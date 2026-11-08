@@ -182,10 +182,17 @@ export async function gymTeamOnboardingRecord(options: {
                         await shot(page, `turn-${String(turns)}`);
                         continue;
                     }
-                    const streaming = await page
-                        .locator('[data-happy-desktop-ui="message"][aria-busy="true"]')
-                        .count();
-                    if (streaming > 0) idleSince = Date.now();
+                    // A reply being written, or tools still running under it.
+                    const streaming =
+                        (await page
+                            .locator('[data-happy-desktop-ui="message"][aria-busy="true"]')
+                            .count()) > 0 ||
+                        (await page
+                            .getByRole("button", { name: "Stop the agent" })
+                            .first()
+                            .isVisible()
+                            .catch(() => false));
+                    if (streaming) idleSince = Date.now();
                     if (Date.now() - idleSince > IDLE_END_MS) {
                         ended = "idle";
                         break;

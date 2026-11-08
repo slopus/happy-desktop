@@ -23,6 +23,17 @@ export interface GymPersona {
      * order, when a reply shows a live invite. Absent, they make none.
      */
     readonly invites?: readonly string[];
+    /**
+     * What this person ticks on each checklist they submit, in order: the rows
+     * whose label matches are ticked and the rest are not. Past the last
+     * entry, or absent, they keep what is ticked already.
+     */
+    readonly ticks?: readonly (readonly RegExp[])[];
+    /**
+     * This person types an answer rather than pressing a button whenever the
+     * composer takes one. Where it doesn't, they try it once, read why, and press.
+     */
+    readonly typesFirst?: boolean;
 }
 
 /** Someone new to Happy, setting it up on their own computer. */
@@ -44,6 +55,55 @@ export const GYM_PERSONA_NEW_USER: GymPersona = {
     ],
     wordsPerMinute: 260,
     charactersPerSecond: 9,
+};
+
+/**
+ * Someone setting Happy up on a computer they already work on: Git knows
+ * them, and they let their Chief of Staff look at their recent work and pick
+ * the first task from it. They can't pair a phone in a recording, so the
+ * phone waits.
+ */
+export const GYM_PERSONA_WORKER: GymPersona = {
+    ...GYM_PERSONA_NEW_USER,
+    prefers: [
+        /^Claude/u,
+        /^Look at my recent work/u,
+        /^Later$|^Pair later|^Not now|^Maybe later/u,
+        /^Continue|^Next|^Let's go|^Get started/u,
+    ],
+    avoids: [...GYM_PERSONA_NEW_USER.avoids, /^Skip for now$/u, /^Something else$/u],
+    // Git says who they are, and every question has a button they press.
+    answers: [],
+};
+
+/**
+ * Someone whose first AI doesn't answer: they choose a key that turns out to
+ * be bad, read why, and choose the sign-in that works.
+ */
+export const GYM_PERSONA_RECOVERS: GymPersona = {
+    ...GYM_PERSONA_NEW_USER,
+    ticks: [[/^OpenAI API key/u], [/^Claude Code token/u]],
+};
+
+/**
+ * Someone who would rather type than press: every question they can answer in
+ * words, they answer in words.
+ */
+export const GYM_PERSONA_TYPIST: GymPersona = {
+    ...GYM_PERSONA_NEW_USER,
+    typesFirst: true,
+    answers: [
+        { when: /phone/iu, text: "Not now, thanks. Maybe later." },
+        {
+            when: /recent(ly)? work|projects you|Git history|working on/iu,
+            text: "Skip that for now.",
+        },
+        { when: /name and email|your name|call you/iu, text: "I'm Alex Rivera, alex@example.com" },
+        {
+            when: /goal|task|anything else|ready/iu,
+            text: "That's all for now, I'm done setting up.",
+        },
+    ],
 };
 
 /**
@@ -170,7 +230,15 @@ const LIVE_BLOCK = [
  * that still takes a press, or the composer when it is open and the last reply
  * asks for something this persona has an answer to.
  */
-export async function gymChatOfferRead(page: Page, persona: GymPersona): Promise<GymChatOffer> {
+export async function gymChatOfferRead(
+    page: Page,
+    persona: GymPersona,
+    answers: GymPersonaAnswers = gymPersonaAnswersCreate(),
+): Promise<GymChatOffer> {
+    if (persona.typesFirst) {
+        const typed = await composerOffer(page, persona, answers);
+        if (typed) return typed;
+    }
     const blocks = page.locator(LIVE_BLOCK);
     const count = await blocks.count();
     for (let index = count - 1; index >= 0; index--) {
@@ -183,17 +251,37 @@ export async function gymChatOfferRead(page: Page, persona: GymPersona): Promise
         if (kind === "chat-action-checklist") return { kind: "checklist", block };
         return { kind: "buttons", block, labels: await enabled.allInnerTexts() };
     }
+    return (await composerOffer(page, persona, answers)) ?? { kind: "none" };
+}
+
+/** The open composer, when the last reply asks something this person still has an answer to. */
+async function composerOffer(
+    page: Page,
+    persona: GymPersona,
+    answers: GymPersonaAnswers,
+): Promise<GymChatOffer | undefined> {
     const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
     if (
-        (await composer.isVisible().catch(() => false)) &&
-        (await composer.isEnabled().catch(() => false))
-    ) {
-        const replies = page.locator('[data-happy-desktop-ui="message"]:not([data-own])');
-        const last = (await replies.count()) > 0 ? await replies.last().innerText() : "";
-        if (persona.answers.some((answer) => answer.when.test(last)))
-            return { kind: "composer", composer, prompt: last };
-    }
-    return { kind: "none" };
+        !(await composer.isVisible().catch(() => false)) ||
+        !(await composer.isEnabled().catch(() => false))
+    )
+        return undefined;
+    // Nothing is asked while a reply is still being written or its tools run.
+    if ((await page.locator('[data-happy-desktop-ui="message"][aria-busy="true"]').count()) > 0)
+        return undefined;
+    if (
+        await page
+            .getByRole("button", { name: "Stop the agent" })
+            .first()
+            .isVisible()
+            .catch(() => false)
+    )
+        return undefined;
+    const replies = page.locator('[data-happy-desktop-ui="message"]:not([data-own])');
+    const last = (await replies.count()) > 0 ? await replies.last().innerText() : "";
+    if (persona.answers.some((answer) => answer.when.test(last) && !answers.typed.has(answer.text)))
+        return { kind: "composer", composer, prompt: last };
+    return undefined;
 }
 
 /** How many times one label may be pressed in a run: a question can come back, a loop cannot. */
@@ -210,10 +298,20 @@ export type GymPersonaAnswers = {
     readonly typed: Set<string>;
     /** The invite codes made so far, with the role each was made for. */
     readonly invites: { readonly role: string; readonly code: string }[];
+    /** How many checklists this person has submitted. */
+    checklists: number;
+    /** Whether a person who types first has already found the composer closed. */
+    composerTried: boolean;
 };
 
 export function gymPersonaAnswersCreate(): GymPersonaAnswers {
-    return { presses: new Map(), typed: new Set(), invites: [] };
+    return {
+        presses: new Map(),
+        typed: new Set(),
+        invites: [],
+        checklists: 0,
+        composerTried: false,
+    };
 }
 
 /**
@@ -257,6 +355,8 @@ export function gymPersonaChoice(
     persona: GymPersona,
     labels: readonly string[],
     answers: GymPersonaAnswers = gymPersonaAnswersCreate(),
+    /** The button the reply recommends, by index, if one. */
+    emphasized?: number,
 ): number | undefined {
     const allowed = labels
         .map((label, index) => ({ label: label.trim(), index }))
@@ -269,7 +369,8 @@ export function gymPersonaChoice(
         const found = allowed.find(({ label }) => pattern.test(label));
         if (found) return found.index;
     }
-    return allowed[0]?.index;
+    // Nothing they reach for: what the reply recommends, then the first.
+    return allowed.find(({ index }) => index === emphasized)?.index ?? allowed[0]?.index;
 }
 
 /**
@@ -284,12 +385,34 @@ export async function gymPersonaTurn(
     answers: GymPersonaAnswers,
 ): Promise<boolean> {
     if (await gymPersonaInvite(page, persona, driver, answers)) return true;
-    const offer = await gymChatOfferRead(page, persona);
+    const offer = await gymChatOfferRead(page, persona, answers);
+    if (persona.typesFirst && !answers.composerTried && offer.kind !== "none") {
+        // They try to type first; a closed composer says why, and they press.
+        const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
+        if (
+            offer.kind !== "composer" &&
+            (await composer.isVisible().catch(() => false)) &&
+            !(await composer.isEnabled().catch(() => true))
+        ) {
+            answers.composerTried = true;
+            await driver.press(composer);
+            await driver.pause(1_600, 2_200);
+        }
+    }
     switch (offer.kind) {
         case "none":
             return false;
         case "buttons": {
-            const choice = gymPersonaChoice(persona, offer.labels, answers);
+            const buttons = offer.block.locator("button:not([disabled])");
+            const emphasized = await buttons.evaluateAll((elements) =>
+                elements.findIndex((element) => element.hasAttribute("data-emphasis")),
+            );
+            const choice = gymPersonaChoice(
+                persona,
+                offer.labels,
+                answers,
+                emphasized < 0 ? undefined : emphasized,
+            );
             if (choice === undefined) return false;
             const label = (offer.labels[choice] ?? "").trim();
             answers.presses.set(label, (answers.presses.get(label) ?? 0) + 1);
@@ -298,9 +421,29 @@ export async function gymPersonaTurn(
             return true;
         }
         case "checklist": {
-            // What is ticked already is what this person wants; the submit is
-            // the first button under the options.
+            // What is ticked already is what this person wants, unless they
+            // came with a choice for this one; the submit is the first button
+            // under the options.
             await driver.read(await offer.block.innerText());
+            const wanted = persona.ticks?.[answers.checklists];
+            answers.checklists += 1;
+            if (wanted) {
+                const rows = offer.block.locator(
+                    '[data-happy-desktop-ui="chat-action-table-row"], [data-happy-desktop-ui="chat-action-option"]',
+                );
+                for (let index = 0; index < (await rows.count()); index++) {
+                    const row = rows.nth(index);
+                    const label = (
+                        await row.locator(".happy-chat-action__label").innerText()
+                    ).trim();
+                    const box = row.locator('input[type="checkbox"]');
+                    if (!(await box.isEnabled().catch(() => false))) continue;
+                    const want = wanted.some((pattern) => pattern.test(label));
+                    if ((await box.isChecked()) === want) continue;
+                    await driver.press(row.locator(".happy-chat-action__label"));
+                    await driver.pause(300, 600);
+                }
+            }
             await driver.press(
                 offer.block.locator(".happy-chat-action__buttons button:not([disabled])").first(),
             );
