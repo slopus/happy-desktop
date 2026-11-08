@@ -17,10 +17,12 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                # updater: 0.0.103 turns Preview updates on and installs 0.0.104-preview.4 itself.
-                # manual-stable / manual-preview: 0.0.104-preview.4's installer is run over
-                # 0.0.103 by hand, with Preview updates off or on.
-                scenario: [updater, manual-stable, manual-preview]
+                # All start with stable 0.0.103 set up on Agent 0.4.114, then:
+                # updater: Preview updates turned on; 0.0.103's updater installs 0.0.104-preview.4.
+                # quit-mid-agent-download: Preview updates turned on; Happy quits while it
+                #   fetches the Agent preview in the background; 0.0.104-preview.4 installed over it.
+                # manual-preview: 0.0.104-preview.4 installed over it by hand, Preview updates on.
+                scenario: [updater, quit-mid-agent-download, manual-preview]
         defaults:
             run:
                 shell: pwsh
@@ -28,6 +30,7 @@ jobs:
             DO_NOT_TRACK: "1"
             OUT: ${{ github.workspace }}\diag-out
             GH_TOKEN: ${{ github.token }}
+            SCENARIO: ${{ matrix.scenario }}
         steps:
             - name: Keep launches away from PostHog
               run: |
@@ -57,56 +60,62 @@ jobs:
                   ./.github/diag/capture.ps1 -Label 0-installed-0.0.103 -Out $env:OUT
             - name: 0.0.103 first-run setup to Agent ready
               run: |
-                  $preview = if ('${{ matrix.scenario }}' -eq 'updater') { 'on' } else { 'keep' }
-                  $install = if ('${{ matrix.scenario }}' -eq 'updater') { '1' } else { '0' }
                   $env:DIAG_CDP_PORT = '9333'
-                  node "$env:RUNNER_TEMP\drv\drive.mjs" 1-setup-0.0.103 $env:HAPPY_EXE $env:OUT 10 $preview $install
-                  ./.github/diag/capture.ps1 -Label 1-0.0.103-ready-app-running -Out $env:OUT
-            - name: Quit 0.0.103 (daemon stays) and move to 0.0.104-preview.4
+                  switch ($env:SCENARIO) {
+                      'updater' { $env:DIAG_PREVIEW = 'on-after-ready'; $env:DIAG_UNTIL = 'update-downloaded' }
+                      'quit-mid-agent-download' { $env:DIAG_PREVIEW = 'on-after-ready'; $env:DIAG_UNTIL = 'agent-downloading' }
+                      default { $env:DIAG_PREVIEW = 'keep'; $env:DIAG_UNTIL = 'ready' }
+                  }
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 1-setup-0.0.103 $env:HAPPY_EXE $env:OUT 12
+                  "DRIVE1_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
+                  ./.github/diag/capture.ps1 -Label 1-0.0.103-app-running -Out $env:OUT
+                  exit 0
+            - name: Leave 0.0.103 (daemon stays) for 0.0.104-preview.4
               if: always()
               run: |
-                  if ('${{ matrix.scenario }}' -eq 'updater') {
+                  function Quit-Happy {
+                      taskkill /IM Happy.exe /T; Start-Sleep 6; taskkill /IM Happy.exe /T /F; Start-Sleep 2
+                  }
+                  if ($env:SCENARIO -eq 'updater' -and $env:DRIVE1_EXIT -eq '0') {
                       # The app's own updater quits it and runs the installer; wait for that.
-                      $deadline = (Get-Date).AddMinutes(6)
+                      $deadline = (Get-Date).AddMinutes(5)
                       while ((Get-Date) -lt $deadline) {
                           $v = (Get-Item $env:HAPPY_EXE -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
-                          $installer = Get-Process | Where-Object { $_.Path -match 'happy-desktop-updater|Happy-0\.0\.104' }
+                          $installer = Get-Process | Where-Object { $_.Path -match 'updater|Happy-0\.0\.104' }
                           if ($v -match '0\.0\.104' -and -not $installer) { break }
-                          Start-Sleep 3
+                          Start-Sleep 2
                       }
                       "installed version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
-                      Start-Sleep 10
-                      ./.github/diag/capture.ps1 -Label 2a-after-updater-install -Out $env:OUT
-                      taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
+                      Start-Sleep 15
+                      ./.github/diag/capture.ps1 -Label 2a-updated-app-relaunched -Out $env:OUT
+                      Quit-Happy
                   } else {
-                      taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
-                      Start-Sleep 3
+                      if ($env:SCENARIO -eq 'updater') { 'the Desktop update never arrived; installing it by hand instead' }
+                      Quit-Happy
                       ./.github/diag/capture.ps1 -Label 2a-0.0.103-quit -Out $env:OUT
                       # What electron-updater runs for a silent update.
                       $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.104-preview.4-x64.exe" -ArgumentList '--updated /S' -PassThru -Wait
                       "installer exit $($p.ExitCode); version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
-                      if ('${{ matrix.scenario }}' -eq 'manual-preview') {
+                      if ($env:SCENARIO -eq 'manual-preview') {
                           $path = "$env:USERPROFILE\.happy\desktop\config.json"
                           $config = if (Test-Path $path) { Get-Content -Raw $path | ConvertFrom-Json -AsHashtable } else { @{} }
                           $config.previewUpdatesEnabled = $true
                           $config | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8 $path
-                          Get-Content -Raw $path
                       }
                   }
-                  Start-Sleep 3
                   ./.github/diag/capture.ps1 -Label 2b-before-0.0.104-launch -Out $env:OUT
                   exit 0
-            - name: 0.0.104-preview.4 launch and setup
+            - name: 0.0.104-preview.4 launch, watched for 6 minutes
               if: always()
               run: |
-                  $env:DIAG_CDP_PORT = '9334'
-                  node "$env:RUNNER_TEMP\drv\drive.mjs" 3-0.0.104-preview.4 $env:HAPPY_EXE $env:OUT 8
-                  ./.github/diag/capture.ps1 -Label 3-0.0.104-after-setup -Out $env:OUT
-                  taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
-                  Start-Sleep 3
+                  $env:DIAG_CDP_PORT = '9334'; $env:DIAG_PREVIEW = 'keep'; $env:DIAG_UNTIL = 'deadline'
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 3-0.0.104-preview.4 $env:HAPPY_EXE $env:OUT 6
+                  ./.github/diag/capture.ps1 -Label 3-0.0.104-running -Out $env:OUT
+                  taskkill /IM Happy.exe /T; Start-Sleep 6; taskkill /IM Happy.exe /T /F
+                  Start-Sleep 2
                   ./.github/diag/capture.ps1 -Label 3b-0.0.104-quit -Out $env:OUT
                   exit 0
-            - name: Reinstall 0.0.103 with fresh userData and run setup
+            - name: Reinstall 0.0.103 with fresh userData, watched for 5 minutes
               if: always()
               run: |
                   $uninstaller = Get-ChildItem (Split-Path $env:HAPPY_EXE) -Filter 'Uninstall*.exe' | Select-Object -First 1 -ExpandProperty FullName
@@ -117,9 +126,9 @@ jobs:
                   $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.103-x64.exe" -ArgumentList '/S' -PassThru -Wait
                   "installer exit $($p.ExitCode); version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
                   ./.github/diag/capture.ps1 -Label 4a-reinstalled-0.0.103 -Out $env:OUT
-                  $env:DIAG_CDP_PORT = '9335'
-                  node "$env:RUNNER_TEMP\drv\drive.mjs" 4-reinstall-0.0.103 $env:HAPPY_EXE $env:OUT 8
-                  ./.github/diag/capture.ps1 -Label 4b-reinstall-after-setup -Out $env:OUT
+                  $env:DIAG_CDP_PORT = '9335'; $env:DIAG_PREVIEW = 'keep'; $env:DIAG_UNTIL = 'deadline'
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 4-reinstall-0.0.103 $env:HAPPY_EXE $env:OUT 5
+                  ./.github/diag/capture.ps1 -Label 4b-reinstall-running -Out $env:OUT
                   taskkill /IM Happy.exe /T /F
                   exit 0
             - name: Upload diagnostics
