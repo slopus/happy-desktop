@@ -21,6 +21,14 @@ export type HappyAgentCloudProviderAddFlow =
     /** Claude's browser sign-in, or pasting a setup token instead. */
     | { readonly kind: "claude"; readonly setupToken: boolean };
 
+/**
+ * Whether what a flow adds can only be kept for the team: Bedrock keys run
+ * only in the team's `bedrock` connection, and Grok's, for now, in the team's.
+ */
+export function happyAgentCloudProviderAddTeamOnly(flow: HappyAgentCloudProviderAddFlow): boolean {
+    return flow.kind === "apiKey" && (flow.vendor === "bedrock" || flow.vendor === "grok");
+}
+
 /** The add dialog, while it is open. */
 export interface HappyAgentCloudProviderAdd {
     readonly flow: HappyAgentCloudProviderAddFlow;
@@ -217,7 +225,10 @@ export function happyAgentCloudProvidersStoreCreate(
                     false,
                 );
                 const add = store.getState().add;
-                if (add) addUpdate({ to: destinationOf(add.to) });
+                if (add) {
+                    const flow = flowOffered(add.flow);
+                    addUpdate({ flow, to: destinationOf(add.to, flow) });
+                }
             },
             () => undefined,
         );
@@ -232,9 +243,13 @@ export function happyAgentCloudProvidersStoreCreate(
         );
     };
 
-    /** The destination asked for, where the reader may add to it. */
-    const destinationOf = (to: HappyAgentCloudScope | undefined): HappyAgentCloudScope => {
+    /** The destination asked for, where the reader may add to it and the flow may be kept. */
+    const destinationOf = (
+        to: HappyAgentCloudScope | undefined,
+        flow: HappyAgentCloudProviderAddFlow | undefined,
+    ): HappyAgentCloudScope => {
         const { privateAllowed, teamAllowed } = store.getState();
+        if (flow && happyAgentCloudProviderAddTeamOnly(flow)) return "team";
         if (to === "team" && teamAllowed) return "team";
         if (!privateAllowed && teamAllowed) return "team";
         return "private";
@@ -242,8 +257,10 @@ export function happyAgentCloudProvidersStoreCreate(
 
     /** The flow asked for, where this server offers it. */
     const flowOffered = (flow: HappyAgentCloudProviderAddFlow): HappyAgentCloudProviderAddFlow => {
-        const { signIns } = store.getState();
+        const { signIns, teamAllowed } = store.getState();
         if (flow.kind === "chatgpt" && !signIns.has("codex")) return { kind: "choose" };
+        if (happyAgentCloudProviderAddTeamOnly(flow) && !teamAllowed)
+            return { kind: "apiKey", vendor: "openai" };
         if (flow.kind === "claude" && !flow.setupToken && !signIns.has("claude"))
             return { kind: "claude", setupToken: true };
         return flow;
@@ -454,17 +471,15 @@ export function happyAgentCloudProvidersStoreCreate(
         addOpen(options) {
             if (disposed) return;
             signInAbandon();
-            addSet({
-                flow: flowOffered(options?.flow ?? { kind: "choose" }),
-                to: destinationOf(options?.to),
-                phase: "idle",
-            });
+            const flow = flowOffered(options?.flow ?? { kind: "choose" });
+            addSet({ flow, to: destinationOf(options?.to, flow), phase: "idle" });
         },
         addFlowSelect(flow) {
             const add = store.getState().add;
             if (disposed || !add || add.phase === "busy") return;
             signInAbandon();
-            addSet({ ...addFresh(add), flow: flowOffered(flow) });
+            const offered = flowOffered(flow);
+            addSet({ ...addFresh(add), flow: offered, to: destinationOf(add.to, offered) });
         },
         addBack() {
             actions.addFlowSelect({ kind: "choose" });
@@ -477,7 +492,7 @@ export function happyAgentCloudProvidersStoreCreate(
         addDestinationUpdate(to) {
             const add = store.getState().add;
             if (disposed || !add || add.phase !== "idle") return;
-            addUpdate({ to: destinationOf(to) });
+            addUpdate({ to: destinationOf(to, add.flow) });
         },
         apiKeySubmit(secret, region) {
             const flow = store.getState().add?.flow;

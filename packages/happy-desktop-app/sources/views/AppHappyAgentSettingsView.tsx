@@ -58,6 +58,7 @@ import {
     happyAgentCredentialImportStoreNoop,
     happyAgentCloudProvidersStoreNoop,
     happyAgentRepositoriesStoreNoop,
+    happyAgentCloudProviderAddTeamOnly,
     happyAgentCloudConnectionName,
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
@@ -2339,7 +2340,14 @@ function providerAddProps(
     return {
         flow: add.flow,
         to: add.to,
-        destinationChoice: snapshot.privateAllowed && snapshot.teamAllowed,
+        destinationChoice:
+            snapshot.privateAllowed &&
+            snapshot.teamAllowed &&
+            !happyAgentCloudProviderAddTeamOnly(add.flow),
+        keyVendors: snapshot.teamAllowed
+            ? ["openai", "anthropic", "grok", "bedrock"]
+            : ["openai", "anthropic"],
+        teamOnly: happyAgentCloudProviderAddTeamOnly(add.flow),
         phase: add.phase,
         ...(add.signIn ? { signIn: add.signIn } : {}),
         ...(add.done === undefined ? {} : { done: add.done }),

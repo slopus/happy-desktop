@@ -688,6 +688,9 @@ function AiProvidersSpecimen(props: {
 }) {
     const [add, addSet] = useState(props.add);
     const [to, toSet] = useState<"private" | "team">("private");
+    const teamOnly =
+        add?.flow.kind === "apiKey" &&
+        (add.flow.vendor === "bedrock" || add.flow.vendor === "grok");
     return (
         <div style={{ display: "flex", transform: "translateZ(0)" }}>
             <HappyAgentSettingsShell
@@ -705,8 +708,10 @@ function AiProvidersSpecimen(props: {
                         ? {
                               add: {
                                   ...add,
-                                  to,
-                                  destinationChoice: true,
+                                  ...(teamOnly ? { to: "team" as const } : { to }),
+                                  destinationChoice: !teamOnly,
+                                  keyVendors: ["openai", "anthropic", "grok", "bedrock"],
+                                  teamOnly,
                                   teamRoutingEditable: true,
                                   chatgptAvailable: true,
                                   claudeAvailable: true,
