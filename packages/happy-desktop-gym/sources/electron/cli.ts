@@ -5,11 +5,26 @@ import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
 import { gymOnboardingRecord } from "./onboardingRecording.js";
+import {
+    GYM_PERSONA_NEW_USER,
+    GYM_PERSONA_RECOVERS,
+    GYM_PERSONA_TYPIST,
+    GYM_PERSONA_WORKER,
+    type GymPersona,
+} from "./persona.js";
 import { gymTeamOnboardingRecord } from "./teamOnboardingRecording.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+
+/** The people a recording can follow, by the name `--persona` takes. */
+const GYM_PERSONAS: Readonly<Record<string, GymPersona>> = {
+    "new-user": GYM_PERSONA_NEW_USER,
+    worker: GYM_PERSONA_WORKER,
+    recovers: GYM_PERSONA_RECOVERS,
+    typist: GYM_PERSONA_TYPIST,
+};
 
 const workloads: readonly GymWorkloadName[] = [
     "hidden-window",
@@ -75,10 +90,22 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             daemonSecrets[name] = value;
             delete process.env[name];
         }
+        const persona = flags.persona === undefined ? undefined : GYM_PERSONAS[flags.persona];
+        if (flags.persona !== undefined && persona === undefined)
+            throw new Error(
+                `--persona is one of ${Object.keys(GYM_PERSONAS).join(", ")}; got ${flags.persona}.`,
+            );
+        if (flags.machine !== undefined && flags.machine !== "fresh" && flags.machine !== "worked")
+            throw new Error("--machine is fresh or worked.");
         const recording = await gymOnboardingRecord({
             out: resolve(flags.out),
             ...(flags.root ? { root: flags.root } : {}),
             ...(flags.providers ? { providersFile: resolve(flags.providers) } : {}),
+            ...(persona ? { persona } : {}),
+            ...(flags.machine ? { machine: flags.machine } : {}),
+            ...(flags.relaunchAfter !== undefined
+                ? { relaunchAfterTurns: flags.relaunchAfter }
+                : {}),
             daemonSecrets,
         });
         console.log(JSON.stringify({ command, ...recording }, null, 2));
@@ -182,6 +209,9 @@ function parseFlags(args: readonly string[]): {
     readonly serverName?: string;
     readonly invite?: readonly string[];
     readonly invitesOut?: string;
+    readonly persona?: string;
+    readonly machine?: string;
+    readonly relaunchAfter?: number;
 } {
     const result: {
         profile?: string;
@@ -199,6 +229,9 @@ function parseFlags(args: readonly string[]): {
         serverName?: string;
         invite?: string[];
         invitesOut?: string;
+        persona?: string;
+        machine?: string;
+        relaunchAfter?: number;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -227,7 +260,14 @@ function parseFlags(args: readonly string[]): {
             (result.invite ??= []).push(requiredValue(value, next, () => index++));
         else if (value === "--invites-out")
             result.invitesOut = requiredValue(value, next, () => index++);
-        else throw new Error(`Unknown option '${value}'.`);
+        else if (value === "--persona") result.persona = requiredValue(value, next, () => index++);
+        else if (value === "--machine") result.machine = requiredValue(value, next, () => index++);
+        else if (value === "--relaunch-after") {
+            const turns = Number(requiredValue(value, next, () => index++));
+            if (!Number.isInteger(turns) || turns < 0)
+                throw new Error("--relaunch-after takes a number of turns.");
+            result.relaunchAfter = turns;
+        } else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
 }
@@ -272,6 +312,8 @@ Commands:
   smoke
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML] [--daemon-env NAME]...
+                    [--persona new-user|worker|recovers|typist] [--machine fresh|worked]
+                    [--relaunch-after TURNS]
   record-team-onboarding --out PATH.mkv --server URL [--server-name NAME]
                          [--invite ROLE]... [--invites-out PATH.json]
   clean --root PATH
