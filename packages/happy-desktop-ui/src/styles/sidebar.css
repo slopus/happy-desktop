@@ -1507,6 +1507,14 @@
     color: var(--text-secondary);
 }
 
+/* An empty section's row stays where it is while its act is unavailable, so
+   the sections below it do not move; it only stops answering the pointer. */
+.happy-sidebar__item.happy-sidebar__create:disabled {
+    background: transparent;
+    cursor: default;
+    opacity: 0.55;
+}
+
 /* Archived channels stay in place and clickable but dim uniformly so the state
    reads distinctly from an ordinary resting (already secondary-grey) row. The
    uniform alpha keeps every child glyph's optical centroid unchanged. */

@@ -2010,8 +2010,8 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="Empty sections keep their heading and expose one compact contextual action"
-                label="Empty channels and direct messages"
+                detail="An empty section keeps its heading and offers one quiet row in place of its rows; a section waiting on something else says so instead"
+                label="Empty sections"
                 number="04"
                 stage="app"
             >
@@ -2024,48 +2024,42 @@ export function SidebarPage() {
                             onSectionAction={() => {}}
                             sections={[
                                 {
+                                    action: { icon: "plus", label: "New task", reveal: "hover" },
+                                    emptyAction: { label: "New" },
+                                    id: "tasks",
+                                    items: [],
+                                    label: "Tasks",
+                                },
+                                {
                                     action: { icon: "plus", label: "Add channel" },
-                                    empty: {
-                                        actionLabel: "Create a channel",
-                                        description:
-                                            "Shared channels keep your team's work in one place.",
-                                        icon: "hash",
-                                        title: "No shared channels yet",
-                                    },
+                                    emptyAction: { disabled: true, label: "New" },
                                     id: "shared",
                                     items: [],
                                     label: "Shared",
                                 },
                                 {
-                                    action: { icon: "plus", label: "Add channel" },
-                                    empty: {
-                                        actionLabel: "Create a channel",
-                                        description:
-                                            "Private channels are visible only to members.",
-                                        icon: "lock",
-                                        title: "No private channels yet",
-                                    },
-                                    id: "private",
-                                    items: [],
-                                    label: "Private",
-                                },
-                                {
                                     action: { icon: "compose", label: "New message" },
-                                    empty: {
-                                        actionLabel: "Start a conversation",
-                                        description: "Message a teammate to start a direct chat.",
-                                        icon: "chat",
-                                        title: "No direct messages",
-                                    },
+                                    emptyAction: { icon: "compose", label: "New" },
                                     id: "dms",
                                     items: [],
                                     label: "Humans",
+                                },
+                                {
+                                    empty: {
+                                        actionLabel: "Sign in",
+                                        description: "Sign in to this server to see its work.",
+                                        icon: "lock",
+                                        title: "Sign in to this server",
+                                    },
+                                    id: "projects",
+                                    items: [],
+                                    label: "Projects",
                                 },
                             ]}
                             title="Empty workspace"
                         />
                     </Frame>
-                    <DimensionRule label="empty row 28 px · copy 11/15 · ghost action" />
+                    <DimensionRule label="empty row 32 px · Shared unavailable · Projects waiting on sign-in" />
                 </div>
             </Specimen>
 

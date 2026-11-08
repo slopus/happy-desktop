@@ -362,6 +362,18 @@ export type SidebarSection = {
         icon?: IconName;
         title?: string;
     };
+    /**
+     * The act that fills a section, as one quiet row in place of the rows it
+     * has none of, reported through `onSectionAction` as `empty`. The row goes
+     * once the section has rows; the heading's own control stays.
+     */
+    emptyAction?: {
+        /** Keeps the row in its place while the act is unavailable, so nothing below it moves. */
+        disabled?: boolean;
+        /** Defaults to `plus`. */
+        icon?: IconName;
+        label: string;
+    };
     id: string;
     /** Renders only the labeled action row, useful as a hierarchy heading. */
     headingOnly?: boolean;
@@ -591,8 +603,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      */
     itemFoldControls?: boolean;
     /**
-     * Invoked by a section's heading control or by the button in its empty
-     * state. The two are reported apart because they are different acts on the
+     * Invoked by a section's heading control or by its empty state's button
+     * or `emptyAction` row. The two are reported apart because they are different acts on the
      * same section — adding something to it, and the one act an empty section
      * offers instead — and a caller that conflated them would run the wrong one.
      */
@@ -1625,6 +1637,8 @@ function SidebarRow({
 }: {
     active: boolean;
     className?: string;
+    /** Keeps the row in its place while refusing to be chosen. */
+    disabled?: boolean;
     /** Set only while a reorder drag is live, so a static sidebar is untouched. */
     dragging?: boolean;
     /** The pointer has crossed the drag threshold and is still holding this row. */
@@ -2148,6 +2162,7 @@ function SidebarRow({
             data-voice-focus={item().voiceFocus ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             data-grabbed={props.grabbed ? "" : undefined}
+            disabled={props.disabled}
             onClick={() => {
                 if (!props.rename) props.onSelect(item().id);
             }}
@@ -5027,6 +5042,25 @@ export function Sidebar(props: SidebarProps) {
                                         hiddenCount={tailCount}
                                         sectionLabel={section.label ?? section.id}
                                         onToggle={() => local.onSectionTailToggle?.(section.id)}
+                                    />
+                                ) : null}
+                                {!section.headingOnly &&
+                                !section.collapsed &&
+                                section.items.length === 0 &&
+                                section.emptyAction ? (
+                                    <SidebarRow
+                                        active={false}
+                                        className="happy-sidebar__create"
+                                        disabled={section.emptyAction.disabled}
+                                        item={{
+                                            icon: section.emptyAction.icon ?? "plus",
+                                            id: "empty",
+                                            kind: "action",
+                                            label: section.emptyAction.label,
+                                        }}
+                                        onSelect={() =>
+                                            local.onSectionAction?.(section.id, "empty")
+                                        }
                                     />
                                 ) : null}
                                 {!section.headingOnly &&

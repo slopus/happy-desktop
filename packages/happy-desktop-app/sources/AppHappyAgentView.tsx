@@ -2675,24 +2675,12 @@ function happyAgentTasksSection(
                       label: "New task",
                       reveal: "hover" as const,
                   },
-                  // Nothing joined yet says so under the heading, with making
-                  // the first one right beside it while it can be made.
-                  empty: {
-                      ...(offline ? {} : { actionLabel: "New task" }),
-                      description: "Start a task, or browse to join one.",
-                      icon: "tasks" as const,
-                      title: "No tasks yet",
-                  },
+                  // Nothing joined yet leaves one quiet New row under the
+                  // heading, kept in place while the machine is away.
+                  emptyAction: { disabled: offline, label: "New" },
               }
             : materialized
-              ? {
-                    empty: {
-                        ...(offline ? {} : { actionLabel: "Browse tasks" }),
-                        description: "Join a task to keep it here.",
-                        icon: "tasks" as const,
-                        title: "No tasks yet",
-                    },
-                }
+              ? { emptyAction: { disabled: offline, icon: "search" as const, label: "Browse" } }
               : {}),
         ...taskFailureError(happyAgent),
         ...(taskFailureError(happyAgent).error === undefined

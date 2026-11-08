@@ -437,14 +437,19 @@ it("lists tasks in Browse without a face or name on a standalone machine, and wi
     expect(team[1]!.text).toContain("Bo Diaz");
 });
 
-it("says there are no tasks yet, offering Browse, when nothing is joined", () => {
+/** The quiet row an empty section shows in place of its rows. */
+const EMPTY_ROW = '[data-happy-desktop-ui="sidebar-item"][data-item-id="empty"]';
+
+it("offers a quiet Browse row when nothing is joined", () => {
     const { container, actions } = view({
         entries: (actions) => [entry("local", actions, { tasks: [] })],
     });
     expect(sectionLabels(container)).toEqual(["Bots", "Tasks", "Projects"]);
-    const empty = container.querySelector('[data-happy-desktop-ui="sidebar-section-empty"]')!;
-    expect(empty.textContent).toContain("Join a task to keep it here.");
-    fireEvent.click(empty.querySelector("button")!);
+    const empty = container.querySelector<HTMLButtonElement>(EMPTY_ROW)!;
+    expect(empty.querySelector('[data-happy-desktop-ui="sidebar-item-label"]')!.textContent).toBe(
+        "Browse",
+    );
+    fireEvent.click(empty);
     expect(actions.taskBrowseOpen).toHaveBeenCalledTimes(1);
 });
 
@@ -497,18 +502,40 @@ it("makes a task from the hover-revealed + on the Tasks heading", () => {
     expect(actions.taskBrowseOpen).not.toHaveBeenCalled();
 });
 
-it("offers New task in the empty Tasks section on a Happy Agent that makes them", () => {
+it("offers a quiet New row in the empty Tasks section on a Happy Agent that makes them", () => {
     const onTaskCreateOpen = vi.fn();
     const { container } = view({
         onTaskCreateOpen,
         entries: (actions) => [entry("local", actions, { tasks: [], version: CREATES })],
     });
-    const empty = container.querySelector('[data-happy-desktop-ui="sidebar-section-empty"]')!;
-    expect(empty.textContent).toContain("Start a task, or browse to join one.");
-    const button = empty.querySelector("button")!;
-    expect(button.textContent).toBe("New task");
-    fireEvent.click(button);
+    const empty = container.querySelector<HTMLButtonElement>(EMPTY_ROW)!;
+    expect(empty.querySelector('[data-happy-desktop-ui="sidebar-item-label"]')!.textContent).toBe(
+        "New",
+    );
+    expect(empty.disabled).toBe(false);
+    fireEvent.click(empty);
     expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
+});
+
+it("keeps the New row in place but unavailable while the machine is away", () => {
+    const onTaskCreateOpen = vi.fn();
+    const { container } = view({
+        onTaskCreateOpen,
+        entries: (actions) => [
+            entry("local", actions, { status: "disconnected", tasks: [], version: CREATES }),
+        ],
+    });
+    const empty = container.querySelector<HTMLButtonElement>(EMPTY_ROW)!;
+    expect(empty.disabled).toBe(true);
+    fireEvent.click(empty);
+    expect(onTaskCreateOpen).not.toHaveBeenCalled();
+});
+
+it("drops the New row once the Tasks section has rows", () => {
+    const { container } = view({
+        entries: (actions) => [entry("local", actions, { version: CREATES })],
+    });
+    expect(container.querySelector(EMPTY_ROW)).toBeNull();
 });
 
 it("renames a task from its context menu on a Happy Agent that renames them", () => {
