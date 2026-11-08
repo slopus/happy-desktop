@@ -19,8 +19,13 @@ import { linuxDisplayEnvironment } from "./workloads.js";
 
 /** No assistant is set up: the machine a new person brings. */
 const NO_PROVIDERS = "[settings]\nhappy_integration = false\nmenu_bar = false\n";
-/** How long nothing may be offered, with nothing streaming, before the run is over. */
-const IDLE_END_MS = 25_000;
+/**
+ * How long nothing may be offered, with nothing streaming, before the run is
+ * over. A real model may think for a while before its reply starts streaming.
+ */
+const IDLE_END_MS = 60_000;
+/** How long the window is watched after onboarding finishes, to show what it becomes. */
+const FINISHED_WATCH_MS = 8_000;
 
 export interface GymOnboardingRecording {
     readonly root: string;
@@ -28,7 +33,9 @@ export interface GymOnboardingRecording {
     readonly video: GymElectronVideoResult;
     readonly screenshots: readonly string[];
     readonly turns: number;
-    readonly ended: "idle" | "limit";
+    readonly ended: "finished" | "idle" | "limit";
+    /** Each step the flow reported, in order, with `null` once the model leads. */
+    readonly flowSteps: readonly (string | null)[];
     readonly composerStates: readonly {
         readonly disabled: boolean;
         readonly placeholder: string;
@@ -56,6 +63,11 @@ export async function gymOnboardingRecord(options: {
     readonly persona?: GymPersona;
     readonly limitMs?: number;
     readonly scale?: number;
+    /**
+     * Values only the Happy Agent receives, such as a provider's sign-in token;
+     * never written to the run, given to the app, or returned.
+     */
+    readonly daemonSecrets?: Readonly<Record<string, string>>;
 }): Promise<GymOnboardingRecording> {
     if (extname(options.out) !== ".mkv") throw new Error("The recording is H.264 in a .mkv file.");
     const persona = options.persona ?? GYM_PERSONA_NEW_USER;
@@ -64,7 +76,12 @@ export async function gymOnboardingRecord(options: {
     const configuration = options.providersFile
         ? await readFile(options.providersFile, "utf8")
         : NO_PROVIDERS;
-    const runtime = await happyAgentRuntimeCreate(paths, undefined, configuration);
+    const runtime = await happyAgentRuntimeCreate(
+        paths,
+        undefined,
+        configuration,
+        options.daemonSecrets,
+    );
     const screenshots: string[] = [];
     const shot = async (page: import("playwright").Page, label: string) => {
         const path = join(
@@ -105,6 +122,21 @@ export async function gymOnboardingRecord(options: {
             const started = Date.now();
             let turns = 0;
             let ended: GymOnboardingRecording["ended"] = "limit";
+            const flowSteps: (string | null)[] = [];
+            /**
+             * Whether the flow has finished, noting each new step it reports on
+             * the way. Requirements met (`completedVersion`) is not the end of
+             * the conversation, which goes on until the model finishes it.
+             */
+            const flowFinished = async (): Promise<boolean> => {
+                if (!chatOnboarding) return false;
+                const flow = await runtime.client.onboardingFlow().catch(() => undefined);
+                if (flow === undefined) return false;
+                const step = flow.step ?? null;
+                if (flow.status !== "not_started" && flowSteps.at(-1) !== step)
+                    flowSteps.push(step);
+                return flow.status === "finished";
+            };
             let recorded: GymElectronVideoResult;
             /** The composer after each turn, as onboarding's flow set it. */
             const composerStates: { disabled: boolean; placeholder: string }[] = [];
@@ -115,6 +147,13 @@ export async function gymOnboardingRecord(options: {
                 const answered = new Set<string>();
                 let idleSince = Date.now();
                 while (Date.now() - started < limitMs) {
+                    if (await flowFinished()) {
+                        ended = "finished";
+                        await driver.pause(1_500, 2_000);
+                        await shot(page, "finished");
+                        await driver.pause(FINISHED_WATCH_MS, FINISHED_WATCH_MS + 1_000);
+                        break;
+                    }
                     if (await gymPersonaTurn(page, persona, driver, answered)) {
                         turns += 1;
                         idleSince = Date.now();
@@ -155,6 +194,7 @@ export async function gymOnboardingRecord(options: {
                 screenshots,
                 turns,
                 ended,
+                flowSteps,
                 composerStates,
             };
         } finally {

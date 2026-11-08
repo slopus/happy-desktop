@@ -175,17 +175,25 @@ export function happyAgentChatOnboardingStoreCreate(
         }, RETRY_MS);
     };
 
-    /** Takes a flow the server answered with, and does what it now asks of the window. */
-    const flowTake = (next: OnboardingFlow): void => {
+    /**
+     * Takes a flow the server answered with, and does what it now asks of the
+     * window. `started` is the answer to this store's own start.
+     */
+    const flowTake = (next: OnboardingFlow, started = false): void => {
         if (disposed) return;
         const flow = flowNewer(store.getState().flow, next);
         set({ status: "available", flow, error: undefined });
         const snapshot = store.getState();
-        if (!snapshot.begun || happyAgentChatOnboardingOver(flow)) return;
+        const over = happyAgentChatOnboardingOver(flow);
+        // A flow can be over by the time its own start answers: a team
+        // viewer's finishes in its first step. Its conversation still opens,
+        // once. A flow read over, as on every later launch, opens nothing.
+        if (!snapshot.begun || (over && !started)) return;
         if (flow.agentId !== null && !opened.has(flow.agentId)) {
             opened.add(flow.agentId);
             deps.conversationOpen(flow.agentId);
         }
+        if (over) return;
         if (!flow.restartRequired) restartedFor = undefined;
         else if (deps.serverRestart && restartedFor === undefined) {
             restartedFor = flow.version;
@@ -259,7 +267,7 @@ export function happyAgentChatOnboardingStoreCreate(
             const onboarding = await deps.client.getOnboarding();
             if (onboarding.completed || disposed) return;
             const { flow: started } = await deps.client.startOnboardingFlow({ mutationId });
-            flowTake(started);
+            flowTake(started, true);
         })()
             .catch((error: unknown) => {
                 if (disposed) return;

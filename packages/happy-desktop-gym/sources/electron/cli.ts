@@ -64,10 +64,20 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     }
     if (command === "record-onboarding") {
         if (!flags.out) throw new Error("record-onboarding requires --out ABSOLUTE_PATH.mkv.");
+        // Named variables move from this process to the Happy Agent alone, so
+        // no other child of this run inherits them.
+        const daemonSecrets: Record<string, string> = {};
+        for (const name of flags.daemonEnv ?? []) {
+            const value = process.env[name];
+            if (!value) throw new Error(`--daemon-env ${name} is not set in this environment.`);
+            daemonSecrets[name] = value;
+            delete process.env[name];
+        }
         const recording = await gymOnboardingRecord({
             out: resolve(flags.out),
             ...(flags.root ? { root: flags.root } : {}),
             ...(flags.providers ? { providersFile: resolve(flags.providers) } : {}),
+            daemonSecrets,
         });
         console.log(JSON.stringify({ command, ...recording }, null, 2));
         return;
@@ -132,6 +142,7 @@ function parseFlags(args: readonly string[]): {
     readonly poolDefault?: boolean;
     readonly out?: string;
     readonly providers?: string;
+    readonly daemonEnv?: readonly string[];
 } {
     const result: {
         profile?: string;
@@ -144,6 +155,7 @@ function parseFlags(args: readonly string[]): {
         poolDefault?: boolean;
         out?: string;
         providers?: string;
+        daemonEnv?: string[];
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -163,6 +175,8 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--out") result.out = requiredValue(value, next, () => index++);
         else if (value === "--providers")
             result.providers = requiredValue(value, next, () => index++);
+        else if (value === "--daemon-env")
+            (result.daemonEnv ??= []).push(requiredValue(value, next, () => index++));
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -207,7 +221,7 @@ Commands:
   run [--profile PROFILE] [--root PATH] [--workload WORKLOAD] [--ui-trace]
   smoke
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
-  record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML]
+  record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML] [--daemon-env NAME]...
   clean --root PATH
 
 Workloads:
