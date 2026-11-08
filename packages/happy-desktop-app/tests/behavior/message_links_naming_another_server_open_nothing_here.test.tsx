@@ -37,6 +37,7 @@ const list = {
     },
     bots: [],
     tasks: [],
+    taskDirectory: [],
 } as unknown as HappyAgentSessionListSnapshot;
 
 function messageRender(instanceId: string | undefined) {

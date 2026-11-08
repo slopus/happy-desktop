@@ -17,7 +17,9 @@ function surface(id: string, label: string, type: HappyAgentSurfaceType): Sideba
 /**
  * Every fixed and typed row the app's sidebar draws, in the app's order:
  * Artifacts and Feed head the first group, the reader's Surfaces follow, one
- * of each type, then Bots, Tasks, and Projects with the home project.
+ * of each type, then Bots, Tasks, and Projects with the home project. The
+ * reader's private Chief of Staff wears its lock, and a task onboarding just
+ * started is pointed at once.
  */
 const SECTIONS: readonly SidebarSection[] = [
     {
@@ -58,6 +60,14 @@ const SECTIONS: readonly SidebarSection[] = [
                 kind: "project",
                 label: "Rewrite onboarding guide",
                 placeholderSeed: "task-docs",
+            },
+            // Just started by onboarding: washed once as the page opens.
+            {
+                id: "task-forecast",
+                kind: "project",
+                label: "Finish hourly forecast",
+                placeholderSeed: "task-forecast",
+                highlight: true,
             },
         ],
     },

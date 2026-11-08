@@ -120,6 +120,19 @@ export function messageReferenceEntities(
             agentId: owner.conversation.id,
         });
     }
+    // A task the reader has not joined, such as one a teammate's Chief of
+    // Staff just started, opens the way search opens it.
+    for (const task of list.taskDirectory) {
+        if (agents.has(task.conversation.id)) continue;
+        agentAdd(task.conversation, task.workspaceId, task.name);
+        if (!workspaces.has(task.workspaceId))
+            workspaces.set(task.workspaceId, {
+                label: task.name,
+                busy: false,
+                groupId: task.workspaceId,
+                agentId: task.conversation.id,
+            });
+    }
     for (const subtask of happyAgentBotSubtasks([...list.bots, ...list.tasks])) {
         agentAdd(subtask.conversation, subtask.workspaceId);
         if (!workspaces.has(subtask.workspaceId))
