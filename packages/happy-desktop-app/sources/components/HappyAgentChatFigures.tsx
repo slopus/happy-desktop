@@ -66,10 +66,15 @@ export function happyAgentConversationExtras(
                 : {}),
             ...(providerClis
                 ? {
-                      providerCli: (cliId: string) => (
+                      providerCli: (
+                          cliId: string,
+                          _target: "team" | "private" | undefined,
+                          live: boolean,
+                      ) => (
                           <HappyAgentChatProviderCli
                               cliId={cliId}
                               linkOpen={options.linkOpen}
+                              live={live}
                               store={providerClis}
                           />
                       ),
@@ -131,12 +136,15 @@ function HappyAgentChatPhonePairing(props: {
 /**
  * One provider CLI where a chat shows it, live from the connection's provider
  * CLIs: its install and sign-in, each control calling the server's provider CLI
- * routes. A server that does not serve them gets the way into its providers'
+ * routes. In an older message it shows the CLI as it stands and has no
+ * controls, so only the message the conversation stands on starts or cancels a
+ * sign-in. A server that does not serve them gets the way into its providers'
  * Settings instead. Only it repaints as an install or sign-in goes on.
  */
 function HappyAgentChatProviderCli(props: {
     readonly store: HappyAgentProviderClisStore;
     readonly cliId: string;
+    readonly live: boolean;
     /** Opens a vendor's sign-in page in the person's browser. */
     readonly linkOpen: (url: string) => void;
 }) {
@@ -150,11 +158,15 @@ function HappyAgentChatProviderCli(props: {
             cliId={cliId}
             {...(cli ? { cli } : {})}
             {...(error ? { error } : {})}
-            onCancel={() => store.cliCancel(cliId)}
-            onCodeSend={(code) => store.cliSignInCodeSend(cliId, code)}
-            onInstall={() => store.cliInstall(cliId)}
-            onPageOpen={props.linkOpen}
-            onSignIn={() => store.cliSignIn(cliId)}
+            {...(props.live
+                ? {
+                      onCancel: () => store.cliCancel(cliId),
+                      onCodeSend: (code: string) => store.cliSignInCodeSend(cliId, code),
+                      onInstall: () => store.cliInstall(cliId),
+                      onPageOpen: props.linkOpen,
+                      onSignIn: () => store.cliSignIn(cliId),
+                  }
+                : {})}
             requesting={clis.pending.has(cliId)}
         />
     );

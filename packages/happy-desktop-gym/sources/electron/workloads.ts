@@ -578,7 +578,7 @@ async function nativeProfilerStart(page: Page): Promise<GymProfilerSnapshot> {
  * hosts whose kernel restrictions (CI runners) refuse Chromium's sandbox;
  * setting it remains the operator's decision.
  */
-function linuxDisplayEnvironment(): Record<string, string> {
+export function linuxDisplayEnvironment(): Record<string, string> {
     if (process.platform !== "linux") return {};
     const passthrough: Record<string, string> = {};
     for (const name of [

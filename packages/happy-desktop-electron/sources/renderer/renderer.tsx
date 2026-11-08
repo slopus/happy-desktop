@@ -623,8 +623,9 @@ function DesktopOnboardingGate(props: {
     const reached = localOnboardingReachedStage(snapshot);
     const carried = view !== undefined && chatOnboardingCarries(view.kind);
     // The Happy Agent has not said yet whether it runs setup as a conversation,
-    // so neither its conversation nor the window's own steps are drawn.
-    if (carried && chat === "checking") return null;
+    // so neither its conversation nor the window's own steps are drawn. While
+    // the window is still connecting to it, the connecting screen shows as usual.
+    if (carried && chat === "checking" && view.kind !== "connecting") return null;
     // The interface is the final onboarding step. Keep the sidebar (+) usable
     // while Chief of Staff's unsent draft is being prepared in the background.
     // Setup the Happy Agent runs as a conversation shows the interface the

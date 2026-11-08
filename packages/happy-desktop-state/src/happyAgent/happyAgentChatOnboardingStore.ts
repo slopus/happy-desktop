@@ -75,7 +75,11 @@ export const happyAgentChatOnboardingStoreNoop: HappyAgentChatOnboardingStore = 
     begin: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
-const FLOW_EVENTS = ["onboarding.flow.updated"] as const;
+/**
+ * A saved profile is followed too: a team server refuses the flow to a member
+ * without one, and nothing about the flow announces when it answers again.
+ */
+const FLOW_EVENTS = ["onboarding.flow.updated", "profile.updated"] as const;
 /** How long a failed read or start waits before it is tried again while someone watches. */
 const RETRY_MS = 4_000;
 
@@ -147,6 +151,8 @@ export function happyAgentChatOnboardingStoreCreate(
     const opened = new Set<string>();
     /** The flow version a restart was asked for, so one restart answers one request. */
     let restartedFor: string | undefined;
+    /** The last read was refused until this person saves a profile. */
+    let profileRequired = false;
 
     const set = (next: Partial<HappyAgentChatOnboardingSnapshot>): void => {
         const current = store.getState();
@@ -213,16 +219,20 @@ export function happyAgentChatOnboardingStoreCreate(
             .getOnboardingFlow({ signal: controller.signal })
             .then(
                 ({ flow }) => {
-                    if (reading === controller) flowTake(flow);
+                    if (reading === controller) {
+                        profileRequired = false;
+                        flowTake(flow);
+                    }
                     if (store.getState().begun) startIfOwed();
                 },
                 (error: unknown) => {
                     if (disposed || controller.signal.aborted || reading !== controller) return;
                     set({ error: error instanceof Error ? error.message : String(error) });
                     // A team member without a profile is refused until they
-                    // save one, and beginning reads the flow again then.
-                    if (!(error instanceof HappyAgentApiError && error.code === "profile_required"))
-                        retrySchedule();
+                    // save one, and the saved profile's event reads it again.
+                    profileRequired =
+                        error instanceof HappyAgentApiError && error.code === "profile_required";
+                    if (!profileRequired) retrySchedule();
                 },
             )
             .finally(() => {
@@ -271,6 +281,15 @@ export function happyAgentChatOnboardingStoreCreate(
                 events: FLOW_EVENTS,
             })) {
                 if (input.kind === "error") continue;
+                // Anyone's saved profile is announced; only one this read was
+                // waiting on can change the answer.
+                if (
+                    input.kind === "update" &&
+                    input.update.kind === "event" &&
+                    input.update.event.type === "profile.updated" &&
+                    !profileRequired
+                )
+                    continue;
                 // Every new connection may be a different server, with or
                 // without the capability, and its flow may have moved on.
                 if (
@@ -321,8 +340,7 @@ export function happyAgentChatOnboardingStoreCreate(
             const flow = store.getState().flow;
             if (flow !== undefined) flowTake(flow);
             startIfOwed();
-            // A team member's flow may have been refused until their profile
-            // existed, and nothing announces that it now answers.
+            // The flow may not have been read yet, or was refused before.
             if (flow === undefined) refresh();
         },
         [Symbol.dispose]() {
