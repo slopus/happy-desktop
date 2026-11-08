@@ -1,3 +1,4 @@
+import type { ChatAction, ChatActionChoice } from "../chatActions/chatActions.js";
 import type {
     Agent,
     AgentRetrying,
@@ -239,6 +240,17 @@ export interface AgentTextElement extends BaseChatElement {
     messageId: string;
     text: string;
     complete: boolean;
+    /**
+     * The inline action blocks this text holds, when it holds any: the block
+     * index of its first one across the whole message, the choices the daemon
+     * recorded on the message, by block index, and whether its unanswered
+     * blocks still take a press: no person's message is recorded after it.
+     */
+    actions?: {
+        readonly blockStart: number;
+        readonly choices: Readonly<Record<string, ChatActionChoice>>;
+        readonly live: boolean;
+    };
 }
 
 export interface AgentAttachmentsElement extends BaseChatElement {
@@ -874,6 +886,7 @@ export type MutationAction =
     | "set_permission_mode"
     | "set_draft"
     | "answer_user_input"
+    | "send_action"
     | "compact_session"
     | "retry_failed_turn"
     | "switch_and_continue"
@@ -891,6 +904,16 @@ export type MutationAction =
     | "reorder_task"
     | "archive_task"
     | "unarchive_task";
+
+/** One press, as the window hands it to the connection. */
+export interface ChatActionPressInput {
+    readonly messageId: string;
+    readonly blockIndex: number;
+    readonly controlIndex: number;
+    readonly action: ChatAction;
+    /** A checklist's ticked values, or a code field's text, which nothing keeps. */
+    readonly values: readonly string[];
+}
 
 export interface MutationRejectedDelta {
     action: string;
@@ -1259,6 +1282,13 @@ export interface HappyAgentConnection {
     setServiceTier(sessionId: string, serviceTier?: HappyAgentServiceTier): MutationId;
     setPermissionMode(sessionId: string, permissionMode: string): MutationId;
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
+    /**
+     * Sends one press in an agent message's inline action block as the
+     * person's message, under one identity across every retry. A block the
+     * daemon says another press already took settles on the message it
+     * returns, which says what the block shows; any other refusal is reported.
+     */
+    sendAction(sessionId: string, press: ChatActionPressInput): MutationId;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
     setBotStories(botId: string, stories: boolean): MutationId;

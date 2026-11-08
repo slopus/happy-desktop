@@ -120,6 +120,9 @@ export function HappyAgentOnboardingBoundary(props: {
             />
         );
     }
+    // A server that runs onboarding as a conversation offers the phone, and
+    // everything else, there.
+    if (snapshot.chatOnboarding) return props.children;
     const view = ((): LocalOnboardingView => {
         switch (mobile.status) {
             case "desktop":

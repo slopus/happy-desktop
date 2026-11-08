@@ -71,6 +71,13 @@ export interface DesktopMobileSetupProps {
 const DOWNLOAD_URL = "https://link.happy.engineering/download";
 /** The same address as someone types it, without the scheme. */
 const DOWNLOAD_LINK_TEXT = "link.happy.engineering/download";
+/** Where each phone downloads Happy. */
+export const HAPPY_MOBILE_STORE_URLS = {
+    // The short form of the App Store link: fewer bytes keep the code at a
+    // lower version, so it still decodes at the smallest window.
+    ios: "https://apps.apple.com/app/id6748571505",
+    android: "https://play.google.com/store/apps/details?id=com.ex3ndr.happy",
+} as const;
 const ENCRYPTION_DOCS_URL = "https://happy.engineering/docs/security/";
 /** What drifts beside the download code: a phone, its privacy, and its company. */
 const DOWNLOAD_DRIFT = [

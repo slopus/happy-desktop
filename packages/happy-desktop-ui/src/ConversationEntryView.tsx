@@ -6,15 +6,19 @@ import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
 import type { MessageReferences } from "./messageReferences";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
-import type {
-    AgentTurnTraceSummary,
-    ConversationAttachment,
-    ConversationAuthor,
-    ConversationEntry,
-    ConversationErrorAssistance,
-    ConversationToolCall,
-    UserError,
+import {
+    chatActionBlockKey,
+    type AgentTurnTraceSummary,
+    type ChatActionChoice,
+    type ChatActionInvocation,
+    type ConversationAttachment,
+    type ConversationAuthor,
+    type ConversationEntry,
+    type ConversationErrorAssistance,
+    type ConversationToolCall,
+    type UserError,
 } from "happy-desktop-state";
+import { ChatActionBlock, type ChatActionFigures } from "./ChatActionBlock";
 import { messageBodyFormat } from "./messagePlainText";
 import {
     AgentActivityRow,
@@ -134,6 +138,14 @@ export type ConversationEntryViewProps = {
      * that showed it.
      */
     messageLayouts?: MessageInlineLayouts;
+    /** Whether the server takes presses on inline action blocks; without it every block is inert. */
+    actionsPressable?: boolean;
+    /** The conversation's presses still on their way, by `chatActionBlockKey`. */
+    actionPending?: ReadonlyMap<string, ChatActionChoice>;
+    /** Presses a control of one of this reply's inline action blocks. */
+    onActionPress?: (invocation: ChatActionInvocation) => void;
+    /** What this reply's live figures show, drawn by the conversation's owner. */
+    actionFigures?: ChatActionFigures;
     /** Opens one child session represented by a delegated-agent entry. */
     onDelegationSelect?: (sessionId: string) => void;
     /** Reference epoch millis used by live delegated-agent timers. */
@@ -617,7 +629,14 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                   }
                 : {})}
             {...(props.messageLayouts
-                ? { layoutRender: messageLayoutRender(props.messageLayouts, props.onToolMediaOpen) }
+                ? {
+                      layoutRender: messageLayoutRender(
+                          props.messageLayouts,
+                          props.onToolMediaOpen,
+                          entry,
+                          props,
+                      ),
+                  }
                 : {})}
             className={props.className}
             {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}
@@ -850,15 +869,55 @@ function activityMediaRun(
 /**
  * Draws a reply's layout by its placeholder's key: the tree over the pictures
  * it placed, uncapped, each opening as the item of the call that showed it so
- * the viewer steps through the whole transcript from there.
+ * the viewer steps through the whole transcript from there; or an inline
+ * action block.
+ *
+ * A block shows the choice the daemon recorded, or else a press still on its
+ * way. It takes a press only while it has neither, the server takes presses,
+ * and no message from the person has come after the reply.
  */
 function messageLayoutRender(
     layouts: MessageInlineLayouts,
     open: ConversationEntryViewProps["onToolMediaOpen"],
+    entry: Extract<ConversationEntry, { kind: "message" }>,
+    actions: Pick<
+        ConversationEntryViewProps,
+        "actionsPressable" | "actionPending" | "onActionPress" | "actionFigures"
+    >,
 ) {
     return function messageLayout(key: string): ReactNode {
         const layout = layouts.layouts.get(key);
         if (layout === undefined) return null;
+        if (layout.kind === "actions") {
+            const messageId = entry.source === "server" ? entry.messageId : undefined;
+            const blockIndex = layout.blockIndex;
+            const choice =
+                entry.actions?.choices[String(blockIndex)] ??
+                (messageId === undefined
+                    ? undefined
+                    : actions.actionPending?.get(chatActionBlockKey(messageId, blockIndex)));
+            const press = actions.onActionPress;
+            const pressable =
+                messageId !== undefined &&
+                press !== undefined &&
+                actions.actionsPressable === true &&
+                entry.actions?.live === true &&
+                choice === undefined;
+            return (
+                <ChatActionBlock
+                    block={layout.block}
+                    {...(choice ? { choice } : {})}
+                    {...(actions.actionFigures ? { figures: actions.actionFigures } : {})}
+                    {...(entry.actions?.live === true ? { live: true } : {})}
+                    {...(pressable
+                        ? {
+                              onInvoke: (blockPress) =>
+                                  press({ messageId, blockIndex, ...blockPress }),
+                          }
+                        : {})}
+                />
+            );
+        }
         return (
             <ConversationMedia
                 items={layout.members.map((member) => member.item)}

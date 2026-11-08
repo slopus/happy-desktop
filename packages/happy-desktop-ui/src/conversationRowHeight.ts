@@ -85,8 +85,10 @@ import { conversationMediaRunSignature, type ConversationMediaRun } from "./conv
 import {
     conversationMediaVisible,
     messageInlineLayoutKey,
+    messageLayoutMembers,
     type MessageInlineLayouts,
 } from "./conversationInlineLayouts";
+import { chatActionBlockHeight } from "./ChatActionBlock";
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
@@ -603,7 +605,9 @@ function messageLayoutsFramesSignature(layouts: MessageInlineLayouts | undefined
     if (layouts === undefined) return "";
     let signature = "";
     for (const layout of layouts.layouts.values())
-        signature += mediaVideoFramesSignature(layout.members.map((member) => member.item));
+        signature += mediaVideoFramesSignature(
+            messageLayoutMembers(layout).map((member) => member.item),
+        );
     return signature;
 }
 
@@ -782,8 +786,9 @@ export function messageRowHeight(input: MessageRowHeightInput): number {
 
 /**
  * A reply's layout is as tall as its tree laid out at the body's measure: the
- * same off-screen measurement as a presented layout, uncapped. A placeholder
- * naming no layout of this reply is HTML, which draws nothing.
+ * same off-screen measurement as a presented layout, uncapped. An action block
+ * is measured the same way, and no choice or press changes its height. A
+ * placeholder naming no layout of this reply is HTML, which draws nothing.
  */
 function messageLayoutsHeight(
     layouts: MessageInlineLayouts | undefined,
@@ -793,6 +798,7 @@ function messageLayoutsHeight(
         const key = messageInlineLayoutKey(html);
         const layout = key === undefined ? undefined : layouts.layouts.get(key);
         if (layout === undefined) return undefined;
+        if (layout.kind === "actions") return chatActionBlockHeight(layout.block, measure);
         return mediaTreeHeight(
             layout.root,
             mediaItemsFramed(layout.members.map((member) => member.item)),

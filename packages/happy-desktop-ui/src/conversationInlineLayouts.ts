@@ -1,6 +1,10 @@
 import {
+    conversationActionBlockParse,
+    conversationActionSegments,
     conversationTextLayoutParse,
     conversationTextSegments,
+    type ChatActionBlock,
+    type ChatFigure,
     type ConversationEntry,
     type ConversationMediaItem,
     type ConversationMediaLayout,
@@ -34,15 +38,40 @@ import { mediaVideoFramesSignature } from "./mediaVideoFrames";
  * measurement every agent-written tree uses. An HTML block still open at the
  * end of a streaming reply is held back until it closes, so it never flashes
  * as raw text; once the reply settles it is inert HTML like any other.
+ *
+ * Inline action blocks — a menu, a checklist, a code field, steps, a status
+ * line, a tree, a live figure — are cut out the same way, from the Markdown
+ * the layouts leave, exactly where `@slopus/happy-agent-client` finds and
+ * numbers them, and drawn by `ChatActionBlock`. They need no earlier picture,
+ * so any agent reply may hold one. A block the client refuses, and a figure
+ * this surface does not draw, stay the inert text they were written as.
  */
 
-/** One layout in a reply: its tree, and the picture each item node names. */
-export type MessageInlineLayout = {
+/** One layout in a reply: a tree over pictures it named, or an action block. */
+export type MessageInlineLayout = MessageMediaLayout | MessageActionLayout;
+
+export type MessageMediaLayout = {
+    readonly kind: "media";
     readonly key: string;
     readonly root: readonly ConversationMediaLayoutNode[];
     /** The picture each item node shows, by the node's index. */
     readonly members: readonly ConversationMediaRunMember[];
 };
+
+export type MessageActionLayout = {
+    readonly kind: "actions";
+    readonly key: string;
+    readonly block: ChatActionBlock;
+    /** The block's index across its whole message: what its choice and its presses name. */
+    readonly blockIndex: number;
+};
+
+/** The pictures a reply's layout places; an action block places none. */
+export function messageLayoutMembers(
+    layout: MessageInlineLayout,
+): readonly ConversationMediaRunMember[] {
+    return layout.kind === "media" ? layout.members : [];
+}
 
 /** A reply's layouts, and its text with each one replaced by its placeholder. */
 export type MessageInlineLayouts = {
@@ -80,6 +109,8 @@ export function conversationInlineLayouts(
      * the reply's text, and every height keyed on it, changes with it.
      */
     framesAt?: number,
+    /** The live figures this surface draws; any other stays text. One value per surface. */
+    figureTypes: ReadonlySet<ChatFigure["type"]> = NO_FIGURES,
 ): ConversationInlineLayouts {
     const shown: Shown = new Map();
     let messages: Map<string, MessageInlineLayouts> | undefined;
@@ -98,13 +129,13 @@ export function conversationInlineLayouts(
             continue;
         }
         if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") continue;
-        if (shown.size === 0) continue;
-        const layouts = messageInlineLayouts(entry, shown, framesAt);
+        if (shown.size === 0 && entry.actions === undefined) continue;
+        const layouts = messageInlineLayouts(entry, shown, framesAt, figureTypes);
         if (layouts === undefined) continue;
         messages ??= new Map();
         messages.set(entry.message.id, layouts);
         for (const layout of layouts.layouts.values())
-            for (const member of layout.members) {
+            for (const member of messageLayoutMembers(layout)) {
                 hidden ??= new Map();
                 let indexes = hidden.get(member.entryId);
                 if (!indexes) {
@@ -134,8 +165,72 @@ function memberOf(
     return member;
 }
 
+const NO_FIGURES: ReadonlySet<ChatFigure["type"]> = new Set();
+
 /* A reply's text is cut once per entry, however often the transcript updates. */
 const segmentsOf = new WeakMap<ConversationEntry, readonly ConversationTextSegment[]>();
+
+/** A stretch of Markdown a media layout left, with its action blocks cut out. */
+type ActionCut = {
+    readonly text: string;
+    readonly layouts: readonly MessageActionLayout[];
+    /** How many complete action blocks it holds, drawn or not: the client numbers them all. */
+    readonly count: number;
+    /** Whether anything was cut out or held back. */
+    readonly changed: boolean;
+};
+
+/* Cut once per stretch of text, where its blocks start, and figures drawn. */
+const actionCuts = new Map<string, ActionCut>();
+const ACTION_CUTS = 256;
+
+function actionCut(
+    markdown: string,
+    blockStart: number,
+    streaming: boolean,
+    figureTypes: ReadonlySet<ChatFigure["type"]>,
+): ActionCut {
+    if (!markdown.includes("<")) return { text: markdown, layouts: [], count: 0, changed: false };
+    const cacheKey = `${String(blockStart)}\u0000${streaming ? "s" : ""}\u0000${[...figureTypes].join(",")}\u0000${markdown}`;
+    const held = actionCuts.get(cacheKey);
+    if (held) return held;
+    const pieces: string[] = [];
+    const layouts: MessageActionLayout[] = [];
+    let count = 0;
+    let changed = false;
+    for (const segment of conversationActionSegments(markdown)) {
+        if (segment.type === "markdown") {
+            pieces.push(segment.text);
+            continue;
+        }
+        /* Held while the reply streams, so its tags never flash; one the reply
+           ended without closing is plain text, and the client never numbers it. */
+        if (!segment.complete) {
+            if (streaming) changed = true;
+            else pieces.push(segment.html);
+            continue;
+        }
+        const blockIndex = blockStart + count;
+        count += 1;
+        const block = conversationActionBlockParse(segment.html, blockIndex);
+        if (
+            block === undefined ||
+            (block.kind === "figure" && !figureTypes.has(block.figure.type))
+        ) {
+            pieces.push(segment.html);
+            continue;
+        }
+        changed = true;
+        const key = `a${String(blockIndex)}-${hash(segment.html)}`;
+        layouts.push({ kind: "actions", key, block, blockIndex });
+        /* Its own block, at the left margin, whatever surrounds it. */
+        pieces.push(`\n\n<!--happy-layout:${key}-->\n\n`);
+    }
+    const cut = { text: changed ? pieces.join("") : markdown, layouts, count, changed };
+    actionCuts.set(cacheKey, cut);
+    if (actionCuts.size > ACTION_CUTS) actionCuts.delete(actionCuts.keys().next().value!);
+    return cut;
+}
 
 /* An entry is immutable; its layouts change only when what its sources
    resolve to does, so an unchanged resolution keeps its value. */
@@ -145,11 +240,13 @@ function messageInlineLayouts(
     entry: Extract<ConversationEntry, { kind: "message" }>,
     shown: Shown,
     framesAt: number | undefined,
+    figureTypes: ReadonlySet<ChatFigure["type"]>,
 ): MessageInlineLayouts | undefined {
     const message = entry.message;
     /* No tag, no layout: almost every reply leaves here. */
     if (!message.text.includes("<")) return undefined;
     const streaming = message.generationStatus === "streaming";
+    const actions = entry.actions;
     const pieces: string[] = [];
     const layouts = new Map<string, MessageInlineLayout>();
     let changed = false;
@@ -158,10 +255,21 @@ function messageInlineLayouts(
         segments = conversationTextSegments(message.text);
         segmentsOf.set(entry, segments);
     }
-    if (!segments.some((segment) => segment.type === "layout")) return undefined;
+    if (actions === undefined && !segments.some((segment) => segment.type === "layout"))
+        return undefined;
+    /* The client numbers action blocks only in the Markdown media layouts leave. */
+    let blockIndex = actions?.blockStart ?? 0;
     for (const [position, segment] of segments.entries()) {
         if (segment.type === "markdown") {
-            pieces.push(segment.text);
+            if (actions === undefined) {
+                pieces.push(segment.text);
+                continue;
+            }
+            const cut = actionCut(segment.text, blockIndex, streaming, figureTypes);
+            blockIndex += cut.count;
+            pieces.push(cut.text);
+            if (cut.changed) changed = true;
+            for (const layout of cut.layouts) layouts.set(layout.key, layout);
             continue;
         }
         /* A block still open is held while the reply streams, so its tags
@@ -171,7 +279,7 @@ function messageInlineLayouts(
             else pieces.push(segment.html);
             continue;
         }
-        const layout = blockLayout(segment.html, shown);
+        const layout = shown.size === 0 ? undefined : blockLayout(segment.html, shown);
         if (
             layout === undefined ||
             !mediaTreeSound(
@@ -189,7 +297,7 @@ function messageInlineLayouts(
                 framesAt,
             )}`,
         )}`;
-        layouts.set(key, { key, ...layout });
+        layouts.set(key, { kind: "media", key, ...layout });
         /* Its own block, at the left margin, whatever surrounds it. */
         pieces.push(`\n\n<!--happy-layout:${key}-->\n\n`);
     }
@@ -206,7 +314,7 @@ function messageInlineLayouts(
 type BlockParse = {
     /** Each source the parser asked about, and the picture it named then. */
     readonly asked: ReadonlyMap<string, ConversationMediaRunMember | undefined>;
-    readonly layout: Omit<MessageInlineLayout, "key"> | undefined;
+    readonly layout: Omit<MessageMediaLayout, "key" | "kind"> | undefined;
 };
 
 /* A block's parse depends on its HTML and on what each source it asked about
@@ -215,7 +323,10 @@ type BlockParse = {
 const BLOCK_PARSES = 128;
 const blockParses = new Map<string, BlockParse>();
 
-function blockLayout(html: string, shown: Shown): Omit<MessageInlineLayout, "key"> | undefined {
+function blockLayout(
+    html: string,
+    shown: Shown,
+): Omit<MessageMediaLayout, "key" | "kind"> | undefined {
     const held = blockParses.get(html);
     if (held && [...held.asked].every(([source, member]) => shown.get(source) === member)) {
         blockParses.delete(html);

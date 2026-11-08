@@ -28,10 +28,12 @@ import {
     happyAgentSidebarTree,
     happyAgentTabsOrdered,
     happyAgentTodoHeading,
+    type ChatActionInvocation,
     type ConversationFileDiff,
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
     type HappyShareLinkRole,
+    happyAgentChatOnboardingComposer,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { artifactBesideOpen } from "./artifactOpen";
@@ -381,6 +383,10 @@ import {
     type CommandPaletteTab,
 } from "./commandPaletteResults";
 import { openExternalLink } from "./externalLink";
+import {
+    HappyAgentConversationExtrasContext,
+    happyAgentConversationExtras,
+} from "./components/HappyAgentChatFigures";
 import { changedFileRenderedDiffOffered } from "./changedFileRenderedDiff";
 import { fileDownload } from "./fileDownload";
 import { imageCopy } from "./imageCopy";
@@ -648,6 +654,8 @@ export type AppHappyAgentSignIn =
 export interface AppHappyAgentSetup {
     readonly welcome: import("happy-desktop-state").WelcomeStore;
     readonly onboarding: import("happy-desktop-state").HappyAgentOnboardingStore;
+    /** Onboarding the server runs as a conversation, where it does. */
+    readonly chatOnboarding?: import("happy-desktop-state").HappyAgentChatOnboardingStore;
     readonly profile: HappyAgentProfileStore;
     /** Counts pairing codes down during setup, before the session's stores load. */
     readonly clock: HappyAgentClockStore;
@@ -657,6 +665,15 @@ export interface AppHappyAgentSetup {
 export interface AppHappyAgentSession {
     readonly welcome?: import("happy-desktop-state").WelcomeStore;
     readonly onboarding?: import("happy-desktop-state").HappyAgentOnboardingStore;
+    /**
+     * Onboarding the server runs as a conversation: its conversation's
+     * composer follows the flow. Absent on a host that offers none.
+     */
+    readonly chatOnboarding?: import("happy-desktop-state").HappyAgentChatOnboardingStore;
+    /** The assistants' own programs on the server's machine, for a reply's figure. */
+    readonly providerClis?: () => import("happy-desktop-state").HappyAgentProviderClisStore;
+    /** The default model for new conversations, for a reply's figure. */
+    readonly defaultModel?: () => import("happy-desktop-state").HappyAgentDefaultModelStore;
     readonly clock: HappyAgentClockStore;
     readonly connection: HappyAgentConnectionStore;
     /** This Happy Agent installation's WorkOS account. */
@@ -5055,9 +5072,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
               },
           }
         : undefined;
+    // Read once per connection: the session and its stores keep one identity
+    // for its lifetime, so every conversation surface keeps its figures too.
+    const conversationExtras = happyAgentConversationExtras(active?.session, {
+        teamServer: active?.happyCloud === true,
+        linkOpen: props.onExternalLinkOpen ?? openExternalLink,
+    });
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
             <MessageSettingsLinksContext.Provider value={settingsLinks}>
+                <HappyAgentConversationExtrasContext.Provider value={conversationExtras}>
                 <LinkCopyContext.Provider value={linkCopy}>
                     {/* Window chrome has one lifetime. Happy Agent workspaces keep their own
                 keyed lifetimes inside its content region, so changing machines
@@ -5209,6 +5233,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         </ModalOverlayPresence>
                     </WindowCover>
                 </LinkCopyContext.Provider>
+                </HappyAgentConversationExtrasContext.Provider>
             </MessageSettingsLinksContext.Provider>
         </HappyAgentVersionProvider>
     );
@@ -10176,6 +10201,14 @@ function HappyAgentConversationSurface(props: {
     workspace: HappyAgentWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
+    // The figures replies on this connection may hold, and the onboarding it
+    // may be running here.
+    const extras = use(HappyAgentConversationExtrasContext);
+    const chatOnboarding = useSyncExternalStore(
+        extras.chatOnboarding.subscribe,
+        extras.chatOnboarding.get,
+        extras.chatOnboarding.get,
+    );
     // The one subscription the transcript's references read through: every
     // reference row fans out from this snapshot rather than subscribing itself.
     const titlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
@@ -10242,7 +10275,15 @@ function HappyAgentConversationSurface(props: {
     const modelsNotConfigured =
         conversation.menus?.modelOptions.length === 0 &&
         conversation.menus.currentAccount !== "hidden";
-    const composerDisabled = props.readOnly || modelsNotConfigured;
+    // While onboarding runs in this conversation its flow decides whether the
+    // box takes typing, and says what it holds; no AI being connected yet is
+    // what onboarding is there to fix, not a reason to lock it.
+    const onboardingComposer = happyAgentChatOnboardingComposer(
+        chatOnboarding,
+        conversation.conversationId,
+    );
+    const composerDisabled =
+        props.readOnly || (onboardingComposer ? onboardingComposer.disabled : modelsNotConfigured);
     const configurable = !composerDisabled && sendRefusal === undefined;
     const activeActivity = happyAgentActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
@@ -10346,7 +10387,7 @@ function HappyAgentConversationSurface(props: {
                 <HappyAgentComposerDock
                     composer={conversation.composer}
                     disabled={composerDisabled}
-                    {...(!props.readOnly && modelsNotConfigured
+                    {...(!props.readOnly && !onboardingComposer && modelsNotConfigured
                         ? { disabledNote: MODELS_NOT_CONFIGURED_NOTE }
                         : {})}
                     submitDisabled={sendRefusal !== undefined || props.restarting === true}
@@ -10373,8 +10414,9 @@ function HappyAgentConversationSurface(props: {
                     composerPlaceholder={
                         props.readOnly
                             ? (props.readOnlyReason ?? composerPlaceholder(props.groupName))
-                            : // The tab already names the chat.
-                              composerPlaceholder(undefined)
+                            : (onboardingComposer?.placeholder ??
+                              // The tab already names the chat.
+                              composerPlaceholder(undefined))
                     }
                     composerControls={
                         <>{modelControl ? <ComposerModelControl {...modelControl} /> : null}</>
@@ -10602,6 +10644,21 @@ function HappyAgentConversationSurface(props: {
                               : undefined,
                   }
                 : {})}
+            /* A press is the reader's own message, so it goes where one may: not
+               into a chat that is read-only to them. A composer held for any
+               other reason, such as onboarding's own steps, still takes it. */
+            actionsPressable={conversation.actionsPressable}
+            actionPending={conversation.actionPending}
+            {...(props.readOnly ||
+            props.writeRefusal !== undefined ||
+            props.unavailable !== undefined
+                ? {}
+                : {
+                      onActionPress: (invocation: ChatActionInvocation) => {
+                          if (props.happyAgentOnline()) workspace.actionPress(invocation);
+                      },
+                  })}
+            {...(extras.figures ? { actionFigures: extras.figures } : {})}
             expandedTurnIds={conversation.expandedTurnIds}
             expandedMessageIds={conversation.expandedMessageIds}
             onMessageExpandedChange={(messageId, expanded) =>

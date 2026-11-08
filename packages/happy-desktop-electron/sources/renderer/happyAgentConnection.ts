@@ -16,6 +16,13 @@ import {
     happyAgentConversationRetentionFor,
     happyAgentOnboardingStoreCreate,
     happyAgentMobileConnectorStoreCreate,
+    happyAgentChatOnboardingStoreCreate,
+    happyAgentProviderClisStoreCreate,
+    happyAgentDefaultModelStoreCreate,
+    type HappyAgentChatOnboardingStore,
+    type HappyAgentDefaultModelStore,
+    type HappyAgentProviderClisStore,
+    type HappyAgentSessionId,
     welcomeStoreCreate,
     type WelcomeStore,
     type HappyAgentOnboardingStore,
@@ -87,6 +94,8 @@ function protocolMismatchOf(
 const WORKSPACE_MEMORY_PREFIX = "happy.happy-agent.workspace-memory.v1:";
 const FEED_FILTER_PREFIX = "happy.happy-agent.feed-filter.v1:";
 const RETRY_MS = 1_000;
+/** How many times onboarding's conversation is looked for before the window stops trying. */
+const CHAT_ONBOARDING_OPEN_ATTEMPTS = 10;
 const PRELOADED_SESSIONS = 12;
 
 function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMemoryPersistence {
@@ -136,6 +145,12 @@ export interface HappyAgentSession {
     gptLiveRuntimeCreate(options: Omit<GptLiveRuntimeCreateOptions, "client">): GptLiveRuntime;
     readonly welcome: WelcomeStore;
     readonly onboarding: HappyAgentOnboardingStore;
+    /** Onboarding the server runs as a conversation, where it does. */
+    readonly chatOnboarding: HappyAgentChatOnboardingStore;
+    /** The assistants' own programs on the server's machine, as a reply's figure shows one. */
+    readonly providerClis: () => HappyAgentProviderClisStore;
+    /** The default model for new conversations, as a reply's figure changes it. */
+    readonly defaultModel: () => HappyAgentDefaultModelStore;
     readonly connection: HappyAgentConnectionStore;
     readonly cloud: () => HappyAgentCloudStore;
     readonly teams: () => HappyAgentTeamsStore;
@@ -214,6 +229,8 @@ export interface HappyAgentSessionDeps {
 export interface HappyAgentConnectionHandle {
     readonly setup: AppHappyAgentSetup | undefined;
     readonly sync: import("happy-desktop-state").HappyAgentSync;
+    /** Onboarding the server runs as a conversation, followed for the connection's lifetime. */
+    readonly chatOnboarding: HappyAgentChatOnboardingStore;
     get(): HappyAgentSession | undefined;
     /**
      * Why this connection has nothing to hand over, when that is a failure. A
@@ -411,6 +428,22 @@ export function happyAgentConnectionOpen(input: {
      * connection opens. A terminal is started in it and keeps it afterwards.
      */
     readonly terminalColorScheme: () => TerminalColorScheme;
+    /**
+     * Opens a web page in the person's browser, such as a vendor's sign-in
+     * page. Absent, such a page is offered but not opened.
+     */
+    readonly linkOpen?: (url: string) => void;
+    /**
+     * Drains and restarts the server, for a provider chosen in onboarding that
+     * needs it. Only the machine's own Happy Agent is restarted from here.
+     */
+    readonly serverRestart?: () => Promise<void>;
+    /**
+     * Whether onboarding the server runs as a conversation begins on its own
+     * once the workspace loads, which for a team member is after their profile.
+     * Without it the window's owner decides when it begins.
+     */
+    readonly chatOnboardingBeginOnLoad?: boolean;
 }): HappyAgentConnectionHandle {
     let disposed = false;
     let session: HappyAgentSession | undefined;
@@ -491,6 +524,48 @@ export function happyAgentConnectionOpen(input: {
     const onboarding = pairingObserve
         ? { ...onboardingStore, mobile: pairingObserve.onboarding(onboardingStore.mobile) }
         : onboardingStore;
+    /** The conversation onboarding asked to open, until the workspace can say where it is. */
+    let chatOnboardingAgent: { readonly agentId: string; attempts: number } | undefined;
+    let chatOnboardingRetry: ReturnType<typeof setTimeout> | undefined;
+    const chatOnboardingOpen = (): void => {
+        const wanted = chatOnboardingAgent;
+        const target = session?.workspace;
+        if (disposed || wanted === undefined || target === undefined) return;
+        void target.sessionLocationRead(wanted.agentId as HappyAgentSessionId).then(
+            (location) => {
+                if (disposed || chatOnboardingAgent !== wanted) return;
+                if (location) {
+                    chatOnboardingAgent = undefined;
+                    input.deps.conversationOpen(location);
+                    return;
+                }
+                // A conversation made a moment ago may not be listed yet.
+                wanted.attempts += 1;
+                if (wanted.attempts >= CHAT_ONBOARDING_OPEN_ATTEMPTS) {
+                    chatOnboardingAgent = undefined;
+                    return;
+                }
+                chatOnboardingRetry = setTimeout(() => {
+                    chatOnboardingRetry = undefined;
+                    chatOnboardingOpen();
+                }, RETRY_MS);
+            },
+            () => undefined,
+        );
+    };
+    const chatOnboarding = happyAgentChatOnboardingStoreCreate({
+        client: directClient,
+        sync: agentConnection.sync,
+        conversationOpen: (agentId) => {
+            if (chatOnboardingRetry) clearTimeout(chatOnboardingRetry);
+            chatOnboardingRetry = undefined;
+            chatOnboardingAgent = { agentId, attempts: 0 };
+            chatOnboardingOpen();
+        },
+        ...(input.serverRestart ? { serverRestart: input.serverRestart } : {}),
+    });
+    let providerClis: HappyAgentProviderClisStore | undefined;
+    let defaultModel: HappyAgentDefaultModelStore | undefined;
     // Happy Cloud's own routes, over the same transport as the daemon's.
     const cloudRequest = input.happyCloud
         ? happyCloudRequestCreate({
@@ -558,6 +633,7 @@ export function happyAgentConnectionOpen(input: {
         ? {
               welcome,
               onboarding,
+              chatOnboarding,
               profile: profileStore,
               clock,
               retry: () => agentConnection.retry(),
@@ -654,6 +730,18 @@ export function happyAgentConnectionOpen(input: {
                         }),
                     welcome,
                     onboarding,
+                    chatOnboarding,
+                    providerClis: () =>
+                        (providerClis ??= happyAgentProviderClisStoreCreate({
+                            client: directClient,
+                            sync: agentConnection.sync,
+                            linkOpen: input.linkOpen ?? (() => undefined),
+                        })),
+                    defaultModel: () =>
+                        (defaultModel ??= happyAgentDefaultModelStoreCreate({
+                            client: directClient,
+                            models: client.models,
+                        })),
                     cloud: () => cloudStore,
                     teams: () => client.teams(),
                     connection: sessionConnection.store,
@@ -699,6 +787,9 @@ export function happyAgentConnectionOpen(input: {
                 // The directory now owns the live workspace subscription.
                 workspaceKeepWarm?.();
                 workspaceKeepWarm = undefined;
+                // Asked to open before there was a workspace to open it in.
+                chatOnboardingOpen();
+                if (input.chatOnboardingBeginOnLoad) chatOnboarding.begin();
             },
             (error: unknown) => {
                 modelsLoading = false;
@@ -738,12 +829,17 @@ export function happyAgentConnectionOpen(input: {
         client.storiesSettings().subscribe(() => undefined),
         // So does the feed itself, with its media fetched ahead before the row is drawn.
         client.stories().subscribe(() => undefined),
+        // Onboarding in a conversation is read only where the server runs it,
+        // and only on the connection's own hints, so following it costs nothing
+        // elsewhere; whoever begins it finds its flow already read.
+        chatOnboarding.subscribe(() => undefined),
     );
 
     return {
         setup,
         get: () => session,
         sync: agentConnection.sync,
+        chatOnboarding,
         failure: () =>
             compatibilityFailure ??
             (session ? undefined : (catalogFailure ?? onboarding.get().error)),
@@ -757,6 +853,7 @@ export function happyAgentConnectionOpen(input: {
             });
             disposed = true;
             if (retry) clearTimeout(retry);
+            if (chatOnboardingRetry) clearTimeout(chatOnboardingRetry);
             workspaceKeepWarm?.();
             workspace?.[Symbol.dispose]();
             if (session) {
@@ -766,6 +863,9 @@ export function happyAgentConnectionOpen(input: {
             }
             for (const unsubscribe of accountKeepWarm) unsubscribe();
             onboarding[Symbol.dispose]();
+            chatOnboarding[Symbol.dispose]();
+            providerClis?.[Symbol.dispose]();
+            defaultModel?.[Symbol.dispose]();
             client[Symbol.dispose]();
             mobileConnector[Symbol.dispose]();
             clock[Symbol.dispose]();

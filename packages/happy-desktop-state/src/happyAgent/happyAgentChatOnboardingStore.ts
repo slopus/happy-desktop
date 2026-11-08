@@ -1,0 +1,334 @@
+import {
+    HappyAgentApiError,
+    type HappyAgentClient,
+    type OnboardingFlow,
+} from "@slopus/happy-agent-client";
+import { createStore } from "zustand/vanilla";
+import { cuid2Create } from "../utils/cuid2Create.js";
+import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
+
+/**
+ * Onboarding run by the server as a conversation (`capabilities.chatOnboarding`,
+ * happy-agent API.md "Onboarding in a conversation").
+ *
+ * The server owns all of it: which recipe runs for the caller, what each
+ * message says, which step comes next. The window draws that conversation like
+ * any other. This store holds only what the window adds: whether the server
+ * runs it at all, the flow object as the server last described it, starting it
+ * once the host decides this is the moment, and opening its conversation.
+ *
+ * A server without the capability is `unsupported`, and the host keeps its own
+ * welcome and setup. That is never read as onboarding being complete, and
+ * nothing here ever marks onboarding complete.
+ */
+export type HappyAgentChatOnboardingSnapshot = {
+    /**
+     * `checking` until the connection has heard the server's health;
+     * `unsupported` when it does not run onboarding as a conversation;
+     * `available` once its flow has been read.
+     */
+    readonly status: "checking" | "unsupported" | "available";
+    /** The flow as the server last described it, while `available`. */
+    readonly flow?: OnboardingFlow;
+    /** The host asked for onboarding to begin on this connection. */
+    readonly begun: boolean;
+    /** Why the last read or start failed, until one succeeds. */
+    readonly error?: string;
+};
+
+export interface HappyAgentChatOnboardingStore {
+    get(): HappyAgentChatOnboardingSnapshot;
+    subscribe(listener: () => void): () => void;
+    /**
+     * Starts onboarding when the server says it is owed and has not begun,
+     * then opens its conversation; carries on where it stands otherwise. Safe
+     * to call again: the server starts it once, and the conversation is opened
+     * once per connection.
+     */
+    begin(): void;
+    [Symbol.dispose](): void;
+}
+
+export interface HappyAgentChatOnboardingStoreDeps {
+    readonly client: Pick<
+        HappyAgentClient,
+        "getOnboarding" | "getOnboardingFlow" | "startOnboardingFlow"
+    >;
+    readonly sync: HappyAgentSync;
+    /** Opens the conversation onboarding runs in, by its agent ID. */
+    readonly conversationOpen: (agentId: string) => void;
+    /**
+     * Drains and restarts the server, for a provider chosen during onboarding
+     * that takes effect only after a restart. Absent where the window cannot
+     * restart it, as for a team server.
+     */
+    readonly serverRestart?: () => Promise<void>;
+}
+
+const CHECKING: HappyAgentChatOnboardingSnapshot = { status: "checking", begun: false };
+const UNSUPPORTED: HappyAgentChatOnboardingSnapshot = { status: "unsupported", begun: false };
+
+/** A server that runs no onboarding of its own, for surfaces with no connection behind them. */
+export const happyAgentChatOnboardingStoreNoop: HappyAgentChatOnboardingStore = {
+    get: () => UNSUPPORTED,
+    subscribe: () => () => undefined,
+    begin: () => undefined,
+    [Symbol.dispose]: () => undefined,
+};
+const FLOW_EVENTS = ["onboarding.flow.updated"] as const;
+/** How long a failed read or start waits before it is tried again while someone watches. */
+const RETRY_MS = 4_000;
+
+/** Whether onboarding is over for good in this flow: finished, or every requirement met. */
+export function happyAgentChatOnboardingOver(flow: OnboardingFlow): boolean {
+    return (
+        flow.status === "finished" ||
+        (flow.completedVersion !== null && flow.completedVersion >= flow.onboardingVersion)
+    );
+}
+
+/** What onboarding asks of one conversation's composer while it runs there. */
+export type HappyAgentChatOnboardingComposer = {
+    /** The flow's scripted part takes no typing yet. */
+    readonly disabled: boolean;
+    readonly placeholder?: string;
+};
+
+/**
+ * The composer `agentId`'s conversation has while onboarding runs in it, or
+ * `undefined` anywhere else and once it has finished. A status this build does
+ * not know counts as running, as the API says.
+ */
+export function happyAgentChatOnboardingComposer(
+    snapshot: HappyAgentChatOnboardingSnapshot,
+    agentId: string,
+): HappyAgentChatOnboardingComposer | undefined {
+    const flow = snapshot.flow;
+    if (
+        snapshot.status !== "available" ||
+        flow === undefined ||
+        flow.agentId !== agentId ||
+        flow.status === "not_started" ||
+        flow.status === "finished"
+    )
+        return undefined;
+    return {
+        disabled: flow.composer === "disabled",
+        ...(flow.composerPlaceholder === null ? {} : { placeholder: flow.composerPlaceholder }),
+    };
+}
+
+/** The flow with the greater version: each change advances its UUIDv7. */
+function flowNewer(current: OnboardingFlow | undefined, next: OnboardingFlow): OnboardingFlow {
+    return current !== undefined && current.version >= next.version ? current : next;
+}
+
+/**
+ * Follows one connection's onboarding flow while watched. The connection's
+ * bootstrap, reconciles, and `onboarding.flow.updated` are delivery hints,
+ * each answered by one read of `GET /v0/onboarding/flow`; nothing opens until
+ * the first subscriber.
+ */
+export function happyAgentChatOnboardingStoreCreate(
+    deps: HappyAgentChatOnboardingStoreDeps,
+): HappyAgentChatOnboardingStore {
+    const store = createStore<HappyAgentChatOnboardingSnapshot>()(() => CHECKING);
+    const listeners = new Set<() => void>();
+    const mutationIdNext = cuid2Create(Date.now);
+    let disposed = false;
+    let follower: AbortController | undefined;
+    let reading: AbortController | undefined;
+    let readAgain = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let starting = false;
+    /** One identity for the start, however many times it is attempted. */
+    let startMutationId: string | undefined;
+    /** The conversations already opened, so the window is moved there once. */
+    const opened = new Set<string>();
+    /** The flow version a restart was asked for, so one restart answers one request. */
+    let restartedFor: string | undefined;
+
+    const set = (next: Partial<HappyAgentChatOnboardingSnapshot>): void => {
+        const current = store.getState();
+        const merged = { ...current, ...next };
+        if (
+            merged.status === current.status &&
+            merged.flow === current.flow &&
+            merged.begun === current.begun &&
+            merged.error === current.error
+        )
+            return;
+        store.setState(merged, true);
+    };
+
+    const retrySchedule = (): void => {
+        if (disposed || listeners.size === 0 || retry !== undefined) return;
+        retry = setTimeout(() => {
+            retry = undefined;
+            refresh();
+        }, RETRY_MS);
+    };
+
+    /** Takes a flow the server answered with, and does what it now asks of the window. */
+    const flowTake = (next: OnboardingFlow): void => {
+        if (disposed) return;
+        const flow = flowNewer(store.getState().flow, next);
+        set({ status: "available", flow, error: undefined });
+        const snapshot = store.getState();
+        if (!snapshot.begun || happyAgentChatOnboardingOver(flow)) return;
+        if (flow.agentId !== null && !opened.has(flow.agentId)) {
+            opened.add(flow.agentId);
+            deps.conversationOpen(flow.agentId);
+        }
+        if (!flow.restartRequired) restartedFor = undefined;
+        else if (deps.serverRestart && restartedFor === undefined) {
+            restartedFor = flow.version;
+            void deps
+                .serverRestart()
+                .catch(() => undefined)
+                .finally(refresh);
+        }
+    };
+
+    /** Reads the flow once, or once more after the read already out. */
+    const refresh = (): void => {
+        if (disposed || listeners.size === 0) return;
+        if (deps.sync.health()?.capabilities?.chatOnboarding !== true) {
+            // A server that has not answered yet is still being checked; one
+            // that answered without the capability does not run it.
+            set(
+                deps.sync.health() === undefined
+                    ? { status: "checking", flow: undefined }
+                    : { status: "unsupported", flow: undefined },
+            );
+            return;
+        }
+        if (reading !== undefined) {
+            readAgain = true;
+            return;
+        }
+        const controller = new AbortController();
+        reading = controller;
+        void deps.client
+            .getOnboardingFlow({ signal: controller.signal })
+            .then(
+                ({ flow }) => {
+                    if (reading === controller) flowTake(flow);
+                    if (store.getState().begun) startIfOwed();
+                },
+                (error: unknown) => {
+                    if (disposed || controller.signal.aborted || reading !== controller) return;
+                    set({ error: error instanceof Error ? error.message : String(error) });
+                    // A team member without a profile is refused until they
+                    // save one, and beginning reads the flow again then.
+                    if (!(error instanceof HappyAgentApiError && error.code === "profile_required"))
+                        retrySchedule();
+                },
+            )
+            .finally(() => {
+                if (reading !== controller) return;
+                reading = undefined;
+                if (readAgain) {
+                    readAgain = false;
+                    refresh();
+                }
+            });
+    };
+
+    /**
+     * Starts onboarding once the server says it is owed: its own
+     * `GET /v0/onboarding` reports it incomplete and the flow has not begun.
+     */
+    const startIfOwed = (): void => {
+        const flow = store.getState().flow;
+        if (disposed || starting || flow === undefined || flow.status !== "not_started") return;
+        starting = true;
+        startMutationId ??= mutationIdNext();
+        const mutationId = startMutationId;
+        void (async () => {
+            const onboarding = await deps.client.getOnboarding();
+            if (onboarding.completed || disposed) return;
+            const { flow: started } = await deps.client.startOnboardingFlow({ mutationId });
+            flowTake(started);
+        })()
+            .catch((error: unknown) => {
+                if (disposed) return;
+                set({ error: error instanceof Error ? error.message : String(error) });
+                retrySchedule();
+            })
+            .finally(() => {
+                starting = false;
+            });
+    };
+
+    const follow = (): void => {
+        if (disposed || follower !== undefined || listeners.size === 0) return;
+        const active = new AbortController();
+        follower = active;
+        void (async () => {
+            for await (const input of deps.sync.follow({
+                signal: active.signal,
+                events: FLOW_EVENTS,
+            })) {
+                if (input.kind === "error") continue;
+                // Every new connection may be a different server, with or
+                // without the capability, and its flow may have moved on.
+                if (
+                    input.kind === "bootstrap" ||
+                    input.kind === "reconcile" ||
+                    input.update.kind === "event" ||
+                    input.update.kind === "connected"
+                )
+                    refresh();
+            }
+        })()
+            .catch(() => undefined)
+            .finally(() => {
+                if (follower === active) follower = undefined;
+            });
+        refresh();
+    };
+
+    const stop = (): void => {
+        follower?.abort();
+        follower = undefined;
+        reading?.abort();
+        reading = undefined;
+        readAgain = false;
+        if (retry !== undefined) clearTimeout(retry);
+        retry = undefined;
+    };
+
+    return {
+        get: () => store.getState(),
+        subscribe(listener) {
+            if (disposed) return () => undefined;
+            listeners.add(listener);
+            const unsubscribe = store.subscribe(listener);
+            if (listeners.size === 1) follow();
+            let released = false;
+            return () => {
+                if (released) return;
+                released = true;
+                unsubscribe();
+                listeners.delete(listener);
+                if (listeners.size === 0) stop();
+            };
+        },
+        begin() {
+            if (disposed || store.getState().begun) return;
+            set({ begun: true });
+            const flow = store.getState().flow;
+            if (flow !== undefined) flowTake(flow);
+            startIfOwed();
+            // A team member's flow may have been refused until their profile
+            // existed, and nothing announces that it now answers.
+            if (flow === undefined) refresh();
+        },
+        [Symbol.dispose]() {
+            disposed = true;
+            stop();
+            listeners.clear();
+        },
+    };
+}
