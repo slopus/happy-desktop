@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ElectronApplication, Page } from "playwright";
 
 import { happyAgentRuntimeCreate } from "./happyAgentRuntime.js";
@@ -97,19 +96,7 @@ export async function gymTeamOnboardingRecord(options: {
     // the team server's onboarding alone.
     await mkdir(join(paths.happyHome, "agent"), { recursive: true });
     await writeFile(join(paths.happyHome, "agent", "onboarding-v0"), "");
-    // A local stack's server answers only at `<name>.localhost`, which the
-    // daemon's resolver is taught here, as a browser already resolves it.
-    const local = new URL(options.serverUrl).hostname.endsWith(".localhost");
-    const runtime = await happyAgentRuntimeCreate(
-        paths,
-        undefined,
-        NO_PROVIDERS,
-        local
-            ? {
-                  NODE_OPTIONS: `--require=${fileURLToPath(new URL("./localhostResolve.cjs", import.meta.url))}`,
-              }
-            : {},
-    );
+    const runtime = await happyAgentRuntimeCreate(paths, undefined, NO_PROVIDERS);
     const screenshots: string[] = [];
     const shot = async (page: Page, label: string) => {
         const path = join(
