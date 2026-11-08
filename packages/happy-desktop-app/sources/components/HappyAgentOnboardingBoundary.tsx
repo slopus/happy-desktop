@@ -83,7 +83,6 @@ export function HappyAgentOnboardingBoundary(props: {
         online: () => online,
         ...(online ? {} : { unavailable: "Happy can't reach this Happy Agent right now." }),
     });
-    const profileAvailable = props.online || snapshot.available === true;
     // A Happy Cloud member is in once their profile is saved. The server's own
     // setup, naming its Chief of Staff, happens in that bot's chat.
     if (!snapshot.state || snapshot.state.completed || snapshot.state.member?.completed)
@@ -108,17 +107,16 @@ export function HappyAgentOnboardingBoundary(props: {
         return (
             <ProfileSetupScreen
                 appearance={appearance.mode}
-                busy={profile.loading || profile.saving || !profileAvailable}
+                // A Happy Cloud server is not online until this profile exists,
+                // and its profile route answers regardless, so the button
+                // waits only on the profile itself; a save that can't reach
+                // the server says so in the step's message.
+                busy={profile.loading || profile.saving}
                 email={profile.email}
                 {...(message ? { message } : {})}
                 name={profile.name}
                 onCreate={() => {
-                    if (
-                        profileAvailable &&
-                        !profile.loading &&
-                        profile.name.trim() &&
-                        profile.email.trim()
-                    )
+                    if (!profile.loading && profile.name.trim() && profile.email.trim())
                         void props.profile.profileSave().catch(() => undefined);
                 }}
                 onEmailChange={props.profile.emailUpdate}
