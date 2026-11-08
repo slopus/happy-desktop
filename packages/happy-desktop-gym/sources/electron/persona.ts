@@ -36,7 +36,11 @@ export interface GymPersona {
     readonly typesFirst?: boolean;
 }
 
-/** Someone new to Happy, setting it up on their own computer. */
+/**
+ * Someone new to Happy, setting it up on a computer with nothing of theirs on
+ * it yet: they let their Chief of Staff look, it finds nothing, and their
+ * first task is a small new project, said in a line.
+ */
 export const GYM_PERSONA_NEW_USER: GymPersona = {
     name: "Alex Rivera",
     email: "alex@example.com",
@@ -44,13 +48,22 @@ export const GYM_PERSONA_NEW_USER: GymPersona = {
         /^Claude/u,
         /^Codex|^ChatGPT/u,
         /^Continue|^Next|^Let's go|^Get started/u,
+        /^Look at my recent work/u,
+        /^Start a new project/u,
         /^Skip/u,
         /^Later|^Not now|^Maybe later/u,
     ],
     avoids: [/sign-in page/iu, /^Cancel$/u],
     answers: [
+        {
+            when: /want (done|to build|to make)|own words|describe|in a (line|sentence)|which folder/iu,
+            text: "A small command-line tool that prints today's weather for my city, in a new folder called weather-today.",
+        },
+        {
+            when: /(name|call) (it|the project|the folder)|folder name|project name/iu,
+            text: "Call it weather-today.",
+        },
         { when: /name|call you|email/iu, text: "I'm Alex Rivera, alex@example.com" },
-        { when: /project/iu, text: "Let's skip the project for now." },
         { when: /phone/iu, text: "Not now, thanks." },
     ],
     wordsPerMinute: 260,
