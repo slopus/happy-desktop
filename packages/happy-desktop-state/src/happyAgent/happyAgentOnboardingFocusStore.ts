@@ -1,7 +1,4 @@
-import {
-    happyAgentChatOnboardingOver,
-    type HappyAgentChatOnboardingSnapshot,
-} from "./happyAgentChatOnboardingStore.js";
+import type { HappyAgentChatOnboardingSnapshot } from "./happyAgentChatOnboardingStore.js";
 import type { HappyAgentOnboardingSnapshot } from "./happyAgentOnboardingStore.js";
 
 /**
@@ -75,7 +72,8 @@ export const happyAgentOnboardingFocusStoreNoop: HappyAgentOnboardingFocusStore 
 /**
  * Whether a setup's onboarding holds its window: the conversation it runs in
  * has started and not finished, or a step of its own setup comes first, and
- * the person hasn't let it go.
+ * the person hasn't let it go. Requirements met is not the end: the
+ * conversation holds the window until its flow says it finished.
  */
 export function happyAgentOnboardingFocused(input: {
     readonly onboarding: HappyAgentOnboardingSnapshot;
@@ -89,6 +87,14 @@ export function happyAgentOnboardingFocused(input: {
         // A flow not started yet is owed one unless onboarding is complete.
         return flow.status === "not_started"
             ? state !== undefined && !state.completed
-            : !happyAgentChatOnboardingOver(flow);
+            : flow.status !== "finished";
     return state !== undefined && !state.completed && state.member?.completed !== true;
+}
+
+/**
+ * Whether focus offers "Skip setup": where the flow says, and otherwise
+ * always, as for a server that doesn't say.
+ */
+export function happyAgentOnboardingSkippable(snapshot: HappyAgentChatOnboardingSnapshot): boolean {
+    return snapshot.flow?.skippable ?? true;
 }
