@@ -2346,7 +2346,7 @@ function providerAddProps(
             !happyAgentCloudProviderAddTeamOnly(add.flow),
         keyVendors: snapshot.teamAllowed
             ? ["openai", "anthropic", "grok", "bedrock"]
-            : ["openai", "anthropic"],
+            : ["openai", "anthropic", "grok"],
         teamOnly: happyAgentCloudProviderAddTeamOnly(add.flow),
         phase: add.phase,
         ...(add.signIn ? { signIn: add.signIn } : {}),

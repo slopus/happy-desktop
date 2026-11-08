@@ -22,12 +22,9 @@ export type HappyAgentCloudProviderAddFlow =
     /** Claude's browser sign-in, or pasting a setup token instead. */
     | { readonly kind: "claude"; readonly setupToken: boolean };
 
-/**
- * Whether what a flow adds can only be kept for the team: Bedrock keys run
- * only in the team's `bedrock` connection, and Grok's, for now, in the team's.
- */
+/** Whether what a flow adds can only be kept for the team: Bedrock keys run only in its `bedrock` connection. */
 export function happyAgentCloudProviderAddTeamOnly(flow: HappyAgentCloudProviderAddFlow): boolean {
-    return flow.kind === "apiKey" && (flow.vendor === "bedrock" || flow.vendor === "grok");
+    return flow.kind === "apiKey" && flow.vendor === "bedrock";
 }
 
 /** The add dialog, while it is open. */
