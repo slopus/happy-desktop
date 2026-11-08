@@ -108,6 +108,12 @@ export async function gymOnboardingRecord(options: {
      * The video carries on across it.
      */
     readonly relaunchAfterTurns?: number;
+    /**
+     * Once the first task starts, opens it from the sidebar and stays there,
+     * as a person watching their task would, until the Chief of Staff's row
+     * says something new arrived; then goes back and carries on.
+     */
+    readonly visitFirstTask?: boolean;
 }): Promise<GymOnboardingRecording> {
     if (extname(options.out) !== ".mkv") throw new Error("The recording is H.264 in a .mkv file.");
     const persona = options.persona ?? GYM_PERSONA_NEW_USER;
@@ -178,6 +184,8 @@ export async function gymOnboardingRecord(options: {
             let ended: GymOnboardingRecording["ended"] = "limit";
             const flowSteps: (string | null)[] = [];
             const timeline: Record<string, number> = {};
+            /** The first tasks the flow last listed, oldest first. */
+            let firstTasks: readonly { readonly name: string }[] = [];
             /**
              * Whether the flow has finished, noting each new step it reports on
              * the way. Requirements met (`completedVersion`) is not the end of
@@ -190,7 +198,59 @@ export async function gymOnboardingRecord(options: {
                 const step = flow.step ?? null;
                 if (flow.status !== "not_started" && flowSteps.at(-1) !== step)
                     flowSteps.push(step);
+                firstTasks = flow.firstTasks ?? [];
                 return flow.status === "finished";
+            };
+            /** Where the visit to the first task stands. */
+            // Widened on purpose: `visitTurn` moves it on, which narrowing can't see.
+            let visit = (options.visitFirstTask ? "before" : "back") as
+                | "before"
+                | "inTask"
+                | "back";
+            const sidebarRow = (name: string) =>
+                page
+                    .locator('[data-happy-desktop-ui="sidebar-item"]:visible')
+                    .filter({ hasText: name })
+                    .first();
+            /** Opens the first task, or comes back once the Chief of Staff has news. */
+            const visitTurn = async (): Promise<boolean> => {
+                if (visit === "before") {
+                    const first = firstTasks[0];
+                    // After the Started message, which names the task.
+                    const named =
+                        first !== undefined &&
+                        (await page
+                            .locator('[data-happy-desktop-ui="message"]:visible')
+                            .last()
+                            .getByText(first.name)
+                            .first()
+                            .isVisible()
+                            .catch(() => false));
+                    const row = first === undefined ? undefined : sidebarRow(first.name);
+                    if (!named || row === undefined || !(await row.isVisible().catch(() => false)))
+                        return false;
+                    await driver.pause(2_000, 3_000);
+                    await driver.press(row);
+                    visit = "inTask";
+                    timeline.firstTaskOpened = Date.now() - (timeline.pressedAtEpochMs ?? 0);
+                    await driver.pause(1_500, 2_000);
+                    await shot(page, "in-task");
+                    return true;
+                }
+                if (visit !== "inTask") return false;
+                const chief = page
+                    .locator('[data-happy-desktop-ui="sidebar-item"][data-unread]:visible')
+                    .filter({ hasText: "Chief of Staff" })
+                    .first();
+                if (!(await chief.isVisible().catch(() => false))) return false;
+                timeline.chiefUnreadShown = Date.now() - (timeline.pressedAtEpochMs ?? 0);
+                await shot(page, "chief-unread");
+                await driver.pause(2_000, 3_000);
+                await driver.press(chief);
+                visit = "back";
+                await driver.pause(1_500, 2_000);
+                await shot(page, "back-with-chief");
+                return true;
             };
             /** Whether the window's own setup has handed over to the app. */
             const classicFinished = async (): Promise<boolean> =>
@@ -265,9 +325,13 @@ export async function gymOnboardingRecord(options: {
                         idleSince = Date.now();
                         continue;
                     }
-                    const acted = chatOnboarding
-                        ? await gymPersonaTurn(page, persona, driver, answers)
-                        : await classicTurn();
+                    // In the task, nothing there is the persona's to answer.
+                    const acted =
+                        (await visitTurn()) ||
+                        (visit !== "inTask" &&
+                            (chatOnboarding
+                                ? await gymPersonaTurn(page, persona, driver, answers)
+                                : await classicTurn()));
                     if (acted) {
                         turns += 1;
                         idleSince = Date.now();
@@ -296,7 +360,9 @@ export async function gymOnboardingRecord(options: {
                             .first()
                             .isVisible()
                             .catch(() => false));
-                    if (streaming) idleSince = Date.now();
+                    // A first task at work wakes the Chief of Staff when it
+                    // finishes or needs the person, however long that takes.
+                    if (streaming || firstTasks.length > 0) idleSince = Date.now();
                     if (Date.now() - idleSince > IDLE_END_MS) {
                         ended = "idle";
                         break;
@@ -332,7 +398,9 @@ export async function gymOnboardingRecord(options: {
 
 /**
  * Notes, once each, when the window first shows a conversation and its first
- * reply, relative to the welcome's press. Stops after a minute.
+ * reply, when focus chat holds the window and lets it go, and when a first
+ * task's sidebar row is pointed at, relative to the welcome's press. Stops
+ * once all are seen, the window closes, or after the take's longest run.
  */
 function watchTimeline(
     page: import("playwright").Page,
@@ -342,19 +410,33 @@ function watchTimeline(
     const marks: readonly (readonly [string, string])[] = [
         ["conversationShown", '[data-happy-desktop-ui="composer-textarea"]'],
         ["firstReplyShown", '[data-happy-desktop-ui="message"]:not([data-own])'],
+        ["focusShown", '[data-happy-desktop-ui="app-shell-focus"]'],
+        ["firstTaskHighlighted", '[data-happy-desktop-ui="sidebar-item"][data-highlight]'],
     ];
+    const visible = (selector: string): Promise<boolean> =>
+        page
+            .locator(selector)
+            .first()
+            .isVisible()
+            .catch(() => false);
     const tick = async (): Promise<void> => {
+        if (page.isClosed()) return;
         for (const [name, selector] of marks) {
             if (timeline[name] !== undefined) continue;
-            const visible = await page
-                .locator(selector)
-                .first()
-                .isVisible()
-                .catch(() => false);
-            if (visible) timeline[name] = Date.now() - pressedAt;
+            if (await visible(selector)) timeline[name] = Date.now() - pressedAt;
         }
-        if (marks.every(([name]) => timeline[name] !== undefined)) return;
-        if (Date.now() - pressedAt > 60_000) return;
+        if (
+            timeline.focusShown !== undefined &&
+            timeline.focusReleased === undefined &&
+            !(await visible('[data-happy-desktop-ui="app-shell-focus"]'))
+        )
+            timeline.focusReleased = Date.now() - pressedAt;
+        if (
+            marks.every(([name]) => timeline[name] !== undefined) &&
+            timeline.focusReleased !== undefined
+        )
+            return;
+        if (Date.now() - pressedAt > 30 * 60_000) return;
         setTimeout(() => void tick(), 100);
     };
     timeline.welcomePressed = 0;

@@ -121,6 +121,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             ...(flags.relaunchAfter !== undefined
                 ? { relaunchAfterTurns: flags.relaunchAfter }
                 : {}),
+            ...(flags.limitMinutes !== undefined ? { limitMs: flags.limitMinutes * 60_000 } : {}),
+            ...(flags.visitFirstTask ? { visitFirstTask: true } : {}),
             daemonSecrets,
         });
         console.log(JSON.stringify({ command, ...recording }, null, 2));
@@ -232,6 +234,8 @@ function parseFlags(args: readonly string[]): {
     readonly persona?: string;
     readonly machine?: string;
     readonly relaunchAfter?: number;
+    readonly limitMinutes?: number;
+    readonly visitFirstTask?: boolean;
     readonly teamCreate?: string;
     readonly teamJoin?: string;
     readonly from?: string;
@@ -259,6 +263,8 @@ function parseFlags(args: readonly string[]): {
         persona?: string;
         machine?: string;
         relaunchAfter?: number;
+        limitMinutes?: number;
+        visitFirstTask?: boolean;
         teamCreate?: string;
         teamJoin?: string;
         from?: string;
@@ -313,6 +319,12 @@ function parseFlags(args: readonly string[]): {
             if (!Number.isInteger(turns) || turns < 0)
                 throw new Error("--relaunch-after takes a number of turns.");
             result.relaunchAfter = turns;
+        } else if (value === "--visit-first-task") result.visitFirstTask = true;
+        else if (value === "--limit-minutes") {
+            const minutes = Number(requiredValue(value, next, () => index++));
+            if (!Number.isFinite(minutes) || minutes <= 0)
+                throw new Error("--limit-minutes takes a number of minutes.");
+            result.limitMinutes = minutes;
         } else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -401,7 +413,7 @@ Commands:
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML] [--daemon-env NAME]...
                     [--persona new-user|worker|recovers|typist] [--machine fresh|worked]
-                    [--relaunch-after TURNS]
+                    [--relaunch-after TURNS] [--limit-minutes MINUTES] [--visit-first-task]
   record-team-onboarding --out PATH.mkv --server URL [--server-name NAME]
                          [--persona owner|admin|teammate|viewer]
                          [--invite ROLE]... [--invites-out PATH.json]
