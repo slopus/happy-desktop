@@ -18,6 +18,11 @@ export interface GymPersona {
     readonly wordsPerMinute: number;
     /** How fast they type, in characters per second. */
     readonly charactersPerSecond: number;
+    /**
+     * The roles this person makes an invite code for, by their names, in
+     * order, when a reply shows a live invite. Absent, they make none.
+     */
+    readonly invites?: readonly string[];
 }
 
 /** Someone new to Happy, setting it up on their own computer. */
@@ -203,10 +208,48 @@ const LABEL_PRESSES_MAX = 3;
 export type GymPersonaAnswers = {
     readonly presses: Map<string, number>;
     readonly typed: Set<string>;
+    /** The invite codes made so far, with the role each was made for. */
+    readonly invites: { readonly role: string; readonly code: string }[];
 };
 
 export function gymPersonaAnswersCreate(): GymPersonaAnswers {
-    return { presses: new Map(), typed: new Set() };
+    return { presses: new Map(), typed: new Set(), invites: [] };
+}
+
+/**
+ * Makes the next invite this person wants in the live invite figure on screen:
+ * picks its role, creates the code, reads it and copies it, as they would to
+ * send it on. Answers whether there was one to make.
+ */
+async function gymPersonaInvite(
+    page: Page,
+    persona: GymPersona,
+    driver: GymPersonaDriver,
+    answers: GymPersonaAnswers,
+): Promise<boolean> {
+    const role = persona.invites?.[answers.invites.length];
+    if (role === undefined) return false;
+    const figure = page.locator('[data-happy-desktop-ui="chat-figure-invite"]').last();
+    if (!(await figure.isVisible().catch(() => false))) return false;
+    const code = figure.locator(".happy-chat-figure__invite-code");
+    const another = figure.getByRole("button", { name: "Make another" });
+    // A code still showing from the last invite is put away first.
+    if (await code.isVisible().catch(() => false)) {
+        if (!(await another.isEnabled().catch(() => false))) return false;
+        await driver.press(another);
+    }
+    const create = figure.getByRole("button", { name: "Create invite code" });
+    if (!(await create.isEnabled().catch(() => false))) return false;
+    await driver.read(await figure.innerText());
+    const picker = figure.getByRole("combobox", { name: "Role for the invite" });
+    await picker.selectOption({ label: role });
+    await driver.pause(400, 800);
+    await driver.press(create);
+    await code.waitFor({ state: "visible", timeout: 20_000 });
+    answers.invites.push({ role, code: (await code.innerText()).trim() });
+    await driver.read(await figure.innerText());
+    await driver.press(figure.getByRole("button", { name: "Copy invite code" }));
+    return true;
 }
 
 /** The label this persona presses among `labels`, or undefined when none suits them. */
@@ -240,6 +283,7 @@ export async function gymPersonaTurn(
     /** What this person already pressed or typed in this run. */
     answers: GymPersonaAnswers,
 ): Promise<boolean> {
+    if (await gymPersonaInvite(page, persona, driver, answers)) return true;
     const offer = await gymChatOfferRead(page, persona);
     switch (offer.kind) {
         case "none":

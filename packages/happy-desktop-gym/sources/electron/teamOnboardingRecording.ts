@@ -49,6 +49,8 @@ export interface GymTeamOnboardingRecording {
     readonly turns: number;
     readonly ended: "finished" | "idle" | "limit" | "failed";
     readonly failure?: string;
+    /** The invite codes the owner made, with the role each was made for. */
+    readonly invites: readonly { readonly role: string; readonly code: string }[];
 }
 
 /**
@@ -70,10 +72,24 @@ export async function gymTeamOnboardingRecord(options: {
     readonly login: string;
     readonly password: string;
     readonly persona?: GymPersona;
+    /**
+     * The roles to make invite codes for, by name, when the server's invite
+     * shows; the owner then says they are done inviting rather than later.
+     */
+    readonly invites?: readonly string[];
     readonly limitMs?: number;
 }): Promise<GymTeamOnboardingRecording> {
     if (extname(options.out) !== ".mkv") throw new Error("The recording is H.264 in a .mkv file.");
-    const persona = options.persona ?? GYM_PERSONA_TEAM_OWNER;
+    const base = options.persona ?? GYM_PERSONA_TEAM_OWNER;
+    const persona: GymPersona =
+        options.invites && options.invites.length > 0
+            ? {
+                  ...base,
+                  invites: options.invites,
+                  prefers: [/^Done inviting/u, ...base.prefers],
+                  avoids: [...base.avoids, /^Invite later/u],
+              }
+            : base;
     const limitMs = options.limitMs ?? 8 * 60_000;
     const { paths } = await gymRunPathsCreate("smoke");
     // This machine's own Happy Agent counts as already in use, so the take is
@@ -116,6 +132,7 @@ export async function gymTeamOnboardingRecord(options: {
             const video = await gymElectronVideoRecord(page, { path: options.out, codec: "h264" });
             const driver = await gymPersonaDriverCreate(page, persona);
             let turns = 0;
+            const answers = gymPersonaAnswersCreate();
             let ended: GymTeamOnboardingRecording["ended"] = "limit";
             let failure: string | undefined;
             let recorded: GymElectronVideoResult;
@@ -149,7 +166,6 @@ export async function gymTeamOnboardingRecord(options: {
                 await shot(page, "signed-in");
                 await profileSave(page, driver, persona);
                 const started = Date.now();
-                const answers = gymPersonaAnswersCreate();
                 let idleSince = Date.now();
                 while (Date.now() - started < limitMs) {
                     if (await onboardingFinished(page)) {
@@ -194,6 +210,7 @@ export async function gymTeamOnboardingRecord(options: {
                 screenshots,
                 turns,
                 ended,
+                invites: answers.invites,
                 ...(failure === undefined ? {} : { failure }),
             };
         } finally {

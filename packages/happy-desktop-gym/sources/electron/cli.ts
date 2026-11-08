@@ -7,6 +7,7 @@ import { gymLiveVoiceRun } from "./liveVoice.js";
 import { gymOnboardingRecord } from "./onboardingRecording.js";
 import { gymTeamOnboardingRecord } from "./teamOnboardingRecording.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
+import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -98,8 +99,22 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             serverName: flags.serverName ?? "Acme",
             login,
             password,
+            ...(flags.invite ? { invites: flags.invite } : {}),
         });
-        console.log(JSON.stringify({ command, ...recording }, null, 2));
+        // The codes go to a file only this account reads, for a teammate's
+        // take to join with; they are not printed.
+        const { invites, ...reported } = recording;
+        if (flags.invitesOut)
+            await writeFile(resolve(flags.invitesOut), `${JSON.stringify(invites)}\n`, {
+                mode: 0o600,
+            });
+        console.log(
+            JSON.stringify(
+                { command, ...reported, invites: invites.map((invite) => invite.role) },
+                null,
+                2,
+            ),
+        );
         return;
     }
     if (command === "attach-repository") {
@@ -165,6 +180,8 @@ function parseFlags(args: readonly string[]): {
     readonly daemonEnv?: readonly string[];
     readonly server?: string;
     readonly serverName?: string;
+    readonly invite?: readonly string[];
+    readonly invitesOut?: string;
 } {
     const result: {
         profile?: string;
@@ -180,6 +197,8 @@ function parseFlags(args: readonly string[]): {
         daemonEnv?: string[];
         server?: string;
         serverName?: string;
+        invite?: string[];
+        invitesOut?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -204,6 +223,10 @@ function parseFlags(args: readonly string[]): {
             result.serverName = requiredValue(value, next, () => index++);
         else if (value === "--daemon-env")
             (result.daemonEnv ??= []).push(requiredValue(value, next, () => index++));
+        else if (value === "--invite")
+            (result.invite ??= []).push(requiredValue(value, next, () => index++));
+        else if (value === "--invites-out")
+            result.invitesOut = requiredValue(value, next, () => index++);
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -250,6 +273,7 @@ Commands:
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML] [--daemon-env NAME]...
   record-team-onboarding --out PATH.mkv --server URL [--server-name NAME]
+                         [--invite ROLE]... [--invites-out PATH.json]
   clean --root PATH
 
 Workloads:
