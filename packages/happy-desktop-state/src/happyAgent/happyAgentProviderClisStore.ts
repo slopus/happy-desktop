@@ -2,7 +2,7 @@ import {
     HappyAgentApiError,
     type HappyAgentClient,
     type ProviderCli,
-    type ProviderCliSignInRequest,
+    type ProviderCliSignInTarget,
 } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import { cuid2Create } from "../utils/cuid2Create.js";
@@ -37,12 +37,6 @@ export type HappyAgentProviderClisSnapshot = {
  * decides; a team server then signs the caller in privately.
  */
 export type HappyAgentProviderCliTarget = "team" | "private";
-
-/**
- * Where a team server keeps a sign-in (API.md "Provider CLIs"): the team's
- * provider by its ID, or the caller's own. Not in the client's request type yet.
- */
-type ProviderCliSignInPlace = { readonly providerId: string } | { readonly scope: "private" };
 
 export interface HappyAgentProviderClisStore {
     get(): HappyAgentProviderClisSnapshot;
@@ -269,7 +263,7 @@ export function happyAgentProviderClisStoreCreate(
             request(cliId, () => deps.client.installProviderCli(cliId, { mutationId }));
         },
         cliSignIn(cliId, target) {
-            let place: ProviderCliSignInPlace | undefined;
+            let place: ProviderCliSignInTarget | undefined;
             if (target === "private") place = { scope: "private" };
             else if (target === "team") {
                 const providerId = store.getState().clis.get(cliId)?.providerId;
@@ -285,11 +279,12 @@ export function happyAgentProviderClisStoreCreate(
             }
             signingIn.add(cliId);
             const mutationId = mutationIdNext();
-            const body: ProviderCliSignInRequest & { readonly target?: ProviderCliSignInPlace } = {
-                mutationId,
-                ...(place === undefined ? {} : { target: place }),
-            };
-            request(cliId, () => deps.client.signInProviderCli(cliId, body));
+            request(cliId, () =>
+                deps.client.signInProviderCli(cliId, {
+                    mutationId,
+                    ...(place === undefined ? {} : { target: place }),
+                }),
+            );
         },
         cliSignInCodeSend(cliId, code) {
             const mutationId = mutationIdNext();

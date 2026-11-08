@@ -180,4 +180,42 @@ describe("happyAgentChatOnboardingStore", () => {
         stop();
         store[Symbol.dispose]();
     });
+
+    it("tells flows apart by id where the server sends one, whatever their recipe", async () => {
+        const first = flowOf({
+            id: "flow-1",
+            version: "0190a000-0000-7000-8000-000000000009",
+            recipe: "team-owner",
+            status: "running",
+            agentId: "chief-of-staff",
+            step: "invite",
+        });
+        const server = serverOf({ read: first });
+        const store = happyAgentChatOnboardingStoreCreate(server.deps);
+        const stop = store.subscribe(() => undefined);
+        await vi.waitFor(() => expect(store.get().flow?.step).toBe("invite"));
+
+        // An older answer about the same flow changes nothing.
+        server.options.read = {
+            ...first,
+            version: "0190a000-0000-7000-8000-000000000001",
+            step: "name",
+        };
+        server.reconcile();
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        expect(store.get().flow?.step).toBe("invite");
+
+        // Another flow of the same recipe replaces it, though its version is lower.
+        server.options.read = {
+            ...first,
+            id: "flow-2",
+            version: "0190a000-0000-7000-8000-000000000002",
+            step: "welcome",
+        };
+        server.reconcile();
+        await vi.waitFor(() => expect(store.get().flow?.id).toBe("flow-2"));
+        expect(store.get().flow?.step).toBe("welcome");
+        stop();
+        store[Symbol.dispose]();
+    });
 });
