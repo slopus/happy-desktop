@@ -7,7 +7,6 @@ import {
     type HappyAgentCustomProviderDefinition,
     type HappyAgentCustomProviderInput,
     type HappyAgentCustomProviderProtocol,
-    type HappyAgentProviderCli,
     type HappyAgentProviderCredentialInput,
     type HappyAgentProviderCredentials,
     type HappyAgentProviderCredentialsApi,
@@ -31,11 +30,6 @@ export interface HappyAgentProviderEntry extends HappyAgentModelProvider {
         readonly saving: ReadonlySet<string>;
     };
     /**
-     * The team subscription a Happy Cloud server signs in to for this
-     * provider, such as a ChatGPT or Claude plan. Absent elsewhere.
-     */
-    readonly subscription?: HappyAgentProviderSubscription;
-    /**
      * The protocol of a provider the team added itself on a Happy Cloud
      * server, which the team may edit and remove. Absent on built-ins.
      */
@@ -53,16 +47,6 @@ export interface HappyAgentCustomProviderEditor {
     readonly removing: boolean;
     /** Why reading, saving, or removing was refused. Cleared by the next attempt. */
     readonly error?: UserError;
-}
-
-export interface HappyAgentProviderSubscription {
-    /** The vendor's name for what is signed in to, such as "Codex". */
-    readonly name: string;
-    readonly signIn: HappyAgentProviderCli["signIn"];
-    /** The current or last sign-in; its authorization says what to do next. */
-    readonly operation: HappyAgentProviderCli["operation"];
-    /** A start, code, or cancel this window sent that is not answered yet. */
-    readonly pending: boolean;
 }
 
 export interface HappyAgentProvidersSnapshot {
@@ -103,14 +87,6 @@ export interface HappyAgentProvidersStore {
     credentialEnabledUpdate(providerId: string, credentialId: string, enabled: boolean): void;
     /** Removes one team key; a refusal lands in `saveError`. */
     credentialRemove(providerId: string, credentialId: string): void;
-    /** Starts the team subscription's sign-in; a refusal lands in `saveError`. */
-    subscriptionSignIn(providerId: string): void;
-    /** Hands the waiting sign-in the code the vendor's page showed. */
-    subscriptionCodeSubmit(providerId: string, code: string): Promise<void>;
-    /** Stops the sign-in that is waiting. */
-    subscriptionSignInCancel(providerId: string): void;
-    /** Signs the team out of the subscription, removing its shared credential. */
-    subscriptionSignOut(providerId: string): void;
     /** Opens the dialog that adds a provider of the team's own. */
     customProviderCreateOpen(): void;
     /** Opens the dialog for one of the team's own providers and reads what it stores. */
@@ -147,8 +123,6 @@ const EMPTY: HappyAgentProvidersSnapshot = {
  * stops the moment nobody is.
  */
 const PROVIDERS_POLL_INTERVAL_MS = 4_000;
-/** How often a sign-in the person is finishing is re-read, so it lands promptly. */
-const SIGN_IN_POLL_INTERVAL_MS = 1_500;
 
 export function happyAgentProvidersStoreCreate(
     deps: HappyAgentProvidersStoreDeps,
@@ -167,50 +141,16 @@ export function happyAgentProvidersStoreCreate(
     let credentialSettles: (() => void)[] = [];
     /** The team keys the server last reported, by provider. */
     let credentials: ReadonlyMap<string, HappyAgentProviderCredentials> = new Map();
-    /** The server's subscription sign-ins, by the provider each serves. */
-    let clis: ReadonlyMap<string, HappyAgentProviderCli> = new Map();
     /** The team's own providers the server last reported, by protocol. */
     let customProtocols: ReadonlyMap<string, HappyAgentCustomProviderProtocol> = new Map();
     /** Whether the reader's permissions have been asked for since the surface was watched. */
     let permissionsAsked = false;
-    /** Providers whose sign-in request this window has not had answered. */
-    const cliPending = new Set<string>();
-    /**
-     * Whether the server said it offers no subscription sign-in. Asked again
-     * only when the surface is next watched, never on every refresh.
-     */
-    let clisUnsupported = false;
-    const subscriptionOf = (providerId: string): HappyAgentProviderSubscription | undefined => {
-        const cli = clis.get(providerId);
-        if (!cli) return undefined;
-        return {
-            name: cli.name,
-            signIn: cli.signIn,
-            operation: cli.operation,
-            pending: cliPending.has(providerId),
-        };
-    };
-    const subscriptionsEqual = (
-        left: HappyAgentProviderSubscription | undefined,
-        right: HappyAgentProviderSubscription | undefined,
-    ): boolean =>
-        left === right ||
-        (left !== undefined &&
-            right !== undefined &&
-            left.pending === right.pending &&
-            JSON.stringify(left) === JSON.stringify(right));
     const entryOf = (provider: HappyAgentModelProvider): HappyAgentProviderEntry => {
         const keys = credentials.get(provider.id);
-        const subscription = subscriptionOf(provider.id);
         const protocol = customProtocols.get(provider.id);
-        const {
-            subscription: _previous,
-            custom: _custom,
-            ...rest
-        } = provider as HappyAgentProviderEntry;
+        const { custom: _custom, ...rest } = provider as HappyAgentProviderEntry;
         return {
             ...rest,
-            ...(subscription ? { subscription } : {}),
             ...(protocol ? { custom: { protocol } } : {}),
             saving: saving.has(provider.id),
             ...(keys
@@ -235,16 +175,10 @@ export function happyAgentProvidersStoreCreate(
 
     const schedule = (): void => {
         if (disposed || listeners.size === 0 || timer !== undefined) return;
-        const signingIn = [...clis.values()].some(
-            (cli) => cli.operation?.status === "running" || cli.operation?.status === "waiting",
-        );
-        timer = setTimeout(
-            () => {
-                timer = undefined;
-                load();
-            },
-            signingIn ? SIGN_IN_POLL_INTERVAL_MS : PROVIDERS_POLL_INTERVAL_MS,
-        );
+        timer = setTimeout(() => {
+            timer = undefined;
+            load();
+        }, PROVIDERS_POLL_INTERVAL_MS);
     };
 
     /**
@@ -273,8 +207,7 @@ export function happyAgentProvidersStoreCreate(
             current.providers.map((provider) =>
                 provider.saving === saving.has(provider.id) &&
                 provider.credentials?.saving ===
-                    (credentialSaving.get(provider.id) ?? NO_CREDENTIALS_SAVING) &&
-                subscriptionsEqual(provider.subscription, subscriptionOf(provider.id))
+                    (credentialSaving.get(provider.id) ?? NO_CREDENTIALS_SAVING)
                     ? provider
                     : entryOf(provider),
             ),
@@ -289,10 +222,10 @@ export function happyAgentProvidersStoreCreate(
         const currentController = new AbortController();
         controller = currentController;
         void deps.client.getConfig({ signal: currentController.signal }).then(
-            async (response) => {
+            (response) => {
                 if (disposed || controller !== currentController) return;
                 settle(response.config);
-                // Only a Happy Cloud server signs subscriptions in for its team.
+                // Only a Happy Cloud server keeps team keys and the team's own providers.
                 const api = deps.credentials;
                 if (api && credentials.size > 0 && !permissionsAsked) {
                     permissionsAsked = true;
@@ -307,12 +240,6 @@ export function happyAgentProvidersStoreCreate(
                             permissionsAsked = false;
                         },
                     );
-                }
-                if (api && credentials.size > 0 && !clisUnsupported) {
-                    const read = await api.providerClisRead().catch(() => undefined);
-                    if (disposed || controller !== currentController) return;
-                    if (read === null) clisUnsupported = true;
-                    else if (read) clisAccept(read);
                 }
                 controller = undefined;
                 schedule();
@@ -334,50 +261,6 @@ export function happyAgentProvidersStoreCreate(
             },
         );
     };
-
-    /** Keeps the newer of what is known and what arrived, and redraws what changed. */
-    function clisAccept(read: readonly HappyAgentProviderCli[]): void {
-        const next = new Map(clis);
-        for (const cli of read) {
-            if (cli.providerId === null) continue;
-            const known = next.get(cli.providerId);
-            if (!known || known.version <= cli.version) next.set(cli.providerId, cli);
-        }
-        clis = next;
-        savingPublish();
-    }
-
-    /** Sends one sign-in request for a provider and takes in the sign-in it answers with. */
-    function cliSend(
-        providerId: string,
-        request: (
-            api: HappyAgentProviderCredentialsApi,
-            cliId: string,
-        ) => Promise<HappyAgentProviderCli>,
-    ): Promise<void> {
-        const api = deps.credentials;
-        const cli = clis.get(providerId);
-        if (disposed || !api || !cli)
-            return Promise.reject(happyAgentUserError("Not available here."));
-        cliPending.add(providerId);
-        const { saveError: _cleared, ...rest } = store.getState();
-        store.setState(rest, true);
-        savingPublish();
-        return request(api, cli.id).then(
-            (answer) => {
-                cliPending.delete(providerId);
-                if (disposed) return;
-                clisAccept([answer]);
-                timerCancel();
-                schedule();
-            },
-            (error: unknown) => {
-                cliPending.delete(providerId);
-                if (!disposed) savingPublish();
-                throw happyAgentUserError(error);
-            },
-        );
-    }
 
     /** Reads the configuration again at once, after a change the server accepted. */
     function reread(): void {
@@ -458,7 +341,6 @@ export function happyAgentProvidersStoreCreate(
                 unsubscribe();
                 listeners.delete(listener);
                 if (listeners.size !== 0) return;
-                clisUnsupported = false;
                 permissionsAsked = false;
                 timerCancel();
                 controller?.abort();
@@ -502,31 +384,6 @@ export function happyAgentProvidersStoreCreate(
         credentialEnabledUpdate(providerId, credentialId, enabled) {
             credentialChange(providerId, credentialId, (api) =>
                 api.credentialEnabledUpdate(providerId, credentialId, enabled),
-            );
-        },
-        subscriptionSignIn(providerId) {
-            if (cliPending.has(providerId)) return;
-            void cliSend(providerId, (api, cliId) =>
-                api.signInStart(cliId, crypto.randomUUID()),
-            ).catch((error: unknown) => {
-                if (!disposed) store.setState({ saveError: happyAgentUserError(error) }, false);
-            });
-        },
-        subscriptionCodeSubmit(providerId, code) {
-            return cliSend(providerId, (api, cliId) =>
-                api.signInCodeSubmit(cliId, code, crypto.randomUUID()),
-            );
-        },
-        subscriptionSignInCancel(providerId) {
-            void cliSend(providerId, (api, cliId) =>
-                api.signInCancel(cliId, crypto.randomUUID()),
-            ).catch((error: unknown) => {
-                if (!disposed) store.setState({ saveError: happyAgentUserError(error) }, false);
-            });
-        },
-        subscriptionSignOut(providerId) {
-            credentialChange(providerId, "default", (api) =>
-                api.credentialRemove(providerId, "default"),
             );
         },
         credentialRemove(providerId, credentialId) {
@@ -648,10 +505,6 @@ export const happyAgentProvidersStoreNoop: HappyAgentProvidersStore = {
     credentialAdd: () => Promise.reject(new Error("Not available here.")),
     credentialEnabledUpdate: () => undefined,
     credentialRemove: () => undefined,
-    subscriptionSignIn: () => undefined,
-    subscriptionCodeSubmit: () => Promise.reject(new Error("Not available here.")),
-    subscriptionSignInCancel: () => undefined,
-    subscriptionSignOut: () => undefined,
     customProviderCreateOpen: () => undefined,
     customProviderEditOpen: () => undefined,
     customProviderEditorClose: () => undefined,

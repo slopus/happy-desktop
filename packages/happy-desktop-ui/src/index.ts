@@ -1097,7 +1097,6 @@ export {
     type HappyAgentProviderKeyRow,
     type HappyAgentProviderKeyState,
     type HappyAgentProviderKeys,
-    type HappyAgentProviderSubscriptionRow,
     type HappyAgentProviderSettingsProps,
     type HappyAgentProviderStatus,
 } from "./pages/settings/HappyAgentProviderSettings";
@@ -1131,6 +1130,7 @@ export {
     HappyAgentProviderAddDialog,
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderAddFlow,
+    type HappyAgentProviderKeyVendor,
 } from "./pages/settings/HappyAgentProviderAddDialog";
 export {
     HappyAgentFileTierSettings,

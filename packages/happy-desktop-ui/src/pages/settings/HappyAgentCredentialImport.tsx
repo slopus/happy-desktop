@@ -41,11 +41,6 @@ export type HappyAgentCredentialImportRow =
               | { readonly ok: false; readonly message: string };
       })
     | (HappyAgentCredentialImportRowBase & {
-          readonly use: "signIn";
-          /** Whether this server can sign the subscription in itself. */
-          readonly signInAvailable: boolean;
-      })
-    | (HappyAgentCredentialImportRowBase & {
           readonly use: "unsupported";
           readonly reason: string;
       });
@@ -66,8 +61,6 @@ export interface HappyAgentCredentialImportProps {
     onPickToggle: (id: string) => void;
     onPickScopeChange: (id: string, scope: HappyAgentCredentialImportScope) => void;
     onImport: () => void;
-    /** Starts the server's own sign-in for the subscription a row found. */
-    onSignIn?: (id: string) => void;
 }
 
 /**
@@ -162,7 +155,6 @@ function HappyAgentCredentialImportDialog(props: HappyAgentCredentialImportProps
                                     teamAllowed={props.teamAllowed}
                                     onPickScopeChange={props.onPickScopeChange}
                                     onPickToggle={props.onPickToggle}
-                                    {...(props.onSignIn ? { onSignIn: props.onSignIn } : {})}
                                 />
                             ))}
                             {props.rows.length === 0 ? (
@@ -201,7 +193,6 @@ function HappyAgentCredentialImportRowView(props: {
     readonly teamAllowed: boolean;
     onPickToggle: (id: string) => void;
     onPickScopeChange: (id: string, scope: HappyAgentCredentialImportScope) => void;
-    onSignIn?: (id: string) => void;
 }) {
     const row = props.row;
     const imported = row.use === "import" && row.result?.ok === true;
@@ -256,19 +247,6 @@ function HappyAgentCredentialImportRowView(props: {
                     size="compact"
                     value={row.picked}
                 />
-            ) : row.use === "signIn" ? (
-                props.onSignIn && row.signInAvailable ? (
-                    <Button
-                        disabled={props.busy}
-                        onClick={() => props.onSignIn?.(row.id)}
-                        size="small"
-                        variant="secondary"
-                    >
-                        Sign in on server
-                    </Button>
-                ) : (
-                    <HappyAgentSettingsStatus label="Sign-in can't be copied" variant="neutral" />
-                )
             ) : row.use === "unsupported" ? (
                 <HappyAgentSettingsStatus label="Not supported" variant="neutral" />
             ) : null}

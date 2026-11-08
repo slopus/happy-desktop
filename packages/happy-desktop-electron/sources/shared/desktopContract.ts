@@ -55,15 +55,12 @@ export type DesktopCredentialKind = "api_key" | "aws_keys" | "oauth_token" | "oa
 /**
  * What can be done with a found credential.
  *
- * - `import`: copied to Happy Cloud as it is.
- * - `signIn`: a subscription's sign-in, which rotates its refresh token, so
- *   copying it would sign this computer out. The cloud signs in on its own,
- *   as the built-in provider `providerId`.
+ * - `import`: copied to Happy Cloud as it is. A sign-in (`oauth`) is taken
+ *   over by the server, so the copy on this computer may stop working.
  * - `unsupported`: Happy Cloud can't use it; `reason` says why.
  */
 export type DesktopCredentialUse =
     | { readonly kind: "import"; readonly credential: DesktopCredentialKind }
-    | { readonly kind: "signIn"; readonly providerId: string }
     | { readonly kind: "unsupported"; readonly reason: string };
 
 /**

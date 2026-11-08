@@ -10,10 +10,13 @@ import { SegmentedControl } from "../../SegmentedControl";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
 
+/** The vendors an API key is added for by hand; Bedrock also takes AWS access keys. */
+export type HappyAgentProviderKeyVendor = "openai" | "anthropic" | "grok" | "bedrock";
+
 /** Which way of adding a provider the dialog shows. */
 export type HappyAgentProviderAddFlow =
     | { readonly kind: "choose" }
-    | { readonly kind: "apiKey"; readonly vendor: "openai" | "anthropic" }
+    | { readonly kind: "apiKey"; readonly vendor: HappyAgentProviderKeyVendor }
     | { readonly kind: "chatgpt" }
     | { readonly kind: "claude"; readonly setupToken: boolean };
 
@@ -37,6 +40,8 @@ export interface HappyAgentProviderAddDialogProps {
     };
     readonly done?: string;
     readonly error?: { readonly title: string; readonly message: string };
+    /** Whether the reader may set team routing, such as Bedrock's region. */
+    readonly teamRoutingEditable: boolean;
     /** Whether this server signs in to ChatGPT itself. */
     readonly chatgptAvailable: boolean;
     /** Whether this server signs in to Claude itself; a setup token works either way. */
@@ -45,7 +50,13 @@ export interface HappyAgentProviderAddDialogProps {
     onBack: () => void;
     onClose: () => void;
     onDestinationChange: (to: "private" | "team") => void;
-    onApiKeySubmit: (secret: string) => void;
+    /** A Bedrock key may name the region every team Bedrock key routes to. */
+    onApiKeySubmit: (secret: string, region?: string) => void;
+    onAwsKeysSubmit: (input: {
+        readonly accessKeyId: string;
+        readonly secretAccessKey: string;
+        readonly region?: string;
+    }) => void;
     onSetupTokenSubmit: (token: string) => void;
     onSignInStart: () => void;
     onSignInCodeSubmit: (code: string) => void;
@@ -53,7 +64,44 @@ export interface HappyAgentProviderAddDialogProps {
     onExternalOpen?: (url: string) => void;
 }
 
-const VENDOR_NAMES = { openai: "OpenAI", anthropic: "Anthropic" } as const;
+const KEY_VENDORS: readonly HappyAgentProviderKeyVendor[] = [
+    "openai",
+    "anthropic",
+    "grok",
+    "bedrock",
+];
+
+const VENDOR_NAMES: Record<HappyAgentProviderKeyVendor, string> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    grok: "Grok",
+    bedrock: "Amazon Bedrock",
+};
+
+const VENDOR_SHORT_NAMES: Record<HappyAgentProviderKeyVendor, string> = {
+    ...VENDOR_NAMES,
+    bedrock: "Bedrock",
+};
+
+const KEY_PLACEHOLDERS: Record<HappyAgentProviderKeyVendor, string> = {
+    openai: "sk-…",
+    anthropic: "sk-ant-…",
+    grok: "xai-…",
+    bedrock: "ABSK…",
+};
+
+function vendorOf(value: string): HappyAgentProviderKeyVendor {
+    return KEY_VENDORS.find((vendor) => vendor === value) ?? "openai";
+}
+
+/** AWS access keys while they are typed. */
+interface AwsDraft {
+    readonly accessKeyId: string;
+    readonly secretAccessKey: string;
+    readonly region: string;
+}
+
+const AWS_EMPTY: AwsDraft = { accessKeyId: "", secretAccessKey: "", region: "" };
 
 function titleOf(flow: HappyAgentProviderAddFlow): string {
     switch (flow.kind) {
@@ -75,6 +123,20 @@ function titleOf(flow: HappyAgentProviderAddFlow): string {
  */
 export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogProps) {
     const [secret, setSecret] = useState("");
+    const [aws, setAws] = useState<AwsDraft | undefined>(undefined);
+    const [region, setRegion] = useState("");
+    const keySubmit = (): void => {
+        const routed = region.trim();
+        props.onApiKeySubmit(secret, routed === "" ? undefined : routed);
+    };
+    const awsSubmit = (): void => {
+        if (!aws) return;
+        props.onAwsKeysSubmit({
+            accessKeyId: aws.accessKeyId,
+            secretAccessKey: aws.secretAccessKey,
+            ...(aws.region.trim() ? { region: aws.region } : {}),
+        });
+    };
     const busy = props.phase === "busy";
     const open = (url: string): void => {
         if (props.onExternalOpen) props.onExternalOpen(url);
@@ -82,6 +144,8 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
     };
     const flowSelect = (flow: HappyAgentProviderAddFlow): void => {
         setSecret("");
+        setAws(undefined);
+        setRegion("");
         props.onFlowSelect(flow);
     };
     const back = (): void => {
@@ -95,10 +159,16 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
     const done = props.phase === "done";
     const primary = ((): { label: string; onClick: () => void; disabled?: boolean } | undefined => {
         if (done) return { label: "Done", onClick: props.onClose };
+        if (flow.kind === "apiKey" && aws)
+            return {
+                label: busy ? "Checking the keys…" : "Add",
+                onClick: awsSubmit,
+                disabled: aws.accessKeyId.trim() === "" || aws.secretAccessKey.trim() === "",
+            };
         if (flow.kind === "apiKey")
             return {
                 label: busy ? "Checking the key…" : "Add",
-                onClick: () => props.onApiKeySubmit(secret),
+                onClick: keySubmit,
                 disabled: secret.trim() === "",
             };
         if (flow.kind === "claude" && flow.setupToken)
@@ -228,30 +298,100 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                         aria-label="Vendor"
                                         disabled={busy}
                                         onChange={(vendor) =>
-                                            flowSelect({
-                                                kind: "apiKey",
-                                                vendor:
-                                                    vendor === "anthropic" ? "anthropic" : "openai",
-                                            })
+                                            flowSelect({ kind: "apiKey", vendor: vendorOf(vendor) })
                                         }
-                                        segments={[
-                                            { value: "openai", label: VENDOR_NAMES.openai },
-                                            { value: "anthropic", label: VENDOR_NAMES.anthropic },
-                                        ]}
+                                        segments={KEY_VENDORS.map((vendor) => ({
+                                            value: vendor,
+                                            label: VENDOR_SHORT_NAMES[vendor],
+                                        }))}
                                         size="small"
                                         value={flow.vendor}
                                     />
-                                    <TextField
-                                        autoComplete="off"
-                                        autoFocus
-                                        disabled={busy}
-                                        label={`${VENDOR_NAMES[flow.vendor]} API key`}
-                                        onSubmit={() => props.onApiKeySubmit(secret)}
-                                        onValueChange={setSecret}
-                                        placeholder={flow.vendor === "openai" ? "sk-…" : "sk-ant-…"}
-                                        type="password"
-                                        value={secret}
-                                    />
+                                    {flow.vendor === "bedrock" ? (
+                                        <SegmentedControl
+                                            aria-label="Kind of key"
+                                            disabled={busy}
+                                            onChange={(kind) => {
+                                                setSecret("");
+                                                setAws(kind === "aws" ? AWS_EMPTY : undefined);
+                                            }}
+                                            segments={[
+                                                { value: "apiKey", label: "API key" },
+                                                { value: "aws", label: "Access keys" },
+                                            ]}
+                                            size="small"
+                                            value={aws ? "aws" : "apiKey"}
+                                        />
+                                    ) : null}
+                                    {flow.vendor === "bedrock" && aws ? (
+                                        <>
+                                            <TextField
+                                                autoComplete="off"
+                                                autoFocus
+                                                disabled={busy}
+                                                label="Access key ID"
+                                                onSubmit={awsSubmit}
+                                                onValueChange={(accessKeyId) =>
+                                                    setAws({ ...aws, accessKeyId })
+                                                }
+                                                placeholder="AKIA…"
+                                                value={aws.accessKeyId}
+                                            />
+                                            <TextField
+                                                autoComplete="off"
+                                                disabled={busy}
+                                                label="Secret access key"
+                                                onSubmit={awsSubmit}
+                                                onValueChange={(secretAccessKey) =>
+                                                    setAws({ ...aws, secretAccessKey })
+                                                }
+                                                type="password"
+                                                value={aws.secretAccessKey}
+                                            />
+                                            <TextField
+                                                autoComplete="off"
+                                                disabled={busy}
+                                                label="Region"
+                                                onSubmit={awsSubmit}
+                                                onValueChange={(region) =>
+                                                    setAws({ ...aws, region })
+                                                }
+                                                placeholder="us-east-1"
+                                                value={aws.region}
+                                            />
+                                        </>
+                                    ) : (
+                                        <TextField
+                                            autoComplete="off"
+                                            autoFocus
+                                            disabled={busy}
+                                            label={`${VENDOR_NAMES[flow.vendor]} API key`}
+                                            onSubmit={keySubmit}
+                                            onValueChange={setSecret}
+                                            placeholder={KEY_PLACEHOLDERS[flow.vendor]}
+                                            type="password"
+                                            value={secret}
+                                        />
+                                    )}
+                                    {flow.vendor === "bedrock" &&
+                                    !aws &&
+                                    props.teamRoutingEditable ? (
+                                        <>
+                                            <TextField
+                                                autoComplete="off"
+                                                disabled={busy}
+                                                label="Region"
+                                                onSubmit={keySubmit}
+                                                onValueChange={setRegion}
+                                                placeholder="us-east-1"
+                                                value={region}
+                                            />
+                                            <span className="happy-agent-provider-add__hint">
+                                                Every team Bedrock key routes to this region. Leave
+                                                it empty to keep the current one.
+                                            </span>
+                                        </>
+                                    ) : null}
                                 </>
                             ) : flow.kind === "claude" && flow.setupToken ? (
                                 <>

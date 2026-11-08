@@ -32,25 +32,11 @@ export interface HappyAgentProviderCredentials {
     readonly keyed: boolean;
 }
 
-/**
- * What adding a team key sends: an API key, or for Amazon Bedrock AWS access
- * keys instead. Bedrock's region applies to every Bedrock key on the server.
- */
-export type HappyAgentProviderCredentialInput =
-    | {
-          readonly kind: "apiKey";
-          readonly label: string;
-          readonly apiKey: string;
-          readonly region?: string;
-      }
-    | {
-          readonly kind: "aws";
-          readonly label: string;
-          readonly accessKeyId: string;
-          readonly secretAccessKey: string;
-          readonly sessionToken?: string;
-          readonly region?: string;
-      };
+/** What adding a key to one of the team's own providers sends. */
+export interface HappyAgentProviderCredentialInput {
+    readonly label: string;
+    readonly apiKey: string;
+}
 
 /**
  * The wire protocol a team's own provider speaks. Only `openai_responses` is
@@ -94,16 +80,6 @@ export type HappyAgentCustomProviderInput = Omit<HappyAgentCustomProviderDefinit
  */
 export interface HappyAgentProviderCredentialsApi {
     credentialAdd(providerId: string, input: HappyAgentProviderCredentialInput): Promise<void>;
-    /** The server's subscription sign-ins, or `null` where it offers none. */
-    providerClisRead(): Promise<readonly HappyAgentProviderCli[] | null>;
-    providerCliRead(cliId: string): Promise<HappyAgentProviderCli>;
-    signInStart(cliId: string, mutationId: string): Promise<HappyAgentProviderCli>;
-    signInCodeSubmit(
-        cliId: string,
-        code: string,
-        mutationId: string,
-    ): Promise<HappyAgentProviderCli>;
-    signInCancel(cliId: string, mutationId: string): Promise<HappyAgentProviderCli>;
     credentialEnabledUpdate(
         providerId: string,
         credentialId: string,
@@ -120,134 +96,6 @@ export interface HappyAgentProviderCredentialsApi {
         input: HappyAgentCustomProviderInput,
     ): Promise<HappyAgentCustomProviderDefinition>;
     customProviderRemove(providerId: string): Promise<void>;
-}
-
-/** A subscription sign-in's current or most recent attempt. */
-export interface HappyAgentProviderCliOperation {
-    readonly id: string;
-    readonly status: "running" | "waiting" | "succeeded" | "failed" | "cancelled";
-    /** One sentence for the current step or the outcome, shown as is. */
-    readonly message: string;
-    /** What the person does to finish, while the sign-in waits on them. */
-    readonly authorization: {
-        readonly method: "browser" | "device";
-        readonly url: string;
-        /** The code to confirm on a device page. */
-        readonly userCode: string | null;
-        /** Whether the vendor's page may show a code to paste back. */
-        readonly acceptsCode: boolean;
-        readonly expiresAt: number;
-    } | null;
-    readonly error: { readonly code: string; readonly message: string } | null;
-}
-
-/**
- * One subscription a Happy Cloud server signs in to for the whole team, such
- * as a ChatGPT or Claude plan, and the built-in provider it serves.
- */
-export interface HappyAgentProviderCli {
-    readonly id: string;
-    readonly name: string;
-    readonly providerId: string | null;
-    readonly signIn: {
-        readonly status: "signed_in" | "signed_out" | "unknown";
-        readonly account: {
-            readonly email: string | null;
-            readonly plan: string | null;
-        } | null;
-    };
-    readonly operation: HappyAgentProviderCliOperation | null;
-    /** Ordered: of two readings, the greater version is the newer. */
-    readonly version: string;
-}
-
-const OPERATION_STATUSES: ReadonlySet<string> = new Set([
-    "running",
-    "waiting",
-    "succeeded",
-    "failed",
-    "cancelled",
-]);
-
-function stringOrNull(value: unknown): string | null {
-    return typeof value === "string" ? value : null;
-}
-
-function operationRead(value: unknown): HappyAgentProviderCliOperation | null {
-    if (typeof value !== "object" || value === null) return null;
-    const operation = value as Record<string, unknown>;
-    if (
-        operation.kind !== "sign_in" ||
-        typeof operation.id !== "string" ||
-        typeof operation.status !== "string" ||
-        !OPERATION_STATUSES.has(operation.status)
-    )
-        return null;
-    const authorization =
-        typeof operation.authorization === "object" && operation.authorization !== null
-            ? (operation.authorization as Record<string, unknown>)
-            : undefined;
-    const error =
-        typeof operation.error === "object" && operation.error !== null
-            ? (operation.error as Record<string, unknown>)
-            : undefined;
-    return {
-        id: operation.id,
-        status: operation.status as HappyAgentProviderCliOperation["status"],
-        message: typeof operation.message === "string" ? operation.message : "",
-        authorization:
-            authorization &&
-            (authorization.method === "browser" || authorization.method === "device") &&
-            typeof authorization.url === "string"
-                ? {
-                      method: authorization.method,
-                      url: authorization.url,
-                      userCode: stringOrNull(authorization.userCode),
-                      acceptsCode: authorization.acceptsCode === true,
-                      expiresAt:
-                          typeof authorization.expiresAt === "number" ? authorization.expiresAt : 0,
-                  }
-                : null,
-        error: error
-            ? {
-                  code: typeof error.code === "string" ? error.code : "unknown",
-                  message: typeof error.message === "string" ? error.message : "",
-              }
-            : null,
-    };
-}
-
-function providerCliRead(value: unknown): HappyAgentProviderCli | undefined {
-    if (typeof value !== "object" || value === null) return undefined;
-    const cli = value as Record<string, unknown>;
-    if (typeof cli.id !== "string" || typeof cli.version !== "string") return undefined;
-    const signIn =
-        typeof cli.signIn === "object" && cli.signIn !== null
-            ? (cli.signIn as Record<string, unknown>)
-            : {};
-    const account =
-        typeof signIn.account === "object" && signIn.account !== null
-            ? (signIn.account as Record<string, unknown>)
-            : undefined;
-    return {
-        id: cli.id,
-        name: typeof cli.name === "string" ? cli.name : cli.id,
-        providerId: stringOrNull(cli.providerId),
-        signIn: {
-            status:
-                signIn.status === "signed_in" || signIn.status === "signed_out"
-                    ? signIn.status
-                    : "unknown",
-            account: account
-                ? {
-                      email: stringOrNull(account.email),
-                      plan: stringOrNull(account.plan),
-                  }
-                : null,
-        },
-        operation: operationRead(cli.operation),
-        version: cli.version,
-    };
 }
 
 /**
@@ -446,61 +294,15 @@ export function happyAgentProviderCredentialsApiCreate(options: {
     const provider = (providerId: string): string =>
         `v0/providers/${encodeURIComponent(providerId)}`;
     const credentials = (providerId: string): string => `${provider(providerId)}/credentials`;
-    const cliOf = (answer: unknown): HappyAgentProviderCli => {
-        const cli = providerCliRead((answer as { readonly providerCli?: unknown })?.providerCli);
-        if (!cli) throw new UserError("The server answered with no sign-in.");
-        return cli;
-    };
-    const cli = (cliId: string): string => `v0/provider-clis/${encodeURIComponent(cliId)}`;
     const unit = async (pending: Promise<unknown>): Promise<void> => {
         await pending;
     };
     return {
-        providerClisRead: async () => {
-            try {
-                const answer = (await send("GET", "v0/provider-clis")) as
-                    | { readonly providerClis?: unknown }
-                    | undefined;
-                return Array.isArray(answer?.providerClis)
-                    ? answer.providerClis.flatMap((value: unknown) => {
-                          const read = providerCliRead(value);
-                          return read ? [read] : [];
-                      })
-                    : [];
-            } catch (error) {
-                // A server without subscription sign-in has no such route, or
-                // answers that it doesn't support one.
-                if (
-                    error instanceof UserError &&
-                    (error.code === "not_found" ||
-                        error.code === "unsupported" ||
-                        error.code === "machine_local")
-                )
-                    return null;
-                throw error;
-            }
-        },
-        providerCliRead: async (cliId) => cliOf(await send("GET", cli(cliId))),
-        signInStart: async (cliId, mutationId) =>
-            cliOf(await send("POST", `${cli(cliId)}/sign-in`, { mutationId })),
-        signInCodeSubmit: async (cliId, code, mutationId) =>
-            cliOf(await send("POST", `${cli(cliId)}/sign-in/code`, { code, mutationId })),
-        signInCancel: async (cliId, mutationId) =>
-            cliOf(await send("POST", `${cli(cliId)}/cancel`, { mutationId })),
         credentialAdd: (providerId, input) =>
             unit(
                 send("POST", credentials(providerId), {
                     label: input.label,
-                    ...(input.kind === "apiKey"
-                        ? { apiKey: input.apiKey }
-                        : {
-                              accessKeyId: input.accessKeyId,
-                              secretAccessKey: input.secretAccessKey,
-                              ...(input.sessionToken === undefined
-                                  ? {}
-                                  : { sessionToken: input.sessionToken }),
-                          }),
-                    ...(input.region === undefined ? {} : { region: input.region }),
+                    apiKey: input.apiKey,
                 }),
             ),
         credentialEnabledUpdate: (providerId, credentialId, enabled) =>

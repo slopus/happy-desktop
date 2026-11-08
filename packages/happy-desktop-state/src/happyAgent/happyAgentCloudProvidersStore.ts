@@ -84,8 +84,17 @@ export interface HappyAgentCloudProvidersStore {
     /** Closes the dialog; a sign-in waiting on the vendor is cancelled. */
     addClose(): void;
     addDestinationUpdate(to: HappyAgentCloudScope): void;
-    /** Adds the API key of the open key flow. */
-    apiKeySubmit(secret: string): void;
+    /**
+     * Adds the API key of the open key flow. A Bedrock key may name the
+     * region the team's Bedrock keys route to, which is saved first.
+     */
+    apiKeySubmit(secret: string, region?: string): void;
+    /** Adds AWS access keys, in the open key flow for Bedrock. */
+    awsKeysSubmit(input: {
+        readonly accessKeyId: string;
+        readonly secretAccessKey: string;
+        readonly region?: string;
+    }): void;
     /** Adds a Claude setup token. */
     setupTokenSubmit(token: string): void;
     /** Starts the open flow's sign-in. */
@@ -111,6 +120,8 @@ const NO_SAVING: ReadonlySet<string> = new Set();
 const KEY_VENDOR_NAMES: Readonly<Record<HappyAgentCloudKeyVendor, string>> = {
     openai: "OpenAI",
     anthropic: "Anthropic",
+    grok: "Grok",
+    bedrock: "Amazon Bedrock",
 };
 
 function signInCliOf(flow: HappyAgentCloudProviderAddFlow): HappyAgentCloudSignInCli | undefined {
@@ -350,23 +361,29 @@ export function happyAgentCloudProvidersStoreCreate(
 
     /** Sends one credential the person typed to where the dialog keeps it. */
     const credentialSubmit = (
-        input: { readonly vendor: string; readonly kind: "api_key" | "oauth_token" },
+        input: {
+            readonly vendor: string;
+            readonly kind: "api_key" | "aws_keys" | "oauth_token";
+        },
         secret: string,
         label: string,
         teamId: string,
         done: string,
         failed: string,
+        before?: () => Promise<void>,
     ): void => {
         const add = store.getState().add;
         if (disposed || !add || add.phase === "busy" || secret.trim() === "") return;
         const { error: _cleared, ...rest } = add;
         addSet({ ...rest, phase: "busy" });
-        void deps.api
-            .credentialAdd(add.to === "team" ? teamId : "private", {
-                ...input,
-                secret: secret.trim(),
-                label,
-            })
+        void (before ?? (() => Promise.resolve()))()
+            .then(() =>
+                deps.api.credentialAdd(add.to === "team" ? teamId : "private", {
+                    ...input,
+                    secret: secret.trim(),
+                    label,
+                }),
+            )
             .then(
                 ({ duplicate }) => {
                     if (disposed || store.getState().add === undefined) return;
@@ -462,9 +479,10 @@ export function happyAgentCloudProvidersStoreCreate(
             if (disposed || !add || add.phase !== "idle") return;
             addUpdate({ to: destinationOf(to) });
         },
-        apiKeySubmit(secret) {
+        apiKeySubmit(secret, region) {
             const flow = store.getState().add?.flow;
             if (flow?.kind !== "apiKey") return;
+            const routed = flow.vendor === "bedrock" ? region?.trim() : undefined;
             credentialSubmit(
                 { vendor: flow.vendor, kind: "api_key" },
                 secret,
@@ -472,6 +490,23 @@ export function happyAgentCloudProvidersStoreCreate(
                 flow.vendor,
                 "API key added",
                 "Couldn't add the key",
+                routed ? () => deps.api.bedrockRegionSave(routed) : undefined,
+            );
+        },
+        awsKeysSubmit(input) {
+            const flow = store.getState().add?.flow;
+            if (flow?.kind !== "apiKey" || flow.vendor !== "bedrock") return;
+            const accessKeyId = input.accessKeyId.trim();
+            const secretAccessKey = input.secretAccessKey.trim();
+            const region = input.region?.trim();
+            if (accessKeyId === "" || secretAccessKey === "") return;
+            credentialSubmit(
+                { vendor: "bedrock", kind: "aws_keys" },
+                JSON.stringify({ accessKeyId, secretAccessKey, ...(region ? { region } : {}) }),
+                "AWS access keys",
+                "bedrock",
+                "Access keys added",
+                "Couldn't add the keys",
             );
         },
         setupTokenSubmit(token) {
@@ -572,6 +607,7 @@ export const happyAgentCloudProvidersStoreNoop: HappyAgentCloudProvidersStore = 
     addClose: () => undefined,
     addDestinationUpdate: () => undefined,
     apiKeySubmit: () => undefined,
+    awsKeysSubmit: () => undefined,
     setupTokenSubmit: () => undefined,
     signInStart: () => undefined,
     signInCodeSubmit: () => undefined,

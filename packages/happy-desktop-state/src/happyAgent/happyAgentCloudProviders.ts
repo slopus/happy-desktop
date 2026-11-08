@@ -49,8 +49,8 @@ export interface HappyAgentCloudConnection {
     readonly credentials?: readonly HappyAgentCloudCredential[];
 }
 
-/** The vendors a person adds an API key for by hand. */
-export type HappyAgentCloudKeyVendor = "openai" | "anthropic";
+/** The vendors a person adds an API key for by hand; Bedrock also takes AWS access keys. */
+export type HappyAgentCloudKeyVendor = "openai" | "anthropic" | "grok" | "bedrock";
 
 /** Where a credential added by hand or a sign-in is kept. */
 export type HappyAgentCloudTarget = { readonly scope: "private" } | { readonly providerId: string };
@@ -58,7 +58,8 @@ export type HappyAgentCloudTarget = { readonly scope: "private" } | { readonly p
 /** A credential added by hand. The secret goes to the server and nowhere else. */
 export interface HappyAgentCloudCredentialInput {
     readonly vendor: string;
-    readonly kind: "api_key" | "oauth_token";
+    readonly kind: "api_key" | "aws_keys" | "oauth_token";
+    /** AWS keys travel as the JSON text of `{ accessKeyId, secretAccessKey, region? }`. */
     readonly secret: string;
     readonly label: string;
 }
@@ -95,6 +96,11 @@ export interface HappyAgentCloudProvidersApi {
         enabled: boolean,
     ): Promise<void>;
     credentialRemove(connectionId: string, credentialId: string): Promise<void>;
+    /**
+     * Sets the region the team's Bedrock keys route to. It is team
+     * configuration, not part of a key, and needs `providers.manage`.
+     */
+    bedrockRegionSave(region: string): Promise<void>;
     /** What the reader may do on this server, such as `providers.own` and `providers.manage`. */
     permissionsRead(): Promise<ReadonlySet<string>>;
     /** The subscriptions the server can sign in to now; empty where it signs in to none. */
@@ -279,6 +285,9 @@ export function happyAgentCloudProvidersApiCreate(
                 "DELETE",
                 `${credentials(connectionId)}/${encodeURIComponent(credentialId)}`,
             );
+        },
+        bedrockRegionSave: async (region) => {
+            await request("PATCH", "v0/config", { providers: { bedrock: { region } } });
         },
         permissionsRead: async () =>
             new Set(stringsOf(recordOf(await request("GET", "v0/permissions"))?.granted)),

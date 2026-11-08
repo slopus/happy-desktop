@@ -18,7 +18,6 @@ import type {
     HappyAgentCloudConnection,
     HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
-    HappyAgentProviderSubscription,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
     HappyAgentTaskSettingsSnapshot,
@@ -114,7 +113,6 @@ import {
     HappyAgentUsageSettings,
     providerAccountName,
     type HappyAgentProviderRow,
-    type HappyAgentProviderSubscriptionRow,
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
@@ -1487,7 +1485,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             onOpen={() => credentialImportStore.dialogOpen()}
                             onClose={() => credentialImportStore.dialogClose()}
                             phase={credentialImport.phase}
-                            rows={credentialImportRows(credentialImport, providers.providers)}
+                            rows={credentialImportRows(credentialImport)}
                             shellScanned={credentialImport.shellScanned}
                             teamAllowed={credentialImport.teamAllowed}
                             {...(credentialImport.error
@@ -1499,13 +1497,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                 credentialImportStore.pickScopeUpdate(id, scope)
                             }
                             onImport={() => credentialImportStore.importSubmit()}
-                            onSignIn={(id) => {
-                                const use = credentialImport.found.find(
-                                    (entry) => entry.id === id,
-                                )?.use;
-                                if (use?.kind === "signIn" && happyAgentOnline())
-                                    providersStore.subscriptionSignIn(use.providerId);
-                            }}
                         />
                     ) : null}
                     <HappyAgentProviderSettings
@@ -1533,22 +1524,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             if (happyAgentOnline())
                                 providersStore.credentialRemove(providerId, keyId);
                         }}
-                        onSubscriptionSignIn={(providerId) => {
-                            if (happyAgentOnline()) providersStore.subscriptionSignIn(providerId);
-                        }}
-                        onSubscriptionCodeSubmit={(providerId, code) =>
-                            providersStore.subscriptionCodeSubmit(providerId, code)
-                        }
-                        onSubscriptionSignInCancel={(providerId) => {
-                            if (happyAgentOnline())
-                                providersStore.subscriptionSignInCancel(providerId);
-                        }}
-                        onSubscriptionSignOut={(providerId) => {
-                            if (happyAgentOnline()) providersStore.subscriptionSignOut(providerId);
-                        }}
-                        {...(props.externalLinkOpen
-                            ? { onExternalOpen: props.externalLinkOpen }
-                            : {})}
                         {...(providers.customProvidersManageable
                             ? {
                                   onCustomProviderCreate: () => {
@@ -2191,12 +2166,9 @@ function documentLoading(
 }
 
 /**
- * The vendors whose keys and sign-ins AI providers adds and lists on Happy
- * Cloud; their cards below show only models. Grok's and Bedrock's keys are
- * still added on their own cards.
+ * Happy Cloud's keys and sign-ins are listed and added under AI providers, so
+ * the cards here keep only the keys of the team's own providers.
  */
-const AI_PROVIDERS_VENDORS: ReadonlySet<string> = new Set(["openai", "anthropic"]);
-
 function providerRows(
     providers: readonly HappyAgentProviderEntry[],
     settings: HappyAgentSettingsSnapshot,
@@ -2204,12 +2176,10 @@ function providerRows(
     aiProviders: boolean,
 ): readonly HappyAgentProviderRow[] {
     return providers.map((entry) => {
-        const provider: HappyAgentProviderEntry = aiProviders
-            ? (({ subscription: _subscription, credentials, ...rest }) => ({
-                  ...rest,
-                  ...(credentials && !AI_PROVIDERS_VENDORS.has(entry.type) ? { credentials } : {}),
-              }))(entry)
-            : entry;
+        const provider: HappyAgentProviderEntry =
+            aiProviders && !entry.custom
+                ? (({ credentials: _credentials, ...rest }) => rest)(entry)
+                : entry;
         return providerRow(provider, settings, selection);
     });
 }
@@ -2244,13 +2214,11 @@ function providerRow(
             ),
         ],
         status: provider.disabledReason ?? "ready",
-        ...(provider.subscription ? { subscription: subscriptionRow(provider.subscription) } : {}),
         ...(provider.custom ? { custom: { protocol: provider.custom.protocol } } : {}),
         ...(provider.credentials
             ? {
                   keys: {
                       addable: provider.credentials.keyed,
-                      ...(provider.type === "bedrock" ? { aws: true } : {}),
                       source: provider.credentials.source,
                       list: provider.credentials.list.map((credential) => ({
                           id: credential.id,
@@ -2358,13 +2326,15 @@ function providerAddProps(
         ...(add.signIn ? { signIn: add.signIn } : {}),
         ...(add.done === undefined ? {} : { done: add.done }),
         ...(add.error ? { error: add.error } : {}),
+        teamRoutingEditable: snapshot.teamAllowed,
         chatgptAvailable: snapshot.signIns.has("codex"),
         claudeAvailable: snapshot.signIns.has("claude"),
         onFlowSelect: (flow) => store.addFlowSelect(flow),
         onBack: () => store.addBack(),
         onClose: () => store.addClose(),
         onDestinationChange: (to) => store.addDestinationUpdate(to),
-        onApiKeySubmit: (secret) => store.apiKeySubmit(secret),
+        onApiKeySubmit: (secret, region) => store.apiKeySubmit(secret, region),
+        onAwsKeysSubmit: (input) => store.awsKeysSubmit(input),
         onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),
         onSignInStart: () => store.signInStart(),
         onSignInCodeSubmit: (code) => store.signInCodeSubmit(code),
@@ -2403,44 +2373,6 @@ function customProviderDialogValues(
     };
 }
 
-/** A team subscription and its sign-in, worded for the provider's card. */
-function subscriptionRow(
-    subscription: HappyAgentProviderSubscription,
-): HappyAgentProviderSubscriptionRow {
-    const account = subscription.signIn.account;
-    const operation = subscription.operation;
-    const authorization = operation?.authorization;
-    return {
-        name: subscription.name,
-        signedIn: subscription.signIn.status === "signed_in",
-        ...(account && (account.email || account.plan)
-            ? { account: [account.email, account.plan].filter(Boolean).join(" · ") }
-            : {}),
-        ...(operation
-            ? {
-                  signIn: {
-                      status: operation.status,
-                      message: operation.message,
-                      ...(authorization
-                          ? {
-                                authorization: {
-                                    method: authorization.method,
-                                    url: authorization.url,
-                                    acceptsCode: authorization.acceptsCode,
-                                    ...(authorization.userCode
-                                        ? { userCode: authorization.userCode }
-                                        : {}),
-                                },
-                            }
-                          : {}),
-                      ...(operation.error ? { error: operation.error.message } : {}),
-                  },
-              }
-            : {}),
-        pending: subscription.pending,
-    };
-}
-
 /** Safe secret metadata with its timestamp localized for the settings list. */
 function secretRows(secrets: readonly HappyAgentSecret[]): readonly HappyAgentSecretRow[] {
     return secrets.map((secret) => ({
@@ -2459,7 +2391,6 @@ function secretRows(secrets: readonly HappyAgentSecret[]): readonly HappyAgentSe
 /** What Import lists: each found credential with its pick or how its import ended. */
 function credentialImportRows(
     snapshot: HappyAgentCredentialImportSnapshot,
-    providers: readonly HappyAgentProviderEntry[],
 ): HappyAgentCredentialImportRow[] {
     return snapshot.found.map((entry): HappyAgentCredentialImportRow => {
         const base = {
@@ -2469,16 +2400,6 @@ function credentialImportRows(
             source: entry.source,
             ...(entry.account === undefined ? {} : { account: entry.account }),
         };
-        if (entry.use.kind === "signIn") {
-            const providerId = entry.use.providerId;
-            return {
-                ...base,
-                use: "signIn",
-                signInAvailable: providers.some(
-                    (provider) => provider.id === providerId && provider.subscription,
-                ),
-            };
-        }
         if (entry.use.kind === "unsupported")
             return { ...base, use: "unsupported", reason: entry.use.reason };
         const picked = snapshot.picked.get(entry.id);

@@ -11,13 +11,10 @@ export type HappyAgentCredentialImportScope = "team" | "private";
  *
  * - `import`: copied to the server as it is. A `subscription` is a sign-in the
  *   server takes over: the copy on this computer may stop working.
- * - `signIn`: a subscription's sign-in, which can't be copied without signing
- *   this computer out; the server's built-in `providerId` signs in on its own.
  * - `unsupported`: the server can't use it; `reason` says why.
  */
 export type HappyAgentCredentialFoundUse =
     | { readonly kind: "import"; readonly subscription: boolean }
-    | { readonly kind: "signIn"; readonly providerId: string }
     | { readonly kind: "unsupported"; readonly reason: string };
 
 /** A model provider credential found on this computer. Never the secret itself. */

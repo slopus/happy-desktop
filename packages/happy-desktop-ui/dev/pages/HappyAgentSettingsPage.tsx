@@ -335,78 +335,6 @@ Ask before touching anything outside the working directory.
 - Never force-push \`main\`.
 `;
 
-const subscriptionProviders: readonly HappyAgentProviderRow[] = [
-    {
-        enabled: true,
-        id: "codex",
-        models: [],
-        name: "Codex",
-        serviceTiers: [],
-        status: "no_models",
-        subscription: {
-            name: "Codex",
-            signedIn: false,
-            signIn: {
-                status: "waiting",
-                message: "Waiting for you to confirm the code on the sign-in page.",
-                authorization: {
-                    method: "device",
-                    url: "https://auth.openai.com/codex/device",
-                    userCode: "KQ4T-9WXM",
-                    acceptsCode: false,
-                },
-            },
-        },
-    },
-    {
-        enabled: true,
-        id: "claude-code",
-        models: [],
-        name: "Claude Code",
-        serviceTiers: [],
-        status: "no_models",
-        subscription: {
-            name: "Claude Code",
-            signedIn: false,
-            signIn: {
-                status: "waiting",
-                message: "Waiting for you to finish signing in to Claude in your browser.",
-                authorization: {
-                    method: "browser",
-                    url: "https://claude.com/cai/oauth/authorize",
-                    acceptsCode: true,
-                },
-            },
-        },
-    },
-    {
-        enabled: true,
-        id: "codex-signed-in",
-        models: [],
-        name: "Codex",
-        serviceTiers: [],
-        status: "ready",
-        subscription: { account: "team@example.com · Pro", name: "Codex", signedIn: true },
-    },
-    {
-        enabled: false,
-        id: "claude-failed",
-        models: [],
-        name: "Claude Code",
-        serviceTiers: [],
-        status: "not_enabled",
-        subscription: {
-            name: "Claude Code",
-            signedIn: false,
-            signIn: {
-                status: "failed",
-                message: "The sign-in did not finish.",
-                error: "You did not finish signing in within ten minutes.",
-            },
-        },
-    },
-];
-
 const customProviders: readonly HappyAgentProviderRow[] = [
     {
         custom: { protocol: "openai_responses" },
@@ -502,7 +430,7 @@ const cloudProviders: readonly HappyAgentProviderRow[] = [
     {
         enabled: false,
         id: "bedrock",
-        keys: { addable: true, aws: true, list: [], source: null },
+        keys: { addable: true, list: [], source: null },
         models: [],
         name: "Amazon Bedrock",
         serviceTiers: [],
@@ -779,6 +707,7 @@ function AiProvidersSpecimen(props: {
                                   ...add,
                                   to,
                                   destinationChoice: true,
+                                  teamRoutingEditable: true,
                                   chatgptAvailable: true,
                                   claudeAvailable: true,
                                   onFlowSelect: (flow) => addSet({ flow, phase: "idle" }),
@@ -786,6 +715,7 @@ function AiProvidersSpecimen(props: {
                                   onClose: () => addSet(undefined),
                                   onDestinationChange: toSet,
                                   onApiKeySubmit: noop,
+                                  onAwsKeysSubmit: noop,
                                   onSetupTokenSubmit: noop,
                                   onSignInStart: noop,
                                   onSignInCodeSubmit: noop,
@@ -1471,31 +1401,6 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Happy Cloud subscriptions: a Codex device code, a Claude code to paste, signed in, and a failed sign-in"
-                label="Happy Agent settings — providers with team subscriptions"
-                number="03c"
-                screen="providers-team-subscriptions"
-            >
-                <HappyAgentSettingsShell
-                    activeCategoryId="providers"
-                    categories={categories}
-                    description="Every model provider this server knows about"
-                    onCategorySelect={noop}
-                    onClose={noop}
-                    title="Providers"
-                >
-                    <HappyAgentProviderSettings
-                        onModelEnabledChange={noop}
-                        onProviderEnabledChange={noop}
-                        onSubscriptionCodeSubmit={() => Promise.resolve()}
-                        onSubscriptionSignIn={noop}
-                        onSubscriptionSignInCancel={noop}
-                        onSubscriptionSignOut={noop}
-                        providers={subscriptionProviders}
-                    />
-                </HappyAgentSettingsShell>
-            </FullScreenSpecimen>
-            <FullScreenSpecimen
                 detail="Happy Cloud providers: team API keys in each state, one with none yet, and Bedrock's region"
                 label="Happy Agent settings — providers with team keys"
                 number="03b"
@@ -1635,7 +1540,6 @@ export function HappyAgentSettingsBlueprintPage() {
                         onPickScopeChange={noop}
                         onPickToggle={noop}
                         onScan={noop}
-                        onSignIn={noop}
                         phase="ready"
                         rows={credentialImportRows}
                         shellScanned={false}
@@ -1682,6 +1586,16 @@ export function HappyAgentSettingsBlueprintPage() {
                             message: "The vendor rejected the credential.",
                         },
                     }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An Amazon Bedrock API key, with the region every team Bedrock key routes to"
+                label="Happy Agent settings — add a Bedrock key"
+                number="03o"
+                screen="ai-providers-add-bedrock"
+            >
+                <AiProvidersSpecimen
+                    add={{ flow: { kind: "apiKey", vendor: "bedrock" }, phase: "idle" }}
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
