@@ -9,6 +9,7 @@ import {
     HappyAgentInstructionsSettings,
     HappyAgentMobileSettings,
     HappyAgentProviderSettings,
+    HappyAgentCustomProviderDialog,
     HappyAgentCredentialImport,
     HappyAgentMembersSettings,
     type HappyAgentCredentialImportRow,
@@ -402,6 +403,55 @@ const subscriptionProviders: readonly HappyAgentProviderRow[] = [
         },
     },
 ];
+
+const customProviders: readonly HappyAgentProviderRow[] = [
+    {
+        custom: { protocol: "openai_responses" },
+        enabled: true,
+        id: "acme",
+        keys: {
+            addable: true,
+            source: "tenant",
+            list: [{ enabled: true, id: "default", label: "Gateway key", state: "ready" }],
+        },
+        models: [
+            {
+                contextWindow: 128000,
+                efforts: [],
+                enabled: true,
+                id: "acme:acme/qwen-3",
+                isDefault: false,
+                modelId: "acme/qwen-3",
+                name: "Qwen 3",
+            },
+        ],
+        name: "Acme vLLM",
+        serviceTiers: [],
+        status: "ready",
+    },
+    {
+        custom: { protocol: "anthropic_messages" },
+        enabled: false,
+        id: "lab",
+        keys: { addable: true, list: [], source: null },
+        models: [],
+        name: "Lab proxy",
+        serviceTiers: [],
+        status: "not_enabled",
+    },
+];
+
+const customProviderValues = {
+    providerId: "acme",
+    name: "Acme vLLM",
+    baseUrl: "https://llm.acme.com/v1",
+    protocol: "openai_responses",
+    promptCacheKey: true,
+    models: [
+        { id: "qwen-3", name: "Qwen 3", contextWindow: 128000, images: true },
+        { id: "qwen-3-coder", name: "Qwen 3 Coder", contextWindow: 256000, images: false },
+    ],
+} as const;
 
 const cloudProviders: readonly HappyAgentProviderRow[] = [
     {
@@ -1355,6 +1405,100 @@ export function HappyAgentSettingsBlueprintPage() {
                         providers={cloudProviders}
                     />
                 </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The team's own providers: one serving models, one on a protocol Happy Cloud doesn't serve yet, and the way to add another"
+                label="Happy Agent settings — the team's own providers"
+                number="03e"
+                screen="providers-custom"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="providers"
+                    categories={categories}
+                    description="Every model provider this server knows about"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Providers"
+                >
+                    <HappyAgentProviderSettings
+                        onCustomProviderCreate={noop}
+                        onCustomProviderEdit={noop}
+                        onKeyAdd={() => Promise.resolve()}
+                        onKeyEnabledChange={noop}
+                        onKeyRemove={noop}
+                        onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
+                        providers={customProviders}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Adding a provider: name and ID, base URL, protocol, and one model"
+                label="Happy Agent settings — add a provider"
+                number="03f"
+                screen="providers-custom-add"
+            >
+                <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                    <HappyAgentSettingsShell
+                        activeCategoryId="providers"
+                        categories={categories}
+                        description="Every model provider this server knows about"
+                        onCategorySelect={noop}
+                        onClose={noop}
+                        title="Providers"
+                    >
+                        <HappyAgentProviderSettings
+                            onCustomProviderCreate={noop}
+                            onCustomProviderEdit={noop}
+                            onModelEnabledChange={noop}
+                            onProviderEnabledChange={noop}
+                            providers={customProviders}
+                        />
+                        <HappyAgentCustomProviderDialog
+                            loading={false}
+                            onClose={noop}
+                            onSave={noop}
+                            removing={false}
+                            saving={false}
+                        />
+                    </HappyAgentSettingsShell>
+                </div>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Editing a provider: what it stores, two models, one reading images, and a refusal from the server"
+                label="Happy Agent settings — edit a provider"
+                number="03g"
+                screen="providers-custom-edit"
+            >
+                <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                    <HappyAgentSettingsShell
+                        activeCategoryId="providers"
+                        categories={categories}
+                        description="Every model provider this server knows about"
+                        onCategorySelect={noop}
+                        onClose={noop}
+                        title="Providers"
+                    >
+                        <HappyAgentProviderSettings
+                            onCustomProviderCreate={noop}
+                            onCustomProviderEdit={noop}
+                            onModelEnabledChange={noop}
+                            onProviderEnabledChange={noop}
+                            providers={customProviders}
+                        />
+                        <HappyAgentCustomProviderDialog
+                            error="`baseUrl` must be a public https URL such as https://llm.example.com/v1."
+                            loading={false}
+                            onClose={noop}
+                            onRemove={noop}
+                            onSave={noop}
+                            providerId="acme"
+                            removing={false}
+                            saving={false}
+                            values={customProviderValues}
+                        />
+                    </HappyAgentSettingsShell>
+                </div>
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Import from this computer: picked keys for the team and for one person, an imported key, a refused one, a subscription to sign in on the server, and one the server can't use"

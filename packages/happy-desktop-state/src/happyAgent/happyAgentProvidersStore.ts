@@ -2,7 +2,11 @@ import { createStore } from "zustand/vanilla";
 import type { DaemonConfig, HappyAgentClient } from "@slopus/happy-agent-client";
 import type { UserError } from "../types.js";
 import {
+    happyAgentCustomProvidersProject,
     happyAgentProviderCredentialsProject,
+    type HappyAgentCustomProviderDefinition,
+    type HappyAgentCustomProviderInput,
+    type HappyAgentCustomProviderProtocol,
     type HappyAgentProviderCli,
     type HappyAgentProviderCredentialInput,
     type HappyAgentProviderCredentials,
@@ -31,6 +35,24 @@ export interface HappyAgentProviderEntry extends HappyAgentModelProvider {
      * provider, such as a ChatGPT or Claude plan. Absent elsewhere.
      */
     readonly subscription?: HappyAgentProviderSubscription;
+    /**
+     * The protocol of a provider the team added itself on a Happy Cloud
+     * server, which the team may edit and remove. Absent on built-ins.
+     */
+    readonly custom?: { readonly protocol: HappyAgentCustomProviderProtocol };
+}
+
+/** The team's own provider being added or edited, while its dialog is open. */
+export interface HappyAgentCustomProviderEditor {
+    /** The provider being edited; absent while a new one is being added. */
+    readonly providerId?: string;
+    /** What the server stores for the provider being edited, once read. */
+    readonly definition?: HappyAgentCustomProviderDefinition;
+    readonly loading: boolean;
+    readonly saving: boolean;
+    readonly removing: boolean;
+    /** Why reading, saving, or removing was refused. Cleared by the next attempt. */
+    readonly error?: UserError;
 }
 
 export interface HappyAgentProviderSubscription {
@@ -52,6 +74,9 @@ export interface HappyAgentProvidersSnapshot {
     readonly error?: UserError;
     /** Why the last enablement change was refused. Cleared by the next attempt. */
     readonly saveError?: UserError;
+    /** Whether the reader may add, edit, and remove the team's own providers. */
+    readonly customProvidersManageable: boolean;
+    readonly customProviderEditor?: HappyAgentCustomProviderEditor;
 }
 
 /**
@@ -86,6 +111,15 @@ export interface HappyAgentProvidersStore {
     subscriptionSignInCancel(providerId: string): void;
     /** Signs the team out of the subscription, removing its shared credential. */
     subscriptionSignOut(providerId: string): void;
+    /** Opens the dialog that adds a provider of the team's own. */
+    customProviderCreateOpen(): void;
+    /** Opens the dialog for one of the team's own providers and reads what it stores. */
+    customProviderEditOpen(providerId: string): void;
+    customProviderEditorClose(): void;
+    /** Creates or replaces the provider; the dialog closes once the server accepts. */
+    customProviderSave(providerId: string, input: HappyAgentCustomProviderInput): void;
+    /** Removes the provider being edited; the dialog closes once the server accepts. */
+    customProviderRemove(providerId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -101,7 +135,11 @@ export interface HappyAgentProvidersStoreDeps {
     readonly credentials?: HappyAgentProviderCredentialsApi;
 }
 
-const EMPTY: HappyAgentProvidersSnapshot = { providers: [], loading: true };
+const EMPTY: HappyAgentProvidersSnapshot = {
+    providers: [],
+    loading: true,
+    customProvidersManageable: false,
+};
 
 /**
  * How often the open category re-reads the daemon's configuration. Providers
@@ -131,6 +169,10 @@ export function happyAgentProvidersStoreCreate(
     let credentials: ReadonlyMap<string, HappyAgentProviderCredentials> = new Map();
     /** The server's subscription sign-ins, by the provider each serves. */
     let clis: ReadonlyMap<string, HappyAgentProviderCli> = new Map();
+    /** The team's own providers the server last reported, by protocol. */
+    let customProtocols: ReadonlyMap<string, HappyAgentCustomProviderProtocol> = new Map();
+    /** Whether the reader's permissions have been asked for since the surface was watched. */
+    let permissionsAsked = false;
     /** Providers whose sign-in request this window has not had answered. */
     const cliPending = new Set<string>();
     /**
@@ -160,10 +202,16 @@ export function happyAgentProvidersStoreCreate(
     const entryOf = (provider: HappyAgentModelProvider): HappyAgentProviderEntry => {
         const keys = credentials.get(provider.id);
         const subscription = subscriptionOf(provider.id);
-        const { subscription: _previous, ...rest } = provider as HappyAgentProviderEntry;
+        const protocol = customProtocols.get(provider.id);
+        const {
+            subscription: _previous,
+            custom: _custom,
+            ...rest
+        } = provider as HappyAgentProviderEntry;
         return {
             ...rest,
             ...(subscription ? { subscription } : {}),
+            ...(protocol ? { custom: { protocol } } : {}),
             saving: saving.has(provider.id),
             ...(keys
                 ? {
@@ -207,6 +255,7 @@ export function happyAgentProvidersStoreCreate(
     const settle = (config: DaemonConfig): void => {
         const catalog = happyAgentModelCatalogProject(config);
         credentials = happyAgentProviderCredentialsProject(config);
+        customProtocols = happyAgentCustomProvidersProject(config);
         for (const clear of credentialSettles) clear();
         credentialSettles = [];
         const current = store.getState();
@@ -245,6 +294,20 @@ export function happyAgentProvidersStoreCreate(
                 settle(response.config);
                 // Only a Happy Cloud server signs subscriptions in for its team.
                 const api = deps.credentials;
+                if (api && credentials.size > 0 && !permissionsAsked) {
+                    permissionsAsked = true;
+                    void api.permissionsRead().then(
+                        (granted) => {
+                            if (disposed) return;
+                            const manageable = granted.has("providers.manage");
+                            if (store.getState().customProvidersManageable !== manageable)
+                                store.setState({ customProvidersManageable: manageable }, false);
+                        },
+                        () => {
+                            permissionsAsked = false;
+                        },
+                    );
+                }
                 if (api && credentials.size > 0 && !clisUnsupported) {
                     const read = await api.providerClisRead().catch(() => undefined);
                     if (disposed || controller !== currentController) return;
@@ -360,6 +423,25 @@ export function happyAgentProvidersStoreCreate(
         );
     }
 
+    /** Replaces the open dialog's state, unless it has closed or moved to another provider. */
+    const editorUpdate = (
+        providerId: string | undefined,
+        next: (editor: HappyAgentCustomProviderEditor) => HappyAgentCustomProviderEditor | undefined,
+    ): void => {
+        const editor = store.getState().customProviderEditor;
+        if (disposed || !editor || editor.providerId !== providerId) return;
+        const { customProviderEditor: _replaced, ...rest } = store.getState();
+        const updated = next(editor);
+        store.setState(updated ? { ...rest, customProviderEditor: updated } : rest, true);
+    };
+    const editorClean = (
+        editor: HappyAgentCustomProviderEditor,
+        change: Partial<Omit<HappyAgentCustomProviderEditor, "error">>,
+    ): HappyAgentCustomProviderEditor => {
+        const { error: _cleared, ...rest } = editor;
+        return { ...rest, ...change };
+    };
+
     return {
         get: () => store.getState(),
         subscribe(listener) {
@@ -375,6 +457,7 @@ export function happyAgentProvidersStoreCreate(
                 listeners.delete(listener);
                 if (listeners.size !== 0) return;
                 clisUnsupported = false;
+                permissionsAsked = false;
                 timerCancel();
                 controller?.abort();
                 controller = undefined;
@@ -449,6 +532,90 @@ export function happyAgentProvidersStoreCreate(
                 api.credentialRemove(providerId, credentialId),
             );
         },
+        customProviderCreateOpen() {
+            if (disposed || !deps.credentials) return;
+            store.setState(
+                {
+                    customProviderEditor: {
+                        loading: false,
+                        saving: false,
+                        removing: false,
+                    },
+                },
+                false,
+            );
+        },
+        customProviderEditOpen(providerId) {
+            const api = deps.credentials;
+            if (disposed || !api) return;
+            store.setState(
+                {
+                    customProviderEditor: {
+                        providerId,
+                        loading: true,
+                        saving: false,
+                        removing: false,
+                    },
+                },
+                false,
+            );
+            void api.customProviderRead(providerId).then(
+                (definition) =>
+                    editorUpdate(providerId, (editor) =>
+                        editorClean(editor, { definition, loading: false }),
+                    ),
+                (error: unknown) =>
+                    editorUpdate(providerId, (editor) => ({
+                        ...editor,
+                        loading: false,
+                        error: happyAgentUserError(error),
+                    })),
+            );
+        },
+        customProviderEditorClose() {
+            const editor = store.getState().customProviderEditor;
+            if (disposed || !editor || editor.saving || editor.removing) return;
+            const { customProviderEditor: _closed, ...rest } = store.getState();
+            store.setState(rest, true);
+        },
+        customProviderSave(providerId, input) {
+            const api = deps.credentials;
+            const editor = store.getState().customProviderEditor;
+            if (disposed || !api || !editor || editor.saving || editor.removing) return;
+            const key = editor.providerId;
+            editorUpdate(key, (current) => editorClean(current, { saving: true }));
+            void api.customProviderSave(providerId, input).then(
+                () => {
+                    editorUpdate(key, () => undefined);
+                    if (!disposed) reread();
+                },
+                (error: unknown) =>
+                    editorUpdate(key, (current) => ({
+                        ...current,
+                        saving: false,
+                        error: happyAgentUserError(error),
+                    })),
+            );
+        },
+        customProviderRemove(providerId) {
+            const api = deps.credentials;
+            const editor = store.getState().customProviderEditor;
+            if (disposed || !api || editor?.providerId !== providerId) return;
+            if (editor.saving || editor.removing) return;
+            editorUpdate(providerId, (current) => editorClean(current, { removing: true }));
+            void api.customProviderRemove(providerId).then(
+                () => {
+                    editorUpdate(providerId, () => undefined);
+                    if (!disposed) reread();
+                },
+                (error: unknown) =>
+                    editorUpdate(providerId, (current) => ({
+                        ...current,
+                        removing: false,
+                        error: happyAgentUserError(error),
+                    })),
+            );
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
@@ -464,6 +631,7 @@ export function happyAgentProvidersStoreCreate(
 const INERT_SNAPSHOT: HappyAgentProvidersSnapshot = {
     providers: [],
     loading: false,
+    customProvidersManageable: false,
 };
 
 /**
@@ -482,5 +650,10 @@ export const happyAgentProvidersStoreNoop: HappyAgentProvidersStore = {
     subscriptionCodeSubmit: () => Promise.reject(new Error("Not available here.")),
     subscriptionSignInCancel: () => undefined,
     subscriptionSignOut: () => undefined,
+    customProviderCreateOpen: () => undefined,
+    customProviderEditOpen: () => undefined,
+    customProviderEditorClose: () => undefined,
+    customProviderSave: () => undefined,
+    customProviderRemove: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

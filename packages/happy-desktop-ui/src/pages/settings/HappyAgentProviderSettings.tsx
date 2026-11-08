@@ -10,6 +10,11 @@ import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
 import { Spinner } from "../../Spinner";
 import { Switch } from "../../Switch";
+import {
+    HAPPY_AGENT_CUSTOM_PROVIDER_PROTOCOL_LABELS,
+    happyAgentCustomProviderProtocolOffered,
+    type HappyAgentCustomProviderProtocolId,
+} from "./HappyAgentCustomProviderDialog";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
@@ -118,6 +123,8 @@ export interface HappyAgentProviderRow {
     readonly keys?: HappyAgentProviderKeys;
     /** The team's subscription sign-in, on a Happy Cloud server. */
     readonly subscription?: HappyAgentProviderSubscriptionRow;
+    /** A provider the team added itself, with the protocol it speaks. */
+    readonly custom?: { readonly protocol: HappyAgentCustomProviderProtocolId };
 }
 
 export type HappyAgentProviderSettingsProps = {
@@ -142,6 +149,10 @@ export type HappyAgentProviderSettingsProps = {
     onSubscriptionSignOut?: (providerId: string) => void;
     /** Opens a vendor's sign-in page in the person's own browser. */
     onExternalOpen?: (url: string) => void;
+    /** Opens the dialog that adds a provider of the team's own; absent when the reader may not. */
+    onCustomProviderCreate?: () => void;
+    /** Opens one of the team's own providers for editing; absent when the reader may not. */
+    onCustomProviderEdit?: (providerId: string) => void;
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
@@ -245,6 +256,16 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 variant={STATUS_VARIANTS[provider.status]}
                             />
                             {provider.saving ? <Spinner size={16} /> : null}
+                            {provider.custom && props.onCustomProviderEdit ? (
+                                <Button
+                                    aria-label={`Edit ${provider.name}`}
+                                    disabled={props.unavailable !== undefined}
+                                    icon="edit"
+                                    onClick={() => props.onCustomProviderEdit?.(provider.id)}
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            ) : null}
                             <Switch
                                 aria-label={`${provider.typeName ? `${provider.typeName} · ` : ""}${provider.name} enabled`}
                                 checked={provider.enabled}
@@ -350,6 +371,23 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                         ) : null}
                     </article>
                 ))}
+                {props.onCustomProviderCreate ? (
+                    <Box className="happy-agent-provider__add">
+                        <Button
+                            disabled={props.unavailable !== undefined}
+                            icon="plus"
+                            onClick={props.onCustomProviderCreate}
+                            size="small"
+                            variant="secondary"
+                        >
+                            Add a provider
+                        </Button>
+                        <span className="happy-agent-provider__add-note">
+                            Any endpoint that speaks the OpenAI Responses API, such as vLLM or a
+                            gateway.
+                        </span>
+                    </Box>
+                ) : null}
             </HappyAgentSettingsSection>
         </>
     );
@@ -362,6 +400,8 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
  */
 function providerHint(provider: HappyAgentProviderRow): string | undefined {
     if (provider.subscription) return undefined;
+    if (provider.custom && !happyAgentCustomProviderProtocolOffered(provider.custom.protocol))
+        return `Happy Cloud doesn’t serve ${HAPPY_AGENT_CUSTOM_PROVIDER_PROTOCOL_LABELS[provider.custom.protocol]} yet, so this provider offers no models.`;
     if (provider.keys?.addable && provider.keys.source === null)
         return "Add a team API key to use its models.";
     if (provider.keys) return undefined;

@@ -1102,6 +1102,13 @@ export {
     type HappyAgentProviderStatus,
 } from "./pages/settings/HappyAgentProviderSettings";
 export {
+    HappyAgentCustomProviderDialog,
+    type HappyAgentCustomProviderDialogProps,
+    type HappyAgentCustomProviderModelValues,
+    type HappyAgentCustomProviderProtocolId,
+    type HappyAgentCustomProviderValues,
+} from "./pages/settings/HappyAgentCustomProviderDialog";
+export {
     HappyAgentMembersSettings,
     type HappyAgentInviteRow,
     type HappyAgentMemberRow,
@@ -1178,3 +1185,5 @@ export {
     type HappyAgentSystemMonitorSurfacePageProps,
 } from "./pages/surfaces/HappyAgentSystemMonitorSurfacePage";
 export { localAgoTime, localAgoTimeChangedAt, localListTime } from "./localTime";
+
+export { CloudWebSignInScreen, type CloudWebSignInScreenProps } from "./CloudWebSignInScreen";

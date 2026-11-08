@@ -14,6 +14,7 @@ import type {
     HappyAgentSecurityPolicySnapshot,
     HappyAgentSecret,
     HappyAgentModelKey,
+    HappyAgentCustomProviderEditor,
     HappyAgentProviderEntry,
     HappyAgentProviderSubscription,
     HappyAgentSettingsSnapshot,
@@ -82,6 +83,8 @@ import {
     HappyAgentMobileLinkSettings,
     HappyAgentMobileSettings,
     happyAgentMobileLinkHeading,
+    HappyAgentCustomProviderDialog,
+    type HappyAgentCustomProviderDialogProps,
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
     HappyAgentMembersSettings,
@@ -1468,11 +1471,53 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(props.externalLinkOpen
                             ? { onExternalOpen: props.externalLinkOpen }
                             : {})}
+                        {...(providers.customProvidersManageable
+                            ? {
+                                  onCustomProviderCreate: () => {
+                                      if (happyAgentOnline())
+                                          providersStore.customProviderCreateOpen();
+                                  },
+                                  onCustomProviderEdit: (providerId: string) => {
+                                      if (happyAgentOnline())
+                                          providersStore.customProviderEditOpen(providerId);
+                                  },
+                              }
+                            : {})}
                         providers={providerRows(providers.providers, settings, selection)}
                         {...(providers.error ? { error: providers.error.message } : {})}
                         {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
+                    {providers.customProviderEditor ? (
+                        <HappyAgentCustomProviderDialog
+                            {...customProviderDialogValues(providers.customProviderEditor)}
+                            onClose={() => providersStore.customProviderEditorClose()}
+                            onSave={(values) =>
+                                providersStore.customProviderSave(values.providerId, {
+                                    name: values.name,
+                                    baseUrl: values.baseUrl,
+                                    protocol: values.protocol,
+                                    promptCacheKey: values.promptCacheKey,
+                                    models: values.models.map((model) => ({
+                                        id: model.id,
+                                        name: model.name,
+                                        contextWindow: model.contextWindow,
+                                        inputTypes: model.images ? ["text", "image"] : ["text"],
+                                    })),
+                                })
+                            }
+                            {...(providers.customProviderEditor.providerId === undefined
+                                ? {}
+                                : {
+                                      onRemove: () => {
+                                          const providerId =
+                                              providers.customProviderEditor?.providerId;
+                                          if (providerId !== undefined)
+                                              providersStore.customProviderRemove(providerId);
+                                      },
+                                  })}
+                        />
+                    ) : null}
                 </>
             ) : section === "members" ? (
                 membersShown ? (
@@ -2093,6 +2138,7 @@ function providerRows(
         ],
         status: provider.disabledReason ?? "ready",
         ...(provider.subscription ? { subscription: subscriptionRow(provider.subscription) } : {}),
+        ...(provider.custom ? { custom: { protocol: provider.custom.protocol } } : {}),
         ...(provider.credentials
             ? {
                   keys: {
@@ -2120,6 +2166,37 @@ function providerRows(
               }
             : {}),
     }));
+}
+
+/** The open provider dialog's state, as the dialog takes it. */
+function customProviderDialogValues(
+    editor: HappyAgentCustomProviderEditor,
+): Omit<HappyAgentCustomProviderDialogProps, "onSave" | "onRemove" | "onClose"> {
+    const definition = editor.definition;
+    return {
+        loading: editor.loading,
+        saving: editor.saving,
+        removing: editor.removing,
+        ...(editor.providerId === undefined ? {} : { providerId: editor.providerId }),
+        ...(editor.error ? { error: editor.error.message } : {}),
+        ...(definition
+            ? {
+                  values: {
+                      providerId: definition.providerId,
+                      name: definition.name,
+                      baseUrl: definition.baseUrl,
+                      protocol: definition.protocol,
+                      promptCacheKey: definition.promptCacheKey,
+                      models: definition.models.map((model) => ({
+                          id: model.id,
+                          name: model.name,
+                          contextWindow: model.contextWindow,
+                          images: model.inputTypes.includes("image"),
+                      })),
+                  },
+              }
+            : {}),
+    };
 }
 
 /** A team subscription and its sign-in, worded for the provider's card. */

@@ -53,6 +53,42 @@ export type HappyAgentProviderCredentialInput =
       };
 
 /**
+ * The wire protocol a team's own provider speaks. Only `openai_responses` is
+ * served today; a provider stored with another is listed but offers nothing.
+ */
+export type HappyAgentCustomProviderProtocol =
+    | "openai_responses"
+    | "openai_chat"
+    | "anthropic_messages";
+
+/** What a model reads besides text. Every model reads text. */
+export type HappyAgentModelInputType = "text" | "image";
+
+/** One model of a team's own provider, as stored. */
+export interface HappyAgentCustomProviderModel {
+    /** The provider's own model ID, without the provider prefix. */
+    readonly id: string;
+    readonly name: string;
+    /** The context window in tokens; the server chooses one when absent. */
+    readonly contextWindow: number | null;
+    readonly inputTypes: readonly HappyAgentModelInputType[];
+}
+
+/** A team's own provider as the server stores it, which an edit sends back whole. */
+export interface HappyAgentCustomProviderDefinition {
+    readonly providerId: string;
+    readonly name: string;
+    readonly baseUrl: string;
+    readonly protocol: HappyAgentCustomProviderProtocol;
+    /** Sends a stable prompt cache key, for endpoints that route cache hits by it. */
+    readonly promptCacheKey: boolean;
+    readonly models: readonly HappyAgentCustomProviderModel[];
+}
+
+/** What saving a team's own provider sends; its keys are added like any team key. */
+export type HappyAgentCustomProviderInput = Omit<HappyAgentCustomProviderDefinition, "providerId">;
+
+/**
  * The Happy Cloud routes for a provider's team keys. The transport is the
  * connection's own, already authenticated; nothing here holds a token.
  */
@@ -76,6 +112,14 @@ export interface HappyAgentProviderCredentialsApi {
     credentialRemove(providerId: string, credentialId: string): Promise<void>;
     /** What the signed-in member may do on this server, such as `providers.manage`. */
     permissionsRead(): Promise<ReadonlySet<string>>;
+    /** A team's own provider as stored. */
+    customProviderRead(providerId: string): Promise<HappyAgentCustomProviderDefinition>;
+    /** Creates or replaces a team's own provider. */
+    customProviderSave(
+        providerId: string,
+        input: HappyAgentCustomProviderInput,
+    ): Promise<HappyAgentCustomProviderDefinition>;
+    customProviderRemove(providerId: string): Promise<void>;
 }
 
 /** A subscription sign-in's current or most recent attempt. */
@@ -275,6 +319,68 @@ export function happyAgentProviderCredentialsProject(
     return projected;
 }
 
+const PROTOCOLS: ReadonlySet<string> = new Set([
+    "openai_responses",
+    "openai_chat",
+    "anthropic_messages",
+]);
+
+function protocolOf(value: unknown): HappyAgentCustomProviderProtocol | undefined {
+    return typeof value === "string" && PROTOCOLS.has(value)
+        ? (value as HappyAgentCustomProviderProtocol)
+        : undefined;
+}
+
+/**
+ * The team's own providers in a Happy Cloud configuration, by the protocol each
+ * speaks. Built-ins and an operator's endpoints carry no protocol and are not
+ * the team's to edit.
+ */
+export function happyAgentCustomProvidersProject(
+    config: DaemonConfig,
+): ReadonlyMap<string, HappyAgentCustomProviderProtocol> {
+    const projected = new Map<string, HappyAgentCustomProviderProtocol>();
+    for (const [providerId, provider] of Object.entries(config.providers)) {
+        const protocol = protocolOf((provider as { readonly protocol?: unknown }).protocol);
+        if (protocol) projected.set(providerId, protocol);
+    }
+    return projected;
+}
+
+function customProviderRead(value: unknown): HappyAgentCustomProviderDefinition {
+    const provider = (value ?? {}) as Record<string, unknown>;
+    const protocol = protocolOf(provider.protocol);
+    if (
+        typeof provider.providerId !== "string" ||
+        typeof provider.name !== "string" ||
+        typeof provider.baseUrl !== "string" ||
+        !protocol ||
+        !Array.isArray(provider.models)
+    )
+        throw new UserError("The server answered with no provider.");
+    return {
+        providerId: provider.providerId,
+        name: provider.name,
+        baseUrl: provider.baseUrl,
+        protocol,
+        promptCacheKey: provider.promptCacheKey === true,
+        models: provider.models.flatMap((entry: unknown) => {
+            const model = (entry ?? {}) as Record<string, unknown>;
+            if (typeof model.id !== "string") return [];
+            const inputTypes = Array.isArray(model.inputTypes) ? model.inputTypes : [];
+            return [
+                {
+                    id: model.id,
+                    name: typeof model.name === "string" ? model.name : model.id,
+                    contextWindow:
+                        typeof model.contextWindow === "number" ? model.contextWindow : null,
+                    inputTypes: inputTypes.includes("image") ? ["text", "image"] : ["text"],
+                },
+            ];
+        }),
+    };
+}
+
 /**
  * One request to a Happy Cloud route over a connection's own HTTP transport:
  * the endpoint its client uses, with the same bearer. Answers the parsed body,
@@ -332,8 +438,9 @@ export function happyAgentProviderCredentialsApiCreate(options: {
     readonly fetch?: typeof fetch;
 }): HappyAgentProviderCredentialsApi {
     const send = happyCloudRequestCreate(options);
-    const credentials = (providerId: string): string =>
-        `v0/providers/${encodeURIComponent(providerId)}/credentials`;
+    const provider = (providerId: string): string =>
+        `v0/providers/${encodeURIComponent(providerId)}`;
+    const credentials = (providerId: string): string => `${provider(providerId)}/credentials`;
     const cliOf = (answer: unknown): HappyAgentProviderCli => {
         const cli = providerCliRead((answer as { readonly providerCli?: unknown })?.providerCli);
         if (!cli) throw new UserError("The server answered with no sign-in.");
@@ -397,6 +504,26 @@ export function happyAgentProviderCredentialsApiCreate(options: {
             ),
         credentialRemove: (providerId, credentialId) =>
             unit(send("DELETE", `${credentials(providerId)}/${encodeURIComponent(credentialId)}`)),
+        customProviderRead: async (providerId) =>
+            customProviderRead(await send("GET", provider(providerId))),
+        customProviderSave: async (providerId, input) =>
+            customProviderRead(
+                await send("PUT", provider(providerId), {
+                    name: input.name,
+                    baseUrl: input.baseUrl,
+                    protocol: input.protocol,
+                    promptCacheKey: input.promptCacheKey,
+                    models: input.models.map((model) => ({
+                        id: model.id,
+                        name: model.name,
+                        ...(model.contextWindow === null
+                            ? {}
+                            : { contextWindow: model.contextWindow }),
+                        inputTypes: model.inputTypes,
+                    })),
+                }),
+            ),
+        customProviderRemove: (providerId) => unit(send("DELETE", provider(providerId))),
         permissionsRead: async () => {
             const answer = (await send("GET", "v0/permissions")) as
                 | { readonly granted?: unknown }
