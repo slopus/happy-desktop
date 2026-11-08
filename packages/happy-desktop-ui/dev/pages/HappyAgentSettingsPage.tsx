@@ -688,9 +688,7 @@ function AiProvidersSpecimen(props: {
 }) {
     const [add, addSet] = useState(props.add);
     const [to, toSet] = useState<"private" | "team">("private");
-    const teamOnly =
-        add?.flow.kind === "apiKey" &&
-        (add.flow.vendor === "bedrock" || add.flow.vendor === "grok");
+    const teamOnly = add?.flow.kind === "apiKey" && add.flow.vendor === "bedrock";
     return (
         <div style={{ display: "flex", transform: "translateZ(0)" }}>
             <HappyAgentSettingsShell

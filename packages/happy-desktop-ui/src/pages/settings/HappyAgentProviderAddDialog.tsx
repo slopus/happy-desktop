@@ -26,9 +26,9 @@ export interface HappyAgentProviderAddDialogProps {
     readonly to: "private" | "team";
     /** Whether the reader may choose: both "My account" and "Team" are allowed. */
     readonly destinationChoice: boolean;
-    /** The vendors offered for a key; Bedrock and Grok only to those who manage the team's. */
+    /** The vendors offered for a key; Bedrock only to those who manage the team's. */
     readonly keyVendors: readonly HappyAgentProviderKeyVendor[];
-    /** Whether the chosen key can only be kept for the team, as Bedrock's and Grok's are. */
+    /** Whether the chosen key can only be kept for the team, as Bedrock's is. */
     readonly teamOnly: boolean;
     /**
      * - `idle`: waiting on the person.
