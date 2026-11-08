@@ -1,0 +1,127 @@
+# Throwaway diagnostics, branch diag/windows-update-repro only: reproduces a
+# Windows setup failure after moving from Desktop 0.0.103 to 0.0.104-preview.4
+# with the first install's Happy Agent daemon still running. Publishes nothing.
+name: Diag Windows update repro
+
+on:
+    push:
+        branches: [diag/windows-update-repro]
+
+permissions:
+    contents: read
+
+jobs:
+    repro:
+        runs-on: windows-2025
+        timeout-minutes: 75
+        strategy:
+            fail-fast: false
+            matrix:
+                # updater: 0.0.103 turns Preview updates on and installs 0.0.104-preview.4 itself.
+                # manual-stable / manual-preview: 0.0.104-preview.4's installer is run over
+                # 0.0.103 by hand, with Preview updates off or on.
+                scenario: [updater, manual-stable, manual-preview]
+        defaults:
+            run:
+                shell: pwsh
+        env:
+            DO_NOT_TRACK: "1"
+            OUT: ${{ github.workspace }}\diag-out
+            GH_TOKEN: ${{ github.token }}
+        steps:
+            - name: Keep launches away from PostHog
+              run: Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "`r`n0.0.0.0 us.i.posthog.com`r`n:: us.i.posthog.com"
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+            - name: Tools and installers
+              run: |
+                  New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\drv", "$env:RUNNER_TEMP\inst", "$env:RUNNER_TEMP\handle", $env:OUT | Out-Null
+                  Copy-Item .github/diag/drive.mjs "$env:RUNNER_TEMP\drv\drive.mjs"
+                  Push-Location "$env:RUNNER_TEMP\drv"; npm init -y | Out-Null; npm i --no-audit --no-fund playwright-core@1.56.1; Pop-Location
+                  Invoke-WebRequest https://download.sysinternals.com/files/Handle.zip -OutFile "$env:RUNNER_TEMP\handle.zip"
+                  Expand-Archive "$env:RUNNER_TEMP\handle.zip" "$env:RUNNER_TEMP\handle"
+                  gh release download v0.0.103 -R slopus/happy-desktop -p 'Happy-0.0.103-x64.exe' -D "$env:RUNNER_TEMP\inst"
+                  gh release download v0.0.104-preview.4 -R slopus/happy-desktop -p 'Happy-0.0.104-preview.4-x64.exe' -D "$env:RUNNER_TEMP\inst"
+                  Get-ChildItem "$env:RUNNER_TEMP\inst"
+                  Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled | Format-List
+            - name: Install stable 0.0.103
+              run: |
+                  $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.103-x64.exe" -ArgumentList '/S' -PassThru -Wait
+                  "installer exit $($p.ExitCode)"
+                  $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs", "$env:ProgramFiles" -Recurse -Depth 2 -Filter 'Happy.exe' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+                  "installed at $exe ($((Get-Item $exe).VersionInfo.ProductVersion))"
+                  "HAPPY_EXE=$exe" >> $env:GITHUB_ENV
+                  ./.github/diag/capture.ps1 -Label 0-installed-0.0.103 -Out $env:OUT
+            - name: 0.0.103 first-run setup to Agent ready
+              run: |
+                  $preview = if ('${{ matrix.scenario }}' -eq 'updater') { 'on' } else { 'keep' }
+                  $install = if ('${{ matrix.scenario }}' -eq 'updater') { '1' } else { '0' }
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 1-setup-0.0.103 $env:HAPPY_EXE $env:OUT 10 $preview $install
+                  ./.github/diag/capture.ps1 -Label 1-0.0.103-ready-app-running -Out $env:OUT
+            - name: Quit 0.0.103 (daemon stays) and move to 0.0.104-preview.4
+              if: always()
+              run: |
+                  if ('${{ matrix.scenario }}' -eq 'updater') {
+                      # The app's own updater quits it and runs the installer; wait for that.
+                      $deadline = (Get-Date).AddMinutes(6)
+                      while ((Get-Date) -lt $deadline) {
+                          $v = (Get-Item $env:HAPPY_EXE -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+                          $installer = Get-Process | Where-Object { $_.Path -match 'happy-desktop-updater|Happy-0\.0\.104' }
+                          if ($v -match '0\.0\.104' -and -not $installer) { break }
+                          Start-Sleep 3
+                      }
+                      "installed version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
+                      Start-Sleep 10
+                      ./.github/diag/capture.ps1 -Label 2a-after-updater-install -Out $env:OUT
+                      taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
+                  } else {
+                      taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
+                      Start-Sleep 3
+                      ./.github/diag/capture.ps1 -Label 2a-0.0.103-quit -Out $env:OUT
+                      # What electron-updater runs for a silent update.
+                      $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.104-preview.4-x64.exe" -ArgumentList '--updated /S' -PassThru -Wait
+                      "installer exit $($p.ExitCode); version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
+                      if ('${{ matrix.scenario }}' -eq 'manual-preview') {
+                          $path = "$env:USERPROFILE\.happy\desktop\config.json"
+                          $config = if (Test-Path $path) { Get-Content -Raw $path | ConvertFrom-Json -AsHashtable } else { @{} }
+                          $config.previewUpdatesEnabled = $true
+                          $config | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8 $path
+                          Get-Content -Raw $path
+                      }
+                  }
+                  Start-Sleep 3
+                  ./.github/diag/capture.ps1 -Label 2b-before-0.0.104-launch -Out $env:OUT
+                  exit 0
+            - name: 0.0.104-preview.4 launch and setup
+              if: always()
+              run: |
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 3-0.0.104-preview.4 $env:HAPPY_EXE $env:OUT 8
+                  ./.github/diag/capture.ps1 -Label 3-0.0.104-after-setup -Out $env:OUT
+                  taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
+                  Start-Sleep 3
+                  ./.github/diag/capture.ps1 -Label 3b-0.0.104-quit -Out $env:OUT
+                  exit 0
+            - name: Reinstall 0.0.103 with fresh userData and run setup
+              if: always()
+              run: |
+                  $uninstaller = Get-ChildItem (Split-Path $env:HAPPY_EXE) -Filter 'Uninstall*.exe' | Select-Object -First 1 -ExpandProperty FullName
+                  "uninstalling with $uninstaller"
+                  if ($uninstaller) { Start-Process $uninstaller -ArgumentList '/S' -Wait }
+                  Start-Sleep 5
+                  Remove-Item -Recurse -Force "$env:APPDATA\Happy" -ErrorAction SilentlyContinue
+                  $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.103-x64.exe" -ArgumentList '/S' -PassThru -Wait
+                  "installer exit $($p.ExitCode); version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
+                  ./.github/diag/capture.ps1 -Label 4a-reinstalled-0.0.103 -Out $env:OUT
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 4-reinstall-0.0.103 $env:HAPPY_EXE $env:OUT 8
+                  ./.github/diag/capture.ps1 -Label 4b-reinstall-after-setup -Out $env:OUT
+                  taskkill /IM Happy.exe /T /F
+                  exit 0
+            - name: Upload diagnostics
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: diag-${{ matrix.scenario }}
+                  path: diag-out
+                  retention-days: 5
