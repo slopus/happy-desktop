@@ -220,6 +220,8 @@ describe("exit 65", () => {
             { root },
             { localHappyAgentConnector: { connect } },
         );
+        // A computer runs a Happy Agent only once someone asks it to.
+        void runtime.start({ mode: "local" }).catch(() => undefined);
         const failed = await new Promise<DesktopRuntimeSnapshot>((resolvePromise) => {
             const check = (snapshot: DesktopRuntimeSnapshot) => {
                 if (snapshot.phase === "error") resolvePromise(snapshot);
