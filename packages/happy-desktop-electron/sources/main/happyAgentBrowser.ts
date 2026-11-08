@@ -55,7 +55,7 @@ export class HappyAgentBrowser {
                     throw error;
                 }),
         });
-        const browser = new HappyAgentBrowser(session, proxy);
+        const browser = new HappyAgentBrowser(session, proxy, network.artifactId !== undefined);
         try {
             session.webRequest.onBeforeRequest((details, callback) => {
                 const protocol = new URL(details.url).protocol;
@@ -92,6 +92,8 @@ export class HappyAgentBrowser {
     private constructor(
         readonly session: Session,
         readonly proxy: HappyAgentBrowserProxyHandle,
+        /** A live artifact's profile, whose pages are the artifact's author's to inspect. */
+        readonly artifact: boolean,
     ) {}
 
     register(guest: WebContents): void {
@@ -112,7 +114,12 @@ export class HappyAgentBrowser {
     async command(contents: WebContents, command: DesktopBrowserCommand): Promise<void> {
         if (this.#closed || !this.owns(contents) || contents.isDestroyed())
             throw new Error("The browser tab is unavailable.");
-        if (command.action === "stop") contents.stop();
+        if (command.action === "devtools") {
+            // Only the page: a guest this profile registered, never the window
+            // that embeds it, and only a live artifact's.
+            if (!this.artifact) throw new Error("Only a live artifact's page can be inspected.");
+            contents.openDevTools({ mode: "detach" });
+        } else if (command.action === "stop") contents.stop();
         else if (command.action === "reload") contents.reload();
         else if (command.action === "load") {
             const address = browserAddress(command.url);

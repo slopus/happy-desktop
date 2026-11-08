@@ -140,6 +140,10 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.invoke(desktopIpc.guestFitMeasure, guestId, previous),
     browserNetworkCommand: (partition, guestId, command) =>
         ipcRenderer.invoke(desktopIpc.browserNetworkCommand, partition, guestId, command),
+    browserNetworkDevToolsOpen: (partition, guestId) =>
+        ipcRenderer.invoke(desktopIpc.browserNetworkCommand, partition, guestId, {
+            action: "devtools",
+        }),
     browserNetworkPopupSubscribe(listener: (popup: DesktopBrowserPopup) => void) {
         const receive = (_event: Electron.IpcRendererEvent, popup: DesktopBrowserPopup) =>
             listener(popup);

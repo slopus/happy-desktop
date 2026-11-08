@@ -12111,6 +12111,7 @@ function HappyAgentToolBodies(props: {
                         key={tab.id}
                         onLocationChange={(url) => props.store.browserUpdate(tab.id, { url })}
                         onTitleChange={(title) => props.store.browserUpdate(tab.id, { title })}
+                        {...(tab.artifactId === undefined ? {} : { inspectable: true })}
                         {...(props.browserStart ? { start: props.browserStart(tab.id) } : {})}
                         {...(props.happyAgentAvailability === undefined
                             ? {}

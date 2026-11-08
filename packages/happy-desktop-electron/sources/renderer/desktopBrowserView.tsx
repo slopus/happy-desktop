@@ -132,6 +132,21 @@ export class DesktopBrowserGuest extends Component<
             this.command({ action: "stop" });
             this.props.browserLoadingChanged(false);
         },
+        // Only a live artifact's page is offered developer tools.
+        ...(this.props.target?.artifactId !== undefined &&
+        window.happyDesktop?.browserNetworkDevToolsOpen
+            ? {
+                  browserDevToolsOpen: () => {
+                      const desktop = window.happyDesktop;
+                      const partition = this.state.partition;
+                      const view = this.element;
+                      if (!partition || !view || !this.initialized) return;
+                      void desktop
+                          ?.browserNetworkDevToolsOpen?.(partition, view.getWebContentsId())
+                          .catch(() => undefined);
+                  },
+              }
+            : {}),
         ...(window.happyDesktop?.browserPasswordPickerOpen
             ? {
                   browserPasswordPick: () => {

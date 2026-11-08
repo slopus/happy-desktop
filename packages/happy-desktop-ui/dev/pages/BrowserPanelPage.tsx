@@ -22,6 +22,28 @@ function BrowserPreview(_props: BrowserContentProps) {
     );
 }
 
+/** A guest whose host can open developer tools for it. */
+function InspectablePreview(props: BrowserContentProps) {
+    return (
+        <div
+            ref={() =>
+                props.browserControllerReady({
+                    browserBack: () => undefined,
+                    browserForward: () => undefined,
+                    browserLoad: () => undefined,
+                    browserReload: () => undefined,
+                    browserStop: () => undefined,
+                    browserDevToolsOpen: () => undefined,
+                })
+            }
+            style={preview}
+        >
+            <div style={previewMark}>H</div>
+            <div style={previewTitle}>Checkout dev server</div>
+        </div>
+    );
+}
+
 /**
  * A guest that fails its first load, the way Electron leaves the region blank
  * when a navigation never commits. The failure is reported once, from the ref
@@ -73,6 +95,21 @@ export function BrowserPanelPage() {
                         active
                         initialUrl="https://happy.engineering/"
                         renderContent={BrowserPreview}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="a live artifact's page · developer tools for the page alone, beside saved passwords"
+                label="Live artifact page"
+                number="07"
+                stage="app"
+            >
+                <div style={frame}>
+                    <BrowserPanel
+                        active
+                        initialUrl="http://localhost:5173/"
+                        inspectable
+                        renderContent={InspectablePreview}
                     />
                 </div>
             </Specimen>

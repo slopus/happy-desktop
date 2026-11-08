@@ -913,7 +913,9 @@ export interface DesktopBrowserTunnelFailure {
 /** User-initiated navigation; guest pages never receive this bridge. */
 export type DesktopBrowserCommand =
     | { readonly action: "load"; readonly url: string }
-    | { readonly action: "back" | "forward" | "reload" | "stop" };
+    | { readonly action: "back" | "forward" | "reload" | "stop" }
+    /** Opens developer tools for a live artifact's page, never for Happy's own window. */
+    | { readonly action: "devtools" };
 
 /**
  * One step in the life of one main-frame document inside an HTML preview guest.
@@ -1054,6 +1056,11 @@ export interface HappyDesktopBridge {
         guestId: number,
         command: DesktopBrowserCommand,
     ): Promise<void>;
+    /**
+     * Opens developer tools for one live artifact page, in a window of their
+     * own. Absent on native hosts that cannot.
+     */
+    browserNetworkDevToolsOpen?(partition: string, guestId: number): Promise<void>;
     /** Pages a workspace browser guest opened, for the guest's own tab to place. */
     browserNetworkPopupSubscribe?(listener: (popup: DesktopBrowserPopup) => void): () => void;
     /** Absent on native hosts that do not report a network Happy Agent no longer knows. */

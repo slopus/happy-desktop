@@ -14,6 +14,8 @@ export interface BrowserController {
     browserStop(): void;
     /** Opens Happy's native picker; a chosen login is filled by the host alone. */
     browserPasswordPick?(): void;
+    /** Opens developer tools for the page alone, where the host allows inspecting it. */
+    browserDevToolsOpen?(): void;
 }
 
 /**
@@ -127,6 +129,11 @@ export interface BrowserPanelProps {
     onTitleChange?(title: string): void;
     /** Why Happy Agent-bound browser navigation is unavailable while the guest remains mounted. */
     unavailable?: string;
+    /**
+     * The page may be inspected — a live artifact's page — so the toolbar
+     * keeps a place for developer tools, usable once the host offers them.
+     */
+    inspectable?: boolean;
     /**
      * What a tab that has not been anywhere yet shows under its address: the
      * tools it can become, then the pages this browser visited.
@@ -321,6 +328,21 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 >
                     <Ionicon name="key-outline" size={14} />
                 </Button>
+                {props.inspectable ? (
+                    <Button
+                        aria-label="Open developer tools"
+                        disabled={
+                            props.unavailable !== undefined || !controller?.browserDevToolsOpen
+                        }
+                        iconOnly
+                        onClick={() => controller?.browserDevToolsOpen?.()}
+                        size="small"
+                        title="Developer tools"
+                        variant="ghost"
+                    >
+                        <Ionicon name="code-slash-outline" size={14} />
+                    </Button>
+                ) : null}
             </div>
             {props.unavailable ? (
                 <div

@@ -24,7 +24,8 @@ export function desktopBrowserCommandValidate(value: unknown): DesktopBrowserCom
         (command.action === "back" ||
             command.action === "forward" ||
             command.action === "reload" ||
-            command.action === "stop")
+            command.action === "stop" ||
+            command.action === "devtools")
     )
         return { action: command.action };
     throw new Error("Invalid browser command.");
