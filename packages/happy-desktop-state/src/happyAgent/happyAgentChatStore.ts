@@ -725,7 +725,12 @@ export interface HappyAgentChatStore {
         text: string,
         permissionMode: HappyAgentPermissionMode,
     ): Promise<void>;
-    slashCommandInvoke(name: string, argumentsValue?: string): Promise<void>;
+    /**
+     * Runs one command this agent offers. The caller names the catalog entry
+     * it resolved, since a conversation created a moment ago has not read its
+     * own catalog yet.
+     */
+    slashCommandInvoke(command: HappyAgentSlashCommand, argumentsValue?: string): Promise<void>;
     draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     draftAppendConfirmed(text: string, updatedAt: number): Promise<void>;
     runAbort(): Promise<void>;
@@ -1611,7 +1616,7 @@ export function happyAgentChatStoreCreate(
                     });
                 output({ type: "messageSent", sessionId, steered });
             }),
-        slashCommandInvoke: (name, argumentsValue) =>
+        slashCommandInvoke: (command, argumentsValue) =>
             rejecting(() => {
                 // A skill is not a command the daemon runs on its own: it is a
                 // document the model has to read before it acts. So invoking one
@@ -1621,8 +1626,8 @@ export function happyAgentChatStoreCreate(
                 // the model continues with the instructions loaded. The message text
                 // is the command as the reader typed it, so the transcript shows the
                 // invocation and the model reads the ask beside the loaded document.
-                const command = slashCommands.find((one) => one.name === name);
-                if (command?.kind === "skill") {
+                const name = command.name;
+                if (command.kind === "skill") {
                     const steered = runStatus === "running";
                     const text =
                         argumentsValue === undefined || argumentsValue.trim().length === 0

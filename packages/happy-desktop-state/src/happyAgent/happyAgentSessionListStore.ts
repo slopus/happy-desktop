@@ -58,6 +58,7 @@ import type {
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
     HappyAgentSessionSummary,
+    HappyAgentSlashCommand,
     HappyAgentTask,
     HappyAgentTaskId,
     HappyAgentWorktree,
@@ -287,7 +288,11 @@ export type HappyAgentSessionListOutput = {
 };
 
 export interface HappyAgentSessionListStore {
-    sessionCreationWait(sessionId: HappyAgentSessionId): Promise<void>;
+    /**
+     * Waits for a session this store started to exist on the daemon, resolving
+     * with the slash commands its agent offers from the start.
+     */
+    sessionCreationWait(sessionId: HappyAgentSessionId): Promise<readonly HappyAgentSlashCommand[]>;
     workspaceCreationWait(workspaceId: HappyAgentWorktreeId): Promise<void>;
     get(): HappyAgentSessionListSnapshot;
     subscribe(listener: () => void): () => void;
@@ -2715,7 +2720,15 @@ export function happyAgentSessionListStoreCreate(
             }
             deps.connectActions.markSessionRead(sessionId);
         },
-        sessionCreationWait: (sessionId) => deps.connectActions.sessionCreationWait(sessionId),
+        sessionCreationWait: (sessionId) =>
+            deps.connectActions.sessionCreationWait(sessionId).then((catalog) =>
+                catalog.map((command) => ({
+                    name: command.name,
+                    description: command.description,
+                    hasArguments: command.hasArguments,
+                    ...(command.kind === undefined ? {} : { kind: command.kind }),
+                })),
+            ),
         workspaceCreationWait: (workspaceId) =>
             deps.connectActions.workspaceCreationWait(workspaceId),
         sessionCreate: (input) => mutate(async () => sessionCreateRun(input)),

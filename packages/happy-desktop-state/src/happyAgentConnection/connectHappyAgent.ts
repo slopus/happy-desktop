@@ -441,6 +441,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const unannouncedAgents = new Set<string>();
     const sendConfirmations = new Map<string, () => void>();
     const sessionCreationOutcomes = new Map<string, Promise<void>>();
+    /**
+     * The slash catalog each recent creation response named. An agent's
+     * catalog is otherwise read with its transcript, and one created here
+     * opens empty before the daemon has heard of it.
+     */
+    const sessionCreationCatalogs = new Map<string, readonly SlashCommand[]>();
     const workspaceCreationOutcomes = new Map<string, Promise<void>>();
     const sendAcceptance = new Map<string, Promise<void>>();
     const modeSaveOutcomes = new Map<string, Promise<void>>();
@@ -5056,8 +5062,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         }
                     }
                 },
-                ({ agent }) => {
+                ({ agent, slashCommands }) => {
                     unannouncedAgents.delete(sessionId);
+                    sessionCreationCatalogs.set(sessionId, slashCommands);
+                    while (sessionCreationCatalogs.size > 256)
+                        sessionCreationCatalogs.delete(
+                            sessionCreationCatalogs.keys().next().value!,
+                        );
                     if (adoptAgent(agent)) {
                         publishGroups([{ type: "session_added", sessionId: agent.id }]);
                     }
@@ -5256,10 +5267,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             );
         },
         sessionCreationWait(sessionId) {
-            return (
-                sessionCreationOutcomes.get(sessionId) ??
-                Promise.reject(new Error("This session creation is no longer tracked."))
-            );
+            const outcome = sessionCreationOutcomes.get(sessionId);
+            if (outcome === undefined)
+                return Promise.reject(new Error("This session creation is no longer tracked."));
+            return outcome.then(() => {
+                const catalog = sessionCreationCatalogs.get(sessionId);
+                if (catalog === undefined)
+                    throw new Error("This session creation is no longer tracked.");
+                return catalog;
+            });
         },
         sessionModeSaveWait(mutationId) {
             const outcome = modeSaveOutcomes.get(mutationId);

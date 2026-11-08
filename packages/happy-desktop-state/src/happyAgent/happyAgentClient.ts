@@ -99,6 +99,10 @@ import {
     type HappyAgentSecretsStore,
 } from "./happyAgentSecretsStore.js";
 import {
+    happyAgentGlobalSkillsStoreCreate,
+    type HappyAgentGlobalSkillsStore,
+} from "./happyAgentGlobalSkillsStore.js";
+import {
     happyAgentProviderUsageStoreCreate,
     type HappyAgentProviderUsageSource,
     type HappyAgentProviderUsageStore,
@@ -286,6 +290,11 @@ export interface HappyAgentWorkspaceClient {
     securityPolicy(): HappyAgentSecurityPolicyStore;
     /** Global write-only environment bundles, materialized while Settings reads them. */
     secrets(): HappyAgentSecretsStore;
+    /**
+     * Enabled, ready global skills, which a composer offers before any agent
+     * exists to answer for its own catalog. Materialized on first access.
+     */
+    globalSkills(): HappyAgentGlobalSkillsStore;
     /**
      * This Happy Agent's published artifacts: the catalog, the list beside a
      * chat, and the viewer. Materialized on first access; a daemon too old to
@@ -683,6 +692,7 @@ export function happyAgentWorkspaceClientCreate(
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
     let secretsStore: HappyAgentSecretsStore | undefined;
+    let globalSkillsStore: HappyAgentGlobalSkillsStore | undefined;
     let artifacts: HappyAgentArtifacts | undefined;
     let feed: HappyAgentFeed | undefined;
     const feedOf = (): HappyAgentFeed =>
@@ -1132,6 +1142,14 @@ export function happyAgentWorkspaceClientCreate(
             });
             return secretsStore;
         },
+        globalSkills() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            globalSkillsStore ??= happyAgentGlobalSkillsStoreCreate({
+                client: deps.client,
+                sync: deps.connection.sync,
+            });
+            return globalSkillsStore;
+        },
         async chat(sessionId) {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             let binding = chats.get(sessionId);
@@ -1296,6 +1314,8 @@ export function happyAgentWorkspaceClientCreate(
             securityPolicyStore = undefined;
             secretsStore?.[Symbol.dispose]();
             secretsStore = undefined;
+            globalSkillsStore?.[Symbol.dispose]();
+            globalSkillsStore = undefined;
             artifacts?.[Symbol.dispose]();
             toolMediaDocument?.[Symbol.dispose]();
             for (const store of deviceBridgeStores.values()) store[Symbol.dispose]();

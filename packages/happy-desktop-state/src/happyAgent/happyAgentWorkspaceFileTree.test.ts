@@ -132,6 +132,10 @@ function store(
                 ),
             chat: () => new Promise(() => undefined),
             openInTargetsRead: () => new Promise(() => undefined),
+            globalSkills: () => ({
+                get: () => ({ skills: [] }),
+                subscribe: () => () => undefined,
+            }),
             workspaceFileTreeRead: (_group: HappyAgentGroupId, path: string) => disk.read(path),
             workspaceFilesSubscribe: (
                 listener: (change: HappyAgentWorkspaceFilesChanged) => void,

@@ -3,6 +3,7 @@ import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happy
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
 import type { HappyAgentToolMediaDocumentStore } from "./happyAgentToolMediaDocumentStore.js";
+import type { HappyAgentGlobalSkill } from "./happyAgentGlobalSkillsStore.js";
 import { createStore } from "zustand/vanilla";
 import {
     happyAgentBotSubtasks,
@@ -223,6 +224,23 @@ function composerCommandsProject(
         ...happyAgentComposerCommands.filter((command) => !providedIds.has(command.id)),
         ...skillsProvided,
     ];
+}
+
+/**
+ * What a group's composer offers before its first conversation exists: the
+ * Happy Agent's global skills, as that conversation's agent would offer them.
+ * Commands an agent runs are not offered, since there is no agent yet.
+ */
+function globalSkillCommandsProject(
+    skills: readonly HappyAgentGlobalSkill[],
+): readonly ComposerCommand[] {
+    return skills.map((skill) => ({
+        id: skill.name,
+        label: `/${skill.name}`,
+        description: skill.description,
+        hasArguments: true,
+        kind: "skill",
+    }));
 }
 
 /** Number of `@`-mention candidates a local composer asks the workspace for. */
@@ -2687,6 +2705,8 @@ export function happyAgentWorkspaceStoreCreate(
     let groupDraftWriter: HappyAgentSessionDraftWriter | undefined;
     let unsubscribeGroupDraft: (() => void) | undefined;
     let groupDraftGeneration = 0;
+    /** Follows the global skills the group's composer offers, while it is open. */
+    let unsubscribeGroupSkills: (() => void) | undefined;
     /**
      * Where each conversation was last being read, by conversation id. Switching
      * sessions disposes the transcript that held the position, so it is kept
@@ -4932,7 +4952,7 @@ export function happyAgentWorkspaceStoreCreate(
                             new Error(`/${commandId} does not accept arguments.`),
                         );
                     return writeGuard(openGroupConversationRefusal(), () =>
-                        store.slashCommandInvoke(commandId, argumentsValue),
+                        store.slashCommandInvoke(provided, argumentsValue),
                     );
                 }
                 if (argumentsValue !== undefined)
@@ -5764,12 +5784,17 @@ export function happyAgentWorkspaceStoreCreate(
      * Happy Agent releases its work when the checkout arrives. The composer holds one
      * submission pending for the whole of that wait, so a second Enter cannot
      * start a second session against the same new workspace.
+     *
+     * A draft that names a global skill runs it as the first turn instead,
+     * once the new conversation has said which skills its agent offers. One
+     * that agent does not offer under that name is sent as the words it is.
      */
     const groupSubmit = (
         groupId: HappyAgentGroupId,
         text: string,
         attachments: readonly ComposerAttachment[],
         selection: HappyAgentSelection | undefined,
+        skill?: { readonly name: string; readonly arguments?: string },
     ): Promise<HappyAgentSessionLocation> => {
         const refusal = groupConversationRefusalFind(groupId);
         if (refusal) return Promise.reject(new Error(refusal));
@@ -5812,7 +5837,8 @@ export function happyAgentWorkspaceStoreCreate(
                 output({ type: "conversationOpenRequested", location });
                 const acquired = await client.chat(location.sessionId);
                 try {
-                    await acquired.store.messageSend(placed, images);
+                    if (skill === undefined) await acquired.store.messageSend(placed, images);
+                    else await groupSkillRun(acquired.store, location.sessionId, skill, placed);
                 } finally {
                     acquired[Symbol.dispose]();
                 }
@@ -5829,6 +5855,26 @@ export function happyAgentWorkspaceStoreCreate(
                 return location;
             });
         });
+    };
+
+    /**
+     * Runs a global skill as a new conversation's first turn. The skill was
+     * offered from the Happy Agent's global catalog, but the agent decides
+     * what its own name means: a project skill may shadow it, or it may have
+     * been disabled since. So the catalog the daemon created the agent with is
+     * read first, and a name it does not offer goes out as the draft's words.
+     */
+    const groupSkillRun = async (
+        store: HappyAgentChatStore,
+        sessionId: HappyAgentSessionId,
+        skill: { readonly name: string; readonly arguments?: string },
+        text: string,
+    ): Promise<void> => {
+        const catalog = await list.sessionCreationWait(sessionId);
+        const provided = catalog.find((command) => command.name === skill.name);
+        if (provided === undefined || (skill.arguments !== undefined && !provided.hasArguments))
+            return store.messageSend(text, []);
+        return store.slashCommandInvoke(provided, skill.arguments);
     };
 
     /** Composes the published draft from its parts, keeping identity while none moved. */
@@ -6189,6 +6235,8 @@ export function happyAgentWorkspaceStoreCreate(
 
     const releaseGroup = (): void => {
         groupComposer = undefined;
+        unsubscribeGroupSkills?.();
+        unsubscribeGroupSkills = undefined;
         unsubscribeGroupDraft?.();
         unsubscribeGroupDraft = undefined;
         groupDraft = undefined;
@@ -6197,6 +6245,23 @@ export function happyAgentWorkspaceStoreCreate(
         // itself to a group that has since been left.
         groupDraftGeneration += 1;
         openGroupId = undefined;
+    };
+
+    /**
+     * Offers the global skills in the addressed group's composer. Following
+     * starts with a fresh read, so the catalog is current each time the
+     * composer opens, and `skills.updated` keeps it current while it is open.
+     */
+    const groupSkillsFollow = (target: ComposerStore): void => {
+        unsubscribeGroupSkills?.();
+        const skills = client.globalSkills();
+        const reconcile = (): void =>
+            target.getState().composerInput({
+                type: "commandsReconciled",
+                commands: globalSkillCommandsProject(skills.get().skills),
+            });
+        unsubscribeGroupSkills = skills.subscribe(reconcile);
+        reconcile();
     };
 
     /**
@@ -7237,10 +7302,42 @@ export function happyAgentWorkspaceStoreCreate(
             const submittingComposer = composerSubmissions.get(groupId)?.composer;
             if (submittingComposer) {
                 groupComposer = submittingComposer;
+                groupSkillsFollow(submittingComposer);
                 groupDraftEnsure(groupId);
                 recompute();
                 return;
             }
+            /**
+             * Starts the group's first conversation with one submission. The
+             * configuration is read now, not after the session has been
+             * created: creation navigates, which releases this group and its
+             * draft with it.
+             */
+            const groupSubmitting = (
+                revision: number,
+                attachments: readonly ComposerAttachment[],
+                run: (selection: HappyAgentSelection | undefined) => Promise<void>,
+            ): void => {
+                const selection = groupDraft?.get().selection;
+                const submission = composerSubmissions.get(groupId) ?? {
+                    composer: created,
+                    pending: 0,
+                };
+                submission.pending += 1;
+                composerSubmissions.set(groupId, submission);
+                submitting(
+                    created,
+                    revision,
+                    () => run(selection),
+                    attachments,
+                    () => {
+                        client.memory.groupDraftWrite(groupId, created.getState().text);
+                        attachmentsRemember(groupAttachments, groupId, created);
+                        submission.pending -= 1;
+                        if (submission.pending === 0) composerSubmissions.delete(groupId);
+                    },
+                );
+            };
             const created: ComposerStore = composerStoreCreate(groupId, {
                 capabilities: { shellMode: false, commands: [], mentions: false },
                 text: client.memory.groupRead(groupId)?.draft ?? "",
@@ -7260,21 +7357,11 @@ export function happyAgentWorkspaceStoreCreate(
                         case "attachmentAdded":
                             attachmentsRemember(groupAttachments, groupId, created);
                             return;
-                        case "textSubmitted": {
-                            // The configuration is read now, not after the
-                            // session has been created: creation navigates,
-                            // which releases this group and its draft with it.
-                            const selection = groupDraft?.get().selection;
-                            const submission = composerSubmissions.get(groupId) ?? {
-                                composer: created,
-                                pending: 0,
-                            };
-                            submission.pending += 1;
-                            composerSubmissions.set(groupId, submission);
-                            submitting(
-                                created,
+                        case "textSubmitted":
+                            groupSubmitting(
                                 event.revision,
-                                async () => {
+                                event.attachments,
+                                async (selection) => {
                                     await groupSubmit(
                                         groupId,
                                         event.text,
@@ -7283,14 +7370,26 @@ export function happyAgentWorkspaceStoreCreate(
                                     );
                                     fileCommentsSpend(event.attachments);
                                 },
-                                event.attachments,
-                                () => {
-                                    client.memory.groupDraftWrite(groupId, created.getState().text);
-                                    attachmentsRemember(groupAttachments, groupId, created);
-                                    submission.pending -= 1;
-                                    if (submission.pending === 0)
-                                        composerSubmissions.delete(groupId);
-                                },
+                            );
+                            return;
+                        case "commandInvoked": {
+                            // Only a submitted draft starts a conversation: a
+                            // skill picked from the menu is written into the
+                            // draft for its arguments rather than run.
+                            if (event.revision === undefined) return;
+                            // The words as typed, for an agent that does not
+                            // offer this skill under its name.
+                            const text = created.getState().text;
+                            const skill = {
+                                name: event.commandId,
+                                ...(event.arguments === undefined
+                                    ? {}
+                                    : { arguments: event.arguments }),
+                            };
+                            groupSubmitting(event.revision, [], (selection) =>
+                                groupSubmit(groupId, text, [], selection, skill).then(
+                                    () => undefined,
+                                ),
                             );
                             return;
                         }
@@ -7300,6 +7399,7 @@ export function happyAgentWorkspaceStoreCreate(
                 },
             });
             groupComposer = created;
+            groupSkillsFollow(created);
             groupDraftEnsure(groupId);
             recompute();
         },
@@ -8259,7 +8359,8 @@ export function happyAgentWorkspaceStoreCreate(
         composerFocusUpdate: (focused) =>
             (groupComposer ?? composer)?.getState().focusUpdate(focused),
         composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
-        composerCommandInvoke: (commandId) => composer?.getState().commandInvoke(commandId),
+        composerCommandInvoke: (commandId) =>
+            (groupComposer ?? composer)?.getState().commandInvoke(commandId),
         composerAttachmentsAdd(files) {
             const target = groupComposer ?? composer;
             if (target) attachmentsAddTo(target, files);

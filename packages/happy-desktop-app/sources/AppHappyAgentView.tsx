@@ -9406,6 +9406,16 @@ function HappyAgentGroupComposer(props: {
                             />
                         ) : undefined
                     }
+                    // The Happy Agent's global skills, which the first message
+                    // may run before the conversation's own agent exists.
+                    onCommandInvoke={
+                        !modelsNotConfigured && props.unavailable === undefined
+                            ? (commandId) => {
+                                  if (props.happyAgentOnline())
+                                      workspace.composerCommandInvoke(commandId);
+                              }
+                            : undefined
+                    }
                     onComposerAttachmentRemove={(attachmentId) =>
                         workspace.composerAttachmentRemove(attachmentId)
                     }
