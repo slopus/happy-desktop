@@ -126,11 +126,17 @@ export function happyAgentChatOnboardingComposer(
  * The flow to keep. Each change to one flow advances its UUIDv7, so within one
  * flow the greater version wins. A server may replace the caller's flow with
  * another, such as a team's setup with the member's own Welcome, whose version
- * starts over; a flow of another recipe is that replacement, and the server's
- * newer answer wins whatever its version.
+ * starts over; then the server's newer answer wins whatever its version. A
+ * flow is told apart by its `id` (`null` before it starts) where the server
+ * sends one, and by its recipe where it does not, as a standalone daemon.
  */
 function flowNewer(current: OnboardingFlow | undefined, next: OnboardingFlow): OnboardingFlow {
-    if (current === undefined || current.recipe !== next.recipe) return next;
+    if (current === undefined) return next;
+    const same =
+        current.id !== undefined || next.id !== undefined
+            ? current.id === next.id
+            : current.recipe === next.recipe;
+    if (!same) return next;
     return current.version >= next.version ? current : next;
 }
 

@@ -56,9 +56,8 @@ function serverOf(clis: readonly ProviderCli[]) {
     return { deps, signInProviderCli };
 }
 
-/** The `target` the sign-in request carried, which the client's type does not name yet. */
-function targetOf(request: ProviderCliSignInRequest | undefined): unknown {
-    return request === undefined ? undefined : (request as { target?: unknown }).target;
+function targetOf(request: ProviderCliSignInRequest | undefined) {
+    return request?.target;
 }
 
 describe("happyAgentProviderClisStore sign-in target", () => {
