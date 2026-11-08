@@ -23,23 +23,72 @@ import { linuxDisplayEnvironment } from "./workloads.js";
 const NO_PROVIDERS = "[settings]\nhappy_integration = false\nmenu_bar = false\n";
 const IDLE_END_MS = 60_000;
 
-/** Someone setting up their team's server, who leaves the optional parts for later. */
+/**
+ * Someone setting up their team's server: they name its Chief of Staff, keep
+ * the free model, describe the first task in words, start it without a
+ * machine, and leave the phone for later. Nothing that needs a vendor's, a
+ * machine's or a phone's own setup is pressed.
+ */
 export const GYM_PERSONA_TEAM_OWNER: GymPersona = {
     name: "Olga Petrova",
     email: "olga@acme.example",
     prefers: [
-        /^Set up my team/u,
         /^Juno$/u,
+        /^Keep the free model/u,
         /^Invite later/u,
-        /^Stay on the free model/u,
-        /^Not now|^Later|^Skip/u,
-        /^Finish setup/u,
+        /^Describe the work instead/u,
+        /^Start without it/u,
+        /^Later$|^Not now/u,
         /^Continue/u,
     ],
-    avoids: [/sign-in page/iu, /^Cancel$/u, /^Look around first/u, /^Add a machine/u],
-    answers: [{ when: /your name|call you/iu, text: "Olga Petrova" }],
+    avoids: [
+        /sign-in page/iu,
+        /^Cancel$/u,
+        /^ChatGPT$|^Claude|^API key/u,
+        /^It's connected/u,
+        /^I've added one/u,
+        /^It's added/u,
+        /^It's on my phone/u,
+    ],
+    answers: [
+        {
+            when: /describe|which work|need done|work on|in a sentence/iu,
+            text: "Fix the flaky sign-in test in our web app. It fails about one run in five.",
+        },
+    ],
     wordsPerMinute: 260,
     charactersPerSecond: 9,
+};
+
+/** An admin who joined before the owner set the team up, and does it for them. */
+export const GYM_PERSONA_TEAM_ADMIN: GymPersona = {
+    ...GYM_PERSONA_TEAM_OWNER,
+    name: "Ada Okafor",
+    email: "ada@example.com",
+    prefers: [/^Atlas$/u, ...GYM_PERSONA_TEAM_OWNER.prefers.slice(1)],
+};
+
+/** A teammate who joined with an invite: they take the first task offered and leave the phone for later. */
+export const GYM_PERSONA_TEAMMATE: GymPersona = {
+    ...GYM_PERSONA_TEAM_OWNER,
+    name: "Sam Rivera",
+    email: "sam@example.com",
+    prefers: [/^Later$|^Not now/u],
+    answers: [
+        {
+            when: /describe|which work|need done|work on|in a sentence/iu,
+            text: "I'll pick up the sign-in test fix with the team.",
+        },
+    ],
+};
+
+/** A viewer, who only reads: there is nothing for them to answer. */
+export const GYM_PERSONA_VIEWER: GymPersona = {
+    ...GYM_PERSONA_TEAM_OWNER,
+    name: "Vera Lind",
+    email: "vera@example.com",
+    prefers: [/^Later$|^Not now/u],
+    answers: [],
 };
 
 export interface GymTeamOnboardingRecording {
@@ -167,8 +216,11 @@ export async function gymTeamOnboardingRecord(options: {
                 await profileSave(page, driver, persona);
                 const started = Date.now();
                 let idleSince = Date.now();
+                let focusSeen = false;
                 while (Date.now() - started < limitMs) {
-                    if (await onboardingFinished(page)) {
+                    const focused = await onboardingFocused(page);
+                    focusSeen ||= focused;
+                    if (await onboardingFinished(page, { focused, focusSeen })) {
                         ended = "finished";
                         await driver.pause(1_500, 2_000);
                         await shot(page, "finished");
@@ -228,22 +280,43 @@ export async function gymTeamOnboardingRecord(options: {
     }
 }
 
+/** Whether onboarding holds the window in focus chat. */
+async function onboardingFocused(page: Page): Promise<boolean> {
+    return (await page.locator('[data-happy-desktop-ui="app-shell"][data-focus]').count()) > 0;
+}
+
 /**
- * Whether the model has finished onboarding, as the conversation shows it: its
- * `finish_onboarding` call is drawn, and nothing is streaming. The gym holds no
- * token for the team server to read the flow itself.
+ * Whether onboarding has finished, as the window shows it, with nothing
+ * streaming: focus chat let the window go, or the model's `finish_onboarding`
+ * call is drawn, or a flow finished at once (a viewer's welcome) left a
+ * message in an unfocused window. The gym holds no token for the team server
+ * to read the flow itself.
  */
-async function onboardingFinished(page: Page): Promise<boolean> {
-    const finished = await page
-        .getByText("Finish onboarding", { exact: true })
-        .first()
-        .isVisible()
-        .catch(() => false);
-    if (!finished) return false;
+async function onboardingFinished(
+    page: Page,
+    focus: { readonly focused: boolean; readonly focusSeen: boolean },
+): Promise<boolean> {
     const streaming = await page
         .locator('[data-happy-desktop-ui="message"][aria-busy="true"]')
         .count();
-    return streaming === 0;
+    if (streaming > 0) return false;
+    if (focus.focusSeen && !focus.focused) return true;
+    if (
+        await page
+            .getByText("Finish onboarding", { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false)
+    )
+        return true;
+    return (
+        !focus.focused &&
+        (await page
+            .locator('[data-happy-desktop-ui="message"]:not([data-own])')
+            .first()
+            .isVisible()
+            .catch(() => false))
+    );
 }
 
 /** Keeps the pages main would open in the person's browser, rather than opening them. */
@@ -300,9 +373,13 @@ async function devSignIn(authorization: string, login: string, password: string)
  */
 async function profileSave(page: Page, driver: GymPersonaDriver, persona: GymPersona) {
     const profile = page.locator('[data-testid="profile-setup-screen"]');
+    // A profile taken from the account never asks: the conversation shows instead.
+    const conversation = page.locator('[data-happy-desktop-ui="message"]').first();
     const shown = await profile
+        .or(conversation)
+        .first()
         .waitFor({ state: "visible", timeout: 30_000 })
-        .then(() => true)
+        .then(() => profile.isVisible())
         .catch(() => false);
     if (!shown) return;
     await driver.pause(800, 1_400);
