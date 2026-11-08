@@ -107,7 +107,11 @@ export class DesktopBrowserGuests {
                     entry.container.remove();
                 });
                 owner.entries.delete(id);
-            } else if (entry.props.target && entry.props.target.networkId !== tab.networkId) {
+            } else if (
+                entry.props.target?.artifactId === undefined &&
+                entry.props.target &&
+                entry.props.target.networkId !== tab.networkId
+            ) {
                 entry.props = {
                     ...entry.props,
                     target: { ...entry.props.target, networkId: tab.networkId },

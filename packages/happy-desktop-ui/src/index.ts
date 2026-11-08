@@ -848,6 +848,7 @@ export {
     BrowserPanel,
     type BrowserContentProps,
     type BrowserContentRenderer,
+    type BrowserContentTarget,
     type BrowserController,
     type BrowserFailure,
     type BrowserPanelProps,
@@ -878,6 +879,12 @@ export {
     HappyAgentArtifactViewer,
     type HappyAgentArtifactViewerProps,
 } from "./pages/artifacts/HappyAgentArtifactViewer";
+export {
+    ArtifactLivePage,
+    type ArtifactLivePageContentProps,
+    type ArtifactLivePageProps,
+    type ArtifactLiveRenderer,
+} from "./pages/artifacts/ArtifactLivePage";
 export { artifactHtmlDocument } from "./pages/artifacts/artifactHtmlDocument";
 export {
     feedActivityText,

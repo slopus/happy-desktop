@@ -26,6 +26,7 @@ import type {
     HappyAgentArtifactAuthor,
     HappyAgentArtifactFile,
     HappyAgentArtifactId,
+    HappyAgentArtifactLive,
     HappyAgentArtifactVersion,
 } from "./artifactTypes.js";
 
@@ -102,6 +103,12 @@ export type HappyAgentArtifactContent =
           /** What the entry declares itself: a scrolling page, or a full-screen app. */
           readonly pageMode: HappyAgentArtifactPageMode;
       }
+    /**
+     * A version of a live artifact: the address it recorded, reached through
+     * the network the artifact was made on. Its files are only a placeholder
+     * for older clients, so none of them is read or served.
+     */
+    | { readonly type: "live"; readonly live: HappyAgentArtifactLive }
     | { readonly type: "image"; readonly image: HappyAgentArtifactFileLink }
     | { readonly type: "image_series"; readonly images: readonly HappyAgentArtifactFileLink[] }
     | { readonly type: "video"; readonly video: HappyAgentArtifactFileLink }
@@ -140,7 +147,10 @@ export interface HappyAgentArtifactViewerSnapshot {
     readonly versionSelected?: number;
     /** The version on screen, once its manifest has been read. */
     readonly version?: HappyAgentArtifactVersion;
-    /** Every file of the version on screen, in path order. */
+    /**
+     * Every file of the version on screen, in path order. None for a version
+     * of a live artifact, whose files are only its placeholder.
+     */
     readonly files: readonly HappyAgentArtifactFileLink[];
     readonly content: HappyAgentArtifactContent;
     /**
@@ -362,6 +372,9 @@ export function happyAgentArtifactViewerStoreCreate(
     ): Promise<HappyAgentArtifactContent> => {
         const id = artifact.id;
         const number = version.number;
+        // The version's own address, so a version picked from the history
+        // shows what it recorded rather than the latest.
+        if (version.live) return { type: "live", live: version.live };
         const entry = fileLink(id, number, version.entry);
         switch (artifact.type) {
             case "markdown": {
@@ -520,7 +533,9 @@ export function happyAgentArtifactViewerStoreCreate(
             if (signal.aborted) return;
             publish({
                 version,
-                files: version.files.map((file) => fileLink(artifact.id, number, file)),
+                files: version.live
+                    ? []
+                    : version.files.map((file) => fileLink(artifact.id, number, file)),
             });
             const content = await contentOf(artifact, version, signal);
             if (signal.aborted) return;

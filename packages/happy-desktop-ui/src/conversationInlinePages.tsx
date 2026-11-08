@@ -5,7 +5,7 @@ import {
     type HappyAgentArtifactDisplay,
     type HappyAgentArtifactId,
     type HappyAgentArtifactType,
-    type HappyAgentInlineArtifactLive,
+    type HappyAgentArtifactLive,
     type HappyAgentInlineArtifactsSnapshot,
 } from "happy-desktop-state";
 import { Icon } from "./Icon";
@@ -39,7 +39,7 @@ export interface ConversationInlinePages {
      */
     readonly liveRender?: (
         artifactId: HappyAgentArtifactId,
-        live: HappyAgentInlineArtifactLive,
+        live: HappyAgentArtifactLive,
         fit: InlinePageFit,
     ) => ReactNode;
     /**
@@ -183,17 +183,14 @@ export function conversationInlinePage(
                 : placement === "inline" && !collapsed
                   ? `Version ${String(recorded)} · showing the latest, ${String(latest)}`
                   : `Version ${String(recorded)}`;
-        // A live artifact's files are only a placeholder, so the panel beside
-        // the chat has nothing of it to show yet: it is read in the chat.
-        const openSide =
-            gone || live
-                ? undefined
-                : () => {
-                      // Opened beside the chat, it is not also open in it; closing
-                      // the panel leaves it collapsed until the reader expands it.
-                      if (placement === "inline") local.collapsedSet(rowKey, true);
-                      pages.artifactOpen(artifactId, recorded);
-                  };
+        const openSide = gone
+            ? undefined
+            : () => {
+                  // Opened beside the chat, it is not also open in it; closing
+                  // the panel leaves it collapsed until the reader expands it.
+                  if (placement === "inline") local.collapsedSet(rowKey, true);
+                  pages.artifactOpen(artifactId, recorded);
+              };
         const liveRender = pages.liveRender;
         const render = pages.artifactRender;
         const content = artifact?.content;

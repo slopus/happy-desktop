@@ -4,6 +4,7 @@ import type {
     HappyAgentInlineArtifactsStore,
 } from "happy-desktop-state";
 import type {
+    ArtifactLiveRenderer,
     BrowserContentRenderer,
     BrowserFailure,
     ConversationInlinePages,
@@ -45,6 +46,25 @@ function browserFailureMessage(failure: BrowserFailure): string {
 }
 
 const ignore = (): void => undefined;
+
+/**
+ * Draws a live artifact's page in a viewer: its recorded address, on the
+ * network the artifact was made on, through the artifact's own restricted
+ * proxy and in a browser profile of the artifact's own. The network is fixed
+ * when the artifact is made, so one that has gone missing fails closed. The
+ * page may reach the network: a potential vulnerability, bounded by the
+ * daemon deciding every address its proxy connects to.
+ */
+export function artifactLiveRendererCreate(
+    browserContent: BrowserContentRenderer,
+    browserConnectionId: string | null,
+): ArtifactLiveRenderer {
+    return (artifactId, live, props) =>
+        browserContent({
+            ...props,
+            target: { connectionId: browserConnectionId, artifactId, networkId: live.networkId },
+        });
+}
 
 /**
  * What a conversation needs to show its artifacts and pages in a reply: the
@@ -92,14 +112,14 @@ export function conversationInlinePagesCreate(input: {
                           source: live.url,
                           fit,
                           // The network the artifact was made on, never the
-                          // reader's or the agent's current one: a missing
-                          // network fails closed.
+                          // reader's or the agent's current one. Gone missing,
+                          // it is asked of this conversation's agent again and
+                          // retried only if that agent names the same one.
                           target: {
                               connectionId: input.browserConnectionId,
-                              workspaceId: input.workspaceId,
-                              agentId: input.agentId,
-                              networkId: live.networkId,
                               artifactId,
+                              networkId: live.networkId,
+                              recovery: { workspaceId: input.workspaceId, agentId: input.agentId },
                           },
                           browserControllerReady: ignore,
                           browserLoadingChanged: ignore,

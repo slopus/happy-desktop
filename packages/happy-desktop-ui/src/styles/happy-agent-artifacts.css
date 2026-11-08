@@ -451,6 +451,66 @@
     border: 0;
 }
 
+/* A live artifact's page fills the slot. It is a site written for a browser,
+   so it gets the paper a browser puts under a page that paints none. */
+.happy-agent-artifact-live {
+    position: relative;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.happy-agent-artifact-live[data-state="page"] {
+    background: var(--page-canvas);
+}
+
+.happy-agent-artifact-live[data-state="unavailable"] {
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+}
+
+.happy-agent-artifact-live > webview {
+    display: flex;
+    flex: 1 1 0%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+}
+
+/* Covers the blank guest rather than replacing it, so the guest keeps its
+   size and process while the next attempt loads. */
+.happy-agent-artifact-live__error {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    background: var(--surface);
+}
+
+.happy-agent-artifact-live__address,
+.happy-agent-artifact-live__error-code {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.happy-agent-artifact-live__address {
+    user-select: text;
+}
+
 /* The document reads on the slot it is shown in, not on a surface of its own. */
 .happy-markdown-document.happy-agent-artifact-viewer__markdown {
     background: transparent;

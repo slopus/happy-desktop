@@ -306,5 +306,8 @@ export function happyAgentArtifactVersionProject(
         source: happyAgentArtifactSourceProject(version.source),
         createdAt: version.createdAt,
         ...(background === undefined ? {} : { background }),
+        ...(version.live
+            ? { live: { url: version.live.url, networkId: version.live.networkId } }
+            : {}),
     };
 }

@@ -20,6 +20,7 @@ import {
 import type {
     HappyAgentArtifactDisplay,
     HappyAgentArtifactId,
+    HappyAgentArtifactLive,
     HappyAgentArtifactType,
 } from "./artifactTypes.js";
 import type { HappyAgentArtifactFileLink } from "./artifactViewerStore.js";
@@ -30,16 +31,6 @@ export type HappyAgentInlineArtifactSite =
     | { readonly type: "opened"; readonly version: number; readonly url: string }
     /** This host has no guest to run a page in, or could not serve this version. */
     | { readonly type: "unavailable" };
-
-/**
- * A live artifact's page: a web address reached through the network of the
- * agent that made it, never the reader's own. Its files are only an inert
- * placeholder for older clients, so it is never served as a site.
- */
-export interface HappyAgentInlineArtifactLive {
-    readonly url: string;
-    readonly networkId: string;
-}
 
 /**
  * What an artifact other than a page shows inline, at the version it was read
@@ -90,7 +81,7 @@ export type HappyAgentInlineArtifact =
            */
           readonly pageMode?: HappyAgentArtifactPageMode;
           /** Present for a live artifact, whose page is this address instead of its files. */
-          readonly live?: HappyAgentInlineArtifactLive;
+          readonly live?: HappyAgentArtifactLive;
           /** Any other type's latest content, once a row asked to show it. */
           readonly content?: HappyAgentInlineArtifactContent;
       }

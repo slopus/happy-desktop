@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Component, useState, type ReactNode } from "react";
 import {
     entryKey,
     happyAgentArtifactAuthorLabel,
@@ -19,6 +19,7 @@ import {
     type HappyAgentArtifactViewerSnapshot,
 } from "happy-desktop-state";
 import { AgentActivityRow } from "../../src/AgentActivityRow";
+import type { ArtifactLivePageContentProps } from "../../src/pages/artifacts/ArtifactLivePage";
 import { conversationInlinePage } from "../../src/conversationInlinePages";
 import type {
     HappyAgentArtifactLabels,
@@ -568,6 +569,26 @@ const futureViewer = viewerOf(
 
 const removedViewer = viewerOf(removed, [], { type: "loading" }, []);
 
+/**
+ * A live artifact: a dev server an agent published by its address. Its one
+ * file is the placeholder older clients show, so the viewer lists no files.
+ */
+const devServer = artifact("dev-server", "html", "Checkout dev server", {
+    entry: file("index.html", "text/html", 320),
+    size: 320,
+});
+const devServerLive = { url: "http://localhost:5173/checkout", networkId: "network-1" };
+const devServerViewer = viewerOf(
+    devServer,
+    [
+        version(devServer, 1, [file("index.html", "text/html", 320)], {
+            live: devServerLive,
+        }),
+    ],
+    { type: "live", live: devServerLive },
+    [],
+);
+
 /** Gives a fixed overlay a desktop-sized window of its own to cover. */
 function windowFrame(children: ReactNode) {
     return (
@@ -1056,6 +1077,51 @@ export function HappyAgentArtifactsBlueprintPage() {
             >
                 <ArcadeInlineRow />
             </Specimen>
+
+            <FullScreenSpecimen
+                detail="A live artifact is its recorded address, drawn by the host's browser on the network the artifact was made on and in a profile of its own — here an inert stand-in. Its placeholder file is never shown or listed."
+                label="Viewer · live page"
+                screen="27-live-1100x760"
+                window={{ width: 1100, height: 760 }}
+                number="27"
+            >
+                <HappyAgentArtifactViewer
+                    {...viewerHandlers}
+                    labels={labels}
+                    renderLive={() => <LivePageStandIn />}
+                    viewer={devServerViewer}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The address refused to connect, as a dev server that has stopped does: the failure covers the guest, which stays mounted, and Try again loads the address once more."
+                label="Viewer · live page, refused"
+                screen="28-live-refused-1100x760"
+                window={{ width: 1100, height: 760 }}
+                number="28"
+            >
+                <HappyAgentArtifactViewer
+                    {...viewerHandlers}
+                    labels={labels}
+                    renderLive={(_artifactId, _live, props) => <RefusedLivePage {...props} />}
+                    viewer={devServerViewer}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A host with no browser for it, such as a web browser tab, cannot reach the agent's network: the viewer says so and names the address, never the placeholder."
+                label="Viewer · live page, no browser"
+                screen="29-live-unavailable-560x760"
+                window={{ width: 560, height: 760 }}
+                number="29"
+            >
+                <HappyAgentArtifactViewer
+                    {...panelViewerHandlers}
+                    labels={labels}
+                    tab
+                    viewer={devServerViewer}
+                />
+            </FullScreenSpecimen>
         </ComponentPage>
     );
 }
@@ -1095,6 +1161,32 @@ function ArcadeInlineRow() {
             />
         </div>
     );
+}
+
+/**
+ * What a host's guest reports when the address refused to connect: a dev
+ * server that is not running. It reports once, as it mounts, the way the
+ * engine reports a failed load.
+ */
+class RefusedLivePage extends Component<ArtifactLivePageContentProps> {
+    componentDidMount(): void {
+        this.props.browserControllerReady({
+            browserBack: noop,
+            browserForward: noop,
+            browserLoad: noop,
+            browserReload: noop,
+            browserStop: noop,
+        });
+        this.props.browserFailed({
+            code: -102,
+            description: "ERR_CONNECTION_REFUSED",
+            url: this.props.source,
+        });
+    }
+
+    render() {
+        return null;
+    }
 }
 
 /** What the host's guest would draw for the landing page; Blueprint has no engine to run it in. */

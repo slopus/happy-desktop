@@ -34,7 +34,11 @@ import {
     happyAgentComputesStoreNoop,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
-import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
+import {
+    artifactLiveRendererCreate,
+    conversationInlinePagesCreate,
+    inlineArtifactsStoreNoop,
+} from "./conversationInlinePages";
 import {
     ARTIFACT_READING,
     artifactTitlesStoreNoop,
@@ -228,6 +232,7 @@ import {
     Banner,
     BrowserPanel,
     DevBuildMenu,
+    type ArtifactLiveRenderer,
     type BrowserContentRenderer,
     type BrowserPanelProps,
     type BrowserStartTool,
@@ -4672,6 +4677,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <>
                     <HappyAgentArtifactsSurface
                         artifacts={artifacts}
+                        {...(props.browserContent
+                            ? {
+                                  artifactLive: artifactLiveRendererCreate(
+                                      props.browserContent,
+                                      active.remoteId ?? null,
+                                  ),
+                              }
+                            : {})}
                         {...(active.session.surfaces
                             ? { surfaces: active.session.surfaces.catalog() }
                             : {})}
@@ -5921,6 +5934,8 @@ function artifactSourceChoices(
 function HappyAgentArtifactsSurface(props: {
     artifacts: HappyAgentArtifacts;
     artifactPage?: HtmlPreviewRenderer;
+    /** Shows a live artifact's page, where the host has a browser for it. */
+    artifactLive?: ArtifactLiveRenderer;
     artifactId?: HappyAgentArtifactId;
     /** The instance this machine's health named, which a link naming an instance must match. */
     instanceId?: string;
@@ -5958,6 +5973,7 @@ function HappyAgentArtifactsSurface(props: {
                           <HappyAgentArtifactViewerSurface
                               artifactId={props.artifactId}
                               {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
+                              {...(props.artifactLive ? { artifactLive: props.artifactLive } : {})}
                               artifacts={props.artifacts}
                               {...(props.instanceId === undefined
                                   ? {}
@@ -6012,6 +6028,7 @@ function HappyAgentArtifactCatalogSurface(props: {
 function HappyAgentArtifactViewerSurface(props: {
     artifacts: HappyAgentArtifacts;
     artifactPage?: HtmlPreviewRenderer;
+    artifactLive?: ArtifactLiveRenderer;
     artifactId: HappyAgentArtifactId;
     labels: HappyAgentArtifactLabels;
     /** The instance this machine's health named, which a link naming an instance must match. */
@@ -6065,6 +6082,7 @@ function HappyAgentArtifactViewerSurface(props: {
             onMarkdownViewSelect={store.markdownViewSelect}
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
+            {...(props.artifactLive ? { renderLive: props.artifactLive } : {})}
             {...(surfaces.availability === "available"
                 ? {
                       surface: {
@@ -6713,6 +6731,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
     artifacts: HappyAgentArtifacts;
     entities?: MessageReferences;
     artifactPage?: HtmlPreviewRenderer;
+    artifactLive?: ArtifactLiveRenderer;
     places: HappyAgentArtifactPlaces;
     view: HappyAgentPanelArtifactView;
 }) {
@@ -6743,6 +6762,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
             onMarkdownViewSelect={store.markdownViewSelect}
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
+            {...(props.artifactLive ? { renderLive: props.artifactLive } : {})}
             tab
             viewer={viewer.artifactId === artifactId ? viewer : VIEWER_OPENING}
         />
@@ -6759,6 +6779,7 @@ function HappyAgentArtifactTabSurface(props: {
     artifacts: HappyAgentArtifacts;
     entities?: MessageReferences;
     artifactPage?: HtmlPreviewRenderer;
+    artifactLive?: ArtifactLiveRenderer;
     places: HappyAgentArtifactPlaces;
     tab: Extract<HappyAgentPanelTabSnapshot, { kind: "artifact" }>;
 }) {
@@ -6789,6 +6810,7 @@ function HappyAgentArtifactTabSurface(props: {
             onMarkdownViewSelect={store.markdownViewSelect}
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
+            {...(props.artifactLive ? { renderLive: props.artifactLive } : {})}
             tab
             viewer={viewer.artifactId === artifactId ? viewer : VIEWER_OPENING}
         />
@@ -11745,6 +11767,14 @@ function HappyAgentPanelBody(props: {
                         props.artifacts && props.panel.artifactView ? (
                             <HappyAgentArtifactPanelViewerSurface
                                 artifacts={props.artifacts.artifacts}
+                                {...(props.browserContent
+                                    ? {
+                                          artifactLive: artifactLiveRendererCreate(
+                                              props.browserContent,
+                                              props.browserConnectionId,
+                                          ),
+                                      }
+                                    : {})}
                                 {...(props.artifacts.entities
                                     ? { entities: props.artifacts.entities }
                                     : {})}
@@ -12027,6 +12057,14 @@ function HappyAgentToolBodies(props: {
                 props.artifacts ? (
                     <HappyAgentArtifactTabSurface
                         artifacts={props.artifacts.artifacts}
+                        {...(props.browserContent
+                            ? {
+                                  artifactLive: artifactLiveRendererCreate(
+                                      props.browserContent,
+                                      props.browserConnectionId,
+                                  ),
+                              }
+                            : {})}
                         {...(props.artifacts.entities
                             ? { entities: props.artifacts.entities }
                             : {})}

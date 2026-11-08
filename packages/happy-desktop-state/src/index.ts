@@ -115,7 +115,6 @@ export * from "./feed/feed.js";
 export type {
     HappyAgentInlineArtifact,
     HappyAgentInlineArtifactContent,
-    HappyAgentInlineArtifactLive,
     HappyAgentInlineArtifactSite,
     HappyAgentInlineArtifactsSnapshot,
     HappyAgentInlineArtifactsStore,

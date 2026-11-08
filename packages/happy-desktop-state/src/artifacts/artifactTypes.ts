@@ -169,6 +169,17 @@ export type HappyAgentArtifactAuthor =
     | { readonly kind: "user"; readonly userId: string | null }
     | { readonly kind: "unknown" };
 
+/**
+ * A live artifact's page: a web address reached through the network of the
+ * agent that made it, never the reader's own. Its files are only an inert
+ * placeholder for older clients, so they are never served as its page.
+ */
+export interface HappyAgentArtifactLive {
+    readonly url: string;
+    /** The network the artifact was made on, fixed when it was made. */
+    readonly networkId: string;
+}
+
 /** The artifact as its latest version and its lifecycle leave it. */
 export interface HappyAgentArtifact {
     readonly id: HappyAgentArtifactId;
@@ -234,6 +245,11 @@ export interface HappyAgentArtifactVersion {
      * not a hex colour — and the version is drawn on whatever surface holds it.
      */
     readonly background?: string;
+    /**
+     * Present for a version of a live artifact: the address this version
+     * shows. Its files are then only a placeholder and never its page.
+     */
+    readonly live?: HappyAgentArtifactLive;
 }
 
 /**

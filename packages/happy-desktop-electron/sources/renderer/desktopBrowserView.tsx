@@ -1,5 +1,9 @@
 import { Component, createElement } from "react";
-import type { BrowserContentProps, BrowserController } from "happy-desktop-ui";
+import type {
+    BrowserContentProps,
+    BrowserContentTarget,
+    BrowserController,
+} from "happy-desktop-ui";
 import type {
     DesktopBrowserCommand,
     DesktopBrowserStatus,
@@ -293,12 +297,7 @@ export class DesktopBrowserGuest extends Component<
     }
 
     componentDidUpdate(before: BrowserContentProps & { displayLease?: number }): void {
-        if (
-            before.target?.workspaceId !== this.props.target?.workspaceId ||
-            before.target?.connectionId !== this.props.target?.connectionId ||
-            before.target?.agentId !== this.props.target?.agentId ||
-            before.target?.networkId !== this.props.target?.networkId
-        )
+        if (browserTargetKey(before.target) !== browserTargetKey(this.props.target))
             this.proxyApply();
         else if (before.displayLease !== this.props.displayLease && this.initialized) {
             this.props.browserControllerReady(this.controller);
@@ -391,6 +390,11 @@ export class DesktopBrowserGuest extends Component<
                         : "The Happy Agent browser proxy could not be opened.",
             });
         };
+        // A live artifact's network is fixed when the artifact is made.
+        if (target.artifactId !== undefined) {
+            this.profileOpen(target.connectionId, target.networkId, generation, failed);
+            return;
+        }
         // A tab is bound to a network once. A bound tab only ever opens that
         // network's profile; if the network has ended, its tunnels are refused
         // and the tab is not moved to whatever the agent names now.
@@ -451,6 +455,10 @@ export class DesktopBrowserGuest extends Component<
         const target = this.props.target;
         const partition = this.state.partition;
         if (!desktop?.browserNetworkResolve || !target?.networkId || !partition) return;
+        // A live artifact's network is fixed when it is made: only the agent
+        // its page was shown for is asked, and without one it fails closed.
+        const asked = target.artifactId === undefined ? target : target.recovery;
+        if (asked === undefined) return;
         const bound = target.networkId;
         const generation = this.proxyGeneration;
         const navigation = this.navigation;
@@ -463,8 +471,8 @@ export class DesktopBrowserGuest extends Component<
         void desktop
             .browserNetworkResolve({
                 connectionId: target.connectionId,
-                workspaceId: target.workspaceId,
-                agentId: target.agentId,
+                workspaceId: asked.workspaceId,
+                agentId: asked.agentId,
             })
             .then(
                 (networkId) => {
@@ -562,6 +570,16 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
             <DesktopBrowserGuest {...this.props} />
         );
     }
+}
+
+/** What a page's traffic and profile depend on; a change opens the page again. */
+function browserTargetKey(target: BrowserContentTarget | undefined): string {
+    if (target === undefined) return "";
+    return JSON.stringify(
+        target.artifactId === undefined
+            ? ["tab", target.connectionId, target.workspaceId, target.agentId, target.networkId]
+            : ["artifact", target.connectionId, target.artifactId, target.networkId],
+    );
 }
 
 function browserSameAddress(first: string, second: string): boolean {

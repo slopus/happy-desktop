@@ -39,6 +39,7 @@ import {
     type HappyAgentArtifactLabels,
 } from "./artifactPresentation";
 import { ArtifactHeader } from "./ArtifactHeader";
+import { ArtifactLivePage, type ArtifactLiveRenderer } from "./ArtifactLivePage";
 import { HappyAgentArtifactHtmlFrame } from "./HappyAgentArtifactHtmlFrame";
 import type { MessageReferences } from "../../messageReferences";
 
@@ -86,6 +87,12 @@ export interface HappyAgentArtifactViewerProps {
      * where the host has none, in which case the viewer never holds a site.
      */
     renderPage?: HtmlPreviewRenderer;
+    /**
+     * The host's browser for a live artifact's page, bound to the network the
+     * artifact was made on and a profile of the artifact's own. Absent where
+     * the host has none, in which case the viewer names the page's address.
+     */
+    renderLive?: ArtifactLiveRenderer;
     /**
      * Reads and opens the `happy://` links to Happy entities a Markdown
      * version carries, as a message's do. Absent, each reads as its label.
@@ -317,6 +324,7 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                 />
                             ) : (
                                 <ArtifactContent
+                                    artifactId={artifact.id}
                                     content={viewer.content}
                                     diff={diffOffered && viewer.markdownView === "diff"}
                                     {...(props.entities ? { entities: props.entities } : {})}
@@ -326,6 +334,7 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                     {...(fullScreen ? { escapePressed: fullScreenExit } : {})}
                                     {...(app ? { closeRequested: appClose } : {})}
                                     {...(props.renderPage ? { renderPage: props.renderPage } : {})}
+                                    {...(props.renderLive ? { renderLive: props.renderLive } : {})}
                                     title={artifact.title}
                                 />
                             )}
@@ -476,6 +485,7 @@ function ArtifactOlder(props: {
 
 /** The version on screen, shown the way its type reads best. */
 function ArtifactContent(props: {
+    artifactId: HappyAgentArtifactId;
     content: HappyAgentArtifactContent;
     /** A Markdown version is read as its diff against the version before it. */
     diff: boolean;
@@ -487,6 +497,7 @@ function ArtifactContent(props: {
     /** A running app asked to close; offered only for a page that declared itself one. */
     closeRequested?: () => void;
     renderPage?: HtmlPreviewRenderer;
+    renderLive?: ArtifactLiveRenderer;
     title: string;
 }): ReactNode {
     const content = props.content;
@@ -593,6 +604,15 @@ function ArtifactContent(props: {
                     reason={content.page.reason}
                     text={content.page.text}
                     title={props.title || "Web page"}
+                />
+            );
+        case "live":
+            return (
+                <ArtifactLivePage
+                    artifactId={props.artifactId}
+                    data-testid="happy-agent-artifact-live"
+                    live={content.live}
+                    {...(props.renderLive ? { renderContent: props.renderLive } : {})}
                 />
             );
         case "image":

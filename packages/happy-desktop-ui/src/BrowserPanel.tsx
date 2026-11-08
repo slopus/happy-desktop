@@ -41,21 +41,8 @@ export interface BrowserContentProps {
     };
     /** The browser's own start/error page covers the native guest. */
     readonly visible?: boolean;
-    /**
-     * Owning workspace, host-published Happy Agent route, the agent the tab was
-     * opened for, and the network it is bound to once that has been named.
-     */
-    readonly target?: {
-        readonly connectionId: string | null;
-        readonly workspaceId: string;
-        readonly agentId: string;
-        readonly networkId?: string;
-        /**
-         * The live artifact this page is: it gets a browser profile of that
-         * artifact's own instead of the network's, shared with nothing else.
-         */
-        readonly artifactId?: string;
-    };
+    /** Where the page's traffic leaves from, and whose profile it runs in. */
+    readonly target?: BrowserContentTarget;
     /** Initial location for the Chromium guest. Further navigation uses the controller. */
     readonly source: string;
     browserControllerReady(controller: BrowserController | undefined): void;
@@ -74,6 +61,37 @@ export interface BrowserContentProps {
      */
     readonly fit?: InlinePageFit;
 }
+
+/** Where a browser page's traffic leaves from, and whose profile it runs in. */
+export type BrowserContentTarget =
+    /**
+     * A workspace browser tab: owning workspace, host-published Happy Agent
+     * route, the agent the tab was opened for, and the network it is bound to
+     * once that has been named. Every tab on one network shares its profile.
+     */
+    | {
+          readonly connectionId: string | null;
+          readonly workspaceId: string;
+          readonly agentId: string;
+          readonly networkId?: string;
+          readonly artifactId?: undefined;
+      }
+    /**
+     * A live artifact's page, on the network the artifact was made on, through
+     * that artifact's own restricted proxy, in a browser profile of the
+     * artifact's own, shared with no tab, page, or other artifact.
+     */
+    | {
+          readonly connectionId: string | null;
+          readonly artifactId: string;
+          readonly networkId: string;
+          /**
+           * The agent asked again for the network when Happy Agent no longer
+           * knows it; the page is retried only if that agent names the same
+           * network. Absent, a missing network fails closed.
+           */
+          readonly recovery?: { readonly workspaceId: string; readonly agentId: string };
+      };
 
 /** One authoritative subscription for all browser lifetimes in a workspace. */
 export interface BrowserGuestOwner {
@@ -465,7 +483,7 @@ function BrowserStart(props: {
     );
 }
 
-interface BrowserFailurePage {
+export interface BrowserFailurePage {
     readonly code: string;
     readonly description: string;
     readonly icon: IconName;
@@ -478,7 +496,7 @@ interface BrowserFailurePage {
  * failed, and always ends with the raw engine code so a developer debugging a
  * local service still sees exactly what Chromium reported.
  */
-function browserFailureDescribe(failure: BrowserFailure): BrowserFailurePage {
+export function browserFailureDescribe(failure: BrowserFailure): BrowserFailurePage {
     const host = browserFailureHost(failure.url);
     const code =
         failure.status !== undefined
