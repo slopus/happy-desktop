@@ -304,7 +304,10 @@ export function happyAgentChatOnboardingStoreCreate(
         void (async () => {
             const onboarding = await deps.client.getOnboarding();
             if (onboarding.completed || disposed) return;
-            const { flow: started } = await deps.client.startOnboardingFlow({ mutationId });
+            const { flow: started } = await deps.client.startOnboardingFlow({
+                mutationId,
+                device: "desktop",
+            });
             flowTake(started, true);
         })()
             .catch((error: unknown) => {
