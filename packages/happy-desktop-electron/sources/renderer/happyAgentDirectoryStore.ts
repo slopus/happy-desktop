@@ -788,7 +788,18 @@ export function happyAgentDirectoryStoreCreate(
                           forget: cloudServerForgetOf(happyAgent.entry.remoteId),
                       },
                   }
-                : {}),
+                : happyAgent.entry.serverUrl !== undefined
+                  ? {
+                        // A team server added by its address has the same
+                        // members and invites. The reader removes it from
+                        // the window themselves, through This Mac's Chief of
+                        // Staff, so leaving it here only ends their sign-in.
+                        cloudServer: {
+                            name: happyAgent.entry.label,
+                            forget: async () => undefined,
+                        },
+                    }
+                  : {}),
             happyAgentHttpUrl,
             modelPreferencePersistence: deps.modelPreferencePersistence(happyAgent.entry.id),
             terminalColorScheme: deps.terminalColorScheme,

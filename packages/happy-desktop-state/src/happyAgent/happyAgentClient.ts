@@ -1081,6 +1081,7 @@ export function happyAgentWorkspaceClientCreate(
             membersStore ??= happyAgentMembersStoreCreate({
                 serverName: cloud.serverName,
                 request: cloud.request,
+                sync: deps.connection.sync,
                 selfUserId: async () => (await deps.client.getProfile()).profile.userId ?? null,
                 serverForget: cloud.serverForget,
             });

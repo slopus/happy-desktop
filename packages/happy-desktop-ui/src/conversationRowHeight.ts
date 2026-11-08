@@ -36,6 +36,7 @@ import {
     uiTextHeight,
     uiTextNaturalWidth,
     textLayoutCssSize,
+    type MarkdownHtmlBlockHeight,
     type MessageTextLayoutCache,
 } from "./messageTextLayout";
 import {
@@ -88,7 +89,7 @@ import {
     messageLayoutMembers,
     type MessageInlineLayouts,
 } from "./conversationInlineLayouts";
-import { chatActionBlockHeight } from "./ChatActionBlock";
+import { CHAT_ACTION_BLOCK_GAP, chatActionBlockHeight } from "./ChatActionBlock";
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
@@ -787,23 +788,30 @@ export function messageRowHeight(input: MessageRowHeightInput): number {
 /**
  * A reply's layout is as tall as its tree laid out at the body's measure: the
  * same off-screen measurement as a presented layout, uncapped. An action block
- * is measured the same way, and no choice or press changes its height. A
+ * is measured the same way, and no choice or press changes its height; it
+ * keeps the wider gap the reply's stylesheet gives it from its neighbours. A
  * placeholder naming no layout of this reply is HTML, which draws nothing.
  */
 function messageLayoutsHeight(
     layouts: MessageInlineLayouts | undefined,
-): ((html: string, measure: number) => number | undefined) | undefined {
+): MarkdownHtmlBlockHeight | undefined {
     if (layouts === undefined || layouts.layouts.size === 0) return undefined;
     return (html, measure) => {
         const key = messageInlineLayoutKey(html);
         const layout = key === undefined ? undefined : layouts.layouts.get(key);
         if (layout === undefined) return undefined;
-        if (layout.kind === "actions") return chatActionBlockHeight(layout.block, measure);
-        return mediaTreeHeight(
-            layout.root,
-            mediaItemsFramed(layout.members.map((member) => member.item)),
-            measure,
-        );
+        if (layout.kind === "actions")
+            return {
+                height: chatActionBlockHeight(layout.block, measure),
+                gap: CHAT_ACTION_BLOCK_GAP,
+            };
+        return {
+            height: mediaTreeHeight(
+                layout.root,
+                mediaItemsFramed(layout.members.map((member) => member.item)),
+                measure,
+            ),
+        };
     };
 }
 

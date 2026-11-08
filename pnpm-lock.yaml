@@ -156,8 +156,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz
-        version: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz
+        specifier: file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz
+        version: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -259,8 +259,8 @@ importers:
   packages/happy-desktop-gym:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz
-        version: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz
+        specifier: file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz
+        version: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz
       happy-desktop-state:
         specifier: workspace:*
         version: link:../happy-desktop-state
@@ -299,8 +299,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz
-        version: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz
+        specifier: file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz
+        version: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2112,9 +2112,9 @@ packages:
   '@slopus/ghostty-web@0.1.3':
     resolution: {integrity: sha512-z6t+XKBqUWQPM2tjBbOL6EjuKtD12gqtuLKUjMT4Pn74DjuGNHDw5tEdzn5hA0MTvXPW2w1rQTX089QDa892Xw==}
 
-  '@slopus/happy-agent-client@file:.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz':
-    resolution: {integrity: sha512-8SeAIxSGXRv2qaHOA3DpcuxfjieDzQkHA6783XCYT5qDDzAcO/2ng5ul7G94UuPYC1jDkQC9kY/+xTIzQV1Txg==, tarball: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz}
-    version: 0.0.161-preview.5
+  '@slopus/happy-agent-client@file:.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz':
+    resolution: {integrity: sha512-O8YSwMllpS3FsEHoVlEx3hioardw5ihu/kH/aV59WVbtk0ys37vabUYhYhM7v1PSS0s0+tHyu4axA5KQejkRqg==, tarball: file:.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz}
+    version: 0.0.161-preview.6
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7408,7 +7408,7 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.3': {}
 
-  '@slopus/happy-agent-client@file:.context/packs/slopus-happy-agent-client-0.0.161-preview.5.tgz':
+  '@slopus/happy-agent-client@file:.context/packs/slopus-happy-agent-client-0.0.161-preview.6.tgz':
     dependencies:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1

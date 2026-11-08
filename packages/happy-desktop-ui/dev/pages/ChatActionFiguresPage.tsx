@@ -6,7 +6,14 @@ import {
     type ProviderCli,
 } from "happy-desktop-state";
 import { ChatActionBlock } from "../../src/ChatActionBlock";
-import { ChatDefaultModelFigure, ChatProviderCliFigure } from "../../src/ChatActionFigures";
+import {
+    ChatDefaultModelFigure,
+    ChatInviteFigure,
+    ChatMembersFigure,
+    ChatProviderCliFigure,
+    type ChatInviteFigureProps,
+    type ChatMembersFigureProps,
+} from "../../src/ChatActionFigures";
 import { MessageSettingsLinksContext } from "../../src/MessageMarkdown";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -258,6 +265,172 @@ const SETTING_STATES: readonly {
     },
 ];
 
+const ROLES = [
+    { id: "owner", name: "Owner" },
+    { id: "admin", name: "Admin" },
+    { id: "member", name: "Member" },
+    { id: "viewer", name: "Viewer" },
+];
+
+const INVITE_READY: ChatInviteFigureProps = {
+    loading: false,
+    roles: ROLES,
+    manage: true,
+    owner: true,
+    creating: false,
+    onCreate: () => undefined,
+    onCreatedDismiss: () => undefined,
+};
+
+/* The code below is made up; a real one is the server's answer to one window. */
+const INVITE_STATES: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly detail: string;
+    readonly state: ChatInviteFigureProps;
+}[] = [
+    {
+        id: "C-338o",
+        label: "Invite, reading",
+        detail: "before the server's roles are read",
+        state: { ...INVITE_READY, loading: true, roles: [] },
+    },
+    {
+        id: "C-338p",
+        label: "Invite",
+        detail: "the role the reply suggested · Create invite code",
+        state: INVITE_READY,
+    },
+    {
+        id: "C-338q",
+        label: "Invite, creating",
+        detail: "the code asked for, until the server answers",
+        state: { ...INVITE_READY, creating: true },
+    },
+    {
+        id: "C-338r",
+        label: "Invite code",
+        detail: "shown here this once · Copy · Make another",
+        state: {
+            ...INVITE_READY,
+            created: {
+                code: "QX7M-4KDP",
+                detail: "Joins acme as Member · Expires in 7 days · Shown only here",
+            },
+        },
+    },
+    {
+        id: "C-338s",
+        label: "Invite, refused",
+        detail: "the server's reason, over the role still picked",
+        state: { ...INVITE_READY, error: "Invites need the accounts service, which is down." },
+    },
+    {
+        id: "C-338t",
+        label: "Invite, not allowed",
+        detail: "someone who may not invite",
+        state: { ...INVITE_READY, manage: false, owner: false },
+    },
+];
+
+const MEMBERS_READY: ChatMembersFigureProps = {
+    loading: false,
+    summary: "2 people · 1 code waiting",
+    rows: [
+        {
+            id: "acc-olga",
+            kind: "member",
+            name: "Olga Petrova (you)",
+            role: "Owner",
+            status: "Joined Nov 8",
+            pending: false,
+            saving: false,
+        },
+        {
+            id: "acc-sam",
+            kind: "member",
+            name: "Sam Lee",
+            role: "Member",
+            status: "Hasn't opened acme yet",
+            pending: true,
+            saving: false,
+        },
+        {
+            id: "inv-1",
+            kind: "invite",
+            name: "Invite code",
+            role: "Admin",
+            status: "Waiting · Expires in 7 days",
+            pending: true,
+            saving: false,
+        },
+    ],
+    onInviteRevoke: () => undefined,
+};
+
+const MEMBERS_STATES: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly detail: string;
+    readonly state: ChatMembersFigureProps;
+}[] = [
+    {
+        id: "C-338u",
+        label: "Members, reading",
+        detail: "before the server answers",
+        state: { ...MEMBERS_READY, loading: true, rows: [] },
+    },
+    {
+        id: "C-338v",
+        label: "Members",
+        detail: "joined, not here yet, and a waiting code · Revoke",
+        state: MEMBERS_READY,
+    },
+    {
+        id: "C-338w",
+        label: "Members, many",
+        detail: "past three rows the list scrolls in place",
+        state: {
+            ...MEMBERS_READY,
+            summary: "4 people · 1 code waiting",
+            rows: [
+                ...MEMBERS_READY.rows.slice(0, 2),
+                {
+                    id: "acc-vera",
+                    kind: "member",
+                    name: "Vera Novak",
+                    role: "Viewer",
+                    status: "Joined Nov 9",
+                    pending: false,
+                    saving: false,
+                },
+                {
+                    id: "acc-ada",
+                    kind: "member",
+                    name: "Ada Quinn",
+                    role: "Admin",
+                    status: "Joined Nov 9",
+                    pending: false,
+                    saving: false,
+                },
+                ...MEMBERS_READY.rows.slice(2),
+            ],
+        },
+    },
+    {
+        id: "C-338x",
+        label: "Members, as a viewer",
+        detail: "who is on the server, with nothing to revoke",
+        state: {
+            loading: false,
+            summary: "2 people",
+            rows: MEMBERS_READY.rows.slice(0, 2),
+        },
+    },
+];
+
+const INVITE = blockOf(`<figure data-invite data-role="member"></figure>`);
+const MEMBERS = blockOf(`<figure data-members></figure>`);
 const DEFAULT_MODEL = blockOf(`<figure data-setting="default-model"></figure>`);
 const TEAM_PROVIDERS = blockOf(`<figure data-providers data-scope="team"></figure>`);
 const SETTINGS_LINKS = { has: () => true, open: () => undefined };
@@ -268,7 +441,7 @@ export function ChatActionFiguresPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The live figures an agent may put in a reply: one provider CLI with its install and sign-in, the default model for new chats, and a team server's way into its Settings. Each fills one fixed box whatever state it is in, so the height the transcript reserved never changes. Every specimen here is fixture data; nothing is installed or signed in to draw it."
+            summary="The live figures an agent may put in a reply: one provider CLI with its install and sign-in, the default model for new chats, a team server's invite and members, and its way into Settings for the rest. Each fills one fixed box whatever state it is in, so the height the transcript reserved never changes. Every specimen here is fixture data; nothing is installed or signed in to draw it."
             title="Chat action figures"
         >
             <div className="specimen-grid">
@@ -297,6 +470,55 @@ export function ChatActionFiguresPage() {
                                             onSignIn={() => undefined}
                                             spinnerFrame={0}
                                         />
+                                    ),
+                                }}
+                            />
+                        </div>
+                    </Specimen>
+                ))}
+            </div>
+
+            <div className="specimen-grid">
+                {INVITE_STATES.map((state) => (
+                    <Specimen
+                        detail={`${state.detail} · fixture data`}
+                        key={state.id}
+                        label={state.label}
+                        number={state.id}
+                        stage="surface"
+                    >
+                        <div style={column}>
+                            <DimensionRule label="560 wide · 96 fixed" />
+                            <ChatActionBlock
+                                block={INVITE}
+                                figures={{
+                                    invite: (role) => (
+                                        <ChatInviteFigure
+                                            {...state.state}
+                                            {...(role ? { role } : {})}
+                                            spinnerFrame={0}
+                                        />
+                                    ),
+                                }}
+                            />
+                        </div>
+                    </Specimen>
+                ))}
+                {MEMBERS_STATES.map((state) => (
+                    <Specimen
+                        detail={`${state.detail} · fixture data`}
+                        key={state.id}
+                        label={state.label}
+                        number={state.id}
+                        stage="surface"
+                    >
+                        <div style={column}>
+                            <DimensionRule label="560 wide · 140 fixed" />
+                            <ChatActionBlock
+                                block={MEMBERS}
+                                figures={{
+                                    members: () => (
+                                        <ChatMembersFigure {...state.state} spinnerFrame={0} />
                                     ),
                                 }}
                             />
