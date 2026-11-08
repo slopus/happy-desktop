@@ -59,6 +59,7 @@ import type {
     HappyAgentVaultUpload,
     HappyAgentVaultUploadFile,
     HappyAgentVaultVersion,
+    HappyAgentVaultTextEdit,
 } from "./surfaceVaultTypes.js";
 
 export interface HappyAgentVaultStore {
@@ -77,6 +78,10 @@ export interface HappyAgentVaultStore {
      */
     itemOpen(itemId: HappyAgentVaultItemId): void;
     previewClose(): void;
+    textEditStart(): void;
+    textDraftUpdate(value: string): void;
+    textEditDiscard(): void;
+    textEditSave(): void;
     previewPanelUpdate(panel: "preview" | "history"): void;
     /** Shows one numbered version; the newest number, or none, follows the newest again. */
     previewVersionSelect(number: number | undefined): void;
@@ -1466,6 +1471,28 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
 
     // ---- The store -----------------------------------------------------------------------
 
+    const textSaveAttempts = new Map<
+        HappyAgentVaultItemId,
+        {
+            draft: string;
+            baseVersion: string;
+            mutationId: string;
+            operationId: string;
+            uploadId?: string;
+            uploadedId?: string;
+        }
+    >();
+    const textEditSet = (
+        itemId: HappyAgentVaultItemId,
+        edit: HappyAgentVaultTextEdit | undefined,
+    ): void => {
+        const textEdits = new Map(snapshot.textEdits);
+        if (edit) textEdits.set(itemId, edit);
+        else textEdits.delete(itemId);
+        snapshot = { ...snapshot, textEdits };
+        notify();
+    };
+
     const store: HappyAgentVaultStore = {
         get: () => snapshot,
         subscribe(listener) {
@@ -1536,6 +1563,136 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             else if (item !== undefined) store.itemSelect(itemId);
         },
         previewClose,
+        textEditStart() {
+            const preview = snapshot.preview;
+            const file = preview?.file;
+            if (
+                disposed ||
+                !preview ||
+                preview.inTrash ||
+                file?.kind !== "file" ||
+                (file.mediaType !== "text/plain" && file.mediaType !== "text/markdown") ||
+                preview.content.type !== "text" ||
+                preview.versionShown !== file.latestVersion ||
+                snapshot.textEdits?.has(file.id)
+            )
+                return;
+            previewSet({ panel: "preview" });
+            textEditSet(file.id, {
+                status: "editing",
+                baseVersion: file.version,
+                original: preview.content.text,
+                draft: preview.content.text,
+            });
+        },
+        textDraftUpdate(value) {
+            const itemId = snapshot.preview?.itemId;
+            const edit = itemId ? snapshot.textEdits?.get(itemId) : undefined;
+            if (!itemId || !edit || edit.status === "saving" || disposed) return;
+            textEditSet(itemId, { ...edit, draft: value });
+        },
+        textEditDiscard() {
+            const itemId = snapshot.preview?.itemId;
+            if (!itemId || disposed || snapshot.textEdits?.get(itemId)?.status === "saving") return;
+            textSaveAttempts.delete(itemId);
+            textEditSet(itemId, undefined);
+        },
+        textEditSave() {
+            const preview = snapshot.preview;
+            const itemId = preview?.itemId;
+            const edit = itemId ? snapshot.textEdits?.get(itemId) : undefined;
+            if (
+                disposed ||
+                !preview?.file ||
+                preview.inTrash ||
+                !itemId ||
+                !edit ||
+                edit.status !== "editing" ||
+                edit.draft === edit.original
+            )
+                return;
+            let attempt = textSaveAttempts.get(itemId);
+            if (
+                !attempt ||
+                attempt.draft !== edit.draft ||
+                attempt.baseVersion !== edit.baseVersion
+            ) {
+                attempt = {
+                    draft: edit.draft,
+                    baseVersion: edit.baseVersion,
+                    mutationId: idCreate(),
+                    operationId: idCreate(),
+                };
+                textSaveAttempts.set(itemId, attempt);
+            }
+            const saving = attempt;
+            textEditSet(itemId, { ...edit, status: "saving" });
+            void (async () => {
+                const signal = life.signal;
+                const uploadId =
+                    saving.uploadedId ??
+                    (await happyAgentVaultUploadSend(
+                        { client },
+                        new Blob([saving.draft], { type: "text/plain" }),
+                        saving.uploadId,
+                        (id) => {
+                            saving.uploadId = id;
+                        },
+                        signal,
+                    ));
+                saving.uploadedId = uploadId;
+                const response = await client.createVaultVersion(
+                    surfaceId,
+                    itemId,
+                    {
+                        uploadId,
+                        mutationId: saving.mutationId,
+                        operationId: saving.operationId,
+                    },
+                    { ifMatch: saving.baseVersion, signal },
+                );
+                if (disposed) return;
+                const file = happyAgentVaultFileProject(response.file);
+                entryAdopt(file);
+                textSaveAttempts.delete(itemId);
+                // A deduplicated retry can return a newer current file alongside our older version.
+                // Never adopt that newer concurrency token as the base of this draft.
+                const superseded = response.version
+                    ? response.version.number !== file.latestVersion
+                    : file.version !== saving.baseVersion;
+                textEditSet(
+                    itemId,
+                    superseded
+                        ? { ...edit, status: "conflict" }
+                        : {
+                              status: "editing",
+                              baseVersion: file.version,
+                              original: saving.draft,
+                              draft: saving.draft,
+                          },
+                );
+                republish();
+                if (snapshot.preview?.itemId === itemId) historyLoad(false);
+            })().catch((error: unknown) => {
+                if (disposed) return;
+                // A stale base is never retried against a newer version: the draft is the reader's.
+                if (
+                    error instanceof HappyAgentApiError &&
+                    error.status === 409 &&
+                    error.code === "conflict"
+                ) {
+                    const current = conflictItem(error);
+                    if (current) entryAdopt(current);
+                    textEditSet(itemId, { ...edit, status: "conflict" });
+                    republish();
+                } else
+                    textEditSet(itemId, {
+                        ...edit,
+                        status: "editing",
+                        error: happyAgentUserError(error),
+                    });
+            });
+        },
         previewPanelUpdate(panel) {
             if (disposed || snapshot.preview === undefined || snapshot.preview.panel === panel)
                 return;

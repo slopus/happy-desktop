@@ -489,6 +489,10 @@ const handlers: Omit<HappyAgentVaultSurfacePageProps, "surface" | "vault" | "now
     onItemSelect: noop,
     onItemOpen: noop,
     onPreviewClose: noop,
+    onTextEditStart: noop,
+    onTextDraftChange: noop,
+    onTextEditDiscard: noop,
+    onTextEditSave: noop,
     onPreviewPanelChange: noop,
     onPreviewVersionSelect: noop,
     onHistoryMoreLoad: noop,
@@ -897,6 +901,36 @@ export function HappyAgentVaultBlueprintPage() {
                 <Page vault={vaultOf(null, { status: "missing" })} />
             </FullScreenSpecimen>
 
+            {[
+                { width: 1100, height: 760 },
+                { width: 720, height: 640 },
+            ].map((window) => (
+                <FullScreenSpecimen
+                    key={window.width}
+                    detail="Plain text and Markdown edit as text. A conflict keeps the draft and never overwrites the newer file."
+                    label="Text editor, conflict"
+                    number="23"
+                    screen={`23-text-edit-${window.width}x${window.height}`}
+                    window={window}
+                >
+                    <Page
+                        vault={vaultOf(null, {
+                            preview: previewOf("roadmap", { type: "text", text: ROADMAP_TEXT }),
+                            textEdits: new Map([
+                                [
+                                    id("roadmap"),
+                                    {
+                                        status: "conflict",
+                                        baseVersion: "before",
+                                        original: ROADMAP_TEXT,
+                                        draft: `${ROADMAP_TEXT}\nKeep this unsaved addition.\n`,
+                                    },
+                                ],
+                            ]),
+                        })}
+                    />
+                </FullScreenSpecimen>
+            ))}
             <Specimen
                 detail="The + menu’s New vault: a name and, if wanted, a picture. Shown in a window-sized frame, which holds the dialog’s fixed overlay."
                 label="New vault"

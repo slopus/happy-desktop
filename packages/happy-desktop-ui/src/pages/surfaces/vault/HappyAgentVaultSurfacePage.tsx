@@ -55,6 +55,10 @@ export interface HappyAgentVaultSurfacePageProps {
     onItemSelect: (itemId: HappyAgentVaultItemId | undefined) => void;
     onItemOpen: (itemId: HappyAgentVaultItemId) => void;
     onPreviewClose: () => void;
+    onTextEditStart?: () => void;
+    onTextDraftChange?: (value: string) => void;
+    onTextEditDiscard?: () => void;
+    onTextEditSave?: () => void;
     onPreviewPanelChange: (panel: "preview" | "history") => void;
     onPreviewVersionSelect: (number: number | undefined) => void;
     onHistoryMoreLoad: () => void;
@@ -595,6 +599,11 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                         <div className="happy-vault__preview">
                             {notices}
                             <VaultPreviewPane
+                                textEdit={vault.textEdits?.get(preview.itemId)}
+                                onTextEditStart={props.onTextEditStart}
+                                onTextDraftChange={props.onTextDraftChange}
+                                onTextEditDiscard={props.onTextEditDiscard}
+                                onTextEditSave={props.onTextEditSave}
                                 items={vault.items}
                                 names={names}
                                 now={props.now}

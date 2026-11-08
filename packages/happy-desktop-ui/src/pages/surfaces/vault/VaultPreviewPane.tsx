@@ -9,10 +9,12 @@ import {
     type HappyAgentVaultItemId,
     type HappyAgentVaultPreview,
     type HappyAgentVaultVersion,
+    type HappyAgentVaultTextEdit,
 } from "happy-desktop-state";
 import { Banner } from "../../../Banner";
 import { Button } from "../../../Button";
 import { FilePreview, type FilePreviewContent } from "../../../FilePreview";
+import { FileEditor } from "../../../FileEditor";
 import { HtmlPreviewFrame } from "../../../HtmlPreviewFrame";
 import type { HtmlPreviewRenderer } from "../../../htmlPreview";
 import { Icon } from "../../../Icon";
@@ -32,6 +34,11 @@ import {
 } from "./vaultPresentation";
 
 export interface VaultPreviewPaneProps {
+    textEdit?: HappyAgentVaultTextEdit;
+    onTextEditStart?: () => void;
+    onTextDraftChange?: (value: string) => void;
+    onTextEditDiscard?: () => void;
+    onTextEditSave?: () => void;
     preview: HappyAgentVaultPreview;
     items: ReadonlyMap<HappyAgentVaultItemId, HappyAgentVaultItem>;
     /** What the vault's root is called: the Surface's own name. */
@@ -78,6 +85,13 @@ export function VaultPreviewPane(props: VaultPreviewPaneProps) {
     const entry = preview.file;
     const shown = preview.versionShown;
     const older = entry !== undefined && shown !== undefined && shown !== entry.latestVersion;
+    const editable =
+        entry?.kind === "file" &&
+        (entry.mediaType === "text/plain" || entry.mediaType === "text/markdown") &&
+        preview.content.type === "text" &&
+        shown === entry.latestVersion &&
+        !preview.inTrash;
+    const edit = props.textEdit;
     return (
         <aside
             aria-label={`Preview of ${happyAgentVaultPathShown(preview.path)}`}
@@ -96,6 +110,31 @@ export function VaultPreviewPane(props: VaultPreviewPaneProps) {
                     size="small"
                     value={preview.panel}
                 />
+                {editable && !edit && props.onTextEditStart ? (
+                    <Button
+                        icon="edit"
+                        onClick={props.onTextEditStart}
+                        size="small"
+                        variant="ghost"
+                    >
+                        Edit
+                    </Button>
+                ) : null}
+                {edit && props.onTextEditSave ? (
+                    <Button
+                        disabled={
+                            edit.status !== "editing" ||
+                            edit.draft === edit.original ||
+                            preview.inTrash ||
+                            entry === undefined
+                        }
+                        onClick={props.onTextEditSave}
+                        size="small"
+                        variant="primary"
+                    >
+                        Save
+                    </Button>
+                ) : null}
             </div>
             {preview.inTrash || entry === undefined || older ? (
                 <div className="happy-vault-preview__notices">
@@ -129,7 +168,40 @@ export function VaultPreviewPane(props: VaultPreviewPaneProps) {
                     ) : null}
                 </div>
             ) : null}
-            {preview.panel === "preview" ? (
+            {preview.panel === "preview" && edit ? (
+                <FileEditor
+                    banner={
+                        edit.status === "conflict" ? (
+                            <Banner tone="warning" title="A newer file version is available">
+                                Your draft is kept here. The latest version has not been
+                                overwritten. Copy any text you want to keep, then discard the draft
+                                and edit the latest version.
+                            </Banner>
+                        ) : edit.status === "editing" && edit.error ? (
+                            <Banner tone="danger" title="Not saved">
+                                {edit.error.message}
+                            </Banner>
+                        ) : undefined
+                    }
+                    className="happy-vault-preview__file"
+                    closeLabel="Discard draft and close editor"
+                    dirty={edit.draft !== edit.original}
+                    documentKey={`vault:${preview.itemId}`}
+                    onClose={edit.status === "saving" ? undefined : props.onTextEditDiscard}
+                    onRevert={props.onTextEditDiscard}
+                    onSave={props.onTextEditSave}
+                    onValueChange={props.onTextDraftChange}
+                    path={preview.path}
+                    pathShown={false}
+                    readOnly={edit.status === "saving"}
+                    revertLabel="Discard draft"
+                    saveDisabled={
+                        edit.status === "conflict" || preview.inTrash || entry === undefined
+                    }
+                    saving={edit.status === "saving"}
+                    value={edit.draft}
+                />
+            ) : preview.panel === "preview" ? (
                 <VaultPreviewContent {...props} />
             ) : (
                 <VaultHistory {...props} />

@@ -313,6 +313,8 @@ export interface HappyAgentVaultSnapshot {
     /** Read while the Trash is shown. */
     readonly trash: HappyAgentVaultTrash;
     readonly preview?: HappyAgentVaultPreview;
+    /** Unsaved text remains in this vault when the reader opens another item. */
+    readonly textEdits?: ReadonlyMap<HappyAgentVaultItemId, HappyAgentVaultTextEdit>;
     /** Newest first; finished ones stay until dismissed. */
     readonly uploads: readonly HappyAgentVaultUpload[];
     readonly settings: HappyAgentVaultSettings;
@@ -324,6 +326,16 @@ export interface HappyAgentVaultSnapshot {
     /** The last change the Happy Agent refused, until it is dismissed or another is made. */
     readonly failure?: UserError;
 }
+
+export type HappyAgentVaultTextEdit = {
+    readonly baseVersion: string;
+    readonly original: string;
+    readonly draft: string;
+} & (
+    | { readonly status: "editing"; readonly error?: UserError }
+    | { readonly status: "saving" }
+    | { readonly status: "conflict" }
+);
 
 /** One file picked or dropped, with the folders it sat in when a folder was dropped. */
 export interface HappyAgentVaultUploadFile {

@@ -6693,6 +6693,10 @@ function HappyAgentVaultSurface(props: {
             onFolderOpen={store.folderOpen}
             onHistoryMoreLoad={store.historyMoreLoad}
             onPreviewClose={store.previewClose}
+            onTextEditStart={store.textEditStart}
+            onTextDraftChange={store.textDraftUpdate}
+            onTextEditDiscard={store.textEditDiscard}
+            onTextEditSave={store.textEditSave}
             onPreviewPanelChange={store.previewPanelUpdate}
             onPreviewVersionSelect={store.previewVersionSelect}
             onRetentionChange={store.retentionUpdate}
