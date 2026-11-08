@@ -37,6 +37,7 @@ import {
     happyAgentChatOnboardingStoreNoop,
     happyAgentOnboardingFocused,
     happyAgentOnboardingFocusStoreNoop,
+    happyAgentOnboardingSkippable,
     type HappyAgentOnboardingFocusStore,
     type HappyAgentOnboardingSnapshot,
 } from "happy-desktop-state";
@@ -3657,7 +3658,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         }) ? (
             <FocusChatHeader
                 {...(focusBot ? { name: focusBot.name, face: botFace(focusBot) } : {})}
-                onSkip={() => onboardingFocusStore.focusRelease(active.id)}
+                {...(happyAgentOnboardingSkippable(setupChatOnboarding)
+                    ? { onSkip: () => onboardingFocusStore.focusRelease(active.id) }
+                    : {})}
                 setup={active.teamName === undefined ? active.label : `@${active.teamName}`}
             />
         ) : undefined;
