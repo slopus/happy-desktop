@@ -3770,9 +3770,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         updateStore.get,
     );
     const updateHost = hostHappyAgent(directory);
-    // Tiers are one list for the window, remembered by the host: every
-    // machine's Changes is split by the same tiers Settings shows.
-    const changeTiersStore = updateHost?.session?.workspace.changeTiers;
+    // Local machines share the host's tier preferences; Cloud files stay ungrouped.
+    const changeTiersStore = active?.happyCloud
+        ? undefined
+        : updateHost?.session?.workspace.changeTiers;
     // An update under way owns the slot: the window keeps working beside it,
     // and the offer comes back only once it has finished and been cleared.
     const sidebarUpdate = updateProgress ? (
@@ -4540,6 +4541,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // offered only once it is downloaded and there is something to apply it
     // with, which is the same test the sidebar's own update control makes.
     const paletteSubject: HappyAgentPaletteSubject = {
+        happyCloud: active?.happyCloud === true,
         bots: active?.bots ?? [],
         tasks: active?.tasks ?? NO_TASKS,
         chatId: props.chatId,
@@ -5142,6 +5144,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
  * can do from there.
  */
 interface HappyAgentPaletteSubject {
+    happyCloud: boolean;
     happyAgentId: string;
     projects: readonly HappyAgentProjectGroup[];
     bots: readonly HappyAgentBot[];
@@ -5341,6 +5344,7 @@ function paletteContext(
         chatId: subject.chatId,
         groupId: subject.groupId,
         happyAgentId: subject.happyAgentId,
+        happyCloud: subject.happyCloud,
         projects: subject.projects,
         sessionCreateAvailable: facts.sessionCreateAvailable,
         tabs: facts.tabs,

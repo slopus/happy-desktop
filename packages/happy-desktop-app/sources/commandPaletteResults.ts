@@ -35,6 +35,7 @@ import {
     type IconName,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
+import { happyAgentSettingsCategoryAvailable } from "./happyAgentSettingsCategoryAvailable";
 
 /**
  * What the command palette offers, derived from the snapshots the window is
@@ -259,6 +260,7 @@ export type CommandPaletteTab =
  * actions depend only on the addressed workspace and machine.
  */
 export interface CommandPaletteContext {
+    readonly happyCloud?: boolean;
     /** The machine whose work the palette lists: the one the address names. */
     readonly happyAgentId: string;
     readonly projects: readonly HappyAgentProjectGroup[];
@@ -1285,9 +1287,14 @@ function settingsSectionRows(input: CommandPaletteInput): Ranked[] {
         rows.push({ rank, updatedAt: 0, row });
     }
     for (const jump of SETTINGS_JUMPS) {
+        if (!happyAgentSettingsCategoryAvailable(jump.section, input.happyCloud === true)) continue;
         // The section the row leads to is searchable too: "general" has to
         // reach the rows that live under General, not only the page itself.
-        const rank = rowRank(query, jump.title, jump.sectionLabel, jump.keywords);
+        const keywords =
+            input.happyCloud && jump.section === "account"
+                ? "profile name email photo happy account"
+                : jump.keywords;
+        const rank = rowRank(query, jump.title, jump.sectionLabel, keywords);
         if (rank === undefined) continue;
         rows.push({
             rank,

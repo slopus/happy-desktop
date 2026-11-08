@@ -124,6 +124,7 @@ import {
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
+import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
 import {
     AppMobileDirectSection,
     appMobileDirectOff,
@@ -630,8 +631,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         serverDirectoryStore.get,
         serverDirectoryStore.get,
     );
-    const section = props.section;
-    const stateOpen = section === "debug";
     const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
     const titleShimmer = useSyncExternalStore(
         titleShimmerStore.subscribe,
@@ -662,12 +661,18 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         props.happyAgents.get,
     );
     const host = hostHappyAgent(directory);
+    const happyCloud = host?.happyCloud === true;
+    const section = happyAgentSettingsCategoryAvailable(props.section, happyCloud)
+        ? props.section
+        : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
+    const stateOpen = section === "debug";
     const membersStore = host?.session?.members?.();
     const repositoriesStore = host?.session?.repositories?.();
     // A category the host cannot serve is left out of the list rather than
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
         (category) =>
+            happyAgentSettingsCategoryAvailable(category.id, happyCloud) &&
             (category.id !== "servers" || props.servers !== undefined) &&
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined),
@@ -717,8 +722,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // The connection keeps both identities synchronized. This category only
     // observes their already-warm snapshots while it is visible.
     const cloudStore =
-        (section === "account" || stateOpen ? host?.session?.cloud?.() : undefined) ??
-        happyAgentCloudStoreNoop;
+        (!happyCloud && (section === "account" || stateOpen)
+            ? host?.session?.cloud?.()
+            : undefined) ?? happyAgentCloudStoreNoop;
     const cloud = useSyncExternalStore(cloudStore.subscribe, cloudStore.get, cloudStore.get);
     const happyIntegrationStore =
         (section === "mobile-access" || stateOpen
@@ -870,7 +876,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     // Tiers are one list for the window, remembered by the host's workspace;
     // every machine's Changes is split by these.
-    const changeTiersStore = host?.session?.workspace.changeTiers;
+    const changeTiersStore = happyCloud ? undefined : host?.session?.workspace.changeTiers;
     const changeTiers = useSyncExternalStore(
         changeTiersStore?.subscribe ?? noSubscribe,
         changeTiersStore?.get ?? changeTiersNone,
@@ -1380,7 +1386,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     />
                     {/* The web app's Happy Cloud session stands in for the
                         machine's own WorkOS connection, which it has none of. */}
-                    {props.cloudWebSession ? null : (
+                    {happyCloud || props.cloudWebSession ? null : (
                         <HappyAgentAccountSettings
                             authorizationCompleting={cloud.authorizationCompleting}
                             authorizationStarting={cloud.authorizationStarting}
