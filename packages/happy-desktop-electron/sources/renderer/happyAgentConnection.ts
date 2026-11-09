@@ -166,6 +166,12 @@ export interface HappyAgentSession {
     readonly userProfile: (
         userId: string,
     ) => import("happy-desktop-state").HappyAgentUserProfileStore | undefined;
+    readonly computePool: (
+        poolId: string | undefined,
+    ) => import("happy-desktop-state").HappyAgentComputePoolStore | undefined;
+    readonly ownGitCredentials: (
+        host: string,
+    ) => import("happy-desktop-state").HappyAgentOwnGitCredentialsStore | undefined;
     readonly repositories: () =>
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
@@ -813,6 +819,8 @@ export function happyAgentConnectionOpen(input: {
                     repositories: () => client.repositories(),
                     members: () => client.members(),
                     userProfile: (userId) => client.userProfile(userId),
+                    computePool: (poolId) => client.computePool(poolId),
+                    ownGitCredentials: (host) => client.ownGitCredentials(host),
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),

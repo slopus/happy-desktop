@@ -8,7 +8,13 @@ import {
     type UiActionResponse,
     type UiComponent,
 } from "happy-desktop-state";
-import { UiDefaultModel, UiInvite, UiProviderSignIn } from "../../src/ui/UiLiveWidgets";
+import {
+    UiComputeJoin,
+    UiDefaultModel,
+    UiGithubConnect,
+    UiInvite,
+    UiProviderSignIn,
+} from "../../src/ui/UiLiveWidgets";
 import { UiDocumentView, type UiDocumentViewProps } from "../../src/ui/UiDocumentView";
 import { UiRefusedNote } from "../../src/ui/UiRefusedNote";
 import type { ChatUiLive } from "../../src/ui/UiWidgetControl";
@@ -212,6 +218,25 @@ const LIVE: ChatUiLive = {
     ),
 };
 
+const LIVE_TEAM: ChatUiLive = {
+    github_connect: (_component, control) => (
+        <UiGithubConnect connectedAs="octo-you" control={control} />
+    ),
+    compute_join: (_component, control) => (
+        <UiComputeJoin
+            control={control}
+            machines={{
+                loading: false,
+                name: "Build machines",
+                machines: [
+                    { id: "n1", name: "mac-mini-studio", status: "online" },
+                    { id: "n2", name: "linux-builder-2", status: "enrolling" },
+                ],
+            }}
+        />
+    ),
+};
+
 const LIVE_SIGNED_IN: ChatUiLive = {
     provider_sign_in: (_component, control) => (
         <UiProviderSignIn cli={CODEX_SIGNED_IN} control={control} provider="codex" />
@@ -329,6 +354,29 @@ const SPECIMENS: readonly {
                 ]),
             }),
             live: LIVE,
+            onAction: act,
+        },
+    },
+    {
+        id: "C-338l2",
+        label: "GitHub linked, and a pool's machines",
+        detail: "the card flips when the credential appears; machines join live",
+        view: {
+            ui: documentOf([
+                {
+                    id: "github",
+                    type: "github_connect",
+                    fallback: "Connect GitHub",
+                    props: {},
+                } as UiComponent,
+                {
+                    id: "join",
+                    type: "compute_join",
+                    fallback: "Add a computer",
+                    props: {},
+                } as UiComponent,
+            ]),
+            live: LIVE_TEAM,
             onAction: act,
         },
     },

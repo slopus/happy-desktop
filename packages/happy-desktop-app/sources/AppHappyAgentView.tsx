@@ -734,7 +734,18 @@ export interface AppHappyAgentSession {
     readonly userProfile?: (
         userId: string,
     ) => import("happy-desktop-state").HappyAgentUserProfileStore | undefined;
-    /** Settings › Repositories, on a Happy Cloud server; absent or undefined elsewhere. */
+    /** One compute pool's machines, for a join card, on a Happy Cloud server; absent or undefined elsewhere. */
+    readonly computePool?: (
+        poolId: string | undefined,
+    ) => import("happy-desktop-state").HappyAgentComputePoolStore | undefined;
+    /** The reader's own git credentials for a host, on a Happy Cloud server; absent or undefined elsewhere. */
+    readonly ownGitCredentials?: (
+        host: string,
+    ) => import("happy-desktop-state").HappyAgentOwnGitCredentialsStore | undefined;
+    /**
+     * Settings › Repositories and the repository a new task starts in, on a
+     * Happy Cloud server; absent or undefined elsewhere.
+     */
     readonly repositories?: () =>
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
