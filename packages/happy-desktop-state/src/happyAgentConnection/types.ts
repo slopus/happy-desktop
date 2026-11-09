@@ -144,6 +144,14 @@ interface BaseChatElement {
     createdAt: number;
 }
 
+/** A Happy Cloud `file` block: the server fills in the type and size once it has the bytes. */
+export interface UserMessageFile {
+    readonly attachment: string;
+    readonly name: string;
+    readonly mimeType?: string;
+    readonly size?: number;
+}
+
 export interface UserMessageElement extends BaseChatElement {
     kind: "user_message";
     messageId: string;
@@ -156,6 +164,8 @@ export interface UserMessageElement extends BaseChatElement {
     delivery: "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
+    /** Files uploaded to Happy Cloud and named by this message, by attachment ID. */
+    files?: readonly UserMessageFile[];
     /** The story this message replies to, with its still at its own address. */
     quote?: {
         readonly storyId: string;
