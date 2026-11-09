@@ -10496,7 +10496,19 @@ function HappyAgentConversationSurface(props: {
                 ) {
                     return;
                 }
-                if (attachment.openUrl) openExternalLink(attachment.openUrl);
+                if (attachment.openUrl) {
+                    openExternalLink(attachment.openUrl);
+                    return;
+                }
+                // A file a Happy Cloud message names is kept by the server
+                // behind the reader's sign-in, so it is fetched with it and saved.
+                const bytes =
+                    attachment.attachmentKind === "file"
+                        ? workspace.attachmentDownload(attachment.source)
+                        : undefined;
+                void bytes
+                    ?.then((blob) => fileDownload(attachment.name, { type: "blob", blob }))
+                    .catch(() => undefined);
             }}
             onToolSelect={(entryId) => workspace.panel.previewOpen(entryId)}
             onToolMediaOpen={(entryId, tool, index) => {

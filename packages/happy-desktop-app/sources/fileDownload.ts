@@ -11,10 +11,12 @@ export async function fileDownload(
     path: string,
     source:
         | { readonly type: "text"; readonly text: string }
-        | { readonly type: "url"; readonly url: string },
+        | { readonly type: "url"; readonly url: string }
+        | { readonly type: "blob"; readonly blob: Blob },
 ): Promise<void> {
     let blob: Blob;
     if (source.type === "text") blob = new Blob([source.text], { type: "text/plain" });
+    else if (source.type === "blob") blob = source.blob;
     else {
         const response = await fetch(source.url);
         if (!response.ok)

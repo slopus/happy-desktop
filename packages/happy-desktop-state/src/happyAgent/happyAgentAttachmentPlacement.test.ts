@@ -125,3 +125,34 @@ describe("happyAgentAttachmentPlacementCreate", () => {
         });
     });
 });
+
+it("downloads a Happy Cloud file's bytes with the reader's sign-in", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+        Promise.resolve(
+            new Response("remember the milk\n", {
+                status: 200,
+                headers: { "content-type": "text/plain" },
+            }),
+        ),
+    );
+    const placement = happyAgentAttachmentPlacementCreate(
+        { attachmentSourceReachable: vi.fn(), attachmentWrite: vi.fn() },
+        happyCloudRequestCreate({ endpoint: "http://cloud.test/api", token: "access", fetch }),
+    );
+
+    const blob = await placement.attachmentDownload!("agent one", "digest");
+
+    expect(await blob.text()).toBe("remember the milk\n");
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe("http://cloud.test/api/v0/agents/agent%20one/attachments/digest");
+    expect(init?.method).toBe("GET");
+    expect(init?.headers).toMatchObject({ authorization: "Bearer access", accept: "*/*" });
+});
+
+it("still reads a JSON answer as JSON when no other type is asked for", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+        Promise.resolve(Response.json({ ok: true })),
+    );
+    const request = happyCloudRequestCreate({ endpoint: "http://cloud.test", token: "t", fetch });
+    expect(await request("GET", "v0/thing")).toEqual({ ok: true });
+});

@@ -28,6 +28,8 @@ export interface HappyAgentAttachmentPlacement extends Pick<
         agentId: string,
         attachment: HappyCloudAttachmentFile,
     ) => Promise<HappyCloudFileBlock>;
+    /** One file a Happy Cloud message names, by its conversation and attachment ID. */
+    readonly attachmentDownload?: (agentId: string, attachment: string) => Promise<Blob>;
 }
 
 /**
@@ -81,6 +83,17 @@ export function happyAgentAttachmentPlacementCreate(
                 attachment: id,
                 name: typeof name === "string" && name.length > 0 ? name : attachment.name,
             };
+        },
+        attachmentDownload: async (agentId, attachment) => {
+            const bytes = await cloudRequest(
+                "GET",
+                `v0/agents/${encodeURIComponent(agentId)}/attachments/${encodeURIComponent(attachment)}`,
+                undefined,
+                { accept: "*/*" },
+            );
+            if (!(bytes instanceof Blob))
+                throw new UserError("The server didn't send the file.", "attachment_failed");
+            return bytes;
         },
     };
 }
