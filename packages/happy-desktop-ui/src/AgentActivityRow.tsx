@@ -162,7 +162,7 @@ function parseMcpToolName(name: string): { server: string; tool: string } | unde
     if (!name.startsWith("mcp__")) return undefined;
     const parts = name.split("__");
     if (parts.length < 3) return undefined;
-    return { server: parts[1]!, tool: parts.slice(2).join(" ") };
+    return { server: parts[1]!, tool: parts.slice(2).join("__") };
 }
 
 /** Splits an MCP result into ≤`budget` dim rows, returning the overflow count. */
@@ -192,7 +192,7 @@ function humanizeToolName(name: string): string {
     if (explicit[name]) return explicit[name]!;
     if (name.startsWith("mcp__")) {
         const parts = name.split("__");
-        if (parts.length >= 3) return `${parts[1]} · ${parts.slice(2).join(" ")}`;
+        if (parts.length >= 3) return `${parts[1]} · ${parts.slice(2).join("__")}`;
     }
     return name
         .replace(/[_-]+/g, " ")
@@ -564,10 +564,12 @@ function toolAction(
         subject,
     });
     const lower = tool.toolName.toLowerCase();
-    // A command that said what it does is told in its own words alone.
+    // A description already says the action; do not prepend another verb.
     if (
         summary !== undefined &&
-        (presentation?.type === "execCommand" || /^(bash|exec_command|shell)$/.test(lower))
+        (tool.summaryKind === "description" ||
+            presentation?.type === "execCommand" ||
+            /^(bash|exec_command|shell)$/.test(lower))
     )
         return { verb: "", subject: summary };
     if (
@@ -1006,6 +1008,19 @@ function AgentToolActivity(props: {
                   : ((stillGlyph === "clock" ? waitSubject(tool) : undefined) ??
                     summary ??
                     humanizeToolName(tool.toolName));
+    }
+    // Rich bodies retain their data, links, and diff counts; their label still
+    // comes from the call's explicit description, including on a failed call.
+    if (!mcp && summary !== undefined && tool.summaryKind === "description") {
+        primaryText = summary;
+        verb =
+            tool.status === "stopped"
+                ? "Stopped"
+                : tool.failed || tool.status === "failed"
+                  ? "Failed"
+                  : tool.status === "awaitingApproval"
+                    ? "Awaiting approval"
+                    : "";
     }
     /* Said in the call's own words rather than its raw input. */
     const described = summary !== undefined && primaryText === summary;

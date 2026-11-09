@@ -4,6 +4,7 @@ import type {
     ToolCallElement,
 } from "../happyAgentConnection/index.js";
 import { expect, it } from "vitest";
+import { entryEquivalent } from "../conversation/conversationEntries.js";
 import { happyAgentConversationProject } from "./happyAgentConversationProject.js";
 
 const running: CompactionElement = {
@@ -366,6 +367,22 @@ it("carries the words a call gave about itself as a compact single-line summary"
             }),
             call("create_task", { name: "Nightly triage", description: "Triage the night's bugs" }),
             call("exec_command", { cmd: "ls", description: "x".repeat(121) }, "long"),
+            call("python", { code: "print(1)", description: "  Inspect\u0085the\u2003data  " }),
+            call("apply_patch", { patch: "...", description: "Update both parsers" }),
+            call("write_stdin", { chars: "y", description: "Confirm the prompt" }),
+            call("kill_session", { session_id: 1, description: "Stop the build" }),
+            call("update_artifact", { title: "Report", description: "Publish corrected totals" }),
+            call("create_task", { description: "Investigate the regression" }, "unnamed-task"),
+            call("create_task", { description: "\u0085  ", name: "Nightly triage" }, "blank-task"),
+            call("create_bot", { description: "Watch the release", name: "Watcher" }),
+            call("web_fetch", { url: "https://example.com/docs" }),
+            call("lookup_secret", { name: "PRIVATE_KEY" }),
+            call("mcp__docs__exec_command_0123456789abcdef", { description: "Semantic input" }),
+            call("exec_command", { description: "😀".repeat(121) }, "unicode-long"),
+            call("move_vault_file", { path: "notes/old.md", toPath: "notes/new.md" }),
+            call("request_user_input", {
+                questions: [{ question: "Which account?" }, { question: "Which region?" }],
+            }),
         ],
         sessionId: "s1",
         showReasoning: false,
@@ -386,7 +403,46 @@ it("carries the words a call gave about itself as a compact single-line summary"
         "List files and more",
         "Fix trace folding",
         "Asks for the diff",
-        "Nightly triage",
+        "Triage the night's bugs",
         `${"x".repeat(119)}…`,
+        "Inspect the data",
+        "Update both parsers",
+        "Confirm the prompt",
+        "Stop the build",
+        "Publish corrected totals",
+        "Investigate the regression",
+        "Nightly triage",
+        "Watch the release",
+        "https://example.com/docs",
+        undefined,
+        undefined,
+        `${"😀".repeat(119)}…`,
+        "notes/old.md → notes/new.md",
+        "Which account? · Which region?",
     ]);
+    const tools = entries.flatMap((entry) =>
+        entry.kind === "agentActivity" && entry.activity.kind === "tool"
+            ? [entry.activity.tool]
+            : [],
+    );
+    expect(tools.find((tool) => tool.toolCallId === "create_task")?.summaryKind).toBe(
+        "description",
+    );
+    expect(tools.find((tool) => tool.toolCallId === "blank-task")?.summaryKind).toBe("subject");
+    expect(tools.find((tool) => tool.toolCallId === "unicode-long")?.arguments).toEqual({
+        description: "😀".repeat(121),
+    });
+    const described = entries[0]!;
+    if (described.kind !== "agentActivity" || described.activity.kind !== "tool") {
+        throw new Error("Expected the described tool row");
+    }
+    expect(
+        entryEquivalent(described, {
+            ...described,
+            activity: {
+                ...described.activity,
+                tool: { ...described.activity.tool, summaryKind: "subject" },
+            },
+        }),
+    ).toBe(false);
 });

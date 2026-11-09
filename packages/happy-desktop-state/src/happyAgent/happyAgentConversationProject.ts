@@ -1350,7 +1350,7 @@ function toolProject(
         failed: element.status === "failed",
         ...presentationEntry(element.presentation, agents),
         ...(element.elevated === true ? { elevated: true } : {}),
-        ...(summary === undefined ? {} : { summary }),
+        ...(summary === undefined ? {} : { summary: summary.text, summaryKind: summary.kind }),
         // A review still running has only the action it is weighing: no
         // verdict, no reason, no risk. The row states a decision, so it waits
         // for one rather than painting a blank verdict beside the call.
@@ -1370,13 +1370,55 @@ function toolProject(
 
 /**
  * The argument in which a tool states, in a few words, what one call does.
- * Shell-like tools take a `description`; the tools that start another agent
- * name it, and the tools that message one explain the message.
+ * A nonblank description wins. These explicit subject fields keep older calls
+ * readable without exposing arbitrary identifiers such as a secret's name.
  */
 const TOOL_SUMMARY_ARGUMENT: Readonly<Record<string, string>> = {
     create_agent: "title",
     create_subtask: "title",
     create_task: "name",
+    create_bot: "name",
+    create_artifact: "title",
+    create_calendar_event: "title",
+    update_calendar_event: "title",
+    update_artifact: "title",
+    codex_imagegen: "title",
+    create_calendar_surface: "name",
+    create_chat_surface: "name",
+    create_document_surface: "name",
+    create_todo_surface: "name",
+    create_vault_surface: "name",
+    set_bot_name: "name",
+    set_node_name: "name",
+    set_title: "name",
+    remove_mcp_server: "name",
+    update_surface: "name",
+    create_vault_folder: "path",
+    delete_vault_file: "path",
+    delete_vault_folder: "path",
+    edit_artifact_file: "path",
+    edit_vault_file: "path",
+    list_vault_versions: "path",
+    read_artifact_file: "path",
+    read_vault_file: "path",
+    view_image: "path",
+    write_artifact_file: "path",
+    write_vault_artifact: "path",
+    write_vault_file: "path",
+    copy_vault_file: "path",
+    move_vault_file: "path",
+    move_vault_folder: "path",
+    list_vault: "path",
+    glob_vault: "pattern",
+    grep_vault: "pattern",
+    tool_search: "query",
+    web_search: "query",
+    read_agent_history: "query",
+    add_repository: "url",
+    web_fetch: "url",
+    create_todo: "text",
+    update_todo: "text",
+    update_plan: "explanation",
     send_agent_message: "explanation",
     send_bot_message: "explanation",
     send_task_message: "explanation",
@@ -1385,11 +1427,41 @@ const TOOL_SUMMARY_ARGUMENT: Readonly<Record<string, string>> = {
 const TOOL_SUMMARY_LIMIT = 120;
 
 /** What a call said it does, as the row can show it; nothing when it said nothing usable. */
-function toolSummary(name: string, input: unknown): string | undefined {
+function toolSummary(
+    name: string,
+    input: unknown,
+): { readonly text: string; readonly kind: "description" | "subject" } | undefined {
+    // Native MCP arguments are semantic input, not Happy's display contract.
+    if (name.startsWith("mcp__")) return undefined;
     if (typeof input !== "object" || input === null) return undefined;
-    const value = (input as Record<string, unknown>)[TOOL_SUMMARY_ARGUMENT[name] ?? "description"];
+    const args = input as Record<string, unknown>;
+    const description = toolSummaryText(args.description);
+    if (description !== undefined) return { text: description, kind: "description" };
+    if (name === "request_user_input" && Array.isArray(args.questions)) {
+        const questions = args.questions.flatMap((question: unknown) => {
+            if (typeof question !== "object" || question === null) return [];
+            const text = toolSummaryText((question as Record<string, unknown>).question);
+            return text === undefined ? [] : [text];
+        });
+        const text = toolSummaryText(questions.join(" · "));
+        if (text !== undefined) return { text, kind: "subject" };
+    }
+    if (name === "copy_vault_file" || name === "move_vault_file" || name === "move_vault_folder") {
+        const path = toolSummaryText(args.path);
+        const toPath = toolSummaryText(args.toPath);
+        const text = toolSummaryText(
+            [path, toPath].filter((value) => value !== undefined).join(" → "),
+        );
+        if (text !== undefined) return { text, kind: "subject" };
+    }
+    const field = TOOL_SUMMARY_ARGUMENT[name];
+    const subject = field === undefined ? undefined : toolSummaryText(args[field]);
+    return subject === undefined ? undefined : { text: subject, kind: "subject" };
+}
+
+function toolSummaryText(value: unknown): string | undefined {
     if (typeof value !== "string") return undefined;
-    const summary = value.replace(/\s+/gu, " ").trim();
+    const summary = value.replace(/\p{White_Space}+/gu, " ").trim();
     if (summary.length === 0) return undefined;
     const characters = Array.from(summary);
     return characters.length <= TOOL_SUMMARY_LIMIT

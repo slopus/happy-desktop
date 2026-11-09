@@ -1772,6 +1772,78 @@ it("settles a finished run on the stream alone, without refetching history", asy
     expect(agentTexts(chat.elements).map((element) => element.text)).toEqual(["final text"]);
 });
 
+it("requests full described tool data on initial history and pagination", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const project = daemon.projectSeed({ id: "project-tool-details" });
+    const agent = daemon.agentSeed(project.id, { id: "agent-tool-details" });
+    const run = (id: string, startedAt: number) =>
+        fakeRun({
+            id,
+            startedAt,
+            status: "completed",
+            messages: [
+                fakeAgentMessage({
+                    id: `message-${id}`,
+                    content: [
+                        {
+                            type: "tool_call",
+                            id: `tool-${id}`,
+                            name: "exec_command",
+                            status: "completed",
+                            arguments: {
+                                description: "Run account tests",
+                                cmd: "pnpm test accounts",
+                            },
+                            result: { output: "All account tests passed" },
+                            presentation: {
+                                type: "exec_command",
+                                command: "pnpm test accounts",
+                                output: "All account tests passed",
+                            },
+                        },
+                    ],
+                }),
+            ],
+        });
+    const latest = run("latest", 2);
+    daemon.historySet(agent.id, [latest]);
+    daemon.historyHasMoreSet(agent.id, true);
+    const { connection } = harnessOpen(daemon);
+    groupsWatch(connection);
+    let elements: readonly ChatElement[] = [];
+    const transcript = connection.connectSession({
+        sessionId: agent.id,
+        onChange: (next) => {
+            elements = next;
+        },
+        onError: (error) => {
+            throw error;
+        },
+    });
+    await vi.waitFor(() =>
+        expect(elements.some((element) => element.kind === "tool_call")).toBe(true),
+    );
+    daemon.historySet(agent.id, [run("earlier", 1), latest]);
+    await transcript.loadMore("latest");
+    await vi.waitFor(() =>
+        expect(elements.filter((element) => element.kind === "tool_call")).toHaveLength(2),
+    );
+    const reads = daemon.calls.filter((call) => call.method === "getMessages");
+    expect(reads).toHaveLength(2);
+    expect(reads.map((call) => call.args[1])).toEqual([
+        expect.objectContaining({ omitToolData: false }),
+        expect.objectContaining({ before: "latest", omitToolData: false }),
+    ]);
+    for (const element of elements) {
+        if (element.kind !== "tool_call") continue;
+        expect(element.arguments).toEqual({
+            description: "Run account tests",
+            cmd: "pnpm test accounts",
+        });
+        expect(element.result).toContain("All account tests passed");
+    }
+});
+
 it("reopens a session that streamed while unwatched without reading its history again", async () => {
     const { connection, daemon } = harnessOpen();
     const project = daemon.projectSeed({ id: "project-a" });
