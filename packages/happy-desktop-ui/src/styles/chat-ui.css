@@ -1,20 +1,14 @@
 /*
  * Chat UI: the flat list of components an agent shows with `show_ui`, or the
- * daemon writes into one of its messages. Laid on the chat like everything in
- * a reply: no frame, no background, the reply's left edge and type.
+ * daemon writes into one of its messages, and the replies it suggests. Laid
+ * on the chat like everything in a reply: no frame, no background, the
+ * reply's left edge and type.
  *
- *   document   the components top to bottom, 16px apart
- *   choice     a wrapping row of 36px outline buttons, 8px apart
- *   checklist  rows of an 18px checkbox + label (+ muted detail), 8px apart,
- *              then the submit 12px below
- *   text_field its label, then a 240px field and its submit on one row
- *   file_tree  the app's file tree, every folder open
- *   images     the transcript's own media flow
- *   fallback   the server's one line, muted
- *
- * A control's status line (who can use it, or why the last attempt was
- * refused) sits 8px under it. Answering a control changes no size: the chosen
- * button takes the pressed fill and the rest fade in place.
+ *   document       the components top to bottom, 16px apart
+ *   file_tree      the app's file tree, every folder open
+ *   images         the transcript's own media flow
+ *   fallback       the server's one line, muted
+ *   quick replies  a wrapping row of 36px outline pills, 8px apart
  */
 .happy-chat-ui {
     display: flex;
@@ -33,87 +27,6 @@
     gap: 16px;
 }
 
-.happy-chat-ui__control {
-    flex-direction: column;
-    gap: 8px;
-}
-
-.happy-chat-ui__buttons {
-    display: flex;
-    flex-flow: row wrap;
-    gap: 8px;
-}
-
-/* An answered or unusable group keeps its buttons where they are; the ones
-   not chosen fade. */
-.happy-chat-ui[data-locked] .happy-button:disabled {
-    opacity: 0.55;
-}
-
-.happy-chat-ui__checklist {
-    gap: 12px;
-}
-
-.happy-chat-ui__options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.happy-chat-ui__option {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    min-width: 0;
-}
-
-/* The checkbox shares the marks' 20px slot, on the first line's centre. */
-.happy-chat-ui__option > .happy-checkbox {
-    width: 20px;
-    height: 24px;
-    justify-content: center;
-}
-
-.happy-chat-ui__text {
-    display: flex;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    align-items: baseline;
-    column-gap: 8px;
-    min-width: 0;
-}
-
-.happy-chat-ui__option .happy-chat-ui__text {
-    cursor: pointer;
-}
-
-.happy-chat-ui[data-locked] .happy-chat-ui__option .happy-chat-ui__text {
-    cursor: default;
-}
-
-.happy-chat-ui__detail {
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 20px;
-}
-
-.happy-chat-ui__field-label {
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 20px;
-}
-
-.happy-chat-ui__field-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.happy-chat-ui__field {
-    flex: 0 1 240px;
-    min-width: 0;
-}
-
 .happy-chat-ui__tree {
     flex-direction: column;
     max-width: 420px;
@@ -128,53 +41,27 @@
     font-size: 15px;
 }
 
-/* One line under a control: a 16px mark in a 20px slot, then the words. */
-.happy-chat-ui__line {
-    display: flex;
-    align-items: flex-start;
+/* Suggested replies under the agent's last words: a tap sends one as the
+   person's message, and the row goes once they have. */
+.happy-chat-ui__quick-replies {
+    flex-flow: row wrap;
     gap: 8px;
+}
+
+/* A pill never outgrows the measure: an option too long for one row ends in an ellipsis. */
+.happy-chat-ui__pill {
+    flex: 0 1 auto;
     min-width: 0;
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 20px;
+    max-width: 100%;
 }
 
-.happy-chat-ui__line[data-error] {
-    color: var(--status-error);
+.happy-chat-ui__pill .happy-button__content,
+.happy-chat-ui__pill .happy-button__label {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
-.happy-chat-ui__mark {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-}
-
-/* A live widget: the figure it draws, in its one fixed box. */
-.happy-chat-ui__live {
-    flex-direction: column;
-    gap: 8px;
-}
-
-/* An answer that never became the person's words: their bubble, greyed, and
-   why under it, on the bubble's own trailing edge. */
-.happy-message[data-refused] .happy-message__body {
-    opacity: 0.55;
-}
-
-.happy-message[data-refused] .happy-message__attachments {
-    align-items: flex-end;
-}
-
-.happy-chat-ui__refused {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    height: 20px;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-ui);
-    font-size: 13px;
-    line-height: 20px;
+.happy-chat-ui__pill .happy-button__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

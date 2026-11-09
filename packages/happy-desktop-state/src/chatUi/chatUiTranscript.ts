@@ -1,10 +1,9 @@
 import type { Message, UiActionBlock, UiDocument } from "@slopus/happy-agent-client";
-import {
-    chatUiActionDefinition,
-    type ConversationUi,
-    type ConversationUiAttempt,
-    type UiActionInput,
-    type UiComponent,
+import type {
+    ConversationQuickReplies,
+    ConversationUi,
+    ConversationUiAttempt,
+    UiComponent,
 } from "./chatUi.js";
 
 /**
@@ -19,8 +18,6 @@ export type ChatUiTranscript = {
     readonly components: ReadonlyMap<string, UiComponent>;
     /** Each component's last attempt, by the same key. */
     readonly attempts: ReadonlyMap<string, ConversationUiAttempt>;
-    /** Each component's accepted `once` answer, by the same key. */
-    readonly answers: ReadonlyMap<string, UiActionInput>;
 };
 
 const key = (messageId: string, uiId: string, componentId: string): string =>
@@ -45,7 +42,7 @@ export function chatUiRecordOf(message: Message): UiActionBlock | undefined {
     return undefined;
 }
 
-/** Whether a message carries chat UI or answers it, so its projection depends on the transcript. */
+/** Whether a message carries chat UI or a record of it, so its projection depends on the transcript. */
 export function chatUiMessage(message: Message): boolean {
     return chatUiDocumentsOf(message).length > 0 || chatUiRecordOf(message) !== undefined;
 }
@@ -54,7 +51,6 @@ export function chatUiMessage(message: Message): boolean {
 export function chatUiTranscriptRead(messages: Iterable<Message>): ChatUiTranscript {
     const components = new Map<string, UiComponent>();
     const attempts = new Map<string, ConversationUiAttempt>();
-    const answers = new Map<string, UiActionInput>();
     for (const message of messages) {
         for (const document of chatUiDocumentsOf(message))
             for (const component of document.components)
@@ -62,22 +58,12 @@ export function chatUiTranscriptRead(messages: Iterable<Message>): ChatUiTranscr
         const record = chatUiRecordOf(message);
         if (record === undefined) continue;
         const at = key(record.messageId, record.uiId, record.componentId);
-        attempts.set(at, { action: record.action, outcome: record.outcome });
-        if (
-            record.outcome.status === "accepted" &&
-            chatUiActionDefinition(record.action.type)?.once === true
-        )
-            answers.set(at, record.action);
+        attempts.set(key(record.messageId, record.uiId, record.componentId), {
+            action: record.action,
+            outcome: record.outcome,
+        });
     }
-    return { components, attempts, answers };
-}
-
-/** The component an attempt record answered, when the transcript still holds its offer. */
-export function chatUiRecordComponent(
-    transcript: ChatUiTranscript,
-    record: UiActionBlock,
-): UiComponent | undefined {
-    return transcript.components.get(key(record.messageId, record.uiId, record.componentId));
+    return { components, attempts };
 }
 
 /** One document as a message entry shows it, with what the transcript recorded about it. */
@@ -86,18 +72,48 @@ export function chatUiConversation(
     messageId: string,
     document: UiDocument,
     media: ConversationUi["media"],
-    open: boolean,
 ): ConversationUi {
     const attempts = new Map<string, ConversationUiAttempt>();
-    const answers = new Map<string, UiActionInput>();
     for (const component of document.components) {
-        const at = key(messageId, document.id, component.id);
-        const attempt = transcript.attempts.get(at);
+        const attempt = transcript.attempts.get(key(messageId, document.id, component.id));
         if (attempt !== undefined) attempts.set(component.id, attempt);
-        const answer = transcript.answers.get(at);
-        if (answer !== undefined) answers.set(component.id, answer);
     }
-    return { offer: { messageId, uiId: document.id }, document, media, attempts, answers, open };
+    return { offer: { messageId, uiId: document.id }, document, media, attempts };
+}
+
+/**
+ * The suggestion a message makes: its own `quick_replies` block, or its last
+ * `suggest_replies` call's presentation.
+ */
+export function quickRepliesOf(message: Message): ConversationQuickReplies | undefined {
+    if (message.role !== "agent") return undefined;
+    let found: ConversationQuickReplies | undefined;
+    for (const block of message.content) {
+        if (block.type === "quick_replies")
+            found = { messageId: message.id, options: block.options };
+        else if (block.type === "tool_call" && block.presentation?.type === "quick_replies")
+            found = {
+                messageId: message.id,
+                toolCallId: block.id,
+                options: block.presentation.options,
+            };
+    }
+    return found;
+}
+
+/** Whether two suggestions are the same one. */
+export function quickRepliesEqual(
+    left: ConversationQuickReplies | undefined,
+    right: ConversationQuickReplies | undefined,
+): boolean {
+    if (left === right) return true;
+    if (left === undefined || right === undefined) return false;
+    return (
+        left.messageId === right.messageId &&
+        left.toolCallId === right.toolCallId &&
+        left.options.length === right.options.length &&
+        left.options.every((option, index) => option === right.options[index])
+    );
 }
 
 /** Whether two projections of one document say the same thing. */
@@ -108,15 +124,13 @@ export function chatUiEqual(left: ConversationUi | undefined, right: Conversatio
         left.offer.messageId === right.offer.messageId &&
         left.offer.uiId === right.offer.uiId &&
         left.document === right.document &&
-        left.open === right.open &&
         left.media.length === right.media.length &&
         left.media.every((item, index) => item.url === right.media[index]?.url) &&
         mapsEqual(
             left.attempts,
             right.attempts,
             (a, b) => a.action === b.action && outcomeSame(a, b),
-        ) &&
-        mapsEqual(left.answers, right.answers, (a, b) => a === b)
+        )
     );
 }
 

@@ -3306,27 +3306,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         });
     };
 
-    /* The optimistic bubble of each chat UI answer on its way, by its offer:
-       the attempt ID it is held under until the daemon's message or record
-       for that offer arrives, by the response or by the stream. */
-    const uiBubbles = new Map<string, string>();
-    const uiBubbleSettle = (agentId: string, message: Message): void => {
-        const action = message.content.find((block) => block.type === "action");
-        if (action === undefined) return;
-        const offer = uiOfferKey(action.messageId, action.uiId, action.componentId);
-        const pendingId = uiBubbles.get(offer);
-        if (pendingId === undefined || pendingId === message.id) return;
-        if (message.role === "service" && action.outcome.status === "pending") return;
-        uiBubbles.delete(offer);
-        const entry = sessions.get(agentId);
-        if (entry?.messages.get(pendingId)?.pendingSend) {
-            entry.messages.delete(pendingId);
-            publishSession(entry);
-        }
-    };
-
     const updateMessage = (agentId: string, message: Message, runId: string | null): void => {
-        if (uiBubbles.size > 0 && message.role !== "agent") uiBubbleSettle(agentId, message);
         if (message.role === "user") sendConfirm(message.id);
         const entry = sessions.get(agentId);
         const current = entry?.messages.get(message.id)?.message;
@@ -5237,6 +5217,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         delivery,
                         mode,
                         runId: null,
+                        ...(input.quickReply ? { quickReply: input.quickReply } : {}),
                     },
                     runId: null,
                     pendingSend: true,
@@ -5264,6 +5245,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                                           ...files,
                                       ] as unknown as typeof richContent,
                                   }),
+                            ...(input.quickReply ? { quickReply: input.quickReply } : {}),
                             delivery,
                             mode,
                         },
@@ -5713,47 +5695,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         },
         async sendUiAction(sessionId, input) {
             if (config === undefined) throw new Error("The agent is not loaded.");
-            const says = input.text !== undefined;
-            const mode = says
-                ? modeOf(
-                      config,
-                      agentDrafts.get(sessionId),
-                      agentModes.get(sessionId),
-                      intendedModes.get(sessionId),
-                  )
-                : undefined;
-            const offer = uiOfferKey(input.messageId, input.uiId, input.componentId);
-            const entry = sessions.get(sessionId);
-            if (says && mode !== undefined && entry !== undefined) {
-                // The person's words show at once, as a send's do; the message
-                // or the refusal the daemon records takes their place.
-                uiBubbles.set(offer, input.id);
-                entry.messages.set(input.id, {
-                    message: {
-                        id: input.id,
-                        role: "user",
-                        createdAt: now(),
-                        content: [{ type: "text", text: input.text ?? "" }],
-                        metadata: {},
-                        status: "pending",
-                        delivery: "steer",
-                        mode,
-                        runId: null,
-                    },
-                    runId: null,
-                    pendingSend: true,
-                });
-                publishSession(entry);
-            }
-            const bubbleDrop = () => {
-                if (uiBubbles.get(offer) !== input.id) return;
-                uiBubbles.delete(offer);
-                const current = sessions.get(sessionId);
-                if (current?.messages.get(input.id)?.pendingSend) {
-                    current.messages.delete(input.id);
-                    publishSession(current);
-                }
-            };
+            // Every action is silent: its record, by the response or the
+            // stream, is what the component shows.
             let retryMs = INITIAL_SEND_RETRY_MS;
             for (let attempt = 1; ; attempt += 1) {
                 try {
@@ -5765,20 +5708,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             uiId: input.uiId,
                             componentId: input.componentId,
                             action: input.action,
-                            ...(mode ? { mode } : {}),
                         },
                         { signal: deadlineSignal() },
                     );
-                    bubbleDrop();
                     if (!closed) {
-                        // The stream places a record in its run; a reply that
-                        // arrives first keeps whatever place it already has.
+                        // The stream places a record in its run; one that
+                        // arrived first keeps the place it already has.
                         const held = sessions.get(sessionId)?.messages.get(response.record.id);
                         updateMessage(sessionId, response.record, held?.runId ?? null);
-                        if (response.message !== null) {
-                            await ensureMessageUsers([response.message]);
-                            updateMessage(sessionId, response.message, response.message.runId);
-                        }
                     }
                     return response;
                 } catch (error) {
@@ -5787,10 +5724,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         error.status === 408 ||
                         error.status === 429 ||
                         error.status >= 500;
-                    if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS) {
-                        bubbleDrop();
+                    if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS)
                         throw error;
-                    }
                     await wait(retryMs, rootController.signal);
                     retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
                 }
@@ -6481,6 +6416,8 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
             );
         case "ui":
             return next.type === "ui" && previous.ui.id === next.ui.id;
+        case "quick_replies":
+            return next.type === "quick_replies";
         case "action":
             return (
                 next.type === "action" &&
@@ -6736,9 +6673,4 @@ function teammateCurrent(
         name: profile.name,
         ...(profile.avatar === null ? {} : { imageUrl: profile.avatar.url }),
     };
-}
-
-/** One chat UI component's offer, as the key its optimistic bubble is held under. */
-function uiOfferKey(messageId: string, uiId: string, componentId: string): string {
-    return `${messageId}\u0000${uiId}\u0000${componentId}`;
 }

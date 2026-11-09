@@ -1,4 +1,4 @@
-import { chatUiEqual } from "../chatUi/chatUiTranscript.js";
+import { chatUiEqual, quickRepliesEqual } from "../chatUi/chatUiTranscript.js";
 import {
     entryKey,
     entrySequence,
@@ -128,7 +128,9 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
             left.sentHere !== right.sentHere ||
             left.clientMutationId !== right.clientMutationId ||
             left.error !== right.error ||
-            left.refused !== right.refused ||
+            left.quickReply?.messageId !== right.quickReply?.messageId ||
+            left.quickReply?.index !== right.quickReply?.index ||
+            !quickRepliesEqual(left.quickReplies, right.quickReplies) ||
             !chatUiEqual(left.ui, right.ui)
         )
             return false;

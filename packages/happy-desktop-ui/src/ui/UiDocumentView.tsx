@@ -1,8 +1,7 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
     chatUiActionAllowed,
-    chatUiActionSays,
     chatUiComponentKey,
     type ChatUiGranted,
     type ConversationUi,
@@ -12,14 +11,10 @@ import {
 } from "happy-desktop-state";
 import { ChatSettingsFigure } from "../ChatActionFigures";
 import { messageTextLayoutFontGenerationGet } from "../messageTextLayout";
-import { UiChecklist } from "./UiChecklist";
-import { UiChoice } from "./UiChoice";
 import { UiFallback } from "./UiFallback";
 import { UiFileTree } from "./UiFileTree";
 import { UiImages } from "./UiImages";
 import { UiPhoneApp } from "./UiPhoneApp";
-import type { UiControlState } from "./UiStatusLine";
-import { UiTextField } from "./UiTextField";
 import { chatUiLiveType, type ChatUiLive, type UiWidgetControl } from "./UiWidgetControl";
 
 export type UiDocumentViewProps = {
@@ -98,12 +93,10 @@ function UiComponentView(props: {
     const allowed = (type: string) => chatUiActionAllowed(component, type, granted);
     const pending = view.pending?.get(key);
     const attempt = ui.attempts.get(component.id);
-    /* A refused answer that would have been the person's words shows as their
-       greyed bubble, so only a silent action's refusal is the component's. */
+    /* Every action is silent, so its record's refusal is the component's to show. */
     const recordError =
         attempt !== undefined &&
-        (attempt.outcome.status === "rejected" || attempt.outcome.status === "failed") &&
-        !chatUiActionSays(attempt.action.type)
+        (attempt.outcome.status === "rejected" || attempt.outcome.status === "failed")
             ? (attempt.outcome.reason ?? "That didn't work.")
             : undefined;
     const error = view.errors?.get(key) ?? recordError;
@@ -122,13 +115,6 @@ function UiComponentView(props: {
         if (draw === undefined) return <UiFallback text={component.fallback} />;
         return <LiveBox type={component.type}>{draw(component, control)}</LiveBox>;
     }
-    /* What a `once` answer shows as chosen: the one accepted, or the one on its way. */
-    const answer = ui.answers.get(component.id) ?? pending;
-    const state = (type: string): UiControlState => ({
-        ...(allowed(type) ? {} : { blocked: "You can read this, but not answer it here." }),
-        ...(pending ? { pending: true } : {}),
-        ...(error ? { error } : {}),
-    });
     switch (component.type) {
         case "images":
             return (
@@ -148,72 +134,6 @@ function UiComponentView(props: {
                         : {})}
                 />
             );
-        case "choice":
-            return (
-                <UiChoice
-                    {...(answer?.type === "choice.choose"
-                        ? { answer: String(answer.payload["optionId"]) }
-                        : {})}
-                    {...(control.act
-                        ? {
-                              onChoose: (optionId: string) =>
-                                  void control
-                                      .act?.({ type: "choice.choose", payload: { optionId } })
-                                      .catch(() => undefined),
-                          }
-                        : {})}
-                    options={component.props.options}
-                    state={state("choice.choose")}
-                />
-            );
-        case "checklist":
-            return (
-                <UiChecklist
-                    {...(answer?.type === "checklist.submit" &&
-                    Array.isArray(answer.payload["selected"])
-                        ? { answer: answer.payload["selected"] as string[] }
-                        : {})}
-                    {...(component.props.emptyLabel
-                        ? { emptyLabel: component.props.emptyLabel }
-                        : {})}
-                    {...(control.act
-                        ? {
-                              onSubmit: (selected: readonly string[]) =>
-                                  void control
-                                      .act?.({
-                                          type: "checklist.submit",
-                                          payload: { selected: [...selected] },
-                                      })
-                                      .catch(() => undefined),
-                          }
-                        : {})}
-                    options={component.props.options}
-                    state={state("checklist.submit")}
-                    submitLabel={component.props.submitLabel}
-                />
-            );
-        case "text_field":
-            return (
-                <UiTextField
-                    {...(answer?.type === "text_field.submit"
-                        ? { answer: String(answer.payload["text"]) }
-                        : {})}
-                    label={component.props.label}
-                    {...(control.act
-                        ? {
-                              onSubmit: (text: string) =>
-                                  void control
-                                      .act?.({ type: "text_field.submit", payload: { text } })
-                                      .catch(() => undefined),
-                          }
-                        : {})}
-                    {...(component.props.placeholder
-                        ? { placeholder: component.props.placeholder }
-                        : {})}
-                    state={state("text_field.submit")}
-                    submitLabel={component.props.submitLabel}
-                />
-            );
         case "file_tree":
             return <UiFileTree paths={component.props.paths} />;
         case "phone_app":
@@ -230,29 +150,22 @@ function UiComponentView(props: {
 }
 
 let measureHost: HTMLDivElement | undefined;
-const measured = new WeakMap<ConversationUi, Map<string, number>>();
+const measured = new WeakMap<object, Map<string, number>>();
 
 /**
- * The document's height at `width`, measured by laying out the same view in
- * an invisible box of that width. Live components are their fixed boxes,
- * whatever they draw, so only the document, what this window shows of its
- * answers, and which live types the surface draws decide it.
+ * The height of `element` at `width`, laid out in an invisible box of that
+ * width with the reply body's type, and kept per `owner` and `key`.
  */
-export function uiDocumentHeight(
-    props: Omit<UiDocumentViewProps, "onAction" | "onMediaOpen">,
+export function chatUiMeasure(
+    owner: object,
+    key: string,
     width: number,
+    element: () => ReactElement,
 ): number {
     if (typeof document === "undefined") return 0;
-    const live = props.live ? Object.keys(props.live).sort().join(",") : "";
-    const key = [
-        width,
-        messageTextLayoutFontGenerationGet(),
-        live,
-        props.served ? [...props.served].join(",") : "*",
-        uiDocumentStateSignature(props),
-    ].join("|");
-    let byKey = measured.get(props.ui);
-    const known = byKey?.get(key);
+    const fullKey = `${String(width)}|${String(messageTextLayoutFontGenerationGet())}|${key}`;
+    let byKey = measured.get(owner);
+    const known = byKey?.get(fullKey);
     if (known !== undefined) return known;
     if (!measureHost?.isConnected) {
         measureHost = document.createElement("div");
@@ -266,14 +179,8 @@ export function uiDocumentHeight(
         document.body.append(measureHost);
     }
     measureHost.style.width = `${String(width)}px`;
-    /* Live widgets measure as their empty fixed boxes; nothing live is drawn here. */
-    const boxes: ChatUiLive | undefined = props.live
-        ? Object.fromEntries(Object.keys(props.live).map((type) => [type, () => null]))
-        : undefined;
     const template = document.createElement("template");
-    template.innerHTML = renderToStaticMarkup(
-        <UiDocumentView {...props} {...(boxes ? { live: boxes } : {})} />,
-    );
+    template.innerHTML = renderToStaticMarkup(element());
     measureHost.replaceChildren(template.content);
     const height =
         [...measureHost.children].find((child) => child.tagName !== "LINK")?.getBoundingClientRect()
@@ -281,33 +188,41 @@ export function uiDocumentHeight(
     measureHost.replaceChildren();
     if (!byKey) {
         byKey = new Map();
-        measured.set(props.ui, byKey);
+        measured.set(owner, byKey);
     }
-    byKey.set(key, height);
+    byKey.set(fullKey, height);
     return height;
 }
 
 /**
- * What the window adds to a document that can change its height: which
- * controls are pending, refused, or blocked. Part of the row's cache key.
+ * The document's height at `width`. Live components are their fixed boxes,
+ * whatever they draw, and every other component draws its props alone, so
+ * only the document, which types this server serves, and which live types
+ * the surface draws decide it.
  */
-export function uiDocumentStateSignature(
-    props: Pick<UiDocumentViewProps, "ui" | "pending" | "errors" | "granted">,
-): string {
-    const parts: string[] = [];
-    for (const component of props.ui.document.components) {
-        const key = chatUiComponentKey(props.ui.offer, component.id);
-        const attempt = props.ui.attempts.get(component.id);
-        parts.push(
-            [
-                props.pending?.has(key) ? "p" : "",
-                props.errors?.get(key) ?? "",
-                attempt ? `${attempt.outcome.status}:${attempt.outcome.reason ?? ""}` : "",
-                props.ui.answers.has(component.id) ? "a" : "",
-            ].join(":"),
+export function uiDocumentHeight(
+    props: Pick<UiDocumentViewProps, "ui" | "served" | "live">,
+    width: number,
+): number {
+    return chatUiMeasure(props.ui, uiDocumentSignature(props), width, () => {
+        /* Live widgets measure as their empty fixed boxes; nothing live is drawn here. */
+        const boxes: ChatUiLive | undefined = props.live
+            ? Object.fromEntries(Object.keys(props.live).map((type) => [type, () => null]))
+            : undefined;
+        return (
+            <UiDocumentView
+                ui={props.ui}
+                {...(props.served ? { served: props.served } : {})}
+                {...(boxes ? { live: boxes } : {})}
+            />
         );
-    }
-    const granted = props.granted;
-    parts.push(granted === undefined || granted === "all" ? "all" : [...granted].sort().join(","));
-    return parts.join("\u0000");
+    });
+}
+
+/** What besides the document decides its height; part of the row's cache key. */
+export function uiDocumentSignature(props: Pick<UiDocumentViewProps, "served" | "live">): string {
+    return [
+        props.live ? Object.keys(props.live).sort().join(",") : "",
+        props.served ? [...props.served].sort().join(",") : "*",
+    ].join("|");
 }

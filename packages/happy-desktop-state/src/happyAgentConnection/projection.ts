@@ -1,10 +1,10 @@
-import { chatUiActionSays, chatUiActionText } from "../chatUi/chatUi.js";
+import type { ConversationQuickReplies } from "../chatUi/chatUi.js";
 import {
     chatUiConversation,
     chatUiMessage,
-    chatUiRecordComponent,
     chatUiRecordOf,
     chatUiTranscriptRead,
+    quickRepliesOf,
     type ChatUiTranscript,
 } from "../chatUi/chatUiTranscript.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
@@ -454,10 +454,19 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         elements.push(element);
     };
     /* Chat UI reads the whole transcript: an offer shows the records that
-       answered it, and closes once a person's message is recorded after it. */
+       answered it. Quick replies are the latest suggestion, until a person's
+       message is recorded after it. */
     const ordered: Message[] = [];
-    let lastUser: Message | undefined;
     let chatUi = false;
+    let quickReplies: ConversationQuickReplies | undefined;
+    const read = (message: Message): void => {
+        ordered.push(message);
+        if (message.role === "user") quickReplies = undefined;
+        else {
+            if (!chatUi && chatUiMessage(message)) chatUi = true;
+            quickReplies = quickRepliesOf(message) ?? quickReplies;
+        }
+    };
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         if (messages === undefined) continue;
@@ -466,26 +475,15 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         // itself, once for every run in the transcript, cost more than
         // everything else this loop does.
         if (!messagesOrdered(messages)) messages.sort(compareMessages);
-        for (const entry of messages) {
-            ordered.push(entry.message);
-            if (entry.message.role === "user") lastUser = entry.message;
-            else if (!chatUi && chatUiMessage(entry.message)) chatUi = true;
-        }
+        for (const entry of messages) read(entry.message);
     }
     if (!messagesOrdered(pending)) pending.sort(compareMessages);
-    for (const entry of pending) {
-        ordered.push(entry.message);
-        if (entry.message.role === "user") lastUser = entry.message;
-        else if (!chatUi && chatUiMessage(entry.message)) chatUi = true;
-    }
+    for (const entry of pending) read(entry.message);
     const ui: ChatUiProjection | undefined = chatUi
-        ? { transcript: chatUiTranscriptRead(ordered), open: lastUser === undefined }
+        ? { transcript: chatUiTranscriptRead(ordered) }
         : undefined;
-    const projected = (entry: TranscriptMessage, runId: string, status: Run["status"]) => {
-        const elements = projectMessage(entry, runId, status, reader, ui);
-        if (ui !== undefined && entry.message === lastUser) ui.open = true;
-        return elements;
-    };
+    const projected = (entry: TranscriptMessage, runId: string, status: Run["status"]) =>
+        projectMessage(entry, runId, status, reader, ui);
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         const before = elements.length;
@@ -501,6 +499,21 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     for (const entry of pending)
         for (const element of projected(entry, `pending:${entry.message.id}`, "running"))
             push(element);
+    /* The suggestion stands at the end, under whatever the agent said last. */
+    if (quickReplies !== undefined) {
+        const holder = ordered.find((message) => message.id === quickReplies?.messageId);
+        elements.push({
+            id: `quick-replies:${quickReplies.messageId}:${quickReplies.toolCallId ?? ""}`,
+            groupId: elements.at(-1)?.groupId ?? quickReplies.messageId,
+            runId: elements.at(-1)?.runId ?? quickReplies.messageId,
+            createdAt: holder?.createdAt ?? 0,
+            kind: "agent_text",
+            messageId: quickReplies.messageId,
+            text: "",
+            complete: true,
+            quickReplies,
+        });
+    }
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
     return elements;
 }
@@ -1753,11 +1766,9 @@ function senderAgentOf(
     };
 }
 
-/** The transcript's chat UI, and whether no person's message has been projected since. */
+/** The transcript's chat UI. */
 interface ChatUiProjection {
     readonly transcript: ChatUiTranscript;
-    /** Turns true once the last person's message has been projected: every offer after it is open. */
-    open: boolean;
 }
 
 function messageElementsProject(
@@ -1770,42 +1781,8 @@ function messageElementsProject(
     const { message } = entry;
     const elementId = message.id;
     const base = { groupId: runId, runId, createdAt: message.createdAt };
-    /* An attempt record is drawn only as an answer that never became the
-       person's words: the bubble it would have been, greyed, with why. */
-    const record = ui === undefined ? undefined : chatUiRecordOf(message);
-    if (ui !== undefined && record !== undefined) {
-        if (
-            (record.outcome.status !== "rejected" && record.outcome.status !== "failed") ||
-            !chatUiActionSays(record.action.type)
-        )
-            return [];
-        const component = chatUiRecordComponent(ui.transcript, record);
-        const text = component ? chatUiActionText(component, record.action) : undefined;
-        if (text === undefined) return [];
-        return [
-            {
-                ...base,
-                id: `message:${elementId}`,
-                kind: "user_message",
-                messageId: message.id,
-                authority: "server",
-                identity: null,
-                ...(message.metadata.userId === undefined
-                    ? {}
-                    : {
-                          userId: message.metadata.userId,
-                          identity:
-                              message.metadata.userId === reader.currentUserId
-                                  ? null
-                                  : message.metadata.userId,
-                          profile: reader.userProfiles?.get(message.metadata.userId),
-                      }),
-                delivery: "sent",
-                text,
-                refused: record.outcome.reason ?? "Not sent",
-            },
-        ];
-    }
+    /* An attempt record is never drawn: what it says shows in its component. */
+    if (ui !== undefined && chatUiRecordOf(message) !== undefined) return [];
     if (message.role === "user") {
         const senderAgent = senderAgentOf(message, reader);
         const files = userMessageFiles(message);
@@ -1849,6 +1826,7 @@ function messageElementsProject(
                 ...(message.quote?.kind === "story"
                     ? { quote: storyQuoteProject(message.id, message.quote, reader) }
                     : {}),
+                ...(message.quickReply === undefined ? {} : { quickReply: message.quickReply }),
             },
         ];
     }
@@ -1920,7 +1898,7 @@ function messageElementsProject(
                     messageId: message.id,
                     text: "",
                     complete: true,
-                    ui: chatUiConversation(ui.transcript, message.id, block.ui, [], ui.open),
+                    ui: chatUiConversation(ui.transcript, message.id, block.ui, []),
                 });
         } else if (block.type === "configuration") {
             if (block.before !== null)
@@ -1951,10 +1929,14 @@ function messageElementsProject(
                         presentation.items.map((item, at) =>
                             mediaItemProject(item, reader.mediaUrl(reader.agentId, block.id, at)),
                         ),
-                        ui.open,
                     ),
                 });
             }
+        } else if (
+            block.type === "quick_replies" ||
+            (block.type === "tool_call" && block.presentation?.type === "quick_replies")
+        ) {
+            /* A suggestion is drawn as pills at the end of the transcript, while current. */
         } else if (block.type === "tool_call") {
             elements.push({
                 ...base,
@@ -1966,7 +1948,9 @@ function messageElementsProject(
                 argumentsComplete: true,
                 status: projectToolStatus(block.status, runStatus),
                 ...(block.result === undefined ? {} : { result: stringify(block.result) }),
-                ...(block.presentation === undefined || block.presentation.type === "ui"
+                ...(block.presentation === undefined ||
+                block.presentation.type === "ui" ||
+                block.presentation.type === "quick_replies"
                     ? {}
                     : {
                           presentation: projectToolPresentation(block.presentation, (index) =>
@@ -2078,7 +2062,7 @@ type ToolPresentationWire = NonNullable<
 >;
 
 function projectToolPresentation(
-    presentation: Exclude<ToolPresentationWire, { type: "ui" }>,
+    presentation: Exclude<ToolPresentationWire, { type: "ui" } | { type: "quick_replies" }>,
     mediaUrl: (index: number) => string,
 ): ToolPresentation {
     switch (presentation.type) {

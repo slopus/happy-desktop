@@ -91,10 +91,10 @@ import {
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
 import {
     uiDocumentHeight,
-    uiDocumentStateSignature,
+    uiDocumentSignature,
     type UiDocumentViewProps,
 } from "./ui/UiDocumentView";
-import { UI_REFUSED_NOTE_HEIGHT } from "./ui/UiRefusedNote";
+import { uiQuickRepliesHeight } from "./ui/UiQuickReplies";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
 /** The same footer geometry for the live row and the room a queued turn will need. */
@@ -177,7 +177,7 @@ export type ConversationRowContext = {
 };
 
 /** What a chat UI document's height reads besides the document itself. */
-export type ChatUiRowContext = Omit<UiDocumentViewProps, "ui" | "onAction" | "onMediaOpen">;
+export type ChatUiRowContext = Pick<UiDocumentViewProps, "served" | "live">;
 export type ConversationFailureRowContext = {
     /** The conversation has not moved past this failure, so its actions are offered. */
     readonly current: boolean;
@@ -1433,7 +1433,8 @@ export function conversationRowHeight(
         context.messageLayouts?.signature ?? "",
         messageLayoutsFramesSignature(context.messageLayouts),
         entry.ui ? chatUiRowSignature(entry.ui, context.chatUi) : "",
-        entry.refused ?? "",
+        entry.quickReplies ? entry.quickReplies.options.join("\u0000") : "",
+        entry.quickReply ? "suggested" : "",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight(
@@ -1477,6 +1478,9 @@ export function conversationRowHeight(
             const measure = messageContentMeasure(width, treatment) - STORY_QUOTE_BAR;
             height += (Math.min(STORY_QUOTE_WIDTH, measure) * 16) / 9 + STORY_QUOTE_GAP;
             if (own) height += STORY_QUOTE_OWN_LINE;
+        } else if (own && entry.quickReply) {
+            /* "You ↩ suggested by …" stands over the bubble on the same line a story reply uses. */
+            height += STORY_QUOTE_OWN_LINE;
         }
         if (!own && !grouped && entry.contextNote) height += 21;
         /* A document sits in the attachment slot, at the content's measure. */
@@ -1487,19 +1491,16 @@ export function conversationRowHeight(
                     { ui: entry.ui, ...context.chatUi },
                     messageContentMeasure(width, treatment),
                 );
-        if (entry.refused !== undefined) height += MEDIA_MARGIN + UI_REFUSED_NOTE_HEIGHT;
+        if (entry.quickReplies)
+            height +=
+                (hasBody || entry.ui ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+                uiQuickRepliesHeight(entry.quickReplies, messageContentMeasure(width, treatment));
         return height;
     });
 }
 
 function chatUiRowSignature(ui: ConversationUi, context: ChatUiRowContext | undefined): string {
-    return [
-        ui.offer.messageId,
-        ui.offer.uiId,
-        context?.live ? Object.keys(context.live).sort().join(",") : "",
-        context?.served ? [...context.served].join(",") : "*",
-        uiDocumentStateSignature({ ui, ...context }),
-    ].join("|");
+    return [ui.offer.messageId, ui.offer.uiId, uiDocumentSignature(context ?? {})].join("|");
 }
 /**
  * The rendered clock string for a timestamp, formatted exactly as

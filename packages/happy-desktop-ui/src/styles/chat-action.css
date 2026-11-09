@@ -173,6 +173,14 @@
     margin-top: 8px;
 }
 
+/* What sits under a figure's line, 8px below it. */
+.happy-chat-figure__footer {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    padding-top: 8px;
+}
+
 /* A pool's machines as they join, under the line; past three they scroll in
    place, so the box never grows as machines arrive. */
 .happy-chat-figure__machines {
@@ -180,7 +188,6 @@
     flex: none;
     flex-direction: column;
     height: 60px;
-    margin-top: 8px;
     overflow-y: auto;
 }
 

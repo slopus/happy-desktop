@@ -25,7 +25,7 @@
         "lint": "oxlint ."
     },
     "dependencies": {
-        "@slopus/happy-agent-client": "file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.13.tgz",
+        "@slopus/happy-agent-client": "file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.14.tgz",
         "happy-desktop-state": "workspace:*"
     },
     "devDependencies": {
