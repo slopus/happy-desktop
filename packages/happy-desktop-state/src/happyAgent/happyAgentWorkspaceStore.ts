@@ -1774,7 +1774,8 @@ export interface HappyAgentWorkspaceStore {
     /**
      * The bytes of a file the open Happy Cloud conversation names, by attachment
      * ID; undefined where files are not kept by the server. A failure is also
-     * put up as `fileOpenFailure`, under the file's name.
+     * put up as `fileOpenFailure`, under the file's name, until that file
+     * arrives or the failure is dismissed.
      */
     attachmentDownload(attachment: string, name: string): Promise<Blob> | undefined;
     /**
@@ -7977,13 +7978,26 @@ export function happyAgentWorkspaceStoreCreate(
         attachmentDownload: (attachment, name) => {
             const download =
                 openId === undefined ? undefined : client.attachmentDownload?.(openId, attachment);
-            return download?.catch((error: unknown) => {
-                if (!disposed) {
-                    fileOpenFailure = { path: name, message: happyAgentUserError(error).message };
-                    recompute();
-                }
-                throw error;
-            });
+            return download?.then(
+                (blob) => {
+                    // The file arrived, so an earlier failure to fetch it no longer holds.
+                    if (!disposed && fileOpenFailure?.path === name) {
+                        fileOpenFailure = undefined;
+                        recompute();
+                    }
+                    return blob;
+                },
+                (error: unknown) => {
+                    if (!disposed) {
+                        fileOpenFailure = {
+                            path: name,
+                            message: happyAgentUserError(error).message,
+                        };
+                        recompute();
+                    }
+                    throw error;
+                },
+            );
         },
         attachmentFileOpen: (source, kind) => {
             const resolved = groupPathResolve(source);
