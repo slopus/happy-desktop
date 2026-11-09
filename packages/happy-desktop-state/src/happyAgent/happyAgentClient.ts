@@ -37,6 +37,7 @@ import {
     type HappyAgentSessionListStore,
 } from "./happyAgentSessionListStore.js";
 import type { HappyAgentHostServices } from "./happyAgentHostServices.js";
+import { happyAgentAttachmentPlacementCreate } from "./happyAgentAttachmentPlacement.js";
 import {
     happyAgentChangedFileProject,
     happyAgentModelCatalogProject,
@@ -647,6 +648,11 @@ export function happyAgentWorkspaceClientCreate(
             : {}),
     });
     const memory = happyAgentWorkspaceMemoryStoreCreate(deps.workspaceMemoryPersistence);
+    // Happy Cloud's own routes are present exactly on a Happy Cloud connection.
+    const attachmentPlacement = happyAgentAttachmentPlacementCreate(
+        deps.hostServices,
+        deps.cloudRequest !== undefined,
+    );
     let sessionListStore: HappyAgentSessionListStore | undefined;
     /** Surface chat workspaces, which the Surfaces learn and the conversation list accepts. */
     const surfaceChatGroups = happyAgentSurfaceChatGroupsCreate();
@@ -847,9 +853,9 @@ export function happyAgentWorkspaceClientCreate(
         },
         attachmentSourcePath: (file) => deps.hostServices.attachmentSourcePath(file),
         attachmentSourceReachable: (groupId, sourcePath) =>
-            deps.hostServices.attachmentSourceReachable(groupId, sourcePath),
+            attachmentPlacement.attachmentSourceReachable(groupId, sourcePath),
         attachmentWrite: (groupId, name, content) =>
-            deps.hostServices.attachmentWrite(groupId, name, content),
+            attachmentPlacement.attachmentWrite(groupId, name, content),
         async projectAdd(path) {
             // Registration is the daemon's own decision, so it goes directly
             // through the connection actions: the daemon validates the folder,
