@@ -91,7 +91,8 @@ export type IconName =
     | "width-expand"
     | "width-center"
     | "full-screen"
-    | "vault";
+    | "vault"
+    | "folder-open";
 export type IconProps = {
     name: IconName;
     /*
@@ -271,6 +272,8 @@ const glyphs: Record<IconName, IconGlyph> = {
     // Finding your own place again: the crosshair that centres on where you
     // already are, not an arrow that takes you somewhere else.
     locate: { set: "ionicons", name: "locate-outline" },
+    // Showing a file where it lives: the open folder Finder selects it in.
+    "folder-open": { set: "ionicons", name: "folder-open-outline" },
     mobile: { set: "ionicons", name: "phone-portrait-outline" },
     smile: { set: "ionicons", name: "happy-outline" },
     paperclip: { set: "ionicons", name: "attach-outline" },

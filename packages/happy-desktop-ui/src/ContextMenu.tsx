@@ -41,6 +41,11 @@ export function ContextMenu(props: ContextMenuProps) {
         (node: HTMLDivElement | null): void => {
             if (!node) return;
             const bounds = node.getBoundingClientRect();
+            // A transformed or contained ancestor makes itself the containing
+            // block of a fixed box, so `left: x` does not land at viewport x.
+            // Where it did land says how far that block is offset.
+            const offsetX = bounds.left - x;
+            const offsetY = bounds.top - y;
             const left = Math.max(
                 VIEWPORT_MARGIN,
                 Math.min(x, window.innerWidth - bounds.width - VIEWPORT_MARGIN),
@@ -49,8 +54,8 @@ export function ContextMenu(props: ContextMenuProps) {
                 VIEWPORT_MARGIN,
                 Math.min(y, window.innerHeight - bounds.height - VIEWPORT_MARGIN),
             );
-            node.style.left = `${String(left)}px`;
-            node.style.top = `${String(top)}px`;
+            node.style.left = `${String(left - offsetX)}px`;
+            node.style.top = `${String(top - offsetY)}px`;
             node.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')?.focus();
         },
         [x, y],

@@ -36,6 +36,12 @@ export interface HappyAgentHostServices {
      * control that wears it needs the label and the icon, not only the id.
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    /**
+     * Selects one file in the machine's file manager. `path` is relative to
+     * the group's root, or absolute for a file anywhere on the machine the
+     * group runs on. Rejects when the group is not on this machine.
+     */
+    fileReveal(groupId: HappyAgentGroupId, path: string): Promise<void>;
     workspaceFileBytesRead(
         groupId: HappyAgentGroupId,
         path: string,

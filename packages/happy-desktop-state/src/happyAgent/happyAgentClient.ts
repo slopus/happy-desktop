@@ -447,6 +447,8 @@ export interface HappyAgentWorkspaceClient {
      * it the one this machine opened most recently.
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    /** Selects one file, relative to the group's root or absolute, in the machine's file manager. */
+    fileReveal(groupId: HappyAgentGroupId, path: string): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
         groupId: HappyAgentGroupId,
@@ -898,6 +900,7 @@ export function happyAgentWorkspaceClientCreate(
         },
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
         openIn: (groupId, target) => deps.hostServices.openIn(groupId, target),
+        fileReveal: (groupId, path) => deps.hostServices.fileReveal(groupId, path),
         sessionList() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!sessionListStore) {

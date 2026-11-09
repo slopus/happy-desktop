@@ -10,6 +10,7 @@ import { ChangeStats } from "./ChangeStats";
 import { CodeEditor, type CodeEditorReveal } from "./CodeEditor";
 import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
+import { useFileRevealMenu } from "./FileRevealMenu";
 import { SegmentedControl } from "./SegmentedControl";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 export type FileEditorProps = {
@@ -142,6 +143,7 @@ export function FileEditor(props: FileEditorProps) {
             if (canSave()) local.onSave?.();
         }
     };
+    const revealMenu = useFileRevealMenu(local.path);
     return (
         <section
             className={["happy-file-editor", local.className].filter(Boolean).join(" ")}
@@ -154,7 +156,9 @@ export function FileEditor(props: FileEditorProps) {
             <header
                 className="happy-file-editor__header"
                 data-happy-desktop-ui="file-editor-header"
+                onContextMenu={revealMenu.onContextMenu}
             >
+                {revealMenu.menu}
                 {local.pathShown === false ? null : (
                     <>
                         <span

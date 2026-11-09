@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { HappyAgentFileLink } from "happy-desktop-state";
 import { ContextMenu, type ContextMenuProps } from "./ContextMenu";
 
 /**
@@ -9,6 +10,18 @@ import { ContextMenu, type ContextMenuProps } from "./ContextMenu";
  * Absent, the destination is copied as it is.
  */
 export const LinkCopyContext = createContext<(href: string) => string | undefined>((href) => href);
+
+/**
+ * Shows the file a link names selected in the machine's file manager: a path
+ * in the surface's own workspace (relative, or absolute anywhere on the
+ * machine), or a `happy://` / `happy-file://` file link into another folder.
+ * Absent where no host can reveal files, and file links offer only Copy link.
+ */
+export interface FileReveal {
+    readonly path: (path: string) => void;
+    readonly link: (link: HappyAgentFileLink) => void;
+}
+export const FileRevealContext = createContext<FileReveal | undefined>(undefined);
 
 export interface LinkContextMenuProps extends Omit<ContextMenuProps, "items" | "onSelect"> {
     /** The destination carried by the link, including any custom scheme or file fragment. */

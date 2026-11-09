@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { compactCount, changeCountLabel } from "./countText";
+import { ContextMenu } from "./ContextMenu";
 import { Icon } from "./Icon";
 import { fileTreeRowModel, type FileTreeRow } from "./fileTreeRows";
 import { ScrollArea } from "./Scrollbar";
@@ -95,6 +96,11 @@ export type FileTreeProps = {
     onFilePrefetch?: (id: string) => void;
     /** Directory paging request (the "Show more" affordance). */
     onLoadMore?: (id: string) => void;
+    /**
+     * Shows a file or directory in Finder, offered from the row's context menu.
+     * Without it a right-click on a row does nothing of its own.
+     */
+    onReveal?: (id: string) => void;
     /** Why file-row selection/opening is unavailable while directory disclosure remains local. */
     filesUnavailable?: string;
     /** Per-depth indentation step. Defaults to 16px. */
@@ -487,6 +493,8 @@ interface FileTreeRowViewProps {
     onDirectoryPrefetch?: (id: string) => void;
     onFilePrefetch?: (id: string) => void;
     onLoadMore?: (id: string) => void;
+    /** Asks for the row's context menu at the pointer. */
+    onMenu?: (id: string, x: number, y: number) => void;
     filesUnavailable?: string;
     onFocusRow: (id: string) => void;
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
@@ -513,6 +521,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
         onFocusRow,
         onKeyDown,
         onLoadMore,
+        onMenu,
         onOpen,
         onSelect,
         onToggle,
@@ -654,6 +663,15 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                     onFilePrefetch?.(node.id);
             }}
             onKeyDown={onKeyDown}
+            onContextMenu={
+                row.kind === "entry" && onMenu !== undefined
+                    ? (event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onMenu(node.id, event.clientX, event.clientY);
+                      }
+                    : undefined
+            }
             onPointerEnter={() => {
                 if (row.kind === "entry" && directory) onDirectoryPrefetch?.(node.id);
                 else if (row.kind === "entry" && props.filesUnavailable === undefined)
@@ -755,6 +773,7 @@ export function FileTree(props: FileTreeProps) {
         "onDirectoryPrefetch",
         "onFilePrefetch",
         "onLoadMore",
+        "onReveal",
         "filesUnavailable",
         "indent",
         "virtualize",
@@ -775,6 +794,9 @@ export function FileTree(props: FileTreeProps) {
      * one, or every notification would drag the focus somewhere.
      */
     const [focusedRow, focusedRowSet] = useState<string | undefined>(undefined);
+    /** The row whose context menu is up, and where the pointer asked for it. */
+    const [menu, menuSet] = useState<{ id: string; x: number; y: number } | undefined>();
+    const onReveal = local.onReveal;
     /**
      * A row that has been asked for but is not drawn yet. Moving to a row a
      * long way down a virtualized listing has to scroll it into existence
@@ -950,6 +972,7 @@ export function FileTree(props: FileTreeProps) {
             onDirectoryPrefetch={local.onDirectoryPrefetch}
             onFilePrefetch={local.onFilePrefetch}
             onLoadMore={local.onLoadMore}
+            {...(onReveal === undefined ? {} : { onMenu: (id, x, y) => menuSet({ id, x, y }) })}
             onOpen={local.onOpen}
             onSelect={local.onSelect}
             onToggle={local.onToggle}
@@ -1040,6 +1063,26 @@ export function FileTree(props: FileTreeProps) {
                     ),
                 )
             )}
+            {menu !== undefined && onReveal !== undefined ? (
+                <ContextMenu
+                    data-testid="file-tree-menu"
+                    items={[
+                        {
+                            kind: "item",
+                            id: "reveal",
+                            label: "Show in Finder",
+                            icon: "folder-open",
+                        },
+                    ]}
+                    onClose={() => menuSet(undefined)}
+                    onSelect={() => {
+                        menuSet(undefined);
+                        onReveal(menu.id);
+                    }}
+                    x={menu.x}
+                    y={menu.y}
+                />
+            ) : null}
         </ScrollArea>
     );
 }
