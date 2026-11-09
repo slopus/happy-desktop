@@ -466,6 +466,8 @@ export interface ConversationToolCall {
      * gave them. The row reads as this rather than as its raw input.
      */
     readonly summary?: string;
+    /** Descriptions stand alone; a title or other subject can follow the row's verb. */
+    readonly summaryKind?: "description" | "subject";
     /**
      * The call asked for a review and was granted temporary Full access, so it
      * ran outside the sandbox. Present only on that call: everything else, both

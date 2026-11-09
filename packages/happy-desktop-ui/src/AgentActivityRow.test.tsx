@@ -512,6 +512,138 @@ it("reads a call and a message in their own few words, naming the agents they me
     expect(part("message", "agent-activity-message-body")).toBeNull();
 }, 120_000);
 
+it("uses descriptions across rich tools without hiding their bodies or failure state", async () => {
+    const descriptions: readonly [string, Partial<ConversationToolCall>][] = [
+        ["python", { toolName: "python" }],
+        [
+            "patch",
+            {
+                ...fileDiffTool,
+                toolName: "apply_patch",
+                presentation: {
+                    type: "fileDiff",
+                    files: [
+                        ...(fileDiffTool.presentation?.type === "fileDiff"
+                            ? fileDiffTool.presentation.files
+                            : []),
+                        { path: "src/b.ts", kind: "add", added: 2, deleted: 0, hunks: [] },
+                    ],
+                },
+            },
+        ],
+        [
+            "input",
+            {
+                toolName: "write_stdin",
+                presentation: {
+                    type: "backgroundTerminalInteraction",
+                    command: "pnpm dev",
+                    input: "y\n",
+                },
+            },
+        ],
+        [
+            "stop",
+            {
+                toolName: "kill_session",
+                presentation: {
+                    type: "backgroundTerminalInteraction",
+                    command: "pnpm dev",
+                    input: "",
+                },
+            },
+        ],
+        [
+            "artifact",
+            {
+                toolName: "update_artifact",
+                presentation: {
+                    type: "artifact",
+                    artifactId: "a-report" as never,
+                    artifactType: "markdown",
+                    version: 2,
+                    title: "Report",
+                    shows: "version",
+                },
+            },
+        ],
+        [
+            "task",
+            {
+                toolName: "create_task",
+                arguments: { name: "Nightly triage", description: "Triage the night's bugs" },
+            },
+        ],
+        ["bot", { toolName: "create_bot" }],
+        ["failed", { toolName: "python", status: "failed", failed: true }],
+        ["stopped", { toolName: "python", status: "stopped" }],
+        ["approval", { toolName: "python", status: "awaitingApproval" }],
+        ["unicode", { toolName: "python", summary: `${"😀".repeat(119)}…` }],
+    ];
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div>
+                {descriptions.map(([id, overrides]) => (
+                    <AgentActivityRow
+                        key={id}
+                        data-testid={id}
+                        motion="calm"
+                        activity={{
+                            kind: "tool",
+                            tool: {
+                                ...genericTool,
+                                toolCallId: id,
+                                summary: `Describe ${id}`,
+                                summaryKind: "description",
+                                ...overrides,
+                            },
+                        }}
+                    />
+                ))}
+                <AgentActivityRow
+                    data-testid="native"
+                    motion="calm"
+                    activity={{
+                        kind: "tool",
+                        tool: {
+                            ...mcpTool,
+                            toolName: "mcp__docs__read__page_0123456789abcdef",
+                            arguments: { description: "Semantic input, not a display label" },
+                        },
+                    }}
+                />
+            </div>
+        ),
+        { width: 660, height: 800, padding: 16 },
+    );
+    await view.ready();
+    const part = (row: string, name: string) =>
+        view.container.querySelector<HTMLElement>(
+            `[data-testid="${row}"] [data-happy-desktop-ui="agent-activity-${name}"]`,
+        );
+    for (const [id, overrides] of descriptions) {
+        expect(part(id, "text")?.textContent).toBe(overrides.summary ?? `Describe ${id}`);
+        if (id !== "failed" && id !== "stopped" && id !== "approval")
+            expect(part(id, "verb")?.textContent, id).toBe("");
+    }
+    expect(part("failed", "verb")?.textContent).toBe("Failed");
+    expect(part("stopped", "verb")?.textContent).toBe("Stopped");
+    expect(part("approval", "verb")?.textContent).toBe("Awaiting approval");
+    expect(part("patch", "stats")?.textContent).toContain("+3");
+    expect(part("patch", "stats")?.textContent).toContain("−1");
+    expect(part("native", "text")?.textContent).toBe("docs · read__page_0123456789abcdef");
+    part("patch", "header")?.click();
+    part("input", "header")?.click();
+    part("task", "header")?.click();
+    await vi.waitFor(() => expect(part("patch", "body")?.textContent).toContain("const b = 3"));
+    expect(part("input", "body")?.textContent).toContain("y");
+    expect(part("task", "body")?.textContent).toContain("Nightly triage");
+    expect(view.container.querySelector('[data-testid="artifact"]')?.textContent).toContain(
+        "Report",
+    );
+}, 120_000);
+
 it("tells each call as what it did, in words, and keeps the raw call one click away", async () => {
     const references = {
         view: (reference: { kind: string; id: string }) =>
