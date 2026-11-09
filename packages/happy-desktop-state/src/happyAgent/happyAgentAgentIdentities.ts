@@ -1,4 +1,4 @@
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import type {
     ConversationAgentFace,
     ConversationAgentIdentity,
@@ -75,8 +75,9 @@ export function happyAgentAgentIdentitiesIndex(
 
 /**
  * The identity source over one session list, asking the host with `getAgent`
- * for an agent the list does not name. An agent the host refuses — deleted, or
- * not visible to this reader — is asked about once and then left unnamed.
+ * for an agent the list does not name. Each agent is asked about once. One the
+ * host no longer has is named as deleted; one it refuses otherwise — not
+ * visible to this reader, or a failed read — is left unnamed.
  */
 export function happyAgentAgentIdentitySourceCreate(deps: {
     readonly client: Pick<HappyAgentClient, "getAgent">;
@@ -120,7 +121,16 @@ export function happyAgentAgentIdentitySourceCreate(deps: {
                     });
                     notify();
                 },
-                () => undefined,
+                (error: unknown) => {
+                    // A spawned agent can be deleted long before the history
+                    // that names it; the row says so instead of showing its id.
+                    if (!(error instanceof HappyAgentApiError) || error.status !== 404) return;
+                    fetched.set(agentId, {
+                        name: "Deleted agent",
+                        face: { kind: "placeholder", seed: agentId },
+                    });
+                    notify();
+                },
             );
         },
         subscribe(listener) {

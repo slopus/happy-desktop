@@ -1,3 +1,4 @@
+import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import { expect, it, vi } from "vitest";
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
 import type { ChatElement } from "../happyAgentConnection/index.js";
@@ -154,6 +155,28 @@ it("asks the host once for an agent nothing lists, and leaves one it refuses unn
     await Promise.resolve();
     expect(getAgent).toHaveBeenCalledTimes(2);
     expect(source.lookup("agent_gone")).toBeUndefined();
+});
+
+it("names an agent the host no longer has as deleted, asking about it once", async () => {
+    const getAgent = vi.fn(() =>
+        Promise.reject(new HappyAgentApiError(404, "No such agent.", "not_found", null)),
+    );
+    const source = happyAgentAgentIdentitySourceCreate({
+        client: { getAgent } as never,
+        list: { get: () => list([BOT], []), subscribe: () => () => undefined },
+    });
+    const changed = vi.fn();
+    source.subscribe(changed);
+
+    source.request("agent_deleted");
+    await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    expect(source.lookup("agent_deleted")).toEqual({
+        name: "Deleted agent",
+        face: { kind: "placeholder", seed: "agent_deleted" },
+    });
+    // Every later render looks it up and asks again; nothing more is sent.
+    for (let render = 0; render < 5; render += 1) source.request("agent_deleted");
+    expect(getAgent).toHaveBeenCalledTimes(1);
 });
 
 const envelope = (agentId: string) => `Message from agent ${agentId}:\n\nThe build is green.`;
