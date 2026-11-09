@@ -73,9 +73,8 @@ export function conversationMessageGrouped(
     const entry = entries[index];
     if (entry?.kind !== "message") return false;
     if (entry.opensGroup) return false;
-    /* A row carrying a turn's trace control shows it in its header, so it
-       keeps one: an open turn's answer offers "Hide traces" right where the
-       folded one offered "View traces". */
+    /* The turn's one trace control owns its header: the first row expanded,
+       or the final answer collapsed. */
     if (entry.message.agentTrace && !entry.message.agentTrace.quiet) return false;
     /* A story reply's header says who replied, so it is never folded away. */
     if (entry.message.storyQuote) return false;
