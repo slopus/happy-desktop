@@ -1268,14 +1268,10 @@ function happyAgentConnectGroupProject(
                 entries[statusIndex] = { ...status, agentTrace: { ...turnTrace, quiet: true } };
             return entries;
         }
-        /* It also rides the row the folded turn would keep, so "Hide traces"
-           sits where "View traces" was: opening and closing again is two
-           clicks in one place. */
+        /* Keep the final row as the fold anchor without attaching a second
+           trace control: a non-quiet control also starts an author header. */
         const anchor = entries[actualAnchorIndex];
-        if (anchor) {
-            const traced = withTrace(anchor);
-            if (traced) entries[actualAnchorIndex] = traced;
-        }
+        if (anchor) entries[actualAnchorIndex] = { ...anchor, traceFoldAnchorId: groupEnd.groupId };
         return entries;
     }
     const actualAnchor = entries[actualAnchorIndex];

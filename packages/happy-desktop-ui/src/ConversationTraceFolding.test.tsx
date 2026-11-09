@@ -113,7 +113,10 @@ function answer(groupId: string, text: string): ChatElement {
         complete: true,
     };
 }
-function end(groupId: string, reason: "completed" | "steering" = "completed"): ChatElement {
+function end(
+    groupId: string,
+    reason: "completed" | "steering" = "completed",
+): Extract<ChatElement, { kind: "group_end" }> {
     clock += 1;
     return {
         id: `group-end:${groupId}`,
@@ -667,7 +670,7 @@ it("keeps the rows of a turn steered at the bottom on screen while it follows", 
     expect(rowWith(viewport, "live-step-13")).toBeDefined();
 });
 
-it("opens and closes a folded turn from one place", async () => {
+it("keeps the final answer as the fold anchor without a second trace control", async () => {
     const { view, store } = renderChat([
         ...turn("a", 6),
         ...turn("b", 6),
@@ -678,8 +681,7 @@ it("opens and closes a folded turn from one place", async () => {
     await view.ready();
     await frames();
     const viewport = viewportOf(view);
-    // Parked with the turn's prompt above its answer, so following the end
-    // holds nothing: what keeps the control in place is the control.
+    // Park with this turn's prompt above its answer, away from the live edge.
     const offset =
         rowWith(viewport, "Prompt c:")!.getBoundingClientRect().top -
         viewport.getBoundingClientRect().top -
@@ -697,24 +699,81 @@ it("opens and closes a folded turn from one place", async () => {
         );
     const view0 = control("View traces")!;
     expect(view0).toBeDefined();
-    const place = view0.getBoundingClientRect();
-    /** The control under the pointer, clicked where the reader's pointer is. */
-    const pointed = () =>
-        document
-            .elementFromPoint(place.x + place.width / 2, place.y + place.height / 2)
-            ?.closest("button");
-    expect(pointed()).toBe(view0);
-    pointed()!.click();
+    view0.click();
     await frames();
     expect(store.get().expandedTurnIds).toEqual(new Set(["c"]));
     expect(rowWith(viewport, "c-step-5")).toBeDefined();
-    expect(pointed()?.textContent).toContain("Hide traces");
-    expect(pointed()!.getBoundingClientRect().top).toBe(place.top);
-    pointed()!.click();
+    const final = store
+        .get()
+        .entries.find((entry) => entry.kind === "message" && entry.message.id === "c:answer");
+    expect(final?.traceFoldAnchorId).toBe("c");
+    expect(final?.kind === "message" && final.message.agentTrace).toBeUndefined();
+    expect(control("Hide traces")).toBeUndefined();
+    store.turnTraceToggle("c");
     await frames();
     expect(store.get().expandedTurnIds.size).toBe(0);
-    expect(pointed()?.textContent).toContain("View traces");
-    expect(pointed()!.getBoundingClientRect().top).toBe(place.top);
+    expect(control("View traces")).toBeDefined();
+});
+
+it("renders one author header across inference messages and tools, expanded or collapsed", async () => {
+    const opening = {
+        ...answer("a", "I will inspect the repo."),
+        id: "a:opening",
+        messageId: "a:opening",
+    };
+    const middle = {
+        ...answer("a", "Now checking the result."),
+        id: "a:middle",
+        messageId: "a:middle",
+    };
+    const { view, store } = renderChat([
+        prompt("a", "Inspect the repo and summarize the result."),
+        opening,
+        step("a", 0),
+        middle,
+        step("a", 1),
+        answer("a", "Everything is ready."),
+        { ...end("a"), elapsedMs: 15_000 },
+    ]);
+    await view.ready();
+    await frames();
+    const viewport = viewportOf(view);
+    const assertTurn = () => {
+        expect(
+            [...viewport.querySelectorAll(".happy-message__author")].filter(
+                (node) => node.textContent === "Happy",
+            ),
+        ).toHaveLength(1);
+        const final = store
+            .get()
+            .entries.find((entry) => entry.kind === "message" && entry.message.id === "a:answer");
+        expect(final?.traceFoldAnchorId).toBe("a");
+        const status = store.get().entries.filter((entry) => entry.kind === "turnStatus");
+        expect(status).toHaveLength(1);
+        expect(status[0]).toMatchObject({
+            durationMs: 15_000,
+            copyText: "Everything is ready.",
+            tools: 2,
+        });
+        expect(viewport.querySelectorAll('[data-happy-desktop-ui="turn-summary"]')).toHaveLength(1);
+        expect(
+            viewport.querySelector('[data-happy-desktop-ui="turn-summary-label"]')?.textContent,
+        ).toMatch(/Completed in\s+15s/);
+    };
+    assertTurn();
+    store.turnTraceToggle("a");
+    await frames();
+    expect(rowWith(viewport, "I will inspect the repo.")).toBeDefined();
+    expect(rowWith(viewport, "Now checking the result.")).toBeDefined();
+    expect(
+        [...viewport.querySelectorAll("button")].filter((node) =>
+            node.textContent?.includes("Hide traces"),
+        ),
+    ).toHaveLength(1);
+    assertTurn();
+    store.turnTraceToggle("a");
+    await frames();
+    assertTurn();
 });
 
 it("folds from the top control without moving what is above it", async () => {
