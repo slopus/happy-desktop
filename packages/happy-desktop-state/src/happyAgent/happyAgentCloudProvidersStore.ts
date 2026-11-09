@@ -11,6 +11,10 @@ import type {
     HappyAgentCloudSignInCli,
     HappyAgentCloudTarget,
 } from "./happyAgentCloudProviders.js";
+import {
+    happyAgentCloudConnectionEditable,
+    happyAgentCloudCredentialReplaceable,
+} from "./happyAgentCloudProviders.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 
 /** Which way of adding a provider the dialog shows. */
@@ -52,6 +56,26 @@ export interface HappyAgentCloudProviderAdd {
     readonly error?: { readonly title: string; readonly message: string };
 }
 
+/** The edit dialog of one of the team's connections, while it is open. */
+export interface HappyAgentCloudProviderEdit {
+    readonly connectionId: string;
+    /** `busy` while the changes are out. */
+    readonly phase: "idle" | "busy";
+    /** Why saving stopped; what was saved before it stays saved. */
+    readonly error?: { readonly title: string; readonly message: string };
+}
+
+/** What the edit dialog saves: a new name, and per credential a new label or key. */
+export interface HappyAgentCloudProviderEditChanges {
+    readonly name?: string;
+    readonly credentials?: readonly {
+        readonly id: string;
+        readonly label?: string;
+        /** A key that replaces this one: it is added, then the old one is removed. */
+        readonly secret?: string;
+    }[];
+}
+
 export interface HappyAgentCloudProvidersSnapshot {
     /** True until the first answer, so "nothing added" is never claimed early. */
     readonly loading: boolean;
@@ -67,6 +91,7 @@ export interface HappyAgentCloudProvidersSnapshot {
     /** Credentials whose change the server hasn't answered. */
     readonly credentialsSaving: ReadonlySet<string>;
     readonly add?: HappyAgentCloudProviderAdd;
+    readonly edit?: HappyAgentCloudProviderEdit;
     /** Why the list could not be read. */
     readonly error?: UserError;
     /** Why the last change to a credential was refused. */
@@ -111,6 +136,11 @@ export interface HappyAgentCloudProvidersStore {
     signInCodeSubmit(code: string): void;
     credentialEnabledUpdate(connectionId: string, credentialId: string, enabled: boolean): void;
     credentialRemove(connectionId: string, credentialId: string): void;
+    /** Opens the edit dialog of one of the team's connections. */
+    editOpen(connectionId: string): void;
+    editClose(): void;
+    /** Saves what changed in turn, stopping at the first refusal. */
+    editSave(changes: HappyAgentCloudProviderEditChanges): void;
     [Symbol.dispose](): void;
 }
 
@@ -405,6 +435,50 @@ export function happyAgentCloudProvidersStoreCreate(
             void deps.api.signInCancel(abandoned.cli, crypto.randomUUID()).catch(() => undefined);
     };
 
+    const editSet = (edit: HappyAgentCloudProviderEdit | undefined): void => {
+        if (edit) {
+            store.setState({ edit }, false);
+            return;
+        }
+        const { edit: _closed, ...rest } = store.getState();
+        store.setState(rest, true);
+    };
+
+    /** The requests an edit makes, in order: the name, then each credential. */
+    const editSteps = (
+        connection: HappyAgentCloudConnection,
+        changes: HappyAgentCloudProviderEditChanges,
+    ): (() => Promise<unknown>)[] => {
+        const steps: (() => Promise<unknown>)[] = [];
+        const name = changes.name?.trim();
+        if (name && name !== connection.name)
+            steps.push(() => deps.api.connectionRename(connection.id, name));
+        for (const change of changes.credentials ?? []) {
+            const credential = connection.credentials?.find((entry) => entry.id === change.id);
+            if (!credential) continue;
+            const label = change.label?.trim() || credential.label;
+            const secret = change.secret?.trim();
+            const relabel = () =>
+                label === credential.label
+                    ? Promise.resolve()
+                    : deps.api.credentialLabelUpdate(connection.id, credential.id, label);
+            if (secret && happyAgentCloudCredentialReplaceable(credential)) {
+                steps.push(async () => {
+                    const { duplicate } = await deps.api.credentialAdd(connection.id, {
+                        vendor: credential.vendor,
+                        kind: credential.kind,
+                        secret,
+                        label,
+                    });
+                    // The same key typed again is the credential already there: keep it.
+                    if (duplicate) await relabel();
+                    else await deps.api.credentialRemove(connection.id, credential.id);
+                });
+            } else if (label !== credential.label) steps.push(relabel);
+        }
+        return steps;
+    };
+
     const addFailed = (title: string, error: unknown): void => {
         addUpdate({ phase: "idle", error: { title, message: happyAgentUserError(error).message } });
     };
@@ -625,6 +699,50 @@ export function happyAgentCloudProvidersStoreCreate(
         credentialRemove(connectionId, credentialId) {
             change(credentialId, () => deps.api.credentialRemove(connectionId, credentialId));
         },
+        editOpen(connectionId) {
+            const connection = store
+                .getState()
+                .connections.find((candidate) => candidate.id === connectionId);
+            if (disposed || !store.getState().teamAllowed || !connection) return;
+            if (!happyAgentCloudConnectionEditable(connection)) return;
+            editSet({ connectionId, phase: "idle" });
+        },
+        editClose() {
+            const edit = store.getState().edit;
+            if (disposed || !edit || edit.phase === "busy") return;
+            editSet(undefined);
+        },
+        editSave(changes) {
+            const { edit, connections } = store.getState();
+            if (disposed || !edit || edit.phase === "busy") return;
+            const connection = connections.find((candidate) => candidate.id === edit.connectionId);
+            if (!connection) return;
+            const steps = editSteps(connection, changes);
+            editSet({ connectionId: edit.connectionId, phase: "busy" });
+            void steps
+                .reduce<Promise<unknown>>((done, step) => done.then(step), Promise.resolve())
+                .then(
+                    () => {
+                        if (disposed || store.getState().edit?.connectionId !== connection.id)
+                            return;
+                        editSet(undefined);
+                        if (steps.length > 0) listRead();
+                    },
+                    (error: unknown) => {
+                        if (disposed || store.getState().edit?.connectionId !== connection.id)
+                            return;
+                        editSet({
+                            connectionId: connection.id,
+                            phase: "idle",
+                            error: {
+                                title: "Not saved",
+                                message: happyAgentUserError(error).message,
+                            },
+                        });
+                        listRead();
+                    },
+                );
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             signInAbandon();
@@ -662,5 +780,8 @@ export const happyAgentCloudProvidersStoreNoop: HappyAgentCloudProvidersStore = 
     signInCodeSubmit: () => undefined,
     credentialEnabledUpdate: () => undefined,
     credentialRemove: () => undefined,
+    editOpen: () => undefined,
+    editClose: () => undefined,
+    editSave: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

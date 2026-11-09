@@ -108,6 +108,9 @@ export interface HappyAgentCloudProvidersApi {
         enabled: boolean,
     ): Promise<void>;
     credentialRemove(connectionId: string, credentialId: string): Promise<void>;
+    /** Renames one of the team's connections; needs `providers.manage`. */
+    connectionRename(connectionId: string, name: string): Promise<void>;
+    credentialLabelUpdate(connectionId: string, credentialId: string, label: string): Promise<void>;
     /**
      * Sets the region the team's Bedrock keys route to. It is team
      * configuration, not part of a key, and needs `providers.manage`.
@@ -309,6 +312,18 @@ export function happyAgentCloudProvidersApiCreate(
                 `${credentials(connectionId)}/${encodeURIComponent(credentialId)}`,
             );
         },
+        connectionRename: async (connectionId, name) => {
+            await request("PATCH", `v0/cloud/providers/${encodeURIComponent(connectionId)}`, {
+                name,
+            });
+        },
+        credentialLabelUpdate: async (connectionId, credentialId, label) => {
+            await request(
+                "PATCH",
+                `${credentials(connectionId)}/${encodeURIComponent(credentialId)}`,
+                { label },
+            );
+        },
         bedrockRegionSave: async (region) => {
             await request("PATCH", "v0/config", { providers: { bedrock: { region } } });
         },
@@ -346,6 +361,18 @@ export function happyAgentCloudProvidersApiCreate(
         },
     };
     return api;
+}
+
+/** Whether a connection is one the team added, which a manager may rename and rekey. */
+export function happyAgentCloudConnectionEditable(connection: HappyAgentCloudConnection): boolean {
+    return connection.source === "tenant" && connection.scope === "team";
+}
+
+/** Whether a credential's secret can be typed again to replace it: a key or a setup token. */
+export function happyAgentCloudCredentialReplaceable(
+    credential: HappyAgentCloudCredential,
+): credential is HappyAgentCloudCredential & { readonly kind: "api_key" | "oauth_token" } {
+    return credential.kind === "api_key" || credential.kind === "oauth_token";
 }
 
 /** What a connection is called on screen: Happy (free), My account, or its own name. */

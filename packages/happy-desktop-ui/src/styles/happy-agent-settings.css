@@ -687,6 +687,20 @@
     white-space: nowrap;
 }
 
+/* One key in the edit dialog: what it is, then its label and a replacement. */
+.happy-agent-provider-edit__credential {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-provider-edit__credential-title {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
 .happy-agent-provider-add {
     display: flex;
     flex-direction: column;
