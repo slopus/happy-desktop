@@ -21,17 +21,15 @@ export interface HappyAgentCloudReadStore<T> {
 /**
  * A team server read that stays current while anything shows it: read when
  * the first reader subscribes, and again on each of `events`, on a reconnect,
- * and on a reconcile. The events are hints to read again, never state. A team
- * server announces some changes with events the client's union does not name
- * yet; those are given as plain names.
+ * and on a reconcile. The events are hints to read again, never state.
  */
 export function happyAgentCloudReadStoreCreate<T>(deps: {
     readonly read: () => Promise<T>;
     readonly sync: HappyAgentSync;
-    readonly events: readonly string[];
+    readonly events: readonly HappyAgentEvent["type"][];
 }): HappyAgentCloudReadStore<T> {
     const store = createStore<HappyAgentCloudReadSnapshot<T>>()(() => ({ loading: true }));
-    const events = deps.events as readonly HappyAgentEvent["type"][];
+    const events = deps.events;
     const listeners = new Set<() => void>();
     let disposed = false;
     let reading = false;

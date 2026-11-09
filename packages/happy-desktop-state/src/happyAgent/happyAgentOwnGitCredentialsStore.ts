@@ -1,3 +1,5 @@
+import { gitCredentialSchema } from "@slopus/happy-agent-client";
+import { Value } from "@sinclair/typebox/value";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import {
     happyAgentCloudReadStoreCreate,
@@ -23,12 +25,6 @@ export type HappyAgentOwnGitCredentialsStore = HappyAgentCloudReadStore<
     readonly HappyAgentOwnGitCredential[]
 >;
 
-function recordOf(value: unknown): Record<string, unknown> | undefined {
-    return typeof value === "object" && value !== null
-        ? (value as Record<string, unknown>)
-        : undefined;
-}
-
 export function happyAgentOwnGitCredentialsStoreCreate(deps: {
     readonly host: string;
     readonly request: HappyCloudRequest;
@@ -42,18 +38,19 @@ export function happyAgentOwnGitCredentialsStoreCreate(deps: {
                 "GET",
                 `v0/git/credentials?host=${encodeURIComponent(deps.host)}&shared=false`,
             );
-            const list = recordOf(answer)?.credentials;
+            const list =
+                typeof answer === "object" && answer !== null && "credentials" in answer
+                    ? answer.credentials
+                    : undefined;
             if (!Array.isArray(list)) return [];
+            /* The server's answer, checked against the client's credential schema. */
             return list.flatMap((item: unknown): HappyAgentOwnGitCredential[] => {
-                const entry = recordOf(item);
-                if (!entry || typeof entry.id !== "string") return [];
+                if (!Value.Check(gitCredentialSchema, item) || item.shared) return [];
                 return [
                     {
-                        id: entry.id,
-                        name: typeof entry.name === "string" ? entry.name : entry.id,
-                        ...(typeof entry.username === "string" && entry.username !== ""
-                            ? { username: entry.username }
-                            : {}),
+                        id: item.id,
+                        name: item.name,
+                        ...(item.username ? { username: item.username } : {}),
                     },
                 ];
             });
