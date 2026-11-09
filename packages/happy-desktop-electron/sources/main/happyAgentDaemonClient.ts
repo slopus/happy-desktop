@@ -36,6 +36,7 @@ import {
     serverUrlNormalize,
     type ServerRemoteCredential,
 } from "../shared/serverRemoteAuthorization.js";
+import { happyCloudServerNameOf } from "../shared/happyCloud.js";
 
 /**
  * Largest terminal frame carried by either side of the desktop bridge.
@@ -251,6 +252,9 @@ export class HappyAgentDaemonClient {
      * The token to attach for `connectionId`, only while the roster names the
      * address it was issued for. A roster naming another address, or none,
      * ends that sign-in; a roster that cannot be read sends no token either.
+     * Happy Cloud is reached directly and is never in the roster, so a Happy
+     * Cloud connection the roster does not list sends no token to the host
+     * and its sign-in is left alone.
      */
     async #remoteBound(
         connectionId: string,
@@ -266,6 +270,8 @@ export class HappyAgentDaemonClient {
         }
         remote.rosterSeen?.(servers);
         if (servers.get(connectionId) === credential.serverUrl) return credential.accessToken;
+        if (!servers.has(connectionId) && happyCloudServerNameOf(connectionId) !== undefined)
+            return undefined;
         remote.serverMoved(connectionId, credential.serverUrl);
         return undefined;
     }

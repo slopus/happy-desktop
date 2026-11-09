@@ -168,6 +168,45 @@ describe("happyAgentProxyHandle bridge routes", () => {
         expect(failed.body).toEqual({ error: "Port 8080 on this computer is already in use." });
     });
 
+    it("answers a Happy Cloud connection's host services with 501, never reaching the host", async () => {
+        const connection = vi.fn();
+        const client = { connection } as unknown as HappyAgentProxyClient;
+        const server = createServer((request, response) => {
+            const url = new URL(request.url ?? "/", "http://127.0.0.1");
+            void happyAgentProxyHandle({
+                client,
+                method: request.method ?? "GET",
+                path: url.pathname,
+                query: url.searchParams,
+                request,
+                response,
+            });
+        });
+        servers.push(server);
+        await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+        const base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
+        for (const route of ["attachment", "attachment-source-reachable"])
+            expect(
+                await post(`${base}/connections/cloud-acme/${route}`, {
+                    workspaceId: "w",
+                    name: "a.txt",
+                    content: "",
+                }),
+            ).toEqual({
+                status: 501,
+                body: {
+                    error: "Happy Cloud doesn't offer this desktop service.",
+                    code: "not_implemented",
+                },
+            });
+        expect(connection).not.toHaveBeenCalled();
+        // A host connection is still served as before.
+        expect(
+            await post(`${base}/connections/team/attachment-source-reachable`, { path: "/a" }),
+        ).toEqual({ status: 200, body: { reachable: false } });
+        expect(connection).toHaveBeenCalledWith("team");
+    });
+
     it("says, as JSON, that a desktop without a bridge host cannot bridge", async () => {
         const base = await serverCreate();
         const response = await fetch(`${base}/bridge-events`);
