@@ -171,13 +171,13 @@ export interface UserMessageElement extends BaseChatElement {
      * The agent that put this message in the user slot, when one did, and where
      * it stands relative to the agent whose transcript this is. Happy Agent
      * stamps the sender on every message it generates on an agent's behalf, so
-     * the relation is settled here — once, against this session's own parent —
-     * rather than left to every surface to work out from two identities.
+     * the relation is settled here — once, against this session's own identity —
+     * rather than left to every surface to work out.
      */
     senderAgent?: {
         readonly agentId: string;
-        /** This agent driving itself, the agent that manages it, or any other. */
-        readonly relation: "self" | "parent" | "other";
+        /** This agent driving itself, or any other agent, the one managing it included. */
+        readonly relation: "self" | "other";
         /** That agent's one-line account of what the message is, when it gave one. */
         readonly explanation?: string;
     };
@@ -197,8 +197,6 @@ export interface InboundAgentMessageElement extends BaseChatElement {
     messageId: string;
     /** The agent that sent it, as Happy Agent identified it. */
     agentId: string;
-    /** The agent that manages this one, or any other agent talking to it. */
-    relation: "parent" | "other";
     /** The sender's one-line account of what the message is, when it gave one. */
     explanation?: string;
     /** The message as it arrived, addressing envelope included. */

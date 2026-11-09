@@ -413,7 +413,6 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         quoteFrameUrl: input.quoteFrameUrl,
         agentOwned: input.agentOwned ?? true,
         agentId: input.agent.id,
-        parentAgentId: input.agent.parentAgentId,
         userProfiles: input.userProfiles,
         currentUserId: input.currentUserId,
     };
@@ -1603,11 +1602,11 @@ interface MessageElements {
 }
 
 /**
- * Whose transcript a message is being read in. A message another agent sent
- * reads differently on each side of the relationship, so the two identities the
- * relation is decided from travel with the projection — as the two values they
- * are rather than as the agent object, which is replaced on every status tick
- * and would defeat the memory below.
+ * Whose transcript a message is being read in. A message this agent sent itself
+ * reads differently from one another agent sent, so the reader's identity
+ * travels with the projection — as the value it is rather than as the agent
+ * object, which is replaced on every status tick and would defeat the memory
+ * below.
  */
 interface TranscriptReader {
     /** Stable for the connection's life, so it takes no part in the memory below. */
@@ -1617,7 +1616,6 @@ interface TranscriptReader {
     readonly userProfiles?: ReadonlyMap<string, UserProfile>;
     readonly currentUserId?: string;
     readonly agentId: string;
-    readonly parentAgentId: string | null;
 }
 
 const messageElements = new WeakMap<Message, MessageElements>();
@@ -1639,8 +1637,7 @@ function projectMessage(
         cached.runId === runId &&
         cached.runStatus === runStatus &&
         cached.reader.agentId === reader.agentId &&
-        cached.reader.agentOwned === reader.agentOwned &&
-        cached.reader.parentAgentId === reader.parentAgentId
+        cached.reader.agentOwned === reader.agentOwned
     )
         return cached.elements;
     const elements = messageElementsProject(entry, runId, runStatus, reader);
@@ -1696,12 +1693,7 @@ function senderAgentOf(
     return {
         agentId,
         ...(explanation === undefined ? {} : { explanation }),
-        relation:
-            agentId === reader.agentId
-                ? "self"
-                : agentId === reader.parentAgentId
-                  ? "parent"
-                  : "other",
+        relation: agentId === reader.agentId ? "self" : "other",
     };
 }
 
@@ -1769,7 +1761,6 @@ function messageElementsProject(
                     kind: "inbound_agent_message",
                     messageId: message.id,
                     agentId: senderAgent.agentId,
-                    relation: senderAgent.relation,
                     ...(senderAgent.explanation === undefined
                         ? {}
                         : { explanation: senderAgent.explanation }),

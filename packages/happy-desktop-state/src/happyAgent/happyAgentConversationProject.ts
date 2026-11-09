@@ -28,11 +28,7 @@ import type {
     SubagentSummary,
     HappyAgentUserInputRequest,
 } from "./happyAgentTypes.js";
-import {
-    agentAuthor,
-    happyAgentInboundAuthor,
-    happyAgentOwnerAuthor,
-} from "./happyAgentConversationAuthors.js";
+import { agentAuthor, happyAgentOwnerAuthor } from "./happyAgentConversationAuthors.js";
 import { happyAgentCompactionSubject } from "./happyAgentTokenFormat.js";
 import { happyAgentConfigurationChanges } from "./happyAgentConfigurationChanges.js";
 import { happyAgentFailureProject } from "./happyAgentFailureProject.js";
@@ -672,10 +668,10 @@ function happyAgentConnectGroupProject(
                 // lifecycle notices and opaque encrypted slots steer the model
                 // but are not dialogue, so they leave no row behind.
                 if (omittedInboundMessageIds.has(element.id)) break;
-                // A message from a collaborating agent is content, so it keeps a
-                // row — but it is that agent working, not the reader speaking,
-                // so it takes the same compact activity row the rest of the
-                // turn's work does.
+                // A message from another agent, the managing one included, is
+                // content, so it keeps a row — but it is that agent working, not
+                // the reader speaking, so it takes the same compact activity row
+                // the rest of the turn's work does.
                 const collaborator = element.senderAgent;
                 if (collaborator !== undefined && collaborator.relation === "other") {
                     entries.push({
@@ -731,38 +727,12 @@ function happyAgentConnectGroupProject(
                 break;
             }
             case "inbound_agent_message": {
-                /*
-                 * The agent that manages this one is speaking to it, which is
-                 * how this conversation is given its work — so it reads as
-                 * dialogue, in the lane a message from elsewhere takes. Any
-                 * other agent is a collaborator reporting, which is one step of
-                 * the work and takes the compact activity row the rest of the
-                 * turn's steps take.
-                 */
+                // Another agent speaking to this one — the agent that manages
+                // it, opening brief included, or a collaborator reporting — is
+                // one step of the work, so it takes the compact activity row the
+                // rest of the turn's steps take.
                 const sender = senderOf(input, element.agentId);
-                const name = sender.agentName;
                 const text = inboundAgentText(element.text, element.agentId);
-                if (element.relation === "parent") {
-                    entries.push({
-                        kind: "message",
-                        source: "server",
-                        delivery: "sent",
-                        message: messageProject({
-                            id: element.messageId,
-                            sessionId: input.sessionId,
-                            sequence,
-                            text,
-                            createdAt: element.createdAt,
-                            author: {
-                                ...happyAgentInboundAuthor,
-                                id: `${happyAgentInboundAuthor.id}:${element.agentId}`,
-                                ...(name === undefined ? {} : { displayName: name }),
-                                sessionId: element.agentId,
-                            },
-                        }),
-                    });
-                    break;
-                }
                 entries.push({
                     kind: "agentActivity",
                     id: element.id,

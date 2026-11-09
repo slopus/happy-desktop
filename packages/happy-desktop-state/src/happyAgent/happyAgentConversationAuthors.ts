@@ -10,14 +10,6 @@ export const happyAgentOwnerAuthor: ConversationAuthor = {
     kind: "human",
 };
 
-/** Stable identity of an agent-authored message projected into the human lane. */
-export const happyAgentInboundAuthor: ConversationAuthor = {
-    id: "happy-agent:inbound",
-    displayName: "Agent",
-    username: "agent",
-    kind: "human",
-};
-
 /** Stable identity of the agent running the conversation. */
 export const agentAuthor: ConversationAuthor = {
     id: "happy-agent:agent",
@@ -27,13 +19,9 @@ export const agentAuthor: ConversationAuthor = {
     agentRole: "default",
 };
 
-/** True for a person-authored turn, excluding agent news projected into that lane. */
+/** True for a person-authored turn. */
 export function happyAgentHumanMessageAuthor(author: ConversationAuthor | undefined): boolean {
-    return (
-        author?.kind === "human" &&
-        author.id !== happyAgentInboundAuthor.id &&
-        !author.id.startsWith(`${happyAgentInboundAuthor.id}:`)
-    );
+    return author?.kind === "human";
 }
 
 export type HappyAgentConversationSummaryInput = Omit<
