@@ -1,6 +1,7 @@
 import type { SidebarReadAheadRows, TaskRepository } from "../happyAgentConnection/types.js";
 import type {
     ChatUiGranted,
+    ConversationQuickReplies,
     ConversationUiOffer,
     UiActionInput,
     UiActionResponse,
@@ -1993,6 +1994,8 @@ export interface HappyAgentWorkspaceStore {
         component: UiComponent,
         action: UiActionInput,
     ): Promise<UiActionResponse>;
+    /** Sends one suggested reply in the open conversation; see `HappyAgentChatStore.quickReplySend`. */
+    quickReplySend(replies: ConversationQuickReplies, index: number): Promise<void>;
     /**
      * Records the options ticked into the open conversation's pending question
      * before it is submitted, so switching views preserves the card's choices.
@@ -8441,6 +8444,10 @@ export function happyAgentWorkspaceStoreCreate(
             ),
         uiAction: (offer, component, action) =>
             withChat((store) => store.uiAction(offer, component, action)),
+        quickReplySend: (replies, index) =>
+            writeGuard(openGroupConversationRefusal(), () =>
+                withChat((store) => store.quickReplySend(replies, index)),
+            ),
         compact: () =>
             writeGuard(openGroupConversationRefusal(), () => withChat((store) => store.compact())),
         failureRetry: (entryId) =>

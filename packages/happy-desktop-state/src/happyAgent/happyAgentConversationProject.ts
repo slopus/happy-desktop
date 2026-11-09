@@ -698,7 +698,7 @@ function happyAgentConnectGroupProject(
                 entries.push({
                     kind: "message",
                     source: "server",
-                    ...(element.refused === undefined ? {} : { refused: element.refused }),
+                    ...(element.quickReply === undefined ? {} : { quickReply: element.quickReply }),
                     pendingSend: element.authority === "local",
                     // The optimistic notification is synchronous, before the
                     // sender receives its message ID. Its explicit authority
@@ -834,7 +834,12 @@ function happyAgentConnectGroupProject(
                    in the transcript moments before the first words arrive, so
                    the reader watches a gap open and then fill. The live status
                    already reports the turn; the row belongs to the text. */
-                if (text.trim().length === 0 && element.ui === undefined) break;
+                if (
+                    text.trim().length === 0 &&
+                    element.ui === undefined &&
+                    element.quickReplies === undefined
+                )
+                    break;
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -851,6 +856,7 @@ function happyAgentConnectGroupProject(
                     messageId: element.messageId,
                     runId: element.runId,
                     ...(element.ui ? { ui: element.ui } : {}),
+                    ...(element.quickReplies ? { quickReplies: element.quickReplies } : {}),
                 });
                 break;
             }
@@ -1189,7 +1195,8 @@ function happyAgentConnectGroupProject(
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
             // Chat UI is the agent asking the reader something, or showing them
             // a result, so it stays with the reply rather than with the work.
-            (entry.kind === "message" && entry.ui !== undefined) ||
+            (entry.kind === "message" &&
+                (entry.ui !== undefined || entry.quickReplies !== undefined)) ||
             // An answered question is the reader's own decision, so it stays with
             // their messages rather than folding away with the work it steered.
             entry.kind === "request" ||

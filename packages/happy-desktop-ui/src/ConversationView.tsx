@@ -993,8 +993,10 @@ export function ConversationView(props: ConversationViewProps) {
     ) : null;
     const chatUiRow = ((chatUi) => {
         if (chatUi === undefined) return undefined;
-        const { onAction: _onAction, onMediaOpen: _onMediaOpen, ...view } = chatUi;
-        return view;
+        return {
+            ...(chatUi.served ? { served: chatUi.served } : {}),
+            ...(chatUi.live ? { live: chatUi.live } : {}),
+        };
     })(props.chatUi);
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
@@ -1156,9 +1158,6 @@ export function ConversationView(props: ConversationViewProps) {
                             inlinePages?.liveRender === undefined,
                             // What a document shows decides its height; the handlers do not.
                             props.chatUi?.served,
-                            props.chatUi?.pending,
-                            props.chatUi?.errors,
-                            props.chatUi?.granted,
                             props.chatUi?.live && Object.keys(props.chatUi.live).sort().join(","),
                         ]}
                         estimateRowSize={(index, width) =>

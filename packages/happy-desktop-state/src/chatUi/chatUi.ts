@@ -1,6 +1,5 @@
 import {
     uiActionAllowed,
-    uiActionText,
     uiActionDefinition,
     type UiActionBlock,
     type UiActionDefinition,
@@ -13,6 +12,7 @@ import {
 import type { ConversationMediaItem } from "../conversation/conversationEntry.js";
 
 export type {
+    QuickReply,
     UiActionInput,
     UiActionResponse,
     UiActionOutcome,
@@ -24,7 +24,8 @@ export type {
  * Chat UI as a conversation carries it (happy-agent API.md "Chat UI"): a flat
  * list of typed components the daemon wrote into an agent message, or a model
  * showed with `show_ui`. Both carriers project to one `ConversationUi` on the
- * message entry that shows it; clicks go to `POST /v0/agents/:id/actions`.
+ * message entry that shows it; clicks go to `POST /v0/agents/:id/actions`,
+ * and every one is silent: what it did shows in its component.
  */
 
 export type { UiComponent } from "@slopus/happy-agent-client";
@@ -49,13 +50,19 @@ export type ConversationUi = {
     readonly media: readonly ConversationMediaItem[];
     /** Each component's last recorded attempt, by component ID. */
     readonly attempts: ReadonlyMap<string, ConversationUiAttempt>;
-    /** Each component's accepted `once` answer, by component ID: what it shows as chosen. */
-    readonly answers: ReadonlyMap<string, UiActionInput>;
-    /**
-     * No person's message is recorded after the offer's message, so a `once`
-     * action may still answer it. Once anyone speaks, every older offer closes.
-     */
-    readonly open: boolean;
+};
+
+/**
+ * Replies the conversation suggests now (API.md "Quick replies"): the latest
+ * suggestion, while no person's message has been recorded after it. A tap
+ * sends the option as an ordinary message naming where it came from.
+ */
+export type ConversationQuickReplies = {
+    /** The agent message holding the suggestion. */
+    readonly messageId: string;
+    /** The `suggest_replies` call holding it; absent for the message's own block. */
+    readonly toolCallId?: string;
+    readonly options: readonly string[];
 };
 
 /** The key a component's local state is kept under in its conversation. */
@@ -63,14 +70,9 @@ export function chatUiComponentKey(offer: ConversationUiOffer, componentId: stri
     return `${offer.messageId}\u0000${offer.uiId}\u0000${componentId}`;
 }
 
-/** An action's definition in this build's catalog, by its type such as `choice.choose`. */
+/** An action's definition in this build's catalog, by its type such as `provider_sign_in.submit_token`. */
 export function chatUiActionDefinition(type: string): UiActionDefinition | undefined {
     return uiActionDefinition(type)?.definition;
-}
-
-/** Whether a successful action becomes the person's words, so it gets an optimistic bubble. */
-export function chatUiActionSays(type: string): boolean {
-    return chatUiActionDefinition(type)?.transcript === "message";
 }
 
 /**
@@ -89,14 +91,6 @@ export function chatUiActionAllowed(
     if (definition === undefined) return false;
     if (granted === "all") return true;
     return uiActionAllowed(definition, component.props, granted);
-}
-
-/** The person's words a `"message"` action becomes against a component, as the server stores them. */
-export function chatUiActionText(
-    component: UiComponent,
-    action: UiActionInput,
-): string | undefined {
-    return uiActionText(component, action);
 }
 
 /** A stored action block, as its record carries it. */

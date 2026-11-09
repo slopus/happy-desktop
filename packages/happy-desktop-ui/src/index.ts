@@ -605,15 +605,11 @@ export {
     type ChatSettingsFigureType,
 } from "./ChatActionFigures";
 export { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
-export { UiChoice, type UiChoiceOption, type UiChoiceProps } from "./ui/UiChoice";
-export { UiChecklist, type UiChecklistOption, type UiChecklistProps } from "./ui/UiChecklist";
-export { UiTextField, type UiTextFieldProps } from "./ui/UiTextField";
+export { UiQuickReplies, type UiQuickRepliesProps } from "./ui/UiQuickReplies";
 export { UiFileTree, uiFileTreeNodes, type UiFileTreeProps } from "./ui/UiFileTree";
 export { UiImages, type UiImagesProps } from "./ui/UiImages";
 export { UiFallback } from "./ui/UiFallback";
 export { UiPhoneApp } from "./ui/UiPhoneApp";
-export { UiRefusedNote } from "./ui/UiRefusedNote";
-export { type UiControlState } from "./ui/UiStatusLine";
 export {
     UiComputeJoin,
     UiDefaultModel,

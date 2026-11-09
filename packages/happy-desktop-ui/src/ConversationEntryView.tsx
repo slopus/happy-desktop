@@ -13,6 +13,7 @@ import type {
     ConversationEntry,
     ConversationErrorAssistance,
     ConversationToolCall,
+    ConversationQuickReplies,
     ConversationUi,
     ConversationUiOffer,
     UiActionInput,
@@ -54,7 +55,7 @@ import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { StoryQuote } from "./StoryQuote";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 import { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
-import { UiRefusedNote } from "./ui/UiRefusedNote";
+import { UiQuickReplies } from "./ui/UiQuickReplies";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
 export type ConversationEntryFailureProps = ConversationFailureActions & {
@@ -88,6 +89,8 @@ export type ConversationChatUi = Omit<UiDocumentViewProps, "ui" | "onAction" | "
     ) => Promise<UiActionResponse>;
     /** Opens one of a document's pictures: its message, and its index in the document's media. */
     readonly onMediaOpen?: (messageId: string, index: number) => void;
+    /** Sends one suggested reply. Absent, the pills are drawn disabled. */
+    readonly onQuickReply?: (replies: ConversationQuickReplies, index: number) => void;
 };
 
 export type ConversationEntryViewProps = {
@@ -680,7 +683,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                           ? "replied"
                           : `Replied to ${quote.owner === "yours" ? "your" : `${quote.owner.name}’s`} story`,
                   }
-                : {})}
+                : entry.quickReply
+                  ? {
+                        authorNote: `↩ suggested by ${props.agentAuthor?.displayName ?? "the agent"}`,
+                    }
+                  : {})}
             quote={
                 quote ? (
                     <StoryQuote
@@ -701,7 +708,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             }
             style={props.style}
             time={messageTime(message.createdAt)}
-            data-refused={entry.refused !== undefined ? "" : undefined}
         >
             {linked.map((attachment) => (
                 <FileAttachment
@@ -727,7 +733,17 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 />
             ))}
             {entry.ui ? chatUiDocument(message.id, entry.ui, props.chatUi) : null}
-            {entry.refused !== undefined ? <UiRefusedNote reason={entry.refused} /> : null}
+            {entry.quickReplies ? (
+                <UiQuickReplies
+                    {...(props.chatUi?.onQuickReply
+                        ? {
+                              onSend: (index: number) =>
+                                  props.chatUi?.onQuickReply?.(entry.quickReplies!, index),
+                          }
+                        : {})}
+                    replies={entry.quickReplies}
+                />
+            ) : null}
         </Message>
     );
 }

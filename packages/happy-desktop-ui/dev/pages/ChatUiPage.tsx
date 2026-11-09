@@ -1,6 +1,7 @@
 import {
     type ChatUiGranted,
     type ConversationMediaItem,
+    type ConversationQuickReplies,
     type ConversationUi,
     type ConversationUiAttempt,
     type HappyAgentDefaultModelSnapshot,
@@ -16,7 +17,8 @@ import {
     UiProviderSignIn,
 } from "../../src/ui/UiLiveWidgets";
 import { UiDocumentView, type UiDocumentViewProps } from "../../src/ui/UiDocumentView";
-import { UiRefusedNote } from "../../src/ui/UiRefusedNote";
+import { UiQuickReplies } from "../../src/ui/UiQuickReplies";
+import { Message } from "../../src/Message";
 import type { ChatUiLive } from "../../src/ui/UiWidgetControl";
 import { ComponentPage, Specimen } from "../kit";
 
@@ -28,59 +30,13 @@ const OFFER = { messageId: "msgfixture01", uiId: "uifixture01" };
 
 const documentOf = (
     components: readonly UiComponent[],
-    extra: Partial<Pick<ConversationUi, "media" | "attempts" | "answers">> = {},
+    extra: Partial<Pick<ConversationUi, "media" | "attempts">> = {},
 ): ConversationUi => ({
     offer: OFFER,
     document: { id: OFFER.uiId, components: [...components] },
     media: extra.media ?? [],
     attempts: extra.attempts ?? new Map(),
-    answers: extra.answers ?? new Map(),
-    open: true,
 });
-
-const CHOICE: UiComponent = {
-    id: "work",
-    type: "choice",
-    fallback: "Options: Write code, Plan a launch, Just look around",
-    props: {
-        options: [
-            { id: "code", label: "Write code", primary: true },
-            { id: "launch", label: "Plan a launch" },
-            { id: "look", label: "Just look around" },
-        ],
-    },
-};
-
-const CHECKLIST: UiComponent = {
-    id: "tools",
-    type: "checklist",
-    fallback: "Pick tools: GitHub, Linear, Slack",
-    props: {
-        options: [
-            {
-                id: "github",
-                label: "GitHub",
-                detail: "Repositories and pull requests",
-                checked: true,
-            },
-            { id: "linear", label: "Linear", detail: "Issues and projects" },
-            { id: "slack", label: "Slack", detail: "Channels you choose" },
-        ],
-        submitLabel: "Connect these",
-        emptyLabel: "None for now",
-    },
-};
-
-const TEXT_FIELD: UiComponent = {
-    id: "nickname",
-    type: "text_field",
-    fallback: "What should I call you?",
-    props: {
-        label: "What should I call you?",
-        placeholder: "A name or nickname",
-        submitLabel: "Save",
-    },
-};
 
 const FILE_TREE: UiComponent = {
     id: "tree",
@@ -245,64 +201,29 @@ const LIVE_SIGNED_IN: ChatUiLive = {
 
 const VIEWER: ChatUiGranted = new Set();
 
+const REPLIES: ConversationQuickReplies = {
+    messageId: "msgfixture02",
+    toolCallId: "callfixture01",
+    options: ["Write code", "Plan a launch", "Just look around"],
+};
+
+const REPLIES_LONG: ConversationQuickReplies = {
+    messageId: "msgfixture03",
+    options: [
+        "Yes, ship it",
+        "Not yet — run the slow browser suite first",
+        "Show me the diff",
+        "Explain what changed in the sync code and why it is safe",
+        "Stop",
+    ],
+};
+
 const SPECIMENS: readonly {
     readonly id: string;
     readonly label: string;
     readonly detail: string;
     readonly view: UiDocumentViewProps;
 }[] = [
-    {
-        id: "C-338a",
-        label: "Choice",
-        detail: "up to six buttons · a press becomes the person's words",
-        view: { ui: documentOf([CHOICE]), onAction: act },
-    },
-    {
-        id: "C-338b",
-        label: "Choice, answered",
-        detail: "the accepted option keeps the pressed fill; the rest fade in place",
-        view: {
-            ui: documentOf([CHOICE], {
-                answers: new Map([
-                    ["work", { type: "choice.choose", payload: { optionId: "launch" } }],
-                ]),
-            }),
-            onAction: act,
-        },
-    },
-    {
-        id: "C-338c",
-        label: "Checklist",
-        detail: "ticks, then one submit",
-        view: { ui: documentOf([CHECKLIST]), onAction: act },
-    },
-    {
-        id: "C-338d",
-        label: "Text field",
-        detail: "one labelled line and its submit",
-        view: { ui: documentOf([TEXT_FIELD]), onAction: act },
-    },
-    {
-        id: "C-338e",
-        label: "Text field, on its way",
-        detail: "the click this window sent, until its record arrives",
-        view: {
-            ui: documentOf([TEXT_FIELD]),
-            pending: new Map([
-                [
-                    `${OFFER.messageId}\0${OFFER.uiId}\0nickname`,
-                    { type: "text_field.submit", payload: { text: "Sam" } },
-                ],
-            ]),
-            onAction: act,
-        },
-    },
-    {
-        id: "C-338f",
-        label: "Viewer",
-        detail: "controls drawn disabled, and why",
-        view: { ui: documentOf([CHOICE]), granted: VIEWER, onAction: act },
-    },
     {
         id: "C-338g",
         label: "File tree",
@@ -319,7 +240,7 @@ const SPECIMENS: readonly {
         id: "C-338i",
         label: "Fallback",
         detail: "a type this build doesn't know, and one this server doesn't serve",
-        view: { ui: documentOf([UNKNOWN, CHECKLIST]), served: new Set(["choice"]) },
+        view: { ui: documentOf([UNKNOWN, FILE_TREE]), served: new Set(["images"]) },
     },
     {
         id: "C-338j",
@@ -332,6 +253,17 @@ const SPECIMENS: readonly {
         label: "Provider sign-in, already signed in",
         detail: "Use Codex connects it as it is",
         view: { ui: documentOf([providerSignIn("codex")]), live: LIVE_SIGNED_IN, onAction: act },
+    },
+    {
+        id: "C-338j3",
+        label: "Provider sign-in, viewer",
+        detail: "controls drawn disabled, and why",
+        view: {
+            ui: documentOf([providerSignIn("codex")]),
+            live: LIVE,
+            granted: VIEWER,
+            onAction: act,
+        },
     },
     {
         id: "C-338k",
@@ -434,13 +366,57 @@ export function ChatUiPage() {
                     </Specimen>
                 ))}
                 <Specimen
-                    detail="under the greyed bubble of a press that wasn't sent"
-                    label="Refused"
+                    detail="one outline pill per option, under the latest agent message"
+                    label="Quick replies"
                     number="C-338m"
                     stage="surface"
                 >
-                    <div style={{ display: "flex", padding: "24px" }}>
-                        <UiRefusedNote reason="This was already answered." />
+                    <div style={{ display: "flex", padding: "24px", width: "600px" }}>
+                        <UiQuickReplies onSend={() => undefined} replies={REPLIES} />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="long options wrap onto further rows"
+                    label="Quick replies, wrapping"
+                    number="C-338n"
+                    stage="surface"
+                >
+                    <div style={{ display: "flex", padding: "24px", width: "600px" }}>
+                        <UiQuickReplies onSend={() => undefined} replies={REPLIES_LONG} />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="no way to write: the pills are drawn disabled"
+                    label="Quick replies, read-only"
+                    number="C-338o"
+                    stage="surface"
+                >
+                    <div style={{ display: "flex", padding: "24px", width: "600px" }}>
+                        <UiQuickReplies replies={REPLIES} />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="a tapped pill is the person's own message, marked with where it came from"
+                    label="Sent from a suggestion"
+                    number="C-338p"
+                    stage="surface"
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            padding: "24px",
+                            width: "600px",
+                        }}
+                    >
+                        <Message
+                            author="You"
+                            authorNote="↩ suggested by Happy"
+                            body="Plan a launch"
+                            initials="Y"
+                            own
+                            time="10:52"
+                        />
                     </div>
                 </Specimen>
             </div>

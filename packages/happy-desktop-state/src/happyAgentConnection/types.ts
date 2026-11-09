@@ -16,8 +16,8 @@ import type {
     SlashCommand,
     Task,
 } from "@slopus/happy-agent-client";
-import type { UiActionResponse } from "@slopus/happy-agent-client";
-import type { ConversationUi, UiActionInput } from "../chatUi/chatUi.js";
+import type { QuickReply, UiActionResponse } from "@slopus/happy-agent-client";
+import type { ConversationQuickReplies, ConversationUi, UiActionInput } from "../chatUi/chatUi.js";
 import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
@@ -154,12 +154,8 @@ export interface UserMessageElement extends BaseChatElement {
     profile?: UserProfile;
     delivery: "pending_steering" | "sent";
     text: string;
-    /**
-     * A chat UI answer that never became the person's message: `text` is the
-     * words it would have said, this is why the server refused it, from its
-     * attempt record.
-     */
-    refused?: string;
+    /** The suggested reply this message's text is, as the daemon recorded it. */
+    quickReply?: QuickReply;
     attachments?: readonly { data: string; mediaType: string }[];
     /** The story this message replies to, with its still at its own address. */
     quote?: {
@@ -241,6 +237,11 @@ export interface AgentTextElement extends BaseChatElement {
      * message, or a `show_ui` call's presentation. Such an element has no text.
      */
     ui?: ConversationUi;
+    /**
+     * The replies the conversation suggests now, drawn as pills at its end.
+     * Such an element has no text and stands after everything else.
+     */
+    quickReplies?: ConversationQuickReplies;
 }
 
 export interface AgentAttachmentsElement extends BaseChatElement {
@@ -905,8 +906,6 @@ export interface UiActionSendInput {
     readonly uiId: string;
     readonly componentId: string;
     readonly action: UiActionInput;
-    /** The person's words a `"message"` action becomes, for its optimistic bubble. */
-    readonly text?: string;
 }
 
 export interface MutationRejectedDelta {
@@ -982,6 +981,8 @@ export interface SendMessageInput {
         | SendMessageToolCallRequest
     )[];
     text: string;
+    /** The suggested reply `text` is, which the daemon checks and records. */
+    quickReply?: QuickReply;
 }
 
 /**

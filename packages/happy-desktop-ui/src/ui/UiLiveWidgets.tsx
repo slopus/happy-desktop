@@ -487,7 +487,7 @@ function UiFigure(props: {
                 </span>
                 <span className="happy-chat-figure__text">{props.line}</span>
             </div>
-            {props.footer}
+            {props.footer ? <div className="happy-chat-figure__footer">{props.footer}</div> : null}
         </div>
     );
 }

@@ -1,9 +1,8 @@
 import { createStore } from "zustand/vanilla";
 import {
-    chatUiActionSays,
-    chatUiActionText,
     chatUiComponentKey,
     type ChatUiGranted,
+    type ConversationQuickReplies,
     type ConversationUiOffer,
     type UiActionInput,
     type UiActionResponse,
@@ -768,6 +767,11 @@ export interface HappyAgentChatStore {
         images?: readonly HappyAgentImageInput[],
         refused?: (error: UserError) => void,
     ): Promise<void>;
+    /**
+     * Sends one suggested reply as the person's message: its option, exactly,
+     * naming where it came from. Anyone who may send may send it.
+     */
+    quickReplySend(replies: ConversationQuickReplies, index: number): Promise<void>;
     /** Exact-text human confirmation from voice. Never routes text into a pending question. */
     voiceMessageSendConfirmed(
         text: string,
@@ -1488,9 +1492,6 @@ export function happyAgentChatStoreCreate(
         const key = chatUiComponentKey(offer, component.id);
         if (disposed) throw new UserError("This conversation is closed.");
         if (uiPending.has(key)) throw new UserError("That is still on its way.");
-        const text = chatUiActionSays(action.type)
-            ? chatUiActionText(component, action)
-            : undefined;
         uiPending = new Map(uiPending).set(key, action);
         if (uiErrors.has(key)) {
             const errors = new Map(uiErrors);
@@ -1512,7 +1513,6 @@ export function happyAgentChatStoreCreate(
                 uiId: offer.uiId,
                 componentId: component.id,
                 action,
-                ...(text === undefined ? {} : { text }),
             });
             settle();
             return response;
@@ -1763,6 +1763,32 @@ export function happyAgentChatStoreCreate(
                         if (error instanceof MessageRefusedError)
                             refused(happyAgentUserError(error));
                     });
+                output({ type: "messageSent", sessionId, steered });
+            }),
+        quickReplySend: (replies, index) =>
+            rejecting(async () => {
+                const text = replies.options[index];
+                if (text === undefined) throw new Error("That suggestion is gone.");
+                if (!arrived()) await arrivalWait();
+                const steered = runStatus === "running";
+                const mutationId = deps.connectActions.sendMessage(
+                    sessionId,
+                    {
+                        text,
+                        quickReply: {
+                            messageId: replies.messageId,
+                            ...(replies.toolCallId === undefined
+                                ? {}
+                                : { toolCallId: replies.toolCallId }),
+                            index,
+                        },
+                    },
+                    (id) => {
+                        if (steered) steeringSendId = id;
+                    },
+                );
+                sentMessageIds = new Set([...sentMessageIds, mutationId]);
+                connectMutationTrack(mutationId);
                 output({ type: "messageSent", sessionId, steered });
             }),
         slashCommandInvoke: (command, argumentsValue) =>

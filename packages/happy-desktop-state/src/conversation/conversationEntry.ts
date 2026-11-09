@@ -4,7 +4,7 @@ import type {
     HappyAgentArtifactType,
 } from "../artifacts/artifactTypes.js";
 import type { AgentTurnTraceSummary, UserError } from "../types.js";
-import type { ConversationUi } from "../chatUi/chatUi.js";
+import type { ConversationQuickReplies, ConversationUi, QuickReply } from "../chatUi/chatUi.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
 /** Structured value carried verbatim from an agent tool call into its render. */
@@ -624,11 +624,10 @@ export interface ConversationMessageEntry {
     readonly runId?: string;
     /** The chat UI document this agent message shows, under its text. */
     readonly ui?: ConversationUi;
-    /**
-     * A chat UI answer that never became the person's words: the message is
-     * the bubble it would have been, greyed, and this is why it wasn't sent.
-     */
-    readonly refused?: string;
+    /** The replies the conversation suggests now, as pills; such an entry has no text. */
+    readonly quickReplies?: ConversationQuickReplies;
+    /** The suggested reply a person's message is, as the daemon recorded it. */
+    readonly quickReply?: QuickReply;
 }
 
 export interface ConversationActivityEntry {

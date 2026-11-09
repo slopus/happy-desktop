@@ -9,6 +9,7 @@ import {
 } from "react";
 import type {
     ConversationSummary,
+    ConversationQuickReplies,
     ConversationUiOffer,
     HappyAgentSystemMonitorStore,
     UiActionInput,
@@ -10356,6 +10357,8 @@ function HappyAgentConversationSurface(props: {
                       component: UiComponent,
                       action: UiActionInput,
                   ) => workspace.uiAction(offer, component, action),
+                  onQuickReply: (replies: ConversationQuickReplies, index: number) =>
+                      swallow(workspace.quickReplySend(replies, index)),
               }
             : {}),
         onMediaOpen: (messageId: string, index: number) => {
