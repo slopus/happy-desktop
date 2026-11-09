@@ -24,6 +24,8 @@ export interface HappyAgentCloudCredential {
     readonly reason: string | null;
     /** Epoch milliseconds until which a cooling credential is set aside. */
     readonly coolingUntil: number | null;
+    /** When the server may use it, as the server stores it; carried over unread when it is rekeyed. */
+    readonly usage?: unknown;
 }
 
 /**
@@ -69,6 +71,9 @@ export interface HappyAgentCloudCredentialInput {
     /** AWS keys travel as the JSON text of `{ accessKeyId, secretAccessKey, region? }`. */
     readonly secret: string;
     readonly label: string;
+    /** Settings to start with, as when a key is replaced; the server's defaults when absent. */
+    readonly enabled?: boolean;
+    readonly usage?: unknown;
 }
 
 /** The subscriptions Happy Cloud signs in to itself. */
@@ -97,11 +102,14 @@ export interface HappyAgentCloudProvidersApi {
         readonly connections: readonly HappyAgentCloudConnection[];
         readonly capabilities?: HappyAgentCloudCapabilities;
     }>;
-    /** Checks and stores a credential; `duplicate` when it was already there. */
+    /**
+     * Checks and stores a credential; `duplicate` when it was already there,
+     * and `credentialId` names the one stored, where the server says.
+     */
     credentialAdd(
         connectionId: string,
         input: HappyAgentCloudCredentialInput,
-    ): Promise<{ readonly duplicate: boolean }>;
+    ): Promise<{ readonly duplicate: boolean; readonly credentialId?: string }>;
     credentialEnabledUpdate(
         connectionId: string,
         credentialId: string,
@@ -181,6 +189,7 @@ function credentialRead(value: unknown): HappyAgentCloudCredential | undefined {
             typeof entry.coolingUntil === "number" && Number.isFinite(entry.coolingUntil)
                 ? entry.coolingUntil
                 : null,
+        ...(entry.usage === undefined ? {} : { usage: entry.usage }),
     };
 }
 
@@ -295,9 +304,15 @@ export function happyAgentCloudProvidersApiCreate(
                     kind: input.kind,
                     secret: input.secret,
                     label: input.label,
+                    ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+                    ...(input.usage === undefined ? {} : { usage: input.usage }),
                 }),
             );
-            return { duplicate: answer?.duplicate === true };
+            const credentialId = answer?.credentialId ?? recordOf(answer?.credential)?.id;
+            return {
+                duplicate: answer?.duplicate === true,
+                ...(typeof credentialId === "string" ? { credentialId } : {}),
+            };
         },
         credentialEnabledUpdate: async (connectionId, credentialId, enabled) => {
             await request(

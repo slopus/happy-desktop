@@ -463,17 +463,27 @@ export function happyAgentCloudProvidersStoreCreate(
                     ? Promise.resolve()
                     : deps.api.credentialLabelUpdate(connection.id, credential.id, label);
             if (secret && happyAgentCloudCredentialReplaceable(credential)) {
+                let same = false;
                 steps.push(async () => {
-                    const { duplicate } = await deps.api.credentialAdd(connection.id, {
+                    // The new key keeps the old one's settings: whether it is on, and when it is used.
+                    const added = await deps.api.credentialAdd(connection.id, {
                         vendor: credential.vendor,
                         kind: credential.kind,
                         secret,
                         label,
+                        enabled: credential.enabled,
+                        ...(credential.usage === undefined ? {} : { usage: credential.usage }),
                     });
-                    // The same key typed again is the credential already there: keep it.
-                    if (duplicate) await relabel();
-                    else await deps.api.credentialRemove(connection.id, credential.id);
+                    // The same key typed again is this credential: keep it. A duplicate of
+                    // another one, such as a retry after a failed remove, still replaces it;
+                    // where the server doesn't say which, the old key is kept, never lost.
+                    same =
+                        added.duplicate &&
+                        (added.credentialId === undefined || added.credentialId === credential.id);
                 });
+                steps.push(() =>
+                    same ? relabel() : deps.api.credentialRemove(connection.id, credential.id),
+                );
             } else if (label !== credential.label) steps.push(relabel);
         }
         return steps;
@@ -719,8 +729,15 @@ export function happyAgentCloudProvidersStoreCreate(
             if (!connection) return;
             const steps = editSteps(connection, changes);
             editSet({ connectionId: edit.connectionId, phase: "busy" });
+            let saved = 0;
             void steps
-                .reduce<Promise<unknown>>((done, step) => done.then(step), Promise.resolve())
+                .reduce<Promise<unknown>>(
+                    (done, step) =>
+                        done.then(step).then(() => {
+                            saved += 1;
+                        }),
+                    Promise.resolve(),
+                )
                 .then(
                     () => {
                         if (disposed || store.getState().edit?.connectionId !== connection.id)
@@ -735,7 +752,7 @@ export function happyAgentCloudProvidersStoreCreate(
                             connectionId: connection.id,
                             phase: "idle",
                             error: {
-                                title: "Not saved",
+                                title: saved > 0 ? "Partly saved" : "Not saved",
                                 message: happyAgentUserError(error).message,
                             },
                         });
