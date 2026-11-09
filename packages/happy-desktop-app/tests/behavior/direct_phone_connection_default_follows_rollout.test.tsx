@@ -25,7 +25,7 @@ import { appMobilePairingOptions } from "../../sources/components/AppMobilePairi
  * relay code and nothing asks the daemon for a direct pairing; Direct shows the
  * direct code and emoji step in the same place, with a way back to Relay for
  * older phone apps. A computer already linked through the Happy server offers
- * only the direct code.
+ * only the direct code. Setup offers only the relay code for now.
  */
 
 const clock: HappyAgentClockStore = {
@@ -189,6 +189,30 @@ it.each(["setup", "dialog"] as const)(
         view.unmount();
     },
 );
+
+it("links a phone in setup through the relay only, whatever method is chosen", () => {
+    const pairing = appMobilePairingOptions({
+        layout: "setup",
+        method: "direct",
+        relayOnly: true,
+        onMethodSelect: () => undefined,
+        relay,
+        direct: happyAgentMobileConnectorStoreNoop,
+        snapshot: waiting,
+        clock,
+        online: () => true,
+    });
+    expect(pairing.method).toBe("relay");
+    expect(desktopMobilePairingOptionsCopy(pairing)).toBe(
+        "Open Happy on your phone and scan the code.",
+    );
+    const view = render(<>{pairing.view}</>);
+    expect(slots(view.container)).toEqual(["relay"]);
+    expect(view.queryByTestId("mobile-pairing-method")).toBeNull();
+    expect(view.getByLabelText("QR code to pair through Happy relay")).toBeTruthy();
+    expect(view.queryByLabelText("QR code to connect a phone directly")).toBeNull();
+    view.unmount();
+});
 
 it("offers a linked computer only the direct code, without touching its Happy server link", () => {
     const opened = vi.fn();

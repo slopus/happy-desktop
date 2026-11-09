@@ -565,11 +565,12 @@ function DesktopOnboardingGate(props: {
         view?.kind === "happy-mobile-desktop" && view.step.kind === "link"
             ? view.step.phase
             : undefined;
-    // Linking offers both methods; the direct connector is read only while Direct shows.
-    const linking = linkPhase !== undefined || view?.kind === "happy-mobile-pairing";
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
         method,
+        // Setup links a phone through the relay only for now; Direct stays in
+        // Settings › Mobile Access.
+        relayOnly: true,
         // Choosing Direct asks for a direct code.
         onMethodSelect: (next) => {
             if (next === "direct") props.store.happyMobileDirect().pairingOpen();
@@ -581,10 +582,7 @@ function DesktopOnboardingGate(props: {
               ? appMobileRelayFromOnboarding(snapshot.happyMobile)
               : { kind: "starting" },
         onRelayRetry: () => props.store.happyMobileConnect(),
-        direct:
-            linking && method === "direct"
-                ? props.store.happyMobileDirect()
-                : happyAgentMobileConnectorStoreNoop,
+        direct: happyAgentMobileConnectorStoreNoop,
         clock: props.clock,
         online: () => true,
     });
