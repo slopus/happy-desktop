@@ -5143,15 +5143,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 agentModes.get(sessionId),
                 intendedModes.get(sessionId),
             );
-            const content = input.content?.map((block) =>
-                block.type === "image"
-                    ? {
-                          type: "image" as const,
-                          mimeType: block.mediaType,
-                          data: block.data,
-                      }
-                    : block,
-            ) ?? [{ type: "text" as const, text: input.text }];
+            // A Happy Cloud file block is the server's to show once it holds
+            // the message: the pending row carries only what it can draw.
+            const files = (input.content ?? []).filter((block) => block.type === "file");
+            const content = input.content
+                ?.filter((block) => block.type !== "file")
+                .map((block) =>
+                    block.type === "image"
+                        ? {
+                              type: "image" as const,
+                              mimeType: block.mediaType,
+                              data: block.data,
+                          }
+                        : block,
+                ) ?? [{ type: "text" as const, text: input.text }];
             const richContent = content.filter((block) => block.type !== "text");
             // The composer deliberately permits an image-only turn, while the
             // daemon's send contract requires non-empty display text. Happy Agent uses
@@ -5160,13 +5165,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             const requestText =
                 input.text.trim().length > 0
                     ? input.text
-                    : richContent
-                          .map((block) =>
+                    : [
+                          ...richContent.map((block) =>
                               block.type === "image"
                                   ? `[image:${block.mimeType}]`
                                   : `[tool:${block.name}]`,
-                          )
-                          .join("");
+                          ),
+                          ...files.map((block) => `[file:${block.name}]`),
+                      ].join("");
             // Always steer: a message sent mid-run interrupts the run rather
             // than waiting behind it, and on an idle agent the daemon treats
             // steer and queue identically.
@@ -5208,7 +5214,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         {
                             id: mutationId,
                             text: requestText,
-                            ...(richContent.length === 0 ? {} : { content: richContent }),
+                            ...(richContent.length === 0 && files.length === 0
+                                ? {}
+                                : {
+                                      // The SDK's blocks are a Happy Agent daemon's; Happy
+                                      // Cloud adds the file block, which only it is sent.
+                                      content: [
+                                          ...richContent,
+                                          ...files,
+                                      ] as unknown as typeof richContent,
+                                  }),
                             delivery,
                             mode,
                         },

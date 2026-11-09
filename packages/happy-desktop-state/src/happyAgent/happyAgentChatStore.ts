@@ -42,6 +42,7 @@ import type {
     HappyAgentBackgroundProcess,
     HappyAgentGoal,
     HappyAgentImageInput,
+    HappyCloudFileBlock,
     HappyAgentMenusSnapshot,
     HappyAgentCompute,
     HappyAgentRepositoryBinding,
@@ -722,6 +723,8 @@ export interface HappyAgentChatStore {
         text: string,
         images?: readonly HappyAgentImageInput[],
         refused?: (error: UserError) => void,
+        /** Files already uploaded to this Happy Cloud conversation. */
+        files?: readonly HappyCloudFileBlock[],
     ): Promise<void>;
     /** Exact-text human confirmation from voice. Never routes text into a pending question. */
     voiceMessageSendConfirmed(
@@ -1552,23 +1555,24 @@ export function happyAgentChatStoreCreate(
                 });
                 output({ type: "messageSent", sessionId, steered });
             }),
-        messageSend: (text, images, refused) =>
+        messageSend: (text, images, refused, files) =>
             rejecting(async () => {
                 if (!arrived()) await arrivalWait();
                 const pendingQuestion = store.getState().pendingUserInputs[0];
                 const steered = runStatus === "running";
                 const mutationId = deps.connectActions.sendMessage(
                     sessionId,
-                    images && images.length > 0
+                    (images && images.length > 0) || (files && files.length > 0)
                         ? {
                               text,
                               content: [
                                   { type: "text", text },
-                                  ...images.map((image) => ({
+                                  ...(images ?? []).map((image) => ({
                                       type: "image" as const,
                                       mediaType: image.mediaType,
                                       data: image.data,
                                   })),
+                                  ...(files ?? []).map((file) => ({ ...file })),
                               ],
                           }
                         : text,

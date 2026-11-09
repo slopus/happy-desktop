@@ -166,6 +166,7 @@ import type {
     HappyAgentUserInputAnswers,
     HappyAgentWorkingPhase,
     HappyAgentWorktreeId,
+    HappyCloudFileBlock,
 } from "./happyAgentTypes.js";
 
 /** Desktop-owned commands appended after the selected agent's ordered catalog. */
@@ -5015,8 +5016,25 @@ export function happyAgentWorkspaceStoreCreate(
         sessionId: HappyAgentSessionId | undefined,
         text: string,
         attachments: readonly ComposerAttachment[],
-    ): Promise<string> => {
+    ): Promise<{ readonly text: string; readonly files: readonly HappyCloudFileBlock[] }> => {
         happyAgentComposerAttachmentsValidate(attachments);
+        const upload = client.attachmentUpload;
+        if (upload) {
+            // A Happy Cloud conversation keeps its files itself: each goes to
+            // the server and the message names it, so nothing is copied into a
+            // checkout and the text stays as it was written.
+            const files: HappyCloudFileBlock[] = [];
+            for (const attachment of attachments) {
+                if (attachment.kind !== "workspaceFile") continue;
+                if (sessionId === undefined)
+                    throw new UserError(
+                        "Files can be attached only in a Happy Cloud chat that already exists.",
+                        "attachment_unsupported",
+                    );
+                files.push(await upload(sessionId, attachment));
+            }
+            return { text: happyAgentCommentsTextAppend(text, attachments), files };
+        }
         const paths: string[] = [];
         for (const attachment of attachments) {
             if (attachment.kind !== "workspaceFile") continue;
@@ -5029,10 +5047,13 @@ export function happyAgentWorkspaceStoreCreate(
             if (refusal) throw new Error(refusal);
             paths.push(await attachmentReferenceOf(groupId, attachment));
         }
-        return happyAgentAttachmentTextAppend(
-            happyAgentCommentsTextAppend(text, attachments),
-            paths,
-        );
+        return {
+            text: happyAgentAttachmentTextAppend(
+                happyAgentCommentsTextAppend(text, attachments),
+                paths,
+            ),
+            files: [],
+        };
     };
 
     /**
@@ -5295,51 +5316,61 @@ export function happyAgentWorkspaceStoreCreate(
                                     );
                                     if (refusal) throw new Error(refusal);
                                     const images = await happyAgentImageInputsOf(event.attachments);
-                                    const text = await attachmentsPlace(
+                                    const { text, files } = await attachmentsPlace(
                                         group,
                                         conversationId,
                                         event.text,
                                         event.attachments,
                                     );
                                     const steering = store.get().runStatus === "running";
-                                    await store.messageSend(text, images, () => {
-                                        // Refused after it left the composer,
-                                        // as a send racing the start of a drain
-                                        // is: the words come back, unless
-                                        // something newer has been written.
-                                        const returnedComposer =
-                                            (openId === conversationId ? composer : undefined) ??
-                                            composerSubmissions.get(conversationId)?.composer ??
-                                            created;
-                                        const returnedDraft = returnedComposer.getState();
-                                        if (
-                                            returnedDraft.text.length > 0 ||
-                                            returnedDraft.attachments.length > 0 ||
-                                            returnedDraft.submission.status === "pending" ||
-                                            returnedDraft.voiceDraft
-                                        )
-                                            return;
-                                        returnedComposer.getState().composerInput({
-                                            type: "submissionReturned",
-                                            text: event.text,
-                                            attachments: event.attachments.map(
-                                                happyAgentComposerAttachmentPreviewRenew,
-                                            ),
-                                        });
-                                        if (returnedComposer.getState().text !== event.text) return;
-                                        attachmentsRemember(
-                                            conversationAttachments,
-                                            conversationId,
-                                            returnedComposer,
-                                        );
-                                        void withAddressedChat(conversationId, (returnedStore) =>
-                                            returnedStore.draftSet(
-                                                event.text,
-                                                nextDraftUpdatedAt(),
-                                                draftOrigin,
-                                            ),
-                                        ).catch(() => undefined);
-                                    });
+                                    await store.messageSend(
+                                        text,
+                                        images,
+                                        () => {
+                                            // Refused after it left the composer,
+                                            // as a send racing the start of a drain
+                                            // is: the words come back, unless
+                                            // something newer has been written.
+                                            const returnedComposer =
+                                                (openId === conversationId
+                                                    ? composer
+                                                    : undefined) ??
+                                                composerSubmissions.get(conversationId)?.composer ??
+                                                created;
+                                            const returnedDraft = returnedComposer.getState();
+                                            if (
+                                                returnedDraft.text.length > 0 ||
+                                                returnedDraft.attachments.length > 0 ||
+                                                returnedDraft.submission.status === "pending" ||
+                                                returnedDraft.voiceDraft
+                                            )
+                                                return;
+                                            returnedComposer.getState().composerInput({
+                                                type: "submissionReturned",
+                                                text: event.text,
+                                                attachments: event.attachments.map(
+                                                    happyAgentComposerAttachmentPreviewRenew,
+                                                ),
+                                            });
+                                            if (returnedComposer.getState().text !== event.text)
+                                                return;
+                                            attachmentsRemember(
+                                                conversationAttachments,
+                                                conversationId,
+                                                returnedComposer,
+                                            );
+                                            void withAddressedChat(
+                                                conversationId,
+                                                (returnedStore) =>
+                                                    returnedStore.draftSet(
+                                                        event.text,
+                                                        nextDraftUpdatedAt(),
+                                                        draftOrigin,
+                                                    ),
+                                            ).catch(() => undefined);
+                                        },
+                                        files,
+                                    );
                                     // Keep the persisted draft until every attachment
                                     // has arrived and this conversation accepts the send.
                                     // A draft edited during the upload owns its own text.
@@ -5822,7 +5853,7 @@ export function happyAgentWorkspaceStoreCreate(
             // Transfer failures belong to the draft that initiated the send.
             // Finish transfers before creating or navigating to a conversation,
             // so a failed video upload leaves that draft and its error visible.
-            const placed = await attachmentsPlace(groupId, undefined, text, attachments);
+            const { text: placed } = await attachmentsPlace(groupId, undefined, text, attachments);
             const started = start.worktreeId
                 ? Promise.resolve(list.worktreeSessionStart(start.worktreeId, create))
                 : list.sessionCreate(create);
@@ -6129,13 +6160,15 @@ export function happyAgentWorkspaceStoreCreate(
         // names an unnamed bot from.
         try {
             const images = await happyAgentImageInputsOf(message.attachments);
-            const text = await attachmentsPlace(
+            const { text, files } = await attachmentsPlace(
                 location.groupId,
                 location.sessionId,
                 message.text,
                 message.attachments,
             );
-            await withAddressedChat(location.sessionId, (store) => store.messageSend(text, images));
+            await withAddressedChat(location.sessionId, (store) =>
+                store.messageSend(text, images, undefined, files),
+            );
             activityRecord({
                 kind: "messageSent",
                 // A bot made from here is always the reader's own, never a system bot.
