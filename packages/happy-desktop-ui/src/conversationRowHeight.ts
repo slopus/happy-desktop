@@ -1491,9 +1491,14 @@ export function conversationRowHeight(
                     { ui: entry.ui, ...context.chatUi },
                     messageContentMeasure(width, treatment),
                 );
+        /* Pills close the attachment slot: its 4px gap after anything above them there. */
         if (entry.quickReplies)
             height +=
-                (hasBody || entry.ui ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+                (entry.ui || images.length > 0 || cards > 0
+                    ? ATTACHMENT_CARD_GAP
+                    : hasBody
+                      ? MEDIA_MARGIN
+                      : MEDIA_MARGIN_BARE) +
                 uiQuickRepliesHeight(entry.quickReplies, messageContentMeasure(width, treatment));
         return height;
     });

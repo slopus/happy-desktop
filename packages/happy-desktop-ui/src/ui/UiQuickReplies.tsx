@@ -25,7 +25,6 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
             {props.replies.options.map((option, index) => (
                 <Button
                     className="happy-chat-ui__pill"
-                    data-happy-desktop-ui="chat-ui-quick-reply"
                     disabled={send === undefined}
                     key={`${String(index)}:${option}`}
                     onClick={() => send?.(index)}

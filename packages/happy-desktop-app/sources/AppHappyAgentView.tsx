@@ -7185,7 +7185,13 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // Happy Agent is still preparing refuses the second and not the first, so the two
     // reasons are kept apart all the way down to the controls: a composer reads
     // this one, while file and terminal actions read the write refusal above it.
-    const openGroupChatRefusal = access.conversationRefusal;
+    // A reader whose role holds no `content.write` reads the open chat but
+    // cannot write into it, nor tap its suggested replies.
+    const openGroupChatRefusal =
+        access.conversationRefusal ??
+        (workspace.conversation.type === "ready"
+            ? workspace.conversation.value.contentWriteRefusal
+            : undefined);
     const openGroup = openGroupFind(
         rows,
         workspace.list.bots,

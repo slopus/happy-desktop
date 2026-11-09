@@ -4,8 +4,7 @@ import type {
     TerminalDriverCreate,
 } from "../modules/terminal/terminalState.js";
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
-import { chatUiGrantedFollowCreate } from "../chatUi/chatUiGranted.js";
-import type { ChatUiGranted } from "../chatUi/chatUi.js";
+import { chatUiGrantedFollowCreate, type ChatUiGrantedFollow } from "../chatUi/chatUiGranted.js";
 import { happyAgentProjectAddError } from "./happyAgentProjectRegistration.js";
 import {
     happyAgentFileLinkWorkspaceResolve,
@@ -681,7 +680,7 @@ export function happyAgentWorkspaceClientCreate(
     /** Surface chat workspaces, which the Surfaces learn and the conversation list accepts. */
     const surfaceChatGroups = happyAgentSurfaceChatGroupsCreate();
     let agentIdentities: HappyAgentAgentIdentitySource | undefined;
-    let uiGrantedFollow: ((listener: (granted: ChatUiGranted) => void) => () => void) | undefined;
+    let uiGrantedFollow: ChatUiGrantedFollow | undefined;
     let inboxStore: HappyAgentInboxStore | undefined;
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let happyIntegrationStore: HappyAgentIntegrationStore | undefined;

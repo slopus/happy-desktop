@@ -8,6 +8,7 @@ import {
     type UiActionResponse,
     type UiComponent,
 } from "../chatUi/chatUi.js";
+import { CHAT_CONTENT_WRITE_REFUSAL, type ChatUiGrantedFollow } from "../chatUi/chatUiGranted.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
 import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
@@ -728,6 +729,11 @@ export interface HappyAgentChatSnapshot {
     /** What the viewer may do with chat UI here; only for drawing controls disabled. */
     readonly uiGranted: ChatUiGranted;
     /**
+     * Why this reader may not write here: the server answered their
+     * permissions without `content.write`. Absent while it hasn't answered.
+     */
+    readonly contentWriteRefusal?: string;
+    /**
      * The chat UI component types the daemon serves (`capabilities.chatUi`);
      * any other draws its fallback line. Absent until health is heard.
      */
@@ -915,8 +921,11 @@ export interface HappyAgentChatDeps {
      * this connection, now and on every change. Absent, everything: a
      * standalone daemon's one person holds every permission.
      */
-    readonly uiGrantedFollow?: (listener: (granted: ChatUiGranted) => void) => () => void;
+    readonly uiGrantedFollow?: ChatUiGrantedFollow;
 }
+
+/** Nothing drawn as allowed, while the server hasn't said what the viewer may do. */
+const CHAT_UI_GRANTED_NONE: ChatUiGranted = new Set();
 
 /** Protocol 32 validates a failure switch against the live catalog, not a stored list. */
 export const HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION = 32;
@@ -1121,6 +1130,7 @@ export function happyAgentChatStoreCreate(
     let uiPending: ReadonlyMap<string, UiActionInput> = new Map();
     let uiErrors: ReadonlyMap<string, string> = new Map();
     let uiGranted: ChatUiGranted = "all";
+    let contentWriteRefusal: string | undefined;
     /* One set per reported list, so an unchanged health keeps its identity. */
     let uiServedFrom: readonly string[] | undefined;
     let uiServed: ReadonlySet<string> | undefined;
@@ -1335,6 +1345,7 @@ export function happyAgentChatStoreCreate(
             uiPending,
             uiErrors,
             uiGranted,
+            ...(contentWriteRefusal === undefined ? {} : { contentWriteRefusal }),
             ...((served) => (served === undefined ? {} : { uiServed: served }))(uiServedRead()),
         };
         /* The transcript answers for itself: `entriesMerge` returns the very
@@ -1350,6 +1361,7 @@ export function happyAgentChatStoreCreate(
             uiPending !== previous.uiPending ||
             uiErrors !== previous.uiErrors ||
             uiGranted !== previous.uiGranted ||
+            next.contentWriteRefusal !== previous.contentWriteRefusal ||
             next.uiServed !== previous.uiServed
         ) {
             store.setState(next, true);
@@ -1478,9 +1490,15 @@ export function happyAgentChatStoreCreate(
         commit();
     });
 
-    const unsubscribeUiGranted = deps.uiGrantedFollow?.((next) => {
-        if (disposed || next === uiGranted) return;
+    const unsubscribeUiGranted = deps.uiGrantedFollow?.((answered) => {
+        const next = answered ?? CHAT_UI_GRANTED_NONE;
+        const refusal =
+            answered === undefined || answered === "all" || answered.has("content.write")
+                ? undefined
+                : CHAT_CONTENT_WRITE_REFUSAL;
+        if (disposed || (next === uiGranted && refusal === contentWriteRefusal)) return;
         uiGranted = next;
+        contentWriteRefusal = refusal;
         commit();
     });
 
