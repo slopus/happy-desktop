@@ -94,12 +94,9 @@ function windowTokens(window: unknown): number {
         for (const counts of Object.values(recordOf(models) ?? {})) {
             const count = recordOf(counts);
             if (!count) continue;
-            // Reasoning is part of output, as Settings › Usage counts it.
-            total +=
-                numberOf(count.input) +
-                numberOf(count.cacheRead) +
-                numberOf(count.cacheWrite) +
-                numberOf(count.output);
+            // Happy Cloud's input already holds the cached tokens and its output the
+            // reasoning ones, so those two are the whole count.
+            total += numberOf(count.input) + numberOf(count.output);
         }
     return total;
 }
