@@ -1469,7 +1469,6 @@ async function act(h: Harness, action: Action, pick: ReturnType<typeof random>, 
                     kind: "inbound_agent_message",
                     messageId: id,
                     agentId: "helper",
-                    relation: "other",
                     text: "The helper found a stable anchor.",
                 },
             ];
