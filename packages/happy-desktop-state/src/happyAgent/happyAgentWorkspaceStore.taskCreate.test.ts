@@ -237,6 +237,45 @@ it("puts up a Happy Cloud file that could not be downloaded, under its name and 
     unsubscribe();
 });
 
+it("takes down a Happy Cloud file's failure once that file arrives, and on dismiss", async () => {
+    const blob = new Blob(["notes"]);
+    const attachmentDownload = vi
+        .fn<(agent: string, attachment: string) => Promise<Blob>>()
+        .mockRejectedValueOnce(new UserError("You're offline.", "network"))
+        .mockResolvedValueOnce(blob)
+        .mockRejectedValueOnce(new UserError("No such attachment.", "not_found"))
+        .mockResolvedValueOnce(blob);
+    const { workspace, unsubscribe } = store(
+        () => new Promise(() => undefined),
+        undefined,
+        undefined,
+        {
+            attachmentDownload,
+        },
+    );
+    workspace.conversationOpen(TASK.conversation.id as HappyAgentSessionId, TASK.workspaceId);
+
+    await expect(workspace.attachmentDownload("digest", "notes ü.txt")).rejects.toThrow(
+        "You're offline.",
+    );
+    expect(workspace.get().fileOpenFailure?.path).toBe("notes ü.txt");
+    await expect(workspace.attachmentDownload("digest", "notes ü.txt")).resolves.toBe(blob);
+    expect(workspace.get().fileOpenFailure).toBeUndefined();
+
+    // Another file arriving leaves this one's failure up until it is dismissed.
+    await expect(workspace.attachmentDownload("other", "missing.txt")).rejects.toThrow(
+        "No such attachment.",
+    );
+    await expect(workspace.attachmentDownload("digest", "notes ü.txt")).resolves.toBe(blob);
+    expect(workspace.get().fileOpenFailure).toEqual({
+        path: "missing.txt",
+        message: "No such attachment.",
+    });
+    workspace.fileOpenFailureDismiss();
+    expect(workspace.get().fileOpenFailure).toBeUndefined();
+    unsubscribe();
+});
+
 it("keeps the draft with the host's reason when the task could not be made", async () => {
     const { workspace, outputs, unsubscribe } = store(() =>
         Promise.reject(new Error("The task's folder could not be created.")),
