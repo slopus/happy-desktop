@@ -60,6 +60,8 @@ import {
     conversationMessageClosedByStatus,
     conversationMessageGrouped,
     conversationOwnMessageContinued,
+    conversationOwnRun,
+    conversationOwnRunContinues,
     conversationTurnStatusAfterActivity,
     conversationTurnStatusStartsGroup,
     conversationWorkingStatusStartsGroup,
@@ -476,6 +478,8 @@ function conversationRowClassName(
         classNames.push("happy-conversation__closing");
     if (conversationOwnMessageContinued(entries, index, viewerId))
         classNames.push("happy-conversation__own-continued");
+    if (conversationOwnRunContinues(entries, index, viewerId))
+        classNames.push("happy-conversation__own-run-continues");
     return classNames.length === 0 ? undefined : classNames.join(" ");
 }
 
@@ -1277,6 +1281,20 @@ export function ConversationView(props: ConversationViewProps) {
                                             ? conversationMessageGrouped(source, index)
                                             : undefined
                                     }
+                                    {...((run) =>
+                                        run
+                                            ? {
+                                                  ownRunText: run.text,
+                                                  ownRunMessageCount: run.count,
+                                              }
+                                            : {})(
+                                        conversationOwnRun(
+                                            source,
+                                            index,
+                                            props.viewerId,
+                                            index < transcript.length ? 0 : transcript.length,
+                                        ),
+                                    )}
                                     onImageOpen={props.onImageOpen}
                                     onAttachmentOpen={props.onAttachmentOpen}
                                     onStoryOpen={props.onStoryOpen}

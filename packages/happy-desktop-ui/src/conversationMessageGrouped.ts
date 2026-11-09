@@ -108,6 +108,59 @@ export function conversationOwnMessageContinued(
 }
 
 /**
+ * Whether this is the reader's own message and the next row continues its
+ * run, so the run's one copy sits further down.
+ */
+export function conversationOwnRunContinues(
+    entries: readonly ConversationEntry[],
+    index: number,
+    viewerId: string | undefined,
+): boolean {
+    const entry = entries[index];
+    return (
+        entry?.kind === "message" &&
+        viewerId !== undefined &&
+        entry.message.sender?.id === viewerId &&
+        entries[index + 1]?.kind === "message" &&
+        conversationMessageGrouped(entries, index + 1)
+    );
+}
+
+/**
+ * What the copy under the reader's own message takes: the text of every
+ * message in the run of theirs this row closes, joined by a blank line, and
+ * how many messages that is. `undefined` when the row is not the reader's,
+ * the next row continues its run, or the run has no text. The run reaches
+ * back no further than `start`.
+ */
+export function conversationOwnRun(
+    entries: readonly ConversationEntry[],
+    index: number,
+    viewerId: string | undefined,
+    start = 0,
+): { readonly text: string; readonly count: number } | undefined {
+    const entry = entries[index];
+    if (
+        entry?.kind !== "message" ||
+        viewerId === undefined ||
+        entry.message.sender?.id !== viewerId ||
+        conversationOwnRunContinues(entries, index, viewerId)
+    )
+        return undefined;
+    let first = index;
+    while (
+        first > start &&
+        entries[first - 1]?.kind === "message" &&
+        conversationMessageGrouped(entries, first)
+    )
+        first -= 1;
+    const texts: string[] = [];
+    for (const row of entries.slice(first, index + 1))
+        if (row.kind === "message" && row.message.text.length > 0) texts.push(row.message.text);
+    return texts.length === 0 ? undefined : { text: texts.join("\n\n"), count: texts.length };
+}
+
+/**
  * A question the agent asked and the reader answered. It is the agent's turn
  * that asked it, so when nothing came before it the question opens that turn
  * and carries its header.

@@ -534,6 +534,42 @@
     opacity: 1;
 }
 
+/* Own message actions: a right-aligned 20px line 4px under the bubble that
+   closes a run of the reader's messages. It hangs in the gap below the row
+   and takes no room, so the hover reveal moves nothing. */
+.happy-message[data-own-actions] .happy-message__content {
+    position: relative;
+}
+
+.happy-message__own-actions {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+}
+
+/* The hanging line reaches into the next row's top, which paints later; the
+   row carrying it stays over that row, so the pointer finds the button and
+   reveals it from any direction, not only straight down from the bubble. */
+.happy-message[data-own-actions],
+.happy-message-list__virtual-row:has(.happy-message[data-own-actions]) {
+    z-index: 1;
+}
+
+/* Bare glyphs under the bubble: hover only brightens the ink, never fills. */
+.happy-message__own-actions .happy-copy-button:hover {
+    background: transparent;
+}
+
+.happy-message:hover .happy-message__own-actions .happy-copy-button,
+.happy-message:focus-within .happy-message__own-actions .happy-copy-button {
+    opacity: 1;
+}
+
 /* Incoming human: neutral raised bubble on the left. */
 .happy-message:not([data-agent]):not([data-own]) .happy-message__body {
     background: var(--surface-pressed);

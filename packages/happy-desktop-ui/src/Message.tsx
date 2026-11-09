@@ -173,6 +173,12 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     contextNote?: string;
     /** Compact optional action placed in the author metadata before the time. */
     metaAccessory?: ReactNode;
+    /**
+     * Quiet controls on their own line under an own message, such as copying
+     * it. The line hangs below the row without taking room and is only shown
+     * while the row is hovered or focused, so revealing it moves nothing.
+     */
+    ownActions?: ReactNode;
     author: string;
     body: string | MessageSegment[];
     /** Format of a string body. Human messages use plain text. */
@@ -414,6 +420,7 @@ export function Message(props: MessageProps) {
         "onAuthorSelect",
         "onReactionSelect",
         "own",
+        "ownActions",
         "quote",
         "authorNote",
         "reactions",
@@ -669,6 +676,7 @@ export function Message(props: MessageProps) {
         local.own &&
         (bodyNode !== null ||
             (local.automated && (Boolean(local.images?.length) || hasAttachments())));
+    const ownActions = local.own && local.ownActions ? local.ownActions : null;
     const shownImages = local.images?.slice(0, MESSAGE_MEDIA_MAX) ?? [];
     const mediaPlan = mediaJustifiedPlan(shownImages, MESSAGE_MEDIA_LIMITS);
     const groupedIncomingLine =
@@ -727,6 +735,7 @@ export function Message(props: MessageProps) {
             className={["happy-message", local.className].filter(Boolean).join(" ")}
             data-agent={local.agent ? "" : undefined}
             data-own={local.own ? "" : undefined}
+            data-own-actions={ownActions ? "" : undefined}
             data-author-note={local.authorNote ? "" : undefined}
             data-compact={grouped() ? "" : undefined}
             data-delivery-state={deliveryState()}
@@ -839,6 +848,14 @@ export function Message(props: MessageProps) {
                                 key={`${reaction.emoji}-${index}`}
                             />
                         ))}
+                    </div>
+                ) : null}
+                {ownActions ? (
+                    <div
+                        className="happy-message__own-actions"
+                        data-happy-desktop-ui="message-own-actions"
+                    >
+                        {ownActions}
                     </div>
                 ) : null}
             </div>

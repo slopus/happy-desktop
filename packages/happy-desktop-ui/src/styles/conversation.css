@@ -99,6 +99,30 @@
     padding-bottom: 4px;
 }
 
+/* The run's one copy sits under its last bubble, and hovering or focusing any
+   bubble of the run shows it. Virtual rows stay in transcript order, so the
+   row closing the hovered run is the first one after it that does not
+   continue a run; any copy further down stays hidden. */
+.happy-message-list__virtual-row:has(
+        .happy-conversation__own-run-continues:is(:hover, :focus-within)
+    )
+    ~ .happy-message-list__virtual-row:not(:has(.happy-conversation__own-run-continues))
+    .happy-message__own-actions
+    .happy-copy-button {
+    opacity: 1;
+}
+
+.happy-message-list__virtual-row:has(
+        .happy-conversation__own-run-continues:is(:hover, :focus-within)
+    )
+    ~ .happy-message-list__virtual-row:not(:has(.happy-conversation__own-run-continues))
+    ~ .happy-message-list__virtual-row
+    .happy-message:not(:hover, :focus-within)
+    .happy-message__own-actions
+    .happy-copy-button:not([data-copied], :focus-visible) {
+    opacity: 0;
+}
+
 /* The live turn and its external work are one stable line. The status takes
    whatever room remains and carries the activity summary to the far end; both
    sides truncate in place instead of turning terminals or subagents into a
