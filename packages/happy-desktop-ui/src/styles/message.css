@@ -534,6 +534,49 @@
     opacity: 1;
 }
 
+/* Own message actions: a right-aligned 20px line 4px under the bubble. A fresh
+   row already leaves 16px below its bubble and the next row 16px above its
+   own content, so the line hangs in that gap and takes no room; the hover
+   reveal moves nothing. In a run of the reader's messages the row keeps only
+   4px, so there the line is laid out in flow instead. */
+.happy-message[data-own-actions] .happy-message__content {
+    position: relative;
+}
+
+.happy-message__own-actions {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+}
+
+.happy-message[data-grouped] .happy-message__own-actions,
+.happy-message.happy-conversation__own-continued .happy-message__own-actions {
+    position: static;
+    margin-top: 4px;
+}
+
+/* The hanging line reaches into the next row's top padding, which paints
+   later; the hovered row rises over it so the button stays clickable. */
+.happy-message[data-own-actions]:is(:hover, :focus-within),
+.happy-message-list__virtual-row:has(.happy-message[data-own-actions]:is(:hover, :focus-within)) {
+    z-index: 1;
+}
+
+/* Bare glyphs under the bubble: hover only brightens the ink, never fills. */
+.happy-message__own-actions .happy-copy-button:hover {
+    background: transparent;
+}
+
+.happy-message:hover .happy-message__own-actions .happy-copy-button,
+.happy-message:focus-within .happy-message__own-actions .happy-copy-button {
+    opacity: 1;
+}
+
 /* Incoming human: neutral raised bubble on the left. */
 .happy-message:not([data-agent]):not([data-own]) .happy-message__body {
     background: var(--surface-pressed);

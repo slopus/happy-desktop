@@ -35,6 +35,7 @@ import {
 import type { ConversationFailureClock } from "./conversationFailureText";
 import type { ConversationSwitchTarget } from "./conversationSwitchTargets";
 import { ConversationSummaryRow } from "./ConversationSummaryRow";
+import { CopyButton } from "./CopyButton";
 import { conversationErrorTitle } from "./conversationErrorTitle";
 import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
 import { TurnSummary } from "./TurnSummary";
@@ -643,6 +644,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.linkOpenDefault ? { linkOpenDefault: props.linkOpenDefault } : {})}
             {...(props.references ? { references: props.references } : {})}
             own={own}
+            ownActions={
+                own && message.text.length > 0 ? (
+                    <CopyButton label="Copy message" text={message.text} />
+                ) : undefined
+            }
             {...(quote
                 ? {
                       authorNote: own
