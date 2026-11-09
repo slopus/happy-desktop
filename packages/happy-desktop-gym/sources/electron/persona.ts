@@ -226,7 +226,7 @@ async function cursorInstall(page: Page, at: { x: number; y: number }): Promise<
 /** What the open conversation offers to act on right now. */
 export type GymChatOffer =
     | { readonly kind: "buttons"; readonly block: Locator; readonly labels: readonly string[] }
-    | { readonly kind: "code"; readonly block: Locator }
+    | { readonly kind: "field"; readonly block: Locator; readonly label: string }
     | { readonly kind: "checklist"; readonly block: Locator }
     | { readonly kind: "composer"; readonly composer: Locator; readonly prompt: string }
     | { readonly kind: "none" };
@@ -237,11 +237,11 @@ export type GymChatOffer =
  */
 const COMPOSER = '[data-happy-desktop-ui="composer-textarea"]:visible';
 
-/** A table is drawn inside its checklist, so the checklist stands for both. */
+/** The chat UI components that take an answer, while they still do. */
 const LIVE_BLOCK = [
-    '[data-happy-desktop-ui="chat-action-buttons"]:not([data-locked])',
-    '[data-happy-desktop-ui="chat-action-checklist"]:not([data-locked])',
-    '[data-happy-desktop-ui="chat-action-code"]:not([data-locked])',
+    '[data-happy-desktop-ui="chat-ui-choice"]:not([data-locked])',
+    '[data-happy-desktop-ui="chat-ui-checklist"]:not([data-locked])',
+    '[data-happy-desktop-ui="chat-ui-text-field"]:not([data-locked])',
 ].join(", ");
 
 /**
@@ -264,10 +264,15 @@ export async function gymChatOfferRead(
         const block = blocks.nth(index);
         if (!(await block.isVisible().catch(() => false))) continue;
         const kind = await block.getAttribute("data-happy-desktop-ui");
+        if (kind === "chat-ui-text-field")
+            return {
+                kind: "field",
+                block,
+                label: (await block.locator(".happy-chat-ui__field-label").innerText()).trim(),
+            };
         const enabled = block.locator("button:not([disabled])");
-        if ((await enabled.count()) === 0 && kind !== "chat-action-code") continue;
-        if (kind === "chat-action-code") return { kind: "code", block };
-        if (kind === "chat-action-checklist") return { kind: "checklist", block };
+        if ((await enabled.count()) === 0) continue;
+        if (kind === "chat-ui-checklist") return { kind: "checklist", block };
         return { kind: "buttons", block, labels: await enabled.allInnerTexts() };
     }
     return (await composerOffer(page, persona, answers)) ?? { kind: "none" };
@@ -459,30 +464,38 @@ export async function gymPersonaTurn(
             const wanted = persona.ticks?.[answers.checklists];
             answers.checklists += 1;
             if (wanted) {
-                const rows = offer.block.locator(
-                    '[data-happy-desktop-ui="chat-action-table-row"], [data-happy-desktop-ui="chat-action-option"]',
-                );
+                const rows = offer.block.locator('[data-happy-desktop-ui="chat-ui-option"]');
                 for (let index = 0; index < (await rows.count()); index++) {
                     const row = rows.nth(index);
-                    const label = (
-                        await row.locator(".happy-chat-action__label").innerText()
-                    ).trim();
+                    const label = (await row.locator(".happy-chat-ui__label").innerText()).trim();
                     const box = row.locator('input[type="checkbox"]');
                     if (!(await box.isEnabled().catch(() => false))) continue;
                     const want = wanted.some((pattern) => pattern.test(label));
                     if ((await box.isChecked()) === want) continue;
-                    await driver.press(row.locator(".happy-chat-action__label"));
+                    await driver.press(row.locator(".happy-chat-ui__label"));
                     await driver.pause(300, 600);
                 }
             }
             await driver.press(
-                offer.block.locator(".happy-chat-action__buttons button:not([disabled])").first(),
+                offer.block.locator(".happy-chat-ui__buttons button:not([disabled])").first(),
             );
             return true;
         }
-        case "code":
-            // A code comes from a vendor's page this persona never opens.
-            return false;
+        case "field": {
+            // A field asks what its label says, and they answer it the way
+            // they would answer the question typed in a reply.
+            const answer = persona.answers.find(
+                (candidate) =>
+                    candidate.when.test(offer.label) && !answers.typed.has(candidate.text),
+            );
+            if (!answer) return false;
+            answers.typed.add(answer.text);
+            await driver.read(offer.label);
+            await driver.type(offer.block.locator("input"), answer.text);
+            await driver.pause(300, 700);
+            await driver.press(offer.block.locator("button:not([disabled])").first());
+            return true;
+        }
         case "composer": {
             const answer = persona.answers.find(
                 (candidate) =>

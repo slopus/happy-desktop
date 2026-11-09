@@ -1,9 +1,15 @@
 import { createStore } from "zustand/vanilla";
 import {
-    chatActionBlockKey,
-    type ChatActionChoice,
-    type ChatActionInvocation,
-} from "../chatActions/chatActions.js";
+    chatUiActionSays,
+    chatUiActionText,
+    chatUiComponentKey,
+    type ChatUiGranted,
+    type ConversationUiOffer,
+    type UiActionInput,
+    type UiActionResponse,
+    type UiComponent,
+} from "../chatUi/chatUi.js";
+import { cuid2Create } from "../utils/cuid2Create.js";
 import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
@@ -474,6 +480,24 @@ function imageGalleryOf(entries: readonly ConversationEntry[]): readonly HappyAg
                         ...source,
                     });
             }
+            /* A chat UI document's pictures open by its message and their index in its media. */
+            for (const [index, item] of (entry.ui?.media ?? []).entries()) {
+                if (item.kind === "image")
+                    gallery.push({
+                        ref: { kind: "toolMedia", entryId: entry.message.id, index },
+                        id: `${entry.message.id}:${String(index)}`,
+                        url: item.url,
+                        alt: item.name,
+                        name: item.name,
+                        thumbnail: {
+                            url: item.url,
+                            thumbhash: item.thumbhash,
+                            width: item.width,
+                            height: item.height,
+                            ...(item.scale === undefined ? {} : { scale: item.scale }),
+                        },
+                    });
+            }
             continue;
         }
         if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") continue;
@@ -695,18 +719,24 @@ export interface HappyAgentChatSnapshot {
      */
     readonly failureSwitchSupported: boolean;
     /**
-     * Whether inline action blocks take presses here: the Happy Agent serves
-     * them (`capabilities.inlineActions`). Without it every block is drawn
-     * but inert.
+     * Chat UI clicks made here and not answered yet, by `chatUiComponentKey`:
+     * what each control shows meanwhile. The attempt's record takes over once
+     * the daemon answers.
      */
-    readonly actionsPressable: boolean;
+    readonly uiPending: ReadonlyMap<string, UiActionInput>;
     /**
-     * Presses made here and not yet recorded on their message, by
-     * `chatActionBlockKey`. The message's recorded choice draws over them once
-     * it arrives; a press the daemon refused is dropped, so its block shows
-     * what the message says.
+     * Why the last click on a control left no record: the daemon refused it
+     * before storing anything, or it never arrived. By `chatUiComponentKey`,
+     * until the next click on that control.
      */
-    readonly actionPending: ReadonlyMap<string, ChatActionChoice>;
+    readonly uiErrors: ReadonlyMap<string, string>;
+    /** What the viewer may do with chat UI here; only for drawing controls disabled. */
+    readonly uiGranted: ChatUiGranted;
+    /**
+     * The chat UI component types the daemon serves (`capabilities.chatUi`);
+     * any other draws its fallback line. Absent until health is heard.
+     */
+    readonly uiServed?: ReadonlySet<string>;
 }
 
 export type HappyAgentChatOutput =
@@ -766,11 +796,17 @@ export interface HappyAgentChatStore {
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
     /**
-     * Presses a control in one of the conversation's inline action blocks.
-     * The block shows chosen at once; a refusal drops that and says why in
-     * the conversation. A block already pressed here takes nothing more.
+     * Sends one click on a chat UI component, under one ID however often it
+     * is retried. A `"message"` action shows the person's words at once. The
+     * promise carries the daemon's answer, including any result, to the
+     * caller alone; nothing here keeps the result. It rejects with a
+     * displayable `UserError` when nothing was recorded.
      */
-    actionPress(invocation: ChatActionInvocation): void;
+    uiAction(
+        offer: ConversationUiOffer,
+        component: UiComponent,
+        action: UiActionInput,
+    ): Promise<UiActionResponse>;
     requestSelectionUpdate(
         requestId: string,
         answers: Readonly<Record<string, readonly string[]>>,
@@ -839,7 +875,7 @@ export interface HappyAgentChatDeps {
     readonly connectActions: Pick<
         HappyAgentConnection,
         | "answerUserInput"
-        | "sendAction"
+        | "sendUiAction"
         | "compactSession"
         | "invokeSlashCommand"
         | "retryFailedTurn"
@@ -874,8 +910,14 @@ export interface HappyAgentChatDeps {
     readonly agentIdentities?: HappyAgentAgentIdentitySource;
     /** The protocol the connection's daemon last reported in its health, once heard. */
     readonly daemonProtocol?: () => number | undefined;
-    /** Whether the connection's Happy Agent takes inline action presses, as its health says. */
-    readonly inlineActions?: () => boolean;
+    /** The chat UI component types the daemon last reported in its health, once heard. */
+    readonly daemonUiComponents?: () => readonly string[] | undefined;
+    /**
+     * Owner-only authoritative input: what the viewer may do with chat UI on
+     * this connection, now and on every change. Absent, everything: a
+     * standalone daemon's one person holds every permission.
+     */
+    readonly uiGrantedFollow?: (listener: (granted: ChatUiGranted) => void) => () => void;
 }
 
 /** Protocol 32 validates a failure switch against the live catalog, not a stored list. */
@@ -941,8 +983,9 @@ export function happyAgentChatStoreCreate(
         usageLoading: false,
         activityPanelOpen: false,
         failureSwitchSupported: false,
-        actionsPressable: false,
-        actionPending: new Map(),
+        uiPending: new Map(),
+        uiErrors: new Map(),
+        uiGranted: "all",
     }));
 
     const listeners = new Set<() => void>();
@@ -1075,10 +1118,24 @@ export function happyAgentChatStoreCreate(
     let activityPanelOpen = false;
     let openImageRef: HappyAgentImageRef | undefined;
     const requestSubmissions = new Map<string, ConversationRequestSubmission>();
+    /* Chat UI clicks on their way and the ones that left no record. Each
+       replaces its map, so a reader sees a change by identity. */
+    let uiPending: ReadonlyMap<string, UiActionInput> = new Map();
+    let uiErrors: ReadonlyMap<string, string> = new Map();
+    let uiGranted: ChatUiGranted = "all";
+    /* One set per reported list, so an unchanged health keeps its identity. */
+    let uiServedFrom: readonly string[] | undefined;
+    let uiServed: ReadonlySet<string> | undefined;
+    const uiServedRead = (): ReadonlySet<string> | undefined => {
+        const components = deps.daemonUiComponents?.();
+        if (components !== uiServedFrom) {
+            uiServedFrom = components;
+            uiServed = components === undefined ? undefined : new Set(components);
+        }
+        return uiServed;
+    };
+    const uiActionIdNext = cuid2Create(Date.now);
     const requestMutationIds = new Map<string, string>();
-    /* Presses on their way, by block key, and the mutation carrying each. */
-    let actionPending: ReadonlyMap<string, ChatActionChoice> = new Map();
-    const actionMutationIds = new Map<string, string>();
     const requestSelections = new Map<string, Readonly<Record<string, readonly string[]>>>();
     /* Sends made before the conversation's first full read, waiting for it.
        Until it lands nothing here knows the session's mode or its open
@@ -1278,8 +1335,10 @@ export function happyAgentChatStoreCreate(
                   }),
             failureSwitchSupported:
                 (deps.daemonProtocol?.() ?? 0) >= HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION,
-            actionsPressable: deps.inlineActions?.() === true,
-            actionPending,
+            uiPending,
+            uiErrors,
+            uiGranted,
+            ...((served) => (served === undefined ? {} : { uiServed: served }))(uiServedRead()),
         };
         /* The transcript answers for itself: `entriesMerge` returns the very
            list it was given when nothing moved, so a new one is a change and
@@ -1291,7 +1350,10 @@ export function happyAgentChatStoreCreate(
         if (
             entries !== previous.entries ||
             expandedMessageIds !== previous.expandedMessageIds ||
-            actionPending !== previous.actionPending
+            uiPending !== previous.uiPending ||
+            uiErrors !== previous.uiErrors ||
+            uiGranted !== previous.uiGranted ||
+            next.uiServed !== previous.uiServed
         ) {
             store.setState(next, true);
             return;
@@ -1419,15 +1481,57 @@ export function happyAgentChatStoreCreate(
         commit();
     });
 
+    const unsubscribeUiGranted = deps.uiGrantedFollow?.((next) => {
+        if (disposed || next === uiGranted) return;
+        uiGranted = next;
+        commit();
+    });
+
+    const uiActionRun = async (
+        offer: ConversationUiOffer,
+        component: UiComponent,
+        action: UiActionInput,
+    ): Promise<UiActionResponse> => {
+        const key = chatUiComponentKey(offer, component.id);
+        if (disposed) throw new UserError("This conversation is closed.");
+        if (uiPending.has(key)) throw new UserError("That is still on its way.");
+        const text = chatUiActionSays(action.type)
+            ? chatUiActionText(component, action)
+            : undefined;
+        uiPending = new Map(uiPending).set(key, action);
+        if (uiErrors.has(key)) {
+            const errors = new Map(uiErrors);
+            errors.delete(key);
+            uiErrors = errors;
+        }
+        commit();
+        const settle = (error?: string) => {
+            const pending = new Map(uiPending);
+            pending.delete(key);
+            uiPending = pending;
+            if (error !== undefined) uiErrors = new Map(uiErrors).set(key, error);
+            if (!disposed) commit();
+        };
+        try {
+            const response = await deps.connectActions.sendUiAction(sessionId, {
+                id: uiActionIdNext(),
+                messageId: offer.messageId,
+                uiId: offer.uiId,
+                componentId: component.id,
+                action,
+                ...(text === undefined ? {} : { text }),
+            });
+            settle();
+            return response;
+        } catch (error) {
+            const userError = happyAgentUserError(error);
+            settle(userError.message);
+            throw userError;
+        }
+    };
+
     const unsubscribeMutationRejections = deps.connectMutationSubscribe((rejection) => {
         if (!pendingMutationIds.delete(rejection.mutationId)) return;
-        const blockKey = actionMutationIds.get(rejection.mutationId);
-        if (blockKey !== undefined) {
-            actionMutationIds.delete(rejection.mutationId);
-            const next = new Map(actionPending);
-            next.delete(blockKey);
-            actionPending = next;
-        }
         const requestId = requestMutationIds.get(rejection.mutationId);
         if (requestId !== undefined) {
             requestMutationIds.delete(rejection.mutationId);
@@ -1731,34 +1835,7 @@ export function happyAgentChatStoreCreate(
                 output({ type: "subagentsAborted", sessionId });
             }),
         answerInput: answerInputRun,
-        actionPress(invocation) {
-            if (disposed || deps.inlineActions?.() !== true) return;
-            const blockKey = chatActionBlockKey(invocation.messageId, invocation.blockIndex);
-            if (actionPending.has(blockKey)) return;
-            actionPending = new Map(actionPending).set(blockKey, invocation.choice);
-            try {
-                const mutationId = deps.connectActions.sendAction(sessionId, {
-                    messageId: invocation.messageId,
-                    blockIndex: invocation.blockIndex,
-                    controlIndex: invocation.controlIndex,
-                    action: invocation.action,
-                    values: invocation.values,
-                });
-                actionMutationIds.set(mutationId, blockKey);
-                connectMutationTrack(mutationId);
-            } catch (error) {
-                const next = new Map(actionPending);
-                next.delete(blockKey);
-                actionPending = next;
-                mutationRejection = {
-                    type: "mutation_rejected",
-                    action: "send_action",
-                    mutationId: blockKey,
-                    message: happyAgentUserError(error).message,
-                };
-            }
-            commit();
-        },
+        uiAction: uiActionRun,
         requestSelectionUpdate(requestId, answers) {
             requestSelections.set(requestId, answers);
             commit();
@@ -1934,6 +2011,7 @@ export function happyAgentChatStoreCreate(
             stop();
             unsubscribeMutationRejections();
             unsubscribeCatalog?.();
+            unsubscribeUiGranted?.();
             unsubscribeSenders?.();
             storeUnsubscribe();
             listeners.clear();

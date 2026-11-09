@@ -5,7 +5,6 @@ import type {
     LivePublicText,
     LiveWorkspaceStatus,
 } from "@slopus/happy-agent-client";
-import { conversationTextPlain } from "../chatActions/chatActions.js";
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
 import type { HappyAgentChatSnapshot } from "../happyAgent/happyAgentChatStore.js";
 import type { HappyAgentWorktreeLifecycle } from "../happyAgent/happyAgentProjectGroupProject.js";
@@ -49,13 +48,8 @@ export function gptLivePublicText(entries: readonly ConversationEntry[]): {
             continue;
         const sender = entry.message.sender.kind;
         if (sender !== "human" && sender !== "agent") continue;
-        // Voice cannot press an inline action, so it hears the words around them.
-        const whole = entry.actions
-            ? conversationTextPlain(entry.message.text)
-            : entry.message.text;
-        if (!whole) continue;
-        const text = whole.slice(0, 16_384);
-        if (text.length !== whole.length) truncated = true;
+        const text = entry.message.text.slice(0, 16_384);
+        if (text.length !== entry.message.text.length) truncated = true;
         messages.push({
             id: entry.message.id,
             role: sender === "human" ? "user" : "assistant",

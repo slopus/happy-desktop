@@ -30,7 +30,6 @@ import {
     type Question,
     type Run,
     type SendMessageRequest,
-    type SendActionMessageRequest,
     type SendMessageResponse,
     type SlashCommand,
     type Task,
@@ -3307,7 +3306,27 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         });
     };
 
+    /* The optimistic bubble of each chat UI answer on its way, by its offer:
+       the attempt ID it is held under until the daemon's message or record
+       for that offer arrives, by the response or by the stream. */
+    const uiBubbles = new Map<string, string>();
+    const uiBubbleSettle = (agentId: string, message: Message): void => {
+        const action = message.content.find((block) => block.type === "action");
+        if (action === undefined) return;
+        const offer = uiOfferKey(action.messageId, action.uiId, action.componentId);
+        const pendingId = uiBubbles.get(offer);
+        if (pendingId === undefined || pendingId === message.id) return;
+        if (message.role === "service" && action.outcome.status === "pending") return;
+        uiBubbles.delete(offer);
+        const entry = sessions.get(agentId);
+        if (entry?.messages.get(pendingId)?.pendingSend) {
+            entry.messages.delete(pendingId);
+            publishSession(entry);
+        }
+    };
+
     const updateMessage = (agentId: string, message: Message, runId: string | null): void => {
+        if (uiBubbles.size > 0 && message.role !== "agent") uiBubbleSettle(agentId, message);
         if (message.role === "user") sendConfirm(message.id);
         const entry = sessions.get(agentId);
         const current = entry?.messages.get(message.id)?.message;
@@ -4277,32 +4296,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS) {
                     throw error;
                 }
-                await wait(retryMs, rootController.signal);
-                retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
-            }
-        }
-    };
-
-    const sendActionWithRetry = async (
-        sessionId: string,
-        request: SendActionMessageRequest,
-    ): Promise<SendMessageResponse> => {
-        let retryMs = INITIAL_SEND_RETRY_MS;
-        for (let attempt = 1; ; attempt += 1) {
-            try {
-                return await client.sendMessage(sessionId, request, { signal: deadlineSignal() });
-            } catch (error) {
-                if (drainingRefusal(error)) {
-                    admittingSet(false);
-                    throw error;
-                }
-                const retryable =
-                    !(error instanceof HappyAgentApiError) ||
-                    error.status === 408 ||
-                    error.status === 429 ||
-                    error.status >= 500;
-                if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS)
-                    throw error;
                 await wait(retryMs, rootController.signal);
                 retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
             }
@@ -5718,6 +5711,91 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 permissionMode: permissionMode as MessageMode["permissionMode"],
             }));
         },
+        async sendUiAction(sessionId, input) {
+            if (config === undefined) throw new Error("The agent is not loaded.");
+            const says = input.text !== undefined;
+            const mode = says
+                ? modeOf(
+                      config,
+                      agentDrafts.get(sessionId),
+                      agentModes.get(sessionId),
+                      intendedModes.get(sessionId),
+                  )
+                : undefined;
+            const offer = uiOfferKey(input.messageId, input.uiId, input.componentId);
+            const entry = sessions.get(sessionId);
+            if (says && mode !== undefined && entry !== undefined) {
+                // The person's words show at once, as a send's do; the message
+                // or the refusal the daemon records takes their place.
+                uiBubbles.set(offer, input.id);
+                entry.messages.set(input.id, {
+                    message: {
+                        id: input.id,
+                        role: "user",
+                        createdAt: now(),
+                        content: [{ type: "text", text: input.text ?? "" }],
+                        metadata: {},
+                        status: "pending",
+                        delivery: "steer",
+                        mode,
+                        runId: null,
+                    },
+                    runId: null,
+                    pendingSend: true,
+                });
+                publishSession(entry);
+            }
+            const bubbleDrop = () => {
+                if (uiBubbles.get(offer) !== input.id) return;
+                uiBubbles.delete(offer);
+                const current = sessions.get(sessionId);
+                if (current?.messages.get(input.id)?.pendingSend) {
+                    current.messages.delete(input.id);
+                    publishSession(current);
+                }
+            };
+            let retryMs = INITIAL_SEND_RETRY_MS;
+            for (let attempt = 1; ; attempt += 1) {
+                try {
+                    const response = await client.sendUiAction(
+                        sessionId,
+                        {
+                            id: input.id,
+                            messageId: input.messageId,
+                            uiId: input.uiId,
+                            componentId: input.componentId,
+                            action: input.action,
+                            ...(mode ? { mode } : {}),
+                        },
+                        { signal: deadlineSignal() },
+                    );
+                    bubbleDrop();
+                    if (!closed) {
+                        // The stream places a record in its run; a reply that
+                        // arrives first keeps whatever place it already has.
+                        const held = sessions.get(sessionId)?.messages.get(response.record.id);
+                        updateMessage(sessionId, response.record, held?.runId ?? null);
+                        if (response.message !== null) {
+                            await ensureMessageUsers([response.message]);
+                            updateMessage(sessionId, response.message, response.message.runId);
+                        }
+                    }
+                    return response;
+                } catch (error) {
+                    const retryable =
+                        !(error instanceof HappyAgentApiError) ||
+                        error.status === 408 ||
+                        error.status === 429 ||
+                        error.status >= 500;
+                    if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS) {
+                        bubbleDrop();
+                        throw error;
+                    }
+                    await wait(retryMs, rootController.signal);
+                    retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
+                }
+            }
+        },
         answerUserInput(sessionId, requestId, response) {
             const mutationId = nextId();
             return mutation(
@@ -5742,65 +5820,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 undefined,
                 sessionId,
                 // A human answer must not wait behind unrelated agent work.
-            );
-        },
-        sendAction(sessionId, press) {
-            const mutationId = nextId();
-            if (config === undefined) {
-                reportMutationFailure(
-                    "send_action",
-                    mutationId,
-                    new Error("The agent is not loaded."),
-                    sessionId,
-                );
-                return mutationId;
-            }
-            const mode = modeOf(
-                config,
-                agentDrafts.get(sessionId),
-                agentModes.get(sessionId),
-                intendedModes.get(sessionId),
-            );
-            /* One identity across every attempt: a repeat returns the message
-               the daemon already took. The values travel only in this request. */
-            const request: SendActionMessageRequest = {
-                id: mutationId,
-                content: [
-                    {
-                        type: "action",
-                        messageId: press.messageId,
-                        blockIndex: press.blockIndex,
-                        controlIndex: press.controlIndex,
-                        actionId: press.action.id,
-                        params: { ...press.action.params },
-                        ...(press.values.length === 0 ? {} : { values: [...press.values] }),
-                    },
-                ],
-                mode,
-            };
-            return mutation(
-                "send_action",
-                mutationId,
-                async () => {
-                    const response = await sendActionWithRetry(sessionId, request);
-                    await ensureMessageUsers([response.message]);
-                    return response.message;
-                },
-                (message) => updateMessage(sessionId, message, message.runId),
-                (error) => {
-                    // Another press took the block, or the conversation moved on:
-                    // the pressed message as it now stands shows what won. The
-                    // press itself still failed, so it is reported.
-                    const pressed =
-                        error instanceof HappyAgentApiError && error.status === 409
-                            ? conflictMessageOf(error)
-                            : undefined;
-                    if (pressed !== undefined && pressed.id === press.messageId) {
-                        const runId = sessions.get(sessionId)?.messages.get(pressed.id)?.runId;
-                        updateMessage(sessionId, pressed, runId ?? null);
-                    }
-                },
-                sessionId,
             );
         },
         setSessionArchived(sessionId, archived) {
@@ -6460,6 +6479,15 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                 previous.startedAt === next.startedAt &&
                 previous.trigger === next.trigger
             );
+        case "ui":
+            return next.type === "ui" && previous.ui.id === next.ui.id;
+        case "action":
+            return (
+                next.type === "action" &&
+                previous.uiId === next.uiId &&
+                previous.componentId === next.componentId &&
+                previous.action.type === next.action.type
+            );
         case "configuration":
             return (
                 next.type === "configuration" &&
@@ -6710,10 +6738,7 @@ function teammateCurrent(
     };
 }
 
-/** The pressed message a 409 refusal of a press carries, when it carries one. */
-function conflictMessageOf(error: HappyAgentApiError): Message | undefined {
-    const message = (error.body as { message?: unknown } | null)?.message;
-    return typeof message === "object" && message !== null && "id" in message && "role" in message
-        ? (message as Message)
-        : undefined;
+/** One chat UI component's offer, as the key its optimistic bubble is held under. */
+function uiOfferKey(messageId: string, uiId: string, componentId: string): string {
+    return `${messageId}\u0000${uiId}\u0000${componentId}`;
 }

@@ -1,3 +1,4 @@
+import { chatUiEqual } from "../chatUi/chatUiTranscript.js";
 import {
     entryKey,
     entrySequence,
@@ -18,7 +19,6 @@ import {
     type ConversationFileDiff,
     type ConversationJson,
     type ConversationMediaItem,
-    type ConversationMessageActions,
     type ConversationMessageEntry,
     type ConversationReaction,
     type ConversationRequest,
@@ -128,7 +128,8 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
             left.sentHere !== right.sentHere ||
             left.clientMutationId !== right.clientMutationId ||
             left.error !== right.error ||
-            !messageActionsEqual(left.actions, right.actions)
+            left.refused !== right.refused ||
+            !chatUiEqual(left.ui, right.ui)
         )
             return false;
         if (left.message === right.message) return true;
@@ -147,31 +148,6 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
     // Non-message entries are rebuilt from their producer's durable snapshot, so
     // structural equality of their payload is what "unchanged" means here.
     return entryKey(left) === entryKey(right) && payloadEqual(left, right);
-}
-
-function messageActionsEqual(
-    left: ConversationMessageActions | undefined,
-    right: ConversationMessageActions | undefined,
-): boolean {
-    if (left === right) return true;
-    if (left === undefined || right === undefined) return false;
-    if (left.blockStart !== right.blockStart || left.live !== right.live) return false;
-    if (left.choices === right.choices) return true;
-    const keys = Object.keys(left.choices);
-    if (keys.length !== Object.keys(right.choices).length) return false;
-    return keys.every((key) => {
-        const choice = left.choices[key];
-        const other = right.choices[key];
-        if (choice === undefined || other === undefined || choice.kind !== other.kind) return false;
-        if (choice.kind === "button" && other.kind === "button")
-            return choice.index === other.index;
-        if (choice.kind === "checklist" && other.kind === "checklist")
-            return (
-                choice.values.length === other.values.length &&
-                choice.values.every((value, index) => value === other.values[index])
-            );
-        return true;
-    });
 }
 
 /** Orders entries the way a reader sees them: by sequence, local sends last. */

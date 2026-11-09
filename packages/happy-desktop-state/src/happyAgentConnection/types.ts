@@ -1,4 +1,3 @@
-import type { ChatAction, ChatActionChoice } from "../chatActions/chatActions.js";
 import type {
     Agent,
     AgentRetrying,
@@ -17,6 +16,8 @@ import type {
     SlashCommand,
     Task,
 } from "@slopus/happy-agent-client";
+import type { UiActionResponse } from "@slopus/happy-agent-client";
+import type { ConversationUi, UiActionInput } from "../chatUi/chatUi.js";
 import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
@@ -164,6 +165,12 @@ export interface UserMessageElement extends BaseChatElement {
     profile?: UserProfile;
     delivery: "pending_steering" | "sent";
     text: string;
+    /**
+     * A chat UI answer that never became the person's message: `text` is the
+     * words it would have said, this is why the server refused it, from its
+     * attempt record.
+     */
+    refused?: string;
     attachments?: readonly { data: string; mediaType: string }[];
     /** Files uploaded to Happy Cloud and named by this message, by attachment ID. */
     files?: readonly UserMessageFile[];
@@ -241,16 +248,10 @@ export interface AgentTextElement extends BaseChatElement {
     text: string;
     complete: boolean;
     /**
-     * The inline action blocks this text holds, when it holds any: the block
-     * index of its first one across the whole message, the choices the daemon
-     * recorded on the message, by block index, and whether its unanswered
-     * blocks still take a press: no person's message is recorded after it.
+     * The chat UI document this element shows: a `ui` block of the daemon's
+     * message, or a `show_ui` call's presentation. Such an element has no text.
      */
-    actions?: {
-        readonly blockStart: number;
-        readonly choices: Readonly<Record<string, ChatActionChoice>>;
-        readonly live: boolean;
-    };
+    ui?: ConversationUi;
 }
 
 export interface AgentAttachmentsElement extends BaseChatElement {
@@ -892,7 +893,6 @@ export type MutationAction =
     | "set_permission_mode"
     | "set_draft"
     | "answer_user_input"
-    | "send_action"
     | "compact_session"
     | "retry_failed_turn"
     | "switch_and_continue"
@@ -911,14 +911,15 @@ export type MutationAction =
     | "archive_task"
     | "unarchive_task";
 
-/** One press, as the window hands it to the connection. */
-export interface ChatActionPressInput {
+/** One chat UI click, as the window hands it to the connection. */
+export interface UiActionSendInput {
+    readonly id: string;
     readonly messageId: string;
-    readonly blockIndex: number;
-    readonly controlIndex: number;
-    readonly action: ChatAction;
-    /** A checklist's ticked values, or a code field's text, which nothing keeps. */
-    readonly values: readonly string[];
+    readonly uiId: string;
+    readonly componentId: string;
+    readonly action: UiActionInput;
+    /** The person's words a `"message"` action becomes, for its optimistic bubble. */
+    readonly text?: string;
 }
 
 export interface MutationRejectedDelta {
@@ -1289,12 +1290,13 @@ export interface HappyAgentConnection {
     setPermissionMode(sessionId: string, permissionMode: string): MutationId;
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
     /**
-     * Sends one press in an agent message's inline action block as the
-     * person's message, under one identity across every retry. A block the
-     * daemon says another press already took settles on the message it
-     * returns, which says what the block shows; any other refusal is reported.
+     * Sends one click on a chat UI component (`POST /v0/agents/:id/actions`)
+     * under one `id` across every retry. With `text`, the action becomes the
+     * person's words, so their bubble shows at once and gives way to the
+     * person's message, or to the greyed record of a refusal. The response's
+     * `result` is the caller's alone: nothing here keeps it.
      */
-    sendAction(sessionId: string, press: ChatActionPressInput): MutationId;
+    sendUiAction(sessionId: string, input: UiActionSendInput): Promise<UiActionResponse>;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
     setBotStories(botId: string, stories: boolean): MutationId;

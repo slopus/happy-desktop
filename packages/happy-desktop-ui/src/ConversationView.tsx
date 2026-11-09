@@ -16,8 +16,6 @@ import type { MessageReferences } from "./messageReferences";
 import {
     entryKey,
     entryTrace,
-    type ChatActionChoice,
-    type ChatActionInvocation,
     type ConversationAuthor,
     type ConversationEntry,
     type ConversationErrorAssistance,
@@ -28,7 +26,6 @@ import {
     type HappyAgentTraceViewer,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
-import { chatActionFigureTypes, type ChatActionFigures } from "./ChatActionBlock";
 import {
     AgentWorkingStatus,
     type AgentWaitStatus,
@@ -38,6 +35,7 @@ import { ChannelHeader } from "./ChannelHeader";
 import {
     authorAvatar,
     ConversationEntryView,
+    type ConversationChatUi,
     type ConversationEntryFailureProps,
     type ConversationEntryViewProps,
 } from "./ConversationEntryView";
@@ -105,7 +103,7 @@ import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
 import { WindowOverlay } from "./WindowOverlay";
 import { conversationMediaRunRows, conversationMediaRuns } from "./conversationMediaRuns";
-import { conversationInlineLayouts, messageLayoutMembers } from "./conversationInlineLayouts";
+import { conversationInlineLayouts } from "./conversationInlineLayouts";
 import {
     mediaVideoFramesSignature,
     mediaVideoFramesSubscribe,
@@ -346,21 +344,8 @@ export type ConversationViewProps = {
      * draw them. Absent, every such call keeps its card.
      */
     inlinePages?: ConversationInlinePages;
-    /**
-     * Whether the server takes presses on the inline action blocks agents
-     * write; without it every block is drawn but inert.
-     */
-    actionsPressable?: boolean;
-    /** Presses still on their way, by `chatActionBlockKey`, each drawn as its block's choice. */
-    actionPending?: ReadonlyMap<string, ChatActionChoice>;
-    /** Presses a control of an inline action block. Absent, every block is inert. */
-    onActionPress?: (invocation: ChatActionInvocation) => void;
-    /**
-     * What the live figures agents place in replies show, drawn by the owner
-     * of their stores. A figure with nothing here stays the text it was
-     * written as. Keep one value for the surface's life.
-     */
-    actionFigures?: ChatActionFigures;
+    /** How chat UI documents in this conversation are drawn and answered. Absent, they are inert. */
+    chatUi?: ConversationChatUi;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -758,11 +743,7 @@ export function ConversationView(props: ConversationViewProps) {
             setInlinePageGeneration((generation) => generation + 1);
         },
     };
-    const inlineLayouts = conversationInlineLayouts(
-        transcript,
-        framesAt,
-        chatActionFigureTypes(props.actionFigures),
-    );
+    const inlineLayouts = conversationInlineLayouts(transcript, framesAt);
     const mediaRuns = conversationMediaRuns(transcript, inlineLayouts.hidden);
     /* What a row draws because of a reply's layouts: the pictures a call gave
        up to one, or the layouts a reply draws. */
@@ -770,21 +751,7 @@ export function ConversationView(props: ConversationViewProps) {
         if (entry === undefined) return {};
         if (entry.kind === "message") {
             const layouts = inlineLayouts.messages.get(entry.message.id);
-            if (layouts === undefined) return {};
-            /* Only a reply drawing action blocks reads their state, so a press
-               re-renders that row and leaves every other one alone. */
-            const actions = [...layouts.layouts.values()].some(
-                (layout) => layout.kind === "actions",
-            );
-            return actions
-                ? {
-                      messageLayouts: layouts,
-                      ...(props.actionsPressable ? { actionsPressable: true } : {}),
-                      ...(props.actionPending ? { actionPending: props.actionPending } : {}),
-                      ...(props.onActionPress ? { onActionPress: props.onActionPress } : {}),
-                      ...(props.actionFigures ? { actionFigures: props.actionFigures } : {}),
-                  }
-                : { messageLayouts: layouts };
+            return layouts ? { messageLayouts: layouts } : {};
         }
         const placed = inlineLayouts.hidden.get(entryKey(entry));
         return placed ? { mediaPlaced: placed } : {};
@@ -1014,6 +981,11 @@ export function ConversationView(props: ConversationViewProps) {
             {props.activityControl}
         </div>
     ) : null;
+    const chatUiRow = ((chatUi) => {
+        if (chatUi === undefined) return undefined;
+        const { onAction: _onAction, onMediaOpen: _onMediaOpen, ...view } = chatUi;
+        return view;
+    })(props.chatUi);
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
         const inlinePage = inlinePageOf(entry);
@@ -1031,6 +1003,7 @@ export function ConversationView(props: ConversationViewProps) {
             surface: "conversation",
             liveStatus: index < transcript.length && statusVisible,
             ...(props.references ? { references: props.references } : {}),
+            ...(chatUiRow ? { chatUi: chatUiRow } : {}),
             ...(inlinePage ? { inlinePage: inlinePage.geometry } : {}),
             ...((run) => (run ? { mediaRun: run } : {}))(
                 entry === undefined ? undefined : mediaRuns.get(entryKey(entry)),
@@ -1171,6 +1144,12 @@ export function ConversationView(props: ConversationViewProps) {
                             inlinePages?.artifacts,
                             inlinePages?.artifactRender === undefined,
                             inlinePages?.liveRender === undefined,
+                            // What a document shows decides its height; the handlers do not.
+                            props.chatUi?.served,
+                            props.chatUi?.pending,
+                            props.chatUi?.errors,
+                            props.chatUi?.granted,
+                            props.chatUi?.live && Object.keys(props.chatUi.live).sort().join(","),
                         ]}
                         estimateRowSize={(index, width) =>
                             conversationRowHeight(...rowGeometry(index, width))
@@ -1194,7 +1173,7 @@ export function ConversationView(props: ConversationViewProps) {
                                 let frames = "";
                                 for (const layout of layouts.layouts.values())
                                     frames += mediaVideoFramesSignature(
-                                        messageLayoutMembers(layout).map((member) => member.item),
+                                        layout.members.map((member) => member.item),
                                         framesAt,
                                     );
                                 return `${fold}|${layouts.signature}|${frames}`;
@@ -1371,6 +1350,7 @@ export function ConversationView(props: ConversationViewProps) {
                                         : {})}
                                     {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
                                     {...(props.references ? { references: props.references } : {})}
+                                    {...(props.chatUi ? { chatUi: props.chatUi } : {})}
                                     {...(props.linkOpenDefault
                                         ? { linkOpenDefault: props.linkOpenDefault }
                                         : {})}

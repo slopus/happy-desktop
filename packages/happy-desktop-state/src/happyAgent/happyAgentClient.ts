@@ -4,6 +4,8 @@ import type {
     TerminalDriverCreate,
 } from "../modules/terminal/terminalState.js";
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { chatUiGrantedFollowCreate } from "../chatUi/chatUiGranted.js";
+import type { ChatUiGranted } from "../chatUi/chatUi.js";
 import { happyAgentProjectAddError } from "./happyAgentProjectRegistration.js";
 import {
     happyAgentFileLinkWorkspaceResolve,
@@ -680,6 +682,7 @@ export function happyAgentWorkspaceClientCreate(
     /** Surface chat workspaces, which the Surfaces learn and the conversation list accepts. */
     const surfaceChatGroups = happyAgentSurfaceChatGroupsCreate();
     let agentIdentities: HappyAgentAgentIdentitySource | undefined;
+    let uiGrantedFollow: ((listener: (granted: ChatUiGranted) => void) => () => void) | undefined;
     let inboxStore: HappyAgentInboxStore | undefined;
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let happyIntegrationStore: HappyAgentIntegrationStore | undefined;
@@ -1214,8 +1217,17 @@ export function happyAgentWorkspaceClientCreate(
                         // Health is heard while the connection is admitted, before
                         // any transcript it carries, so every projection can read it.
                         daemonProtocol: () => deps.connection.sync.health()?.version.protocol,
-                        inlineActions: () =>
-                            deps.connection.sync.health()?.capabilities?.inlineActions === true,
+                        daemonUiComponents: () =>
+                            deps.connection.sync.health()?.capabilities?.chatUi?.components,
+                        // A Happy Cloud member may hold only some of what chat UI
+                        // offers; a standalone daemon's one person holds it all.
+                        ...(deps.cloudRequest
+                            ? {
+                                  uiGrantedFollow: (uiGrantedFollow ??= chatUiGrantedFollowCreate(
+                                      deps.cloudRequest,
+                                  )),
+                              }
+                            : {}),
                         // A conversation is opened through the workspace that
                         // already lists everything, so the list is there to
                         // name whoever writes into it.

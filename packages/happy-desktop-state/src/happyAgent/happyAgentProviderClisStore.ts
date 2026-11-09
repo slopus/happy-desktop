@@ -6,6 +6,8 @@ import {
 } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import { cuid2Create } from "../utils/cuid2Create.js";
+
+export type { ProviderCli } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 
 /**
@@ -51,6 +53,11 @@ export interface HappyAgentProviderClisStore {
     /** Hands a waiting sign-in the code its page showed. The code is not kept. */
     cliSignInCodeSend(cliId: string, code: string): void;
     cliCancel(cliId: string): void;
+    /**
+     * Opens the sign-in page of a sign-in this window asked for some other
+     * way, such as a chat UI action the server ran for it.
+     */
+    cliSignInWatch(cliId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -296,6 +303,11 @@ export function happyAgentProviderClisStoreCreate(
             signingIn.delete(cliId);
             const mutationId = mutationIdNext();
             request(cliId, () => deps.client.cancelProviderCli(cliId, { mutationId }));
+        },
+        cliSignInWatch(cliId) {
+            signingIn.add(cliId);
+            const cli = store.getState().clis.get(cliId);
+            if (cli !== undefined) pageOpenIfAsked(cli);
         },
         [Symbol.dispose]() {
             disposed = true;

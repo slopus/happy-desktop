@@ -7,10 +7,17 @@ import {
     useSyncExternalStore,
     type ReactNode,
 } from "react";
-import type { ConversationSummary, HappyAgentSystemMonitorStore } from "happy-desktop-state";
+import type {
+    ConversationSummary,
+    ConversationUiOffer,
+    HappyAgentSystemMonitorStore,
+    UiActionInput,
+    UiComponent,
+} from "happy-desktop-state";
 import {
     HappyAgentSystemMonitorSurfacePage,
     FileRevealContext,
+    type ConversationChatUi,
     LinkCopyContext,
     MessageSettingsLinksContext,
     type MessageSettingsLinks,
@@ -28,7 +35,6 @@ import {
     happyAgentSidebarTree,
     happyAgentTabsOrdered,
     happyAgentTodoHeading,
-    type ChatActionInvocation,
     type ConversationFileDiff,
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
@@ -395,7 +401,7 @@ import { openExternalLink } from "./externalLink";
 import {
     HappyAgentConversationExtrasContext,
     happyAgentConversationExtras,
-} from "./components/HappyAgentChatFigures";
+} from "./components/HappyAgentChatUi";
 import { changedFileRenderedDiffOffered } from "./changedFileRenderedDiff";
 import { fileDownload } from "./fileDownload";
 import { imageCopy } from "./imageCopy";
@@ -10534,9 +10540,31 @@ function HappyAgentConversationSurface(props: {
               entities: references,
           })
         : undefined;
+    // Chat UI documents draw what this server serves, and the live ones from
+    // this connection's stores. A chat that takes no message takes no click.
+    const chatUi: ConversationChatUi = {
+        ...(conversation.uiServed ? { served: conversation.uiServed } : {}),
+        pending: conversation.uiPending,
+        errors: conversation.uiErrors,
+        granted: conversation.uiGranted,
+        ...(extras.live ? { live: extras.live } : {}),
+        ...(!props.readOnly && props.writeRefusal === undefined && props.unavailable === undefined
+            ? {
+                  onAction: (
+                      offer: ConversationUiOffer,
+                      component: UiComponent,
+                      action: UiActionInput,
+                  ) => workspace.uiAction(offer, component, action),
+              }
+            : {}),
+        onMediaOpen: (messageId: string, index: number) => {
+            if (props.happyAgentOnline()) workspace.toolImageOpen(messageId, index);
+        },
+    };
     return (
         <ConversationView
             references={references}
+            chatUi={chatUi}
             {...(inlinePages ? { inlinePages } : {})}
             // Onboarding speaks first here, a moment after the conversation
             // opens, so the conversation's own introduction does not flash in
@@ -10825,21 +10853,6 @@ function HappyAgentConversationSurface(props: {
                               : undefined,
                   }
                 : {})}
-            /* A press is the reader's own message, so it goes where one may: not
-               into a chat that is read-only to them. A composer held for any
-               other reason, such as onboarding's own steps, still takes it. */
-            actionsPressable={conversation.actionsPressable}
-            actionPending={conversation.actionPending}
-            {...(props.readOnly ||
-            props.writeRefusal !== undefined ||
-            props.unavailable !== undefined
-                ? {}
-                : {
-                      onActionPress: (invocation: ChatActionInvocation) => {
-                          if (props.happyAgentOnline()) workspace.actionPress(invocation);
-                      },
-                  })}
-            {...(extras.figures ? { actionFigures: extras.figures } : {})}
             expandedTurnIds={conversation.expandedTurnIds}
             expandedMessageIds={conversation.expandedMessageIds}
             onMessageExpandedChange={(messageId, expanded) =>

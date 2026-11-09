@@ -1,20 +1,10 @@
 /*
- * C-330 ChatActionBlock. Inline UI in an agent's reply, laid on the chat: no
- * frame, no background, the reply's left edge and the reply's type.
- *
- *   menu       a wrapping row of 36px outline buttons, 8px apart
- *   checklist  rows of 18px checkbox + label (+ muted detail), 8px apart,
- *              or a table under its headings, then the submit row 12px below
- *   code       a 240px field and its submit on one row
- *   steps      rows of a 16px mark + label (+ muted detail), 8px apart
- *   status     one row: a 16px mark + muted text
- *   tree       the app's file tree, every folder open
- *   figure     one fixed box per figure, whatever state it draws, flat on
- *              the chat like everything else in a reply
- *
- * Every row's mark sits in a 20px-wide slot so labels line up across blocks.
- * Nothing changes size when a choice is made, so the height the transcript
- * measured stays true.
+ * The live chat UI widgets (`happy-desktop-ui/src/ui`) and the figures they
+ * draw: the phone app's codes, a phone pairing, a provider's sign-in, the
+ * default model, a team's invite, GitHub link and machine join. Laid on the chat: no frame, no
+ * background, the reply's left edge and the reply's type. Each widget is one
+ * fixed box whatever state it draws, so the height the transcript reserved
+ * for it holds from missing to signed in, or from a code to paired.
  */
 .happy-chat-action {
     display: flex;
@@ -27,147 +17,8 @@
     line-height: 24px;
 }
 
-/* In a reply, a block keeps 16px from the text or block on either side, twice
-   the paragraphs' 8px, so a figure, its menu and the words around them read as
-   separate steps. The reply body is a Markdown flow whose blocks stack by top
-   margin, so the gap follows that flow's own rule rather than a flex gap.
-   `CHAT_ACTION_BLOCK_GAP` gives the row-height model the same 16px. */
-.happy-message__body--markdown > * + .happy-chat-action,
-.happy-message__body--markdown > .happy-chat-action + * {
-    margin-top: 16px;
-}
-
-/* A row of buttons starts on the text column: the first button's border lines
-   up with the prose above it, never hanging into the avatar gutter. */
-.happy-chat-action__buttons {
-    display: flex;
-    flex-flow: row wrap;
-    gap: 8px;
-}
-
 .happy-chat-action__button.happy-button[data-variant="outline"] {
     position: relative;
-}
-
-/* The checklist table: a heading row in secondary ink, then one row per item
-   on a hairline. Rows lend their cells to the grid, so every column lines up. */
-.happy-chat-action__table {
-    /* eslint-disable-next-line happy-layout/use-flex-layout -- a table of rows and columns: every row's cells must share one set of column widths */
-    display: grid;
-    column-gap: 16px;
-    min-width: 0;
-    overflow-wrap: break-word;
-}
-
-.happy-chat-action__table-row {
-    display: contents;
-}
-
-.happy-chat-action__table-heading {
-    padding-bottom: 6px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 18px;
-}
-
-.happy-chat-action__table-check,
-.happy-chat-action__table-item,
-.happy-chat-action__table-cell {
-    min-width: 0;
-    padding-block: 8px;
-    border-top: 1px solid var(--divider);
-}
-
-.happy-chat-action__table-check {
-    display: flex;
-    justify-content: center;
-    height: 24px;
-    padding-top: 8px;
-    box-sizing: content-box;
-}
-
-.happy-chat-action__table-check > .happy-checkbox {
-    height: 24px;
-}
-
-.happy-chat-action__table-item {
-    display: flex;
-    flex-direction: column;
-    cursor: pointer;
-}
-
-.happy-chat-action__checklist[data-locked] .happy-chat-action__table-item {
-    cursor: default;
-}
-
-.happy-chat-action__table-name {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.happy-chat-action__table-cell {
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 20px;
-    padding-top: 10px;
-    /* Breaks a word only when it cannot fit, so the column sizes to whole words. */
-    overflow-wrap: break-word;
-}
-
-/* A code a vendor's page shows: its own field and submit, on the text column. */
-.happy-chat-action__code {
-    align-items: center;
-    gap: 8px;
-}
-
-.happy-chat-action__code-field {
-    flex: 0 1 240px;
-    min-width: 0;
-}
-
-.happy-chat-action__button .happy-button__label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.happy-chat-action__product {
-    display: flex;
-    flex: none;
-    align-items: center;
-}
-
-.happy-chat-action__step .happy-chat-action__product {
-    height: 24px;
-}
-
-.happy-chat-action__choice {
-    position: relative;
-    display: flex;
-    flex: none;
-}
-
-/* Something already connected wears a green check on its corner, out of the flow. */
-.happy-chat-action__connected {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--success);
-    color: var(--surface);
-}
-
-/* The places Happy will read, as the app's file tree, at its natural height. */
-.happy-chat-action__tree {
-    flex-direction: column;
-    max-width: 420px;
 }
 
 /* The codes that download the phone app, side by side, each over the name of
@@ -227,7 +78,6 @@
      provider CLI  24 head · 4 · 40 line (two lines at most) · 8 · 36 controls = 112
      setting       24 head · 8 · 36 controls · 8 · 20 line                    =  96
      invite        24 head · 8 · 36 controls · 8 · 20 line                    =  96
-     members       24 head · 8 · 72 list (two 36 rows, then scrolling)       = 104
      settings      24 head · 4 · 20 line · 8 · 36 controls                    =  92 */
 .happy-chat-action__figure {
     width: 560px;
@@ -248,10 +98,6 @@
 
 .happy-chat-action__figure[data-figure="invite"] {
     height: 96px;
-}
-
-.happy-chat-action__figure[data-figure="members"] {
-    height: 104px;
 }
 
 .happy-chat-figure {
@@ -322,15 +168,6 @@
     margin-top: 8px;
 }
 
-/* The head, then the list or the line that stands in for it, 8px apart. */
-.happy-chat-figure--members {
-    gap: 8px;
-}
-
-.happy-chat-figure--members .happy-chat-figure__line {
-    height: 20px;
-}
-
 .happy-chat-figure__line[data-error],
 .happy-chat-figure__line[data-error] .happy-chat-figure__mark,
 .happy-chat-figure__line[data-state="failed"] .happy-chat-figure__mark {
@@ -367,8 +204,7 @@
 
 .happy-chat-figure--setting .happy-chat-figure__text,
 .happy-chat-figure--settings .happy-chat-figure__text,
-.happy-chat-figure--invite .happy-chat-figure__text,
-.happy-chat-figure--members .happy-chat-figure__text {
+.happy-chat-figure--invite .happy-chat-figure__text {
     -webkit-line-clamp: 1;
     line-clamp: 1;
 }
@@ -458,74 +294,6 @@
     opacity: 1;
 }
 
-/* Everyone on the server, then the codes still waiting, in rows that line up
-   their marks with every other block's. Past two rows the list scrolls in
-   place: a box that grew with its rows would move the menu under it whenever
-   someone joins or a code is made. */
-.happy-chat-figure__members {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    height: 72px;
-    overflow-y: auto;
-}
-
-.happy-chat-figure__member {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 8px;
-    height: 36px;
-    min-width: 0;
-    font-size: 14px;
-    line-height: 20px;
-}
-
-/* Fixed columns, so every row's name, role and status start on one line
-   down the list, across the figure's 560px:
-     20 mark · 8 · 160 name · 8 · 72 role · 8 · status · 8 · 72 action */
-.happy-chat-figure__member-name {
-    flex: none;
-    width: 160px;
-    overflow: hidden;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-chat-figure__member-role {
-    flex: none;
-    width: 72px;
-    overflow: hidden;
-    color: var(--text-secondary);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-chat-figure__member-status {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-chat-figure__member-action {
-    display: flex;
-    flex: none;
-    justify-content: flex-end;
-    width: 72px;
-}
-
-.happy-chat-figure__member[data-pending] .happy-chat-figure__member-name {
-    color: var(--text-secondary);
-}
-
-.happy-chat-figure__member > .happy-chat-figure__mark {
-    color: var(--text-secondary);
-}
-
 .happy-chat-figure__code {
     display: flex;
     flex: 0 1 auto;
@@ -556,99 +324,4 @@
 .happy-chat-action__phone-pair .happy-mobile-pairing__actions,
 .happy-chat-action__phone-pair .happy-mobile-direct-pairing__progress {
     justify-content: flex-start;
-}
-
-.happy-chat-action__checklist {
-    flex-direction: column;
-    gap: 12px;
-}
-
-.happy-chat-action__steps {
-    flex-direction: column;
-    gap: 8px;
-}
-
-.happy-chat-action__options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.happy-chat-action__option,
-.happy-chat-action__step,
-.happy-chat-action__status {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    min-width: 0;
-}
-
-/* The checkbox shares the marks' 20px slot, on the first line's centre. */
-.happy-chat-action__option > .happy-checkbox {
-    width: 20px;
-    height: 24px;
-    justify-content: center;
-}
-
-.happy-chat-action__mark {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 24px;
-    color: var(--text-secondary);
-}
-
-.happy-chat-action__text {
-    display: flex;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    align-items: baseline;
-    column-gap: 8px;
-    min-width: 0;
-}
-
-.happy-chat-action__option .happy-chat-action__text {
-    cursor: pointer;
-}
-
-.happy-chat-action__checklist[data-locked] .happy-chat-action__text {
-    cursor: default;
-}
-
-.happy-chat-action__detail {
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 20px;
-}
-
-.happy-chat-action__step[data-status="pending"] .happy-chat-action__label {
-    color: var(--text-secondary);
-}
-
-.happy-chat-action__step[data-status="done"] .happy-chat-action__mark,
-.happy-chat-action__status[data-status="done"] .happy-chat-action__mark {
-    color: var(--success);
-}
-
-.happy-chat-action__step[data-status="failed"] .happy-chat-action__mark,
-.happy-chat-action__status[data-status="failed"] .happy-chat-action__mark {
-    color: var(--status-error);
-}
-
-.happy-chat-action__step[data-status="running"] .happy-chat-action__mark,
-.happy-chat-action__status[data-status="running"] .happy-chat-action__mark {
-    color: var(--text);
-}
-
-.happy-chat-action__status .happy-chat-action__label {
-    color: var(--text-secondary);
-    font-size: 15px;
-}
-
-/* A locked group keeps its buttons where they are; the ones not chosen fade. */
-.happy-chat-action[data-locked] .happy-button:disabled,
-.happy-chat-action__checklist[data-locked] .happy-button:disabled {
-    opacity: 0.55;
 }

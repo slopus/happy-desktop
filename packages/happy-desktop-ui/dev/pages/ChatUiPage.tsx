@@ -1,0 +1,401 @@
+import {
+    type ChatUiGranted,
+    type ConversationMediaItem,
+    type ConversationUi,
+    type ConversationUiAttempt,
+    type HappyAgentDefaultModelSnapshot,
+    type ProviderCli,
+    type UiActionResponse,
+    type UiComponent,
+} from "happy-desktop-state";
+import { UiDefaultModel, UiInvite, UiProviderSignIn } from "../../src/ui/UiLiveWidgets";
+import { UiDocumentView, type UiDocumentViewProps } from "../../src/ui/UiDocumentView";
+import { UiRefusedNote } from "../../src/ui/UiRefusedNote";
+import type { ChatUiLive } from "../../src/ui/UiWidgetControl";
+import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-338";
+
+/* Fixture documents only: nothing here was sent by a daemon. */
+const OFFER = { messageId: "msgfixture01", uiId: "uifixture01" };
+
+const documentOf = (
+    components: readonly UiComponent[],
+    extra: Partial<Pick<ConversationUi, "media" | "attempts" | "answers">> = {},
+): ConversationUi => ({
+    offer: OFFER,
+    document: { id: OFFER.uiId, components: [...components] },
+    media: extra.media ?? [],
+    attempts: extra.attempts ?? new Map(),
+    answers: extra.answers ?? new Map(),
+    open: true,
+});
+
+const CHOICE: UiComponent = {
+    id: "work",
+    type: "choice",
+    fallback: "Options: Write code, Plan a launch, Just look around",
+    props: {
+        options: [
+            { id: "code", label: "Write code", primary: true },
+            { id: "launch", label: "Plan a launch" },
+            { id: "look", label: "Just look around" },
+        ],
+    },
+};
+
+const CHECKLIST: UiComponent = {
+    id: "tools",
+    type: "checklist",
+    fallback: "Pick tools: GitHub, Linear, Slack",
+    props: {
+        options: [
+            {
+                id: "github",
+                label: "GitHub",
+                detail: "Repositories and pull requests",
+                checked: true,
+            },
+            { id: "linear", label: "Linear", detail: "Issues and projects" },
+            { id: "slack", label: "Slack", detail: "Channels you choose" },
+        ],
+        submitLabel: "Connect these",
+        emptyLabel: "None for now",
+    },
+};
+
+const TEXT_FIELD: UiComponent = {
+    id: "nickname",
+    type: "text_field",
+    fallback: "What should I call you?",
+    props: {
+        label: "What should I call you?",
+        placeholder: "A name or nickname",
+        submitLabel: "Save",
+    },
+};
+
+const FILE_TREE: UiComponent = {
+    id: "tree",
+    type: "file_tree",
+    fallback: "weather-cli: src/index.ts, src/forecast.ts, package.json",
+    props: {
+        paths: [
+            "weather-cli/src/index.ts",
+            "weather-cli/src/forecast.ts",
+            "weather-cli/package.json",
+        ],
+    },
+};
+
+const MEDIA: readonly ConversationMediaItem[] = [
+    {
+        kind: "image",
+        name: "landscape.webp",
+        mimeType: "image/webp",
+        size: 0,
+        width: 1600,
+        height: 900,
+        url: new URL("../assets/crop-landscape.webp", import.meta.url).href,
+    },
+    {
+        kind: "image",
+        name: "portrait.webp",
+        mimeType: "image/webp",
+        size: 0,
+        width: 900,
+        height: 1600,
+        url: new URL("../assets/crop-portrait.webp", import.meta.url).href,
+    },
+];
+
+const IMAGES: UiComponent = {
+    id: "shots",
+    type: "images",
+    fallback: "Two screenshots",
+    props: {
+        images: [
+            { mediaIndex: 0, alt: "The forecast, wide" },
+            { mediaIndex: 1, alt: "The forecast on a phone" },
+        ],
+        columns: 2,
+    },
+};
+
+/* A type from a newer daemon, which this build has never heard of. */
+const UNKNOWN = {
+    id: "future",
+    type: "calendar_pick",
+    fallback: "Pick a time for the call: Tue 10:00, Wed 14:00",
+    props: {},
+} as unknown as UiComponent;
+
+const act = (): Promise<UiActionResponse> => new Promise(() => undefined);
+
+const CODEX: ProviderCli = {
+    id: "codex",
+    name: "Codex",
+    vendor: "OpenAI",
+    website: "https://openai.com/codex",
+    providerId: "codex",
+    installation: {
+        status: "installed",
+        path: "/Users/you/.local/bin/codex",
+        version: "0.61.0",
+        source: "standalone",
+        desktopApp: null,
+    },
+    installer: {
+        command: "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh",
+        sourceUrl: "https://chatgpt.com/codex/install.sh",
+        sourceHost: "chatgpt.com",
+        vendorSite: "https://openai.com/codex",
+    },
+    commands: { run: "codex", signIn: "codex login" },
+    signIn: { status: "signed_out", account: null, methods: ["browser", "device"] },
+    operation: null,
+    version: "0199a000-0000-7000-8000-000000000001",
+    updatedAt: 0,
+};
+
+const CODEX_SIGNED_IN: ProviderCli = {
+    ...CODEX,
+    signIn: {
+        status: "signed_in",
+        account: { email: "you@example.com", plan: "Pro" },
+        methods: ["browser"],
+    },
+};
+
+const MODELS: HappyAgentDefaultModelSnapshot = {
+    loading: false,
+    current: { providerId: "codex", modelId: "openai/gpt-6.1-sol", effort: "medium" },
+    choices: [
+        {
+            providerId: "codex",
+            providerName: "Codex",
+            modelId: "openai/gpt-6.1-sol",
+            modelName: "GPT-6.1 Sol",
+            efforts: ["low", "medium", "high", "xhigh"],
+            defaultEffort: "medium",
+        },
+    ],
+};
+
+const providerSignIn = (provider: string): UiComponent =>
+    ({
+        id: `sign-in-${provider}`,
+        type: "provider_sign_in",
+        fallback: `Sign in to ${provider}`,
+        props: { provider },
+    }) as UiComponent;
+
+const LIVE: ChatUiLive = {
+    provider_sign_in: (_component, control) => (
+        <UiProviderSignIn cli={CODEX} control={control} provider="codex" />
+    ),
+    default_model: (_component, control) => <UiDefaultModel control={control} state={MODELS} />,
+    invite: (_component, control) => (
+        <UiInvite
+            control={control}
+            createdWords={() => ({ detail: "Joins acme as Member · Shown only here" })}
+            figure={{
+                loading: false,
+                owner: true,
+                roles: [
+                    { id: "admin", name: "Admin" },
+                    { id: "member", name: "Member" },
+                ],
+            }}
+        />
+    ),
+};
+
+const LIVE_SIGNED_IN: ChatUiLive = {
+    provider_sign_in: (_component, control) => (
+        <UiProviderSignIn cli={CODEX_SIGNED_IN} control={control} provider="codex" />
+    ),
+};
+
+const VIEWER: ChatUiGranted = new Set();
+
+const SPECIMENS: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly detail: string;
+    readonly view: UiDocumentViewProps;
+}[] = [
+    {
+        id: "C-338a",
+        label: "Choice",
+        detail: "up to six buttons · a press becomes the person's words",
+        view: { ui: documentOf([CHOICE]), onAction: act },
+    },
+    {
+        id: "C-338b",
+        label: "Choice, answered",
+        detail: "the accepted option keeps the pressed fill; the rest fade in place",
+        view: {
+            ui: documentOf([CHOICE], {
+                answers: new Map([
+                    ["work", { type: "choice.choose", payload: { optionId: "launch" } }],
+                ]),
+            }),
+            onAction: act,
+        },
+    },
+    {
+        id: "C-338c",
+        label: "Checklist",
+        detail: "ticks, then one submit",
+        view: { ui: documentOf([CHECKLIST]), onAction: act },
+    },
+    {
+        id: "C-338d",
+        label: "Text field",
+        detail: "one labelled line and its submit",
+        view: { ui: documentOf([TEXT_FIELD]), onAction: act },
+    },
+    {
+        id: "C-338e",
+        label: "Text field, on its way",
+        detail: "the click this window sent, until its record arrives",
+        view: {
+            ui: documentOf([TEXT_FIELD]),
+            pending: new Map([
+                [
+                    `${OFFER.messageId}\0${OFFER.uiId}\0nickname`,
+                    { type: "text_field.submit", payload: { text: "Sam" } },
+                ],
+            ]),
+            onAction: act,
+        },
+    },
+    {
+        id: "C-338f",
+        label: "Viewer",
+        detail: "controls drawn disabled, and why",
+        view: { ui: documentOf([CHOICE]), granted: VIEWER, onAction: act },
+    },
+    {
+        id: "C-338g",
+        label: "File tree",
+        detail: "paths as a tree, every folder open",
+        view: { ui: documentOf([FILE_TREE]) },
+    },
+    {
+        id: "C-338h",
+        label: "Images",
+        detail: "a show_ui call's pictures, in two columns",
+        view: { ui: documentOf([IMAGES], { media: MEDIA }) },
+    },
+    {
+        id: "C-338i",
+        label: "Fallback",
+        detail: "a type this build doesn't know, and one this server doesn't serve",
+        view: { ui: documentOf([UNKNOWN, CHECKLIST]), served: new Set(["choice"]) },
+    },
+    {
+        id: "C-338j",
+        label: "Provider sign-in",
+        detail: "Sign in, or paste a setup token",
+        view: { ui: documentOf([providerSignIn("codex")]), live: LIVE, onAction: act },
+    },
+    {
+        id: "C-338j2",
+        label: "Provider sign-in, already signed in",
+        detail: "Use Codex connects it as it is",
+        view: { ui: documentOf([providerSignIn("codex")]), live: LIVE_SIGNED_IN, onAction: act },
+    },
+    {
+        id: "C-338k",
+        label: "Provider sign-in, token refused",
+        detail: "the record's reason, inside the widget",
+        view: {
+            ui: documentOf([providerSignIn("codex")], {
+                attempts: new Map([
+                    [
+                        "sign-in-codex",
+                        {
+                            action: { type: "provider_sign_in.submit_token", payload: {} },
+                            outcome: {
+                                status: "rejected",
+                                code: "token_rejected",
+                                reason: "Codex didn't accept that token.",
+                            },
+                        } as ConversationUiAttempt,
+                    ],
+                ]),
+            }),
+            live: LIVE,
+            onAction: act,
+        },
+    },
+    {
+        id: "C-338l",
+        label: "Default model and invite",
+        detail: "live widgets, each in its fixed box",
+        view: {
+            ui: documentOf([
+                {
+                    id: "model",
+                    type: "default_model",
+                    fallback: "Default model",
+                    props: {},
+                } as UiComponent,
+                {
+                    id: "invite",
+                    type: "invite",
+                    fallback: "Invite a teammate",
+                    props: {},
+                } as UiComponent,
+            ]),
+            live: LIVE,
+            onAction: act,
+        },
+    },
+];
+
+export function ChatUiPage() {
+    return (
+        <ComponentPage
+            number={componentNumber}
+            summary="Chat UI: a document's components drawn top to bottom, 16px apart, on the reply's measure. Unknown or unserved types show the server's fallback line; live widgets keep one fixed box."
+            title="Chat UI"
+        >
+            <div className="specimen-grid">
+                {SPECIMENS.map((specimen) => (
+                    <Specimen
+                        detail={specimen.detail}
+                        key={specimen.id}
+                        label={specimen.label}
+                        number={specimen.id}
+                        stage="surface"
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                padding: "24px",
+                                width: "600px",
+                            }}
+                        >
+                            <UiDocumentView {...specimen.view} />
+                        </div>
+                    </Specimen>
+                ))}
+                <Specimen
+                    detail="under the greyed bubble of a press that wasn't sent"
+                    label="Refused"
+                    number="C-338m"
+                    stage="surface"
+                >
+                    <div style={{ display: "flex", padding: "24px" }}>
+                        <UiRefusedNote reason="This was already answered." />
+                    </div>
+                </Specimen>
+            </div>
+        </ComponentPage>
+    );
+}
