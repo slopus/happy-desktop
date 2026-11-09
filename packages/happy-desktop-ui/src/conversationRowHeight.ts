@@ -3,6 +3,7 @@ import {
     type AgentTurnTraceSummary,
     type ConversationEntry,
     type ConversationErrorAssistance,
+    type ConversationUi,
     type ConversationMediaItem,
     type ConversationMediaLayout,
     type ConversationRequest,
@@ -36,7 +37,6 @@ import {
     uiTextHeight,
     uiTextNaturalWidth,
     textLayoutCssSize,
-    type MarkdownHtmlBlockHeight,
     type MessageTextLayoutCache,
 } from "./messageTextLayout";
 import {
@@ -86,11 +86,15 @@ import { conversationMediaRunSignature, type ConversationMediaRun } from "./conv
 import {
     conversationMediaVisible,
     messageInlineLayoutKey,
-    messageLayoutMembers,
     type MessageInlineLayouts,
 } from "./conversationInlineLayouts";
-import { CHAT_ACTION_BLOCK_GAP, chatActionBlockHeight } from "./ChatActionBlock";
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
+import {
+    uiDocumentHeight,
+    uiDocumentStateSignature,
+    type UiDocumentViewProps,
+} from "./ui/UiDocumentView";
+import { UI_REFUSED_NOTE_HEIGHT } from "./ui/UiRefusedNote";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
 /** The same footer geometry for the live row and the room a queued turn will need. */
@@ -168,7 +172,12 @@ export type ConversationRowContext = {
     readonly mediaPlaced?: ReadonlySet<number>;
     /** The layouts this reply draws, and its text with each one's placeholder. */
     readonly messageLayouts?: MessageInlineLayouts;
+    /** What the surface draws of chat UI, for a message showing a document. */
+    readonly chatUi?: ChatUiRowContext;
 };
+
+/** What a chat UI document's height reads besides the document itself. */
+export type ChatUiRowContext = Omit<UiDocumentViewProps, "ui" | "onAction" | "onMediaOpen">;
 export type ConversationFailureRowContext = {
     /** The conversation has not moved past this failure, so its actions are offered. */
     readonly current: boolean;
@@ -606,9 +615,7 @@ function messageLayoutsFramesSignature(layouts: MessageInlineLayouts | undefined
     if (layouts === undefined) return "";
     let signature = "";
     for (const layout of layouts.layouts.values())
-        signature += mediaVideoFramesSignature(
-            messageLayoutMembers(layout).map((member) => member.item),
-        );
+        signature += mediaVideoFramesSignature(layout.members.map((member) => member.item));
     return signature;
 }
 
@@ -787,31 +794,22 @@ export function messageRowHeight(input: MessageRowHeightInput): number {
 
 /**
  * A reply's layout is as tall as its tree laid out at the body's measure: the
- * same off-screen measurement as a presented layout, uncapped. An action block
- * is measured the same way, and no choice or press changes its height; it
- * keeps the wider gap the reply's stylesheet gives it from its neighbours. A
- * placeholder naming no layout of this reply is HTML, which draws nothing.
+ * same off-screen measurement as a presented layout, uncapped. A placeholder
+ * naming no layout of this reply is HTML, which draws nothing.
  */
 function messageLayoutsHeight(
     layouts: MessageInlineLayouts | undefined,
-): MarkdownHtmlBlockHeight | undefined {
+): ((html: string, measure: number) => number | undefined) | undefined {
     if (layouts === undefined || layouts.layouts.size === 0) return undefined;
     return (html, measure) => {
         const key = messageInlineLayoutKey(html);
         const layout = key === undefined ? undefined : layouts.layouts.get(key);
         if (layout === undefined) return undefined;
-        if (layout.kind === "actions")
-            return {
-                height: chatActionBlockHeight(layout.block, measure),
-                gap: CHAT_ACTION_BLOCK_GAP,
-            };
-        return {
-            height: mediaTreeHeight(
-                layout.root,
-                mediaItemsFramed(layout.members.map((member) => member.item)),
-                measure,
-            ),
-        };
+        return mediaTreeHeight(
+            layout.root,
+            mediaItemsFramed(layout.members.map((member) => member.item)),
+            measure,
+        );
     };
 }
 
@@ -1434,6 +1432,8 @@ export function conversationRowHeight(
         messageReferencesSignature(conversationEntryReferences(entry), context.references),
         context.messageLayouts?.signature ?? "",
         messageLayoutsFramesSignature(context.messageLayouts),
+        entry.ui ? chatUiRowSignature(entry.ui, context.chatUi) : "",
+        entry.refused ?? "",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight(
@@ -1479,8 +1479,27 @@ export function conversationRowHeight(
             if (own) height += STORY_QUOTE_OWN_LINE;
         }
         if (!own && !grouped && entry.contextNote) height += 21;
+        /* A document sits in the attachment slot, at the content's measure. */
+        if (entry.ui)
+            height +=
+                (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+                uiDocumentHeight(
+                    { ui: entry.ui, ...context.chatUi },
+                    messageContentMeasure(width, treatment),
+                );
+        if (entry.refused !== undefined) height += MEDIA_MARGIN + UI_REFUSED_NOTE_HEIGHT;
         return height;
     });
+}
+
+function chatUiRowSignature(ui: ConversationUi, context: ChatUiRowContext | undefined): string {
+    return [
+        ui.offer.messageId,
+        ui.offer.uiId,
+        context?.live ? Object.keys(context.live).sort().join(",") : "",
+        context?.served ? [...context.served].join(",") : "*",
+        uiDocumentStateSignature({ ui, ...context }),
+    ].join("|");
 }
 /**
  * The rendered clock string for a timestamp, formatted exactly as

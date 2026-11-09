@@ -52,7 +52,7 @@ export type AgentActivityMediaRun =
     | { readonly type: "deferred" }
     | {
           readonly type: "end";
-          readonly columns: 1 | 2;
+          readonly columns: 1 | 2 | 3;
           /** Every picture of the run, in order. */
           readonly items: readonly ConversationMediaItem[];
           /** Opens one picture by its position in `items`. */

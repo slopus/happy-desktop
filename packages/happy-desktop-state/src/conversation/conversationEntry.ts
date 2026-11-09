@@ -3,8 +3,8 @@ import type {
     HappyAgentArtifactId,
     HappyAgentArtifactType,
 } from "../artifacts/artifactTypes.js";
-import type { ChatActionChoice } from "../chatActions/chatActions.js";
 import type { AgentTurnTraceSummary, UserError } from "../types.js";
+import type { ConversationUi } from "../chatUi/chatUi.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
 /** Structured value carried verbatim from an agent tool call into its render. */
@@ -202,7 +202,7 @@ export interface ConversationMediaSource {
  * exactly once, and an item it left out is appended after it.
  */
 export type ConversationMediaLayout =
-    | { readonly type: "columns"; readonly columns: 1 | 2 }
+    | { readonly type: "columns"; readonly columns: 1 | 2 | 3 }
     | { readonly type: "tree"; readonly root: readonly ConversationMediaLayoutNode[] };
 
 export type ConversationMediaLayoutTag =
@@ -622,25 +622,13 @@ export interface ConversationMessageEntry {
     readonly messageId?: string;
     /** The run that produced it, when the Happy Agent served it. */
     readonly runId?: string;
-    /** The inline action blocks an agent's text holds, when the Happy Agent served it. */
-    readonly actions?: ConversationMessageActions;
-}
-
-/**
- * Where an agent text's inline action blocks stand in their message, and what
- * the daemon recorded about them.
- */
-export interface ConversationMessageActions {
-    /** The block index of the text's first block, counted across the whole message. */
-    readonly blockStart: number;
-    /** Each answered block's recorded choice, by block index; an answered block is locked. */
-    readonly choices: Readonly<Record<string, ChatActionChoice>>;
+    /** The chat UI document this agent message shows, under its text. */
+    readonly ui?: ConversationUi;
     /**
-     * Whether its unanswered blocks still take a press: no message from the
-     * person has come after this one. Once anyone writes or presses anywhere
-     * later, every older block is inert.
+     * A chat UI answer that never became the person's words: the message is
+     * the bubble it would have been, greyed, and this is why it wasn't sent.
      */
-    readonly live: boolean;
+    readonly refused?: string;
 }
 
 export interface ConversationActivityEntry {

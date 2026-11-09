@@ -1,3 +1,4 @@
+export * from "./chatUi/chatUi.js";
 export * from "./types.js";
 export * from "./transport.js";
 export { HappyAgentApiError, HappyAgentClient } from "@slopus/happy-agent-client";
@@ -9,7 +10,6 @@ export type {
 export * as happyAgentProtocol from "@slopus/happy-agent-client";
 export * from "./happyAgentConnection/index.js";
 export { type DeepReadonly } from "./deepReadonly.js";
-export * from "./chatActions/chatActions.js";
 export * from "./conversation/conversationAuthor.js";
 export * from "./conversation/conversationEntries.js";
 export * from "./conversation/conversationEntry.js";

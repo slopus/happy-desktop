@@ -1216,16 +1216,8 @@ const HEADINGS = [
     { size: 16, line: 24, weight: 600 },
     { size: 16, line: 24, weight: 600 },
 ] as const;
-/**
- * A block's painted box plus the margins that separate it from its neighbours,
- * and the wider gap it keeps from the block on either side, when it keeps one.
- */
-type Block = {
-    readonly height: number;
-    readonly marginTop: number;
-    readonly marginBottom: number;
-    readonly gap?: number;
-};
+/** A block's painted box plus the margins that separate it from its neighbours. */
+type Block = { readonly height: number; readonly marginTop: number; readonly marginBottom: number };
 const flow = (height: number): Block => ({ height, marginTop: 0, marginBottom: 0 });
 type MarkdownList = Extract<MarkdownRootContent, { type: "list" }>;
 type MarkdownTrailingInline = {
@@ -1342,13 +1334,9 @@ function messageMarkdownFootnotes(
 /**
  * The box a top-level HTML block draws, by its source, at `measure`; nothing
  * for HTML that draws nothing, which is all of it unless a renderer gives a
- * block a meaning (a reply's own layout). `gap` is the space it keeps from the
- * blocks beside it when that is wider than the paragraphs' own.
+ * block a meaning (a reply's own layout).
  */
-export type MarkdownHtmlBlockHeight = (
-    html: string,
-    measure: number,
-) => { readonly height: number; readonly gap?: number } | undefined;
+export type MarkdownHtmlBlockHeight = (html: string, measure: number) => number | undefined;
 function markdownBlocksHeight(
     nodes: readonly MarkdownRootContent[],
     measure: number,
@@ -1363,8 +1351,8 @@ function markdownBlocksHeight(
     const blocks = nodes
         .map((node) => {
             if (htmlBlockHeight !== undefined && node.type === "html") {
-                const box = htmlBlockHeight(node.value, measure);
-                return box === undefined ? undefined : { ...flow(box.height), gap: box.gap };
+                const height = htmlBlockHeight(node.value, measure);
+                return height === undefined ? undefined : flow(height);
             }
             return markdownBlockHeight(
                 node,
@@ -1381,8 +1369,7 @@ function markdownBlocksHeight(
     let total = 0;
     let pendingMargin = 0;
     for (const [index, block] of blocks.entries()) {
-        const between = index > 0 ? Math.max(gap, blocks[index - 1]!.gap ?? 0, block.gap ?? 0) : 0;
-        pendingMargin = Math.max(pendingMargin, between, block.marginTop);
+        pendingMargin = Math.max(pendingMargin, index > 0 ? gap : 0, block.marginTop);
         if (block.height === 0) {
             // Empty block margins collapse through the element, rather than
             // adding another paragraph gap before the next painted block.

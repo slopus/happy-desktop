@@ -1,4 +1,12 @@
-import { conversationActionBlockCount, type ChatActionChoice } from "../chatActions/chatActions.js";
+import { chatUiActionSays, chatUiActionText } from "../chatUi/chatUi.js";
+import {
+    chatUiConversation,
+    chatUiMessage,
+    chatUiRecordComponent,
+    chatUiRecordOf,
+    chatUiTranscriptRead,
+    type ChatUiTranscript,
+} from "../chatUi/chatUiTranscript.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
@@ -412,9 +420,11 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             questionAsked = true;
         elements.push(element);
     };
-    /* An agent message's inline actions stay live until a person's message is
-       recorded after it; one still waiting for a run is not recorded yet. */
-    let lastUserMessage: Message | undefined;
+    /* Chat UI reads the whole transcript: an offer shows the records that
+       answered it, and closes once a person's message is recorded after it. */
+    const ordered: Message[] = [];
+    let lastUser: Message | undefined;
+    let chatUi = false;
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         if (messages === undefined) continue;
@@ -423,41 +433,40 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         // itself, once for every run in the transcript, cost more than
         // everything else this loop does.
         if (!messagesOrdered(messages)) messages.sort(compareMessages);
-        for (const entry of messages)
-            if (entry.message.role === "user") lastUserMessage = entry.message;
+        for (const entry of messages) {
+            ordered.push(entry.message);
+            if (entry.message.role === "user") lastUser = entry.message;
+            else if (!chatUi && chatUiMessage(entry.message)) chatUi = true;
+        }
     }
-    let actionsLive = lastUserMessage === undefined;
+    if (!messagesOrdered(pending)) pending.sort(compareMessages);
+    for (const entry of pending) {
+        ordered.push(entry.message);
+        if (entry.message.role === "user") lastUser = entry.message;
+        else if (!chatUi && chatUiMessage(entry.message)) chatUi = true;
+    }
+    const ui: ChatUiProjection | undefined = chatUi
+        ? { transcript: chatUiTranscriptRead(ordered), open: lastUser === undefined }
+        : undefined;
+    const projected = (entry: TranscriptMessage, runId: string, status: Run["status"]) => {
+        const elements = projectMessage(entry, runId, status, reader, ui);
+        if (ui !== undefined && entry.message === lastUser) ui.open = true;
+        return elements;
+    };
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         const before = elements.length;
-        if (messages !== undefined) {
-            for (const entry of messages) {
-                for (const element of projectMessage(
-                    entry,
-                    run.id,
-                    run.status,
-                    reader,
-                    actionsLive,
-                ))
-                    push(element);
-                if (entry.message === lastUserMessage) actionsLive = true;
-            }
-        }
+        if (messages !== undefined)
+            for (const entry of messages)
+                for (const element of projected(entry, run.id, run.status)) push(element);
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
         }
         const end = projectRunEnd(run, input.runFinalContextTokens?.get(run.id));
         if (end !== undefined) elements.push(end);
     }
-    if (!messagesOrdered(pending)) pending.sort(compareMessages);
     for (const entry of pending)
-        for (const element of projectMessage(
-            entry,
-            `pending:${entry.message.id}`,
-            "running",
-            reader,
-            true,
-        ))
+        for (const element of projected(entry, `pending:${entry.message.id}`, "running"))
             push(element);
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
     return elements;
@@ -1587,7 +1596,6 @@ interface MessageElements {
     readonly runId: string;
     readonly runStatus: Run["status"];
     readonly reader: TranscriptReader;
-    readonly actionsLive: boolean;
     readonly elements: readonly ChatElement[];
 }
 
@@ -1616,8 +1624,12 @@ function projectMessage(
     runId: string,
     runStatus: Run["status"],
     reader: TranscriptReader,
-    actionsLive: boolean,
+    ui: ChatUiProjection | undefined,
 ): readonly ChatElement[] {
+    /* What chat UI shows depends on the rest of the transcript, so it is
+       projected afresh; entries keep their identity by comparing it. */
+    if (ui !== undefined && chatUiMessage(entry.message))
+        return messageElementsProject(entry, runId, runStatus, reader, ui);
     const cached = messageElements.get(entry.message);
     const userId = entry.message.role === "user" ? entry.message.metadata.userId : undefined;
     const profile = userId === undefined ? undefined : reader.userProfiles?.get(userId);
@@ -1628,18 +1640,16 @@ function projectMessage(
         cached.own === own &&
         cached.runId === runId &&
         cached.runStatus === runStatus &&
-        cached.actionsLive === actionsLive &&
         cached.reader.agentId === reader.agentId &&
         cached.reader.agentOwned === reader.agentOwned &&
         cached.reader.parentAgentId === reader.parentAgentId
     )
         return cached.elements;
-    const elements = messageElementsProject(entry, runId, runStatus, reader, actionsLive);
+    const elements = messageElementsProject(entry, runId, runStatus, reader, undefined);
     messageElements.set(entry.message, {
         runId,
         runStatus,
         reader,
-        actionsLive,
         elements,
         profile,
         own,
@@ -1697,18 +1707,59 @@ function senderAgentOf(
     };
 }
 
-const NO_ACTION_CHOICES: Readonly<Record<string, ChatActionChoice>> = {};
+/** The transcript's chat UI, and whether no person's message has been projected since. */
+interface ChatUiProjection {
+    readonly transcript: ChatUiTranscript;
+    /** Turns true once the last person's message has been projected: every offer after it is open. */
+    open: boolean;
+}
 
 function messageElementsProject(
     entry: TranscriptMessage,
     runId: string,
     runStatus: Run["status"],
     reader: TranscriptReader,
-    actionsLive: boolean,
+    ui: ChatUiProjection | undefined,
 ): readonly ChatElement[] {
     const { message } = entry;
     const elementId = message.id;
     const base = { groupId: runId, runId, createdAt: message.createdAt };
+    /* An attempt record is drawn only as an answer that never became the
+       person's words: the bubble it would have been, greyed, with why. */
+    const record = ui === undefined ? undefined : chatUiRecordOf(message);
+    if (ui !== undefined && record !== undefined) {
+        if (
+            (record.outcome.status !== "rejected" && record.outcome.status !== "failed") ||
+            !chatUiActionSays(record.action.type)
+        )
+            return [];
+        const component = chatUiRecordComponent(ui.transcript, record);
+        const text = component ? chatUiActionText(component, record.action) : undefined;
+        if (text === undefined) return [];
+        return [
+            {
+                ...base,
+                id: `message:${elementId}`,
+                kind: "user_message",
+                messageId: message.id,
+                authority: "server",
+                identity: null,
+                ...(message.metadata.userId === undefined
+                    ? {}
+                    : {
+                          userId: message.metadata.userId,
+                          identity:
+                              message.metadata.userId === reader.currentUserId
+                                  ? null
+                                  : message.metadata.userId,
+                          profile: reader.userProfiles?.get(message.metadata.userId),
+                      }),
+                delivery: "sent",
+                text,
+                refused: record.outcome.reason ?? "Not sent",
+            },
+        ];
+    }
     if (message.role === "user") {
         const senderAgent = senderAgentOf(message, reader);
         return [
@@ -1774,17 +1825,12 @@ function messageElementsProject(
     }
 
     const elements: ChatElement[] = [];
-    /* The daemon numbers a message's action blocks across all of its text. */
-    const actionChoices = message.role === "agent" ? message.actionChoices : undefined;
-    let actionBlocks = 0;
     for (let index = 0; index < message.content.length; index += 1) {
         const block = message.content[index];
         if (block === undefined) continue;
         const id = `message:${elementId}:${String(index)}`;
         if (block.type === "text") {
             if (message.role === "agent") {
-                const blockStart = actionBlocks;
-                actionBlocks += conversationActionBlockCount(block.text);
                 elements.push({
                     ...base,
                     id,
@@ -1792,15 +1838,6 @@ function messageElementsProject(
                     messageId: message.id,
                     text: block.text,
                     complete: runStatus !== "running",
-                    ...(actionBlocks > blockStart
-                        ? {
-                              actions: {
-                                  blockStart,
-                                  choices: actionChoices ?? NO_ACTION_CHOICES,
-                                  live: actionsLive,
-                              },
-                          }
-                        : {}),
                 });
             } else if (
                 message.role === "service" &&
@@ -1821,6 +1858,17 @@ function messageElementsProject(
             } else {
                 elements.push({ ...base, id, kind: "system_notice", text: block.text });
             }
+        } else if (block.type === "ui") {
+            if (message.role === "agent" && ui !== undefined)
+                elements.push({
+                    ...base,
+                    id,
+                    kind: "agent_text",
+                    messageId: message.id,
+                    text: "",
+                    complete: true,
+                    ui: chatUiConversation(ui.transcript, message.id, block.ui, [], ui.open),
+                });
         } else if (block.type === "configuration") {
             if (block.before !== null)
                 elements.push({ ...base, id, kind: "configuration", configuration: block });
@@ -1832,6 +1880,28 @@ function messageElementsProject(
                 text: block.text,
                 complete: runStatus !== "running",
             });
+        } else if (block.type === "tool_call" && block.presentation?.type === "ui") {
+            /* What `show_ui` showed is part of the reply, not a step of the work. */
+            if (ui !== undefined) {
+                const presentation = block.presentation;
+                elements.push({
+                    ...base,
+                    id,
+                    kind: "agent_text",
+                    messageId: message.id,
+                    text: "",
+                    complete: true,
+                    ui: chatUiConversation(
+                        ui.transcript,
+                        message.id,
+                        presentation.ui,
+                        presentation.items.map((item, at) =>
+                            mediaItemProject(item, reader.mediaUrl(reader.agentId, block.id, at)),
+                        ),
+                        ui.open,
+                    ),
+                });
+            }
         } else if (block.type === "tool_call") {
             elements.push({
                 ...base,
@@ -1843,7 +1913,7 @@ function messageElementsProject(
                 argumentsComplete: true,
                 status: projectToolStatus(block.status, runStatus),
                 ...(block.result === undefined ? {} : { result: stringify(block.result) }),
-                ...(block.presentation === undefined
+                ...(block.presentation === undefined || block.presentation.type === "ui"
                     ? {}
                     : {
                           presentation: projectToolPresentation(block.presentation, (index) =>
@@ -1950,8 +2020,12 @@ function usageTotal(usage: UsageBreakdown): number {
     return total;
 }
 
+type ToolPresentationWire = NonNullable<
+    Extract<MessageBlock, { type: "tool_call" }>["presentation"]
+>;
+
 function projectToolPresentation(
-    presentation: NonNullable<Extract<MessageBlock, { type: "tool_call" }>["presentation"]>,
+    presentation: Exclude<ToolPresentationWire, { type: "ui" }>,
     mediaUrl: (index: number) => string,
 ): ToolPresentation {
     switch (presentation.type) {
@@ -2005,30 +2079,12 @@ function projectToolPresentation(
                 ...(presentation.sources === undefined ? {} : { sources: presentation.sources }),
             };
         case "media":
-            // The array position is the item's index on the bytes route.
             return {
                 kind: "media",
-                items: presentation.items.map((item, index) => ({
-                    kind: mediaKindProject(item.kind),
-                    name: item.name,
-                    mimeType: item.mimeType,
-                    size: item.size,
-                    ...(item.width === undefined ? {} : { width: item.width }),
-                    ...(item.height === undefined ? {} : { height: item.height }),
-                    ...((scale) => (scale === undefined ? {} : { scale }))(
-                        item.kind === "image" ? mediaScaleProject(item.scale) : undefined,
-                    ),
-                    ...(item.thumbhash === undefined ? {} : { thumbhash: item.thumbhash }),
-                    url: mediaUrl(index),
-                    ...(item.source === undefined
-                        ? {}
-                        : {
-                              source: {
-                                  path: item.source.path,
-                                  absolutePath: item.source.absolutePath,
-                              },
-                          }),
-                })),
+                // The array position is the item's index on the bytes route.
+                items: presentation.items.map((item, index) =>
+                    mediaItemProject(item, mediaUrl(index)),
+                ),
                 ...((layout) => (layout === undefined ? {} : { layout }))(
                     mediaLayoutProjectSafe(presentation.layout, presentation.items.length),
                 ),
@@ -2056,6 +2112,31 @@ function projectToolPresentation(
                 answers: presentation.answers,
             };
     }
+}
+
+type WireMediaItem = Extract<ToolPresentationWire, { type: "media" }>["items"][number];
+
+/** One presented item at its bytes' address on this connection. */
+function mediaItemProject(
+    item: WireMediaItem,
+    url: string,
+): Extract<ToolPresentation, { kind: "media" }>["items"][number] {
+    return {
+        kind: mediaKindProject(item.kind),
+        name: item.name,
+        mimeType: item.mimeType,
+        size: item.size,
+        ...(item.width === undefined ? {} : { width: item.width }),
+        ...(item.height === undefined ? {} : { height: item.height }),
+        ...((scale) => (scale === undefined ? {} : { scale }))(
+            item.kind === "image" ? mediaScaleProject(item.scale) : undefined,
+        ),
+        ...(item.thumbhash === undefined ? {} : { thumbhash: item.thumbhash }),
+        url,
+        ...(item.source === undefined
+            ? {}
+            : { source: { path: item.source.path, absolutePath: item.source.absolutePath } }),
+    };
 }
 
 /** A display preference this build knows, or no preference. */

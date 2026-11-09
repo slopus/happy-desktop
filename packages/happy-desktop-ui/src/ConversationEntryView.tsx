@@ -6,19 +6,20 @@ import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
 import type { MessageReferences } from "./messageReferences";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
-import {
-    chatActionBlockKey,
-    type AgentTurnTraceSummary,
-    type ChatActionChoice,
-    type ChatActionInvocation,
-    type ConversationAttachment,
-    type ConversationAuthor,
-    type ConversationEntry,
-    type ConversationErrorAssistance,
-    type ConversationToolCall,
-    type UserError,
+import type {
+    AgentTurnTraceSummary,
+    ConversationAttachment,
+    ConversationAuthor,
+    ConversationEntry,
+    ConversationErrorAssistance,
+    ConversationToolCall,
+    ConversationUi,
+    ConversationUiOffer,
+    UiActionInput,
+    UiActionResponse,
+    UiComponent,
+    UserError,
 } from "happy-desktop-state";
-import { ChatActionBlock, type ChatActionFigures } from "./ChatActionBlock";
 import { messageBodyFormat } from "./messagePlainText";
 import {
     AgentActivityRow,
@@ -52,6 +53,8 @@ import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { StoryQuote } from "./StoryQuote";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
+import { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
+import { UiRefusedNote } from "./ui/UiRefusedNote";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
 export type ConversationEntryFailureProps = ConversationFailureActions & {
@@ -70,6 +73,22 @@ export type ConversationEntryFailureProps = ConversationFailureActions & {
 };
 
 type ConversationLinkedAttachment = Extract<ConversationAttachment, { kind: "linked" }>;
+
+/**
+ * How the conversation draws and answers chat UI documents: what the server
+ * serves, this window's clicks, what the viewer may do, and the live
+ * components its owner binds to product state.
+ */
+export type ConversationChatUi = Omit<UiDocumentViewProps, "ui" | "onAction" | "onMediaOpen"> & {
+    /** Sends one click on a document's component. Absent, every control is inert. */
+    readonly onAction?: (
+        offer: ConversationUiOffer,
+        component: UiComponent,
+        action: UiActionInput,
+    ) => Promise<UiActionResponse>;
+    /** Opens one of a document's pictures: its message, and its index in the document's media. */
+    readonly onMediaOpen?: (messageId: string, index: number) => void;
+};
 
 export type ConversationEntryViewProps = {
     entry: ConversationEntry;
@@ -136,14 +155,6 @@ export type ConversationEntryViewProps = {
      * that showed it.
      */
     messageLayouts?: MessageInlineLayouts;
-    /** Whether the server takes presses on inline action blocks; without it every block is inert. */
-    actionsPressable?: boolean;
-    /** The conversation's presses still on their way, by `chatActionBlockKey`. */
-    actionPending?: ReadonlyMap<string, ChatActionChoice>;
-    /** Presses a control of one of this reply's inline action blocks. */
-    onActionPress?: (invocation: ChatActionInvocation) => void;
-    /** What this reply's live figures show, drawn by the conversation's owner. */
-    actionFigures?: ChatActionFigures;
     /** Opens one child session represented by a delegated-agent entry. */
     onDelegationSelect?: (sessionId: string) => void;
     /** Reference epoch millis used by live delegated-agent timers. */
@@ -160,6 +171,8 @@ export type ConversationEntryViewProps = {
     references?: MessageReferences;
     /** The page this row's tool call shows inline, when its owner shows one. */
     inlinePage?: InlinePageProps;
+    /** How this row draws and answers a chat UI document it carries. */
+    chatUi?: ConversationChatUi;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -627,14 +640,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                   }
                 : {})}
             {...(props.messageLayouts
-                ? {
-                      layoutRender: messageLayoutRender(
-                          props.messageLayouts,
-                          props.onToolMediaOpen,
-                          entry,
-                          props,
-                      ),
-                  }
+                ? { layoutRender: messageLayoutRender(props.messageLayouts, props.onToolMediaOpen) }
                 : {})}
             className={props.className}
             {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}
@@ -695,6 +701,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             }
             style={props.style}
             time={messageTime(message.createdAt)}
+            data-refused={entry.refused !== undefined ? "" : undefined}
         >
             {linked.map((attachment) => (
                 <FileAttachment
@@ -719,7 +726,32 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     variant="chat"
                 />
             ))}
+            {entry.ui ? chatUiDocument(message.id, entry.ui, props.chatUi) : null}
+            {entry.refused !== undefined ? <UiRefusedNote reason={entry.refused} /> : null}
         </Message>
+    );
+}
+
+function chatUiDocument(
+    messageId: string,
+    ui: ConversationUi,
+    chatUi: ConversationChatUi | undefined,
+): ReactNode {
+    const { onAction, onMediaOpen, ...view } = chatUi ?? {};
+    return (
+        <UiDocumentView
+            {...view}
+            {...(onAction
+                ? {
+                      onAction: (component: UiComponent, action: UiActionInput) =>
+                          onAction(ui.offer, component, action),
+                  }
+                : {})}
+            {...(onMediaOpen
+                ? { onMediaOpen: (index: number) => onMediaOpen(messageId, index) }
+                : {})}
+            ui={ui}
+        />
     );
 }
 
@@ -857,55 +889,15 @@ function activityMediaRun(
 /**
  * Draws a reply's layout by its placeholder's key: the tree over the pictures
  * it placed, uncapped, each opening as the item of the call that showed it so
- * the viewer steps through the whole transcript from there; or an inline
- * action block.
- *
- * A block shows the choice the daemon recorded, or else a press still on its
- * way. It takes a press only while it has neither, the server takes presses,
- * and no message from the person has come after the reply.
+ * the viewer steps through the whole transcript from there.
  */
 function messageLayoutRender(
     layouts: MessageInlineLayouts,
     open: ConversationEntryViewProps["onToolMediaOpen"],
-    entry: Extract<ConversationEntry, { kind: "message" }>,
-    actions: Pick<
-        ConversationEntryViewProps,
-        "actionsPressable" | "actionPending" | "onActionPress" | "actionFigures"
-    >,
 ) {
     return function messageLayout(key: string): ReactNode {
         const layout = layouts.layouts.get(key);
         if (layout === undefined) return null;
-        if (layout.kind === "actions") {
-            const messageId = entry.source === "server" ? entry.messageId : undefined;
-            const blockIndex = layout.blockIndex;
-            const choice =
-                entry.actions?.choices[String(blockIndex)] ??
-                (messageId === undefined
-                    ? undefined
-                    : actions.actionPending?.get(chatActionBlockKey(messageId, blockIndex)));
-            const press = actions.onActionPress;
-            const pressable =
-                messageId !== undefined &&
-                press !== undefined &&
-                actions.actionsPressable === true &&
-                entry.actions?.live === true &&
-                choice === undefined;
-            return (
-                <ChatActionBlock
-                    block={layout.block}
-                    {...(choice ? { choice } : {})}
-                    {...(actions.actionFigures ? { figures: actions.actionFigures } : {})}
-                    {...(entry.actions?.live === true ? { live: true } : {})}
-                    {...(pressable
-                        ? {
-                              onInvoke: (blockPress) =>
-                                  press({ messageId, blockIndex, ...blockPress }),
-                          }
-                        : {})}
-                />
-            );
-        }
         return (
             <ConversationMedia
                 items={layout.members.map((member) => member.item)}

@@ -436,7 +436,11 @@ export {
     type ActivityTreatment,
     type AgentActivityRowProps,
 } from "./AgentActivityRow";
-export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
+export {
+    ConversationEntryView,
+    type ConversationChatUi,
+    type ConversationEntryViewProps,
+} from "./ConversationEntryView";
 export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
 export { ContextMenu, type ContextMenuProps } from "./ContextMenu";
 export { LinkContextMenu, LinkCopyContext, type LinkContextMenuProps } from "./LinkContextMenu";
@@ -591,25 +595,39 @@ export {
 export { Switch, type SwitchProps, type SwitchSize } from "./Switch";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
 export {
-    ChatActionBlock,
-    chatActionFigureTypes,
-    type ChatActionBlockPress,
-    type ChatActionBlockProps,
-    type ChatActionFigures,
-} from "./ChatActionBlock";
-export {
     ChatDefaultModelFigure,
     ChatInviteFigure,
-    ChatMembersFigure,
     ChatProviderCliFigure,
     ChatSettingsFigure,
     type ChatDefaultModelFigureProps,
     type ChatInviteFigureProps,
-    type ChatMembersFigureProps,
-    type ChatMembersFigureRow,
     type ChatProviderCliFigureProps,
     type ChatSettingsFigureType,
 } from "./ChatActionFigures";
+export { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
+export { UiChoice, type UiChoiceOption, type UiChoiceProps } from "./ui/UiChoice";
+export { UiChecklist, type UiChecklistOption, type UiChecklistProps } from "./ui/UiChecklist";
+export { UiTextField, type UiTextFieldProps } from "./ui/UiTextField";
+export { UiFileTree, uiFileTreeNodes, type UiFileTreeProps } from "./ui/UiFileTree";
+export { UiImages, type UiImagesProps } from "./ui/UiImages";
+export { UiFallback } from "./ui/UiFallback";
+export { UiPhoneApp } from "./ui/UiPhoneApp";
+export { UiRefusedNote } from "./ui/UiRefusedNote";
+export { type UiControlState } from "./ui/UiStatusLine";
+export {
+    UiComputeJoin,
+    UiDefaultModel,
+    UiGithubConnect,
+    UiInvite,
+    UiPhonePair,
+    UiProviderSignIn,
+} from "./ui/UiLiveWidgets";
+export {
+    chatUiLiveType,
+    type ChatUiLive,
+    type ChatUiLiveType,
+    type UiWidgetControl,
+} from "./ui/UiWidgetControl";
 export {
     SegmentedControl,
     type SegmentedControlProps,

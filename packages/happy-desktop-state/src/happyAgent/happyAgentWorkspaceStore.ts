@@ -1,4 +1,11 @@
 import type { SidebarReadAheadRows, TaskRepository } from "../happyAgentConnection/types.js";
+import type {
+    ChatUiGranted,
+    ConversationUiOffer,
+    UiActionInput,
+    UiActionResponse,
+    UiComponent,
+} from "../chatUi/chatUi.js";
 import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happyAgentPanelChat.js";
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
@@ -64,7 +71,6 @@ import {
     type HappyAgentViewPreferencesPersistence,
 } from "./happyAgentViewPreferences.js";
 import type { HappyAgentHost } from "./happyAgentHost.js";
-import type { ChatActionChoice, ChatActionInvocation } from "../chatActions/chatActions.js";
 import type {
     HappyAgentChatSnapshot,
     HappyAgentChatStore,
@@ -340,10 +346,14 @@ export interface HappyAgentConversationSnapshot {
     readonly modelLocked: boolean;
     /** Whether a failure card may offer switching to another account and model. */
     readonly failureSwitchSupported: boolean;
-    /** Whether the server takes presses on inline action blocks; without it they are drawn inert. */
-    readonly actionsPressable: boolean;
-    /** Presses on their way, by `chatActionBlockKey`, each drawn as its block's choice meanwhile. */
-    readonly actionPending: ReadonlyMap<string, ChatActionChoice>;
+    /** Chat UI clicks on their way; see `HappyAgentChatSnapshot.uiPending`. */
+    readonly uiPending: ReadonlyMap<string, UiActionInput>;
+    /** Chat UI clicks that left no record; see `HappyAgentChatSnapshot.uiErrors`. */
+    readonly uiErrors: ReadonlyMap<string, string>;
+    /** What the viewer may do with chat UI here, for drawing controls disabled. */
+    readonly uiGranted: ChatUiGranted;
+    /** The chat UI component types the daemon serves; see `HappyAgentChatSnapshot.uiServed`. */
+    readonly uiServed?: ReadonlySet<string>;
     /**
      * Where this conversation was last being read, when it has been read before.
      * Absent opens at the newest message.
@@ -1973,8 +1983,16 @@ export interface HappyAgentWorkspaceStore {
     /** Stops the open conversation's working subagents; see `HappyAgentChatStore.subagentsAbort`. */
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
-    /** Presses a control of an inline action block; see `HappyAgentChatStore.actionPress`. */
-    actionPress(invocation: ChatActionInvocation): void;
+    /**
+     * One click on a chat UI component in the open conversation; see
+     * `HappyAgentChatStore.uiAction`. The server decides who may: the
+     * conversation's own controls apply to every click.
+     */
+    uiAction(
+        offer: ConversationUiOffer,
+        component: UiComponent,
+        action: UiActionInput,
+    ): Promise<UiActionResponse>;
     /**
      * Records the options ticked into the open conversation's pending question
      * before it is submitted, so switching views preserves the card's choices.
@@ -3093,8 +3111,10 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
             modelLocked: chat.modelLocked,
             failureSwitchSupported: chat.failureSwitchSupported,
-            actionsPressable: chat.actionsPressable,
-            actionPending: chat.actionPending,
+            uiPending: chat.uiPending,
+            uiErrors: chat.uiErrors,
+            uiGranted: chat.uiGranted,
+            ...(chat.uiServed ? { uiServed: chat.uiServed } : {}),
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
                 : {}),
@@ -8419,10 +8439,8 @@ export function happyAgentWorkspaceStoreCreate(
             writeGuard(openGroupConversationRefusal(), () =>
                 withChat((store) => store.answerInput(input)),
             ),
-        // A press is the person's message, so it is refused where a message is.
-        actionPress: (invocation) => {
-            if (writeAllowed(openGroupConversationRefusal())) chatStore?.actionPress(invocation);
-        },
+        uiAction: (offer, component, action) =>
+            withChat((store) => store.uiAction(offer, component, action)),
         compact: () =>
             writeGuard(openGroupConversationRefusal(), () => withChat((store) => store.compact())),
         failureRetry: (entryId) =>
@@ -9094,7 +9112,6 @@ const NO_SUBAGENTS: readonly SubagentSummary[] = [];
 const NO_PROCESSES: readonly HappyAgentBackgroundProcess[] = [];
 const NO_PROCESS_IDS: ReadonlySet<number> = new Set();
 const NO_TURNS: ReadonlySet<string> = new Set();
-const NO_ACTION_PENDING: ReadonlyMap<string, ChatActionChoice> = new Map();
 
 /**
  * The conversation as it reads between being addressed and its chat handle
@@ -9139,10 +9156,14 @@ function conversationAcquiring(
         ...(menus ? { menus } : {}),
         modelLocked: false,
         failureSwitchSupported: false,
-        actionsPressable: false,
-        actionPending: NO_ACTION_PENDING,
+        uiPending: NO_UI_PENDING,
+        uiErrors: NO_UI_ERRORS,
+        uiGranted: "all",
     };
 }
+
+const NO_UI_PENDING: ReadonlyMap<string, UiActionInput> = new Map();
+const NO_UI_ERRORS: ReadonlyMap<string, string> = new Map();
 
 /** A cached stand-in must already have the shape of a new visit, even if acquisition is slow. */
 function conversationTracesFold(

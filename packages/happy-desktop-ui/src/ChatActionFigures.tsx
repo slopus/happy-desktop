@@ -1,7 +1,6 @@
 import { useContext, useState, type ReactNode } from "react";
 import {
     happyAgentThinkingLabel,
-    type ChatFigure,
     type HappyAgentDefaultModelSelection,
     type HappyAgentDefaultModelSnapshot,
     type ProviderCli,
@@ -16,13 +15,12 @@ import { TextField } from "./TextField";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /**
- * The live figures an agent may put in a reply (C-338, happy-agent API.md
- * "Inline actions"): one provider CLI with its install and sign-in, the
- * default model for new chats, and a team server's ways into Settings. Each
- * fills the one fixed box `ChatActionBlock` gives its figure, whatever state it
- * is in, so the height the transcript reserved for it holds from missing to
- * signed in. They draw props only; the conversation's owner supplies the live
- * state.
+ * The figures the live chat UI widgets draw (`ui/UiLiveWidgets.tsx`): one
+ * provider CLI with its install and sign-in, the default model for new
+ * chats, a team invite, and a team server's ways into Settings. Each fills
+ * the one fixed box `UiDocumentView` gives its widget, whatever state it is
+ * in, so the height the transcript reserved for it holds from missing to
+ * signed in. They draw props only; the widget supplies the live state.
  */
 
 /** The marks of the programs this build knows; a newer one is drawn without. */
@@ -52,6 +50,13 @@ export type ChatProviderCliFigureProps = {
     readonly onSignIn?: () => void;
     readonly onPageOpen?: (url: string) => void;
     readonly onCodeSend?: (code: string) => void;
+    /**
+     * Takes a setup token or API key pasted instead of signing in. It goes to
+     * this call and nowhere else; the figure empties its field once sent.
+     */
+    readonly onTokenSend?: (token: string) => void;
+    /** Connects an AI that is already signed in, as it is. */
+    readonly onUse?: () => void;
     readonly onCancel?: () => void;
     /** Pins the spinner on one frame, for a still fixture. */
     readonly spinnerFrame?: number;
@@ -141,9 +146,20 @@ export function ChatProviderCliFigure(props: ChatProviderCliFigureProps) {
                 ? `${installed} Not signed in yet.`
                 : `${installed} Happy can't tell whether it's signed in.`;
             controls = (
-                <FigureButton busy={busy} emphasized onPress={props.onSignIn}>
-                    Sign in
-                </FigureButton>
+                <>
+                    <FigureButton busy={busy} emphasized onPress={props.onSignIn}>
+                        Sign in
+                    </FigureButton>
+                    {props.onTokenSend ? (
+                        <FigureCode
+                            busy={busy}
+                            label="Setup token or API key"
+                            onSend={props.onTokenSend}
+                            placeholder="Or paste a setup token"
+                            secret
+                        />
+                    ) : null}
+                </>
             );
             break;
         }
@@ -190,6 +206,11 @@ export function ChatProviderCliFigure(props: ChatProviderCliFigureProps) {
             line = state.email
                 ? `Signed in as ${state.email}${state.plan ? ` · ${state.plan}` : ""}`
                 : "Signed in";
+            controls = props.onUse ? (
+                <FigureButton busy={busy} emphasized onPress={props.onUse}>
+                    {`Use ${name}`}
+                </FigureButton>
+            ) : null;
             break;
         case "failed":
             mark = <Ionicon name="alert-circle" size={16} />;
@@ -268,10 +289,17 @@ function FigureButton(props: {
     );
 }
 
-/** The code a vendor's page shows, typed back; it goes to the sign-in only. */
+/**
+ * The code a vendor's page shows, typed back, or a pasted token: it goes to
+ * the sign-in only, and the field empties once it is sent.
+ */
 function FigureCode(props: {
     readonly busy: boolean;
     readonly onSend: ((code: string) => void) | undefined;
+    readonly label?: string;
+    readonly placeholder?: string;
+    /** Drawn as dots, as a password field is. */
+    readonly secret?: boolean;
 }) {
     const [code, setCode] = useState("");
     const usable = code.trim() !== "" && !props.busy && props.onSend !== undefined;
@@ -283,12 +311,13 @@ function FigureCode(props: {
     return (
         <span className="happy-chat-figure__code">
             <TextField
-                aria-label="Code from the sign-in page"
-                autoComplete="one-time-code"
+                aria-label={props.label ?? "Code from the sign-in page"}
+                autoComplete={props.secret ? "off" : "one-time-code"}
                 className="happy-chat-figure__code-field"
                 onSubmit={send}
                 onValueChange={setCode}
-                placeholder="Paste the code"
+                placeholder={props.placeholder ?? "Paste the code"}
+                {...(props.secret ? { type: "password" as const } : {})}
                 size="medium"
                 value={code}
             />
@@ -559,129 +588,8 @@ export function ChatInviteFigure(props: ChatInviteFigureProps) {
     );
 }
 
-/** One row of the members figure: someone on the server, or a code still waiting. */
-export interface ChatMembersFigureRow {
-    /** A member's account, or an invite's ID; what revoking an invite names. */
-    readonly id: string;
-    readonly kind: "member" | "invite";
-    /** Their name, or what the code is. */
-    readonly name: string;
-    readonly role: string;
-    /** Joined, not here yet, or waiting, already worded. */
-    readonly status: string;
-    /** Someone who has not opened the server yet, or a code nobody has used. */
-    readonly pending: boolean;
-    /** A revoke this window asked for and the server hasn't answered. */
-    readonly saving: boolean;
-}
-
-export interface ChatMembersFigureProps {
-    readonly loading: boolean;
-    readonly error?: string;
-    /** Who is on the server, then the codes still waiting. */
-    readonly rows: readonly ChatMembersFigureRow[];
-    /** How many people, and how many codes wait, worded. */
-    readonly summary: string;
-    /** Revokes a waiting code. Absent for someone who may not, and in an older message. */
-    onInviteRevoke?: (inviteId: string) => void;
-    readonly spinnerFrame?: number;
-}
-
-/**
- * A team server's people, in the reply that shows them: everyone who joined,
- * and the codes still waiting for someone. Two rows show; more scroll in
- * place, so the box never grows and the menu under it never moves.
- *
- *   24 head · 8 · 72 list (two 36 rows) = 104
- */
-export function ChatMembersFigure(props: ChatMembersFigureProps) {
-    const empty = props.error ?? (props.loading ? "Reading who is on this server…" : undefined);
-    return (
-        <div
-            className="happy-chat-figure happy-chat-figure--members"
-            data-happy-desktop-ui="chat-figure-members"
-        >
-            <div className="happy-chat-figure__head">
-                <span className="happy-chat-figure__name">Members</span>
-                {empty === undefined ? (
-                    <span className="happy-chat-figure__vendor">{props.summary}</span>
-                ) : null}
-            </div>
-            {empty !== undefined ? (
-                <div
-                    className="happy-chat-figure__line"
-                    data-error={props.error ? "" : undefined}
-                    role="status"
-                >
-                    <span className="happy-chat-figure__mark">
-                        {props.error ? (
-                            <Ionicon name="alert-circle" size={16} />
-                        ) : (
-                            <Spinner
-                                size={16}
-                                {...(props.spinnerFrame === undefined
-                                    ? {}
-                                    : { frame: props.spinnerFrame })}
-                            />
-                        )}
-                    </span>
-                    <span className="happy-chat-figure__text">{empty}</span>
-                </div>
-            ) : (
-                <div className="happy-chat-figure__members" role="list">
-                    {props.rows.map((row) => (
-                        <div
-                            className="happy-chat-figure__member"
-                            data-happy-desktop-ui="chat-figure-member"
-                            data-kind={row.kind}
-                            data-pending={row.pending ? "" : undefined}
-                            key={`${row.kind}:${row.id}`}
-                            role="listitem"
-                        >
-                            <span className="happy-chat-figure__mark">
-                                <Ionicon
-                                    name={
-                                        row.kind === "invite"
-                                            ? "mail-outline"
-                                            : row.pending
-                                              ? "time-outline"
-                                              : "person-circle-outline"
-                                    }
-                                    size={16}
-                                />
-                            </span>
-                            <span className="happy-chat-figure__member-name">{row.name}</span>
-                            <span className="happy-chat-figure__member-role">{row.role}</span>
-                            <span className="happy-chat-figure__member-status">{row.status}</span>
-                            {/* Where codes can be revoked, every row keeps the
-                                column, so the statuses end on one edge. */}
-                            {props.onInviteRevoke ? (
-                                <span className="happy-chat-figure__member-action">
-                                    {row.kind === "invite" ? (
-                                        <Button
-                                            disabled={row.saving}
-                                            onClick={() => props.onInviteRevoke?.(row.id)}
-                                            size="small"
-                                            variant="outline"
-                                        >
-                                            Revoke
-                                        </Button>
-                                    ) : null}
-                                </span>
-                            ) : null}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
-/** The team figures a reply may hold that are drawn as the way into one Settings page. */
-export type ChatSettingsFigureType = Extract<
-    ChatFigure["type"],
-    "providers" | "computeJoin" | "serverLink"
->;
+/** What a chat may show as the way into one Settings page: a server's providers, or its phone link. */
+export type ChatSettingsFigureType = "providers" | "server_link";
 
 /** Each team figure's Settings page, and what its way in says. */
 export const CHAT_SETTINGS_FIGURES: ReadonlyMap<
@@ -697,15 +605,7 @@ export const CHAT_SETTINGS_FIGURES: ReadonlyMap<
         },
     ],
     [
-        "computeJoin",
-        {
-            page: "computes",
-            title: "Add a computer",
-            detail: "Join a machine to this server so agents can work on it.",
-        },
-    ],
-    [
-        "serverLink",
+        "server_link",
         {
             page: "mobile-access",
             title: "Connect your phone",

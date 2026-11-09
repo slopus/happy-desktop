@@ -46,7 +46,7 @@ export type ConversationMediaRun =
     /** This call ends its run and draws the whole run's grid. */
     | {
           readonly type: "end";
-          readonly columns: 1 | 2;
+          readonly columns: 1 | 2 | 3;
           readonly members: readonly ConversationMediaRunMember[];
           /** Everything the grid's height reads: its columns and every picture's size. */
           readonly signature: string;
@@ -58,7 +58,7 @@ const DEFERRED: ConversationMediaRun = { type: "deferred" };
 function runColumns(
     entry: ConversationEntry,
     hidden: ReadonlySet<number> | undefined,
-): 1 | 2 | undefined {
+): 1 | 2 | 3 | undefined {
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return undefined;
     const presentation = entry.activity.tool.presentation;
     if (presentation?.type !== "media" || presentation.layout?.type !== "columns") return undefined;
@@ -89,7 +89,7 @@ export function conversationMediaRuns(
     hidden?: ReadonlyMap<string, ReadonlySet<number>>,
 ): ReadonlyMap<string, ConversationMediaRun> {
     const runs = new Map<string, ConversationMediaRun>();
-    let columns: 1 | 2 | undefined;
+    let columns: 1 | 2 | 3 | undefined;
     let calls: ConversationEntry[] = [];
     const close = () => {
         if (calls.length >= 2 && columns !== undefined) {

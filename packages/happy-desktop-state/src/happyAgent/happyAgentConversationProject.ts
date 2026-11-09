@@ -12,7 +12,6 @@ import {
     type ConversationRequestEntry,
     type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
-import { conversationTextPlain } from "../chatActions/chatActions.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import { happyAgentArtifactTypeProject } from "../artifacts/artifactProject.js";
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
@@ -699,6 +698,7 @@ function happyAgentConnectGroupProject(
                 entries.push({
                     kind: "message",
                     source: "server",
+                    ...(element.refused === undefined ? {} : { refused: element.refused }),
                     pendingSend: element.authority === "local",
                     // The optimistic notification is synchronous, before the
                     // sender receives its message ID. Its explicit authority
@@ -834,7 +834,7 @@ function happyAgentConnectGroupProject(
                    in the transcript moments before the first words arrive, so
                    the reader watches a gap open and then fill. The live status
                    already reports the turn; the row belongs to the text. */
-                if (text.trim().length === 0) break;
+                if (text.trim().length === 0 && element.ui === undefined) break;
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -850,7 +850,7 @@ function happyAgentConnectGroupProject(
                     }),
                     messageId: element.messageId,
                     runId: element.runId,
-                    ...(element.actions ? { actions: element.actions } : {}),
+                    ...(element.ui ? { ui: element.ui } : {}),
                 });
                 break;
             }
@@ -1151,12 +1151,8 @@ function happyAgentConnectGroupProject(
     const finalAgent = finalAgentIndex < 0 ? undefined : entries[finalAgentIndex];
     if (finalAgent?.kind === "message") {
         const status = entries[statusIndex];
-        // A copy is pasted somewhere that cannot press, so its action blocks go.
-        const copyText = finalAgent.actions
-            ? conversationTextPlain(finalAgent.message.text)
-            : finalAgent.message.text;
-        if (status?.kind === "turnStatus" && copyText.trim().length > 0)
-            entries[statusIndex] = { ...status, copyText };
+        if (status?.kind === "turnStatus" && finalAgent.message.text.trim().length > 0)
+            entries[statusIndex] = { ...status, copyText: finalAgent.message.text };
     }
 
     /*
@@ -1191,6 +1187,9 @@ function happyAgentConnectGroupProject(
             entry.kind === "delegation" ||
             index === actualAnchorIndex ||
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
+            // Chat UI is the agent asking the reader something, or showing them
+            // a result, so it stays with the reply rather than with the work.
+            (entry.kind === "message" && entry.ui !== undefined) ||
             // An answered question is the reader's own decision, so it stays with
             // their messages rather than folding away with the work it steered.
             entry.kind === "request" ||
