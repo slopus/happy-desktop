@@ -253,28 +253,38 @@ export function UiInvite(props: {
 /**
  * `github_connect`: links the viewer's own GitHub account by device code. The
  * code `device_start` answers with is shown here alone; the server follows
- * the link and says when it's done.
+ * the link, and once the reader's own GitHub credential appears the card says
+ * so and the code goes.
  *
  *   24 head · 8 · 36 controls · 8 · 20 line = 96
  */
 export function UiGithubConnect(props: {
     readonly control: UiWidgetControl;
     readonly onPageOpen?: (url: string) => void;
+    /** The account the reader's own GitHub credential signs in as, once there is one. */
+    readonly connectedAs?: string;
 }) {
     const [device, setDevice] = useState<{ readonly userCode: string; readonly uri: string }>();
     const control = props.control;
     const usable = control.act !== undefined && control.allowed("github_connect.device_start");
     const busy = busyOf(control);
-    const line =
-        control.error ??
-        (device
-            ? "Enter this code on GitHub. Happy notices when you've approved it."
-            : usable
-              ? "Link your GitHub account so agents can work with your repositories."
-              : "You can't link GitHub from here.");
+    const connected = props.connectedAs !== undefined;
+    const line = connected
+        ? `GitHub connected as ${props.connectedAs}.`
+        : (control.error ??
+          (device
+              ? "Enter this code on GitHub. Happy notices when you've approved it."
+              : usable
+                ? "Link your GitHub account so agents can work with your repositories."
+                : "You can't link GitHub from here."));
     return (
-        <UiFigure error={control.error !== undefined} line={line} title="Connect GitHub">
-            {device ? (
+        <UiFigure
+            done={connected}
+            error={!connected && control.error !== undefined}
+            line={line}
+            title="Connect GitHub"
+        >
+            {connected ? null : device ? (
                 <>
                     <span className="happy-chat-figure__invite-code">{device.userCode}</span>
                     <CopyButton
@@ -322,30 +332,84 @@ export function UiGithubConnect(props: {
     );
 }
 
+/** A pool's machines as the join card lists them, from its owner's live store. */
+export type UiComputeJoinPool = {
+    readonly loading: boolean;
+    /** The pool's own name, once read. */
+    readonly name?: string;
+    /** Revoked machines left out. */
+    readonly machines: readonly {
+        readonly id: string;
+        readonly name: string;
+        readonly status: string;
+    }[];
+    readonly error?: string;
+};
+
 /**
- * `compute_join`: commands that add a machine to a compute pool. They are a
- * secret result, shown here alone; the first one is drawn and every one is
- * copied.
+ * `compute_join`: commands that add a machine to a compute pool, and the
+ * pool's machines as they join. The commands are a secret result, shown here
+ * alone; the first one is drawn and every one is copied.
  *
- *   24 head · 8 · 36 controls · 8 · 20 line = 96
+ *   24 head · 8 · 36 controls · 8 · 20 line · 8 · 60 machines (three rows, then scrolling) = 164
  */
 export function UiComputeJoin(props: {
     readonly pool?: string;
+    /** The pool's machines, live; absent where nothing follows them. */
+    readonly machines?: UiComputeJoinPool;
     readonly control: UiWidgetControl;
 }) {
     const [commands, setCommands] = useState<readonly string[]>();
     const control = props.control;
     const usable = control.act !== undefined && control.allowed("compute_join.create");
     const busy = busyOf(control);
+    const poolName = props.machines?.name ?? props.pool;
     const line =
         control.error ??
         (commands
             ? "Run this on the machine to add it. It works once, for a short while."
             : usable
-              ? `Add a machine${props.pool ? ` to ${props.pool}` : ""} so agents can work on it.`
+              ? `Add a machine${poolName ? ` to ${poolName}` : ""} so agents can work on it.`
               : "Owners and admins add machines here.");
+    const machines = props.machines;
     return (
-        <UiFigure error={control.error !== undefined} line={line} title="Add a computer">
+        <UiFigure
+            error={control.error !== undefined}
+            footer={
+                machines ? (
+                    <div
+                        className="happy-chat-figure__machines"
+                        data-happy-desktop-ui="chat-ui-compute-machines"
+                        role="list"
+                    >
+                        {machines.machines.length > 0 ? (
+                            machines.machines.map((machine) => (
+                                <span
+                                    className="happy-chat-figure__machine"
+                                    data-status={machine.status}
+                                    key={machine.id}
+                                    role="listitem"
+                                >
+                                    <span className="happy-chat-figure__mark">
+                                        <Ionicon name="desktop-outline" size={14} />
+                                    </span>
+                                    <span className="happy-chat-figure__text">{`${machine.name} · ${machine.status}`}</span>
+                                </span>
+                            ))
+                        ) : (
+                            <span className="happy-chat-figure__machine" data-empty="">
+                                {machines.error ??
+                                    (machines.loading
+                                        ? "Reading the pool's machines…"
+                                        : "No machines yet")}
+                            </span>
+                        )}
+                    </div>
+                ) : undefined
+            }
+            line={line}
+            title={poolName ?? "Add a computer"}
+        >
             {commands ? (
                 <>
                     <code className="happy-chat-figure__command" title={commands[0]}>
@@ -390,6 +454,10 @@ function UiFigure(props: {
     readonly error: boolean;
     readonly children: ReactNode;
     readonly pending?: boolean;
+    /** The thing is done, such as GitHub linked: a check mark on the line. */
+    readonly done?: boolean;
+    /** What sits under the status line, such as a pool's machines. */
+    readonly footer?: ReactNode;
 }) {
     return (
         <div
@@ -403,11 +471,14 @@ function UiFigure(props: {
             <div
                 className="happy-chat-figure__line"
                 data-error={props.error ? "" : undefined}
+                data-state={props.done ? "signedIn" : undefined}
                 role="status"
             >
                 <span className="happy-chat-figure__mark">
                     {props.error ? (
                         <Ionicon name="alert-circle" size={16} />
+                    ) : props.done ? (
+                        <Ionicon name="checkmark-circle" size={16} />
                     ) : props.pending ? (
                         <Spinner size={16} />
                     ) : (
@@ -416,6 +487,7 @@ function UiFigure(props: {
                 </span>
                 <span className="happy-chat-figure__text">{props.line}</span>
             </div>
+            {props.footer}
         </div>
     );
 }

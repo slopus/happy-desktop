@@ -78,6 +78,7 @@
      provider CLI  24 head · 4 · 40 line (two lines at most) · 8 · 36 controls = 112
      setting       24 head · 8 · 36 controls · 8 · 20 line                    =  96
      invite        24 head · 8 · 36 controls · 8 · 20 line                    =  96
+     compute join  invite · 8 · 60 machines (three 20px rows, then scrolling)  = 164
      settings      24 head · 4 · 20 line · 8 · 36 controls                    =  92 */
 .happy-chat-action__figure {
     width: 560px;
@@ -94,6 +95,10 @@
 
 .happy-chat-action__figure[data-figure="settings"] {
     height: 92px;
+}
+
+.happy-chat-action__figure[data-figure="compute-join"] {
+    height: 164px;
 }
 
 .happy-chat-action__figure[data-figure="invite"] {
@@ -166,6 +171,38 @@
 .happy-chat-figure--invite .happy-chat-figure__line {
     height: 20px;
     margin-top: 8px;
+}
+
+/* A pool's machines as they join, under the line; past three they scroll in
+   place, so the box never grows as machines arrive. */
+.happy-chat-figure__machines {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    height: 60px;
+    margin-top: 8px;
+    overflow-y: auto;
+}
+
+.happy-chat-figure__machine {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 20px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy-chat-figure__machine > .happy-chat-figure__text {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+}
+
+.happy-chat-figure__machine[data-status="online"] {
+    color: var(--text);
 }
 
 .happy-chat-figure__line[data-error],

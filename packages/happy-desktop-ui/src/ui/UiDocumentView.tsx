@@ -70,7 +70,7 @@ const LIVE_BOX: Record<string, { readonly className: string; readonly figure?: s
     phone_pair: { className: "happy-chat-action__phone-pair" },
     invite: { className: "happy-chat-action__figure", figure: "invite" },
     github_connect: { className: "happy-chat-action__figure", figure: "invite" },
-    compute_join: { className: "happy-chat-action__figure", figure: "invite" },
+    compute_join: { className: "happy-chat-action__figure", figure: "compute-join" },
     server_link: { className: "happy-chat-action__figure", figure: "settings" },
 };
 

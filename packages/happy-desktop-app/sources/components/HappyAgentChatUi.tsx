@@ -3,9 +3,11 @@ import {
     happyAgentChatOnboardingStoreNoop,
     type HappyAgentChatOnboardingStore,
     type HappyAgentClockStore,
+    type HappyAgentComputePoolStore,
     type HappyAgentDefaultModelStore,
     type HappyAgentMembersStore,
     type HappyAgentMobileConnectorStore,
+    type HappyAgentOwnGitCredentialsStore,
     type HappyAgentProviderClisStore,
     type UiActionInput,
 } from "happy-desktop-state";
@@ -47,6 +49,10 @@ export type HappyAgentConversationExtrasSource = {
     readonly mobileConnector?: () => HappyAgentMobileConnectorStore;
     /** A team server's members and invites; undefined anywhere else. */
     readonly members?: () => HappyAgentMembersStore | undefined;
+    /** A team server's compute pool, by ID or its default; undefined anywhere else. */
+    readonly computePool?: (poolId: string | undefined) => HappyAgentComputePoolStore | undefined;
+    /** The reader's own git credentials for a host on a team server; undefined anywhere else. */
+    readonly ownGitCredentials?: (host: string) => HappyAgentOwnGitCredentialsStore | undefined;
     readonly clock: HappyAgentClockStore;
 };
 
@@ -112,13 +118,18 @@ export function happyAgentConversationExtras(
             ...(options.teamServer
                 ? {
                       github_connect: (_component, control) => (
-                          <UiGithubConnect control={control} onPageOpen={linkOpen} />
+                          <HappyAgentChatGithubConnect
+                              control={control}
+                              credentials={source.ownGitCredentials?.("github.com")}
+                              linkOpen={linkOpen}
+                          />
                       ),
                       compute_join: (component, control) =>
                           component.type === "compute_join" ? (
-                              <UiComputeJoin
+                              <HappyAgentChatComputeJoin
                                   control={control}
-                                  {...(component.props.pool ? { pool: component.props.pool } : {})}
+                                  pool={component.props.pool}
+                                  store={source.computePool?.(component.props.pool)}
                               />
                           ) : null,
                   }
@@ -230,6 +241,65 @@ function HappyAgentChatInvite(props: {
                 owner: members.roleId === "owner",
             }}
             {...(props.role ? { role: props.role } : {})}
+        />
+    );
+}
+
+/* A host with no team server reads nothing. */
+const NO_READ = { loading: false } as const;
+const readSubscribeNoop = () => () => undefined;
+const readNoop = () => NO_READ;
+
+/**
+ * Linking the reader's own GitHub where a document asks for it. The server
+ * follows the device sign-in itself; the card learns it is done when the
+ * reader's own GitHub credential appears in the live list.
+ */
+function HappyAgentChatGithubConnect(props: {
+    readonly credentials: HappyAgentOwnGitCredentialsStore | undefined;
+    readonly control: UiWidgetControl;
+    readonly linkOpen: (url: string) => void;
+}) {
+    const credentials = useSyncExternalStore(
+        props.credentials?.subscribe ?? readSubscribeNoop,
+        props.credentials?.get ?? readNoop,
+        props.credentials?.get ?? readNoop,
+    );
+    const linked = credentials.value?.[0];
+    return (
+        <UiGithubConnect
+            {...(linked ? { connectedAs: linked.username ?? linked.name } : {})}
+            control={props.control}
+            onPageOpen={props.linkOpen}
+        />
+    );
+}
+
+/** Adding a machine where a document asks for it, with the pool's machines live under it. */
+function HappyAgentChatComputeJoin(props: {
+    readonly store: HappyAgentComputePoolStore | undefined;
+    readonly pool: string | undefined;
+    readonly control: UiWidgetControl;
+}) {
+    const pool = useSyncExternalStore(
+        props.store?.subscribe ?? readSubscribeNoop,
+        props.store?.get ?? readNoop,
+        props.store?.get ?? readNoop,
+    );
+    return (
+        <UiComputeJoin
+            control={props.control}
+            {...(props.store
+                ? {
+                      machines: {
+                          loading: pool.loading,
+                          ...(pool.value ? { name: pool.value.name } : {}),
+                          machines: pool.value?.machines ?? [],
+                          ...(pool.error ? { error: pool.error } : {}),
+                      },
+                  }
+                : {})}
+            {...(props.pool ? { pool: props.pool } : {})}
         />
     );
 }

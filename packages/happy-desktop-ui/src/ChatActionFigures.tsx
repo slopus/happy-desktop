@@ -122,6 +122,16 @@ export function ChatProviderCliFigure(props: ChatProviderCliFigureProps) {
             {...(props.spinnerFrame === undefined ? {} : { frame: props.spinnerFrame })}
         />
     );
+    /* A setup token or API key needs no sign-in page, and for some AIs no program either. */
+    const tokenField = props.onTokenSend ? (
+        <FigureCode
+            busy={busy}
+            label="Setup token or API key"
+            onSend={props.onTokenSend}
+            placeholder="Or paste a setup token"
+            secret
+        />
+    ) : null;
     switch (state.kind) {
         case "reading":
             mark = spinner;
@@ -132,12 +142,17 @@ export function ChatProviderCliFigure(props: ChatProviderCliFigureProps) {
             if (state.installer) {
                 line = `Not installed · official installer from ${state.installer.sourceHost}`;
                 command = state.installer.command;
-                controls = (
-                    <FigureButton busy={busy} emphasized onPress={props.onInstall}>
-                        Install and sign in
-                    </FigureButton>
-                );
             } else line = `Not installed, and Happy can't install ${name} here.`;
+            controls = (
+                <>
+                    {state.installer ? (
+                        <FigureButton busy={busy} emphasized onPress={props.onInstall}>
+                            Install and sign in
+                        </FigureButton>
+                    ) : null}
+                    {tokenField}
+                </>
+            );
             break;
         case "signedOut": {
             mark = <Ionicon name="log-in-outline" size={16} />;
@@ -150,15 +165,7 @@ export function ChatProviderCliFigure(props: ChatProviderCliFigureProps) {
                     <FigureButton busy={busy} emphasized onPress={props.onSignIn}>
                         Sign in
                     </FigureButton>
-                    {props.onTokenSend ? (
-                        <FigureCode
-                            busy={busy}
-                            label="Setup token or API key"
-                            onSend={props.onTokenSend}
-                            placeholder="Or paste a setup token"
-                            secret
-                        />
-                    ) : null}
+                    {tokenField}
                 </>
             );
             break;

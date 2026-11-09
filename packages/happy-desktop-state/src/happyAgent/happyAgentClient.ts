@@ -144,6 +144,14 @@ import {
     type HappyAgentComputesStore,
 } from "./happyAgentComputesStore.js";
 import {
+    happyAgentComputePoolStoreCreate,
+    type HappyAgentComputePoolStore,
+} from "./happyAgentComputePoolStore.js";
+import {
+    happyAgentOwnGitCredentialsStoreCreate,
+    type HappyAgentOwnGitCredentialsStore,
+} from "./happyAgentOwnGitCredentialsStore.js";
+import {
     happyAgentVoiceSettingsStoreCreate,
     type HappyAgentVoiceSettingsStore,
 } from "./happyAgentVoiceSettingsStore.js";
@@ -269,6 +277,17 @@ export interface HappyAgentWorkspaceClient {
      * chip's picker. Undefined anywhere but a Happy Cloud server.
      */
     computes(): HappyAgentComputesStore | undefined;
+    /**
+     * One compute pool's machines, live, for the card that adds one; the
+     * default pool when no ID is given. Undefined anywhere but a Happy Cloud
+     * server.
+     */
+    computePool(poolId: string | undefined): HappyAgentComputePoolStore | undefined;
+    /**
+     * The reader's own git credentials for a host, live, such as the GitHub
+     * link a chat card makes. Undefined anywhere but a Happy Cloud server.
+     */
+    ownGitCredentials(host: string): HappyAgentOwnGitCredentialsStore | undefined;
     /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
@@ -682,6 +701,8 @@ export function happyAgentWorkspaceClientCreate(
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
     let computesStore: HappyAgentComputesStore | undefined;
+    const computePoolStores = new Map<string, HappyAgentComputePoolStore>();
+    const ownGitCredentialStores = new Map<string, HappyAgentOwnGitCredentialsStore>();
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
@@ -1097,6 +1118,37 @@ export function happyAgentWorkspaceClientCreate(
             computesStore ??= happyAgentComputesStoreCreate({ request: cloud.request });
             return computesStore;
         },
+        computePool(poolId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const cloud = deps.cloudServer;
+            if (!cloud) return undefined;
+            const key = poolId ?? "";
+            let pool = computePoolStores.get(key);
+            if (!pool) {
+                pool = happyAgentComputePoolStoreCreate({
+                    ...(poolId === undefined ? {} : { poolId }),
+                    request: cloud.request,
+                    sync: deps.connection.sync,
+                });
+                computePoolStores.set(key, pool);
+            }
+            return pool;
+        },
+        ownGitCredentials(host) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const cloud = deps.cloudServer;
+            if (!cloud) return undefined;
+            let credentials = ownGitCredentialStores.get(host);
+            if (!credentials) {
+                credentials = happyAgentOwnGitCredentialsStoreCreate({
+                    host,
+                    request: cloud.request,
+                    sync: deps.connection.sync,
+                });
+                ownGitCredentialStores.set(host, credentials);
+            }
+            return credentials;
+        },
         taskSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             taskSettingsStore ??= happyAgentTaskSettingsStoreCreate({
@@ -1313,6 +1365,11 @@ export function happyAgentWorkspaceClientCreate(
             membersStore = undefined;
             computesStore?.[Symbol.dispose]();
             computesStore = undefined;
+            for (const pool of computePoolStores.values()) pool[Symbol.dispose]();
+            computePoolStores.clear();
+            for (const credentials of ownGitCredentialStores.values())
+                credentials[Symbol.dispose]();
+            ownGitCredentialStores.clear();
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();
