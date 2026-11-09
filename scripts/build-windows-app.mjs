@@ -79,6 +79,7 @@ await build({
                 ? [
                       "dist/*.js",
                       "dist/assets/**/*.js",
+                      "dist/artifact-code/**",
                       "dist/preload.cjs",
                       "assets/app-icon/generated/app-icon.png",
                       "package.json",
