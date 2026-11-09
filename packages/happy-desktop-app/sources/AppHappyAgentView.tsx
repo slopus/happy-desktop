@@ -390,6 +390,7 @@ import {
     type HappyAgentPreviewMedia,
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
+import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { botFace, ownerFace, ownerInitials, taskFace } from "./agentFaces";
 import { sidebarReadAheadRows } from "./sidebarReadAhead";
@@ -693,6 +694,10 @@ export interface AppHappyAgentSession {
     readonly providers?: HappyAgentProvidersStore;
     /** Settings › Members, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly members?: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
+    /** One member's profile, on Happy Cloud; absent or undefined elsewhere. */
+    readonly userProfile?: (
+        userId: string,
+    ) => import("happy-desktop-state").HappyAgentUserProfileStore | undefined;
     /** Settings › Repositories, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly repositories?: () =>
         | import("happy-desktop-state").HappyAgentRepositoriesStore
@@ -993,6 +998,10 @@ export interface AppHappyAgentViewProps {
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
+    /** The person whose profile the URL opens, on the addressed Happy Agent. */
+    userProfileId?: string;
+    /** Addresses one person's profile on one Happy Agent. */
+    onUserProfileOpen?(happyAgentId: string, userId: string): void;
     /** Whether the URL addresses the addressed Happy Agent's feed. */
     feedOpen?: boolean;
     /** Addresses that feed. */
@@ -3592,6 +3601,27 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const happyAgentOf = (happyAgentId: string) =>
         directory.happyAgents.find((happyAgent) => happyAgent.id === happyAgentId);
     /**
+     * Opens a task named outside the sidebar, such as from the feed or a
+     * profile: a task the reader has joined opens at once, and one they are
+     * not in is joined, and then opened.
+     */
+    const taskOpen = (taskId: HappyAgentTaskId): void => {
+        const session = active?.session;
+        if (!active || !session) return;
+        const open = (task: HappyAgentTask) =>
+            props.onChatSelect(active.id, task.workspaceId, task.conversation.id);
+        const task = active.tasks?.find((entry) => entry.id === taskId);
+        if (task) {
+            open(task);
+            return;
+        }
+        if (!activeHappyAgentOnline()) return;
+        void session.workspace
+            .taskJoin(taskId)
+            .then(() => taskJoinedThen(session.workspace, taskId, open))
+            .catch(() => undefined);
+    };
+    /**
      * Opens a live artifact's page from the Artifacts page as a browser tab
      * beside the conversation the reader is in, and shows that conversation.
      * Absent with no conversation to sit beside.
@@ -4624,6 +4654,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         onTaskCreateOpen: props.onTaskCreateOpen,
         onSurfaceOpen: props.onSurfaceOpen,
         ...(artifactOpen ? { onArtifactOpen: artifactOpen } : {}),
+        ...(props.onUserProfileOpen ? { onUserProfileOpen: props.onUserProfileOpen } : {}),
         ...(props.onSurfaceOpen && active?.session?.surfaces
             ? {
                   onVaultItemOpen: (happyAgentId: string, surfaceId: string, itemId: string) => {
@@ -4740,6 +4771,25 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             );
         }
 
+        // A person's profile belongs to the Happy Cloud server they are on; a
+        // server without profiles shows nothing here, as it offers no way in.
+        const userProfileStore =
+            props.userProfileId !== undefined && active?.happyCloud
+                ? active.session?.userProfile?.(props.userProfileId)
+                : undefined;
+        if (userProfileStore && active?.session)
+            return (
+                <>
+                    {desktop ? <WindowDragRegion /> : null}
+                    <HappyAgentUserProfileSurface
+                        key={props.userProfileId}
+                        clock={active.session.clock}
+                        onTaskOpen={(task) => taskOpen(task.id)}
+                        store={userProfileStore}
+                    />
+                </>
+            );
+
         // The feed belongs to the addressed machine, like its artifacts. Its
         // header carries Mark all read, so the header is the window's drag band.
         if (props.feedOpen && active?.session) {
@@ -4775,27 +4825,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                     );
                                 return;
                             }
-                            case "task": {
-                                const taskId = subject.id as HappyAgentTaskId;
-                                const open = (task: HappyAgentTask) =>
-                                    props.onChatSelect(
-                                        active.id,
-                                        task.workspaceId,
-                                        task.conversation.id,
-                                    );
-                                const task = active.tasks?.find((entry) => entry.id === taskId);
-                                if (task) {
-                                    open(task);
-                                    return;
-                                }
-                                // A task the reader is not in is joined, and then opened.
-                                if (!activeHappyAgentOnline()) return;
-                                void session.workspace
-                                    .taskJoin(taskId)
-                                    .then(() => taskJoinedThen(session.workspace, taskId, open))
-                                    .catch(() => undefined);
+                            case "task":
+                                taskOpen(subject.id as HappyAgentTaskId);
                                 return;
-                            }
                         }
                     }}
                     artifactTitles={session.artifacts?.titles() ?? artifactTitlesStoreNoop}
@@ -5237,6 +5269,7 @@ interface HappyAgentPaletteActions {
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
     /** Opens a vault on one of its folders or files. */
     onVaultItemOpen?(happyAgentId: string, surfaceId: string, itemId: string): void;
+    onUserProfileOpen?(happyAgentId: string, userId: string): void;
 }
 
 /**
@@ -5818,6 +5851,9 @@ function paletteCommandRun(
             return;
         case "vaultItemOpen":
             props.onVaultItemOpen?.(command.happyAgentId, command.surfaceId, command.itemId);
+            return;
+        case "userProfileOpen":
+            props.onUserProfileOpen?.(command.happyAgentId, command.userId);
             return;
         case "panelToggle":
             props.workspace?.panel.panelToggle();

@@ -1,6 +1,7 @@
 import type { HappyAgentClient, SearchResult } from "@slopus/happy-agent-client";
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
+import type { HappyAgentTeamRoster } from "../happyAgentConnection/types.js";
 import type {
     HappyAgentGroupId,
     HappyAgentProjectId,
@@ -31,6 +32,8 @@ export interface HappyAgentSearchStore {
 export interface HappyAgentSearchDeps {
     readonly client: Pick<HappyAgentClient, "search">;
     readonly sync: Pick<HappyAgentSync, "health">;
+    /** The team as the connection holds it, whose photos a person found wears. */
+    readonly team?: () => HappyAgentTeamRoster;
 }
 
 /** How long typing has to pause before the Happy Agent is asked. */
@@ -39,8 +42,11 @@ const DEBOUNCE_MS = 120;
 const LIMIT = 20;
 const OFF: HappyAgentSearchSnapshot = { status: "off" };
 
-/** One wire result as its product variant. */
-function hitProject(result: SearchResult): HappyAgentSearchHit {
+/** One wire result as its product variant; a person takes their photo from the team. */
+function hitProject(
+    result: SearchResult,
+    photos: ReadonlyMap<string, string | undefined>,
+): HappyAgentSearchHit {
     const base = { key: result.key, rank: result.rank };
     switch (result.type) {
         case "vault_file":
@@ -110,8 +116,16 @@ function hitProject(result: SearchResult): HappyAgentSearchHit {
                 workspaceId: result.workspaceId as HappyAgentGroupId | null,
                 projectId: result.projectId as HappyAgentProjectId | null,
             };
-        case "user":
-            return { ...base, type: "user", userId: result.userId, name: result.name };
+        case "user": {
+            const imageUrl = photos.get(result.userId);
+            return {
+                ...base,
+                type: "user",
+                userId: result.userId,
+                name: result.name,
+                ...(imageUrl === undefined ? {} : { imageUrl }),
+            };
+        }
         case "skill":
             return {
                 ...base,
@@ -203,10 +217,13 @@ export function happyAgentSearchStoreCreate(deps: HappyAgentSearchDeps): HappyAg
             (response) => {
                 if (own.signal.aborted) return;
                 request = undefined;
+                const photos = new Map(
+                    (deps.team?.().members ?? []).map((member) => [member.id, member.imageUrl]),
+                );
                 set({
                     status: "ready",
                     query,
-                    hits: response.results.map(hitProject),
+                    hits: response.results.map((result) => hitProject(result, photos)),
                     partial: response.partial,
                 });
             },

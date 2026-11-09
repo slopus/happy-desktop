@@ -487,6 +487,15 @@ const feedRoute = createRoute({
     path: "/feed/$happyAgentId",
 });
 
+/**
+ * One person's profile on a Happy Cloud server. The server is in the address
+ * because the person is one of its members.
+ */
+const userProfileRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/people/$happyAgentId/$userId",
+});
+
 /** One artifact open in the viewer, on the machine that keeps it. */
 const artifactRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -608,6 +617,7 @@ const routeTree = rootRoute.addChildren([
         artifactsRoute,
         artifactRoute,
         feedRoute,
+        userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
         botCreateRoute,
         taskCreateRoute,
@@ -638,6 +648,7 @@ function HappyAgentWorkspaceLayout() {
         inbox: matched.has(inboxRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
+        userProfile: matched.has(userProfileRoute.id),
     };
     // The router is constructed before RouterProvider supplies the real context,
     // so the very first render of a deep-linked URL can arrive with an empty
@@ -680,6 +691,15 @@ function HappyAgentWorkspaceLayout() {
             {...(shows.artifacts && params.artifactId !== undefined
                 ? { artifactId: params.artifactId }
                 : {})}
+            {...(shows.userProfile && params.userId !== undefined
+                ? { userProfileId: params.userId }
+                : {})}
+            onUserProfileOpen={(happyAgentId, userId) =>
+                void navigate({
+                    params: { happyAgentId, userId },
+                    to: "/people/$happyAgentId/$userId",
+                })
+            }
             {...(shows.surface && params.surfaceId !== undefined
                 ? { surfaceId: params.surfaceId }
                 : {})}
@@ -856,6 +876,12 @@ function HappyAgentSettingsRoute() {
                 void navigate({ params: { section }, to: "/settings/$section" })
             }
             onClose={() => happyAgentRouterSettingsClose(router)}
+            onUserProfileOpen={(happyAgentId, userId) =>
+                void navigate({
+                    params: { happyAgentId, userId },
+                    to: "/people/$happyAgentId/$userId",
+                })
+            }
             happyAgents={context.happyAgents}
             platform={context.platform}
             section={params.section ?? HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY}

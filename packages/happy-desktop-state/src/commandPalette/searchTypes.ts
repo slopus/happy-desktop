@@ -134,6 +134,8 @@ export type HappyAgentSearchHit =
           readonly type: "user";
           readonly userId: string;
           readonly name: string;
+          /** Their photo, from the team the connection already holds; absent without one. */
+          readonly imageUrl?: string;
       })
     | (HappyAgentSearchHitFields & {
           readonly type: "skill";

@@ -86,6 +86,47 @@ const suggestions: CommandPaletteResultsSection[] = [
     },
 ];
 
+/**
+ * What “maya” finds on Happy Cloud: the person, wearing the photo the team
+ * already holds, then her work. Choosing the person opens her profile.
+ */
+const person: CommandPaletteResultsSection[] = [
+    {
+        id: "results",
+        caption: "Results",
+        rows: [
+            {
+                kind: "command",
+                id: "user:usr_maya",
+                avatar: {
+                    imageUrl: new URL("../assets/user-profile-photo.webp", import.meta.url).href,
+                    initials: "MO",
+                    type: "agent",
+                },
+                meta: "Person",
+                shortcut: NUMBERS[0],
+                title: "Maya Okafor",
+            },
+            {
+                kind: "command",
+                id: "user:usr_mayank",
+                avatar: { initials: "MR", placeholderSeed: "usr_mayank", type: "agent" },
+                meta: "Person",
+                shortcut: NUMBERS[1],
+                title: "Mayank Rao",
+            },
+            {
+                kind: "command",
+                id: "task-maya",
+                avatar: { icon: "tasks", initials: "", type: "agent" },
+                meta: "Task · Maya Okafor",
+                shortcut: NUMBERS[2],
+                title: "Redesign the onboarding sky",
+            },
+        ],
+    },
+];
+
 /** What “launch” finds across the machine: work, documents, todos, artifacts, a calendar. */
 const mixed: CommandPaletteResultsSection[] = [
     {
@@ -692,6 +733,18 @@ export function CommandPalettePage() {
                 window={{ width: 1100, height: 760 }}
             >
                 <PaletteWindow mode="dark" trafficLights={false} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="On Happy Cloud a person found opens their profile; they wear their photo, or the placeholder their ID picks."
+                label="Window, a person found, light"
+                number="W-16"
+                screen="16-person-light-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="light" query="maya">
+                    <CommandPaletteResults activeIndex={0} sections={person} />
+                </PaletteWindow>
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

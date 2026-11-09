@@ -149,6 +149,9 @@ export interface HappyAgentSession {
     readonly providerUsage: HappyAgentProviderUsageStore | undefined;
     readonly providers: HappyAgentProvidersStore;
     readonly members: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
+    readonly userProfile: (
+        userId: string,
+    ) => import("happy-desktop-state").HappyAgentUserProfileStore | undefined;
     readonly repositories: () =>
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
@@ -669,6 +672,7 @@ export function happyAgentConnectionOpen(input: {
                     cloudProviders: () => client.cloudProviders(),
                     repositories: () => client.repositories(),
                     members: () => client.members(),
+                    userProfile: (userId) => client.userProfile(userId),
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),

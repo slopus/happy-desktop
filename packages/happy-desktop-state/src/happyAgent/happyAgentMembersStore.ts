@@ -7,6 +7,8 @@ import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js"
 export interface HappyAgentMember {
     /** The member's account, which every member route addresses. */
     readonly id: string;
+    /** Their user, which their profile is addressed by; `null` until they sign in. */
+    readonly userId: string | null;
     readonly name: string | null;
     /** A role ID from `roles`. */
     readonly roleId: string;
@@ -166,6 +168,7 @@ export function happyAgentMembersStoreCreate(
             read.members.map(
                 (member): HappyAgentMember => ({
                     id: member.id,
+                    userId: member.userId,
                     name: member.name,
                     roleId: member.roleId,
                     joinedAt: member.joinedAt,

@@ -448,6 +448,28 @@
     white-space: nowrap;
 }
 
+/* A name that opens the member's profile reads as the name, and underlines on hover. */
+.happy-agent-members__profile {
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-members__profile:hover {
+    text-decoration: underline;
+}
+
+.happy-agent-members__profile:focus-visible {
+    border-radius: var(--happy-radius-sm);
+    outline: 2px solid var(--text-link);
+    outline-offset: 1px;
+}
+
 .happy-agent-members__meta,
 .happy-agent-members__role {
     color: var(--text-secondary);

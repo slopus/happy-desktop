@@ -142,6 +142,10 @@ import {
 } from "./happyAgentMembersStore.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import {
+    happyAgentUserProfileStoreCreate,
+    type HappyAgentUserProfileStore,
+} from "./happyAgentUserProfileStore.js";
+import {
     happyAgentVoiceSettingsStoreCreate,
     type HappyAgentVoiceSettingsStore,
 } from "./happyAgentVoiceSettingsStore.js";
@@ -262,6 +266,12 @@ export interface HappyAgentWorkspaceClient {
      * invites. Undefined anywhere but a Happy Cloud server.
      */
     members(): HappyAgentMembersStore | undefined;
+    /**
+     * One member's profile on Happy Cloud: who they are, what they used, and
+     * their latest tasks. Materialized per member on first access and kept;
+     * undefined anywhere but Happy Cloud.
+     */
+    userProfile(userId: string): HappyAgentUserProfileStore | undefined;
     /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
@@ -684,6 +694,7 @@ export function happyAgentWorkspaceClientCreate(
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
+    const userProfileStores = new Map<string, HappyAgentUserProfileStore>();
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
@@ -947,6 +958,7 @@ export function happyAgentWorkspaceClientCreate(
             return (search ??= happyAgentSearchStoreCreate({
                 client: deps.client,
                 sync: deps.connection.sync,
+                team: () => deps.connection.team(),
             }));
         },
         toolMediaDocument() {
@@ -1093,6 +1105,21 @@ export function happyAgentWorkspaceClientCreate(
                 serverForget: cloud.serverForget,
             });
             return membersStore;
+        },
+        userProfile(userId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            let store = userProfileStores.get(userId);
+            if (!store) {
+                store = happyAgentUserProfileStoreCreate({
+                    userId,
+                    request,
+                    endpoint: deps.client.endpoint,
+                });
+                userProfileStores.set(userId, store);
+            }
+            return store;
         },
         taskSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -1297,6 +1324,8 @@ export function happyAgentWorkspaceClientCreate(
             repositoriesStore = undefined;
             membersStore?.[Symbol.dispose]();
             membersStore = undefined;
+            for (const store of userProfileStores.values()) store[Symbol.dispose]();
+            userProfileStores.clear();
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();

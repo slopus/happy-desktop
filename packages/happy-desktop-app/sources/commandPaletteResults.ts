@@ -91,6 +91,8 @@ export type CommandPaletteCommand =
     | { readonly kind: "workspaceOpen"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "surfaceOpen"; readonly happyAgentId: string; readonly surfaceId: string }
     | { readonly kind: "artifactOpen"; readonly happyAgentId: string; readonly artifactId: string }
+    /** A person's profile on a Happy Cloud server. */
+    | { readonly kind: "userProfileOpen"; readonly happyAgentId: string; readonly userId: string }
     /** A folder or file in a vault, opened in its vault as its own row there would open it. */
     | {
           readonly kind: "vaultItemOpen";
@@ -1556,7 +1558,7 @@ const AGENT_KIND_LABEL = {
  * window holds is its own row; other work opens in the workspace the Happy
  * Agent names, and is left out when it names none, as a message is. Anything
  * archived, which the palette lists apart, is left out too, and so is what
- * the desktop has nowhere to open: a person, a skill.
+ * the desktop has nowhere to open: a skill, or a person outside Happy Cloud.
  */
 function remoteRow(
     hit: HappyAgentSearchHit,
@@ -1677,8 +1679,26 @@ function remoteRow(
                 },
             };
         }
-        // The desktop has no page of its own for a person or a skill, so neither is offered.
+        // A person opens their profile, which only Happy Cloud has.
         case "user":
+            if (!input.happyCloud) return undefined;
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.name,
+                    meta: "Person",
+                    glyph: {
+                        kind: "avatar",
+                        initials: initialsOf(hit.name),
+                        ...(hit.imageUrl === undefined
+                            ? { placeholderSeed: hit.userId }
+                            : { imageUrl: hit.imageUrl }),
+                    },
+                    command: { kind: "userProfileOpen", happyAgentId, userId: hit.userId },
+                },
+            };
+        // The desktop has no page of its own for a skill, so none is offered.
         case "skill":
             return undefined;
         case "artifact": {

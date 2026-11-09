@@ -12,6 +12,8 @@ import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentMemberRow {
     readonly id: string;
+    /** Their user, whose profile the name opens; absent before they sign in. */
+    readonly userId?: string;
     readonly name: string;
     readonly roleId: string;
     /** When they joined, already worded. */
@@ -49,6 +51,8 @@ export interface HappyAgentMembersSettingsProps {
         readonly roleName: string;
         readonly expires: string;
     };
+    /** Opens a member's profile; absent where there are no profiles. */
+    onProfileOpen?: (userId: string) => void;
     onRoleChange: (memberId: string, roleId: string) => void;
     onRemove: (memberId: string) => void;
     onInviteCreate: (roleId: string) => void;
@@ -110,9 +114,20 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                             key={member.id}
                         >
                             <Box className="happy-agent-members__text">
-                                <span className="happy-agent-members__name">
-                                    {member.self ? `${member.name} (you)` : member.name}
-                                </span>
+                                {member.userId !== undefined && props.onProfileOpen ? (
+                                    <button
+                                        className="happy-agent-members__name happy-agent-members__profile"
+                                        data-happy-desktop-ui="happy-agent-member-profile"
+                                        onClick={() => props.onProfileOpen?.(member.userId!)}
+                                        type="button"
+                                    >
+                                        {member.self ? `${member.name} (you)` : member.name}
+                                    </button>
+                                ) : (
+                                    <span className="happy-agent-members__name">
+                                        {member.self ? `${member.name} (you)` : member.name}
+                                    </span>
+                                )}
                                 <span className="happy-agent-members__meta">{member.joined}</span>
                             </Box>
                             {member.saving ? <Spinner size={16} /> : null}

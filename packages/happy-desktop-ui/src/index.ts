@@ -858,6 +858,12 @@ export {
     type HappyAgentInboxPageProps,
 } from "./pages/inbox/HappyAgentInboxPage";
 export {
+    HappyAgentUserProfilePage,
+    type HappyAgentUserProfilePageProps,
+    type HappyAgentUserProfileTaskRow,
+    type HappyAgentUserProfileView,
+} from "./pages/people/HappyAgentUserProfilePage";
+export {
     type HappyAgentArtifactLabels,
     type HappyAgentArtifactSourceChoice,
 } from "./pages/artifacts/artifactPresentation";

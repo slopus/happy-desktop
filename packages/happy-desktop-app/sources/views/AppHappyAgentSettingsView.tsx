@@ -566,6 +566,8 @@ export interface AppHappyAgentSettingsViewProps {
     happyAgents: AppHappyAgentDirectoryStore;
     onClose(): void;
     onCategorySelect(id: string): void;
+    /** Opens a person's profile on a Happy Cloud server. */
+    onUserProfileOpen?(happyAgentId: string, userId: string): void;
     platform?: "desktop" | "web";
     section: string;
     settings: HappyAgentSettingsStore;
@@ -1635,6 +1637,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         manage={members.manage}
                         members={members.members.map((member) => ({
                             id: member.id,
+                            ...(member.userId === null ? {} : { userId: member.userId }),
                             name: member.name ?? "Someone who hasn't signed in yet",
                             roleId: member.roleId,
                             joined: `Joined ${new Date(member.joinedAt).toLocaleDateString([], {
@@ -1649,6 +1652,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         onInviteCreatedDismiss={() => membersShown.inviteCreatedDismiss()}
                         onInviteRevoke={(inviteId) => membersShown.inviteRevoke(inviteId)}
                         onLeave={() => membersShown.serverLeave()}
+                        {...(host?.happyCloud &&
+                        host.session?.userProfile &&
+                        props.onUserProfileOpen
+                            ? {
+                                  onProfileOpen: (userId: string) =>
+                                      props.onUserProfileOpen?.(host.id, userId),
+                              }
+                            : {})}
                         onRemove={(memberId) => membersShown.memberRemove(memberId)}
                         onRoleChange={(memberId, roleId) =>
                             membersShown.memberRoleUpdate(memberId, roleId)

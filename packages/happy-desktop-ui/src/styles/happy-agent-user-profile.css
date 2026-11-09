@@ -1,0 +1,212 @@
+/*
+ * A person's profile on Happy Cloud: their face, name and role centred at the
+ * top, then their usage as two rows of tiles, then the tasks they last worked
+ * in, read down the same content column the inbox and the feed use.
+ *
+ * Layout is flexbox throughout; colors and type come only from theme roles.
+ */
+
+.happy-agent-user-profile {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    font-family: var(--happy-font-ui);
+}
+
+/* The toolbar insets its own title by 16px, so the strip carries the rest of
+ * what puts that title on the column's gutter. */
+.happy-agent-user-profile__header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 calc(var(--happy-content-inline) - 16px);
+}
+
+/* The scrollport is flush; spacing belongs to the content wrapper inside it. */
+.happy-agent-user-profile__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-agent-user-profile__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-agent-user-profile__content {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 8px var(--happy-content-gutter) 48px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+}
+
+.happy-agent-user-profile__pending {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* ---- Identity ------------------------------------------------------------ */
+
+.happy-agent-user-profile__identity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-top: 16px;
+    text-align: center;
+}
+
+/* The person's face at profile size: their photo over its ThumbHash, which
+ * shows until the bytes arrive, or the placeholder their ID picks. */
+.happy-agent-user-profile__face {
+    display: flex;
+    flex: none;
+    width: 88px;
+    height: 88px;
+    overflow: hidden;
+    border-radius: var(--happy-radius-pill);
+    background-color: var(--surface-ripple);
+    background-position: center;
+    background-size: cover;
+}
+
+.happy-agent-user-profile__photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-agent-user-profile__name {
+    margin: 0;
+    padding-top: 8px;
+    color: var(--text);
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 32px;
+    overflow-wrap: anywhere;
+}
+
+.happy-agent-user-profile__role {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+/* ---- Sections ------------------------------------------------------------ */
+
+.happy-agent-user-profile__section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.happy-agent-user-profile__section-title {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-agent-user-profile__tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+/* Tiles share each row equally and wrap rather than squeeze below a readable width. */
+.happy-agent-user-profile__tile {
+    flex: 1 1 160px;
+}
+
+.happy-agent-user-profile__empty {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+/* ---- Tasks --------------------------------------------------------------- */
+
+.happy-agent-user-profile__tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-agent-user-profile__task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: var(--happy-radius-md);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-user-profile__task:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-agent-user-profile__task:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-agent-user-profile__task-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-user-profile__task-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-agent-user-profile__task-name,
+.happy-agent-user-profile__task-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-user-profile__task-name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-agent-user-profile__task-meta {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}

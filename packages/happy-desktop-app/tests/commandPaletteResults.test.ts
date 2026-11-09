@@ -666,6 +666,35 @@ it("opens a found message in its conversation, and leaves out what the desktop c
     expect(ids(result)).not.toContain("skill:sk_1");
 });
 
+it("opens a person found on Happy Cloud at their profile, wearing their face", () => {
+    const remote: readonly HappyAgentSearchHit[] = [
+        {
+            type: "user",
+            key: "user:usr_maya",
+            rank: 1,
+            userId: "usr_maya",
+            name: "Maya Search",
+            imageUrl: PHOTO,
+        },
+        { type: "user", key: "user:usr_theo", rank: 2, userId: "usr_theo", name: "Theo Search" },
+    ];
+    const result = commandPaletteResults(input({ query: "search", remote, happyCloud: true }));
+    expect(result.rows.find((row) => row.id === "user:usr_maya")).toMatchObject({
+        kind: "command",
+        title: "Maya Search",
+        glyph: { kind: "avatar", initials: "MS", imageUrl: PHOTO },
+        command: { kind: "userProfileOpen", happyAgentId: "local", userId: "usr_maya" },
+    });
+    // Without a photo the person wears the placeholder their ID picks, as everywhere else.
+    expect(result.rows.find((row) => row.id === "user:usr_theo")).toMatchObject({
+        glyph: { kind: "avatar", initials: "TS", placeholderSeed: "usr_theo" },
+        command: { kind: "userProfileOpen", happyAgentId: "local", userId: "usr_theo" },
+    });
+    // A local Happy Agent has no profiles to open, so it offers no people.
+    const local = commandPaletteResults(input({ query: "search", remote }));
+    expect(ids(local)).not.toContain("user:usr_maya");
+});
+
 const HIDE = {
     query: "hide",
     tasks: [...TASKS, task("hidden", "Why tasks hide on reload", 1)],
