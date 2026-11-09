@@ -63,6 +63,10 @@ export type ConversationQuickReplies = {
     /** The `suggest_replies` call holding it; absent for the message's own block. */
     readonly toolCallId?: string;
     readonly options: readonly string[];
+    /** The option a person's message sent, by its `quickReply`: read back from the transcript. */
+    readonly chosen?: number;
+    /** It takes a tap: the newest suggestion, with no person's message after it. */
+    readonly live: boolean;
 };
 
 /** The key a component's local state is kept under in its conversation. */

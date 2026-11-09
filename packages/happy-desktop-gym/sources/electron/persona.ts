@@ -229,11 +229,11 @@ export type GymChatOffer =
  */
 const COMPOSER = '[data-happy-desktop-ui="composer-textarea"]:visible';
 
-/** The agent's replies on screen; the latest carries the suggested replies under its words. */
+/** The agent's replies on screen. */
 const AGENT_REPLY = '[data-happy-desktop-ui="message"]:not([data-own]):visible';
 
-/** The suggested replies under the latest agent message, while no message stands after them. */
-const LIVE_BLOCK = '[data-happy-desktop-ui="chat-ui-quick-replies"]';
+/** The newest suggested replies, while nobody has written since; older stacks stay, untappable. */
+const LIVE_BLOCK = '[data-happy-desktop-ui="chat-ui-quick-replies"][data-live]';
 
 /**
  * Reads the conversation on screen the way the person would: the suggested
@@ -414,18 +414,18 @@ export async function gymPersonaTurn(
             const choice = gymPersonaChoice(persona, offer.labels, answers);
             if (choice === undefined) return false;
             const label = (offer.labels[choice] ?? "").trim();
-            // The pill is pinned before they read: a newer reply arriving
-            // meanwhile takes these suggestions away, in which case they read
-            // on instead of pressing.
+            // The reply is pinned before they read: someone writing meanwhile
+            // leaves these suggestions untappable, in which case they read on
+            // instead of pressing.
             const pin = String((answers.pins += 1));
             await buttons
                 .nth(choice)
                 .evaluate((element, value) => element.setAttribute("data-gym-pin", value), pin);
-            // They read the reply the suggestions sit under, pills and all.
+            // They read the reply the suggestions follow, then the suggestions.
+            const replies = page.locator(AGENT_REPLY);
+            const shown = await replies.count();
             await driver.read(
-                await offer.block
-                    .locator('xpath=ancestor::*[@data-happy-desktop-ui="message"][1]')
-                    .innerText(),
+                `${shown > 0 ? await replies.last().innerText() : ""} ${offer.labels.join(" ")}`,
             );
             const target = page.locator(`[data-gym-pin="${pin}"]`);
             if (!(await target.isEnabled().catch(() => false))) return false;

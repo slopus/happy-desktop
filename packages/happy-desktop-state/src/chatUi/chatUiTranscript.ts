@@ -85,20 +85,33 @@ export function chatUiConversation(
  * The suggestion a message makes: its own `quick_replies` block, or its last
  * `suggest_replies` call's presentation.
  */
-export function quickRepliesOf(message: Message): ConversationQuickReplies | undefined {
-    if (message.role !== "agent") return undefined;
-    let found: ConversationQuickReplies | undefined;
+export function quickRepliesOf(message: Message): readonly ConversationQuickReplies[] {
+    if (message.role !== "agent") return [];
+    const found: ConversationQuickReplies[] = [];
     for (const block of message.content) {
-        if (block.type === "quick_replies")
-            found = { messageId: message.id, options: block.options };
-        else if (block.type === "tool_call" && block.presentation?.type === "quick_replies")
-            found = {
+        if (block.type === "quick_replies" && block.options.length > 0)
+            found.push({ messageId: message.id, options: block.options, live: false });
+        else if (
+            block.type === "tool_call" &&
+            block.presentation?.type === "quick_replies" &&
+            block.presentation.options.length > 0
+        )
+            found.push({
                 messageId: message.id,
                 toolCallId: block.id,
                 options: block.presentation.options,
-            };
+                live: false,
+            });
     }
     return found;
+}
+
+/** The key one suggestion and every `quickReply` naming it share. */
+export function quickRepliesKey(replies: {
+    readonly messageId: string;
+    readonly toolCallId?: string;
+}): string {
+    return `${replies.messageId}\u0000${replies.toolCallId ?? ""}`;
 }
 
 /** Whether two suggestions are the same one. */
@@ -111,6 +124,8 @@ export function quickRepliesEqual(
     return (
         left.messageId === right.messageId &&
         left.toolCallId === right.toolCallId &&
+        left.chosen === right.chosen &&
+        left.live === right.live &&
         left.options.length === right.options.length &&
         left.options.every((option, index) => option === right.options[index])
     );

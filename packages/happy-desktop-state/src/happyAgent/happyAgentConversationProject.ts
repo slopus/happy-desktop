@@ -1149,7 +1149,12 @@ function happyAgentConnectGroupProject(
         const entry = entries[index];
         if (!entry) continue;
         if (statusIndex < 0 && entry.kind === "turnStatus") statusIndex = index;
-        if (entry.kind === "message" && entry.message.sender?.kind === "agent") {
+        // Suggested replies are no answer: the words above them are.
+        if (
+            entry.kind === "message" &&
+            entry.message.sender?.kind === "agent" &&
+            entry.quickReplies === undefined
+        ) {
             finalAgentIndex = index;
             break;
         }

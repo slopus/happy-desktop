@@ -1379,6 +1379,12 @@ export function conversationRowHeight(
                     ? entry.details.length * SUMMARY_DETAIL_HEIGHT + SUMMARY_DETAILS_PADDING
                     : 0),
         );
+    /* Suggested replies are a row of their own: one line each, whichever is chosen. */
+    const replies = entry.quickReplies;
+    if (replies)
+        return rowHeightCached(cache, entry, `replies:${String(width)}`, () =>
+            uiQuickRepliesHeight(replies, width),
+        );
     const message = entry.message;
     const agent = message.sender?.kind === "agent";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;
@@ -1433,7 +1439,6 @@ export function conversationRowHeight(
         context.messageLayouts?.signature ?? "",
         messageLayoutsFramesSignature(context.messageLayouts),
         entry.ui ? chatUiRowSignature(entry.ui, context.chatUi) : "",
-        entry.quickReplies ? entry.quickReplies.options.join("\u0000") : "",
         entry.quickReply ? "suggested" : "",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
@@ -1491,15 +1496,6 @@ export function conversationRowHeight(
                     { ui: entry.ui, ...context.chatUi },
                     messageContentMeasure(width, treatment),
                 );
-        /* Pills close the attachment slot: its 4px gap after anything above them there. */
-        if (entry.quickReplies)
-            height +=
-                (entry.ui || images.length > 0 || cards > 0
-                    ? ATTACHMENT_CARD_GAP
-                    : hasBody
-                      ? MEDIA_MARGIN
-                      : MEDIA_MARGIN_BARE) +
-                uiQuickRepliesHeight(entry.quickReplies, messageContentMeasure(width, treatment));
         return height;
     });
 }

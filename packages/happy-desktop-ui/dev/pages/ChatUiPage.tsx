@@ -205,17 +205,17 @@ const REPLIES: ConversationQuickReplies = {
     messageId: "msgfixture02",
     toolCallId: "callfixture01",
     options: ["Write code", "Plan a launch", "Just look around"],
+    live: true,
 };
 
 const REPLIES_LONG: ConversationQuickReplies = {
     messageId: "msgfixture03",
     options: [
         "Yes, ship it",
-        "Not yet — run the slow browser suite first",
+        "Not yet — run the slow browser suite first, then tell me which engines failed and why",
         "Show me the diff",
-        "Explain what changed in the sync code and why it is safe",
-        "Stop",
     ],
+    live: true,
 };
 
 const SPECIMENS: readonly {
@@ -365,53 +365,56 @@ export function ChatUiPage() {
                         </div>
                     </Specimen>
                 ))}
+                {(
+                    [
+                        {
+                            number: "C-338m",
+                            label: "Quick replies",
+                            detail: "the person's bubbles, fainter, one under another against the right; the newest takes a tap",
+                            replies: REPLIES,
+                        },
+                        {
+                            number: "C-338n",
+                            label: "Quick replies, one sent",
+                            detail: "the sent one takes the bubble's fill and a tick, the rest go quiet; nothing moves",
+                            replies: { ...REPLIES, chosen: 1, live: false },
+                        },
+                        {
+                            number: "C-338o",
+                            label: "Quick replies, passed by",
+                            detail: "someone wrote since: kept, but no longer taking a tap",
+                            replies: { ...REPLIES, live: false },
+                        },
+                        {
+                            number: "C-338o2",
+                            label: "Quick replies, a long option",
+                            detail: "one line each; a long option ends in an ellipsis",
+                            replies: REPLIES_LONG,
+                        },
+                    ] as const
+                ).map((specimen) => (
+                    <Specimen
+                        detail={specimen.detail}
+                        key={specimen.number}
+                        label={specimen.label}
+                        number={specimen.number}
+                        stage="surface"
+                    >
+                        <div style={{ display: "flex", width: "720px" }}>
+                            <UiQuickReplies onSend={() => undefined} replies={specimen.replies} />
+                        </div>
+                    </Specimen>
+                ))}
                 <Specimen
-                    detail="one outline pill per option, under the latest agent message"
-                    label="Quick replies"
-                    number="C-338m"
-                    stage="surface"
-                >
-                    <div style={{ display: "flex", padding: "24px", width: "600px" }}>
-                        <UiQuickReplies onSend={() => undefined} replies={REPLIES} />
-                    </div>
-                </Specimen>
-                <Specimen
-                    detail="long options wrap onto further rows"
-                    label="Quick replies, wrapping"
-                    number="C-338n"
-                    stage="surface"
-                >
-                    <div style={{ display: "flex", padding: "24px", width: "600px" }}>
-                        <UiQuickReplies onSend={() => undefined} replies={REPLIES_LONG} />
-                    </div>
-                </Specimen>
-                <Specimen
-                    detail="no way to write: the pills are drawn disabled"
-                    label="Quick replies, read-only"
-                    number="C-338o"
-                    stage="surface"
-                >
-                    <div style={{ display: "flex", padding: "24px", width: "600px" }}>
-                        <UiQuickReplies replies={REPLIES} />
-                    </div>
-                </Specimen>
-                <Specimen
-                    detail="a tapped pill is the person's own message, marked with where it came from"
+                    detail="a tapped reply is the person's own message, marked with where it came from"
                     label="Sent from a suggestion"
                     number="C-338p"
                     stage="surface"
                 >
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            padding: "24px",
-                            width: "600px",
-                        }}
-                    >
+                    <div style={{ display: "flex", flexDirection: "column", width: "720px" }}>
                         <Message
                             author="You"
-                            authorNote="↩ suggested by Happy"
+                            authorNote="↩ Suggested reply"
                             body="Plan a launch"
                             initials="Y"
                             own

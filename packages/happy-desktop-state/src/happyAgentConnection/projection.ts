@@ -4,6 +4,7 @@ import {
     chatUiMessage,
     chatUiRecordOf,
     chatUiTranscriptRead,
+    quickRepliesKey,
     quickRepliesOf,
     type ChatUiTranscript,
 } from "../chatUi/chatUiTranscript.js";
@@ -421,17 +422,23 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         elements.push(element);
     };
     /* Chat UI reads the whole transcript: an offer shows the records that
-       answered it. Quick replies are the latest suggestion, until a person's
-       message is recorded after it. */
+       answered it. Every suggestion stays; the option a person's message sent
+       is read back from its `quickReply` (one on its way from here too), and
+       only the newest takes a tap, until a person's message follows it. */
     const ordered: Message[] = [];
     let chatUi = false;
-    let quickReplies: ConversationQuickReplies | undefined;
+    const chosen = new Map<string, number>();
+    let liveKey: string | undefined;
     const read = (message: Message): void => {
         ordered.push(message);
-        if (message.role === "user") quickReplies = undefined;
-        else {
+        if (message.role === "user") {
+            liveKey = undefined;
+            if (message.quickReply)
+                chosen.set(quickRepliesKey(message.quickReply), message.quickReply.index);
+        } else {
             if (!chatUi && chatUiMessage(message)) chatUi = true;
-            quickReplies = quickRepliesOf(message) ?? quickReplies;
+            const last = quickRepliesOf(message).at(-1);
+            if (last) liveKey = quickRepliesKey(last);
         }
     };
     for (const run of input.runs) {
@@ -451,12 +458,46 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         : undefined;
     const projected = (entry: TranscriptMessage, runId: string, status: Run["status"]) =>
         projectMessage(entry, runId, status, reader, ui);
+    /*
+     * A suggestion's row sits under everything the agent said in its turn,
+     * above how the turn ended, until a person's message in the turn (a
+     * steer) pins it where it stands: what follows goes under it, so from
+     * then on nothing moves it.
+     */
+    const repliesPlace = (replies: ConversationQuickReplies, holder: Message, runId: string) => {
+        const key = quickRepliesKey(replies);
+        const sent = chosen.get(key);
+        elements.push({
+            id: `quick-replies:${replies.messageId}:${replies.toolCallId ?? ""}`,
+            groupId: runId,
+            runId,
+            createdAt: holder.createdAt,
+            kind: "agent_text",
+            messageId: replies.messageId,
+            text: "",
+            complete: true,
+            quickReplies: {
+                ...replies,
+                ...(sent === undefined || sent >= replies.options.length ? {} : { chosen: sent }),
+                live: key === liveKey,
+            },
+        });
+    };
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         const before = elements.length;
+        const open: { readonly replies: ConversationQuickReplies; readonly holder: Message }[] = [];
+        const flush = () => {
+            for (const { replies, holder } of open.splice(0)) repliesPlace(replies, holder, run.id);
+        };
         if (messages !== undefined)
-            for (const entry of messages)
+            for (const entry of messages) {
+                if (entry.message.role === "user") flush();
                 for (const element of projected(entry, run.id, run.status)) push(element);
+                for (const replies of quickRepliesOf(entry.message))
+                    open.push({ replies, holder: entry.message });
+            }
+        flush();
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
         }
@@ -466,30 +507,6 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     for (const entry of pending)
         for (const element of projected(entry, `pending:${entry.message.id}`, "running"))
             push(element);
-    /*
-     * The suggestion stands at the end, under whatever the agent said last: on
-     * that reply's own row, so the reply stays the turn's answer rather than
-     * folding into its work behind a row of pills.
-     */
-    let lastText = elements.length - 1;
-    while (lastText >= 0 && elements[lastText]?.kind !== "agent_text") lastText -= 1;
-    const said = elements[lastText];
-    if (quickReplies !== undefined && said?.kind === "agent_text") {
-        elements[lastText] = { ...said, quickReplies };
-    } else if (quickReplies !== undefined) {
-        const holder = ordered.find((message) => message.id === quickReplies?.messageId);
-        elements.push({
-            id: `quick-replies:${quickReplies.messageId}:${quickReplies.toolCallId ?? ""}`,
-            groupId: elements.at(-1)?.groupId ?? quickReplies.messageId,
-            runId: elements.at(-1)?.runId ?? quickReplies.messageId,
-            createdAt: holder?.createdAt ?? 0,
-            kind: "agent_text",
-            messageId: quickReplies.messageId,
-            text: "",
-            complete: true,
-            quickReplies,
-        });
-    }
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
     return elements;
 }

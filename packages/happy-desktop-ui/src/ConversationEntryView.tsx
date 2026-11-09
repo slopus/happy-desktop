@@ -591,6 +591,19 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             </div>
         );
 
+    /* Suggested replies are a row of their own, drawn as the person's own words would be. */
+    if (entry.quickReplies) {
+        const replies = entry.quickReplies;
+        const send = props.chatUi?.onQuickReply;
+        return (
+            <UiQuickReplies
+                {...(props.className === undefined ? {} : { className: props.className })}
+                {...(send ? { onSend: (index: number) => send(replies, index) } : {})}
+                replies={replies}
+                style={props.style}
+            />
+        );
+    }
     const message = entry.message;
     const author =
         props.agentAuthor !== undefined && message.sender?.id === props.agentAuthor.id
@@ -684,9 +697,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                           : `Replied to ${quote.owner === "yours" ? "your" : `${quote.owner.name}’s`} story`,
                   }
                 : entry.quickReply
-                  ? {
-                        authorNote: `↩ suggested by ${props.agentAuthor?.displayName ?? "the agent"}`,
-                    }
+                  ? { authorNote: "↩ Suggested reply" }
                   : {})}
             quote={
                 quote ? (
@@ -733,17 +744,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 />
             ))}
             {entry.ui ? chatUiDocument(message.id, entry.ui, props.chatUi) : null}
-            {entry.quickReplies ? (
-                <UiQuickReplies
-                    {...(props.chatUi?.onQuickReply
-                        ? {
-                              onSend: (index: number) =>
-                                  props.chatUi?.onQuickReply?.(entry.quickReplies!, index),
-                          }
-                        : {})}
-                    replies={entry.quickReplies}
-                />
-            ) : null}
         </Message>
     );
 }
