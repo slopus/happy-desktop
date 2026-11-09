@@ -8,11 +8,25 @@ const require = createRequire(
 const electronBuilderRequire = createRequire(require.resolve("electron-builder/package.json"));
 const { extractFile, listPackage } = electronBuilderRequire("@electron/asar");
 
-/** Verify every relative JavaScript import reachable from each packaged process entry. */
-export function packagedMainModulesVerify(archive, entries) {
-    const packaged = new Set(
+function packagedPaths(archive) {
+    return new Set(
         listPackage(archive).map((path) => path.replaceAll("\\", "/").replace(/^\//u, "")),
     );
+}
+
+/**
+ * Verify files the main process reads by path rather than imports are packaged,
+ * such as the artifact code renderer: a missing one only fails quietly at run time.
+ */
+export function packagedFilesVerify(archive, files) {
+    const packaged = packagedPaths(archive);
+    for (const file of files)
+        if (!packaged.has(file)) throw new Error(`Packaged file is missing: ${file}`);
+}
+
+/** Verify every relative JavaScript import reachable from each packaged process entry. */
+export function packagedMainModulesVerify(archive, entries) {
+    const packaged = packagedPaths(archive);
     const pending = [...entries];
     const visited = new Set();
     while (pending.length > 0) {
