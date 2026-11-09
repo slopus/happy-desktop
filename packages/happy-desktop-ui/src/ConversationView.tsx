@@ -60,6 +60,7 @@ import {
     conversationMessageClosedByStatus,
     conversationMessageGrouped,
     conversationOwnMessageContinued,
+    conversationOwnRunText,
     conversationTurnStatusAfterActivity,
     conversationTurnStatusStartsGroup,
     conversationWorkingStatusStartsGroup,
@@ -1277,6 +1278,12 @@ export function ConversationView(props: ConversationViewProps) {
                                             ? conversationMessageGrouped(source, index)
                                             : undefined
                                     }
+                                    ownRunText={conversationOwnRunText(
+                                        source,
+                                        index,
+                                        props.viewerId,
+                                        index < transcript.length ? 0 : transcript.length,
+                                    )}
                                     onImageOpen={props.onImageOpen}
                                     onAttachmentOpen={props.onAttachmentOpen}
                                     onStoryOpen={props.onStoryOpen}

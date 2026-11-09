@@ -351,13 +351,6 @@ const CONVERSATION_AGENT_PADDING_BOTTOM = { leading: 16, grouped: 2 } as const;
  * 16px. Only the bottom edge changes.
  */
 const OWN_PADDING_BOTTOM = { leading: 16, grouped: 4 } as const;
-/**
- * `.happy-message__own-actions`: a 20px line 4px under an own message with
- * text. It hangs in the gap a fresh row already leaves below its bubble and
- * takes room of its own only where a run of the reader's messages keeps a 4px
- * trailing padding.
- */
-const OWN_ACTIONS_HEIGHT = 24;
 /** Horizontal chrome: row padding, then the 76% bubble cap, then bubble padding. */
 const AGENT_INSET = 94;
 /** CSS rounds each padding edge separately at native zoom. */
@@ -1445,7 +1438,6 @@ export function conversationRowHeight(
                     ? CONVERSATION_AGENT_PADDING_BOTTOM.grouped
                     : CONVERSATION_AGENT_PADDING_BOTTOM.leading);
         if (ownContinued) height -= OWN_PADDING_BOTTOM.leading - OWN_PADDING_BOTTOM.grouped;
-        if (own && hasBody && (grouped || ownContinued)) height += OWN_ACTIONS_HEIGHT;
         const images: MediaFlowImage[] = [];
         let cards = 0;
         for (const attachment of message.attachments) {

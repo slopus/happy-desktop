@@ -91,6 +91,11 @@ export type ConversationEntryViewProps = {
     contextNote?: string;
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
+    /**
+     * The text the copy under the reader's own message takes: their whole run
+     * of messages, given only to the row that closes the run.
+     */
+    ownRunText?: string;
     /** Answers a pending question request entry. */
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Options ticked into this question so far, when the owner keeps them. */
@@ -645,8 +650,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.references ? { references: props.references } : {})}
             own={own}
             ownActions={
-                own && message.text.length > 0 ? (
-                    <CopyButton label="Copy message" text={message.text} />
+                own && props.ownRunText !== undefined ? (
+                    <CopyButton label="Copy message" text={props.ownRunText} />
                 ) : undefined
             }
             {...(quote

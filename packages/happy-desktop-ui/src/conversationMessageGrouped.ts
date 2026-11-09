@@ -108,6 +108,39 @@ export function conversationOwnMessageContinued(
 }
 
 /**
+ * The text copied from under the reader's own message: every message of the
+ * run of theirs this row closes, joined by a blank line. `undefined` when the
+ * row is not the reader's, the next row continues its run, or the run has no
+ * text. The run reaches back no further than `start`.
+ */
+export function conversationOwnRunText(
+    entries: readonly ConversationEntry[],
+    index: number,
+    viewerId: string | undefined,
+    start = 0,
+): string | undefined {
+    const entry = entries[index];
+    if (
+        entry?.kind !== "message" ||
+        viewerId === undefined ||
+        entry.message.sender?.id !== viewerId ||
+        (entries[index + 1]?.kind === "message" && conversationMessageGrouped(entries, index + 1))
+    )
+        return undefined;
+    let first = index;
+    while (
+        first > start &&
+        entries[first - 1]?.kind === "message" &&
+        conversationMessageGrouped(entries, first)
+    )
+        first -= 1;
+    const texts: string[] = [];
+    for (const row of entries.slice(first, index + 1))
+        if (row.kind === "message" && row.message.text.length > 0) texts.push(row.message.text);
+    return texts.length === 0 ? undefined : texts.join("\n\n");
+}
+
+/**
  * A question the agent asked and the reader answered. It is the agent's turn
  * that asked it, so when nothing came before it the question opens that turn
  * and carries its header.

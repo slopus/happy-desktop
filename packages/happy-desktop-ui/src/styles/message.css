@@ -534,11 +534,9 @@
     opacity: 1;
 }
 
-/* Own message actions: a right-aligned 20px line 4px under the bubble. A fresh
-   row already leaves 16px below its bubble and the next row 16px above its
-   own content, so the line hangs in that gap and takes no room; the hover
-   reveal moves nothing. In a run of the reader's messages the row keeps only
-   4px, so there the line is laid out in flow instead. */
+/* Own message actions: a right-aligned 20px line 4px under the bubble that
+   closes a run of the reader's messages. It hangs in the gap below the row
+   and takes no room, so the hover reveal moves nothing. */
 .happy-message[data-own-actions] .happy-message__content {
     position: relative;
 }
@@ -554,16 +552,11 @@
     height: 20px;
 }
 
-.happy-message[data-grouped] .happy-message__own-actions,
-.happy-message.happy-conversation__own-continued .happy-message__own-actions {
-    position: static;
-    margin-top: 4px;
-}
-
-/* The hanging line reaches into the next row's top padding, which paints
-   later; the hovered row rises over it so the button stays clickable. */
-.happy-message[data-own-actions]:is(:hover, :focus-within),
-.happy-message-list__virtual-row:has(.happy-message[data-own-actions]:is(:hover, :focus-within)) {
+/* The hanging line reaches into the next row's top, which paints later; the
+   row carrying it stays over that row, so the pointer finds the button and
+   reveals it from any direction, not only straight down from the bubble. */
+.happy-message[data-own-actions],
+.happy-message-list__virtual-row:has(.happy-message[data-own-actions]) {
     z-index: 1;
 }
 

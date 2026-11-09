@@ -175,8 +175,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     metaAccessory?: ReactNode;
     /**
      * Quiet controls on their own line under an own message, such as copying
-     * it. The line is always laid out and only shown while the row is hovered
-     * or focused, so revealing it moves nothing.
+     * it. The line hangs below the row without taking room and is only shown
+     * while the row is hovered or focused, so revealing it moves nothing.
      */
     ownActions?: ReactNode;
     author: string;
