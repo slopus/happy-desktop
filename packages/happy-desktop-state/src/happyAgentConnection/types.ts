@@ -953,8 +953,19 @@ export interface SendMessageInput {
         | { type: "text"; text: string }
         | { type: "image"; mediaType: string; data: string }
         | SendMessageToolCallRequest
+        | SendMessageFileBlock
     )[];
     text: string;
+}
+
+/**
+ * A file already uploaded to a Happy Cloud conversation, named by its
+ * attachment ID. Only a Happy Cloud server takes it.
+ */
+export interface SendMessageFileBlock {
+    type: "file";
+    attachment: string;
+    name: string;
 }
 
 /**

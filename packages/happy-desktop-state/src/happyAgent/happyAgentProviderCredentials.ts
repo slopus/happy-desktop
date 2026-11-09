@@ -262,10 +262,15 @@ export function happyCloudRequestCreate(options: {
                 headers: {
                     accept: "application/json",
                     authorization: `Bearer ${options.token}`,
-                    ...(body === undefined ? {} : { "content-type": "application/json" }),
+                    ...(body === undefined || body instanceof Blob
+                        ? {}
+                        : { "content-type": "application/json" }),
                     ...headers,
                 },
-                ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+                // A file goes as its own bytes; anything else is a JSON body.
+                ...(body === undefined
+                    ? {}
+                    : { body: body instanceof Blob ? body : JSON.stringify(body) }),
             });
         } catch (error) {
             throw new UserError("Happy couldn't reach the server.", "offline", error);

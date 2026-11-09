@@ -37,7 +37,10 @@ import {
     type HappyAgentSessionListStore,
 } from "./happyAgentSessionListStore.js";
 import type { HappyAgentHostServices } from "./happyAgentHostServices.js";
-import { happyAgentAttachmentPlacementCreate } from "./happyAgentAttachmentPlacement.js";
+import {
+    happyAgentAttachmentPlacementCreate,
+    type HappyAgentAttachmentPlacement,
+} from "./happyAgentAttachmentPlacement.js";
 import {
     happyAgentChangedFileProject,
     happyAgentModelCatalogProject,
@@ -410,6 +413,12 @@ export interface HappyAgentWorkspaceClient {
         content: string,
     ): Promise<{ readonly path: string }>;
     /**
+     * Uploads one file to an agent's Happy Cloud conversation and answers the
+     * block its message names it with. Present exactly on a Happy Cloud
+     * connection, whose files never go into a checkout.
+     */
+    readonly attachmentUpload?: HappyAgentAttachmentPlacement["attachmentUpload"];
+    /**
      * Registers one folder on this Happy Agent's machine as a project and resolves with
      * the identity Happy Agent gave it. Nothing is started in it: a project is a folder
      * Happy Agent knows about, and a conversation in it is a separate decision.
@@ -651,7 +660,7 @@ export function happyAgentWorkspaceClientCreate(
     // Happy Cloud's own routes are present exactly on a Happy Cloud connection.
     const attachmentPlacement = happyAgentAttachmentPlacementCreate(
         deps.hostServices,
-        deps.cloudRequest !== undefined,
+        deps.cloudRequest,
     );
     let sessionListStore: HappyAgentSessionListStore | undefined;
     /** Surface chat workspaces, which the Surfaces learn and the conversation list accepts. */
@@ -856,6 +865,9 @@ export function happyAgentWorkspaceClientCreate(
             attachmentPlacement.attachmentSourceReachable(groupId, sourcePath),
         attachmentWrite: (groupId, name, content) =>
             attachmentPlacement.attachmentWrite(groupId, name, content),
+        ...(attachmentPlacement.attachmentUpload
+            ? { attachmentUpload: attachmentPlacement.attachmentUpload }
+            : {}),
         async projectAdd(path) {
             // Registration is the daemon's own decision, so it goes directly
             // through the connection actions: the daemon validates the folder,

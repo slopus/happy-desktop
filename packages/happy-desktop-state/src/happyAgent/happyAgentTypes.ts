@@ -344,6 +344,17 @@ export interface HappyAgentImageInput {
 }
 
 /**
+ * A file uploaded to a Happy Cloud conversation, named in a message by its
+ * attachment ID. Happy Cloud's addition to the send contract; a Happy Agent
+ * daemon has no such block.
+ */
+export interface HappyCloudFileBlock {
+    readonly type: "file";
+    readonly attachment: string;
+    readonly name: string;
+}
+
+/**
  * A picture being put on something the host keeps — a bot's face. The host
  * stores encoded bytes and answers with a thumbhash and a URL, so this is the
  * one shape a picture has on its way up: raster bytes in one of the three
