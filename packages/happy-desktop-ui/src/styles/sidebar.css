@@ -1596,6 +1596,10 @@
 .happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-count,
 .happy-sidebar__item:hover
     .happy-sidebar__item-trailing[data-swaps]
+    .happy-sidebar__item-change-stats,
+.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-change-stats,
+.happy-sidebar__item:hover
+    .happy-sidebar__item-trailing[data-swaps]
     .happy-sidebar__item-unread-cell,
 .happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread-cell {
     visibility: hidden;
