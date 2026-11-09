@@ -586,6 +586,9 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         },
         refresh: refreshRun,
         serverMoved(connectionId, serverUrl) {
+            // Happy Cloud is never in the host's roster, so a miss there says
+            // nothing about it; only its own list of servers ends its sign-ins.
+            if (directIs(connectionId)) return;
             for (const attempt of attempts.values())
                 if (attempt.connectionId === connectionId && attempt.serverUrl === serverUrl)
                     attempt.fail(new ServerSessionError(SERVER_MOVED, "server_moved"));

@@ -487,6 +487,24 @@ it("holds a Happy Cloud server's issued tokens and refreshes them without the ac
     ]);
 });
 
+it("keeps a Happy Cloud sign-in when the host reports a roster miss for it", () => {
+    const context = cloudCreate(serverCreate());
+    context.sessions.directSignIn("cloud-acme", {
+        accessToken: "issued",
+        expiresAt: Date.now() + 900_000,
+        refreshToken: null,
+        refreshUrl: null,
+        clientId: "happy",
+        resource: CLOUD_SERVER,
+        serverUrl: CLOUD_SERVER,
+    });
+    context.sessions.serverMoved("cloud-acme", CLOUD_SERVER);
+    expect(context.sessions.get()).toEqual([{ connectionId: "cloud-acme", state: "signedIn" }]);
+    expect(context.sessions.tokens()).toEqual({
+        "cloud-acme": { accessToken: "issued", serverUrl: CLOUD_SERVER },
+    });
+});
+
 it("holds Happy Cloud's account pass issued without a browser", () => {
     const context = cloudCreate(serverCreate());
     context.sessions.directSignIn("account", {
