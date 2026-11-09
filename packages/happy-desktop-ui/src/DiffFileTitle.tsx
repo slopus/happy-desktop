@@ -1,4 +1,5 @@
 import { FileKindIcon } from "./FileKindIcon";
+import { useFileRevealMenu } from "./FileRevealMenu";
 import { Icon } from "./Icon";
 
 /**
@@ -19,6 +20,7 @@ export function DiffFileTitle(props: { path: string; previousPath?: string }) {
     const cut = props.path.lastIndexOf("/");
     const directory = cut === -1 ? "" : props.path.slice(0, cut + 1);
     const name = props.path.slice(cut + 1);
+    const revealMenu = useFileRevealMenu(props.path);
     return (
         <span
             className="happy-diff-file-title"
@@ -27,7 +29,9 @@ export function DiffFileTitle(props: { path: string; previousPath?: string }) {
             // itself: a stream of them has to be able to say which one the
             // reader is currently inside.
             data-path={props.path}
+            onContextMenu={revealMenu.onContextMenu}
         >
+            {revealMenu.menu}
             <FileKindIcon path={props.path} size={16} />
             {props.previousPath === undefined ? null : (
                 <>

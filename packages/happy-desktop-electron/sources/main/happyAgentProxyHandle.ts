@@ -8,7 +8,8 @@ import {
     HappyAgentDaemonHttpError,
     type HappyAgentDaemonClient,
 } from "./happyAgentDaemonClient";
-import { openInRun, openInTargetsRead } from "./openIn";
+import { isAbsolute, relative, resolve } from "node:path";
+import { fileReveal, openInRun, openInTargetsRead } from "./openIn";
 import { happyAgentDaemonHealthProject } from "./happyAgentHttpProxy";
 import type { HappyAgentRequestMilestone } from "./happyAgentRequestTiming";
 import type { HappyAgentDaemonClientOptions } from "./happyAgentDaemonClient";
@@ -145,6 +146,27 @@ export async function happyAgentProxyHandle(
             if (workspace.compute.type !== "host")
                 throw new Error("A container workspace cannot be opened as a local folder.");
             await openInRun(target, workspace.compute.path);
+            writeJson(response, 200, {});
+            return true;
+        }
+        if (method === "POST" && path === "/file-reveal") {
+            if (connectionId)
+                throw new Error("A file on another machine cannot be shown in Finder.");
+            const body = await bodyReadJson(request);
+            const workspaceId = requiredString(body.workspaceId, "workspaceId");
+            const filePath = requiredString(body.path, "path");
+            const { workspace } = await client.getWorkspace(workspaceId);
+            if (workspace.compute.type !== "host")
+                throw new Error("A file in a container cannot be shown in Finder.");
+            // An absolute path names a file anywhere on this machine, as an
+            // agent that went looking for one writes it; a relative one names a
+            // file in this workspace and may not climb out of it.
+            const root = workspace.compute.path;
+            const target = isAbsolute(filePath) ? resolve(filePath) : resolve(root, filePath);
+            const inside = relative(root, target);
+            if (!isAbsolute(filePath) && (inside.startsWith("..") || isAbsolute(inside)))
+                throw new Error("That path is outside this workspace.");
+            await fileReveal(target);
             writeJson(response, 200, {});
             return true;
         }

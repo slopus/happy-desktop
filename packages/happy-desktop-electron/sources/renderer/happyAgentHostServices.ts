@@ -265,6 +265,9 @@ export function happyAgentHostServicesCreate(
                 target: target.id,
             });
         },
+        fileReveal: async (workspaceId, path) => {
+            await postJson<Record<string, never>>(baseUrl, "/file-reveal", { workspaceId, path });
+        },
         workspaceFileBytesRead: async (
             workspaceId,
             path,

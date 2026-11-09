@@ -30,6 +30,7 @@ import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
 import { ScrollingText } from "./ScrollingText";
 import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
+import { useFileRevealMenu } from "./FileRevealMenu";
 import { TypedText } from "./TypedText";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
@@ -655,6 +656,13 @@ const FILE_PATH_ARGUMENTS = ["file_path", "filePath", "path", "notebook_path"] a
  * report nothing rather than offering a click that goes nowhere.
  */
 function toolFilePath(tool: ConversationToolCall): string | undefined {
+    const candidate = toolSubjectPath(tool);
+    if (candidate === undefined) return undefined;
+    return filePreviewKind(candidate) === "binary" ? undefined : candidate;
+}
+
+/** The one workspace file a tool call is about, whatever kind of file it is. */
+function toolSubjectPath(tool: ConversationToolCall): string | undefined {
     // An artifact's own files are not the workspace's; the artifact opens them.
     if (ARTIFACT_FILE_VERBS[tool.toolName.toLowerCase()] !== undefined) return undefined;
     const presentation = tool.presentation;
@@ -664,8 +672,7 @@ function toolFilePath(tool: ConversationToolCall): string | undefined {
                 ? presentation.files[0]!.path
                 : undefined
             : argumentFilePath(tool.arguments);
-    if (candidate === undefined || candidate.trim().length === 0) return undefined;
-    return filePreviewKind(candidate) === "binary" ? undefined : candidate;
+    return candidate === undefined || candidate.trim().length === 0 ? undefined : candidate;
 }
 
 /**
@@ -1040,6 +1047,9 @@ function AgentToolActivity(props: {
         tool.status !== "failed" &&
         !tool.failed;
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
+    // Any file the call is about can be shown in Finder, including one Happy
+    // has no preview for.
+    const revealMenu = useFileRevealMenu(toolSubjectPath(tool));
 
     /* Only a row that is open, and open on its arguments, ever prints them.
        Serializing them anyway cost the whole argument tree on every frame of a
@@ -1248,7 +1258,12 @@ function AgentToolActivity(props: {
             {/* The copy action is a sibling of the header rather than part of
                 it: the header is itself a button in most variants, and a
                 nested button would be neither valid nor clickable. */}
-            <div className="happy-agent-activity__line" data-happy-desktop-ui="agent-activity-line">
+            <div
+                className="happy-agent-activity__line"
+                data-happy-desktop-ui="agent-activity-line"
+                onContextMenu={revealMenu.onContextMenu}
+            >
+                {revealMenu.menu}
                 {singleLine && (spawnedOpen || props.onSelect) ? (
                     // A spawned agent opens itself, wherever its row is drawn.
                     <button

@@ -1823,6 +1823,14 @@ export interface HappyAgentWorkspaceStore {
      * exactly as `fileReferenceOpen` would.
      */
     fileLinkOpen(link: HappyAgentFileLink, kind: HappyAgentFileTabKind): void;
+    /**
+     * Selects a file in the machine's file manager. `path` is relative to the
+     * group's root, or absolute for a file anywhere on that machine. When the
+     * host cannot show it, `fileOpenFailure` says why.
+     */
+    fileReveal(groupId: HappyAgentGroupId, path: string): void;
+    /** Selects the file a `happy://` or `happy-file://` file link names in the machine's file manager. */
+    fileLinkReveal(link: HappyAgentFileLink): void;
     /** Puts away the notice about a reference that could not be followed. */
     fileOpenFailureDismiss(): void;
     /**
@@ -7959,6 +7967,28 @@ export function happyAgentWorkspaceStoreCreate(
                     recompute();
                 }, fail);
             }, fail);
+        },
+        fileReveal(groupId, path) {
+            if (disposed) return;
+            void client.fileReveal(groupId, path).catch((error: unknown) => {
+                if (disposed) return;
+                fileOpenFailure = { path, message: happyAgentUserError(error).message };
+                recompute();
+            });
+        },
+        fileLinkReveal(link) {
+            if (disposed) return;
+            void client
+                .fileLinkWorkspaceResolve(link.target)
+                .then((workspaceId) => client.fileReveal(workspaceId, link.path))
+                .catch((error: unknown) => {
+                    if (disposed) return;
+                    fileOpenFailure = {
+                        path: link.path,
+                        message: happyAgentUserError(error).message,
+                    };
+                    recompute();
+                });
         },
         fileOpenFailureDismiss() {
             if (disposed || fileOpenFailure === undefined) return;

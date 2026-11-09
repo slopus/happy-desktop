@@ -439,7 +439,13 @@ export {
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
 export { ContextMenu, type ContextMenuProps } from "./ContextMenu";
-export { LinkContextMenu, LinkCopyContext, type LinkContextMenuProps } from "./LinkContextMenu";
+export {
+    FileRevealContext,
+    LinkContextMenu,
+    LinkCopyContext,
+    type FileReveal,
+    type LinkContextMenuProps,
+} from "./LinkContextMenu";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export { ComputeChip, type ComputeChipCompute, type ComputeChipProps } from "./ComputeChip";
 export {

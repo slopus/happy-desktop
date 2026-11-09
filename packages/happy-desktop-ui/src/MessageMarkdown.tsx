@@ -5,12 +5,13 @@ import {
     useContext,
     useState,
     type ComponentPropsWithoutRef,
+    type MouseEvent,
     type ReactNode,
 } from "react";
 import { happyShareLinkParse, isHappyUrl, type HappyReference } from "happy-desktop-state";
 import Markdown, { type Components, type ExtraProps, type UrlTransform } from "react-markdown";
 import type { Processor } from "unified";
-import { LinkContextMenu } from "./LinkContextMenu";
+import { FileRevealContext, LinkContextMenu } from "./LinkContextMenu";
 import { CopyButton } from "./CopyButton";
 import { filePreviewKind } from "./FilePreview";
 import { type MenuItem } from "./Menu";
@@ -107,6 +108,10 @@ const LINK_MENU_PANEL: LinkOpenPlacement = "panel";
  * beside that row. Absent, neither row claims it.
  */
 const MarkdownLinkDefaultContext = createContext<LinkOpenPlacement | undefined>(undefined);
+const FILE_MENU_REVEAL = "reveal";
+const FILE_MENU_ITEMS: readonly MenuItem[] = [
+    { kind: "item", id: FILE_MENU_REVEAL, label: "Show in Finder", icon: "folder-open" },
+];
 function linkMenuItems(defaultPlacement: LinkOpenPlacement | undefined): MenuItem[] {
     const detail = (placement: LinkOpenPlacement) =>
         placement === defaultPlacement ? { detail: "Default" } : {};
@@ -314,6 +319,7 @@ const MarkdownLink = ({
     const onLinkOpen = useContext(MarkdownLinkOpenContext);
     const linkOpenDefault = useContext(MarkdownLinkDefaultContext);
     const settingsLinks = useContext(MessageSettingsLinksContext);
+    const reveal = useContext(FileRevealContext);
     // The link's own context menu, while it is up: where the pointer asked
     // for it. Local to the link because nothing else in the message reads it.
     const [menuAt, setMenuAt] = useState<{ x: number; y: number }>();
@@ -358,6 +364,33 @@ const MarkdownLink = ({
             </a>
         );
     }
+    // A file link's own menu shows the file in Finder above Copy link, where
+    // the host can reveal files; otherwise the window's plain link menu stands.
+    const fileMenu = (revealFile: (() => void) | undefined) => ({
+        onContextMenu:
+            revealFile === undefined
+                ? undefined
+                : (event: MouseEvent<HTMLAnchorElement>) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setMenuAt({ x: event.clientX, y: event.clientY });
+                  },
+        menu:
+            revealFile !== undefined && menuAt !== undefined && typeof href === "string" ? (
+                <LinkContextMenu
+                    data-testid="message-md-file-menu"
+                    href={href}
+                    items={FILE_MENU_ITEMS}
+                    onClose={() => setMenuAt(undefined)}
+                    onSelect={(id) => {
+                        setMenuAt(undefined);
+                        if (id === FILE_MENU_REVEAL) revealFile();
+                    }}
+                    x={menuAt.x}
+                    y={menuAt.y}
+                />
+            ) : null,
+    });
     // A link into another workspace's folder carries that folder, so it opens
     // the same file wherever the message is read. Its scheme means nothing to
     // the browser or the OS, so no click may hand it to either.
@@ -366,26 +399,34 @@ const MarkdownLink = ({
         fileLink !== undefined &&
         onFileLinkOpen !== undefined &&
         filePreviewKind(fileLink.path) !== "binary"
-    )
+    ) {
+        const menu = fileMenu(reveal && (() => reveal.link(fileLink)));
         return (
-            <a
-                className="happy-message__md-link happy-message__md-file"
-                data-happy-desktop-ui="message-md-file"
-                data-path={fileLink.path}
-                href={href}
-                onClick={(event) => {
-                    event.preventDefault();
-                    onFileLinkOpen(fileLink);
-                }}
-                onAuxClick={(event) => {
-                    event.preventDefault();
-                    if (event.button === 1) onFileLinkOpen(fileLink);
-                }}
-                onDragStart={(event) => event.preventDefault()}
-            >
-                <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
-            </a>
+            <>
+                <a
+                    className="happy-message__md-link happy-message__md-file"
+                    data-happy-desktop-ui="message-md-file"
+                    data-path={fileLink.path}
+                    href={href}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        onFileLinkOpen(fileLink);
+                    }}
+                    onAuxClick={(event) => {
+                        event.preventDefault();
+                        if (event.button === 1) onFileLinkOpen(fileLink);
+                    }}
+                    onContextMenu={menu.onContextMenu}
+                    onDragStart={(event) => event.preventDefault()}
+                >
+                    <MarkdownLinkContext.Provider value={true}>
+                        {children}
+                    </MarkdownLinkContext.Provider>
+                </a>
+                {menu.menu}
+            </>
         );
+    }
     // Any other Happy address — one this surface cannot open, or one that is
     // malformed — is its words. It is never a link the browser or the OS
     // could be handed.
@@ -399,21 +440,29 @@ const MarkdownLink = ({
         target !== undefined &&
         onFileOpen !== undefined &&
         filePreviewKind(target.path) !== "binary"
-    )
+    ) {
+        const menu = fileMenu(reveal && (() => reveal.path(target.path)));
         return (
-            <a
-                className="happy-message__md-link happy-message__md-file"
-                data-happy-desktop-ui="message-md-file"
-                data-path={target.path}
-                href={href}
-                onClick={(event) => {
-                    event.preventDefault();
-                    onFileOpen(target.path, target.selection);
-                }}
-            >
-                <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
-            </a>
+            <>
+                <a
+                    className="happy-message__md-link happy-message__md-file"
+                    data-happy-desktop-ui="message-md-file"
+                    data-path={target.path}
+                    href={href}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        onFileOpen(target.path, target.selection);
+                    }}
+                    onContextMenu={menu.onContextMenu}
+                >
+                    <MarkdownLinkContext.Provider value={true}>
+                        {children}
+                    </MarkdownLinkContext.Provider>
+                </a>
+                {menu.menu}
+            </>
         );
+    }
     // A written reference this surface cannot open is the words it was written
     // as. The transcript made that link itself, so an inert anchor here would
     // underline a path in every message read somewhere with no workspace behind

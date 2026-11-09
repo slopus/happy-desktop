@@ -6,6 +6,7 @@ import { Button } from "./Button";
 import { CodeBlock } from "./CodeBlock";
 import { FileTreeFamilyIcon, fileTreeFamily, type FileTreeNode } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
+import { useFileRevealMenu } from "./FileRevealMenu";
 import { Icon, type IconName } from "./Icon";
 import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
@@ -324,6 +325,7 @@ export function FilePreview(props: FilePreviewProps) {
     const dimensions =
         local.dimensions ?? (measured?.source === source ? measured.dimensions : undefined);
     const meta = [dimensions, local.size].filter(Boolean).join(" · ");
+    const revealMenu = useFileRevealMenu(local.path);
     return (
         <section
             className={["happy-file-preview", local.className].filter(Boolean).join(" ")}
@@ -336,7 +338,9 @@ export function FilePreview(props: FilePreviewProps) {
                 className="happy-file-preview__header"
                 data-happy-desktop-ui="file-preview-header"
                 data-path-hidden={local.pathHidden ? "" : undefined}
+                onContextMenu={revealMenu.onContextMenu}
             >
+                {revealMenu.menu}
                 {local.pathHidden ? null : (
                     <>
                         <span

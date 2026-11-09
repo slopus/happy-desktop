@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -424,5 +424,32 @@ export async function openInRun(targetId: string, directory: string): Promise<vo
         await execFileAsync("/usr/bin/open", ["-a", path, directory], { timeout: 10_000 });
     } catch {
         throw new Error(`${target.label} could not open this project.`);
+    }
+}
+
+/**
+ * Shows one file or folder selected in a Finder window.
+ *
+ * The caller resolves `path` to an absolute location on this machine. Revealing
+ * only selects an item in Finder — nothing is opened or run — so any path the
+ * reader can see may be revealed, not only a project's own files.
+ */
+export async function fileReveal(path: string): Promise<void> {
+    if (process.platform !== "darwin")
+        throw new Error("Showing a file in Finder is only supported on macOS.");
+    // A hidden-window run (main/hiddenWindows.ts) never puts another
+    // application in front of the person.
+    if (process.env.HAPPY_DESKTOP_WINDOWS_HIDDEN !== undefined)
+        throw new Error("A hidden-window run cannot show a file in Finder.");
+    if (!isAbsolute(path)) throw new Error("Only a path on this Mac can be shown in Finder.");
+    try {
+        await stat(path);
+    } catch {
+        throw new Error("That file is not on this Mac.");
+    }
+    try {
+        await execFileAsync("/usr/bin/open", ["-R", path], { timeout: 10_000 });
+    } catch {
+        throw new Error("Finder could not show this file.");
     }
 }

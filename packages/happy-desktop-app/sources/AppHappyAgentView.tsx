@@ -10,6 +10,7 @@ import {
 import type { ConversationSummary, HappyAgentSystemMonitorStore } from "happy-desktop-state";
 import {
     HappyAgentSystemMonitorSurfacePage,
+    FileRevealContext,
     LinkCopyContext,
     MessageSettingsLinksContext,
     type MessageSettingsLinks,
@@ -285,6 +286,7 @@ import {
     filePathMatches,
     fileNameCompare,
     type FileLinkOpenHandler,
+    type FileReveal,
     type FileOpenHandler,
     type LinkOpenHandler,
     type LinkOpenPlacement,
@@ -1931,6 +1933,12 @@ const tabsOrdered = happyAgentTabsOrdered;
 
 /** The tab action ids the strip's context menu dispatches back to this surface. */
 const TAB_MENU_CLOSE = "close";
+const FILE_TAB_REVEAL_ITEM = {
+    kind: "item",
+    id: "reveal",
+    label: "Show in Finder",
+    icon: "folder-open",
+} as const satisfies MenuItem;
 const TAB_MENU_CLOSE_OTHERS = "close-others";
 const TAB_MENU_CLOSE_LEFT = "close-left";
 const TAB_MENU_CLOSE_RIGHT = "close-right";
@@ -7146,6 +7154,21 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         props.groupId,
         props.chatId,
     );
+    // Finder is offered where the host can hand a path to it: a remote Happy
+    // Agent's host lists no applications, because its files are not on this Mac.
+    const fileReveal: FileReveal | undefined =
+        openGroup && workspace.openInTargets.some((target) => target.id === "finder")
+            ? {
+                  path: (path) => props.workspace.fileReveal(openGroup.id, path),
+                  link: (link) => props.workspace.fileLinkReveal(link),
+              }
+            : undefined;
+    /** Reveals into the workspace a file tab reads, which a linked file names itself. */
+    const fileTabReveal = (file: HappyAgentFileTabSnapshot): FileReveal | undefined =>
+        fileReveal && {
+            path: (path) => props.workspace.fileReveal(file.groupId, path),
+            link: fileReveal.link,
+        };
     // Where this machine's artifacts can have been made, as the list names it.
     const artifactPlaces: HappyAgentArtifactPlaces = {
         bots: workspace.list.bots,
@@ -7751,44 +7774,45 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             : {}),
     });
     const mainFileBody = (file: HappyAgentFileTabSnapshot): ReactNode => (
-        <HappyAgentFileBody
-            appearance={appearance.appearance}
-            entities={documentEntities}
-            file={file}
-            tabNamed
-            {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
-            key={`${file.id}:${file.kind}`}
-            {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
-            mode={workspace.fileViewMode}
-            {...((change) => (change === undefined ? {} : { change }))(
-                openGroup?.id === file.groupId
-                    ? openGroup.changes.find((candidate) => candidate.path === file.path)
-                    : undefined,
-            )}
-            comments={workspace.fileComments.comments.filter(
-                (comment) => comment.anchor.path === file.path,
-            )}
-            {...(workspace.fileComments.draft?.anchor.path === file.path
-                ? { commentDraft: workspace.fileComments.draft }
-                : {})}
-            happyAgentOnline={happyAgentOnline}
-            onMainFileOpen={(path, kind, selection) => {
-                // The address names the file; the region is the ask that came
-                // with it, and the tab keeps it because a file's own address is
-                // re-applied as a preview and leaves a region alone.
-                if (selection !== undefined)
-                    props.workspace.fileOpen(file.groupId, path, kind, selection);
-                props.onFileSelect(file.groupId, props.chatId, path, kind);
-            }}
-            wrap={workspace.fileViewWrap}
-            {...(file.linked
-                ? { writeRefusal: HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL }
-                : access.writeRefusal === undefined
-                  ? {}
-                  : { writeRefusal: access.writeRefusal })}
-            {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
-            workspace={props.workspace}
-        />
+        <FileRevealContext.Provider key={`${file.id}:${file.kind}`} value={fileTabReveal(file)}>
+            <HappyAgentFileBody
+                appearance={appearance.appearance}
+                entities={documentEntities}
+                file={file}
+                tabNamed
+                {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
+                {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
+                mode={workspace.fileViewMode}
+                {...((change) => (change === undefined ? {} : { change }))(
+                    openGroup?.id === file.groupId
+                        ? openGroup.changes.find((candidate) => candidate.path === file.path)
+                        : undefined,
+                )}
+                comments={workspace.fileComments.comments.filter(
+                    (comment) => comment.anchor.path === file.path,
+                )}
+                {...(workspace.fileComments.draft?.anchor.path === file.path
+                    ? { commentDraft: workspace.fileComments.draft }
+                    : {})}
+                happyAgentOnline={happyAgentOnline}
+                onMainFileOpen={(path, kind, selection) => {
+                    // The address names the file; the region is the ask that came
+                    // with it, and the tab keeps it because a file's own address is
+                    // re-applied as a preview and leaves a region alone.
+                    if (selection !== undefined)
+                        props.workspace.fileOpen(file.groupId, path, kind, selection);
+                    props.onFileSelect(file.groupId, props.chatId, path, kind);
+                }}
+                wrap={workspace.fileViewWrap}
+                {...(file.linked
+                    ? { writeRefusal: HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL }
+                    : access.writeRefusal === undefined
+                      ? {}
+                      : { writeRefusal: access.writeRefusal })}
+                {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
+                workspace={props.workspace}
+            />
+        </FileRevealContext.Provider>
     );
     /**
      * The checkout's whole change, in one scroll — or one file of it, when the
@@ -8074,241 +8098,256 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         deviceBridgeSupport && openGroup ? props.workspace.deviceBridges(openGroup.id) : undefined;
 
     return (
-        <AppShell
-            embedded
-            panelResizable
-            // A chat narrower than this yields to the pane. The activity card
-            // overlays the chat and never changes the width it needs.
-            workspaceReadableWidth={420}
-            {...(checkoutClosed
-                ? {}
-                : {
-                      panelToggleAction: {
-                          open: panel.open,
-                          onClick: () => props.workspace.panel.panelToggle(),
-                          shortcut: APP_SHORTCUTS.panelToggle,
-                      },
-                  })}
-            // The width this checkout was last left at, or the shell's own
-            // default where nobody has sized it. Passed on every render rather
-            // than seeded once, so moving to another project shows that
-            // project's width instead of carrying this one's across.
-            panelWidth={workspace.panelWidth ?? APP_SHELL_PANEL_DEFAULT_WIDTH}
-            onFocusedPaneChange={workspaceFocusedPaneChange}
-            onPanelWidthChange={(width) => {
-                if (openGroup) props.workspace.panelWidthUpdate(openGroup.id, width);
-            }}
-            panel={
-                // The panel reads and writes the checkout: a file tree, a diff,
-                // a terminal. None of them has anything to open until the
-                // checkout is there, so while it is being prepared the panel is
-                // not drawn at all rather than drawn empty. It comes back on its
-                // own — the reader's choice to have it open is untouched here.
-                panel.open && !checkoutClosed ? (
-                    <HappyAgentPanelBody
-                        {...(panelCloseTarget ? { closeShortcut: APP_SHORTCUTS.tabClose } : {})}
-                        {...(props.artifacts && props.onArtifactOpen
-                            ? {
-                                  artifacts: {
-                                      artifacts: props.artifacts,
-                                      context: happyAgentArtifactChatContext(
-                                          artifactPlaces,
-                                          props.groupId,
-                                          props.chatId,
-                                      ),
-                                      onOpen: props.onArtifactOpen,
-                                      places: artifactPlaces,
-                                      ...(props.artifactPage ? { page: props.artifactPage } : {}),
-                                      entities: documentEntities,
-                                  },
-                              }
-                            : {})}
-                        {...(props.artifacts && props.chatId
-                            ? {
-                                  onArtifactNew: (replacing: HappyAgentPanelTabId) => {
-                                      const panelStore = props.workspace.panel;
-                                      void props
-                                          .artifacts!.artifactCreate(
-                                              props.chatId as HappyAgentSessionId,
-                                          )
-                                          .then(
-                                              (artifactId) => {
-                                                  panelStore.artifactViewOpen(artifactId);
-                                                  panelStore.tabClose(replacing);
-                                              },
-                                              () => undefined,
+        <FileRevealContext.Provider value={fileReveal}>
+            <AppShell
+                embedded
+                panelResizable
+                // A chat narrower than this yields to the pane. The activity card
+                // overlays the chat and never changes the width it needs.
+                workspaceReadableWidth={420}
+                {...(checkoutClosed
+                    ? {}
+                    : {
+                          panelToggleAction: {
+                              open: panel.open,
+                              onClick: () => props.workspace.panel.panelToggle(),
+                              shortcut: APP_SHORTCUTS.panelToggle,
+                          },
+                      })}
+                // The width this checkout was last left at, or the shell's own
+                // default where nobody has sized it. Passed on every render rather
+                // than seeded once, so moving to another project shows that
+                // project's width instead of carrying this one's across.
+                panelWidth={workspace.panelWidth ?? APP_SHELL_PANEL_DEFAULT_WIDTH}
+                onFocusedPaneChange={workspaceFocusedPaneChange}
+                onPanelWidthChange={(width) => {
+                    if (openGroup) props.workspace.panelWidthUpdate(openGroup.id, width);
+                }}
+                panel={
+                    // The panel reads and writes the checkout: a file tree, a diff,
+                    // a terminal. None of them has anything to open until the
+                    // checkout is there, so while it is being prepared the panel is
+                    // not drawn at all rather than drawn empty. It comes back on its
+                    // own — the reader's choice to have it open is untouched here.
+                    panel.open && !checkoutClosed ? (
+                        <HappyAgentPanelBody
+                            {...(panelCloseTarget ? { closeShortcut: APP_SHORTCUTS.tabClose } : {})}
+                            {...(props.artifacts && props.onArtifactOpen
+                                ? {
+                                      artifacts: {
+                                          artifacts: props.artifacts,
+                                          context: happyAgentArtifactChatContext(
+                                              artifactPlaces,
+                                              props.groupId,
+                                              props.chatId,
+                                          ),
+                                          onOpen: props.onArtifactOpen,
+                                          places: artifactPlaces,
+                                          ...(props.artifactPage
+                                              ? { page: props.artifactPage }
+                                              : {}),
+                                          entities: documentEntities,
+                                      },
+                                  }
+                                : {})}
+                            {...(props.artifacts && props.chatId
+                                ? {
+                                      onArtifactNew: (replacing: HappyAgentPanelTabId) => {
+                                          const panelStore = props.workspace.panel;
+                                          void props
+                                              .artifacts!.artifactCreate(
+                                                  props.chatId as HappyAgentSessionId,
+                                              )
+                                              .then(
+                                                  (artifactId) => {
+                                                      panelStore.artifactViewOpen(artifactId);
+                                                      panelStore.tabClose(replacing);
+                                                  },
+                                                  () => undefined,
+                                              );
+                                      },
+                                  }
+                                : {})}
+                            activity={
+                                conversation.type === "ready" ? conversation.value : undefined
+                            }
+                            canStartBrowser={
+                                availability.online &&
+                                openGroup !== undefined &&
+                                props.chatId !== undefined
+                            }
+                            {...(deviceBridgeSupport && deviceBridges && openGroup
+                                ? {
+                                      devices: {
+                                          groupId: openGroup.id,
+                                          support: deviceBridgeSupport,
+                                          bridges: deviceBridges,
+                                      },
+                                  }
+                                : {})}
+                            browserContent={props.browserContent}
+                            browserConnectionId={props.browserConnectionId}
+                            htmlPreview={props.htmlPreview}
+                            mediaWindow={props.mediaWindow}
+                            changes={panelChanges}
+                            {...(openGroup?.changesStatus === undefined || !floatyFromGit
+                                ? {}
+                                : { changesStatus: openGroup.changesStatus })}
+                            {...(props.changeTiers === undefined
+                                ? {}
+                                : { changeTiers: props.changeTiers })}
+                            expanded={workspace.fileTreeExpanded}
+                            collapsed={workspace.fileTreeCollapsed}
+                            layout={workspace.fileLayout}
+                            onFileSelect={(path) => {
+                                // A file the conversation edited outside a checkout
+                                // opens as everything those edits did to it.
+                                if (!floatyFromGit && workspace.fileScope === "changed")
+                                    props.workspace.panel.changeViewOpen(path);
+                                else if (openGroup && happyAgentOnline())
+                                    props.onFileSelect(
+                                        openGroup.id,
+                                        props.chatId,
+                                        path,
+                                        fileTabKind(path),
+                                    );
+                            }}
+                            onFileOpen={(path) => {
+                                if (!floatyFromGit && workspace.fileScope === "changed")
+                                    props.workspace.panel.changeViewOpen(path);
+                                else if (openGroup && happyAgentOnline()) {
+                                    const kind = fileTabKind(path);
+                                    // A double click pins the preview; the address
+                                    // is unchanged when the first click already
+                                    // selected this file.
+                                    props.workspace.fileOpen(openGroup.id, path, kind);
+                                    props.onFileSelect(openGroup.id, props.chatId, path, kind);
+                                }
+                            }}
+                            {...(fileReveal === undefined ? {} : { onFileReveal: fileReveal.path })}
+                            {...(workspace.panelFile && fileReveal !== undefined
+                                ? {
+                                      onPanelFileReveal: () => {
+                                          const file = workspace.panelFile;
+                                          if (file) fileTabReveal(file)?.path(file.path);
+                                      },
+                                  }
+                                : {})}
+                            onFilePreprocess={(path) => {
+                                if (openGroup && happyAgentOnline())
+                                    props.workspace.filePreprocess(
+                                        openGroup.id,
+                                        path,
+                                        fileTabKind(path),
+                                    );
+                            }}
+                            onLayoutChange={(layout) => {
+                                if (openGroup)
+                                    props.workspace.fileLayoutUpdate(openGroup.id, layout);
+                            }}
+                            now={now}
+                            {...(availability.online
+                                ? {
+                                      onActivityProcessStop: (processId: number) => {
+                                          void props.workspace
+                                              .backgroundProcessStop(processId)
+                                              .catch(() => undefined);
+                                      },
+                                  }
+                                : {})}
+                            onActivityOpen={() => props.workspace.activityPanelOpen()}
+                            onUsageOpen={() => props.workspace.usagePanelOpen()}
+                            {...(openGroup
+                                ? {
+                                      onSubagentSelect: (sessionId: string) => {
+                                          props.workspace.activityPanelClose();
+                                          props.onChatSelect(
+                                              openGroup.id,
+                                              sessionId as HappyAgentSessionId,
                                           );
-                                  },
-                              }
-                            : {})}
-                        activity={conversation.type === "ready" ? conversation.value : undefined}
-                        canStartBrowser={
-                            availability.online &&
-                            openGroup !== undefined &&
-                            props.chatId !== undefined
-                        }
-                        {...(deviceBridgeSupport && deviceBridges && openGroup
-                            ? {
-                                  devices: {
-                                      groupId: openGroup.id,
-                                      support: deviceBridgeSupport,
-                                      bridges: deviceBridges,
-                                  },
-                              }
-                            : {})}
-                        browserContent={props.browserContent}
-                        browserConnectionId={props.browserConnectionId}
-                        htmlPreview={props.htmlPreview}
-                        mediaWindow={props.mediaWindow}
-                        changes={panelChanges}
-                        {...(openGroup?.changesStatus === undefined || !floatyFromGit
-                            ? {}
-                            : { changesStatus: openGroup.changesStatus })}
-                        {...(props.changeTiers === undefined
-                            ? {}
-                            : { changeTiers: props.changeTiers })}
-                        expanded={workspace.fileTreeExpanded}
-                        collapsed={workspace.fileTreeCollapsed}
-                        layout={workspace.fileLayout}
-                        onFileSelect={(path) => {
-                            // A file the conversation edited outside a checkout
-                            // opens as everything those edits did to it.
-                            if (!floatyFromGit && workspace.fileScope === "changed")
-                                props.workspace.panel.changeViewOpen(path);
-                            else if (openGroup && happyAgentOnline())
-                                props.onFileSelect(
-                                    openGroup.id,
-                                    props.chatId,
-                                    path,
-                                    fileTabKind(path),
-                                );
-                        }}
-                        onFileOpen={(path) => {
-                            if (!floatyFromGit && workspace.fileScope === "changed")
-                                props.workspace.panel.changeViewOpen(path);
-                            else if (openGroup && happyAgentOnline()) {
-                                const kind = fileTabKind(path);
-                                // A double click pins the preview; the address
-                                // is unchanged when the first click already
-                                // selected this file.
-                                props.workspace.fileOpen(openGroup.id, path, kind);
-                                props.onFileSelect(openGroup.id, props.chatId, path, kind);
+                                      },
+                                  }
+                                : {})}
+                            {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
+                            fileBody={mainFileBody}
+                            onPanelFileClose={() => props.workspace.filePanelClose()}
+                            onViewClose={panelViewClose}
+                            onScopeChange={(scope) => {
+                                if (
+                                    openGroup &&
+                                    (scope === "changed" ||
+                                        workspace.workspaceFiles !== undefined ||
+                                        happyAgentOnline())
+                                )
+                                    props.workspace.fileScopeUpdate(openGroup.id, scope);
+                            }}
+                            onToggle={(path, expanded) =>
+                                props.workspace.fileTreeExpandedUpdate(path, expanded)
                             }
-                        }}
-                        onFilePreprocess={(path) => {
-                            if (openGroup && happyAgentOnline())
-                                props.workspace.filePreprocess(
-                                    openGroup.id,
-                                    path,
-                                    fileTabKind(path),
-                                );
-                        }}
-                        onLayoutChange={(layout) => {
-                            if (openGroup) props.workspace.fileLayoutUpdate(openGroup.id, layout);
-                        }}
-                        now={now}
-                        {...(availability.online
-                            ? {
-                                  onActivityProcessStop: (processId: number) => {
-                                      void props.workspace
-                                          .backgroundProcessStop(processId)
-                                          .catch(() => undefined);
-                                  },
-                              }
-                            : {})}
-                        onActivityOpen={() => props.workspace.activityPanelOpen()}
-                        onUsageOpen={() => props.workspace.usagePanelOpen()}
-                        {...(openGroup
-                            ? {
-                                  onSubagentSelect: (sessionId: string) => {
-                                      props.workspace.activityPanelClose();
-                                      props.onChatSelect(
-                                          openGroup.id,
-                                          sessionId as HappyAgentSessionId,
-                                      );
-                                  },
-                              }
-                            : {})}
-                        {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
-                        fileBody={mainFileBody}
-                        onPanelFileClose={() => props.workspace.filePanelClose()}
-                        onViewClose={panelViewClose}
-                        onScopeChange={(scope) => {
-                            if (
-                                openGroup &&
-                                (scope === "changed" ||
-                                    workspace.workspaceFiles !== undefined ||
-                                    happyAgentOnline())
-                            )
-                                props.workspace.fileScopeUpdate(openGroup.id, scope);
-                        }}
-                        onToggle={(path, expanded) =>
-                            props.workspace.fileTreeExpandedUpdate(path, expanded)
-                        }
-                        onDirectoryPrefetch={(path) =>
-                            props.workspace.fileTreeDirectoryPrefetch(path)
-                        }
-                        onLoadMore={(path) => props.workspace.fileTreeLoadMore(path)}
-                        onViewTransfer={(viewId) => {
-                            if (viewId === "artifact") {
-                                const view = panel.artifactView;
-                                if (!view || !props.artifacts) return;
-                                props.workspace.artifactPlacementUpdate(
-                                    viewId,
-                                    "main",
-                                    artifactVersionOnScreen(
-                                        props.artifacts.panelViewer(),
-                                        view.artifactId,
-                                        view.version,
-                                    ),
-                                );
-                                return;
+                            onDirectoryPrefetch={(path) =>
+                                props.workspace.fileTreeDirectoryPrefetch(path)
                             }
-                            const file =
-                                viewId === HAPPY_AGENT_PANEL_FILE_VIEW_ID
-                                    ? workspace.panelFile
-                                    : workspace.fileTabs.find((tab) => tab.id === viewId);
-                            props.workspace.viewPlacementUpdate(viewId, "main");
-                            if (file)
-                                props.onFileSelect(
-                                    file.groupId,
-                                    props.chatId,
-                                    file.path,
-                                    file.kind,
-                                );
-                        }}
-                        panel={panel}
-                        {...(changeDiff === undefined ? {} : { changeDiff })}
-                        previewTool={previewTool}
-                        {...(previewMedia
-                            ? {
-                                  previewMedia,
-                                  toolMediaDocument: props.workspace.toolMediaDocument(),
-                              }
-                            : {})}
-                        {...(terminalHappyAgentAvailability === undefined
-                            ? {}
-                            : {
-                                  happyAgentAvailability: terminalHappyAgentAvailability,
-                                  happyAgentAvailabilityReason: availability.message,
-                              })}
-                        onReviewOpen={() => {
-                            if (openGroup) props.workspace.reviewOpen(openGroup.id);
-                        }}
-                        scope={workspace.fileScope}
-                        search={workspace.fileSearch}
-                        onSearchQueryChange={(query) => props.workspace.fileSearchUpdate(query)}
-                        selectedPath={activeFile?.path}
-                        store={props.workspace.panel}
-                        workspaceFiles={workspace.workspaceFiles}
-                        workspaceFilesLoading={workspace.workspaceFilesLoading}
-                    />
-                ) : undefined
-            }
-        >
-            {openGroup ? (
-                <>
-                    {/* No banner for an unreachable Happy Agent. The sidebar footer says
+                            onLoadMore={(path) => props.workspace.fileTreeLoadMore(path)}
+                            onViewTransfer={(viewId) => {
+                                if (viewId === "artifact") {
+                                    const view = panel.artifactView;
+                                    if (!view || !props.artifacts) return;
+                                    props.workspace.artifactPlacementUpdate(
+                                        viewId,
+                                        "main",
+                                        artifactVersionOnScreen(
+                                            props.artifacts.panelViewer(),
+                                            view.artifactId,
+                                            view.version,
+                                        ),
+                                    );
+                                    return;
+                                }
+                                const file =
+                                    viewId === HAPPY_AGENT_PANEL_FILE_VIEW_ID
+                                        ? workspace.panelFile
+                                        : workspace.fileTabs.find((tab) => tab.id === viewId);
+                                props.workspace.viewPlacementUpdate(viewId, "main");
+                                if (file)
+                                    props.onFileSelect(
+                                        file.groupId,
+                                        props.chatId,
+                                        file.path,
+                                        file.kind,
+                                    );
+                            }}
+                            panel={panel}
+                            {...(changeDiff === undefined ? {} : { changeDiff })}
+                            previewTool={previewTool}
+                            {...(previewMedia
+                                ? {
+                                      previewMedia,
+                                      toolMediaDocument: props.workspace.toolMediaDocument(),
+                                  }
+                                : {})}
+                            {...(terminalHappyAgentAvailability === undefined
+                                ? {}
+                                : {
+                                      happyAgentAvailability: terminalHappyAgentAvailability,
+                                      happyAgentAvailabilityReason: availability.message,
+                                  })}
+                            onReviewOpen={() => {
+                                if (openGroup) props.workspace.reviewOpen(openGroup.id);
+                            }}
+                            scope={workspace.fileScope}
+                            search={workspace.fileSearch}
+                            onSearchQueryChange={(query) => props.workspace.fileSearchUpdate(query)}
+                            selectedPath={activeFile?.path}
+                            store={props.workspace.panel}
+                            workspaceFiles={workspace.workspaceFiles}
+                            workspaceFilesLoading={workspace.workspaceFilesLoading}
+                        />
+                    ) : undefined
+                }
+            >
+                {openGroup ? (
+                    <>
+                        {/* No banner for an unreachable Happy Agent. The sidebar footer says
                         that once, and repeating it here
                         pushed the transcript down for something the reader was
                         already told — in the one surface where the shift is
@@ -8316,523 +8355,552 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         local part: its composer and actions go read-only, which
                         they do on `availability` without any chrome of their
                         own. */}
-                    <WindowShortcuts
-                        actions={[
-                            // Cmd-W is consistently the workspace's close
-                            // command. The live handler simply has nothing to
-                            // do when Files or an offline session is the only
-                            // current target.
-                            { run: activeTabClose, shortcut: APP_SHORTCUTS.tabClose },
-                            ...(checkoutClosed
-                                ? []
-                                : [
-                                      {
-                                          run: () => props.workspace.panel.panelToggle(),
-                                          shortcut: APP_SHORTCUTS.panelToggle,
-                                      },
-                                      {
-                                          run: () => props.workspace.panel.panelToggle(),
-                                          shortcut: APP_SHORTCUTS.panelToggleAlternate,
-                                      },
-                                  ]),
-                            ...(sessionCreateAvailable
-                                ? [
-                                      {
-                                          run: () => groupConversationCreate(openGroup, "shortcut"),
-                                          shortcut: APP_SHORTCUTS.sessionCreate,
-                                      },
-                                  ]
-                                : []),
-                        ]}
-                    />
-                    {workspace.conversationArchiveConfirm ? (
-                        // Light on purpose: nothing behind it dims, a press
-                        // anywhere else puts it away, and Enter says yes.
-                        <ModalOverlay
-                            backdrop="clear"
-                            onDismiss={() => props.workspace.conversationArchiveConfirmClose()}
-                        >
-                            <ConfirmPopover
-                                confirmLabel="Archive"
-                                initialFocus="confirm"
-                                onCancel={() => props.workspace.conversationArchiveConfirmClose()}
-                                onConfirm={conversationArchiveConfirmAnswer}
-                                title="Archive?"
-                                tone="warning"
-                            />
-                        </ModalOverlay>
-                    ) : null}
-                    {/* Chats say workspace errors above their input. Keep the
+                        <WindowShortcuts
+                            actions={[
+                                // Cmd-W is consistently the workspace's close
+                                // command. The live handler simply has nothing to
+                                // do when Files or an offline session is the only
+                                // current target.
+                                { run: activeTabClose, shortcut: APP_SHORTCUTS.tabClose },
+                                ...(checkoutClosed
+                                    ? []
+                                    : [
+                                          {
+                                              run: () => props.workspace.panel.panelToggle(),
+                                              shortcut: APP_SHORTCUTS.panelToggle,
+                                          },
+                                          {
+                                              run: () => props.workspace.panel.panelToggle(),
+                                              shortcut: APP_SHORTCUTS.panelToggleAlternate,
+                                          },
+                                      ]),
+                                ...(sessionCreateAvailable
+                                    ? [
+                                          {
+                                              run: () =>
+                                                  groupConversationCreate(openGroup, "shortcut"),
+                                              shortcut: APP_SHORTCUTS.sessionCreate,
+                                          },
+                                      ]
+                                    : []),
+                            ]}
+                        />
+                        {workspace.conversationArchiveConfirm ? (
+                            // Light on purpose: nothing behind it dims, a press
+                            // anywhere else puts it away, and Enter says yes.
+                            <ModalOverlay
+                                backdrop="clear"
+                                onDismiss={() => props.workspace.conversationArchiveConfirmClose()}
+                            >
+                                <ConfirmPopover
+                                    confirmLabel="Archive"
+                                    initialFocus="confirm"
+                                    onCancel={() =>
+                                        props.workspace.conversationArchiveConfirmClose()
+                                    }
+                                    onConfirm={conversationArchiveConfirmAnswer}
+                                    title="Archive?"
+                                    tone="warning"
+                                />
+                            </ModalOverlay>
+                        ) : null}
+                        {/* Chats say workspace errors above their input. Keep the
                         lane mounted but empty there, preserving the tab strip
                         and transcript identities. Views without a composer use
                         it as their fallback. Preparation stays in the sidebar
                         while the chat is on screen. */}
-                    <WorkspaceLifecycleLane
-                        {...(openGroup.lifecycle?.phase === "failed" &&
-                        openGroup.lifecycle.reason !== undefined
-                            ? { detail: openGroup.lifecycle.reason }
-                            : {})}
-                        name={openGroup.name}
-                        {...(openGroup.path ? { path: openGroup.path } : {})}
-                        {...(openGroupPhase !== undefined &&
-                        !openGroupNotice &&
-                        !preparingChatOnScreen &&
-                        !workspaceNoticeInComposer
-                            ? { phase: openGroupPhase }
-                            : {})}
-                    />
-                    {openGroupNotice ? (
-                        // Nothing has run here and the place itself will never
-                        // take one: a composer would collect a message for a
-                        // checkout that is not coming. What happened to the
-                        // workspace is the whole screen instead.
-                        //
-                        // A checkout Happy Agent is still preparing is deliberately not
-                        // this case. Happy Agent has already said where it will be and
-                        // holds a session's work until it is there, so an empty
-                        // new workspace shows its composer immediately with the
-                        // lane above saying what is happening to it.
-                        <WorkspaceLifecycleNotice
+                        <WorkspaceLifecycleLane
                             {...(openGroup.lifecycle?.phase === "failed" &&
                             openGroup.lifecycle.reason !== undefined
                                 ? { detail: openGroup.lifecycle.reason }
                                 : {})}
                             name={openGroup.name}
                             {...(openGroup.path ? { path: openGroup.path } : {})}
-                            phase={openGroupPhase}
+                            {...(openGroupPhase !== undefined &&
+                            !openGroupNotice &&
+                            !preparingChatOnScreen &&
+                            !workspaceNoticeInComposer
+                                ? { phase: openGroupPhase }
+                                : {})}
                         />
-                    ) : (
-                        <TabbedPane
-                            actions={
-                                /* A tab is a session, so adding one starts it
+                        {openGroupNotice ? (
+                            // Nothing has run here and the place itself will never
+                            // take one: a composer would collect a message for a
+                            // checkout that is not coming. What happened to the
+                            // workspace is the whole screen instead.
+                            //
+                            // A checkout Happy Agent is still preparing is deliberately not
+                            // this case. Happy Agent has already said where it will be and
+                            // holds a session's work until it is there, so an empty
+                            // new workspace shows its composer immediately with the
+                            // lane above saying what is happening to it.
+                            <WorkspaceLifecycleNotice
+                                {...(openGroup.lifecycle?.phase === "failed" &&
+                                openGroup.lifecycle.reason !== undefined
+                                    ? { detail: openGroup.lifecycle.reason }
+                                    : {})}
+                                name={openGroup.name}
+                                {...(openGroup.path ? { path: openGroup.path } : {})}
+                                phase={openGroupPhase}
+                            />
+                        ) : (
+                            <TabbedPane
+                                actions={
+                                    /* A tab is a session, so adding one starts it
                                    directly in the addressed project or worktree.
                                    A checkout that cannot take one yet keeps the
                                    control disabled rather than dropping it; a
                                    bot or task can never take a second chat, so
                                    it offers none. */
-                                openGroup.singleConversationId === undefined ? (
-                                    <Tooltip
-                                        label="Create a session in this project"
-                                        placement="bottom"
-                                        shortcut={APP_SHORTCUTS.sessionCreate}
-                                    >
-                                        <Button
-                                            aria-label="Create a session in this project"
-                                            disabled={!sessionCreateAvailable}
-                                            icon="plus"
-                                            iconOnly
-                                            onClick={() => groupConversationCreate(openGroup)}
-                                            size="small"
-                                            variant="ghost"
-                                        />
-                                    </Tooltip>
-                                ) : null
-                            }
-                            trailing={
-                                /* The strip's own controls hold the bar's far
+                                    openGroup.singleConversationId === undefined ? (
+                                        <Tooltip
+                                            label="Create a session in this project"
+                                            placement="bottom"
+                                            shortcut={APP_SHORTCUTS.sessionCreate}
+                                        >
+                                            <Button
+                                                aria-label="Create a session in this project"
+                                                disabled={!sessionCreateAvailable}
+                                                icon="plus"
+                                                iconOnly
+                                                onClick={() => groupConversationCreate(openGroup)}
+                                                size="small"
+                                                variant="ghost"
+                                            />
+                                        </Tooltip>
+                                    ) : null
+                                }
+                                trailing={
+                                    /* The strip's own controls hold the bar's far
                                    edge instead of sliding along with the tabs. */
-                                <WorkTabControls
-                                    floatyOpen={floatyShown}
-                                    onFloatyOpenChange={(open) => {
-                                        if (floatyKey !== undefined)
-                                            props.workspace.panel.floatyOpenedUpdate(
-                                                floatyKey,
-                                                open,
-                                            );
-                                    }}
-                                />
-                            }
-                            activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
-                            tabSizing="content"
-                            closePresentation="overlay"
-                            overflowFade
-                            size="medium"
-                            closeLabel="Close tab"
-                            closeShortcut={APP_SHORTCUTS.tabClose}
-                            onClose={tabCloseRequest}
-                            onDoubleClick={(tabId) => {
-                                const file = groupFileTabs.find((tab) => tab.id === tabId);
-                                if (file)
-                                    props.workspace.fileOpen(file.groupId, file.path, file.kind);
-                            }}
-                            onReorder={(tabIds: readonly string[]) => {
-                                // A detached subagent has no place in the
-                                // order, so it is taken out of both sides of
-                                // the comparison rather than dragged into one.
-                                const orderable = (ids: readonly string[]) =>
-                                    ids.filter((id) => id !== detachedConversationId);
-                                const move = sidebarReorderMove(
-                                    orderable(groupTabs.map((tab) => tab.id)),
-                                    orderable(tabIds),
-                                );
-                                if (!move) return;
-                                props.workspace.tabReorder(move.id, move.afterId);
-                            }}
-                            onSelect={(tabId) => {
-                                if (openReview?.id === tabId) {
-                                    props.workspace.reviewOpen(openGroup.id);
-                                    return;
+                                    <WorkTabControls
+                                        floatyOpen={floatyShown}
+                                        onFloatyOpenChange={(open) => {
+                                            if (floatyKey !== undefined)
+                                                props.workspace.panel.floatyOpenedUpdate(
+                                                    floatyKey,
+                                                    open,
+                                                );
+                                        }}
+                                    />
                                 }
-                                const file = groupFileTabs.find((tab) => tab.id === tabId);
-                                if (file) {
-                                    props.onFileSelect(
-                                        file.groupId,
-                                        props.chatId,
-                                        file.path,
-                                        file.kind,
+                                activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
+                                tabSizing="content"
+                                closePresentation="overlay"
+                                overflowFade
+                                size="medium"
+                                closeLabel="Close tab"
+                                closeShortcut={APP_SHORTCUTS.tabClose}
+                                onClose={tabCloseRequest}
+                                onDoubleClick={(tabId) => {
+                                    const file = groupFileTabs.find((tab) => tab.id === tabId);
+                                    if (file)
+                                        props.workspace.fileOpen(
+                                            file.groupId,
+                                            file.path,
+                                            file.kind,
+                                        );
+                                }}
+                                onReorder={(tabIds: readonly string[]) => {
+                                    // A detached subagent has no place in the
+                                    // order, so it is taken out of both sides of
+                                    // the comparison rather than dragged into one.
+                                    const orderable = (ids: readonly string[]) =>
+                                        ids.filter((id) => id !== detachedConversationId);
+                                    const move = sidebarReorderMove(
+                                        orderable(groupTabs.map((tab) => tab.id)),
+                                        orderable(tabIds),
                                     );
-                                    return;
-                                }
-                                if (mainTools.some((tab) => tab.id === tabId)) {
-                                    props.workspace.mainViewSelect(tabId);
-                                    return;
-                                }
-                                props.onChatSelect(openGroup.id, tabId);
-                            }}
-                            // Pointing at a session tab loads its conversation, so that
-                            // selecting it shows the conversation at once.
-                            onIntent={(tabId) => {
-                                if (openReview?.id === tabId) return;
-                                if (groupFileTabs.some((tab) => tab.id === tabId)) return;
-                                if (mainTools.some((tab) => tab.id === tabId)) return;
-                                props.workspace.conversationPrefetch(tabId as HappyAgentSessionId);
-                            }}
-                            onTransfer={(tabId) => {
-                                const artifact = mainTools.find(
-                                    (tab) => tab.id === tabId && tab.kind === "artifact",
-                                );
-                                if (artifact?.kind === "artifact") {
-                                    props.workspace.artifactPlacementUpdate(
-                                        tabId,
-                                        "panel",
-                                        props.artifacts
-                                            ? artifactVersionOnScreen(
-                                                  props.artifacts.tabViewer(),
-                                                  artifact.artifactId,
-                                                  artifact.version,
-                                              )
-                                            : artifact.version,
+                                    if (!move) return;
+                                    props.workspace.tabReorder(move.id, move.afterId);
+                                }}
+                                onSelect={(tabId) => {
+                                    if (openReview?.id === tabId) {
+                                        props.workspace.reviewOpen(openGroup.id);
+                                        return;
+                                    }
+                                    const file = groupFileTabs.find((tab) => tab.id === tabId);
+                                    if (file) {
+                                        props.onFileSelect(
+                                            file.groupId,
+                                            props.chatId,
+                                            file.path,
+                                            file.kind,
+                                        );
+                                        return;
+                                    }
+                                    if (mainTools.some((tab) => tab.id === tabId)) {
+                                        props.workspace.mainViewSelect(tabId);
+                                        return;
+                                    }
+                                    props.onChatSelect(openGroup.id, tabId);
+                                }}
+                                // Pointing at a session tab loads its conversation, so that
+                                // selecting it shows the conversation at once.
+                                onIntent={(tabId) => {
+                                    if (openReview?.id === tabId) return;
+                                    if (groupFileTabs.some((tab) => tab.id === tabId)) return;
+                                    if (mainTools.some((tab) => tab.id === tabId)) return;
+                                    props.workspace.conversationPrefetch(
+                                        tabId as HappyAgentSessionId,
                                     );
-                                    return;
-                                }
-                                const file = groupFileTabs.find((tab) => tab.id === tabId);
-                                const selected = workspace.activeMainViewId === tabId;
-                                props.workspace.viewPlacementUpdate(tabId, "panel");
-                                // Moving the addressed file beside the session
-                                // uncovers that session in the main region, so
-                                // its address must stop claiming the file is
-                                // still selected there.
-                                if (file && selected)
-                                    props.onChatSelect(openGroup.id, props.chatId, true);
-                            }}
-                            // A session is what the address names, so it stays
-                            // where the address points; a diff is two revisions
-                            // read together and the panel's viewer reads one
-                            // file, so it has nowhere over there to land; and a
-                            // file with text that has not been written back
-                            // keeps its edit rather than its place.
-                            transferable={(tab) =>
-                                mainTools.some((entry) => entry.id === tab.id) ||
-                                groupFileTabs.some(
-                                    (entry) =>
-                                        entry.id === tab.id &&
-                                        entry.kind !== "diff" &&
-                                        entry.draft === undefined &&
-                                        !entry.saving,
-                                )
-                            }
-                            transferTargets={MAIN_TRANSFER_TARGETS}
-                            tabMenuItems={(tab) => {
-                                // A chat's tab is its agent, whose link leads the
-                                // menu in a section of its own.
-                                const agentCopy: MenuItem[] =
-                                    tabAgentLink(tab.id) === undefined
-                                        ? []
-                                        : [
-                                              agentLinkCopyMenuItem(tabAgentNoun(tab.id)),
-                                              { kind: "separator" },
-                                          ];
-                                const index = sweepableTabs.findIndex(
-                                    (entry) => entry.id === tab.id,
-                                );
-                                // The detached subagent's tab is not in the sweepable
-                                // order, so it offers nothing else — its runner owns it.
-                                if (index < 0) return agentCopy.slice(0, 1);
-                                // A session is archived; a file, a terminal, a
-                                // page is closed. The verb has to be the true
-                                // one for the tab it is offered on.
-                                const verb =
-                                    groupFileTabs.some((entry) => entry.id === tab.id) ||
-                                    mainTools.some((entry) => entry.id === tab.id)
-                                        ? "Close"
-                                        : "Archive";
-                                return [
-                                    ...agentCopy,
-                                    ...tabStripMenu(verb, index, sweepableTabs.length - index - 1),
-                                ];
-                            }}
-                            onTabMenuSelect={(tab, actionId) => {
-                                if (actionId === MENU_AGENT_LINK_COPY) {
-                                    const link = tabAgentLink(tab.id);
-                                    if (link !== undefined)
-                                        void navigator.clipboard?.writeText(link);
-                                    return;
-                                }
-                                const ids = sweepableTabs.map((entry) => entry.id);
-                                const index = ids.indexOf(tab.id);
-                                if (index < 0) return;
-                                if (actionId === TAB_MENU_CLOSE) {
-                                    tabCloseRequest(tab.id);
-                                } else if (actionId === TAB_MENU_CLOSE_OTHERS) {
-                                    groupTabsClose(
-                                        ids.filter((id) => id !== tab.id),
-                                        tab.id,
+                                }}
+                                onTransfer={(tabId) => {
+                                    const artifact = mainTools.find(
+                                        (tab) => tab.id === tabId && tab.kind === "artifact",
                                     );
-                                } else if (actionId === TAB_MENU_CLOSE_LEFT) {
-                                    groupTabsClose(ids.slice(0, index), tab.id);
-                                } else if (actionId === TAB_MENU_CLOSE_RIGHT) {
-                                    groupTabsClose(ids.slice(index + 1), tab.id);
-                                } else if (actionId === TAB_MENU_CLOSE_ALL) {
-                                    groupTabsClose(ids);
+                                    if (artifact?.kind === "artifact") {
+                                        props.workspace.artifactPlacementUpdate(
+                                            tabId,
+                                            "panel",
+                                            props.artifacts
+                                                ? artifactVersionOnScreen(
+                                                      props.artifacts.tabViewer(),
+                                                      artifact.artifactId,
+                                                      artifact.version,
+                                                  )
+                                                : artifact.version,
+                                        );
+                                        return;
+                                    }
+                                    const file = groupFileTabs.find((tab) => tab.id === tabId);
+                                    const selected = workspace.activeMainViewId === tabId;
+                                    props.workspace.viewPlacementUpdate(tabId, "panel");
+                                    // Moving the addressed file beside the session
+                                    // uncovers that session in the main region, so
+                                    // its address must stop claiming the file is
+                                    // still selected there.
+                                    if (file && selected)
+                                        props.onChatSelect(openGroup.id, props.chatId, true);
+                                }}
+                                // A session is what the address names, so it stays
+                                // where the address points; a diff is two revisions
+                                // read together and the panel's viewer reads one
+                                // file, so it has nowhere over there to land; and a
+                                // file with text that has not been written back
+                                // keeps its edit rather than its place.
+                                transferable={(tab) =>
+                                    mainTools.some((entry) => entry.id === tab.id) ||
+                                    groupFileTabs.some(
+                                        (entry) =>
+                                            entry.id === tab.id &&
+                                            entry.kind !== "diff" &&
+                                            entry.draft === undefined &&
+                                            !entry.saving,
+                                    )
                                 }
-                            }}
-                            tabs={groupTabs}
-                        >
-                            <WorkFloaty
-                                agents={floatyAgents.current}
-                                artifacts={floatyOutputs.slice(0, FLOATY_ARTIFACTS)}
-                                changes={floatyPlaces.map((place) => place.row)}
-                                history={[
-                                    ...floatyAgents.history,
-                                    ...floatyOutputs.slice(FLOATY_ARTIFACTS),
-                                ]}
-                                historyExpanded={panel.floatyHistoryExpanded}
-                                onHistoryExpandedChange={
-                                    props.workspace.panel.floatyHistoryExpandedUpdate
-                                }
-                                // Every row opens beside the chat, which stays
-                                // where it was: a place as its changes, an
-                                // artifact as itself, an agent as its chat. A
-                                // tab already showing it is selected again.
-                                onRowOpen={(id) => {
-                                    const place = floatyPlaces.find(
-                                        (candidate) => candidate.row.id === id,
+                                transferTargets={MAIN_TRANSFER_TARGETS}
+                                tabMenuItems={(tab) => {
+                                    // A chat's tab is its agent, whose link leads the
+                                    // menu in a section of its own.
+                                    const agentCopy: MenuItem[] =
+                                        tabAgentLink(tab.id) === undefined
+                                            ? []
+                                            : [
+                                                  agentLinkCopyMenuItem(tabAgentNoun(tab.id)),
+                                                  { kind: "separator" },
+                                              ];
+                                    const revealed: MenuItem[] =
+                                        fileReveal !== undefined &&
+                                        groupFileTabs.some((entry) => entry.id === tab.id)
+                                            ? [FILE_TAB_REVEAL_ITEM, { kind: "separator" }]
+                                            : [];
+                                    const index = sweepableTabs.findIndex(
+                                        (entry) => entry.id === tab.id,
                                     );
-                                    if (place?.workspaceId !== undefined)
-                                        workspaceOpen(place.workspaceId);
-                                    else if (place) {
-                                        if (openGroup)
-                                            props.workspace.fileScopeUpdate(
-                                                openGroup.id,
-                                                "changed",
-                                            );
-                                        props.workspace.panel.filesSelect();
-                                    } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX)) {
-                                        const artifactId = id.slice(
-                                            FLOATY_ARTIFACT_PREFIX.length,
-                                        ) as HappyAgentArtifactId;
-                                        if (props.artifacts)
-                                            artifactBesideOpen({
-                                                artifacts: props.artifacts,
-                                                panel: props.workspace.panel,
-                                                artifactId,
-                                            });
-                                        else props.workspace.panel.artifactViewOpen(artifactId);
-                                    } else {
-                                        const agent = [
-                                            ...floatyAgents.current,
-                                            ...floatyAgents.history,
-                                        ].find((candidate) => candidate.id === id);
-                                        if (agent)
-                                            props.workspace.panel.chatTabOpen(
-                                                id as HappyAgentSessionId,
-                                                agent.label,
-                                            );
+                                    // The detached subagent's tab is not in the sweepable
+                                    // order, so it offers nothing else — its runner owns it.
+                                    if (index < 0) return agentCopy.slice(0, 1);
+                                    // A session is archived; a file, a terminal, a
+                                    // page is closed. The verb has to be the true
+                                    // one for the tab it is offered on.
+                                    const verb =
+                                        groupFileTabs.some((entry) => entry.id === tab.id) ||
+                                        mainTools.some((entry) => entry.id === tab.id)
+                                            ? "Close"
+                                            : "Archive";
+                                    return [
+                                        ...agentCopy,
+                                        ...revealed,
+                                        ...tabStripMenu(
+                                            verb,
+                                            index,
+                                            sweepableTabs.length - index - 1,
+                                        ),
+                                    ];
+                                }}
+                                onTabMenuSelect={(tab, actionId) => {
+                                    if (actionId === MENU_AGENT_LINK_COPY) {
+                                        const link = tabAgentLink(tab.id);
+                                        if (link !== undefined)
+                                            void navigator.clipboard?.writeText(link);
+                                        return;
+                                    }
+                                    if (actionId === FILE_TAB_REVEAL_ITEM.id) {
+                                        const file = groupFileTabs.find(
+                                            (entry) => entry.id === tab.id,
+                                        );
+                                        if (file) fileTabReveal(file)?.path(file.path);
+                                        return;
+                                    }
+                                    const ids = sweepableTabs.map((entry) => entry.id);
+                                    const index = ids.indexOf(tab.id);
+                                    if (index < 0) return;
+                                    if (actionId === TAB_MENU_CLOSE) {
+                                        tabCloseRequest(tab.id);
+                                    } else if (actionId === TAB_MENU_CLOSE_OTHERS) {
+                                        groupTabsClose(
+                                            ids.filter((id) => id !== tab.id),
+                                            tab.id,
+                                        );
+                                    } else if (actionId === TAB_MENU_CLOSE_LEFT) {
+                                        groupTabsClose(ids.slice(0, index), tab.id);
+                                    } else if (actionId === TAB_MENU_CLOSE_RIGHT) {
+                                        groupTabsClose(ids.slice(index + 1), tab.id);
+                                    } else if (actionId === TAB_MENU_CLOSE_ALL) {
+                                        groupTabsClose(ids);
                                     }
                                 }}
-                                open={floatyShown}
-                                placement="overlay"
-                                {...(floatySelectedId === undefined
-                                    ? {}
-                                    : { selectedId: floatySelectedId })}
-                            />
-                            {/* The whole content area accepts a tab dragged out
+                                tabs={groupTabs}
+                            >
+                                <WorkFloaty
+                                    agents={floatyAgents.current}
+                                    artifacts={floatyOutputs.slice(0, FLOATY_ARTIFACTS)}
+                                    changes={floatyPlaces.map((place) => place.row)}
+                                    history={[
+                                        ...floatyAgents.history,
+                                        ...floatyOutputs.slice(FLOATY_ARTIFACTS),
+                                    ]}
+                                    historyExpanded={panel.floatyHistoryExpanded}
+                                    onHistoryExpandedChange={
+                                        props.workspace.panel.floatyHistoryExpandedUpdate
+                                    }
+                                    // Every row opens beside the chat, which stays
+                                    // where it was: a place as its changes, an
+                                    // artifact as itself, an agent as its chat. A
+                                    // tab already showing it is selected again.
+                                    onRowOpen={(id) => {
+                                        const place = floatyPlaces.find(
+                                            (candidate) => candidate.row.id === id,
+                                        );
+                                        if (place?.workspaceId !== undefined)
+                                            workspaceOpen(place.workspaceId);
+                                        else if (place) {
+                                            if (openGroup)
+                                                props.workspace.fileScopeUpdate(
+                                                    openGroup.id,
+                                                    "changed",
+                                                );
+                                            props.workspace.panel.filesSelect();
+                                        } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX)) {
+                                            const artifactId = id.slice(
+                                                FLOATY_ARTIFACT_PREFIX.length,
+                                            ) as HappyAgentArtifactId;
+                                            if (props.artifacts)
+                                                artifactBesideOpen({
+                                                    artifacts: props.artifacts,
+                                                    panel: props.workspace.panel,
+                                                    artifactId,
+                                                });
+                                            else props.workspace.panel.artifactViewOpen(artifactId);
+                                        } else {
+                                            const agent = [
+                                                ...floatyAgents.current,
+                                                ...floatyAgents.history,
+                                            ].find((candidate) => candidate.id === id);
+                                            if (agent)
+                                                props.workspace.panel.chatTabOpen(
+                                                    id as HappyAgentSessionId,
+                                                    agent.label,
+                                                );
+                                        }
+                                    }}
+                                    open={floatyShown}
+                                    placement="overlay"
+                                    {...(floatySelectedId === undefined
+                                        ? {}
+                                        : { selectedId: floatySelectedId })}
+                                />
+                                {/* The whole content area accepts a tab dragged out
                                 of the panel, so the reader aims at where the
                                 thing will be rather than at a stripe. */}
-                            <TransferZone
-                                icon="panel-collapse"
-                                id={TRANSFER_ZONE_MAIN}
-                                label="Open in the main content"
-                            >
-                                <DeferredPane
-                                    current={
-                                        displayedMainTool
-                                            ? undefined
-                                            : activeReview
-                                              ? {
-                                                    id: activeReview.id,
-                                                    content: mainReviewBody(activeReview),
-                                                }
-                                              : displayedFile
-                                                ? {
-                                                      id:
-                                                          displayedFile.displayedPresentationId ??
-                                                          displayedFile.presentationId,
-                                                      content: mainFileBody(displayedFile),
-                                                  }
-                                                : openConversationView
-                                                  ? // Drawn among the kept views below.
-                                                    undefined
-                                                  : {
-                                                        id: `conversation:${openGroup.id}:empty`,
-                                                        content: mainConversationBody,
+                                <TransferZone
+                                    icon="panel-collapse"
+                                    id={TRANSFER_ZONE_MAIN}
+                                    label="Open in the main content"
+                                >
+                                    <DeferredPane
+                                        current={
+                                            displayedMainTool
+                                                ? undefined
+                                                : activeReview
+                                                  ? {
+                                                        id: activeReview.id,
+                                                        content: mainReviewBody(activeReview),
                                                     }
-                                    }
-                                    fallback={
-                                        <EmptyState
-                                            animation="snail"
-                                            description="The selected file is taking a moment."
-                                            icon="doc"
-                                            size="panel"
-                                            title="Opening file…"
-                                        />
-                                    }
-                                    onReveal={props.workspace.mainViewDisplay}
-                                    pending={
-                                        pendingFile
-                                            ? (() => {
-                                                  const readyOnCommit =
-                                                      connectionRefusal !== undefined ||
-                                                      pendingFile.document.type !== "loading";
-                                                  return {
-                                                      id: pendingFile.presentationId,
-                                                      ready: readyOnCommit,
-                                                      render: () => mainFileBody(pendingFile),
-                                                  };
-                                              })()
-                                            : undefined
-                                    }
-                                    // Every page moved to this side stays
-                                    // mounted whichever tab is on screen, and so
-                                    // do the conversations left most recently.
-                                    persistent={
-                                        <>
-                                            <HappyAgentConversationViews
-                                                open={
-                                                    openConversationView &&
-                                                    props.chatId !== undefined
-                                                        ? {
-                                                              // Named by what the body draws,
-                                                              // so a view and its content agree
-                                                              // while the address catches up.
-                                                              id:
-                                                                  conversation.type === "ready"
-                                                                      ? conversation.value
-                                                                            .conversationId
-                                                                      : props.chatId,
-                                                              content: mainConversationBody,
-                                                              ready:
-                                                                  conversation.type !== "ready" ||
-                                                                  conversation.value.standIn !==
-                                                                      true,
-                                                          }
-                                                        : undefined
-                                                }
-                                                shown={
-                                                    !displayedMainTool &&
-                                                    activeReview === undefined &&
-                                                    displayedFile === undefined
-                                                }
-                                                workspace={props.workspace}
-                                            />
-                                            <HappyAgentToolBodies
-                                                activeId={workspace.displayedMainViewId}
-                                                {...(props.artifacts
+                                                  : displayedFile
                                                     ? {
-                                                          artifacts: {
-                                                              artifacts: props.artifacts,
-                                                              places: artifactPlaces,
-                                                              ...(props.artifactPage
-                                                                  ? { page: props.artifactPage }
-                                                                  : {}),
-                                                              entities: documentEntities,
-                                                          },
+                                                          id:
+                                                              displayedFile.displayedPresentationId ??
+                                                              displayedFile.presentationId,
+                                                          content: mainFileBody(displayedFile),
                                                       }
-                                                    : {})}
-                                                browserConnectionId={props.browserConnectionId}
-                                                {...(props.browserContent
-                                                    ? { browserContent: props.browserContent }
-                                                    : {})}
-                                                store={props.workspace.panel}
-                                                tabs={mainTools}
-                                                {...(terminalHappyAgentAvailability === undefined
-                                                    ? {}
-                                                    : {
-                                                          happyAgentAvailability:
-                                                              terminalHappyAgentAvailability,
-                                                          happyAgentAvailabilityReason:
-                                                              availability.message,
-                                                      })}
+                                                    : openConversationView
+                                                      ? // Drawn among the kept views below.
+                                                        undefined
+                                                      : {
+                                                            id: `conversation:${openGroup.id}:empty`,
+                                                            content: mainConversationBody,
+                                                        }
+                                        }
+                                        fallback={
+                                            <EmptyState
+                                                animation="snail"
+                                                description="The selected file is taking a moment."
+                                                icon="doc"
+                                                size="panel"
+                                                title="Opening file…"
                                             />
-                                        </>
-                                    }
-                                />
-                            </TransferZone>
-                        </TabbedPane>
-                    )}
-                </>
-            ) : (
-                <>
-                    {/* With no project open there is no tab strip, so this side of
+                                        }
+                                        onReveal={props.workspace.mainViewDisplay}
+                                        pending={
+                                            pendingFile
+                                                ? (() => {
+                                                      const readyOnCommit =
+                                                          connectionRefusal !== undefined ||
+                                                          pendingFile.document.type !== "loading";
+                                                      return {
+                                                          id: pendingFile.presentationId,
+                                                          ready: readyOnCommit,
+                                                          render: () => mainFileBody(pendingFile),
+                                                      };
+                                                  })()
+                                                : undefined
+                                        }
+                                        // Every page moved to this side stays
+                                        // mounted whichever tab is on screen, and so
+                                        // do the conversations left most recently.
+                                        persistent={
+                                            <>
+                                                <HappyAgentConversationViews
+                                                    open={
+                                                        openConversationView &&
+                                                        props.chatId !== undefined
+                                                            ? {
+                                                                  // Named by what the body draws,
+                                                                  // so a view and its content agree
+                                                                  // while the address catches up.
+                                                                  id:
+                                                                      conversation.type === "ready"
+                                                                          ? conversation.value
+                                                                                .conversationId
+                                                                          : props.chatId,
+                                                                  content: mainConversationBody,
+                                                                  ready:
+                                                                      conversation.type !==
+                                                                          "ready" ||
+                                                                      conversation.value.standIn !==
+                                                                          true,
+                                                              }
+                                                            : undefined
+                                                    }
+                                                    shown={
+                                                        !displayedMainTool &&
+                                                        activeReview === undefined &&
+                                                        displayedFile === undefined
+                                                    }
+                                                    workspace={props.workspace}
+                                                />
+                                                <HappyAgentToolBodies
+                                                    activeId={workspace.displayedMainViewId}
+                                                    {...(props.artifacts
+                                                        ? {
+                                                              artifacts: {
+                                                                  artifacts: props.artifacts,
+                                                                  places: artifactPlaces,
+                                                                  ...(props.artifactPage
+                                                                      ? { page: props.artifactPage }
+                                                                      : {}),
+                                                                  entities: documentEntities,
+                                                              },
+                                                          }
+                                                        : {})}
+                                                    browserConnectionId={props.browserConnectionId}
+                                                    {...(props.browserContent
+                                                        ? { browserContent: props.browserContent }
+                                                        : {})}
+                                                    store={props.workspace.panel}
+                                                    tabs={mainTools}
+                                                    {...(terminalHappyAgentAvailability ===
+                                                    undefined
+                                                        ? {}
+                                                        : {
+                                                              happyAgentAvailability:
+                                                                  terminalHappyAgentAvailability,
+                                                              happyAgentAvailabilityReason:
+                                                                  availability.message,
+                                                          })}
+                                                />
+                                            </>
+                                        }
+                                    />
+                                </TransferZone>
+                            </TabbedPane>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
-                    {desktop ? <WindowDragRegion /> : null}
-                    {/* No banner for an unreachable Happy Agent here either. The sidebar
+                        {desktop ? <WindowDragRegion /> : null}
+                        {/* No banner for an unreachable Happy Agent here either. The sidebar
                         footer is the window's one account
                         of the machine being out of touch, and this screen has
                         nothing to add to it: what it offers already goes quiet
                         on `availability`, below. */}
-                    {refusedCreate ? (
-                        // This address was a workspace being made until Happy Agent
-                        // refused it. Saying "no project open" here would leave
-                        // the reader to work out for themselves that the row they
-                        // just watched appear and vanish was never created.
-                        <WorkspaceLifecycleNotice
-                            detail={refusedCreate.message}
-                            // The name every worktree Happy asks for is created
-                            // under. Happy Agent never gave this one a record, so the
-                            // name the request carried is the only one there is.
-                            name="Workspace"
-                            phase="refused"
-                        />
-                    ) : /* Keep project setup in the main empty pane: the sidebar
+                        {refusedCreate ? (
+                            // This address was a workspace being made until Happy Agent
+                            // refused it. Saying "no project open" here would leave
+                            // the reader to work out for themselves that the row they
+                            // just watched appear and vanish was never created.
+                            <WorkspaceLifecycleNotice
+                                detail={refusedCreate.message}
+                                // The name every worktree Happy asks for is created
+                                // under. Happy Agent never gave this one a record, so the
+                                // name the request carried is the only one there is.
+                                name="Workspace"
+                                phase="refused"
+                            />
+                        ) : /* Keep project setup in the main empty pane: the sidebar
                            explains why it is empty without repeating this action. */
-                    props.workspacesUnavailable ? (
-                        <EmptyState
-                            description="Pick a bot or a task in the sidebar."
-                            icon="chat"
-                            size="panel"
-                            title="Nothing open"
-                        />
-                    ) : (
-                        <EmptyState
-                            {...(availability.online
-                                ? {
-                                      action: {
-                                          label: "Add project",
-                                          icon: "plus" as const,
-                                          onClick: () => props.workspace.projectAdd(),
-                                      },
-                                  }
-                                : {})}
-                            description="Pick one in the sidebar, or add a project."
-                            icon="files"
-                            size="panel"
-                            title="No project open"
-                        />
-                    )}
-                </>
-            )}
-        </AppShell>
+                        props.workspacesUnavailable ? (
+                            <EmptyState
+                                description="Pick a bot or a task in the sidebar."
+                                icon="chat"
+                                size="panel"
+                                title="Nothing open"
+                            />
+                        ) : (
+                            <EmptyState
+                                {...(availability.online
+                                    ? {
+                                          action: {
+                                              label: "Add project",
+                                              icon: "plus" as const,
+                                              onClick: () => props.workspace.projectAdd(),
+                                          },
+                                      }
+                                    : {})}
+                                description="Pick one in the sidebar, or add a project."
+                                icon="files"
+                                size="panel"
+                                title="No project open"
+                            />
+                        )}
+                    </>
+                )}
+            </AppShell>
+        </FileRevealContext.Provider>
     );
 }
 
@@ -11470,6 +11538,10 @@ function HappyAgentPanelBody(props: {
     onSubagentSelect?: (sessionId: string) => void;
     onFileOpen: (path: string) => void;
     onFilePreprocess: (path: string) => void;
+    /** Shows a listed file or directory in Finder, where the host can. */
+    onFileReveal?: (path: string) => void;
+    /** Shows the panel viewer's file in Finder, where the host can. */
+    onPanelFileReveal?: () => void;
     onFileSelect: (path: string) => void;
     onLayoutChange: (layout: HappyAgentFileLayout) => void;
     /** Opens every change in this checkout as one stream. */
@@ -11743,6 +11815,19 @@ function HappyAgentPanelBody(props: {
                         else props.store.tabSelect(tabId as HappyAgentPanelTabId);
                     }}
                     onTransfer={(tabId) => props.onViewTransfer(tabId)}
+                    tabMenuItems={(tab) =>
+                        tab.id === HAPPY_AGENT_PANEL_FILE_VIEW_ID &&
+                        props.onPanelFileReveal !== undefined
+                            ? [FILE_TAB_REVEAL_ITEM]
+                            : []
+                    }
+                    onTabMenuSelect={(tab, actionId) => {
+                        if (
+                            tab.id === HAPPY_AGENT_PANEL_FILE_VIEW_ID &&
+                            actionId === FILE_TAB_REVEAL_ITEM.id
+                        )
+                            props.onPanelFileReveal?.();
+                    }}
                     tabs={tabs}
                     // The listing opens content rather than being content, and a
                     // tool-call preview is bound to an entry of the conversation
@@ -11856,6 +11941,7 @@ function HappyAgentPanelBody(props: {
                             onReviewOpen={props.onReviewOpen}
                             onDirectoryPrefetch={props.onDirectoryPrefetch}
                             onFilePrefetch={props.onFilePreprocess}
+                            onReveal={props.onFileReveal}
                             onLoadMore={props.onLoadMore}
                             {...(props.happyAgentAvailability === undefined
                                 ? { onOpen: props.onFileOpen }
