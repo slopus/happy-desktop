@@ -2,7 +2,11 @@ import type { SendMessageRequest } from "@slopus/happy-agent-client";
 import { afterEach, expect, it, vi } from "vitest";
 import { connectHappyAgent } from "../happyAgentConnection/connectHappyAgent.js";
 import type { HappyAgentConnection } from "../happyAgentConnection/types.js";
-import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
+import {
+    fakeHappyAgentDaemonCreate,
+    fakeRun,
+    fakeUserMessage,
+} from "../testing/fakeHappyAgentDaemon.js";
 import { happyAgentChatStoreCreate, type HappyAgentChatStore } from "./happyAgentChatStore.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import type { HappyAgentSessionId, HappyCloudFileBlock } from "./happyAgentTypes.js";
@@ -18,10 +22,13 @@ afterEach(() => {
     for (const connection of openConnections.splice(0)) connection.close();
 });
 
-async function chatOpen() {
+async function chatOpen(
+    seed: (daemon: ReturnType<typeof fakeHappyAgentDaemonCreate>) => void = () => undefined,
+) {
     const daemon = fakeHappyAgentDaemonCreate();
     const project = daemon.projectSeed({ id: "project-a" });
     daemon.agentSeed(project.id, { id: "agent-a" });
+    seed(daemon);
     const connection = connectHappyAgent({
         endpoint: "http://happy-agent.test/",
         token: "token",
@@ -83,4 +90,65 @@ it("gives a file-only message the file's name as its text", async () => {
     await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
 
     expect(sent(daemon)).toMatchObject({ text: "[file:notes.txt]", content: [FILE] });
+});
+
+function fileCards(store: HappyAgentChatStore) {
+    return store
+        .get()
+        .entries.flatMap((entry) =>
+            entry.kind === "message"
+                ? entry.message.attachments.filter((attachment) => attachment.kind === "linked")
+                : [],
+        );
+}
+
+it("shows a sent file as its card, from the moment it is sent", async () => {
+    const { store } = await chatOpen();
+    await store.messageSend("Read this", [], undefined, [FILE]);
+    await vi.waitFor(() =>
+        expect(fileCards(store)).toEqual([
+            expect.objectContaining({
+                kind: "linked",
+                attachmentKind: "file",
+                name: "notes.txt",
+                source: "digest-notes",
+            }),
+        ]),
+    );
+});
+
+it("shows a file from history as its card with the size the server recorded, and no stand-in text", async () => {
+    const { store } = await chatOpen((daemon) =>
+        daemon.historySet("agent-a", [
+            fakeRun({
+                id: "run-1",
+                messages: [
+                    fakeUserMessage({
+                        id: "message-1",
+                        status: "accepted",
+                        content: [
+                            { type: "text", text: "[file:report.pdf]" },
+                            {
+                                type: "file",
+                                attachment: "digest-report",
+                                name: "report.pdf",
+                                mimeType: "application/pdf",
+                                size: 2048,
+                            },
+                        ] as never,
+                    }),
+                ],
+            }),
+        ]),
+    );
+    await vi.waitFor(() => expect(fileCards(store)).toHaveLength(1));
+    expect(fileCards(store)[0]).toMatchObject({
+        attachmentKind: "file",
+        name: "report.pdf",
+        source: "digest-report",
+        mediaType: "application/pdf",
+        bytes: 2048,
+    });
+    const row = store.get().entries.find((entry) => entry.kind === "message");
+    expect(row?.kind === "message" ? row.message.text : undefined).toBe("");
 });

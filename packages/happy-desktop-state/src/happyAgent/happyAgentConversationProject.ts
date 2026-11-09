@@ -581,7 +581,9 @@ function userMessageOmit(
     return happyAgentInboundMessageOmit({
         notification: element.source === "notification",
         opaqueAgent:
-            element.text.trim().length === 0 && userMessageAttachments(element, input).length === 0,
+            element.text.trim().length === 0 &&
+            userMessageAttachments(element, input).length === 0 &&
+            (element.files?.length ?? 0) === 0,
     });
 }
 
@@ -705,15 +707,31 @@ function happyAgentConnectGroupProject(
                         text: element.text,
                         createdAt: element.createdAt,
                         author: profileAuthor(element.profile, element.identity),
-                        attachments: userMessageAttachments(element, input).map(
-                            (attachment, index) => ({
-                                kind: "inlineImage" as const,
-                                id: `${element.id}:image:${String(index)}`,
-                                mediaType: attachment.mediaType,
-                                data: attachment.data,
-                                ...inlineImageSize(attachment.data),
-                            }),
-                        ),
+                        attachments: [
+                            ...userMessageAttachments(element, input).map(
+                                (attachment, index): ConversationAttachment => ({
+                                    kind: "inlineImage",
+                                    id: `${element.id}:image:${String(index)}`,
+                                    mediaType: attachment.mediaType,
+                                    data: attachment.data,
+                                    ...inlineImageSize(attachment.data),
+                                }),
+                            ),
+                            // A Happy Cloud file shows as its card: name and size.
+                            ...(element.files ?? []).map(
+                                (file, index): ConversationAttachment => ({
+                                    kind: "linked",
+                                    id: `${element.id}:file:${String(index)}`,
+                                    attachmentKind: "file",
+                                    name: file.name,
+                                    source: file.attachment,
+                                    ...(file.mimeType === undefined
+                                        ? {}
+                                        : { mediaType: file.mimeType }),
+                                    ...(file.size === undefined ? {} : { bytes: file.size }),
+                                }),
+                            ),
+                        ],
                         ...(element.quote
                             ? { storyQuote: storyQuoteProject(element.quote, input) }
                             : {}),

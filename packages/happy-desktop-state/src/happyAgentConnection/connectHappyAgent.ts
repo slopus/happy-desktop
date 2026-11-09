@@ -5191,7 +5191,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         id: mutationId,
                         role: "user",
                         createdAt: now(),
-                        content,
+                        // The files ride the echo too, so their cards show
+                        // before the server answers.
+                        content: [...content, ...files] as unknown as typeof content,
                         metadata: {},
                         status: "pending",
                         delivery,

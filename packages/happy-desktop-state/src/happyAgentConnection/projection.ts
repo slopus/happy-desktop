@@ -43,6 +43,7 @@ import type {
     TaskOwner,
     ToolPresentation,
     UserInputRequest,
+    UserMessageFile,
     WorkspaceGroup,
 } from "./types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
@@ -1680,6 +1681,26 @@ function messageText(message: Message): string {
 }
 
 /**
+ * The Happy Cloud files one message names. The block is Happy Cloud's addition
+ * to the send contract, so the daemon's block type does not list it.
+ */
+function userMessageFiles(message: Message): readonly UserMessageFile[] {
+    const files: UserMessageFile[] = [];
+    for (const block of message.content as readonly { readonly type: string }[]) {
+        if (block.type !== "file") continue;
+        const file = block as Partial<Record<keyof UserMessageFile, unknown>>;
+        if (typeof file.attachment !== "string" || typeof file.name !== "string") continue;
+        files.push({
+            attachment: file.attachment,
+            name: file.name,
+            ...(typeof file.mimeType === "string" ? { mimeType: file.mimeType } : {}),
+            ...(typeof file.size === "number" ? { size: file.size } : {}),
+        });
+    }
+    return files;
+}
+
+/**
  * The sender stamped on a message, placed relative to the agent reading it. A
  * message with no stamp was typed by the owner and has no sending agent at all.
  */
@@ -1708,6 +1729,8 @@ function messageElementsProject(
     const base = { groupId: runId, runId, createdAt: message.createdAt };
     if (message.role === "user") {
         const senderAgent = senderAgentOf(message, reader);
+        const files = userMessageFiles(message);
+        const text = messageText(message);
         return [
             {
                 ...base,
@@ -1731,7 +1754,13 @@ function messageElementsProject(
                     message.status === "pending" && message.delivery === "steer"
                         ? "pending_steering"
                         : "sent",
-                text: messageText(message),
+                // A file-only message carries its files' names as its text, the
+                // send contract's fallback; the chips already say it.
+                text:
+                    files.length > 0 && text === files.map((file) => `[file:${file.name}]`).join("")
+                        ? ""
+                        : text,
+                ...(files.length === 0 ? {} : { files }),
                 attachments: message.content
                     .filter(
                         (block): block is Extract<MessageBlock, { type: "image" }> =>
