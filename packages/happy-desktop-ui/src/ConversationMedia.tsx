@@ -243,9 +243,12 @@ export function ConversationMedia(props: ConversationMediaProps) {
     /* A recording that stated no size is laid out at the size its metadata
        reports, once it has (`mediaVideoFrames`); only such a set listens. */
     const unframed = mediaItemsUnframed(props.items);
+    /* The same getter serves the static render chat UI measures a document with. */
+    const framesVersion = unframed ? mediaVideoFramesVersion : framesSettled;
     const framesAt = useSyncExternalStore(
         unframed ? mediaVideoFramesSubscribe : framesIgnore,
-        unframed ? mediaVideoFramesVersion : framesSettled,
+        framesVersion,
+        framesVersion,
     );
     const items = mediaItemsFramed(props.items, unframed ? framesAt : undefined);
     const open = props.onItemOpen;

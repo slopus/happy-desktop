@@ -229,9 +229,8 @@ export type GymChatOffer =
  */
 const COMPOSER = '[data-happy-desktop-ui="composer-textarea"]:visible';
 
-/** The agent's replies on screen, without the row that only carries suggested replies. */
-const AGENT_REPLY =
-    '[data-happy-desktop-ui="message"]:not([data-own]):not(:has([data-happy-desktop-ui="chat-ui-quick-replies"])):visible';
+/** The agent's replies on screen; the latest carries the suggested replies under its words. */
+const AGENT_REPLY = '[data-happy-desktop-ui="message"]:not([data-own]):visible';
 
 /** The suggested replies under the latest agent message, while no message stands after them. */
 const LIVE_BLOCK = '[data-happy-desktop-ui="chat-ui-quick-replies"]';
@@ -422,11 +421,11 @@ export async function gymPersonaTurn(
             await buttons
                 .nth(choice)
                 .evaluate((element, value) => element.setAttribute("data-gym-pin", value), pin);
-            // They read the reply the suggestions follow, then the pills.
-            const replies = page.locator(AGENT_REPLY);
-            const shown = await replies.count();
+            // They read the reply the suggestions sit under, pills and all.
             await driver.read(
-                `${shown > 0 ? await replies.last().innerText() : ""} ${offer.labels.join(" ")}`,
+                await offer.block
+                    .locator('xpath=ancestor::*[@data-happy-desktop-ui="message"][1]')
+                    .innerText(),
             );
             const target = page.locator(`[data-gym-pin="${pin}"]`);
             if (!(await target.isEnabled().catch(() => false))) return false;

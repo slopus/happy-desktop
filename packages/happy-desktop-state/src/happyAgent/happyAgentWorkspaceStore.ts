@@ -359,6 +359,8 @@ export interface HappyAgentConversationSnapshot {
     readonly uiErrors: ReadonlyMap<string, string>;
     /** What the viewer may do with chat UI here, for drawing controls disabled. */
     readonly uiGranted: ChatUiGranted;
+    /** Why this reader may not write here; see `HappyAgentChatSnapshot.contentWriteRefusal`. */
+    readonly contentWriteRefusal?: string;
     /** The chat UI component types the daemon serves; see `HappyAgentChatSnapshot.uiServed`. */
     readonly uiServed?: ReadonlySet<string>;
     /**
@@ -3131,6 +3133,9 @@ export function happyAgentWorkspaceStoreCreate(
             uiPending: chat.uiPending,
             uiErrors: chat.uiErrors,
             uiGranted: chat.uiGranted,
+            ...(chat.contentWriteRefusal === undefined
+                ? {}
+                : { contentWriteRefusal: chat.contentWriteRefusal }),
             ...(chat.uiServed ? { uiServed: chat.uiServed } : {}),
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }

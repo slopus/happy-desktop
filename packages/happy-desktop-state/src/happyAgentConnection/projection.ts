@@ -1,4 +1,4 @@
-import type { ConversationQuickReplies } from "../chatUi/chatUi.js";
+import type { ConversationQuickReplies, ConversationUi } from "../chatUi/chatUi.js";
 import {
     chatUiConversation,
     chatUiMessage,
@@ -499,8 +499,17 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     for (const entry of pending)
         for (const element of projected(entry, `pending:${entry.message.id}`, "running"))
             push(element);
-    /* The suggestion stands at the end, under whatever the agent said last. */
-    if (quickReplies !== undefined) {
+    /*
+     * The suggestion stands at the end, under whatever the agent said last: on
+     * that reply's own row, so the reply stays the turn's answer rather than
+     * folding into its work behind a row of pills.
+     */
+    let lastText = elements.length - 1;
+    while (lastText >= 0 && elements[lastText]?.kind !== "agent_text") lastText -= 1;
+    const said = elements[lastText];
+    if (quickReplies !== undefined && said?.kind === "agent_text") {
+        elements[lastText] = { ...said, quickReplies };
+    } else if (quickReplies !== undefined) {
         const holder = ordered.find((message) => message.id === quickReplies?.messageId);
         elements.push({
             id: `quick-replies:${quickReplies.messageId}:${quickReplies.toolCallId ?? ""}`,
@@ -1856,6 +1865,26 @@ function messageElementsProject(
     }
 
     const elements: ChatElement[] = [];
+    /*
+     * A document follows the words before it in the same message on their row,
+     * text first, so the reply reads as one answer; with no words just before
+     * it, it stands on its own row.
+     */
+    const uiPush = (id: string, document: ConversationUi) => {
+        const previous = elements.at(-1);
+        if (previous?.kind === "agent_text" && previous.ui === undefined)
+            elements[elements.length - 1] = { ...previous, ui: document };
+        else
+            elements.push({
+                ...base,
+                id,
+                kind: "agent_text",
+                messageId: message.id,
+                text: "",
+                complete: true,
+                ui: document,
+            });
+    };
     for (let index = 0; index < message.content.length; index += 1) {
         const block = message.content[index];
         if (block === undefined) continue;
@@ -1891,15 +1920,7 @@ function messageElementsProject(
             }
         } else if (block.type === "ui") {
             if (message.role === "agent" && ui !== undefined)
-                elements.push({
-                    ...base,
-                    id,
-                    kind: "agent_text",
-                    messageId: message.id,
-                    text: "",
-                    complete: true,
-                    ui: chatUiConversation(ui.transcript, message.id, block.ui, []),
-                });
+                uiPush(id, chatUiConversation(ui.transcript, message.id, block.ui, []));
         } else if (block.type === "configuration") {
             if (block.before !== null)
                 elements.push({ ...base, id, kind: "configuration", configuration: block });
@@ -1915,14 +1936,9 @@ function messageElementsProject(
             /* What `show_ui` showed is part of the reply, not a step of the work. */
             if (ui !== undefined) {
                 const presentation = block.presentation;
-                elements.push({
-                    ...base,
+                uiPush(
                     id,
-                    kind: "agent_text",
-                    messageId: message.id,
-                    text: "",
-                    complete: true,
-                    ui: chatUiConversation(
+                    chatUiConversation(
                         ui.transcript,
                         message.id,
                         presentation.ui,
@@ -1930,7 +1946,7 @@ function messageElementsProject(
                             mediaItemProject(item, reader.mediaUrl(reader.agentId, block.id, at)),
                         ),
                     ),
-                });
+                );
             }
         } else if (
             block.type === "quick_replies" ||
