@@ -8,7 +8,10 @@
  *   file_tree      the app's file tree, every folder open
  *   images         the transcript's own media flow
  *   fallback       the server's one line, muted
- *   quick replies  a wrapping row of 36px outline pills, 8px apart
+ *   quick replies  their own row with the own message's insets: replies one
+ *                  under another, 6px apart, each as wide as a person's widest
+ *                  bubble (76% of the column) against the right; the bubble's
+ *                  10px 12px padding and radius, one line, a kept 16px tick
  */
 .happy-chat-ui {
     display: flex;
@@ -43,25 +46,87 @@
 
 /* Suggested replies under the agent's last words: a tap sends one as the
    person's message, and the row goes once they have. */
-.happy-chat-ui__quick-replies {
-    flex-flow: row wrap;
+
+.happy-chat-replies {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: flex-end;
+    width: 100%;
+    padding: 8px 28px 8px 20px;
+}
+
+.happy-chat-replies__stack {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 76%;
+    min-width: 0;
+}
+
+/* A reply not sent: the person's bubble, halfway to the ground, as words they haven't said yet. */
+.happy-chat-replies__reply {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
     gap: 8px;
-}
-
-/* A pill never outgrows the measure: an option too long for one row ends in an ellipsis. */
-.happy-chat-ui__pill {
-    flex: 0 1 auto;
     min-width: 0;
-    max-width: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--happy-radius-md);
+    background: color-mix(in srgb, var(--user-message-background) 50%, var(--surface));
+    color: var(--user-message-text);
+    font-family: var(--happy-font-ui);
+    font-size: 15px;
+    font-synthesis: none;
+    line-height: 22px;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease;
 }
 
-.happy-chat-ui__pill .happy-button__content,
-.happy-chat-ui__pill .happy-button__label {
-    flex: 0 1 auto;
+.happy-chat-replies__reply:disabled {
+    cursor: default;
+}
+
+.happy-chat-replies__reply:not(:disabled):hover {
+    background: color-mix(in srgb, var(--user-message-background) 80%, var(--surface));
+}
+
+.happy-chat-replies__reply:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+/* The one a person sent is their bubble, ticked; the rest only go quiet. */
+.happy-chat-replies__reply[data-chosen] {
+    background: var(--user-message-background);
+}
+
+.happy-chat-replies[data-chosen] .happy-chat-replies__reply:not([data-chosen]) {
+    color: var(--text-secondary);
+}
+
+.happy-chat-replies__label {
+    flex: 1 1 auto;
     min-width: 0;
-}
-
-.happy-chat-ui__pill .happy-button__label {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-replies__tick {
+    display: flex;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    visibility: hidden;
+}
+
+.happy-chat-replies__reply[data-chosen] .happy-chat-replies__tick {
+    visibility: visible;
 }
