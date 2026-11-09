@@ -1,6 +1,7 @@
 import {
     happyAgentHistoryCreate,
     happyAgentRouterCreate,
+    happyAgentRouterConnectionChanged,
     type HappyAgentRouter,
 } from "happy-desktop-app";
 import {
@@ -81,7 +82,7 @@ export function desktopConnectionUiCreate(input: {
         entry = next;
         snapshot = { activeHappyAgentId: id, happyAgents: next ? [next] : [] };
         for (const listener of listeners) listener();
-        if (materialized) void router.invalidate();
+        if (materialized) void happyAgentRouterConnectionChanged(router);
     });
     const stored = input.preferences.read();
     const ownedSettings = input.main
