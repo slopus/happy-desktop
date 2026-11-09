@@ -1,4 +1,4 @@
-import type { ConversationEntry } from "happy-desktop-state";
+import { entryTrace, type ConversationEntry } from "happy-desktop-state";
 
 type MessageEntry = Extract<ConversationEntry, { kind: "message" }>;
 
@@ -73,20 +73,12 @@ export function conversationMessageGrouped(
     const entry = entries[index];
     if (entry?.kind !== "message") return false;
     if (entry.opensGroup) return false;
-    /* The turn's one trace control owns its header: the first row expanded,
-       or the final answer collapsed. */
+    /* The turn's one trace control owns its header, on the turn's first row
+       on screen, expanded or collapsed. */
     if (entry.message.agentTrace && !entry.message.agentTrace.quiet) return false;
     /* A story reply's header says who replied, so it is never folded away. */
     if (entry.message.storyQuote) return false;
-    if (entry.message.sender?.kind === "agent") {
-        const preceding = entries[index - 1];
-        if (
-            preceding?.kind === "agentActivity" ||
-            preceding?.kind === "delegation" ||
-            answeredQuestionRow(preceding)
-        )
-            return true;
-    }
+    if (entry.message.sender?.kind === "agent" && agentOwnedRow(entries[index - 1])) return true;
     const previous = previousMessage(entries, index);
     return previous !== undefined && sameSender(entry, previous);
 }
@@ -169,7 +161,8 @@ export function conversationAgentRowStartsGroup(
     const entry = entries[index];
     if (entry?.opensGroup) return true;
     // The trace control rides the header, so a row carrying it opens one.
-    if (entry?.kind === "agentActivity" && entry.agentTrace && !entry.agentTrace.quiet) return true;
+    const trace = entry && agentOwnedRow(entry) ? entryTrace(entry) : undefined;
+    if (trace && !trace.quiet) return true;
     return agentOwnedRow(entry) && !agentGroupContinues(entries, index);
 }
 

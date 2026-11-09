@@ -477,7 +477,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         /* A turn can fail before it does anything else, and then these notices
            are the entire turn. They take the same identity header a tool-first
            turn takes, so a run that only failed still reads as the agent's work
-           rather than as loose text in the transcript. */
+           rather than as loose text in the transcript. Opening it, they also
+           carry its trace control. */
         return props.activityAuthor ? (
             <Message
                 agent
@@ -488,6 +489,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
                 {...authorAvatar(props.activityAuthor)}
+                metaAccessory={traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle)}
                 style={props.style}
             >
                 {notice}
@@ -518,8 +520,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 {...(lead ? {} : { style: props.style })}
             />
         );
-        /* An answered question the turn opens with carries the turn's identity,
-           as a tool-first turn's first call does. */
+        /* An answered question the turn opens with carries the turn's identity
+           and trace control, as a tool-first turn's first call does. */
         return lead && props.activityAuthor ? (
             <Message
                 agent
@@ -530,6 +532,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
                 {...authorAvatar(props.activityAuthor)}
+                metaAccessory={traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle)}
                 style={props.style}
             >
                 {request}

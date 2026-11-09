@@ -224,7 +224,8 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             errorEqual(left.error, right.error) &&
             noticeFailureEqual(left.failure, right.failure) &&
             left.source?.messageId === right.source?.messageId &&
-            left.source?.runId === right.source?.runId
+            left.source?.runId === right.source?.runId &&
+            traceEqual(left.agentTrace, right.agentTrace)
         );
     }
     if (left.kind === "agentActivity" && right.kind === "agentActivity")
@@ -233,7 +234,10 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             traceEqual(left.agentTrace, right.agentTrace)
         );
     if (left.kind === "request" && right.kind === "request")
-        return requestEqual(left.request, right.request);
+        return (
+            requestEqual(left.request, right.request) &&
+            traceEqual(left.agentTrace, right.agentTrace)
+        );
     if (left.kind === "delegation" && right.kind === "delegation")
         return (
             delegationEqual(left.child, right.child) &&

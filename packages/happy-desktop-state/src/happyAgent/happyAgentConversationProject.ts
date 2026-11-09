@@ -1,6 +1,8 @@
 import type { ChatElement, ToolPresentation } from "../happyAgentConnection/index.js";
 import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 import {
+    entryAgentOwned,
+    entryTraceWith,
     noticeInformational,
     type ConversationActivityPresentation,
     type ConversationAgentIdentity,
@@ -623,14 +625,7 @@ function groupSteered(elements: readonly ChatElement[], start: number, end: numb
  * line about it. Every later row of the reply continues that group.
  */
 function replyOpened(entries: readonly ConversationEntry[]): readonly ConversationEntry[] {
-    const index = entries.findIndex(
-        (entry) =>
-            (entry.kind === "message" && entry.message.sender?.kind === "agent") ||
-            entry.kind === "agentActivity" ||
-            entry.kind === "delegation" ||
-            (entry.kind === "request" && entry.request.kind === "userInput") ||
-            (entry.kind === "notice" && entry.variant === "notice"),
-    );
+    const index = entries.findIndex(entryAgentOwned);
     if (index < 0) return entries;
     const opened = [...entries];
     opened[index] = { ...entries[index]!, opensGroup: true };
@@ -1187,69 +1182,53 @@ function happyAgentConnectGroupProject(
         backgroundTerminals: [],
     };
 
-    /** The same entry carrying this turn's trace, or nothing if it cannot hold one. */
-    const withTrace = (
-        entry: ConversationEntry,
-        trace: AgentTurnTraceSummary = turnTrace,
-    ): ConversationEntry | undefined => {
-        if (entry === entries[actualAnchorIndex])
-            entry = { ...entry, traceFoldAnchorId: groupEnd.groupId };
-        if (entry.kind === "agentActivity") return { ...entry, agentTrace: trace };
-        if (entry.kind === "delegation") return { ...entry, agentTrace: trace };
-        if (entry.kind === "message" && entry.message.sender?.kind === "agent")
-            return { ...entry, message: { ...entry.message, agentTrace: trace } };
-        return undefined;
-    };
-
     /*
-     * Expanded, the control folds the turn back up, so it rides the first row of
-     * the turn — usually a tool call. Collapsed, it rides the final answer, the
-     * first persistent delegation, or the last real activity when there was no
-     * prose.
+     * The control rides the row that opens the turn's author header — its first
+     * agent-owned row on screen — so it never lands mid-turn under a second
+     * header, and folding never takes away rows above it. Collapsed that is the
+     * first row the fold keeps: usually the answer, else a delegation, a
+     * collaborator's message, a failure, or an edit the turn shows before it.
+     * Expanded it is the turn's first row, usually a tool call. The collapsed
+     * lead also names the turn as the row that survives folding.
      */
+    const kept = new Set(visibleCollapsed);
+    const collapsedLeadIndex =
+        actualAnchorIndex < 0
+            ? -1
+            : entries.findIndex((entry) => kept.has(entry) && entryAgentOwned(entry));
+    const anchored = (entry: ConversationEntry): ConversationEntry => ({
+        ...entry,
+        traceFoldAnchorId: groupEnd.groupId,
+    });
+
     if (input.expandedGroupIds.has(groupEnd.groupId)) {
-        const target = entries[actualAnchorIndex];
-        if (target) {
-            const kept = new Set(visibleCollapsed);
+        const leadIndex = entries.findIndex(entryAgentOwned);
+        const leadFolds = leadIndex >= 0 && !kept.has(entries[leadIndex]!);
+        if (collapsedLeadIndex >= 0) {
             for (let index = 0; index < entries.length; index += 1)
                 if (!kept.has(entries[index]!))
                     entries[index] = { ...entries[index]!, traceFoldTargetId: groupEnd.groupId };
+            entries[collapsedLeadIndex] = anchored(entries[collapsedLeadIndex]!);
         }
+        /* Watched to the end, the turn keeps the rows it ran with: its control
+           shows only where its first row already has a header, and the footer
+           that arrived with the end offers to hide the steps too. */
         const quiet = input.settlingGroupIds?.has(groupEnd.groupId) === true;
-        for (let index = 0; index < entries.length; index += 1) {
-            const traced = withTrace(entries[index]!, {
+        if (leadIndex >= 0)
+            entries[leadIndex] = entryTraceWith(entries[leadIndex]!, {
                 ...turnTrace,
-                ...(index === actualAnchorIndex ? {} : { foldsAway: true as const }),
+                ...(leadFolds ? { foldsAway: true as const } : {}),
                 ...(quiet ? { quiet: true as const } : {}),
             });
-            if (!traced) continue;
-            entries[index] = traced;
-            break;
-        }
-        /* Watched to the end, the turn keeps the rows it ran with: its answer
-           gains no header, and the footer that arrived with the end offers to
-           hide the steps instead. */
         const status = entries[statusIndex];
-        if (quiet) {
-            const anchor = entries[actualAnchorIndex];
-            if (anchor)
-                entries[actualAnchorIndex] = { ...anchor, traceFoldAnchorId: groupEnd.groupId };
-            if (status?.kind === "turnStatus")
-                entries[statusIndex] = { ...status, agentTrace: { ...turnTrace, quiet: true } };
-            return entries;
-        }
-        /* Keep the final row as the fold anchor without attaching a second
-           trace control: a non-quiet control also starts an author header. */
-        const anchor = entries[actualAnchorIndex];
-        if (anchor) entries[actualAnchorIndex] = { ...anchor, traceFoldAnchorId: groupEnd.groupId };
+        if (quiet && status?.kind === "turnStatus")
+            entries[statusIndex] = { ...status, agentTrace: { ...turnTrace, quiet: true } };
         return entries;
     }
-    const actualAnchor = entries[actualAnchorIndex];
-    if (!actualAnchor) return visibleCollapsed;
-    const tracedAnchor = withTrace(actualAnchor);
-    if (!tracedAnchor) return visibleCollapsed;
-    entries[actualAnchorIndex] = tracedAnchor;
-    return visibleCollapsed.map((entry) => (entry === actualAnchor ? tracedAnchor : entry));
+    const lead = entries[collapsedLeadIndex];
+    if (!lead) return visibleCollapsed;
+    const tracedLead = anchored(entryTraceWith(lead, turnTrace));
+    return visibleCollapsed.map((entry) => (entry === lead ? tracedLead : entry));
 }
 
 /** A quoted story, as the reader's own or as the named agent's. */

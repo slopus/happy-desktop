@@ -10,11 +10,13 @@ import {
     happyAgentTaskDepths,
     type HappyAgentSubtaskRoot,
 } from "./happyAgentBotSubtasks.js";
-import type {
-    ConversationEntry,
-    ConversationErrorAssistance,
-    ConversationErrorAssistanceEntry,
-    ConversationRetrying,
+import {
+    entryTrace,
+    entryTraceWith,
+    type ConversationEntry,
+    type ConversationErrorAssistance,
+    type ConversationErrorAssistanceEntry,
+    type ConversationRetrying,
 } from "../conversation/conversationEntry.js";
 import { happyAgentChatDraftAppend } from "./happyAgentChatDraftAppend.js";
 import {
@@ -9105,14 +9107,7 @@ function conversationTracesFold(
         return snapshot;
     const traces = new Map<string, AgentTurnTraceSummary>();
     for (const entry of snapshot.entries) {
-        const trace =
-            entry.kind === "message"
-                ? entry.message.agentTrace
-                : entry.kind === "agentActivity" ||
-                    entry.kind === "delegation" ||
-                    entry.kind === "turnStatus"
-                  ? entry.agentTrace
-                  : undefined;
+        const trace = entryTrace(entry);
         if (trace) traces.set(trace.turnId, trace);
     }
     const entries = snapshot.entries
@@ -9125,31 +9120,10 @@ function conversationTracesFold(
                 entry.traceFoldAnchorId === undefined
                     ? undefined
                     : traces.get(entry.traceFoldAnchorId);
-            if (source) {
-                const trace = { ...source, quiet: undefined, foldsAway: undefined };
-                if (entry.kind === "message")
-                    return { ...entry, message: { ...entry.message, agentTrace: trace } };
-                if (entry.kind === "agentActivity" || entry.kind === "delegation")
-                    return { ...entry, agentTrace: trace };
-            }
-            const trace =
-                entry.kind === "message"
-                    ? entry.message.agentTrace
-                    : entry.kind === "agentActivity" ||
-                        entry.kind === "delegation" ||
-                        entry.kind === "turnStatus"
-                      ? entry.agentTrace
-                      : undefined;
-            if (trace && anchors.has(trace.turnId)) {
-                if (entry.kind === "message")
-                    return { ...entry, message: { ...entry.message, agentTrace: undefined } };
-                if (
-                    entry.kind === "agentActivity" ||
-                    entry.kind === "delegation" ||
-                    entry.kind === "turnStatus"
-                )
-                    return { ...entry, agentTrace: undefined };
-            }
+            if (source)
+                return entryTraceWith(entry, { ...source, quiet: undefined, foldsAway: undefined });
+            const trace = entryTrace(entry);
+            if (trace && anchors.has(trace.turnId)) return entryTraceWith(entry, undefined);
             return entry;
         });
     return {

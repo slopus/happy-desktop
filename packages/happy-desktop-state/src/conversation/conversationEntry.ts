@@ -634,11 +634,11 @@ export interface ConversationActivityEntry {
     /** Ordering key inside the conversation, compared like a message sequence. */
     readonly sequence: string;
     /**
-     * The turn this row opens, when it is the first row of an expanded turn. It
-     * carries the control that folds the turn back up, which has to ride the row
-     * the turn begins on: a turn that ran tools and answered nothing has no
-     * message to hang it from, and one that answered in the middle would put
-     * "Hide traces" below the work it hides.
+     * The turn this row opens on screen, expanded or folded. It carries the
+     * turn's trace control, which has to ride the row the turn begins on: a turn
+     * that ran tools and answered nothing has no message to hang it from, and
+     * one that answered in the middle would put "Hide traces" below the work it
+     * hides.
      */
     readonly agentTrace?: AgentTurnTraceSummary;
 }
@@ -678,6 +678,8 @@ export interface ConversationServiceNoticeEntry extends ConversationNoticeEntryB
      * Absent from a daemon that predates it; the card then shows `error` as before.
      */
     readonly failure?: ConversationFailure;
+    /** The turn whose trace control this notice carries, when it opens that turn. */
+    readonly agentTrace?: AgentTurnTraceSummary;
 }
 
 /**
@@ -939,6 +941,8 @@ export interface ConversationRequestEntry {
     readonly id: string;
     readonly request: ConversationRequest;
     readonly sequence: string;
+    /** The turn whose trace control an answered question carries, when it opens that turn. */
+    readonly agentTrace?: AgentTurnTraceSummary;
 }
 
 /** The render-ready facts shared by every compact delegated-agent row. */
@@ -1049,6 +1053,44 @@ export type ConversationEntry = (
 /** The stable render identity of an entry; the row key React must keep. */
 export function entryKey(entry: ConversationEntry): string {
     return entry.kind === "message" ? entry.message.id : entry.id;
+}
+
+/**
+ * Whether the agent itself produced this row: its words, a step of its work, a
+ * question it asked, or a service line about it. The first such row of a turn
+ * opens the agent's author header, and the turn's trace control rides it.
+ */
+export function entryAgentOwned(entry: ConversationEntry): boolean {
+    return (
+        (entry.kind === "message" && entry.message.sender?.kind === "agent") ||
+        entry.kind === "agentActivity" ||
+        entry.kind === "delegation" ||
+        (entry.kind === "request" && entry.request.kind === "userInput") ||
+        (entry.kind === "notice" && entry.variant === "notice")
+    );
+}
+
+/** The turn trace this row carries, if any. */
+export function entryTrace(entry: ConversationEntry): AgentTurnTraceSummary | undefined {
+    if (entry.kind === "message") return entry.message.agentTrace;
+    if (entry.kind === "notice") return entry.variant === "compute" ? undefined : entry.agentTrace;
+    if (entry.kind === "summary") return undefined;
+    return entry.agentTrace;
+}
+
+/**
+ * The same row carrying `trace` instead of whatever it carried. A row that
+ * cannot carry one is returned unchanged.
+ */
+export function entryTraceWith(
+    entry: ConversationEntry,
+    trace: AgentTurnTraceSummary | undefined,
+): ConversationEntry {
+    if (entry.kind === "message")
+        return { ...entry, message: { ...entry.message, agentTrace: trace } };
+    if (entry.kind === "notice" && entry.variant === "compute") return entry;
+    if (entry.kind === "summary") return entry;
+    return { ...entry, agentTrace: trace };
 }
 
 /** The ordering key of an entry, in the same space as a message sequence. */

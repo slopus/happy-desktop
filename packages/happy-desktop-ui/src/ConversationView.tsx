@@ -15,6 +15,7 @@ import {
 import type { MessageReferences } from "./messageReferences";
 import {
     entryKey,
+    entryTrace,
     type ConversationAuthor,
     type ConversationEntry,
     type ConversationErrorAssistance,
@@ -412,15 +413,7 @@ type ConversationTraceSpans = ReadonlyMap<
 function conversationTraceSpans(transcript: readonly ConversationEntry[]): ConversationTraceSpans {
     const spans = new Map<string, { first: number; last: number }>();
     for (let index = 0; index < transcript.length; index += 1) {
-        const entry = transcript[index]!;
-        const trace =
-            entry.kind === "message"
-                ? entry.message.agentTrace
-                : entry.kind === "agentActivity" ||
-                    entry.kind === "delegation" ||
-                    entry.kind === "turnStatus"
-                  ? entry.agentTrace
-                  : undefined;
+        const trace = entryTrace(transcript[index]!);
         if (!trace?.quiet) continue;
         const span = spans.get(trace.turnId);
         if (span) span.last = index;
@@ -455,14 +448,7 @@ function conversationEntryTraceOpen(
     entry: ConversationEntry,
     expandedTurnIds: ReadonlySet<string> | undefined,
 ): boolean {
-    const trace =
-        entry.kind === "message"
-            ? entry.message.agentTrace
-            : entry.kind === "agentActivity" ||
-                entry.kind === "delegation" ||
-                entry.kind === "turnStatus"
-              ? entry.agentTrace
-              : undefined;
+    const trace = entryTrace(entry);
     return trace !== undefined && expandedTurnIds?.has(trace.turnId) === true;
 }
 
