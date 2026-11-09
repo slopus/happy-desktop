@@ -428,6 +428,7 @@ export interface HappyAgentWorkspaceClient {
      * connection, whose files never go into a checkout.
      */
     readonly attachmentUpload?: HappyAgentAttachmentPlacement["attachmentUpload"];
+    readonly attachmentDownload?: HappyAgentAttachmentPlacement["attachmentDownload"];
     /**
      * Registers one folder on this Happy Agent's machine as a project and resolves with
      * the identity Happy Agent gave it. Nothing is started in it: a project is a folder
@@ -878,6 +879,9 @@ export function happyAgentWorkspaceClientCreate(
             attachmentPlacement.attachmentWrite(groupId, name, content),
         ...(attachmentPlacement.attachmentUpload
             ? { attachmentUpload: attachmentPlacement.attachmentUpload }
+            : {}),
+        ...(attachmentPlacement.attachmentDownload
+            ? { attachmentDownload: attachmentPlacement.attachmentDownload }
             : {}),
         async projectAdd(path) {
             // Registration is the daemon's own decision, so it goes directly

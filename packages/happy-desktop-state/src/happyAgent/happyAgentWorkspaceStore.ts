@@ -1772,6 +1772,11 @@ export interface HappyAgentWorkspaceStore {
      */
     attachmentFileOpen(source: string, kind: HappyAgentFileTabKind): boolean;
     /**
+     * The bytes of a file the open Happy Cloud conversation names, by attachment
+     * ID; undefined where files are not kept by the server.
+     */
+    attachmentDownload(attachment: string): Promise<Blob> | undefined;
+    /**
      * Opens one workspace file in the panel's viewer, beside the conversation
      * that named it. This is what a link in a message and the file a tool call
      * worked on resolve to: the file is read for showing, the panel's viewer tab
@@ -7968,6 +7973,8 @@ export function happyAgentWorkspaceStoreCreate(
         fileOpen: (groupId, path, kind, selection) =>
             fileTabOpen(groupId, path, kind, false, "main", selection),
         filePreprocess: (groupId, path, kind) => filePreprocessEnqueue(groupId, path, kind),
+        attachmentDownload: (attachment) =>
+            openId === undefined ? undefined : client.attachmentDownload?.(openId, attachment),
         attachmentFileOpen: (source, kind) => {
             const resolved = groupPathResolve(source);
             if (!resolved) return false;

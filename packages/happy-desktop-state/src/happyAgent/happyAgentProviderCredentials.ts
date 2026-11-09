@@ -275,6 +275,9 @@ export function happyCloudRequestCreate(options: {
         } catch (error) {
             throw new UserError("Happy couldn't reach the server.", "offline", error);
         }
+        // A caller asking for anything but JSON is fetching a file's bytes.
+        if (response.ok && headers?.accept !== undefined && headers.accept !== "application/json")
+            return await response.blob();
         if (response.ok) return await response.json().catch(() => undefined);
         const answer = (await response.json().catch(() => undefined)) as
             | { readonly error?: unknown; readonly code?: unknown }
