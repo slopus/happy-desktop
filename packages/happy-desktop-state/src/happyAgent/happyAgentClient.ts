@@ -440,6 +440,7 @@ export interface HappyAgentWorkspaceClient {
      * as a displayable `UserError`.
      */
     projectAdd(path: string): Promise<HappyAgentProjectId>;
+    projectRemoveArchivedDirectory(projectId: string): Promise<void>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<HappyAgentOpenInTargets>;
     /**
@@ -897,6 +898,14 @@ export function happyAgentWorkspaceClientCreate(
             } catch (error) {
                 throw happyAgentProjectAddError(error, path);
             }
+        },
+
+        async projectRemoveArchivedDirectory(_projectId) {
+            // Disabled pending a race-safe Happy Agent server-side API.
+            // Never execute filesystem deletion through a project terminal.
+            throw new Error(
+                "La eliminación física remota está deshabilitada por seguridad."
+            );
         },
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
         openIn: (groupId, target) => deps.hostServices.openIn(groupId, target),
