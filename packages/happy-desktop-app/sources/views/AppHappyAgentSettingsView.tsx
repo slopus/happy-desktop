@@ -60,6 +60,8 @@ import {
     happyAgentRepositoriesStoreNoop,
     happyAgentCloudProviderAddTeamOnly,
     happyAgentCloudConnectionName,
+    happyAgentCloudConnectionEditable,
+    happyAgentCloudCredentialReplaceable,
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
     happyAgentMembersStoreNoop,
@@ -97,6 +99,7 @@ import {
     HappyAgentAiProviders,
     type HappyAgentAiProviderConnectionRow,
     type HappyAgentProviderAddDialogProps,
+    type HappyAgentProviderEditDialogProps,
     HappyAgentMembersSettings,
     Banner,
     type HappyAgentCredentialImportRow,
@@ -840,6 +843,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
         (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
     );
+    const cloudProviderEdit = cloudProvidersStore
+        ? providerEditProps(cloudProviders, cloudProvidersStore)
+        : undefined;
     const credentialImport = useSyncExternalStore(
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).subscribe,
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).get,
@@ -1489,7 +1495,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                       ),
                                   }
                                 : {})}
+                            {...(cloudProviderEdit ? { edit: cloudProviderEdit } : {})}
                             onAdd={() => cloudProvidersStore.addOpen()}
+                            onEdit={(connectionId) => cloudProvidersStore.editOpen(connectionId)}
                             onCredentialEnabledChange={(connectionId, credentialId, enabled) =>
                                 cloudProvidersStore.credentialEnabledUpdate(
                                     connectionId,
@@ -2322,6 +2330,7 @@ function cloudConnectionRow(
                   .join(" · ")
             : "Add a key or sign in to use it",
         enabled: connection.enabled,
+        ...(happyAgentCloudConnectionEditable(connection) ? { editable: true } : {}),
         ...(connection.credentials
             ? {
                   credentials: connection.credentials.map((credential) => ({
@@ -2344,6 +2353,31 @@ function cloudConnectionRow(
                   })),
               }
             : {}),
+    };
+}
+
+/** The edit dialog's props from the AI providers store, while its connection is listed. */
+function providerEditProps(
+    snapshot: HappyAgentCloudProvidersSnapshot,
+    store: HappyAgentCloudProvidersStore,
+): HappyAgentProviderEditDialogProps | undefined {
+    const edit = snapshot.edit;
+    const connection = edit
+        ? snapshot.connections.find((candidate) => candidate.id === edit.connectionId)
+        : undefined;
+    if (!edit || !connection) return undefined;
+    return {
+        name: connection.name,
+        credentials: (connection.credentials ?? []).map((credential) => ({
+            id: credential.id,
+            label: credential.label,
+            meta: `${cloudVendorName(credential.vendor)} · ${CLOUD_KIND_NAMES[credential.kind]}`,
+            replaceable: happyAgentCloudCredentialReplaceable(credential),
+        })),
+        saving: edit.phase === "busy",
+        ...(edit.error ? { error: edit.error } : {}),
+        onSave: (changes) => store.editSave(changes),
+        onClose: () => store.editClose(),
     };
 }
 

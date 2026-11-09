@@ -9,6 +9,10 @@ import {
     HappyAgentProviderAddDialog,
     type HappyAgentProviderAddDialogProps,
 } from "./HappyAgentProviderAddDialog";
+import {
+    HappyAgentProviderEditDialog,
+    type HappyAgentProviderEditDialogProps,
+} from "./HappyAgentProviderEditDialog";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
@@ -41,6 +45,8 @@ export interface HappyAgentAiProviderConnectionRow {
     readonly enabled: boolean;
     /** Its credentials, where the reader may see them. */
     readonly credentials?: readonly HappyAgentAiProviderCredentialRow[];
+    /** Whether it can be renamed and rekeyed: one the team added, for those who manage it. */
+    readonly editable?: boolean;
 }
 
 export interface HappyAgentAiProvidersProps {
@@ -55,7 +61,10 @@ export interface HappyAgentAiProvidersProps {
     readonly teamManageable: boolean;
     /** The add dialog, while it is open. */
     readonly add?: HappyAgentProviderAddDialogProps;
+    /** The edit dialog, while it is open. */
+    readonly edit?: HappyAgentProviderEditDialogProps;
     onAdd: () => void;
+    onEdit?: (connectionId: string) => void;
     onCredentialEnabledChange: (
         connectionId: string,
         credentialId: string,
@@ -145,6 +154,7 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
                                             key={row.id}
                                             manageable={group.id !== "team" || props.teamManageable}
                                             row={row}
+                                            {...(props.onEdit ? { onEdit: props.onEdit } : {})}
                                             onCredentialEnabledChange={
                                                 props.onCredentialEnabledChange
                                             }
@@ -158,6 +168,7 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
                 )}
             </Box>
             {props.add ? <HappyAgentProviderAddDialog {...props.add} /> : null}
+            {props.edit ? <HappyAgentProviderEditDialog {...props.edit} /> : null}
         </HappyAgentSettingsSection>
     );
 }
@@ -165,6 +176,7 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
 function HappyAgentAiProviderConnection(props: {
     readonly row: HappyAgentAiProviderConnectionRow;
     readonly manageable: boolean;
+    onEdit?: (connectionId: string) => void;
     onCredentialEnabledChange: (
         connectionId: string,
         credentialId: string,
@@ -185,6 +197,16 @@ function HappyAgentAiProviderConnection(props: {
                     <span className="happy-agent-ai-providers__meta">{row.meta}</span>
                 </Box>
                 {row.enabled ? null : <HappyAgentSettingsStatus label="Off" variant="neutral" />}
+                {props.manageable && row.editable && props.onEdit ? (
+                    <Button
+                        aria-label={`Edit ${row.name}`}
+                        icon="edit"
+                        iconOnly
+                        onClick={() => props.onEdit?.(row.id)}
+                        size="small"
+                        variant="ghost"
+                    />
+                ) : null}
             </Box>
             {row.credentials?.map((credential) => {
                 const label = STATE_LABELS[credential.state];

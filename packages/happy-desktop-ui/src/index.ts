@@ -1165,6 +1165,12 @@ export {
     type HappyAgentProviderKeyVendor,
 } from "./pages/settings/HappyAgentProviderAddDialog";
 export {
+    HappyAgentProviderEditDialog,
+    type HappyAgentProviderEditChanges,
+    type HappyAgentProviderEditCredential,
+    type HappyAgentProviderEditDialogProps,
+} from "./pages/settings/HappyAgentProviderEditDialog";
+export {
     HappyAgentFileTierSettings,
     type HappyAgentFileTierMoveDirection,
     type HappyAgentFileTierRow,
