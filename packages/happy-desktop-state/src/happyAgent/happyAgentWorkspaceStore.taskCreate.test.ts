@@ -1,6 +1,7 @@
 import type { DaemonConfig } from "@slopus/happy-agent-client";
 import { expect, it, vi } from "vitest";
 import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
+import { UserError } from "../types.js";
 import type { HappyAgentWorkspaceClient } from "./happyAgentClient.js";
 import {
     happyAgentModelStoreCreate,
@@ -207,6 +208,32 @@ it("uploads a Happy Cloud task's first file once the task exists, then sends it"
     expect(text).toBe("Read this");
     expect(images).toEqual([]);
     expect(files).toEqual([{ type: "file", attachment: "att_1", name: "notes.txt" }]);
+    unsubscribe();
+});
+
+it("puts up a Happy Cloud file that could not be downloaded, under its name and the reason", async () => {
+    const attachmentDownload = vi.fn(() =>
+        Promise.reject(new UserError("No such attachment.", "not_found")),
+    );
+    const { workspace, unsubscribe } = store(
+        () => new Promise(() => undefined),
+        undefined,
+        undefined,
+        {
+            attachmentDownload,
+        },
+    );
+    workspace.conversationOpen(TASK.conversation.id as HappyAgentSessionId, TASK.workspaceId);
+
+    await expect(workspace.attachmentDownload("digest", "notes ü.txt")).rejects.toThrow(
+        "No such attachment.",
+    );
+
+    expect(attachmentDownload).toHaveBeenCalledWith(TASK.conversation.id, "digest");
+    expect(workspace.get().fileOpenFailure).toEqual({
+        path: "notes ü.txt",
+        message: "No such attachment.",
+    });
     unsubscribe();
 });
 
