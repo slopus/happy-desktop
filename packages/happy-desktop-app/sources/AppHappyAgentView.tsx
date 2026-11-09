@@ -10504,10 +10504,11 @@ function HappyAgentConversationSurface(props: {
                 // behind the reader's sign-in, so it is fetched with it and saved.
                 const bytes =
                     attachment.attachmentKind === "file"
-                        ? workspace.attachmentDownload(attachment.source)
+                        ? workspace.attachmentDownload(attachment.source, attachment.name)
                         : undefined;
                 void bytes
                     ?.then((blob) => fileDownload(attachment.name, { type: "blob", blob }))
+                    // The store has already put the failure up beside the transcript.
                     .catch(() => undefined);
             }}
             onToolSelect={(entryId) => workspace.panel.previewOpen(entryId)}

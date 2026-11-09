@@ -1773,9 +1773,10 @@ export interface HappyAgentWorkspaceStore {
     attachmentFileOpen(source: string, kind: HappyAgentFileTabKind): boolean;
     /**
      * The bytes of a file the open Happy Cloud conversation names, by attachment
-     * ID; undefined where files are not kept by the server.
+     * ID; undefined where files are not kept by the server. A failure is also
+     * put up as `fileOpenFailure`, under the file's name.
      */
-    attachmentDownload(attachment: string): Promise<Blob> | undefined;
+    attachmentDownload(attachment: string, name: string): Promise<Blob> | undefined;
     /**
      * Opens one workspace file in the panel's viewer, beside the conversation
      * that named it. This is what a link in a message and the file a tool call
@@ -7973,8 +7974,17 @@ export function happyAgentWorkspaceStoreCreate(
         fileOpen: (groupId, path, kind, selection) =>
             fileTabOpen(groupId, path, kind, false, "main", selection),
         filePreprocess: (groupId, path, kind) => filePreprocessEnqueue(groupId, path, kind),
-        attachmentDownload: (attachment) =>
-            openId === undefined ? undefined : client.attachmentDownload?.(openId, attachment),
+        attachmentDownload: (attachment, name) => {
+            const download =
+                openId === undefined ? undefined : client.attachmentDownload?.(openId, attachment);
+            return download?.catch((error: unknown) => {
+                if (!disposed) {
+                    fileOpenFailure = { path: name, message: happyAgentUserError(error).message };
+                    recompute();
+                }
+                throw error;
+            });
+        },
         attachmentFileOpen: (source, kind) => {
             const resolved = groupPathResolve(source);
             if (!resolved) return false;
