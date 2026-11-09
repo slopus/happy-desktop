@@ -69,6 +69,7 @@ function store(
     taskCreate: (input: HappyAgentTaskCreateInput) => Promise<HappyAgentTaskCreation>,
     taskRename: (taskId: HappyAgentTaskId, name: string) => Promise<void> = () => Promise.resolve(),
     models?: HappyAgentModelStore,
+    overrides: Record<PropertyKey, unknown> = {},
 ) {
     const list = {
         projects: { type: "ready", value: [] },
@@ -110,6 +111,7 @@ function store(
             chat: () => new Promise(() => undefined),
             openInTargetsRead: () => new Promise(() => undefined),
             workspaceFilesSubscribe: () => () => undefined,
+            ...overrides,
         } as Record<PropertyKey, unknown>,
         { get: (target, property) => (property in target ? target[property] : inert()) },
     ) as unknown as HappyAgentWorkspaceClient;
@@ -148,6 +150,63 @@ it("opens a task draft of its own, and Create turns the window to the new task",
     });
     // Put down once made, so the next arrival starts a fresh draft.
     expect(workspace.get().taskCreate).toBeUndefined();
+    unsubscribe();
+});
+
+it("uploads a Happy Cloud task's first file once the task exists, then sends it", async () => {
+    const order: string[] = [];
+    const taskCreate = vi.fn(() => {
+        order.push("taskCreate");
+        return Promise.resolve({
+            taskId: "task_new" as HappyAgentTaskId,
+            location: {
+                groupId: "ws_new" as HappyAgentGroupId,
+                sessionId: "ses_new" as HappyAgentSessionId,
+            },
+        });
+    });
+    const attachmentUpload = vi.fn((agentId: string, attachment: { readonly name: string }) => {
+        order.push(`upload:${agentId}`);
+        return Promise.resolve({
+            type: "file" as const,
+            attachment: "att_1",
+            name: attachment.name,
+        });
+    });
+    let sent!: (args: unknown[]) => void;
+    const delivered = new Promise<unknown[]>((resolve) => (sent = resolve));
+    const messageSend = vi.fn((...args: unknown[]) => {
+        order.push("messageSend");
+        sent(args);
+        return Promise.resolve();
+    });
+    const { workspace, unsubscribe } = store(taskCreate, undefined, undefined, {
+        attachmentUpload,
+        attachmentSourcePath: () => undefined,
+        chat: () =>
+            Promise.resolve({
+                store: new Proxy({ messageSend } as Record<PropertyKey, unknown>, {
+                    get: (target, property) => (property in target ? target[property] : inert()),
+                }),
+                [Symbol.dispose]: () => undefined,
+            }),
+    });
+
+    workspace.taskCreateOpen();
+    workspace.taskCreateMessageUpdate("Read this");
+    workspace.taskCreateAttachmentsAdd([new File(["hello"], "notes.txt", { type: "text/plain" })]);
+    workspace.taskCreateMessageSend();
+
+    const [text, images, , files] = await delivered;
+    // Made first, so the upload has an agent to go to; sent last, naming it.
+    expect(order).toEqual(["taskCreate", "upload:ses_new", "messageSend"]);
+    expect(attachmentUpload).toHaveBeenCalledWith(
+        "ses_new",
+        expect.objectContaining({ name: "notes.txt", mediaType: "text/plain", size: 5 }),
+    );
+    expect(text).toBe("Read this");
+    expect(images).toEqual([]);
+    expect(files).toEqual([{ type: "file", attachment: "att_1", name: "notes.txt" }]);
     unsubscribe();
 });
 
