@@ -896,6 +896,18 @@ export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaul
 }
 
 /**
+ * Reapplies the current address when a connection's stores become available.
+ * Before RouterProvider supplies context, its initial load still owns that
+ * work: loading early would cache a failed chat loader with no directory.
+ */
+export function happyAgentRouterConnectionChanged(
+    router: HappyAgentRouter,
+): Promise<void> | undefined {
+    if (!router.options.context?.happyAgents) return;
+    return router.invalidate();
+}
+
+/**
  * Shows a Surface's shared chat beside it, at the conversation it is, or
  * hides it. The chat is found in the background; a reader who has moved
  * on by the time it answers stays where they went.

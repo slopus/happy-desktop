@@ -24,6 +24,7 @@ import {
     happyAgentRouterHappyLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
+    happyAgentRouterConnectionChanged,
     type AppHappyAgentDaemonStore,
     type AppHappyAgentUpdateStore,
     type AppHappyAgentReleaseNotesStore,
@@ -2011,7 +2012,7 @@ if (mediaPreviewBridge) {
                     .join(",");
                 if (current === materialized) return;
                 materialized = current;
-                void happyAgentRouter.invalidate();
+                void happyAgentRouterConnectionChanged(happyAgentRouter);
             }),
         );
         // What is waiting for the person is a fact about the whole window, not

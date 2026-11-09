@@ -65,6 +65,7 @@ export {
     happyAgentRouterGroupForget,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
+    happyAgentRouterConnectionChanged,
     type HappyAgentRouter,
     type HappyAgentRouterContext,
 } from "./navigation/happyAgentRouter";
