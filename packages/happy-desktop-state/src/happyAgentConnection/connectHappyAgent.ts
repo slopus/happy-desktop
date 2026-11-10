@@ -398,6 +398,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
     const draftRevisions = new Map<string, number>();
+    /**
+     * Per agent, the mode changes still out and the mode the server held
+     * before them, moved on by each one it accepts. Once the last one is
+     * settled after a refusal, the composer goes back to that mode, so it
+     * never shows a model the agent is not on.
+     */
+    const modeSaves = new Map<string, { pending: number; saved: MessageMode }>();
     const unhydratedDraftModes = new Set<string>();
     const unhydratedDraftSaves = new Map<string, DraftSave>();
     const pendingDraftSaves = new Map<string, PendingDraftSave>();
@@ -4575,6 +4582,43 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         draftSave(sessionId, pending);
     };
 
+    /**
+     * Counts one mode change settled, the server having stored `saved` when it
+     * accepted it. Answers the server's mode once nothing else is out.
+     */
+    const modeSaveSettle = (sessionId: string, saved?: MessageMode): MessageMode | undefined => {
+        const saves = modeSaves.get(sessionId);
+        if (saves === undefined) return undefined;
+        const next = { pending: saves.pending - 1, saved: saved ?? saves.saved };
+        if (next.pending > 0) {
+            modeSaves.set(sessionId, next);
+            return undefined;
+        }
+        modeSaves.delete(sessionId);
+        return next.saved;
+    };
+
+    /** Puts the composer back on the server's mode, keeping what was typed. */
+    const modeRestore = (sessionId: string, saved: MessageMode): void => {
+        intendedModes.delete(sessionId);
+        // Text typed meanwhile is still saved, but on the server's mode.
+        const onSaved = (draft: AgentDraftSnapshot): AgentDraftSnapshot =>
+            draft.value === null
+                ? draft
+                : { ...draft, value: { ...saved, text: draft.value.text } };
+        const pending = pendingDraftSaves.get(sessionId);
+        if (pending !== undefined)
+            pendingDraftSaves.set(sessionId, { ...pending, draft: onSaved(pending.draft) });
+        const held = heldDraftSaves.get(sessionId);
+        if (held !== undefined)
+            heldDraftSaves.set(sessionId, { ...held, draft: onSaved(held.draft) });
+        const draft = agentDrafts.get(sessionId);
+        if (draft?.value == null) return;
+        const { text, ...mode } = draft.value;
+        if (modesEqual(mode as MessageMode, saved)) return;
+        replaceDraft(sessionId, { ...draft, value: { ...saved, text } });
+    };
+
     const saveMode = (
         sessionId: string,
         action: Extract<
@@ -4599,7 +4643,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const previousMode = intendedModes.get(sessionId);
         const previousDraft =
             agentDrafts.get(sessionId) ?? ({ value: null, updatedAt: null } as const);
-        const mode = change(modeOf(config, previousDraft, agentModes.get(sessionId), previousMode));
+        const current = modeOf(config, previousDraft, agentModes.get(sessionId), previousMode);
+        const saves = modeSaves.get(sessionId) ?? { pending: 0, saved: current };
+        modeSaves.set(sessionId, { ...saves, pending: saves.pending + 1 });
+        const mode = change(current);
         const updatedAt = draftStampAfter(previousDraft, now());
         const draft: AgentDraftSnapshot = {
             value: { ...mode, text: previousDraft.value?.text ?? "" },
@@ -4625,17 +4672,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     { signal: deadlineSignal() },
                 ),
             ({ draft: saved }) => {
+                modeSaveSettle(sessionId, modeOf(config!, saved, agentModes.get(sessionId)));
                 if (draftRevisions.get(sessionId) !== revision) return;
                 draftRevisions.delete(sessionId);
                 intendedModes.delete(sessionId);
                 replaceDraft(sessionId, saved);
             },
             () => {
-                if (draftRevisions.get(sessionId) !== revision) return;
-                draftRevisions.delete(sessionId);
-                if (previousMode === undefined) intendedModes.delete(sessionId);
-                else intendedModes.set(sessionId, previousMode);
-                replaceDraft(sessionId, previousDraft);
+                const settled = modeSaveSettle(sessionId);
+                if (draftRevisions.get(sessionId) === revision) {
+                    draftRevisions.delete(sessionId);
+                    if (previousMode === undefined) intendedModes.delete(sessionId);
+                    else intendedModes.set(sessionId, previousMode);
+                    replaceDraft(sessionId, previousDraft);
+                }
+                // A refusal undone above may restore another change's refused
+                // mode, and one overtaken by typing is not undone at all; once
+                // nothing else is out, the server's mode is what stays.
+                if (settled !== undefined) modeRestore(sessionId, settled);
             },
             sessionId,
             `agent:${sessionId}`,
@@ -6159,6 +6213,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             sessions.clear();
             userSessions.clear();
             intendedModes.clear();
+            modeSaves.clear();
             agentModes.clear();
             modeRevisions.clear();
             pendingSwitchRevisions.clear();
