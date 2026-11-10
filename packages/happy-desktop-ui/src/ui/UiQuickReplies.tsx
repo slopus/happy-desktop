@@ -1,18 +1,9 @@
-import type { CSSProperties, ReactNode } from "react";
-import type { ConversationQuickReplies, ReplyProviderId } from "happy-desktop-state";
+import type { CSSProperties } from "react";
+import { replyUiNote, type ConversationQuickReplies } from "happy-desktop-state";
 import { AssistantMark } from "../AssistantMark";
 import type { ConversationQuickRepliesLayout } from "../conversationRowHeight";
 import { Ionicon } from "../vectorIcons/VectorIcon";
 import { uiProviderMark } from "./UiProviderSignInRow";
-
-/**
- * The live notes reply components wear, drawn by the conversation's owner
- * from its own stores: a provider option's "2 accounts". A note's text may
- * change; its room is reserved, so nothing moves when it does.
- */
-export type ChatUiReplyNotes = {
-    readonly provider?: (provider: ReplyProviderId) => ReactNode;
-};
 
 export type UiQuickRepliesProps = {
     readonly replies: ConversationQuickReplies;
@@ -27,14 +18,14 @@ export type UiQuickRepliesProps = {
      * no longer the newest one nobody has answered, the replies take no tap.
      */
     readonly onSend?: (index: number) => void;
-    readonly notes?: ChatUiReplyNotes;
     readonly className?: string;
     readonly style?: CSSProperties;
 };
 
 /**
- * Suggested replies: the agent's offer of what the person might say. They are
- * its output, so they stand on its text's edge, one under another, every pill
+ * Suggested replies: plain, static options the agent offered, drawn from what
+ * was stored with them and never from live state. They are its output, so
+ * they stand on its text's edge, one under another, every pill
  * as wide as the widest of the stack, in a fainter fill of the person's own
  * bubble. A tap sends the option at once. The option a person's message sent
  * (`chosen`, read back from its `quickReply`) takes the bubble's own fill and
@@ -42,11 +33,10 @@ export type UiQuickRepliesProps = {
  * nothing moves. The stack stays for good, and only the newest one nobody has
  * answered takes a tap.
  *
- * An option about an AI wears its mark before the words and, while the stack
- * takes a tap, a quiet line under them on how that AI stands now; the line
- * keeps its height whether or not it holds a note. Words wrap to two lines at
- * most, then ellipsize; each pill's height is the layout's, so neither a
- * choice nor a note moves anything.
+ * An option about an AI wears its mark before the words and, under them, the
+ * note its component was stored with. Words wrap to two lines at most, then
+ * ellipsize; each pill's height is the layout's. Once shown, only the chosen
+ * fill and tick change, and the stack stops taking taps.
  */
 export function UiQuickReplies(props: UiQuickRepliesProps) {
     const replies = props.replies;
@@ -68,10 +58,7 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
             >
                 {replies.options.map((option, index) => {
                     const about = replies.ui?.[index];
-                    const note =
-                        about && replies.live
-                            ? props.notes?.provider?.(about.props.provider)
-                            : null;
+                    const note = replyUiNote(about);
                     return (
                         <button
                             aria-pressed={replies.chosen === index}
@@ -98,9 +85,9 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                             ) : null}
                             <span className="happy-chat-replies__words">
                                 <span className="happy-chat-replies__label">{option}</span>
-                                {about ? (
+                                {note === undefined ? null : (
                                     <span className="happy-chat-replies__note">{note}</span>
-                                ) : null}
+                                )}
                             </span>
                             <span aria-hidden="true" className="happy-chat-replies__tick">
                                 <Ionicon name="checkmark" size={16} />

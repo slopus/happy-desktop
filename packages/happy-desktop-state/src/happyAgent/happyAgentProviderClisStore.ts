@@ -90,29 +90,6 @@ export function providerCliAccountsCount(count: number): string {
     return `${String(count)} account${count === 1 ? "" : "s"}`;
 }
 
-/**
- * The quiet note a quick reply about this AI wears, from its live state and
- * never from the model: "Not installed", "Not signed in", "1 account",
- * "N accounts". Nothing while the program hasn't been read yet.
- */
-export function providerCliReplyNote(cli: ProviderCli | undefined): string | undefined {
-    if (cli === undefined) return undefined;
-    if (cli.installation.status === "missing") return "Not installed";
-    const count = providerCliAccounts(cli).length;
-    if (count > 0) return providerCliAccountsCount(count);
-    return cli.signIn.status === "unknown" ? undefined : "Not signed in";
-}
-
-/**
- * The widest notes `providerCliReplyNote` can say, which a pill reserves room
- * for, so a note changing never changes its width.
- */
-export const PROVIDER_CLI_REPLY_NOTE_SAMPLES: readonly string[] = [
-    "Not installed",
-    "Not signed in",
-    providerCliAccountsCount(12),
-];
-
 export interface HappyAgentProviderClisStoreDeps {
     readonly client: Pick<
         HappyAgentClient,

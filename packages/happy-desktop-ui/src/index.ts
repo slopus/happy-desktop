@@ -596,11 +596,7 @@ export {
     type ChatSettingsFigureType,
 } from "./ChatActionFigures";
 export { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
-export {
-    UiQuickReplies,
-    type ChatUiReplyNotes,
-    type UiQuickRepliesProps,
-} from "./ui/UiQuickReplies";
+export { UiQuickReplies, type UiQuickRepliesProps } from "./ui/UiQuickReplies";
 export { UiFileTree, uiFileTreeNodes, type UiFileTreeProps } from "./ui/UiFileTree";
 export { UiMedia, uiMediaHeight, type UiMediaProps } from "./ui/UiMedia";
 export {

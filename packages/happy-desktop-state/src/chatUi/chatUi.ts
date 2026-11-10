@@ -83,6 +83,15 @@ export type ConversationQuickReplies = {
 /** One option's reply component as this build draws it: a known type, props checked. */
 export type ReplyUi = KnownReplyUi;
 
+/**
+ * The note a reply component carries under its words, frozen by the daemon
+ * when it stored the options: what the stack says for good, never a live
+ * reading. None until the contract carries `note`.
+ */
+export function replyUiNote(_ui: ReplyUi | null | undefined): string | undefined {
+    return undefined;
+}
+
 /** An AI whose program a reply option or a sign-in row is about. */
 export type ReplyProviderId = UiProvider;
 

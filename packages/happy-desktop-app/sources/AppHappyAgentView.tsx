@@ -10569,7 +10569,6 @@ function HappyAgentConversationSurface(props: {
         errors: conversation.uiErrors,
         granted: conversation.uiGranted,
         ...(extras.live ? { live: extras.live } : {}),
-        ...(extras.replyNotes ? { replyNotes: extras.replyNotes } : {}),
         ...(!props.readOnly && props.writeRefusal === undefined && props.unavailable === undefined
             ? {
                   onAction: (

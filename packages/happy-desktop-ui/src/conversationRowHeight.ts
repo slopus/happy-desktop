@@ -9,7 +9,7 @@ import {
     type ConversationMediaLayout,
     type ConversationRequest,
     type HappyReference,
-    PROVIDER_CLI_REPLY_NOTE_SAMPLES,
+    replyUiNote,
 } from "happy-desktop-state";
 import {
     conversationAgentRowStartsGroup,
@@ -695,10 +695,10 @@ export function messageContentMeasure(width: number, treatment: MessageTreatment
 }
 /*
  * `.happy-chat-replies`: 8px over and under the stack, pills 6px apart, each
- * 10px + one or two 22px lines of words + 10px tall; an option about an AI
- * adds its 18px note line under the words, kept whether or not a note is in
- * it. Across a pill: 12px padding either side, the 15px words, a 16px tick
- * 8px after them; an option about an AI adds its 16px mark 8px before them.
+ * 10px + one or two 22px lines of words + 10px tall; an option whose
+ * component carries a note adds its 18px note line under the words. Across a
+ * pill: 12px padding either side, the 15px words, a 16px tick 8px after
+ * them; an option about an AI adds its 16px mark 8px before them.
  */
 const REPLIES_PADDING = 8;
 const REPLY_GAP = 6;
@@ -719,13 +719,12 @@ export type ConversationQuickRepliesLayout = {
 };
 
 /**
- * Lays a suggestion out at the row's `width`, from its options' words alone:
- * every pill as wide as the widest one's words (or, for an option about an
- * AI, the widest note it could wear under them) with the tick's room, and no
- * wider than the person's own widest bubble. At that width an option's words
- * wrap to at most two lines, past which they ellipsize, and its pill is as
- * tall as its lines and note line. A reply chosen or a note changing moves
- * nothing.
+ * Lays a suggestion out at the row's `width`, from what it was stored with
+ * alone: every pill as wide as the widest one's words or note, with the
+ * tick's room, and no wider than the person's own widest bubble. At that
+ * width an option's words wrap to at most two lines, past which they
+ * ellipsize, and its pill is as tall as its lines and note line. Nothing in
+ * it changes once shown; a reply chosen only recolours a pill.
  */
 export function conversationQuickRepliesLayout(
     replies: ConversationQuickReplies,
@@ -733,10 +732,7 @@ export function conversationQuickRepliesLayout(
     cache?: MessageTextLayoutCache,
 ): ConversationQuickRepliesLayout {
     const about = (index: number) => (replies.ui?.[index] ?? null) !== null;
-    let noteWidth = 0;
-    if (replies.ui?.some((entry) => entry !== null))
-        for (const sample of PROVIDER_CLI_REPLY_NOTE_SAMPLES)
-            noteWidth = Math.max(noteWidth, uiTextNaturalWidth(sample, 13, cache));
+    const note = (index: number) => replyUiNote(replies.ui?.[index]);
     /* What an option keeps beside its words. */
     const chrome = (index: number) =>
         2 * REPLY_PADDING_X +
@@ -748,7 +744,10 @@ export function conversationQuickRepliesLayout(
         widest = Math.max(
             widest,
             chrome(index) +
-                Math.max(uiTextNaturalWidth(option, 15, cache), about(index) ? noteWidth : 0),
+                Math.max(
+                    uiTextNaturalWidth(option, 15, cache),
+                    uiTextNaturalWidth(note(index) ?? "", 13, cache),
+                ),
         );
     const cap = Math.floor((width - OWN_INSET) * BUBBLE_CAP);
     const pillWidth = Math.min(cap, Math.ceil(widest + 0.5));
@@ -759,7 +758,7 @@ export function conversationQuickRepliesLayout(
         return (
             2 * REPLY_PADDING_Y +
             Math.min(REPLY_LINES_MAX, Math.max(1, lines)) * REPLY_LINE +
-            (about(index) ? REPLY_NOTE_LINE : 0)
+            (note(index) === undefined ? 0 : REPLY_NOTE_LINE)
         );
     });
     const height =

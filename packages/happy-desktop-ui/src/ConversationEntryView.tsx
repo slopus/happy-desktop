@@ -60,7 +60,7 @@ import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { StoryQuote } from "./StoryQuote";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 import { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
-import { UiQuickReplies, type ChatUiReplyNotes } from "./ui/UiQuickReplies";
+import { UiQuickReplies } from "./ui/UiQuickReplies";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
 export type ConversationEntryFailureProps = ConversationFailureActions & {
@@ -96,8 +96,6 @@ export type ConversationChatUi = Omit<UiDocumentViewProps, "ui" | "onAction" | "
     readonly onMediaOpen?: (messageId: string, index: number) => void;
     /** Sends one suggested reply. Absent, the pills are drawn disabled. */
     readonly onQuickReply?: (replies: ConversationQuickReplies, index: number) => void;
-    /** The live notes reply components wear, from the owner's stores. Absent, none. */
-    readonly replyNotes?: ChatUiReplyNotes;
 };
 
 export type ConversationEntryViewProps = {
@@ -612,11 +610,9 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     if (entry.quickReplies) {
         const replies = entry.quickReplies;
         const send = props.chatUi?.onQuickReply;
-        const notes = props.chatUi?.replyNotes;
         return (
             <UiQuickReplies
                 {...(props.className === undefined ? {} : { className: props.className })}
-                {...(notes ? { notes } : {})}
                 {...(send ? { onSend: (index: number) => send(replies, index) } : {})}
                 {...(rowWidth === undefined
                     ? {}
@@ -804,13 +800,7 @@ function chatUiDocument(
     chatUi: ConversationChatUi | undefined,
     width: number | undefined,
 ): ReactNode {
-    const {
-        onAction,
-        onMediaOpen,
-        onQuickReply: _send,
-        replyNotes: _notes,
-        ...view
-    } = chatUi ?? {};
+    const { onAction, onMediaOpen, onQuickReply: _send, ...view } = chatUi ?? {};
     return (
         <UiDocumentView
             {...view}
