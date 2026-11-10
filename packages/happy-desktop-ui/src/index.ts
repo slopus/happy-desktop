@@ -596,9 +596,34 @@ export {
     type ChatSettingsFigureType,
 } from "./ChatActionFigures";
 export { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
-export { UiQuickReplies, type UiQuickRepliesProps } from "./ui/UiQuickReplies";
+export {
+    UiQuickReplies,
+    type UiQuickRepliesProps,
+    type UiQuickReplyDecoration,
+} from "./ui/UiQuickReplies";
 export { UiFileTree, uiFileTreeNodes, type UiFileTreeProps } from "./ui/UiFileTree";
-export { UiImages, type UiImagesProps } from "./ui/UiImages";
+export { UiImages, type UiImagesLayout, type UiImagesProps } from "./ui/UiImages";
+export {
+    UiComputeJoinRows,
+    UiDefaultModelRow,
+    UiFileTreeList,
+    UiGithubRow,
+    UiInviteRow,
+    UiPhoneAppCard,
+    UiPhonePairCard,
+    type UiFileTreeEntry,
+} from "./ui/UiCards";
+export {
+    UiAccountStack,
+    UiProviderAccountsList,
+    uiAccountsCount,
+    uiAccountsLine,
+    type UiProviderAccount,
+    type UiProviderAccounts,
+    type UiProviderAccountsActions,
+    type UiProviderKey,
+} from "./ui/UiProviderAccounts";
+export { UiRow, UiRows, type UiRowTone } from "./ui/UiRows";
 export { UiFallback } from "./ui/UiFallback";
 export { UiPhoneApp } from "./ui/UiPhoneApp";
 export {

@@ -129,9 +129,34 @@
     gap: 8px;
 }
 
+/* Every row's controls end on one edge, measured to the ink: an outlined
+   button's border, a quiet button's words or glyph. A quiet button drawn last
+   lends the row its own inset, so its words end where a border would. */
+.happy-chat-row__controls > .happy-button[data-variant="ghost"]:not([data-icon-only]):last-child {
+    margin-right: -10px;
+    padding-inline: 10px;
+}
+
+.happy-chat-row__controls > .happy-button[data-variant="ghost"][data-icon-only]:last-child,
+.happy-chat-row__controls > .happy-copy-button[data-captioned]:last-child {
+    margin-right: -10px;
+}
+
+/* A copy control in a row is always shown: it is the row's action, not a hover extra. */
+.happy-chat-row__controls > .happy-copy-button {
+    flex: none;
+    opacity: 1;
+}
+
+/* A code in a frame is flat: no tile or shadow of its own, only its quiet zone. */
+.happy-chat-rows .happy-qr-code {
+    border-radius: 0;
+    box-shadow: none;
+}
+
 .happy-chat-row__field {
     display: flex;
-    width: 168px;
+    width: 144px;
 }
 
 .happy-chat-row__field > * {
@@ -169,7 +194,6 @@
     font-weight: 700;
     line-height: 16px;
 }
-
 
 .happy-chat-accounts__one[data-tone="ocean"] {
     background: color-mix(in srgb, var(--radio-active) 18%, var(--surface));
@@ -219,4 +243,204 @@
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 20px;
+}
+
+/* A frame holding one thing larger than a row: a code or a picture on one
+   side, its words and controls on the other, 12px from every edge. */
+.happy-chat-card {
+    display: flex;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+    padding: 11px;
+    background: var(--surface);
+}
+
+.happy-chat-card__words {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    align-self: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-chat-card__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-chat-card__line {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-chat-card__line[data-tone="error"] {
+    color: var(--status-error);
+}
+
+.happy-chat-card__codes {
+    display: flex;
+    flex: none;
+    gap: 16px;
+}
+
+.happy-chat-card__code {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy-chat-card__code-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 16px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* The code, the emoji or the result: one square, whatever the step. */
+.happy-chat-card__visual {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 136px;
+    height: 136px;
+    border-radius: 6px;
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy-chat-card[data-step="code"] .happy-chat-card__visual {
+    background: none;
+}
+
+.happy-chat-card__side {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: space-between;
+    align-self: stretch;
+    gap: 12px;
+    min-width: 0;
+    padding: 4px 0 0;
+}
+
+.happy-chat-card__controls {
+    align-self: flex-end;
+}
+
+.happy-chat-card__emoji {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 12px;
+    width: 104px;
+    font-family: var(--happy-font-emoji);
+    font-size: 36px;
+    line-height: 48px;
+}
+
+.happy-chat-card__done {
+    display: flex;
+    color: var(--success);
+}
+
+/* The agent's places, quiet: 28px rows, 20px per level, a hairline guide per level. */
+.happy-chat-tree {
+    display: flex;
+    flex-direction: column;
+    padding: 7px 11px;
+    background: var(--surface);
+}
+
+.happy-chat-tree__row {
+    display: flex;
+    position: relative;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+/* Out of flow on purpose: a guide is a hairline under each level's column, not a child in the row's line. */
+.happy-chat-tree__guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--divider);
+}
+
+.happy-chat-tree__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy-chat-tree__name {
+    flex: none;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-tree__row[data-folder] .happy-chat-tree__name {
+    color: var(--text-secondary);
+}
+
+.happy-chat-tree__row[data-status="deleted"] .happy-chat-tree__name {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.happy-chat-tree__status {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-chat-tree__status[data-status="added"] {
+    background: var(--diff-added-bg);
+    color: var(--diff-added-text);
+}
+
+.happy-chat-tree__status[data-status="modified"] {
+    background: var(--surface-highest);
+    color: var(--text-secondary);
+}
+
+.happy-chat-tree__status[data-status="deleted"] {
+    background: var(--diff-removed-bg);
+    color: var(--diff-removed-text);
+}
+
+.happy-chat-tree__note {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

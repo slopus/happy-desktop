@@ -112,6 +112,14 @@ export function UiProviderAccountsList(
         readonly spinnerFrame?: number;
         /** Opens a row on its token field, for a still fixture. */
         readonly tokenOpen?: UiProviderKey;
+        /** Whether a signed-in provider offers another account; absent, it does. */
+        readonly accountsAddable?: boolean;
+        /**
+         * The account this component's own sign-in added, once it has. An
+         * iterative chat's step then says what it did and offers nothing more:
+         * the next step is the model's next question, not this row.
+         */
+        readonly settled?: UiProviderAccount;
     },
 ) {
     return (
@@ -119,6 +127,8 @@ export function UiProviderAccountsList(
             {props.providers.map((provider) => (
                 <UiProviderAccountRow
                     actions={props}
+                    addable={props.accountsAddable ?? true}
+                    {...(props.settled ? { settled: props.settled } : {})}
                     key={provider.provider}
                     provider={provider}
                     {...(props.spinnerFrame === undefined
@@ -133,6 +143,8 @@ export function UiProviderAccountsList(
 
 function UiProviderAccountRow(props: {
     readonly provider: UiProviderAccounts;
+    readonly addable: boolean;
+    readonly settled?: UiProviderAccount;
     readonly actions: UiProviderAccountsActions;
     readonly spinnerFrame?: number;
     readonly tokenOpen: boolean;
@@ -143,8 +155,20 @@ function UiProviderAccountRow(props: {
     const [tokenChosen, setTokenChosen] = useState(props.tokenOpen);
     const op = p.operation;
     const key = p.provider;
+    /* While a new account signs in, the line counts it: "Adding account 3 · …". */
+    const countedLine = (rest: string) =>
+        op?.kind === "sign_in" &&
+        op.status !== "failed" &&
+        op.account === "new" &&
+        p.accounts.length > 0
+            ? `Adding account ${String(p.accounts.length + 1)} · ${rest}`
+            : rest.charAt(0).toUpperCase() + rest.slice(1);
     const mark = <AssistantMark name={MARKS[key]} size={20} />;
-    const adding = op?.kind === "sign_in" && op.status !== "failed" && op.account === "new";
+    const adding =
+        props.settled === undefined &&
+        op?.kind === "sign_in" &&
+        op.status !== "failed" &&
+        op.account === "new";
     const beside = <UiAccountStack accounts={p.accounts} adding={adding} />;
     const spin = props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame };
     const cancel = (
@@ -183,6 +207,14 @@ function UiProviderAccountRow(props: {
             {...spin}
         />
     );
+
+    if (props.settled)
+        return row(
+            "settled",
+            [`Added ${props.settled.label}`, props.settled.plan].filter(Boolean).join(" · "),
+            "done",
+            null,
+        );
 
     if (tokenChosen && op?.status !== "running")
         return row(
@@ -231,13 +263,13 @@ function UiProviderAccountRow(props: {
         if (auth.acceptsCode)
             return row(
                 "code",
-                "Paste the code from the page",
+                countedLine("paste the code"),
                 "busy",
                 <>
                     <RowField
                         label="Code from the sign-in page"
                         onSend={(code) => a.onCode?.(key, code)}
-                        placeholder="Code"
+                        placeholder="Code from the page"
                         send="Continue"
                     />
                     {cancel}
@@ -247,7 +279,7 @@ function UiProviderAccountRow(props: {
             return row(
                 "device",
                 <>
-                    Enter <code>{auth.userCode}</code> on {p.name}'s page
+                    Enter <code>{auth.userCode}</code> on {`${p.name}'s page`}
                 </>,
                 "busy",
                 <>
@@ -258,7 +290,7 @@ function UiProviderAccountRow(props: {
             );
         return row(
             "browser",
-            "Finish signing in in your browser",
+            countedLine("finish in your browser"),
             "busy",
             <>
                 {useToken}
@@ -303,12 +335,13 @@ function UiProviderAccountRow(props: {
             </Button>,
         );
 
-    const signedIn = p.accounts.filter((account) => account.signIn !== "signed_out");
     const lapsed = p.accounts.find((account) => account.signIn === "signed_out");
     if (lapsed)
         return row(
             "lapsed",
-            `${lapsed.label} needs to sign in again`,
+            p.accounts.length > 1
+                ? `${uiAccountsCount(p.accounts)} · ${lapsed.label} needs to sign in again`
+                : `${lapsed.label} needs to sign in again`,
             "quiet",
             <Button
                 disabled={a.onSignIn === undefined}
@@ -319,7 +352,7 @@ function UiProviderAccountRow(props: {
                 Sign in again
             </Button>,
         );
-    if (signedIn.length === 0)
+    if (p.accounts.length === 0)
         return row(
             "signed-out",
             "Not signed in",
@@ -333,23 +366,38 @@ function UiProviderAccountRow(props: {
                 Sign in
             </Button>,
         );
-    const first = signedIn[0]!;
     return row(
         "connected",
-        signedIn.length === 1
-            ? [first.label, first.plan].filter(Boolean).join(" · ")
-            : signedIn.map((account) => account.label).join(", "),
+        uiAccountsLine(p.accounts),
         "done",
-        <Button
-            disabled={a.onSignIn === undefined}
-            icon="plus"
-            onClick={() => a.onSignIn?.(key, "new")}
-            size="medium"
-            variant="ghost"
-        >
-            Add account
-        </Button>,
+        props.addable ? (
+            <Button
+                disabled={a.onSignIn === undefined}
+                icon="plus"
+                onClick={() => a.onSignIn?.(key, "new")}
+                size="medium"
+                variant="ghost"
+            >
+                Add account
+            </Button>
+        ) : null,
     );
+}
+
+/**
+ * How many accounts a provider has, in words: one is its email and plan; more
+ * are "2 accounts · ada@example.com +1". Signed-out accounts still count.
+ */
+export function uiAccountsLine(accounts: readonly UiProviderAccount[]): string {
+    const first = accounts[0];
+    if (first === undefined) return "Not signed in";
+    if (accounts.length === 1) return [first.label, first.plan].filter(Boolean).join(" · ");
+    return `${uiAccountsCount(accounts)} · ${first.label} +${String(accounts.length - 1)}`;
+}
+
+/** "1 account", "2 accounts". */
+export function uiAccountsCount(accounts: readonly UiProviderAccount[]): string {
+    return `${String(accounts.length)} account${accounts.length === 1 ? "" : "s"}`;
 }
 
 const TONES = ["ocean", "mint", "ember"] as const;
@@ -385,7 +433,7 @@ export function UiAccountStack(props: {
             ))}
             {props.adding ? (
                 <span className="happy-chat-accounts__one" data-adding="" title="Adding an account">
-                    <Ionicon name="add" size={10} />
+                    <Ionicon name="add-outline" size={10} />
                 </span>
             ) : null}
             {more > 0 ? (

@@ -62,47 +62,36 @@
 /* The live pairing: one box for the code, the emoji and the result alike,
    on the reply's left edge like every block. */
 .happy-chat-action__phone-pair {
-    width: 360px;
+    width: 640px;
     max-width: 100%;
     height: var(--happy-chat-phone-pair-height);
 }
 
 :root {
-    /* The code at 204px, and the four emoji with their answer, fill one height. */
-    --happy-chat-phone-pair-height: 204px;
+    /* The pairing card: 136px code, emoji or result, 12px inside a 1px frame. */
+    --happy-chat-phone-pair-height: 162px;
 }
 
 /* A live figure: one fixed box for every state of what it draws, so a CLI
    going from missing to signed in, or a setting being saved, moves nothing.
 
-     provider CLI  24 head · 4 · 40 line (two lines at most) · 8 · 36 controls = 112
-     setting       24 head · 8 · 36 controls · 8 · 20 line                    =  96
-     invite        24 head · 8 · 36 controls · 8 · 20 line                    =  96
-     compute join  invite · 8 · 60 machines (three 20px rows, then scrolling)  = 164
+     one row       1 frame · 58 row · 1 frame (`chat-ui-rows.css`)            =  60
+                   provider sign-in, default model, invite, GitHub, compute join
      settings      24 head · 4 · 20 line · 8 · 36 controls                    =  92 */
 .happy-chat-action__figure {
-    width: 560px;
+    width: 640px;
     max-width: 100%;
 }
 
-.happy-chat-action__figure[data-figure="provider-cli"] {
-    height: 112px;
-}
-
-.happy-chat-action__figure[data-figure="setting"] {
-    height: 96px;
+.happy-chat-action__figure[data-figure="provider-cli"],
+.happy-chat-action__figure[data-figure="setting"],
+.happy-chat-action__figure[data-figure="compute-join"],
+.happy-chat-action__figure[data-figure="invite"] {
+    height: 60px;
 }
 
 .happy-chat-action__figure[data-figure="settings"] {
     height: 92px;
-}
-
-.happy-chat-action__figure[data-figure="compute-join"] {
-    height: 164px;
-}
-
-.happy-chat-action__figure[data-figure="invite"] {
-    height: 96px;
 }
 
 .happy-chat-figure {

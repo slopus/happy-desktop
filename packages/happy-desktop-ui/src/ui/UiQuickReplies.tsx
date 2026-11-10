@@ -54,29 +54,30 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                 {replies.options.map((option, index) => {
                     const decoration = props.decorations?.[index];
                     return (
-                    <button
-                        aria-pressed={replies.chosen === index}
-                        className="happy-chat-replies__reply"
-                        data-chosen={replies.chosen === index ? "" : undefined}
-                        disabled={send === undefined}
-                        key={`${String(index)}:${option}`}
-                        onClick={() => send?.(index)}
-                        title={option}
-                        type="button"
-                    >
-                        {decoration?.mark ? (
-                            <span aria-hidden="true" className="happy-chat-replies__mark">
-                                <AssistantMark name={decoration.mark} size={16} />
+                        <button
+                            aria-pressed={replies.chosen === index}
+                            className="happy-chat-replies__reply"
+                            data-chosen={replies.chosen === index ? "" : undefined}
+                            disabled={send === undefined}
+                            key={`${String(index)}:${option}`}
+                            onClick={() => send?.(index)}
+                            title={option}
+                            type="button"
+                        >
+                            {decoration?.mark ? (
+                                <span aria-hidden="true" className="happy-chat-replies__mark">
+                                    <AssistantMark name={decoration.mark} size={16} />
+                                </span>
+                            ) : null}
+                            <span className="happy-chat-replies__label">{option}</span>
+                            {/* A note says how things are now; an answered stack keeps only its marks. */}
+                            {decoration?.note && replies.live ? (
+                                <span className="happy-chat-replies__note">{decoration.note}</span>
+                            ) : null}
+                            <span aria-hidden="true" className="happy-chat-replies__tick">
+                                <Ionicon name="checkmark" size={16} />
                             </span>
-                        ) : null}
-                        <span className="happy-chat-replies__label">{option}</span>
-                        {decoration?.note ? (
-                            <span className="happy-chat-replies__note">{decoration.note}</span>
-                        ) : null}
-                        <span aria-hidden="true" className="happy-chat-replies__tick">
-                            <Ionicon name="checkmark" size={16} />
-                        </span>
-                    </button>
+                        </button>
                     );
                 })}
             </div>

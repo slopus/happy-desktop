@@ -61,8 +61,12 @@ export function UiRow(props: {
                     {tone === "quiet" ? null : (
                         <span className="happy-chat-row__line-mark">
                             {tone === "busy" ? (
+                                /* The arc, not the braille cell: at 14px in a line of words
+                                   a braille cell reads as one more character. */
                                 <Spinner
                                     size={14}
+                                    tone="muted"
+                                    variant="arc"
                                     {...(props.spinnerFrame === undefined
                                         ? {}
                                         : { frame: props.spinnerFrame })}
@@ -77,7 +81,9 @@ export function UiRow(props: {
                     <span className="happy-chat-row__line-text">{props.line}</span>
                 </span>
             </span>
-            {props.controls ? <span className="happy-chat-row__controls">{props.controls}</span> : null}
+            {props.controls ? (
+                <span className="happy-chat-row__controls">{props.controls}</span>
+            ) : null}
         </div>
     );
 }

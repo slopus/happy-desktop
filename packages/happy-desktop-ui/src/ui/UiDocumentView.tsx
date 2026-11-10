@@ -12,9 +12,8 @@ import {
 import { ChatSettingsFigure } from "../ChatActionFigures";
 import { messageTextLayoutFontGenerationGet } from "../messageTextLayout";
 import { UiFallback } from "./UiFallback";
-import { UiFileTree } from "./UiFileTree";
-import { UiImages } from "./UiImages";
-import { UiPhoneApp } from "./UiPhoneApp";
+import { UiFileTreeList, UiPhoneAppCard, type UiFileTreeEntry } from "./UiCards";
+import { UiImages, type UiImagesLayout } from "./UiImages";
 import { chatUiLiveType, type ChatUiLive, type UiWidgetControl } from "./UiWidgetControl";
 
 export type UiDocumentViewProps = {
@@ -116,28 +115,44 @@ function UiComponentView(props: {
         return <LiveBox type={component.type}>{draw(component, control)}</LiveBox>;
     }
     switch (component.type) {
-        case "images":
+        case "images": {
+            const shown = component.props.images.filter(
+                (image) => ui.media[image.mediaIndex] !== undefined,
+            );
+            /* PROTOTYPE: `layout` is the proposed prop; today's documents carry `columns` only. */
+            const layout = (component.props as { readonly layout?: UiImagesLayout }).layout;
             return (
                 <UiImages
+                    captions={shown.map((image) => image.caption)}
                     {...(component.props.columns ? { columns: component.props.columns } : {})}
-                    items={component.props.images.flatMap((image) => {
-                        const item = ui.media[image.mediaIndex];
-                        return item ? [image.alt ? { ...item, name: image.alt } : item] : [];
+                    items={shown.map((image) => {
+                        const item = ui.media[image.mediaIndex]!;
+                        return image.alt ? { ...item, name: image.alt } : item;
                     })}
+                    {...(layout ? { layout } : {})}
                     {...(view.onMediaOpen
                         ? {
                               onItemOpen: (index: number) => {
-                                  const image = component.props.images[index];
+                                  const image = shown[index];
                                   if (image) view.onMediaOpen?.(image.mediaIndex);
                               },
                           }
                         : {})}
                 />
             );
-        case "file_tree":
-            return <UiFileTree paths={component.props.paths} />;
+        }
+        case "file_tree": {
+            /* PROTOTYPE: `entries` (a path with a note and a status) is the proposed prop. */
+            const entries = (component.props as { readonly entries?: readonly UiFileTreeEntry[] })
+                .entries;
+            return (
+                <UiFileTreeList
+                    entries={entries ?? component.props.paths.map((path) => ({ path }))}
+                />
+            );
+        }
         case "phone_app":
-            return <UiPhoneApp />;
+            return <UiPhoneAppCard />;
         case "server_link":
             return (
                 <LiveBox type="server_link">

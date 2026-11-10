@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { ConversationQuickReplies } from "happy-desktop-state";
 import { Message } from "../../src/Message";
 import {
+    uiAccountsCount,
     UiProviderAccountsList,
     uiProviderMark,
     type UiProviderAccounts,
@@ -27,7 +28,7 @@ import {
  */
 export const componentNumber = "C-338x";
 
-const STILL = 2;
+const STILL = 0;
 
 /** One direction's chat, at the width a reply has in Happy's default window. */
 const SCREEN = { width: 760, height: 500 } as const;
@@ -112,20 +113,22 @@ export function Person(props: { readonly body: string; readonly suggested?: bool
 export function providerOption(
     provider: UiProviderAccounts,
 ): UiQuickReplyDecoration & { readonly provider: UiProviderAccounts } {
-    const count = provider.accounts.filter((account) => account.signIn !== "signed_out").length;
     return {
         provider,
         mark: uiProviderMark(provider.provider),
         note: !provider.installed
             ? "Not installed"
-            : count === 0
+            : provider.accounts.length === 0
               ? "Not signed in"
-              : `${String(count)} account${count === 1 ? "" : "s"}`,
+              : uiAccountsCount(provider.accounts),
     };
 }
 
 export function Replies(props: {
-    readonly options: readonly (string | { readonly text: string; readonly about: UiProviderAccounts })[];
+    readonly options: readonly (
+        | string
+        | { readonly text: string; readonly about: UiProviderAccounts }
+    )[];
     readonly chosen?: number;
 }) {
     const replies: ConversationQuickReplies = {
@@ -146,14 +149,24 @@ export function Replies(props: {
     );
 }
 
-const live = { onSignIn: () => undefined, onCode: () => undefined, onToken: () => undefined, onCancel: () => undefined, onPageOpen: () => undefined };
+const live = {
+    onSignIn: () => undefined,
+    onCode: () => undefined,
+    onToken: () => undefined,
+    onCancel: () => undefined,
+    onPageOpen: () => undefined,
+};
 
 /** Direction A in one state: the whole component under the agent's one sentence. */
 function DirectionA(props: { readonly providers: readonly UiProviderAccounts[] }) {
     return (
         <ChatColumn title="A · All in one">
             <Agent body="Connect the AIs you want me to work with. You can add more accounts any time.">
-                <UiProviderAccountsList providers={props.providers} spinnerFrame={STILL} {...live} />
+                <UiProviderAccountsList
+                    providers={props.providers}
+                    spinnerFrame={STILL}
+                    {...live}
+                />
             </Agent>
         </ChatColumn>
     );
@@ -190,7 +203,11 @@ const DIRECTION_B: Readonly<Record<(typeof SIGN_IN_STATES)[number]["id"], () => 
         <>
             <Person body="Add another Claude Code account" suggested />
             <Agent body="Finish in your browser — I'll carry on as soon as Claude says yes.">
-                <UiProviderAccountsList providers={[CLAUDE_TWO_ADDING]} spinnerFrame={STILL} {...live} />
+                <UiProviderAccountsList
+                    providers={[CLAUDE_TWO_ADDING]}
+                    spinnerFrame={STILL}
+                    {...live}
+                />
             </Agent>
         </>
     ),
@@ -198,7 +215,11 @@ const DIRECTION_B: Readonly<Record<(typeof SIGN_IN_STATES)[number]["id"], () => 
         <>
             <Person body="Add another Claude Code account" suggested />
             <Agent body="Claude's page shows a code when you approve. Paste it here.">
-                <UiProviderAccountsList providers={[CLAUDE_TWO_CODE]} spinnerFrame={STILL} {...live} />
+                <UiProviderAccountsList
+                    providers={[CLAUDE_TWO_CODE]}
+                    spinnerFrame={STILL}
+                    {...live}
+                />
             </Agent>
         </>
     ),
@@ -206,7 +227,11 @@ const DIRECTION_B: Readonly<Record<(typeof SIGN_IN_STATES)[number]["id"], () => 
         <>
             <Person body="Add another Claude Code account" suggested />
             <Agent body="That sign-in didn't finish. Try again, or use a setup token instead.">
-                <UiProviderAccountsList providers={[CLAUDE_TWO_FAILED]} spinnerFrame={STILL} {...live} />
+                <UiProviderAccountsList
+                    providers={[CLAUDE_TWO_FAILED]}
+                    spinnerFrame={STILL}
+                    {...live}
+                />
             </Agent>
         </>
     ),

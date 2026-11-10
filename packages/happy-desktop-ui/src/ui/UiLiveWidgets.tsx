@@ -1,25 +1,20 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
     UserError,
     type HappyAgentDefaultModelSelection,
     type HappyAgentDefaultModelSnapshot,
     type ProviderCli,
 } from "happy-desktop-state";
-import { Button } from "../Button";
+import { ChatSettingsFigure, type ChatInviteFigureProps } from "../ChatActionFigures";
+import type { MobileDirectConnectorState } from "../MobileDirectConnection";
 import {
-    ChatDefaultModelFigure,
-    ChatInviteFigure,
-    ChatProviderCliFigure,
-    ChatSettingsFigure,
-    type ChatInviteFigureProps,
-} from "../ChatActionFigures";
-import { CopyButton } from "../CopyButton";
-import {
-    MobileDirectPairingPanel,
-    type MobileDirectConnectorState,
-} from "../MobileDirectConnection";
-import { Spinner } from "../Spinner";
-import { Ionicon } from "../vectorIcons/VectorIcon";
+    UiComputeJoinRows,
+    UiDefaultModelRow,
+    UiGithubRow,
+    UiInviteRow,
+    UiPhonePairCard,
+} from "./UiCards";
+import { UiProviderAccountsList, type UiProviderAccounts } from "./UiProviderAccounts";
 import { uiWidgetSend, type UiWidgetControl } from "./UiWidgetControl";
 
 /*
@@ -33,7 +28,7 @@ import { uiWidgetSend, type UiWidgetControl } from "./UiWidgetControl";
 const busyOf = (control: UiWidgetControl): boolean =>
     control.pending !== undefined || control.attempt?.outcome.status === "pending";
 
-/** `provider_sign_in`: one AI's install and sign-in, from the server's provider CLI state. */
+/** `provider_sign_in`: one AI's install and sign-in, from the server's provider CLI state, as one row. */
 export function UiProviderSignIn(props: {
     readonly provider: string;
     /** The program as the server last described it; absent until read. */
@@ -48,41 +43,145 @@ export function UiProviderSignIn(props: {
     const control = props.control;
     if (props.unsupported) return <ChatSettingsFigure type="providers" />;
     const live = control.act !== undefined;
-    const may = (type: string) => (live && control.allowed(type) ? true : undefined);
+    const may = (type: string) => live && control.allowed(type);
+    const cli = props.cli;
+    const missing = cli?.installation.status === "missing";
     return (
-        <ChatProviderCliFigure
-            cliId={props.provider}
-            {...(props.cli ? { cli: props.cli } : {})}
-            {...(control.error ? { error: control.error } : {})}
-            {...(may("provider_sign_in.install")
-                ? { onInstall: () => void uiWidgetSend(control, "provider_sign_in.install") }
-                : {})}
-            {...(may("provider_sign_in.sign_in")
-                ? {
-                      onSignIn: () => void uiWidgetSend(control, "provider_sign_in.sign_in"),
-                      onUse: () => void uiWidgetSend(control, "provider_sign_in.sign_in"),
-                  }
+        <UiProviderAccountsList
+            /* Today's daemon signs one account in per program: a second sign-in replaces it. */
+            accountsAddable={false}
+            {...(may("provider_sign_in.cancel")
+                ? { onCancel: () => void uiWidgetSend(control, "provider_sign_in.cancel") }
                 : {})}
             {...(may("provider_sign_in.submit_code")
                 ? {
-                      onCodeSend: (code: string) =>
+                      onCode: (_provider: string, code: string) =>
                           void uiWidgetSend(control, "provider_sign_in.submit_code", { code }),
+                  }
+                : {})}
+            {...(props.onPageOpen ? { onPageOpen: props.onPageOpen } : {})}
+            {...(may(missing ? "provider_sign_in.install" : "provider_sign_in.sign_in")
+                ? {
+                      onSignIn: () =>
+                          void uiWidgetSend(
+                              control,
+                              missing ? "provider_sign_in.install" : "provider_sign_in.sign_in",
+                          ),
                   }
                 : {})}
             {...(may("provider_sign_in.submit_token")
                 ? {
-                      onTokenSend: (token: string) =>
+                      onToken: (_provider: string, token: string) =>
                           void uiWidgetSend(control, "provider_sign_in.submit_token", { token }),
                   }
                 : {})}
-            {...(may("provider_sign_in.cancel")
-                ? { onCancel: () => void uiWidgetSend(control, "provider_sign_in.cancel") }
-                : {})}
-            {...(props.onPageOpen ? { onPageOpen: props.onPageOpen } : {})}
-            requesting={busyOf(control)}
+            providers={[
+                uiProviderAccountsFromCli(props.provider, cli, busyOf(control), control.error),
+            ]}
             {...(props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame })}
         />
     );
+}
+
+const CLI_NAMES: Readonly<Record<string, string>> = {
+    claude: "Claude Code",
+    codex: "Codex",
+    grok: "Grok",
+    antigravity: "Antigravity",
+};
+
+/**
+ * Today's provider CLI object as the accounts row draws it: its one sign-in
+ * as one account, its operation as the row's operation, and a click on its
+ * way or a refusal over both.
+ */
+export function uiProviderAccountsFromCli(
+    provider: string,
+    cli: ProviderCli | undefined,
+    requesting: boolean,
+    error: string | undefined,
+): UiProviderAccounts {
+    const key =
+        (["claude", "codex", "grok", "antigravity"] as const).find((id) => id === provider) ??
+        "codex";
+    const name = cli?.name ?? CLI_NAMES[provider] ?? provider;
+    const account = cli?.signIn.status === "signed_in" ? cli.signIn.account : null;
+    const operation = cli?.operation;
+    const base = {
+        provider: key,
+        name,
+        installed: cli?.installation.status !== "missing",
+        ...(cli?.installer ? { installerHost: cli.installer.sourceHost } : {}),
+        accounts:
+            cli?.signIn.status === "signed_in"
+                ? [
+                      {
+                          id: cli.providerId ?? cli.id,
+                          label: account?.email ?? "Signed in",
+                          ...(account?.plan ? { plan: account.plan } : {}),
+                          signIn: "signed_in" as const,
+                      },
+                  ]
+                : [],
+    };
+    if (error) return { ...base, operation: { kind: "sign_in", status: "failed", message: error } };
+    if (!cli)
+        return {
+            ...base,
+            operation: {
+                kind: "sign_in",
+                account: "new",
+                status: "running",
+                message: `Checking ${name} on this computer…`,
+            },
+        };
+    if (operation?.status === "waiting" && operation.authorization)
+        return {
+            ...base,
+            operation: {
+                kind: "sign_in",
+                account: "new",
+                status: "waiting",
+                authorization: {
+                    url: operation.authorization.url,
+                    ...(operation.authorization.userCode
+                        ? { userCode: operation.authorization.userCode }
+                        : {}),
+                    acceptsCode: operation.authorization.acceptsCode,
+                    openedByProgram: operation.authorization.openedByProgram,
+                },
+            },
+        };
+    if (operation?.status === "running" || operation?.status === "waiting")
+        return operation.kind === "install"
+            ? {
+                  ...base,
+                  operation: { kind: "install", status: "running", message: operation.message },
+              }
+            : {
+                  ...base,
+                  operation: {
+                      kind: "sign_in",
+                      account: "new",
+                      status: "running",
+                      message: operation.message,
+                  },
+              };
+    if (operation?.status === "failed")
+        return {
+            ...base,
+            operation: {
+                kind: operation.kind,
+                status: "failed",
+                message: operation.error?.message ?? operation.message,
+            },
+        };
+    if (requesting)
+        return {
+            ...base,
+            operation: { kind: "sign_in", account: "new", status: "running", message: "Starting…" },
+        };
+    return base;
 }
 
 /** `default_model`: the model new chats start on, changed with `default_model.set`. */
@@ -95,7 +194,7 @@ export function UiDefaultModel(props: {
     const pending = control.pending?.payload as HappyAgentDefaultModelSelection | undefined;
     const usable = control.act !== undefined && control.allowed("default_model.set");
     return (
-        <ChatDefaultModelFigure
+        <UiDefaultModelRow
             {...(usable
                 ? {
                       onChange: (selection: HappyAgentDefaultModelSelection) => {
@@ -155,18 +254,22 @@ export function UiPhonePair(props: {
     const busy = control.pending?.type;
     const pairingId = pairing?.id;
     return (
-        <MobileDirectPairingPanel
-            cancelling={busy === "phone_pair.cancel"}
-            codeSize={204}
-            confirming={busy === "phone_pair.confirm"}
+        <UiPhonePairCard
+            {...(busy === "phone_pair.start"
+                ? { busy: "start" as const }
+                : busy === "phone_pair.confirm"
+                  ? { busy: "confirm" as const }
+                  : busy === "phone_pair.cancel"
+                    ? { busy: "cancel" as const }
+                    : {})}
             connector={shown}
-            density="compact"
+            {...(control.error ? { error: control.error } : {})}
             now={props.now}
+            onCancel={() => {
+                if (pairingId) void uiWidgetSend(control, "phone_pair.cancel", { pairingId });
+            }}
             onConfirm={() => {
                 if (pairingId) void uiWidgetSend(control, "phone_pair.confirm", { pairingId });
-            }}
-            onReject={() => {
-                if (pairingId) void uiWidgetSend(control, "phone_pair.cancel", { pairingId });
             }}
             onStart={() => {
                 void uiWidgetSend(control, "phone_pair.start").then((response) => {
@@ -178,11 +281,10 @@ export function UiPhonePair(props: {
                         setStarted({ pairingId: result["pairingId"], pairing: result["pairing"] });
                 });
             }}
-            starting={busy === "phone_pair.start"}
+            {...(ours ? { qr: started.pairing } : {})}
             {...(control.act === undefined || !control.allowed("phone_pair.start")
                 ? { unavailable: "Only this computer's owner can pair a phone here." }
                 : {})}
-            {...(control.error ? { actionError: control.error } : {})}
         />
     );
 }
@@ -212,7 +314,7 @@ export function UiInvite(props: {
     const control = props.control;
     const manage = control.allowed("invite.create");
     return (
-        <ChatInviteFigure
+        <UiInviteRow
             {...props.figure}
             creating={control.pending?.type === "invite.create"}
             {...(created ? { created } : {})}
@@ -268,67 +370,25 @@ export function UiGithubConnect(props: {
     const control = props.control;
     const usable = control.act !== undefined && control.allowed("github_connect.device_start");
     const busy = busyOf(control);
-    const connected = props.connectedAs !== undefined;
-    const line = connected
-        ? `GitHub connected as ${props.connectedAs}.`
-        : (control.error ??
-          (device
-              ? "Enter this code on GitHub. Happy notices when you've approved it."
-              : usable
-                ? "Link your GitHub account so agents can work with your repositories."
-                : "You can't link GitHub from here."));
     return (
-        <UiFigure
-            done={connected}
-            error={!connected && control.error !== undefined}
-            line={line}
-            title="Connect GitHub"
-        >
-            {connected ? null : device ? (
-                <>
-                    <span className="happy-chat-figure__invite-code">{device.userCode}</span>
-                    <CopyButton
-                        caption="Copy"
-                        label="Copy the GitHub code"
-                        text={device.userCode}
-                    />
-                    <Button
-                        disabled={props.onPageOpen === undefined}
-                        onClick={() => props.onPageOpen?.(device.uri)}
-                        size="medium"
-                        variant="outline"
-                    >
-                        Open GitHub
-                    </Button>
-                </>
-            ) : (
-                <Button
-                    data-emphasis=""
-                    data-strong=""
-                    disabled={!usable || busy}
-                    loading={busy}
-                    onClick={() => {
-                        void uiWidgetSend(control, "github_connect.device_start").then(
-                            (response) => {
-                                const result = response?.result;
-                                if (
-                                    typeof result?.["userCode"] === "string" &&
-                                    typeof result["verificationUri"] === "string"
-                                )
-                                    setDevice({
-                                        userCode: result["userCode"],
-                                        uri: result["verificationUri"],
-                                    });
-                            },
-                        );
-                    }}
-                    size="medium"
-                    variant="outline"
-                >
-                    Link GitHub
-                </Button>
-            )}
-        </UiFigure>
+        <UiGithubRow
+            busy={busy}
+            {...(props.connectedAs !== undefined ? { connectedAs: props.connectedAs } : {})}
+            {...(device ? { device } : {})}
+            {...(control.error ? { error: control.error } : {})}
+            onStart={() => {
+                void uiWidgetSend(control, "github_connect.device_start").then((response) => {
+                    const result = response?.result;
+                    if (
+                        typeof result?.["userCode"] === "string" &&
+                        typeof result["verificationUri"] === "string"
+                    )
+                        setDevice({ userCode: result["userCode"], uri: result["verificationUri"] });
+                });
+            }}
+            {...(props.onPageOpen ? { onPageOpen: props.onPageOpen } : {})}
+            usable={usable}
+        />
     );
 }
 
@@ -363,131 +423,22 @@ export function UiComputeJoin(props: {
     const control = props.control;
     const usable = control.act !== undefined && control.allowed("compute_join.create");
     const busy = busyOf(control);
-    const poolName = props.machines?.name ?? props.pool;
-    const line =
-        control.error ??
-        (commands
-            ? "Run this on the machine to add it. It works once, for a short while."
-            : usable
-              ? `Add a machine${poolName ? ` to ${poolName}` : ""} so agents can work on it.`
-              : "Owners and admins add machines here.");
-    const machines = props.machines;
+    const poolName = props.machines?.name ?? props.pool ?? "Add a computer";
     return (
-        <UiFigure
-            error={control.error !== undefined}
-            footer={
-                machines ? (
-                    <div
-                        className="happy-chat-figure__machines"
-                        data-happy-desktop-ui="chat-ui-compute-machines"
-                        role="list"
-                    >
-                        {machines.machines.length > 0 ? (
-                            machines.machines.map((machine) => (
-                                <span
-                                    className="happy-chat-figure__machine"
-                                    data-status={machine.status}
-                                    key={machine.id}
-                                    role="listitem"
-                                >
-                                    <span className="happy-chat-figure__mark">
-                                        <Ionicon name="desktop-outline" size={14} />
-                                    </span>
-                                    <span className="happy-chat-figure__text">{`${machine.name} · ${machine.status}`}</span>
-                                </span>
-                            ))
-                        ) : (
-                            <span className="happy-chat-figure__machine" data-empty="">
-                                {machines.error ??
-                                    (machines.loading
-                                        ? "Reading the pool's machines…"
-                                        : "No machines yet")}
-                            </span>
-                        )}
-                    </div>
-                ) : undefined
-            }
-            line={line}
-            title={poolName ?? "Add a computer"}
-        >
-            {commands ? (
-                <>
-                    <code className="happy-chat-figure__command" title={commands[0]}>
-                        {commands[0]}
-                    </code>
-                    <CopyButton
-                        caption="Copy"
-                        label="Copy the join commands"
-                        text={commands.join("\n")}
-                    />
-                </>
-            ) : (
-                <Button
-                    data-emphasis=""
-                    data-strong=""
-                    disabled={!usable || busy}
-                    loading={busy}
-                    onClick={() => {
-                        void uiWidgetSend(control, "compute_join.create").then((response) => {
-                            const list = response?.result?.["commands"];
-                            if (
-                                Array.isArray(list) &&
-                                list.every((item) => typeof item === "string")
-                            )
-                                setCommands(list as string[]);
-                        });
-                    }}
-                    size="medium"
-                    variant="outline"
-                >
-                    Make join command
-                </Button>
-            )}
-        </UiFigure>
-    );
-}
-
-/** A figure's head, its controls, and one status line under them. */
-function UiFigure(props: {
-    readonly title: string;
-    readonly line: string;
-    readonly error: boolean;
-    readonly children: ReactNode;
-    readonly pending?: boolean;
-    /** The thing is done, such as GitHub linked: a check mark on the line. */
-    readonly done?: boolean;
-    /** What sits under the status line, such as a pool's machines. */
-    readonly footer?: ReactNode;
-}) {
-    return (
-        <div
-            className="happy-chat-figure happy-chat-figure--invite"
-            data-happy-desktop-ui="chat-ui-figure"
-        >
-            <div className="happy-chat-figure__head">
-                <span className="happy-chat-figure__name">{props.title}</span>
-            </div>
-            <div className="happy-chat-figure__controls">{props.children}</div>
-            <div
-                className="happy-chat-figure__line"
-                data-error={props.error ? "" : undefined}
-                data-state={props.done ? "signedIn" : undefined}
-                role="status"
-            >
-                <span className="happy-chat-figure__mark">
-                    {props.error ? (
-                        <Ionicon name="alert-circle" size={16} />
-                    ) : props.done ? (
-                        <Ionicon name="checkmark-circle" size={16} />
-                    ) : props.pending ? (
-                        <Spinner size={16} />
-                    ) : (
-                        <Ionicon name="information-circle-outline" size={16} />
-                    )}
-                </span>
-                <span className="happy-chat-figure__text">{props.line}</span>
-            </div>
-            {props.footer ? <div className="happy-chat-figure__footer">{props.footer}</div> : null}
-        </div>
+        <UiComputeJoinRows
+            busy={busy}
+            {...(commands ? { commands } : {})}
+            {...(control.error ? { error: control.error } : {})}
+            {...(props.machines ? { machines: props.machines } : {})}
+            onCreate={() => {
+                void uiWidgetSend(control, "compute_join.create").then((response) => {
+                    const list = response?.result?.["commands"];
+                    if (Array.isArray(list) && list.every((item) => typeof item === "string"))
+                        setCommands(list as string[]);
+                });
+            }}
+            pool={poolName}
+            usable={usable}
+        />
     );
 }
