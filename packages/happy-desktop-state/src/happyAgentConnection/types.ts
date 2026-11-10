@@ -33,6 +33,7 @@ import type {
     HappyAgentRepositoryBinding,
 } from "../happyAgent/happyAgentTypes.js";
 import type { HappyAgentSync } from "./happyAgentSync.js";
+import type { UserEnvironmentReport } from "./userEnvironment.js";
 import type { UserProfile } from "./userProfiles.js";
 
 export type { MutationId };
@@ -1105,6 +1106,12 @@ export interface ConnectHappyAgentOptions {
      * once. The live update feed keeps them current from then on. Defaults to none.
      */
     preloadedSessions?: number;
+    /**
+     * This device's environment, read when the connection first goes live and reported to the
+     * server once. Once the server stores it, every send names its device. Unset, nothing is
+     * reported and no send names a device.
+     */
+    environment?: () => UserEnvironmentReport;
 }
 
 /**

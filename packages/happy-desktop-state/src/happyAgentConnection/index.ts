@@ -26,3 +26,9 @@ export {
 export type { ProjectRegistrationErrorCode } from "./errors.js";
 export type * from "./types.js";
 export type { UserProfile } from "./userProfiles.js";
+export {
+    userEnvironmentDeviceIdValid,
+    userEnvironmentReportRead,
+    type UserDeviceKind,
+    type UserEnvironmentReport,
+} from "./userEnvironment.js";

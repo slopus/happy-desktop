@@ -56,8 +56,10 @@ import {
     type ServerCompatibility,
     type TerminalColorScheme,
     UserError,
+    userEnvironmentReportRead,
 } from "happy-desktop-state";
 import { imageCropOpen } from "happy-desktop-ui";
+import { desktopDeviceId } from "./desktopDeviceId";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import {
@@ -443,6 +445,14 @@ export function happyAgentConnectionOpen(input: {
         // Read ahead the sessions most likely opened next, so a first open, of a remote's
         // session above all, shows its transcript instead of a loading line.
         preloadedSessions: PRELOADED_SESSIONS,
+        // The Electron window has the desktop bridge; any other renderer is a browser tab.
+        environment: () =>
+            userEnvironmentReportRead({
+                deviceId: desktopDeviceId(),
+                deviceKind: window.happyDesktop === undefined ? "web" : "desktop",
+                languages: navigator.languages,
+                now: new Date(),
+            }),
         onDebugEntry: debugEntry,
         onMutationRejected: (rejection) => {
             for (const listener of mutationListeners) listener(rejection);

@@ -46,6 +46,7 @@ import { happyAgentSyncRead } from "./happyAgentSyncRead.js";
 import { gitSnapshotStateUpdate, type GitSnapshotState } from "./gitSnapshotState.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { MessageRefusedError, projectRegistrationError } from "./errors.js";
+import { userEnvironmentReportSend, type UserEnvironmentReport } from "./userEnvironment.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentDraftAppended } from "../happyAgent/happyAgentChatDraftAppend.js";
 import { chatUiOutcomeUnknown } from "../chatUi/chatUi.js";
@@ -502,6 +503,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
+    // Whether this connection has reported the device's environment yet, and the device it
+    // named once the server stored it. Sends name that device only then: a server without the
+    // route refuses a send that names one.
+    let environmentReportStarted = false;
+    let environmentDeviceId: string | undefined;
     /** Everyone the latest bootstrap listed as signing in to the team. */
     let teammates: readonly HappyAgentTeammate[] = [];
     let viewerProfileLoading: Promise<void> | undefined;
@@ -4153,6 +4159,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         });
                         publishConnection("live");
                         heldWritesFlush();
+                        environmentReport();
                         reconnectMs = INITIAL_RECONNECT_MS;
                     } else if (update.kind === "state_lost") {
                         reportDebug({
@@ -4326,9 +4333,55 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
+    /**
+     * Tells the server about this device's environment, once, when the connection first goes
+     * live. A server without the route is left alone, and no failure is retried or shown: the
+     * report only helps the agent and never holds anything up.
+     */
+    const environmentReport = (): void => {
+        if (environmentReportStarted || options.environment === undefined) return;
+        environmentReportStarted = true;
+        let report: UserEnvironmentReport;
+        try {
+            report = options.environment();
+        } catch (error) {
+            // Runs inside the update loop, which an unreadable environment must not end.
+            reportDebug({
+                detail: debugDetail({ error: String(error) }),
+                level: "info",
+                message: "Device environment could not be read",
+                source: "connection",
+            });
+            return;
+        }
+        void userEnvironmentReportSend({
+            endpoint,
+            token: options.token,
+            ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+            report,
+            mutationId: nextId(),
+            signal: deadlineSignal(),
+        }).then((result) => {
+            if (rootController.signal.aborted) return;
+            if (result.outcome === "reported") environmentDeviceId = report.deviceId;
+            reportDebug({
+                detail: debugDetail(result),
+                level: "info",
+                message:
+                    result.outcome === "reported"
+                        ? "Device environment reported"
+                        : result.outcome === "unsupported"
+                          ? "Happy Agent does not take a device environment"
+                          : "Device environment report failed",
+                source: "connection",
+            });
+        });
+    };
+
     const sendMessageWithRetry = async (
         sessionId: string,
-        request: SendMessageRequest,
+        // `deviceId` is the unreleased client's; the client spreads the request into its body.
+        request: SendMessageRequest & { readonly deviceId?: string },
         confirmed: Promise<void>,
     ): Promise<SendMessageResponse | undefined> => {
         let retryMs = INITIAL_SEND_RETRY_MS;
@@ -5373,6 +5426,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             ...(input.quickReply ? { quickReply: input.quickReply } : {}),
                             delivery,
                             mode,
+                            ...(environmentDeviceId === undefined
+                                ? {}
+                                : { deviceId: environmentDeviceId }),
                         },
                         confirmed,
                     );
