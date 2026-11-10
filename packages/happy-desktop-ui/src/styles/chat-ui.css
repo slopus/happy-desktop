@@ -82,8 +82,9 @@
     font-size: 15px;
 }
 
-/* The agent's output, so on its text's edge: the pill's box starts on the
-   reply's 30px line, the edge media and widget rows use. The 48px of insets
+/* The agent's output, framed like every other frame in the transcript: the
+   box stands out by the frame outset and the pill's 12px padding (the same
+   outset) puts its letters on the reply's 30px line. The 48px of insets
    match a person's row, so the 76% cap is the bubble's. */
 .happy-chat-replies {
     display: flex;
@@ -91,7 +92,7 @@
     flex-direction: column;
     align-items: flex-start;
     width: 100%;
-    padding: 8px 18px 8px 30px;
+    padding: 8px 30px 8px calc(30px - var(--happy-chat-frame-outset));
 }
 
 /* The width comes from the layout; without one, the widest pill's. */
