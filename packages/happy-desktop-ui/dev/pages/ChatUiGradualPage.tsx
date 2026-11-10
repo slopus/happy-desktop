@@ -52,6 +52,14 @@ const STILL = 0;
 
 const act = () => new Promise<never>(() => undefined);
 const control = { act, allowed: () => true };
+/** A row whose sign-in the person already used, so it reads as connected. */
+const usedControl = {
+    ...control,
+    attempt: {
+        action: { type: "provider_sign_in.sign_in", payload: {} },
+        outcome: { status: "accepted" as const },
+    },
+};
 
 const CODEX_ONE = cliSignedIn("codex", [{ label: "ada@example.com", plan: "Pro" }]);
 const CLAUDE_OUT = cliFixture("claude");
@@ -97,11 +105,11 @@ function Replies(props: {
     );
 }
 
-const signIn = (cli: ProviderCli, account?: "new") => (
+const signIn = (cli: ProviderCli, account?: "new", used?: boolean) => (
     <UiProviderSignIn
         {...(account ? { account } : {})}
         cli={cli}
-        control={control}
+        control={used ? usedControl : control}
         onPageOpen={() => undefined}
         provider={cli.id}
         spinnerFrame={STILL}
@@ -199,7 +207,9 @@ const SCREENS: readonly Screen[] = [
         height: 440,
         body: () => (
             <>
-                <Agent body="Claude Code is connected.">{signIn(CLAUDE_ONE)}</Agent>
+                <Agent body="Claude Code is connected.">
+                    {signIn(CLAUDE_ONE, undefined, true)}
+                </Agent>
                 <Agent body="Want another AI, or another account?" />
                 <Replies
                     clis={{ ...CLIS, claude: CLAUDE_ONE }}

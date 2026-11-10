@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import {
     providerCliAccounts,
+    providerCliAccountName,
     providerCliAccountsCount,
     type ProviderCli,
     type ProviderCliAccount,
@@ -291,8 +292,8 @@ export function UiProviderSignInRow(
         return row(
             "lapsed",
             accounts.length > 1
-                ? `${providerCliAccountsCount(accounts.length)} · ${lapsed.label} needs to sign in again`
-                : `${lapsed.label} needs to sign in again`,
+                ? `${providerCliAccountsCount(accounts.length)} · ${providerCliAccountName(lapsed)} needs to sign in again`
+                : `${providerCliAccountName(lapsed)} needs to sign in again`,
             "quiet",
             <Button
                 disabled={props.onSignIn === undefined}
@@ -351,14 +352,15 @@ export function UiProviderSignInRow(
 }
 
 /**
- * How many accounts a program has, in words: one is its label and plan; more
+ * How many accounts a program has, in words: one is its name and plan; more
  * are "2 accounts · ada@example.com +1". Signed-out accounts still count.
  */
 export function uiAccountsLine(accounts: readonly ProviderCliAccount[]): string {
     const first = accounts[0];
     if (first === undefined) return "Not signed in";
-    if (accounts.length === 1) return [first.label, first.plan].filter(Boolean).join(" · ");
-    return `${providerCliAccountsCount(accounts.length)} · ${first.label} +${String(accounts.length - 1)}`;
+    if (accounts.length === 1)
+        return [providerCliAccountName(first), first.plan].filter(Boolean).join(" · ");
+    return `${providerCliAccountsCount(accounts.length)} · ${providerCliAccountName(first)} +${String(accounts.length - 1)}`;
 }
 
 const TONES = ["ocean", "mint", "ember"] as const;
@@ -387,9 +389,9 @@ export function UiAccountStack(props: {
                     data-signed-out={account.signIn === "signed_out" ? "" : undefined}
                     data-tone={TONES[index % TONES.length]}
                     key={account.id}
-                    title={account.label}
+                    title={providerCliAccountName(account)}
                 >
-                    {account.label.slice(0, 1).toUpperCase()}
+                    {providerCliAccountName(account).slice(0, 1).toUpperCase()}
                 </span>
             ))}
             {props.adding ? (

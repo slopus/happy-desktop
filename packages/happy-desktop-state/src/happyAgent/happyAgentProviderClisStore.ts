@@ -80,6 +80,11 @@ export function providerCliAccounts(cli: ProviderCli): readonly ProviderCliAccou
     ];
 }
 
+/** What names an account to the person: its email when it has one, else the daemon's label. */
+export function providerCliAccountName(account: ProviderCliAccount): string {
+    return account.email ?? account.label;
+}
+
 /** "1 account", "2 accounts". */
 export function providerCliAccountsCount(count: number): string {
     return `${String(count)} account${count === 1 ? "" : "s"}`;
