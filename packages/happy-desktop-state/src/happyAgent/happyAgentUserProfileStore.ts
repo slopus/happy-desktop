@@ -36,8 +36,11 @@ export interface HappyAgentUserProfile {
     readonly lastActivityAt: number | null;
     /** UTC days in the last 30 on which they used anything. */
     readonly activeDays: number;
-    /** Tokens per window, summed over every provider and model. */
-    readonly tokens: Readonly<Record<HappyAgentUserProfileUsageWindow, number>>;
+    /**
+     * Tokens per window, summed over every provider and model; `null` when the
+     * reader's role may not see another member's usage.
+     */
+    readonly tokens: Readonly<Record<HappyAgentUserProfileUsageWindow, number>> | null;
     readonly recentTasks: readonly HappyAgentUserProfileTask[];
 }
 
@@ -184,9 +187,13 @@ export function happyAgentUserProfileStoreCreate(
             tasks: { total: numberOf(tasks?.total), active: numberOf(tasks?.active) },
             lastActivityAt: typeof stats?.lastActivityAt === "number" ? stats.lastActivityAt : null,
             activeDays: numberOf(stats?.activeDays),
-            tokens: Object.fromEntries(
-                WINDOWS.map((window) => [window, windowTokens(usage?.[window])]),
-            ) as Record<HappyAgentUserProfileUsageWindow, number>,
+            // Without `usage.view_team` the server answers another member's usage as null.
+            tokens:
+                stats?.usage === null
+                    ? null
+                    : (Object.fromEntries(
+                          WINDOWS.map((window) => [window, windowTokens(usage?.[window])]),
+                      ) as Record<HappyAgentUserProfileUsageWindow, number>),
             recentTasks: referencesPreserve(
                 previous,
                 recent.flatMap((task) => {

@@ -72,6 +72,7 @@ import {
     type HappyAgentStoriesStore,
 } from "../stories/storiesStore.js";
 import { storyMediaPreload } from "../stories/storyMediaPreload.js";
+import { happyAgentCloudTeamUsageAllowed } from "./happyAgentCloudTeamUsage.js";
 import {
     happyAgentAutoJoinSettingsCreate,
     type HappyAgentAutoJoinSettingsStore,
@@ -1024,7 +1025,11 @@ export function happyAgentWorkspaceClientCreate(
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const source = deps.providerUsageSource;
             if (!source) return undefined;
-            providerUsageStore ??= happyAgentProviderUsageStoreCreate({ source });
+            const request = deps.cloudRequest;
+            providerUsageStore ??= happyAgentProviderUsageStoreCreate({
+                source,
+                ...(request ? { allowed: () => happyAgentCloudTeamUsageAllowed(request) } : {}),
+            });
             return providerUsageStore;
         },
         happyIntegration() {

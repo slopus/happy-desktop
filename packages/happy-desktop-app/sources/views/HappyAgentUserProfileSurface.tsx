@@ -31,7 +31,7 @@ function profileView(profile: HappyAgentUserProfile, now: number): HappyAgentUse
         activeDays: profile.activeDays,
         lastActive:
             profile.lastActivityAt === null ? "Never" : localAgoTime(profile.lastActivityAt, now),
-        tokens: profile.tokens,
+        ...(profile.tokens === null ? {} : { tokens: profile.tokens }),
         recentTasks: profile.recentTasks.map((task) => ({
             id: task.id,
             name: task.name,

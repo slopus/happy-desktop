@@ -150,6 +150,8 @@ export interface HappyAgentProviderUsageSnapshot {
     readonly loadedAt?: number;
     /** Set when the feed itself failed; the retained readings stay visible beneath it. */
     readonly error?: UserError;
+    /** The reader's role may not see this usage, so it is never read. */
+    readonly forbidden?: boolean;
 }
 
 export interface HappyAgentProviderUsageStore {
@@ -175,6 +177,12 @@ const SOURCE_LINGER_MS = 30_000;
 
 export interface HappyAgentProviderUsageStoreDeps {
     readonly source: HappyAgentProviderUsageSource;
+    /**
+     * Whether the reader may see this usage, asked before the source is first
+     * followed; absent, the usage is always read. A failed answer reads it
+     * anyway, since the server still refuses what the reader may not see.
+     */
+    readonly allowed?: () => Promise<boolean>;
 }
 
 /**
@@ -210,11 +218,26 @@ export function happyAgentProviderUsageStoreCreate(
     let unsubscribeSource: (() => void) | undefined;
     let stopTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
+    /** Whether the reader may see the usage: unasked, being asked, or answered. */
+    let access: "unknown" | "asking" | "allowed" | "forbidden" = deps.allowed
+        ? "unknown"
+        : "allowed";
+    /** Only the answer to the latest question may land. */
+    let question = 0;
 
     const start = (): void => {
         clearTimeout(stopTimer);
         stopTimer = undefined;
-        if (disposed || unsubscribeSource) return;
+        if (disposed || unsubscribeSource || access === "forbidden" || access === "asking") return;
+        if (access === "unknown" && deps.allowed) {
+            access = "asking";
+            const asked = ++question;
+            void deps.allowed().then(
+                (allowed) => answered(asked, allowed),
+                () => answered(asked, true),
+            );
+            return;
+        }
         unsubscribeSource = deps.source.subscribe(
             (incoming) => {
                 if (disposed) return;
@@ -262,21 +285,36 @@ export function happyAgentProviderUsageStoreCreate(
         );
     };
 
+    const answered = (asked: number, allowed: boolean): void => {
+        if (disposed || asked !== question) return;
+        access = allowed ? "allowed" : "forbidden";
+        if (allowed) {
+            if (listeners.size > 0) start();
+            return;
+        }
+        store.setState({ providers: [], loading: false, forbidden: true }, true);
+    };
+
     const stop = (): void => {
         clearTimeout(stopTimer);
         stopTimer = undefined;
         unsubscribeSource?.();
         unsubscribeSource = undefined;
+        // A role can change while nobody looks, so the next look asks again.
+        if (deps.allowed) {
+            question += 1;
+            access = "unknown";
+        }
     };
 
     return {
         get: () => store.getState(),
         usageRefresh(providerIds) {
-            if (disposed || providerIds?.length === 0) return;
+            if (disposed || access === "forbidden" || providerIds?.length === 0) return;
             deps.source.refresh(providerIds);
         },
         tokensFollow() {
-            if (disposed) return () => undefined;
+            if (disposed || access === "forbidden") return () => undefined;
             return deps.source.tokensFollow();
         },
         subscribe(listener) {
