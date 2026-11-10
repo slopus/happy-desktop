@@ -1,3 +1,4 @@
+import { chatUiEqual, quickRepliesEqual } from "../chatUi/chatUiTranscript.js";
 import {
     entryKey,
     entrySequence,
@@ -126,7 +127,11 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
             left.pendingSend !== right.pendingSend ||
             left.sentHere !== right.sentHere ||
             left.clientMutationId !== right.clientMutationId ||
-            left.error !== right.error
+            left.error !== right.error ||
+            left.quickReply?.messageId !== right.quickReply?.messageId ||
+            left.quickReply?.toolCallId !== right.quickReply?.toolCallId ||
+            left.quickReply?.index !== right.quickReply?.index ||
+            !chatUiEqual(left.ui, right.ui)
         )
             return false;
         if (left.message === right.message) return true;
@@ -243,6 +248,8 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             delegationEqual(left.child, right.child) &&
             traceEqual(left.agentTrace, right.agentTrace)
         );
+    if (left.kind === "quickReplies" && right.kind === "quickReplies")
+        return quickRepliesEqual(left.replies, right.replies);
     if (left.kind === "turnStatus" && right.kind === "turnStatus")
         return (
             left.status === right.status &&

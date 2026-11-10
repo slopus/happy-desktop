@@ -691,6 +691,7 @@ function happyAgentConnectGroupProject(
                 entries.push({
                     kind: "message",
                     source: "server",
+                    ...(element.quickReply === undefined ? {} : { quickReply: element.quickReply }),
                     pendingSend: element.authority === "local",
                     // The optimistic notification is synchronous, before the
                     // sender receives its message ID. Its explicit authority
@@ -816,7 +817,7 @@ function happyAgentConnectGroupProject(
                    in the transcript moments before the first words arrive, so
                    the reader watches a gap open and then fill. The live status
                    already reports the turn; the row belongs to the text. */
-                if (text.trim().length === 0) break;
+                if (text.trim().length === 0 && element.ui === undefined) break;
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -832,9 +833,18 @@ function happyAgentConnectGroupProject(
                     }),
                     messageId: element.messageId,
                     runId: element.runId,
+                    ...(element.ui ? { ui: element.ui } : {}),
                 });
                 break;
             }
+            case "quick_replies":
+                entries.push({
+                    kind: "quickReplies",
+                    id: element.id,
+                    sequence,
+                    replies: element.replies,
+                });
+                break;
             case "agent_attachments": {
                 const attachments: ConversationMessageProjection["attachments"] =
                     element.attachments.flatMap((attachment): readonly ConversationAttachment[] => {
@@ -1168,6 +1178,10 @@ function happyAgentConnectGroupProject(
             entry.kind === "delegation" ||
             index === actualAnchorIndex ||
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
+            // Chat UI is the agent showing the reader a result or asking them
+            // something, so it stays with the reply rather than with the work.
+            (entry.kind === "message" && entry.ui !== undefined) ||
+            entry.kind === "quickReplies" ||
             // An answered question is the reader's own decision, so it stays with
             // their messages rather than folding away with the work it steered.
             entry.kind === "request" ||

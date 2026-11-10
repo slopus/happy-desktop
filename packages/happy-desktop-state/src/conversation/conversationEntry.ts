@@ -3,6 +3,7 @@ import type {
     HappyAgentArtifactId,
     HappyAgentArtifactType,
 } from "../artifacts/artifactTypes.js";
+import type { ConversationQuickReplies, ConversationUi, QuickReply } from "../chatUi/chatUi.js";
 import type { AgentTurnTraceSummary, UserError } from "../types.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
@@ -623,6 +624,21 @@ export interface ConversationMessageEntry {
     readonly messageId?: string;
     /** The run that produced it, when the Happy Agent served it. */
     readonly runId?: string;
+    /** The chat UI document this agent message shows, under its text. */
+    readonly ui?: ConversationUi;
+    /** The suggested reply a person's message is, as the daemon recorded it. */
+    readonly quickReply?: QuickReply;
+}
+
+/**
+ * The replies an agent message suggests, on a row of their own under the
+ * agent's turn. A tap sends the option as the person's message.
+ */
+export interface ConversationQuickRepliesEntry {
+    readonly kind: "quickReplies";
+    readonly id: string;
+    readonly sequence: string;
+    readonly replies: ConversationQuickReplies;
 }
 
 export interface ConversationActivityEntry {
@@ -1037,6 +1053,7 @@ export type ConversationEntry = (
     | ConversationDelegationEntry
     | ConversationTurnStatusEntry
     | ConversationSummaryEntry
+    | ConversationQuickRepliesEntry
 ) & {
     /** Stable turn identity used to find the summary if this row folds away. */
     readonly traceFoldTargetId?: string;
@@ -1074,7 +1091,7 @@ export function entryAgentOwned(entry: ConversationEntry): boolean {
 export function entryTrace(entry: ConversationEntry): AgentTurnTraceSummary | undefined {
     if (entry.kind === "message") return entry.message.agentTrace;
     if (entry.kind === "notice") return entry.variant === "compute" ? undefined : entry.agentTrace;
-    if (entry.kind === "summary") return undefined;
+    if (entry.kind === "summary" || entry.kind === "quickReplies") return undefined;
     return entry.agentTrace;
 }
 
@@ -1089,7 +1106,7 @@ export function entryTraceWith(
     if (entry.kind === "message")
         return { ...entry, message: { ...entry.message, agentTrace: trace } };
     if (entry.kind === "notice" && entry.variant === "compute") return entry;
-    if (entry.kind === "summary") return entry;
+    if (entry.kind === "summary" || entry.kind === "quickReplies") return entry;
     return { ...entry, agentTrace: trace };
 }
 

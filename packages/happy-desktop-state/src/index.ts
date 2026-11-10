@@ -1,3 +1,5 @@
+export * from "./chatUi/chatUi.js";
+export * from "./chatUi/chatUiDefaultModel.js";
 export * from "./types.js";
 export * from "./transport.js";
 export { HappyAgentApiError, HappyAgentClient } from "@slopus/happy-agent-client";
