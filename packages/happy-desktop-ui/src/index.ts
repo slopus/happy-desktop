@@ -436,7 +436,17 @@ export {
     type ActivityTreatment,
     type AgentActivityRowProps,
 } from "./AgentActivityRow";
-export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
+export {
+    ConversationEntryView,
+    type ConversationChatUi,
+    type ConversationEntryViewProps,
+} from "./ConversationEntryView";
+export { UiDefaultModel, type UiDefaultModelProps } from "./ui/UiDefaultModel";
+export { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
+export { UiFallback } from "./ui/UiFallback";
+export { UiFileTree } from "./ui/UiFileTree";
+export { UiMedia, type UiMediaProps } from "./ui/UiMedia";
+export { UiQuickReplies, type UiQuickRepliesProps } from "./ui/UiQuickReplies";
 export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
 export { ContextMenu, type ContextMenuProps } from "./ContextMenu";
 export {

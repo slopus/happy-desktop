@@ -1,0 +1,198 @@
+/*
+ * Chat UI: the flat list of components an agent shows with `show_ui`, or the
+ * daemon writes into one of its messages, and the replies it suggests. Laid
+ * on the chat like everything in a reply: the reply's left edge and type.
+ *
+ *   document       the components top to bottom, 16px apart
+ *   media          justified rows from the items' own sizes (`layoutMedia`),
+ *                  6px apart, every box in whole pixels; a label is one 18px
+ *                  line 4px under its item
+ *   fallback       the server's one line, muted, 15/24
+ *   quick replies  their own row on the agent text's edge: replies one under
+ *                  another, 6px apart, every one as wide as the widest
+ *                  (`uiQuickRepliesLayout`); the bubble's 10px 12px padding
+ *                  and radius, two lines at most, a kept 16px tick
+ *
+ * The framed components (`file_tree`, `default_model`) are in
+ * `chat-ui-rows.css`.
+ */
+.happy-chat-ui {
+    display: flex;
+    box-sizing: border-box;
+    min-width: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 16px;
+    line-height: 24px;
+}
+
+/* The document takes the content's whole measure, which pictures lay out across. */
+.happy-chat-ui__document {
+    flex-direction: column;
+    align-self: stretch;
+    gap: 16px;
+}
+
+/* Media: every row and box is sized from the layout in whole pixels, so
+   nothing waits on a byte to know its height. The picture covers its box. */
+.happy-chat-ui__media {
+    flex: none;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 6px;
+}
+
+.happy-chat-media__row {
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-chat-media__item {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-chat-media__item > .happy-chat-media__box {
+    flex: none;
+    border-radius: 8px;
+}
+
+/* A file that is not a picture or a recording: its icon over its name, in the box a picture would take. */
+.happy-chat-media__file {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy-chat-media__file-name {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-media__label {
+    overflow: hidden;
+    height: 18px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-ui__fallback {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 15px;
+    overflow-wrap: break-word;
+}
+
+/* The agent's output, framed like every other frame in the transcript: the
+   box stands out by the frame outset and the pill's 12px padding (the same
+   outset) puts its letters on the reply's 30px line. The 48px of insets
+   match a person's row, so the 76% cap is the bubble's. */
+.happy-chat-replies {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 8px 30px 8px calc(30px - var(--happy-chat-frame-outset));
+}
+
+/* The width comes from the layout; without one, the widest pill's. */
+.happy-chat-replies__stack {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: max-content;
+    max-width: 76%;
+    min-width: 0;
+}
+
+/* A reply not sent: the person's bubble, halfway to the ground, as words they haven't said yet. */
+.happy-chat-replies__reply {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--happy-radius-md);
+    background: color-mix(in srgb, var(--user-message-background) 50%, var(--surface));
+    color: var(--user-message-text);
+    font-family: var(--happy-font-ui);
+    font-size: 15px;
+    font-synthesis: none;
+    line-height: 22px;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+.happy-chat-replies__reply:disabled {
+    cursor: default;
+}
+
+.happy-chat-replies__reply:not(:disabled):hover {
+    background: color-mix(in srgb, var(--user-message-background) 80%, var(--surface));
+}
+
+.happy-chat-replies__reply:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+/* The one a person sent is their bubble, ticked; the rest only go quiet. */
+.happy-chat-replies__reply[data-chosen] {
+    background: var(--user-message-background);
+}
+
+.happy-chat-replies[data-chosen] .happy-chat-replies__reply:not([data-chosen]) {
+    color: var(--text-secondary);
+}
+
+/* Two lines at most, then an ellipsis; the layout gives the pill that height. */
+.happy-chat-replies__label {
+    display: -webkit-box;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+.happy-chat-replies__tick {
+    display: flex;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    visibility: hidden;
+}
+
+.happy-chat-replies__reply[data-chosen] .happy-chat-replies__tick {
+    visibility: visible;
+}

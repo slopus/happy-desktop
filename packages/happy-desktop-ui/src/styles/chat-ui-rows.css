@@ -1,0 +1,160 @@
+/*
+ * Chat UI rows: the frame the framed chat UI components sit in, and the row a
+ * live one is. The frame is a hairline group standing out from the reply's
+ * column by its own padding, so what it holds starts on the reply's left
+ * edge. A row is one thing (a setting): its mark, its name and one line about
+ * it, and on the right the controls it needs now.
+ *
+ *   row   58px: 1px frame + 11px + 36px controls, so a control sits as far
+ *         from the frame's top as the mark does from its left (12px)
+ *   mark  20px box, 12px before the words
+ *   name  15/20 semibold
+ *   line  13/18 secondary, one line, ellipsis
+ *   tree  28px rows, 7px over and under them, 20px and a hairline guide a level
+ *
+ * A row never changes height: a spinner or a refusal takes the line, so the
+ * frame holds whatever state the row is in.
+ */
+.happy-chat-rows {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    flex-direction: column;
+    width: calc(100% + 2 * var(--happy-chat-frame-outset));
+    max-width: calc(640px + 2 * var(--happy-chat-frame-outset));
+    margin-inline: calc(-1 * var(--happy-chat-frame-outset));
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+}
+
+.happy-chat-row {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    height: 58px;
+    min-width: 0;
+    padding: 0 calc(var(--happy-chat-frame-outset) - 1px);
+}
+
+.happy-chat-row__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text);
+}
+
+.happy-chat-row__words {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-chat-row__name {
+    overflow: hidden;
+    height: 20px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-row__line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 18px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-chat-row__line-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-row__line-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    width: 14px;
+    height: 14px;
+}
+
+.happy-chat-row[data-tone="error"] .happy-chat-row__line {
+    color: var(--status-error);
+}
+
+.happy-chat-row__controls {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-chat-row .happy-select {
+    flex: none;
+}
+
+/* The agent's places, quiet. */
+.happy-chat-tree {
+    display: flex;
+    flex-direction: column;
+    padding: 7px 11px;
+}
+
+.happy-chat-tree__row {
+    display: flex;
+    position: relative;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+/* Out of flow on purpose: a guide is a hairline under each level's column, not a child in the row's line. */
+.happy-chat-tree__guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--divider);
+}
+
+.happy-chat-tree__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy-chat-tree__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-tree__row[data-folder] .happy-chat-tree__name {
+    color: var(--text-secondary);
+}

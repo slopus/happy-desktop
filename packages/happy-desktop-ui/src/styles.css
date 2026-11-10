@@ -113,6 +113,8 @@
 @import "./styles/result-card.css";
 @import "./styles/inline-page.css";
 @import "./styles/conversation-media.css";
+@import "./styles/chat-ui.css";
+@import "./styles/chat-ui-rows.css";
 @import "./styles/emoji-picker.css";
 @import "./styles/splash-screen.css";
 @import "./styles/splash-cover.css";

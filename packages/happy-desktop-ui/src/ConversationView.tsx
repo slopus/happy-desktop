@@ -35,6 +35,7 @@ import { ChannelHeader } from "./ChannelHeader";
 import {
     authorAvatar,
     ConversationEntryView,
+    type ConversationChatUi,
     type ConversationEntryFailureProps,
     type ConversationEntryViewProps,
 } from "./ConversationEntryView";
@@ -340,6 +341,8 @@ export type ConversationViewProps = {
      * draw them. Absent, every such call keeps its card.
      */
     inlinePages?: ConversationInlinePages;
+    /** How the chat UI in this conversation is drawn and answered. Absent, it is inert. */
+    chatUi?: ConversationChatUi;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -997,6 +1000,7 @@ export function ConversationView(props: ConversationViewProps) {
             surface: "conversation",
             liveStatus: index < transcript.length && statusVisible,
             ...(props.references ? { references: props.references } : {}),
+            ...(props.chatUi?.defaultModel ? { chatUiDefaultModel: true } : {}),
             ...(inlinePage ? { inlinePage: inlinePage.geometry } : {}),
             ...((run) => (run ? { mediaRun: run } : {}))(
                 entry === undefined ? undefined : mediaRuns.get(entryKey(entry)),
@@ -1137,6 +1141,8 @@ export function ConversationView(props: ConversationViewProps) {
                             inlinePages?.artifacts,
                             inlinePages?.artifactRender === undefined,
                             inlinePages?.liveRender === undefined,
+                            // Whether a document's `default_model` is drawn decides its height.
+                            props.chatUi?.defaultModel === undefined,
                         ]}
                         estimateRowSize={(index, width) =>
                             conversationRowHeight(...rowGeometry(index, width))
@@ -1334,6 +1340,7 @@ export function ConversationView(props: ConversationViewProps) {
                                         : {})}
                                     {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
                                     {...(props.references ? { references: props.references } : {})}
+                                    {...(props.chatUi ? { chatUi: props.chatUi } : {})}
                                     {...(props.linkOpenDefault
                                         ? { linkOpenDefault: props.linkOpenDefault }
                                         : {})}

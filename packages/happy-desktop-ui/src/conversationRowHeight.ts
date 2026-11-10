@@ -89,6 +89,8 @@ import {
 } from "./conversationInlineLayouts";
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
+import { uiDocumentHeight } from "./ui/UiDocumentView";
+import { uiQuickRepliesLayout } from "./ui/UiQuickReplies";
 
 /** The same footer geometry for the live row and the room a queued turn will need. */
 export function conversationWorkingStatusHeight(input: {
@@ -165,6 +167,11 @@ export type ConversationRowContext = {
     readonly mediaPlaced?: ReadonlySet<number>;
     /** The layouts this reply draws, and its text with each one's placeholder. */
     readonly messageLayouts?: MessageInlineLayouts;
+    /**
+     * The surface draws a chat UI document's `default_model` from its model
+     * catalog. Absent, that component is its fallback line.
+     */
+    readonly chatUiDefaultModel?: boolean;
 };
 export type ConversationFailureRowContext = {
     /** The conversation has not moved past this failure, so its actions are offered. */
@@ -676,7 +683,7 @@ export function steeringNoticeRowHeight(
  * the row padding alone, before any bubble cap. An agent's body has no bubble,
  * so its column is its body measure.
  */
-function messageContentMeasure(width: number, treatment: MessageTreatment): number {
+export function messageContentMeasure(width: number, treatment: MessageTreatment): number {
     if (treatment === "agent") return width - agentInset();
     return width - (treatment === "incoming" ? INCOMING_INSET : OWN_INSET);
 }
@@ -1367,6 +1374,14 @@ export function conversationRowHeight(
                     ? entry.details.length * SUMMARY_DETAIL_HEIGHT + SUMMARY_DETAILS_PADDING
                     : 0),
         );
+    /* Suggested replies are a row of their own, the same whichever is chosen. */
+    if (entry.kind === "quickReplies")
+        return rowHeightCached(
+            cache,
+            entry,
+            `replies:${String(width)}`,
+            () => uiQuickRepliesLayout(entry.replies.options, width, cache?.text).height,
+        );
     const message = entry.message;
     const agent = message.sender?.kind === "agent";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;
@@ -1420,6 +1435,7 @@ export function conversationRowHeight(
         messageReferencesSignature(conversationEntryReferences(entry), context.references),
         context.messageLayouts?.signature ?? "",
         messageLayoutsFramesSignature(context.messageLayouts),
+        entry.ui && context.chatUiDefaultModel ? "default-model" : "",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight(
@@ -1463,8 +1479,21 @@ export function conversationRowHeight(
             const measure = messageContentMeasure(width, treatment) - STORY_QUOTE_BAR;
             height += (Math.min(STORY_QUOTE_WIDTH, measure) * 16) / 9 + STORY_QUOTE_GAP;
             if (own) height += STORY_QUOTE_OWN_LINE;
+        } else if (own && entry.quickReply) {
+            /* "↩ Suggested reply" stands over the bubble on the line a story reply uses. */
+            height += STORY_QUOTE_OWN_LINE;
         }
         if (!own && !grouped && entry.contextNote) height += 21;
+        /* A document sits in the attachment slot, under any cards, at the content's measure. */
+        if (entry.ui)
+            height +=
+                (cards > 0 ? ATTACHMENT_CARD_GAP : hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+                uiDocumentHeight(
+                    entry.ui,
+                    messageContentMeasure(width, treatment),
+                    context.chatUiDefaultModel === true,
+                    cache?.text,
+                );
         return height;
     });
 }
