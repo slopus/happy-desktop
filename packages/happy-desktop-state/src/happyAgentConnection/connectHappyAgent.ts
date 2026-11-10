@@ -3405,7 +3405,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
          * the model moved on to a new segment after a tool result.
          */
         const merged = liveMessageContentMerge(current.message.content, message.content);
-        entry.messageBlockOffsets.set(message.id, merged.offset);
+        if (merged.offset !== null) entry.messageBlockOffsets.set(message.id, merged.offset);
         entry.corruptedMessageIds.delete(message.id);
         updateMessage(agentId, { ...message, content: merged.content }, runId);
     };
@@ -6350,7 +6350,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 function liveMessageContentMerge(
     current: readonly MessageBlock[],
     snapshot: readonly MessageBlock[],
-): { content: MessageBlock[]; offset: number } {
+): { content: MessageBlock[]; offset: number | null } {
     // Align the snapshot against the current tail by block identity, tolerant
     // in both directions: the snapshot may be ahead of the assembled content
     // (arguments and text still streaming) or behind it (a stale in-flight
@@ -6377,7 +6377,43 @@ function liveMessageContentMerge(
         content.push(...snapshot.slice(overlap));
         return { content, offset };
     }
+    // A late snapshot of an earlier segment: a tool call already held takes
+    // its state in place, so one that finished after its run ended reads as
+    // finished, not as a second, stopped copy. The live segment stays where
+    // it was.
+    const late = lateSegmentOffset(current, snapshot);
+    if (late !== null) {
+        const content = [...current];
+        for (let index = 0; index < snapshot.length; index += 1) {
+            content[late + index] = messageBlockMerge(current[late + index]!, snapshot[index]!);
+        }
+        return { content, offset: null };
+    }
     return { content: [...current, ...snapshot], offset: current.length };
+}
+
+/**
+ * Where a snapshot lies wholly inside the held content, anchored by a tool
+ * call both name; null when no held call anchors it.
+ */
+function lateSegmentOffset(
+    current: readonly MessageBlock[],
+    snapshot: readonly MessageBlock[],
+): number | null {
+    for (let offset = current.length - snapshot.length; offset >= 0; offset -= 1) {
+        let anchored = false;
+        let matches = true;
+        for (let index = 0; index < snapshot.length; index += 1) {
+            const held = current[offset + index]!;
+            if (!messageBlockSame(held, snapshot[index]!)) {
+                matches = false;
+                break;
+            }
+            if (held.type === "tool_call") anchored = true;
+        }
+        if (matches && anchored) return offset;
+    }
+    return null;
 }
 
 /** Whether two live projections describe the same provider block. */
