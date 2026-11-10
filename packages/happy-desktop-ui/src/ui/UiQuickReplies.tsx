@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { ConversationQuickReplies } from "happy-desktop-state";
+import { AssistantMark, type AssistantMarkName } from "../AssistantMark";
 import { Ionicon } from "../vectorIcons/VectorIcon";
 import { chatUiMeasure } from "./UiDocumentView";
 
@@ -12,6 +13,19 @@ export type UiQuickRepliesProps = {
     readonly onSend?: (index: number) => void;
     readonly className?: string;
     readonly style?: CSSProperties;
+    /**
+     * PROTOTYPE (chat UI onboarding experiment): what an option is about,
+     * drawn beside its words — an AI's mark, and a live note such as how many
+     * accounts it has. By option index; the proposed contract tags an option
+     * with `{ provider }` and the client reads the note from its own live
+     * provider state, so the model never writes a count that goes stale.
+     */
+    readonly decorations?: readonly (UiQuickReplyDecoration | undefined)[];
+};
+
+export type UiQuickReplyDecoration = {
+    readonly mark?: AssistantMarkName;
+    readonly note?: string;
 };
 
 /**
@@ -37,7 +51,9 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
             style={props.style}
         >
             <div aria-label="Suggested replies" className="happy-chat-replies__stack" role="group">
-                {replies.options.map((option, index) => (
+                {replies.options.map((option, index) => {
+                    const decoration = props.decorations?.[index];
+                    return (
                     <button
                         aria-pressed={replies.chosen === index}
                         className="happy-chat-replies__reply"
@@ -48,12 +64,21 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                         title={option}
                         type="button"
                     >
+                        {decoration?.mark ? (
+                            <span aria-hidden="true" className="happy-chat-replies__mark">
+                                <AssistantMark name={decoration.mark} size={16} />
+                            </span>
+                        ) : null}
                         <span className="happy-chat-replies__label">{option}</span>
+                        {decoration?.note ? (
+                            <span className="happy-chat-replies__note">{decoration.note}</span>
+                        ) : null}
                         <span aria-hidden="true" className="happy-chat-replies__tick">
                             <Ionicon name="checkmark" size={16} />
                         </span>
                     </button>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

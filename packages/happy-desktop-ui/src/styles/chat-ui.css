@@ -119,6 +119,24 @@
     white-space: nowrap;
 }
 
+.happy-chat-replies__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+/* What the option is about, live: quieter than the words, never squeezing them first. */
+.happy-chat-replies__note {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 22px;
+    white-space: nowrap;
+}
+
 .happy-chat-replies__tick {
     display: flex;
     flex: none;

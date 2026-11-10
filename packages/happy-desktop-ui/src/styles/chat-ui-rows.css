@@ -1,0 +1,222 @@
+/*
+ * Chat UI rows: the one shape every live chat UI widget takes. A group of
+ * rows in a hairline frame that stands out from the reply's column by its
+ * own padding, so the rows' words sit on the reply's left edge. Each row is
+ * one thing (an AI, a setting, a teammate invite): its mark, its name and one
+ * line about it, and on the right the one or two controls it needs now.
+ *
+ *   row   58px, rows 1px apart on the frame's hairline: 1px frame + 11px +
+ *         36px controls, so a control sits as far from the frame's top as the
+ *         mark does from its left (12px)
+ *   mark  20px box, 12px before the words
+ *   name  15/20 semibold, then anything that belongs beside it (accounts)
+ *   line  13/18 secondary, one line, ellipsis
+ *
+ * A row never changes height: a code field, a token field, a spinner or a
+ * refusal each take the line or the controls' place, so the frame holds
+ * whatever state the row is in.
+ */
+.happy-chat-rows {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    width: calc(100% + 2 * var(--happy-chat-frame-outset));
+    max-width: calc(640px + 2 * var(--happy-chat-frame-outset));
+    margin-inline: calc(-1 * var(--happy-chat-frame-outset));
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    /* The 1px gaps between rows show this: the hairline between two rows. */
+    background: var(--divider);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+}
+
+.happy-chat-row {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    height: 58px;
+    min-width: 0;
+    padding: 0 calc(var(--happy-chat-frame-outset) - 1px);
+    background: var(--surface);
+}
+
+.happy-chat-row__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text);
+}
+
+.happy-chat-row__words {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-chat-row__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 20px;
+}
+
+.happy-chat-row__name {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-row__line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 18px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-chat-row__line-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-row__line-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    width: 14px;
+    height: 14px;
+}
+
+.happy-chat-row[data-tone="error"] .happy-chat-row__line {
+    color: var(--status-error);
+}
+
+.happy-chat-row[data-tone="done"] .happy-chat-row__line-mark {
+    color: var(--success);
+}
+
+.happy-chat-row__line code {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--surface-highest);
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+}
+
+.happy-chat-row__controls {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-chat-row__field {
+    display: flex;
+    width: 168px;
+}
+
+.happy-chat-row__field > * {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Accounts, after the name: one initial each, overlapping, then "+N". The one
+   being added is a dashed ring, so the count it will become is already there. */
+.happy-chat-accounts {
+    display: flex;
+    flex: none;
+    align-items: center;
+    /* Overlapping by design: each initial tucks 6px under the one before it. */
+    gap: 0;
+}
+
+.happy-chat-accounts__one:not(:first-child) {
+    margin-left: -6px;
+}
+
+.happy-chat-accounts__one {
+    display: flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--surface-highest);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+}
+
+
+.happy-chat-accounts__one[data-tone="ocean"] {
+    background: color-mix(in srgb, var(--radio-active) 18%, var(--surface));
+    color: var(--radio-active);
+}
+
+.happy-chat-accounts__one[data-tone="ember"] {
+    background: color-mix(in srgb, var(--status-error) 14%, var(--surface));
+    color: color-mix(in srgb, var(--status-error) 75%, var(--text));
+}
+
+.happy-chat-accounts__one[data-tone="mint"] {
+    background: color-mix(in srgb, var(--success) 20%, var(--surface));
+    color: color-mix(in srgb, var(--success) 70%, var(--text));
+}
+
+.happy-chat-accounts__one[data-signed-out] {
+    opacity: 0.45;
+}
+
+.happy-chat-accounts__one[data-adding] {
+    border: 1.5px dashed var(--text-secondary);
+    background: var(--surface);
+}
+
+.happy-chat-accounts__count {
+    margin-left: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+/* A setting row's selects keep the row's 36px. */
+.happy-chat-row .happy-select {
+    flex: none;
+}
+
+/* What a row adds under itself in the same frame, such as a pool's machines. */
+.happy-chat-row__sub {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 calc(var(--happy-chat-frame-outset) - 1px) 11px 43px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}

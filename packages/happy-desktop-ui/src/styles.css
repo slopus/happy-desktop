@@ -30,6 +30,7 @@
 @import "./styles/copy-button.css";
 @import "./styles/chat-action.css";
 @import "./styles/chat-ui.css";
+@import "./styles/chat-ui-rows.css";
 @import "./styles/conversation-error-card.css";
 @import "./styles/conversation-failure-card.css";
 @import "./styles/conversation-compute-event.css";
