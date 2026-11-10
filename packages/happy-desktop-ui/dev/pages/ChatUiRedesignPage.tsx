@@ -1,9 +1,5 @@
 import type { ReactNode } from "react";
-import type {
-    ConversationMediaItem,
-    HappyAgentDefaultModelSnapshot,
-    ProviderCli,
-} from "happy-desktop-state";
+import type { HappyAgentDefaultModelSnapshot, ProviderCli } from "happy-desktop-state";
 import type { MobileDirectConnectorState } from "../../src/MobileDirectConnection";
 import {
     UiComputeJoinRows,
@@ -14,20 +10,9 @@ import {
     UiPhoneAppCard,
     UiPhonePairCard,
 } from "../../src/ui/UiCards";
-import { UiImages, type UiImagesLayout } from "../../src/ui/UiImages";
 import { UiProviderSignIn } from "../../src/ui/UiLiveWidgets";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
-import {
-    complaintConnect,
-    complaintCreateProfile,
-    generatedLandscape,
-    generatedPortrait,
-    readWide,
-    readWideSecond,
-    thumbnails,
-} from "./conversationMediaLayoutFixtures";
-import { Agent, ChatColumn, Person, Replies, Stage } from "./ProviderSignInDirectionsPage";
-import { CLAUDE_TWO, CODEX_ONE, GROK_MISSING } from "./providerSignInFixtures";
+import { Agent, ChatColumn, Stage } from "./chatUiSpecimen";
 
 /*
  * PROTOTYPE — chat UI onboarding experiment. Every chat UI component in the
@@ -38,27 +23,6 @@ export const componentNumber = "C-338r";
 
 const STILL = 0;
 const NOW = 1_762_700_000_000;
-
-const asset = (name: string) => new URL(`../assets/${name}`, import.meta.url).href;
-
-const picture = (
-    name: string,
-    width: number,
-    height: number,
-    url: string,
-): ConversationMediaItem => ({
-    kind: "image",
-    name,
-    mimeType: "image/webp",
-    size: 0,
-    width,
-    height,
-    url,
-});
-
-const DESKTOP = picture("desktop.webp", 960, 540, asset("crop-landscape.webp"));
-const PHONE = picture("phone.webp", 480, 640, asset("crop-portrait.webp"));
-const COVER = picture("launch.webp", 1600, 900, asset("feed-cover-launch.webp"));
 
 const MODELS: HappyAgentDefaultModelSnapshot = {
     loading: false,
@@ -156,12 +120,6 @@ function Then(props: { readonly children: ReactNode }) {
 const act = () => new Promise<never>(() => undefined);
 const control = { act, allowed: () => true };
 
-const images = (
-    items: readonly ConversationMediaItem[],
-    captions: readonly string[],
-    layout: UiImagesLayout,
-) => <UiImages captions={captions} items={items} layout={layout} onItemOpen={() => undefined} />;
-
 type Screen = {
     readonly id: string;
     readonly label: string;
@@ -194,88 +152,6 @@ const SCREENS: readonly Screen[] = [
                         { path: "weather-cli/README.md" },
                     ]}
                 />
-            </Agent>
-        ),
-    },
-    {
-        id: "02-images-hero",
-        label: "Images · one hero",
-        height: 560,
-        body: () => (
-            <Agent body="The launch cover, final:">
-                {images([COVER], ["Launch cover · 1600 × 900"], "hero")}
-            </Agent>
-        ),
-    },
-    {
-        id: "03-images-hero-portrait",
-        label: "Images · a tall hero",
-        height: 600,
-        body: () => (
-            <Agent body="A tall one keeps its shape and sits on the reply's edge:">
-                {images([generatedPortrait], ["Ridge at night"], "hero")}
-            </Agent>
-        ),
-    },
-    {
-        id: "04-images-compare",
-        label: "Images · before and after",
-        height: 420,
-        body: () => (
-            <Agent body="Before and after the spacing pass:">
-                {images([readWide, readWideSecond], ["Before", "After"], "compare")}
-            </Agent>
-        ),
-    },
-    {
-        id: "05-images-compare-mixed",
-        label: "Images · two shapes compared",
-        height: 470,
-        body: () => (
-            <Agent body="The same screen on desktop and on a phone, at one height:">
-                {images([DESKTOP, PHONE], ["Desktop", "Phone"], "compare")}
-            </Agent>
-        ),
-    },
-    {
-        id: "06-images-grid",
-        label: "Images · a grid of four",
-        height: 600,
-        body: () => (
-            <Agent body="Four directions for the header art. Which one?">
-                {images(
-                    thumbnails.slice(0, 4),
-                    ["1 · Warm", "2 · Coast", "3 · Lilac", "4 · Meadow"],
-                    "grid",
-                )}
-            </Agent>
-        ),
-    },
-    {
-        id: "07-images-grid-three",
-        label: "Images · a grid of three",
-        height: 400,
-        body: () => (
-            <Agent body="The three onboarding screens as they are now:">
-                {images(
-                    [complaintCreateProfile, complaintConnect, generatedLandscape],
-                    ["Create profile", "Connect harnesses", "Welcome art"],
-                    "grid",
-                )}
-            </Agent>
-        ),
-    },
-    {
-        id: "08-images-strip",
-        label: "Images · a strip of twelve",
-        height: 330,
-        body: () => (
-            <Agent body="All twelve renders, small. Open any to see it full size.">
-                {images(
-                    [...thumbnails, ...thumbnails],
-                    [...thumbnails, ...thumbnails].map((_, index) => `Render ${String(index + 1)}`),
-                    "strip",
-                )}
             </Agent>
         ),
     },
@@ -464,8 +340,8 @@ const SCREENS: readonly Screen[] = [
         ),
     },
     {
-        id: "18-provider-sign-in-today",
-        label: "Provider sign-in on today's contract",
+        id: "18-provider-sign-in",
+        label: "Provider sign-in",
         height: 300,
         body: () => (
             <Agent body="Sign in to Codex and I'll take it from there:">
@@ -488,32 +364,13 @@ const SCREENS: readonly Screen[] = [
             </Agent>
         ),
     },
-    {
-        id: "19-quick-replies",
-        label: "Quick replies, with what each is about",
-        height: 360,
-        body: () => (
-            <>
-                <Agent body="Which AI should I work with? You already have a couple." />
-                <Replies
-                    options={[
-                        { text: "Add another Codex account", about: CODEX_ONE },
-                        { text: "Add another Claude Code account", about: CLAUDE_TWO },
-                        { text: "Set up Grok", about: GROK_MISSING },
-                        "That's all for now",
-                    ]}
-                />
-                <Person body="That's all for now" suggested />
-            </>
-        ),
-    },
 ];
 
 export function ChatUiRedesignPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="PROTOTYPE. Every chat UI component in one language: a hairline frame, one 58px row per thing, the words on the reply's edge and its controls ending on one edge. Images lay out as a hero, a comparison, a grid or a strip. Fixture data."
+            summary="PROTOTYPE. Every chat UI component in one language: a hairline frame, one 58px row per thing, the words on the reply's edge and its controls ending on one edge. Media, quick replies and the gradual sign-in are on C-338x. Fixture data."
             title="Chat UI redesign"
         >
             <div className="specimen-grid">

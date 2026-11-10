@@ -6,12 +6,14 @@
  *
  *   document       the components top to bottom, 16px apart
  *   file_tree      the app's file tree, every folder open
- *   images         the transcript's own media flow
+ *   media          justified rows from the items' own sizes (`uiMediaLayout`),
+ *                  6px apart, every box in whole pixels; a label is one 18px
+ *                  line 4px under its item
  *   fallback       the server's one line, muted
- *   quick replies  their own row with the own message's insets: replies one
- *                  under another, 6px apart, each as wide as a person's widest
- *                  bubble (76% of the column) against the right; the bubble's
- *                  10px 12px padding and radius, one line, a kept 16px tick
+ *   quick replies  their own row on the agent text's edge: replies one under
+ *                  another, 6px apart, every one as wide as the widest
+ *                  (`conversationQuickRepliesLayout`); the bubble's 10px 12px
+ *                  padding and radius, one line, a kept 16px tick
  */
 .happy-chat-ui {
     display: flex;
@@ -35,54 +37,39 @@
     max-width: 420px;
 }
 
-/* Pictures: rows 8px apart, pictures 8px apart in a row. Every box is the
-   picture's own shape (or the grid's one cell shape), so nothing waits on a
-   byte to know its height. Rounded 8px; a caption sits 6px under its picture. */
-.happy-chat-ui__images {
+/* Media: every row and box is sized from the layout in whole pixels, so
+   nothing waits on a byte to know its height. The picture covers its box. */
+.happy-chat-ui__media {
     flex-direction: column;
     align-self: stretch;
-    gap: 8px;
+    gap: 6px;
 }
 
-.happy-chat-images__row {
+.happy-chat-media__row {
     display: flex;
+    flex: none;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
-.happy-chat-images__figure {
+.happy-chat-media__item {
     display: flex;
+    flex: none;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
     margin: 0;
 }
 
-.happy-chat-images__box,
-.happy-chat-images__thumb {
-    display: flex;
-    overflow: hidden;
-    min-width: 0;
+.happy-chat-media__item > .happy-chat-media__box {
+    flex: none;
     border-radius: 8px;
-    background: var(--surface-highest);
-    /* A hairline drawn inside, so a white screenshot keeps its edge on a white chat. */
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
-.happy-chat-images__box > *,
-.happy-chat-images__thumb > * {
-    flex: 1 1 auto;
-    border-radius: inherit;
-}
-
-/* A grid shows every picture whole on one cell shape; the cell's fill is the mat. */
-.happy-chat-ui__images[data-layout="grid"] .happy-chat-images__box {
-    background: var(--surface-high);
-}
-
-.happy-chat-images__caption {
+.happy-chat-media__label {
     overflow: hidden;
+    height: 18px;
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 18px;
@@ -90,49 +77,31 @@
     white-space: nowrap;
 }
 
-/* A comparison's captions are its labels: the words that tell the two apart. */
-.happy-chat-images__caption[data-label] {
-    color: var(--text);
-    font-weight: 600;
-}
-
-.happy-chat-images__filler {
-    flex: 1 1 0;
-    min-width: 0;
-}
-
-.happy-chat-images__row[data-strip] {
-    gap: 6px;
-}
-
-.happy-chat-images__thumb {
-    border-radius: 6px;
-}
-
 .happy-chat-ui__fallback {
     color: var(--text-secondary);
     font-size: 15px;
 }
 
-/* Suggested replies under the agent's last words: a tap sends one as the
-   person's message, and the row goes once they have. */
-
+/* The agent's output, so on its text's edge: a pill's 12px padding puts its
+   first glyph on the reply's 30px line, the way a person's bubble does. */
 .happy-chat-replies {
     display: flex;
     box-sizing: border-box;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
     width: 100%;
-    padding: 8px 28px 8px 20px;
+    padding: 8px 32px 8px 18px;
 }
 
+/* The width comes from the layout; without one, the widest pill's. */
 .happy-chat-replies__stack {
     display: flex;
     box-sizing: border-box;
     flex-direction: column;
     align-items: stretch;
     gap: 6px;
-    width: 76%;
+    width: max-content;
+    max-width: 76%;
     min-width: 0;
 }
 

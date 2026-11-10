@@ -598,11 +598,17 @@ export {
 export { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
 export {
     UiQuickReplies,
+    type ChatUiReplyNotes,
     type UiQuickRepliesProps,
-    type UiQuickReplyDecoration,
 } from "./ui/UiQuickReplies";
 export { UiFileTree, uiFileTreeNodes, type UiFileTreeProps } from "./ui/UiFileTree";
-export { UiImages, type UiImagesLayout, type UiImagesProps } from "./ui/UiImages";
+export { UiMedia, uiMediaHeight, type UiMediaProps } from "./ui/UiMedia";
+export {
+    uiMediaLayout,
+    UI_MEDIA_ROW_HEIGHT,
+    type UiMediaLayout,
+    type UiMediaLayoutInput,
+} from "./ui/uiMediaLayout";
 export {
     UiComputeJoinRows,
     UiDefaultModelRow,
@@ -615,14 +621,11 @@ export {
 } from "./ui/UiCards";
 export {
     UiAccountStack,
-    UiProviderAccountsList,
-    uiAccountsCount,
+    UiProviderSignInRow,
     uiAccountsLine,
-    type UiProviderAccount,
-    type UiProviderAccounts,
-    type UiProviderAccountsActions,
-    type UiProviderKey,
-} from "./ui/UiProviderAccounts";
+    uiProviderMark,
+    type UiProviderSignInRowActions,
+} from "./ui/UiProviderSignInRow";
 export { UiRow, UiRows, type UiRowTone } from "./ui/UiRows";
 export { UiFallback } from "./ui/UiFallback";
 export { UiPhoneApp } from "./ui/UiPhoneApp";

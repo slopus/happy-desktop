@@ -61,6 +61,66 @@ export interface HappyAgentProviderClisStore {
     [Symbol.dispose](): void;
 }
 
+/**
+ * One account a provider CLI's type is signed in with: each configured
+ * provider of that type. LOCAL until the client package types
+ * `ProviderCli.accounts` (change 2, 1c).
+ */
+export type ProviderCliAccount = {
+    readonly id: string;
+    /** What the vendor reports: an email or a name. */
+    readonly label: string;
+    readonly email?: string | null;
+    readonly plan?: string | null;
+    readonly signIn: "signed_in" | "signed_out" | "unknown";
+};
+
+/** The accounts a program has: its `accounts` when the server lists them, else its one sign-in. */
+export function providerCliAccounts(cli: ProviderCli): readonly ProviderCliAccount[] {
+    const listed = (cli as ProviderCli & { readonly accounts?: readonly ProviderCliAccount[] })
+        .accounts;
+    if (listed !== undefined) return listed;
+    if (cli.signIn.status !== "signed_in") return [];
+    const account = cli.signIn.account;
+    return [
+        {
+            id: cli.providerId ?? cli.id,
+            label: account?.email ?? cli.name,
+            ...(account?.email ? { email: account.email } : {}),
+            ...(account?.plan ? { plan: account.plan } : {}),
+            signIn: "signed_in",
+        },
+    ];
+}
+
+/** "1 account", "2 accounts". */
+export function providerCliAccountsCount(count: number): string {
+    return `${String(count)} account${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * The quiet note a quick reply about this AI wears, from its live state and
+ * never from the model: "Not installed", "Not signed in", "1 account",
+ * "N accounts". Nothing while the program hasn't been read yet.
+ */
+export function providerCliReplyNote(cli: ProviderCli | undefined): string | undefined {
+    if (cli === undefined) return undefined;
+    if (cli.installation.status === "missing") return "Not installed";
+    const count = providerCliAccounts(cli).length;
+    if (count > 0) return providerCliAccountsCount(count);
+    return cli.signIn.status === "unknown" ? undefined : "Not signed in";
+}
+
+/**
+ * The widest notes `providerCliReplyNote` can say, which a pill reserves room
+ * for, so a note changing never changes its width.
+ */
+export const PROVIDER_CLI_REPLY_NOTE_SAMPLES: readonly string[] = [
+    "Not installed",
+    "Not signed in",
+    providerCliAccountsCount(12),
+];
+
 export interface HappyAgentProviderClisStoreDeps {
     readonly client: Pick<
         HappyAgentClient,

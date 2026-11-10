@@ -1,6 +1,10 @@
 import { useContext, type CSSProperties, type ReactNode } from "react";
 import { MarkdownLayoutCacheContext } from "./MessageMarkdown";
-import { conversationMessageCompactLayout } from "./conversationRowHeight";
+import {
+    conversationMessageCompactLayout,
+    conversationQuickRepliesLayout,
+    messageContentMeasure,
+} from "./conversationRowHeight";
 import { useMessageListRowWidth } from "./messageListRowWidth";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
@@ -56,7 +60,7 @@ import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { StoryQuote } from "./StoryQuote";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 import { UiDocumentView, type UiDocumentViewProps } from "./ui/UiDocumentView";
-import { UiQuickReplies } from "./ui/UiQuickReplies";
+import { UiQuickReplies, type ChatUiReplyNotes } from "./ui/UiQuickReplies";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
 export type ConversationEntryFailureProps = ConversationFailureActions & {
@@ -92,6 +96,8 @@ export type ConversationChatUi = Omit<UiDocumentViewProps, "ui" | "onAction" | "
     readonly onMediaOpen?: (messageId: string, index: number) => void;
     /** Sends one suggested reply. Absent, the pills are drawn disabled. */
     readonly onQuickReply?: (replies: ConversationQuickReplies, index: number) => void;
+    /** The live notes reply components wear, from the owner's stores. Absent, none. */
+    readonly replyNotes?: ChatUiReplyNotes;
 };
 
 export type ConversationEntryViewProps = {
@@ -606,10 +612,18 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     if (entry.quickReplies) {
         const replies = entry.quickReplies;
         const send = props.chatUi?.onQuickReply;
+        const notes = props.chatUi?.replyNotes;
         return (
             <UiQuickReplies
                 {...(props.className === undefined ? {} : { className: props.className })}
+                {...(notes ? { notes } : {})}
                 {...(send ? { onSend: (index: number) => send(replies, index) } : {})}
+                {...(rowWidth === undefined
+                    ? {}
+                    : {
+                          pillWidth: conversationQuickRepliesLayout(replies, rowWidth, textCache)
+                              .pillWidth,
+                      })}
                 replies={replies}
                 style={props.style}
             />
@@ -764,7 +778,23 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     variant="chat"
                 />
             ))}
-            {entry.ui ? chatUiDocument(message.id, entry.ui, props.chatUi) : null}
+            {entry.ui
+                ? chatUiDocument(
+                      message.id,
+                      entry.ui,
+                      props.chatUi,
+                      rowWidth === undefined
+                          ? undefined
+                          : messageContentMeasure(
+                                rowWidth,
+                                message.sender?.kind === "agent"
+                                    ? "agent"
+                                    : message.sender?.id === props.viewerId
+                                      ? "own"
+                                      : "incoming",
+                            ),
+                  )
+                : null}
         </Message>
     );
 }
@@ -773,8 +803,15 @@ function chatUiDocument(
     messageId: string,
     ui: ConversationUi,
     chatUi: ConversationChatUi | undefined,
+    width: number | undefined,
 ): ReactNode {
-    const { onAction, onMediaOpen, ...view } = chatUi ?? {};
+    const {
+        onAction,
+        onMediaOpen,
+        onQuickReply: _send,
+        replyNotes: _notes,
+        ...view
+    } = chatUi ?? {};
     return (
         <UiDocumentView
             {...view}
@@ -788,6 +825,7 @@ function chatUiDocument(
                 ? { onMediaOpen: (index: number) => onMediaOpen(messageId, index) }
                 : {})}
             ui={ui}
+            {...(width === undefined ? {} : { width })}
         />
     );
 }

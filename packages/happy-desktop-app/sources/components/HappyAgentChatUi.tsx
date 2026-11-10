@@ -1,6 +1,7 @@
 import { createContext, useSyncExternalStore } from "react";
 import {
     happyAgentChatOnboardingStoreNoop,
+    providerCliReplyNote,
     type HappyAgentChatOnboardingStore,
     type HappyAgentClockStore,
     type HappyAgentComputePoolStore,
@@ -9,6 +10,7 @@ import {
     type HappyAgentMobileConnectorStore,
     type HappyAgentOwnGitCredentialsStore,
     type HappyAgentProviderClisStore,
+    type ReplyProviderId,
     type UiActionInput,
 } from "happy-desktop-state";
 import {
@@ -19,6 +21,7 @@ import {
     UiPhonePair,
     UiProviderSignIn,
     type ChatUiLive,
+    type ChatUiReplyNotes,
     type UiWidgetControl,
 } from "happy-desktop-ui";
 import { membersExpiresText, membersInviteMessage, membersRoleName } from "../membersWords";
@@ -31,6 +34,8 @@ import { membersExpiresText, membersInviteMessage, membersRoleName } from "../me
  */
 export type HappyAgentConversationExtras = {
     readonly live?: ChatUiLive;
+    /** The live notes quick-reply options about an AI wear. */
+    readonly replyNotes?: ChatUiReplyNotes;
     readonly chatOnboarding: HappyAgentChatOnboardingStore;
 };
 
@@ -75,12 +80,25 @@ export function happyAgentConversationExtras(
     const linkOpen = options.linkOpen;
     return {
         chatOnboarding: source.chatOnboarding ?? happyAgentChatOnboardingStoreNoop,
+        ...(providerClis
+            ? {
+                  replyNotes: {
+                      provider: (provider: ReplyProviderId) => (
+                          <HappyAgentReplyProviderNote provider={provider} store={providerClis} />
+                      ),
+                  },
+              }
+            : {}),
         live: {
             ...(providerClis
                 ? {
                       provider_sign_in: (component, control) =>
                           component.type === "provider_sign_in" ? (
                               <HappyAgentChatProviderSignIn
+                                  /* LOCAL until the client package types `account` on the props. */
+                                  account={
+                                      (component.props as { readonly account?: "new" }).account
+                                  }
                                   control={control}
                                   linkOpen={linkOpen}
                                   provider={component.props.provider}
@@ -153,6 +171,7 @@ const SIGN_IN_STARTS: ReadonlySet<string> = new Set([
 function HappyAgentChatProviderSignIn(props: {
     readonly store: HappyAgentProviderClisStore;
     readonly provider: string;
+    readonly account: "new" | undefined;
     readonly control: UiWidgetControl;
     readonly linkOpen: (url: string) => void;
 }) {
@@ -162,6 +181,7 @@ function HappyAgentChatProviderSignIn(props: {
     const cli = clis.clis.get(provider);
     return (
         <UiProviderSignIn
+            {...(props.account ? { account: props.account } : {})}
             {...(cli ? { cli } : {})}
             control={
                 act
@@ -179,6 +199,23 @@ function HappyAgentChatProviderSignIn(props: {
             unsupported={clis.status === "unsupported"}
         />
     );
+}
+
+/**
+ * The note a quick reply about an AI wears: how that AI stands now, from the
+ * connection's provider CLIs and never from the model. Only the note repaints
+ * as it changes; its pill keeps the width reserved for the widest note.
+ */
+function HappyAgentReplyProviderNote(props: {
+    readonly store: HappyAgentProviderClisStore;
+    readonly provider: ReplyProviderId;
+}) {
+    const note = useSyncExternalStore(
+        props.store.subscribe,
+        () => providerCliReplyNote(props.store.get().clis.get(props.provider)),
+        () => providerCliReplyNote(props.store.get().clis.get(props.provider)),
+    );
+    return note ?? null;
 }
 
 /** The default model for new chats where a document shows it, changed in place. */

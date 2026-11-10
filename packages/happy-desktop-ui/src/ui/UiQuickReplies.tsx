@@ -1,43 +1,47 @@
-import type { CSSProperties } from "react";
-import type { ConversationQuickReplies } from "happy-desktop-state";
-import { AssistantMark, type AssistantMarkName } from "../AssistantMark";
+import type { CSSProperties, ReactNode } from "react";
+import type { ConversationQuickReplies, ReplyProviderId } from "happy-desktop-state";
+import { AssistantMark } from "../AssistantMark";
 import { Ionicon } from "../vectorIcons/VectorIcon";
-import { chatUiMeasure } from "./UiDocumentView";
+import { uiProviderMark } from "./UiProviderSignInRow";
+
+/**
+ * The live notes reply components wear, drawn by the conversation's owner
+ * from its own stores: a provider option's "2 accounts". A note's text may
+ * change; its room is reserved, so nothing moves when it does.
+ */
+export type ChatUiReplyNotes = {
+    readonly provider?: (provider: ReplyProviderId) => ReactNode;
+};
 
 export type UiQuickRepliesProps = {
     readonly replies: ConversationQuickReplies;
+    /**
+     * Every pill's width, from `conversationQuickRepliesLayout` at the row's
+     * width. Absent, the stack is as wide as its widest pill.
+     */
+    readonly pillWidth?: number;
     /**
      * Sends one option as the person's message. Absent, or the suggestion is
      * no longer the newest one nobody has answered, the replies take no tap.
      */
     readonly onSend?: (index: number) => void;
+    readonly notes?: ChatUiReplyNotes;
     readonly className?: string;
     readonly style?: CSSProperties;
-    /**
-     * PROTOTYPE (chat UI onboarding experiment): what an option is about,
-     * drawn beside its words — an AI's mark, and a live note such as how many
-     * accounts it has. By option index; the proposed contract tags an option
-     * with `{ provider }` and the client reads the note from its own live
-     * provider state, so the model never writes a count that goes stale.
-     */
-    readonly decorations?: readonly (UiQuickReplyDecoration | undefined)[];
-};
-
-export type UiQuickReplyDecoration = {
-    readonly mark?: AssistantMarkName;
-    readonly note?: string;
 };
 
 /**
- * Suggested replies: the agent's offer of what the person might say, drawn as
- * their own bubbles would be — one under another, each as wide as a person's
- * widest bubble, against the right, in a fainter fill. A tap sends the option
- * at once. The option a person's message sent (`chosen`, read back from its
- * `quickReply`) takes the bubble's own fill and a tick, and the others' words go
- * quiet; the tick's room is always kept, so nothing moves. The stack stays for
- * good, and only the newest one nobody has answered takes a tap.
+ * Suggested replies: the agent's offer of what the person might say. They are
+ * its output, so they stand on its text's edge, one under another, every pill
+ * as wide as the widest of the stack, in a fainter fill of the person's own
+ * bubble. A tap sends the option at once. The option a person's message sent
+ * (`chosen`, read back from its `quickReply`) takes the bubble's own fill and
+ * a tick, and the others' words go quiet; the tick's room is always kept, so
+ * nothing moves. The stack stays for good, and only the newest one nobody has
+ * answered takes a tap.
  *
- * It is a conversation row of its own, with the own message's insets.
+ * An option about an AI wears its mark before the words and, while the stack
+ * takes a tap, a quiet note at the end on how that AI stands now.
  */
 export function UiQuickReplies(props: UiQuickRepliesProps) {
     const replies = props.replies;
@@ -50,9 +54,18 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
             data-live={send ? "" : undefined}
             style={props.style}
         >
-            <div aria-label="Suggested replies" className="happy-chat-replies__stack" role="group">
+            <div
+                aria-label="Suggested replies"
+                className="happy-chat-replies__stack"
+                role="group"
+                style={props.pillWidth === undefined ? undefined : { width: props.pillWidth }}
+            >
                 {replies.options.map((option, index) => {
-                    const decoration = props.decorations?.[index];
+                    const about = replies.ui?.[index];
+                    const note =
+                        about && replies.live
+                            ? props.notes?.provider?.(about.props.provider)
+                            : null;
                     return (
                         <button
                             aria-pressed={replies.chosen === index}
@@ -64,16 +77,16 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                             title={option}
                             type="button"
                         >
-                            {decoration?.mark ? (
+                            {about ? (
                                 <span aria-hidden="true" className="happy-chat-replies__mark">
-                                    <AssistantMark name={decoration.mark} size={16} />
+                                    <AssistantMark
+                                        name={uiProviderMark(about.props.provider)}
+                                        size={16}
+                                    />
                                 </span>
                             ) : null}
                             <span className="happy-chat-replies__label">{option}</span>
-                            {/* A note says how things are now; an answered stack keeps only its marks. */}
-                            {decoration?.note && replies.live ? (
-                                <span className="happy-chat-replies__note">{decoration.note}</span>
-                            ) : null}
+                            {note ? <span className="happy-chat-replies__note">{note}</span> : null}
                             <span aria-hidden="true" className="happy-chat-replies__tick">
                                 <Ionicon name="checkmark" size={16} />
                             </span>
@@ -83,11 +96,4 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
             </div>
         </div>
     );
-}
-
-/** The row's height at the conversation's `width`: one line per reply, whatever is chosen. */
-export function uiQuickRepliesHeight(replies: ConversationQuickReplies, width: number): number {
-    return chatUiMeasure(replies.options, "row", width, () => (
-        <UiQuickReplies replies={{ ...replies, live: false }} />
-    ));
 }

@@ -147,7 +147,9 @@ export function UiPhoneAppCard() {
                     <span className="happy-chat-card__text">
                         <span className="happy-chat-row__name">Happy on your phone</span>
                         <span className="happy-chat-card__line">
-                            {"Point your phone's camera at a code to get the app, then pair it here."}
+                            {
+                                "Point your phone's camera at a code to get the app, then pair it here."
+                            }
                         </span>
                     </span>
                 </span>

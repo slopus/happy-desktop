@@ -1,9 +1,11 @@
 import type { Message, UiActionBlock, UiDocument } from "@slopus/happy-agent-client";
-import type {
-    ConversationQuickReplies,
-    ConversationUi,
-    ConversationUiAttempt,
-    UiComponent,
+import {
+    replyUiRead,
+    type ConversationQuickReplies,
+    type ConversationUi,
+    type ConversationUiAttempt,
+    type ReplyUi,
+    type UiComponent,
 } from "./chatUi.js";
 
 /**
@@ -90,7 +92,12 @@ export function quickRepliesOf(message: Message): readonly ConversationQuickRepl
     const found: ConversationQuickReplies[] = [];
     for (const block of message.content) {
         if (block.type === "quick_replies" && block.options.length > 0)
-            found.push({ messageId: message.id, options: block.options, live: false });
+            found.push({
+                messageId: message.id,
+                options: block.options,
+                ...replyUiOf(block, block.options.length),
+                live: false,
+            });
         else if (
             block.type === "tool_call" &&
             block.presentation?.type === "quick_replies" &&
@@ -100,10 +107,26 @@ export function quickRepliesOf(message: Message): readonly ConversationQuickRepl
                 messageId: message.id,
                 toolCallId: block.id,
                 options: block.presentation.options,
+                ...replyUiOf(block.presentation, block.presentation.options.length),
                 live: false,
             });
     }
     return found;
+}
+
+/**
+ * The options' reply components, when the suggestion carries them for every
+ * option. LOCAL until the client package types `ui` on the block and the
+ * presentation; then this reads the typed field.
+ */
+function replyUiOf(
+    carrier: object,
+    length: number,
+): { readonly ui: readonly (ReplyUi | null)[] } | Record<string, never> {
+    const ui = (carrier as { readonly ui?: unknown }).ui;
+    if (!Array.isArray(ui) || ui.length !== length) return {};
+    const read = ui.map(replyUiRead);
+    return read.some((entry) => entry !== null) ? { ui: read } : {};
 }
 
 /** The key one suggestion and every `quickReply` naming it share. */
@@ -127,7 +150,13 @@ export function quickRepliesEqual(
         left.chosen === right.chosen &&
         left.live === right.live &&
         left.options.length === right.options.length &&
-        left.options.every((option, index) => option === right.options[index])
+        left.options.every((option, index) => option === right.options[index]) &&
+        (left.ui?.length ?? 0) === (right.ui?.length ?? 0) &&
+        (left.ui ?? []).every(
+            (entry, index) =>
+                entry?.type === right.ui?.[index]?.type &&
+                entry?.props.provider === right.ui?.[index]?.props.provider,
+        )
     );
 }
 

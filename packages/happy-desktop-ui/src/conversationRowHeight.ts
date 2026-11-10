@@ -3,11 +3,13 @@ import {
     type AgentTurnTraceSummary,
     type ConversationEntry,
     type ConversationErrorAssistance,
+    type ConversationQuickReplies,
     type ConversationUi,
     type ConversationMediaItem,
     type ConversationMediaLayout,
     type ConversationRequest,
     type HappyReference,
+    PROVIDER_CLI_REPLY_NOTE_SAMPLES,
 } from "happy-desktop-state";
 import {
     conversationAgentRowStartsGroup,
@@ -94,7 +96,6 @@ import {
     uiDocumentSignature,
     type UiDocumentViewProps,
 } from "./ui/UiDocumentView";
-import { uiQuickRepliesHeight } from "./ui/UiQuickReplies";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
 /** The same footer geometry for the live row and the room a queued turn will need. */
@@ -688,9 +689,61 @@ export function steeringNoticeRowHeight(
  * the row padding alone, before any bubble cap. An agent's body has no bubble,
  * so its column is its body measure.
  */
-function messageContentMeasure(width: number, treatment: MessageTreatment): number {
+export function messageContentMeasure(width: number, treatment: MessageTreatment): number {
     if (treatment === "agent") return width - agentInset();
     return width - (treatment === "incoming" ? INCOMING_INSET : OWN_INSET);
+}
+/*
+ * `.happy-chat-replies`: 8px over and under the stack, pills 6px apart, each
+ * 10px + a 22px line + 10px tall. Across a pill: 12px padding either side, the
+ * 15px words, a 16px tick 8px after them; an option about an AI adds its 16px
+ * mark 8px before the words and the room of its widest 13px note 8px after.
+ */
+const REPLIES_PADDING = 8;
+const REPLY_GAP = 6;
+const REPLY_HEIGHT = 42;
+const REPLY_PADDING_X = 12;
+const REPLY_ICON = 16;
+const REPLY_ICON_GAP = 8;
+
+/** A suggestion's row: its height, and the one width every pill in it takes. */
+export type ConversationQuickRepliesLayout = {
+    readonly height: number;
+    readonly pillWidth: number;
+};
+
+/**
+ * Lays a suggestion out at the row's `width`, from its options' words alone:
+ * one line per pill, every pill as wide as the widest one's natural width,
+ * the tick's room and the widest note an option could wear included, and no
+ * wider than the person's own widest bubble, past which words ellipsize. A
+ * reply chosen or a note changing moves nothing.
+ */
+export function conversationQuickRepliesLayout(
+    replies: ConversationQuickReplies,
+    width: number,
+    cache?: MessageTextLayoutCache,
+): ConversationQuickRepliesLayout {
+    const count = replies.options.length;
+    const height = 2 * REPLIES_PADDING + count * REPLY_HEIGHT + Math.max(0, count - 1) * REPLY_GAP;
+    let noteRoom = 0;
+    if (replies.ui?.some((about) => about !== null))
+        for (const sample of PROVIDER_CLI_REPLY_NOTE_SAMPLES)
+            noteRoom = Math.max(noteRoom, uiTextNaturalWidth(sample, 13, cache));
+    let widest = 0;
+    for (const [index, option] of replies.options.entries()) {
+        const about = replies.ui?.[index] ?? null;
+        widest = Math.max(
+            widest,
+            2 * REPLY_PADDING_X +
+                uiTextNaturalWidth(option, 15, cache) +
+                REPLY_ICON_GAP +
+                REPLY_ICON +
+                (about === null ? 0 : REPLY_ICON + REPLY_ICON_GAP + REPLY_ICON_GAP + noteRoom),
+        );
+    }
+    const cap = Math.floor((width - OWN_INSET) * BUBBLE_CAP);
+    return { height, pillWidth: Math.min(cap, Math.ceil(widest + 0.5)) };
 }
 /** Height of a message's photos at the measure its treatment leaves them. */
 export function messageMediaHeight(
@@ -1382,8 +1435,11 @@ export function conversationRowHeight(
     /* Suggested replies are a row of their own: one line each, whichever is chosen. */
     const replies = entry.quickReplies;
     if (replies)
-        return rowHeightCached(cache, entry, `replies:${String(width)}`, () =>
-            uiQuickRepliesHeight(replies, width),
+        return rowHeightCached(
+            cache,
+            entry,
+            "replies",
+            () => conversationQuickRepliesLayout(replies, width, cache?.text).height,
         );
     const message = entry.message;
     const agent = message.sender?.kind === "agent";

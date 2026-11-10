@@ -14,7 +14,7 @@ import {
     UiInviteRow,
     UiPhonePairCard,
 } from "./UiCards";
-import { UiProviderAccountsList, type UiProviderAccounts } from "./UiProviderAccounts";
+import { UiProviderSignInRow } from "./UiProviderSignInRow";
 import { uiWidgetSend, type UiWidgetControl } from "./UiWidgetControl";
 
 /*
@@ -33,6 +33,8 @@ export function UiProviderSignIn(props: {
     readonly provider: string;
     /** The program as the server last described it; absent until read. */
     readonly cli?: ProviderCli;
+    /** Adds another account instead of signing the default one in. */
+    readonly account?: "new";
     /** The server doesn't run provider CLIs: the way into its providers' Settings instead. */
     readonly unsupported?: boolean;
     readonly control: UiWidgetControl;
@@ -44,144 +46,37 @@ export function UiProviderSignIn(props: {
     if (props.unsupported) return <ChatSettingsFigure type="providers" />;
     const live = control.act !== undefined;
     const may = (type: string) => live && control.allowed(type);
-    const cli = props.cli;
-    const missing = cli?.installation.status === "missing";
+    const start =
+        props.cli?.installation.status === "missing"
+            ? "provider_sign_in.install"
+            : "provider_sign_in.sign_in";
     return (
-        <UiProviderAccountsList
-            /* Today's daemon signs one account in per program: a second sign-in replaces it. */
-            accountsAddable={false}
+        <UiProviderSignInRow
+            {...(props.account ? { account: props.account } : {})}
+            {...(props.cli ? { cli: props.cli } : {})}
+            {...(control.error ? { error: control.error } : {})}
             {...(may("provider_sign_in.cancel")
                 ? { onCancel: () => void uiWidgetSend(control, "provider_sign_in.cancel") }
                 : {})}
             {...(may("provider_sign_in.submit_code")
                 ? {
-                      onCode: (_provider: string, code: string) =>
+                      onCode: (code: string) =>
                           void uiWidgetSend(control, "provider_sign_in.submit_code", { code }),
                   }
                 : {})}
             {...(props.onPageOpen ? { onPageOpen: props.onPageOpen } : {})}
-            {...(may(missing ? "provider_sign_in.install" : "provider_sign_in.sign_in")
-                ? {
-                      onSignIn: () =>
-                          void uiWidgetSend(
-                              control,
-                              missing ? "provider_sign_in.install" : "provider_sign_in.sign_in",
-                          ),
-                  }
-                : {})}
+            {...(may(start) ? { onSignIn: () => void uiWidgetSend(control, start) } : {})}
             {...(may("provider_sign_in.submit_token")
                 ? {
-                      onToken: (_provider: string, token: string) =>
+                      onToken: (token: string) =>
                           void uiWidgetSend(control, "provider_sign_in.submit_token", { token }),
                   }
                 : {})}
-            providers={[
-                uiProviderAccountsFromCli(props.provider, cli, busyOf(control), control.error),
-            ]}
+            provider={props.provider}
+            requesting={busyOf(control)}
             {...(props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame })}
         />
     );
-}
-
-const CLI_NAMES: Readonly<Record<string, string>> = {
-    claude: "Claude Code",
-    codex: "Codex",
-    grok: "Grok",
-    antigravity: "Antigravity",
-};
-
-/**
- * Today's provider CLI object as the accounts row draws it: its one sign-in
- * as one account, its operation as the row's operation, and a click on its
- * way or a refusal over both.
- */
-export function uiProviderAccountsFromCli(
-    provider: string,
-    cli: ProviderCli | undefined,
-    requesting: boolean,
-    error: string | undefined,
-): UiProviderAccounts {
-    const key =
-        (["claude", "codex", "grok", "antigravity"] as const).find((id) => id === provider) ??
-        "codex";
-    const name = cli?.name ?? CLI_NAMES[provider] ?? provider;
-    const account = cli?.signIn.status === "signed_in" ? cli.signIn.account : null;
-    const operation = cli?.operation;
-    const base = {
-        provider: key,
-        name,
-        installed: cli?.installation.status !== "missing",
-        ...(cli?.installer ? { installerHost: cli.installer.sourceHost } : {}),
-        accounts:
-            cli?.signIn.status === "signed_in"
-                ? [
-                      {
-                          id: cli.providerId ?? cli.id,
-                          label: account?.email ?? "Signed in",
-                          ...(account?.plan ? { plan: account.plan } : {}),
-                          signIn: "signed_in" as const,
-                      },
-                  ]
-                : [],
-    };
-    if (error) return { ...base, operation: { kind: "sign_in", status: "failed", message: error } };
-    if (!cli)
-        return {
-            ...base,
-            operation: {
-                kind: "sign_in",
-                account: "new",
-                status: "running",
-                message: `Checking ${name} on this computer…`,
-            },
-        };
-    if (operation?.status === "waiting" && operation.authorization)
-        return {
-            ...base,
-            operation: {
-                kind: "sign_in",
-                account: "new",
-                status: "waiting",
-                authorization: {
-                    url: operation.authorization.url,
-                    ...(operation.authorization.userCode
-                        ? { userCode: operation.authorization.userCode }
-                        : {}),
-                    acceptsCode: operation.authorization.acceptsCode,
-                    openedByProgram: operation.authorization.openedByProgram,
-                },
-            },
-        };
-    if (operation?.status === "running" || operation?.status === "waiting")
-        return operation.kind === "install"
-            ? {
-                  ...base,
-                  operation: { kind: "install", status: "running", message: operation.message },
-              }
-            : {
-                  ...base,
-                  operation: {
-                      kind: "sign_in",
-                      account: "new",
-                      status: "running",
-                      message: operation.message,
-                  },
-              };
-    if (operation?.status === "failed")
-        return {
-            ...base,
-            operation: {
-                kind: operation.kind,
-                status: "failed",
-                message: operation.error?.message ?? operation.message,
-            },
-        };
-    if (requesting)
-        return {
-            ...base,
-            operation: { kind: "sign_in", account: "new", status: "running", message: "Starting…" },
-        };
-    return base;
 }
 
 /** `default_model`: the model new chats start on, changed with `default_model.set`. */

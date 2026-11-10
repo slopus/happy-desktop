@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
     chatUiActionAllowed,
     chatUiComponentKey,
+    chatUiMediaComponent,
     type ChatUiGranted,
     type ConversationUi,
     type UiActionInput,
@@ -13,7 +14,7 @@ import { ChatSettingsFigure } from "../ChatActionFigures";
 import { messageTextLayoutFontGenerationGet } from "../messageTextLayout";
 import { UiFallback } from "./UiFallback";
 import { UiFileTreeList, UiPhoneAppCard, type UiFileTreeEntry } from "./UiCards";
-import { UiImages, type UiImagesLayout } from "./UiImages";
+import { UiMedia } from "./UiMedia";
 import { chatUiLiveType, type ChatUiLive, type UiWidgetControl } from "./UiWidgetControl";
 
 export type UiDocumentViewProps = {
@@ -35,7 +36,12 @@ export type UiDocumentViewProps = {
     readonly live?: ChatUiLive;
     /** Opens one of the document's pictures, by its index in `ui.media`. */
     readonly onMediaOpen?: (index: number) => void;
+    /** The reply's content measure, which `media` lays its rows across. */
+    readonly width?: number;
 };
+
+/** The measure a document is drawn at where its surface states none. */
+const DOCUMENT_WIDTH_FALLBACK = 600;
 
 /**
  * Chat UI: a document's components drawn top to bottom, 16px apart, laid on
@@ -114,33 +120,20 @@ function UiComponentView(props: {
         if (draw === undefined) return <UiFallback text={component.fallback} />;
         return <LiveBox type={component.type}>{draw(component, control)}</LiveBox>;
     }
+    const media = chatUiMediaComponent(component);
+    if (media) return <UiMediaView entries={media.props.items} view={view} />;
     switch (component.type) {
-        case "images": {
-            const shown = component.props.images.filter(
-                (image) => ui.media[image.mediaIndex] !== undefined,
-            );
-            /* PROTOTYPE: `layout` is the proposed prop; today's documents carry `columns` only. */
-            const layout = (component.props as { readonly layout?: UiImagesLayout }).layout;
+        /* Until the client package carries `media`, a document's `images` draws the same way. */
+        case "images":
             return (
-                <UiImages
-                    captions={shown.map((image) => image.caption)}
-                    {...(component.props.columns ? { columns: component.props.columns } : {})}
-                    items={shown.map((image) => {
-                        const item = ui.media[image.mediaIndex]!;
-                        return image.alt ? { ...item, name: image.alt } : item;
-                    })}
-                    {...(layout ? { layout } : {})}
-                    {...(view.onMediaOpen
-                        ? {
-                              onItemOpen: (index: number) => {
-                                  const image = shown[index];
-                                  if (image) view.onMediaOpen?.(image.mediaIndex);
-                              },
-                          }
-                        : {})}
+                <UiMediaView
+                    entries={component.props.images.map((image) => ({
+                        mediaIndex: image.mediaIndex,
+                        ...(image.caption ? { label: image.caption } : {}),
+                    }))}
+                    view={view}
                 />
             );
-        }
         case "file_tree": {
             /* PROTOTYPE: `entries` (a path with a note and a status) is the proposed prop. */
             const entries = (component.props as { readonly entries?: readonly UiFileTreeEntry[] })
@@ -162,6 +155,30 @@ function UiComponentView(props: {
         default:
             return <UiFallback text={component.fallback} />;
     }
+}
+
+/** `media`: the entries the document's media still has, laid out at the document's width. */
+function UiMediaView(props: {
+    readonly entries: readonly { readonly mediaIndex: number; readonly label?: string }[];
+    readonly view: UiDocumentViewProps;
+}) {
+    const { view } = props;
+    const shown = props.entries.filter((entry) => view.ui.media[entry.mediaIndex] !== undefined);
+    return (
+        <UiMedia
+            items={shown.map((entry) => view.ui.media[entry.mediaIndex]!)}
+            labels={shown.map((entry) => entry.label)}
+            {...(view.onMediaOpen
+                ? {
+                      onItemOpen: (index: number) => {
+                          const entry = shown[index];
+                          if (entry) view.onMediaOpen?.(entry.mediaIndex);
+                      },
+                  }
+                : {})}
+            width={view.width ?? DOCUMENT_WIDTH_FALLBACK}
+        />
+    );
 }
 
 let measureHost: HTMLDivElement | undefined;
@@ -229,6 +246,7 @@ export function uiDocumentHeight(
                 ui={props.ui}
                 {...(props.served ? { served: props.served } : {})}
                 {...(boxes ? { live: boxes } : {})}
+                width={width}
             />
         );
     });

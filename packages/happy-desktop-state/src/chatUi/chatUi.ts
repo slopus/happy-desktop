@@ -46,7 +46,7 @@ export type ConversationUiAttempt = {
 export type ConversationUi = {
     readonly offer: ConversationUiOffer;
     readonly document: UiDocument;
-    /** The pictures an `images` component names by `mediaIndex`; empty for a daemon's document. */
+    /** The pictures and recordings a `media` component names by `mediaIndex`; empty for a daemon's document. */
     readonly media: readonly ConversationMediaItem[];
     /** Each component's last recorded attempt, by component ID. */
     readonly attempts: ReadonlyMap<string, ConversationUiAttempt>;
@@ -63,11 +63,63 @@ export type ConversationQuickReplies = {
     /** The `suggest_replies` call holding it; absent for the message's own block. */
     readonly toolCallId?: string;
     readonly options: readonly string[];
+    /**
+     * What each option is about, by position, drawn beside its words; `null`
+     * for a plain option or a reply type this build doesn't draw. Absent when
+     * no option has one. Display-only: a tap still sends the option's text.
+     */
+    readonly ui?: readonly (ReplyUi | null)[];
     /** The option a person's message sent, by its `quickReply`: read back from the transcript. */
     readonly chosen?: number;
     /** It takes a tap: the newest suggestion, with no person's message after it. */
     readonly live: boolean;
 };
+
+/*
+ * LOCAL until the happy-agent contract for change 2 is published: the reply
+ * component catalog (`sources/replies/**`) and the `media` component. Swap
+ * these for the client package's types when it carries them.
+ */
+
+/** An AI whose program a reply option can be about. */
+export type ReplyProviderId = "claude" | "codex" | "grok" | "antigravity";
+
+/** A reply component: what one quick-reply option is about. v1 has `provider` alone. */
+export type ReplyUi = {
+    readonly type: "provider";
+    readonly props: { readonly provider: ReplyProviderId };
+};
+
+const REPLY_PROVIDERS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "antigravity"]);
+
+/** One stored `ui` entry as this build draws it, or `null` for anything else. */
+export function replyUiRead(value: unknown): ReplyUi | null {
+    if (typeof value !== "object" || value === null) return null;
+    const { type, props } = value as { readonly type?: unknown; readonly props?: unknown };
+    if (type !== "provider" || typeof props !== "object" || props === null) return null;
+    const provider = (props as { readonly provider?: unknown }).provider;
+    return typeof provider === "string" && REPLY_PROVIDERS.has(provider)
+        ? { type: "provider", props: { provider: provider as ReplyProviderId } }
+        : null;
+}
+
+/** One picture or recording of a `media` component, by its index in the presentation's `items`. */
+export type UiMediaEntry = { readonly mediaIndex: number; readonly label?: string };
+
+/** The `media` component: pictures and recordings laid out from their own sizes, labels under. */
+export type UiMediaComponent = {
+    readonly id: string;
+    readonly fallback: string;
+    readonly type: "media";
+    readonly props: { readonly items: readonly UiMediaEntry[] };
+};
+
+/** `component` as the `media` component, when it is one. */
+export function chatUiMediaComponent(component: {
+    readonly type: string;
+}): UiMediaComponent | undefined {
+    return component.type === "media" ? (component as UiMediaComponent) : undefined;
+}
 
 /** The key a component's local state is kept under in its conversation. */
 export function chatUiComponentKey(offer: ConversationUiOffer, componentId: string): string {
