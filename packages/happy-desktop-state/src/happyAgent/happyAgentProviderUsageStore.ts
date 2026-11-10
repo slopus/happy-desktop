@@ -222,6 +222,8 @@ export function happyAgentProviderUsageStoreCreate(
     let access: "unknown" | "asking" | "allowed" | "forbidden" = deps.allowed
         ? "unknown"
         : "allowed";
+    /** Only the answer to the latest question may land. */
+    let question = 0;
 
     const start = (): void => {
         clearTimeout(stopTimer);
@@ -229,9 +231,10 @@ export function happyAgentProviderUsageStoreCreate(
         if (disposed || unsubscribeSource || access === "forbidden" || access === "asking") return;
         if (access === "unknown" && deps.allowed) {
             access = "asking";
+            const asked = ++question;
             void deps.allowed().then(
-                (allowed) => answered(allowed),
-                () => answered(true),
+                (allowed) => answered(asked, allowed),
+                () => answered(asked, true),
             );
             return;
         }
@@ -282,8 +285,8 @@ export function happyAgentProviderUsageStoreCreate(
         );
     };
 
-    const answered = (allowed: boolean): void => {
-        if (disposed) return;
+    const answered = (asked: number, allowed: boolean): void => {
+        if (disposed || asked !== question) return;
         access = allowed ? "allowed" : "forbidden";
         if (allowed) {
             if (listeners.size > 0) start();
@@ -297,6 +300,11 @@ export function happyAgentProviderUsageStoreCreate(
         stopTimer = undefined;
         unsubscribeSource?.();
         unsubscribeSource = undefined;
+        // A role can change while nobody looks, so the next look asks again.
+        if (deps.allowed) {
+            question += 1;
+            access = "unknown";
+        }
     };
 
     return {

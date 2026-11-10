@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { happyAgentCloudTeamUsageAllowed } from "./happyAgentCloudTeamUsage.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import {
@@ -77,4 +77,49 @@ it("reads usage once allowed, and when the permission read fails", async () => {
         expect(fake.subscribe).toHaveBeenCalledTimes(1);
         store[Symbol.dispose]();
     }
+});
+
+afterEach(() => {
+    vi.useRealTimers();
+});
+
+it("asks again once nobody has looked for a while, so a role granted since sees usage", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const fake = sourceCreate();
+    let granted = false;
+    const store = happyAgentProviderUsageStoreCreate({
+        source: fake.source,
+        allowed: async () => granted,
+    });
+    const release = store.subscribe(() => undefined);
+    await vi.waitFor(() => expect(store.get().forbidden).toBe(true));
+    release();
+    vi.advanceTimersByTime(30_000);
+
+    granted = true;
+    store.subscribe(() => undefined);
+    await vi.waitFor(() => expect(store.get().providers).toEqual([{ providerId: "claude" }]));
+    expect(store.get().forbidden).toBeUndefined();
+    expect(fake.subscribe).toHaveBeenCalledTimes(1);
+    store[Symbol.dispose]();
+});
+
+it("lets a stale answer go once the store has stopped and asked again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const fake = sourceCreate();
+    const answers: ((allowed: boolean) => void)[] = [];
+    const store = happyAgentProviderUsageStoreCreate({
+        source: fake.source,
+        allowed: () => new Promise<boolean>((resolve) => answers.push(resolve)),
+    });
+    const release = store.subscribe(() => undefined);
+    release();
+    vi.advanceTimersByTime(30_000);
+    store.subscribe(() => undefined);
+    expect(answers).toHaveLength(2);
+    answers[0]!(false);
+    answers[1]!(true);
+    await vi.waitFor(() => expect(fake.subscribe).toHaveBeenCalledTimes(1));
+    expect(store.get().forbidden).toBeUndefined();
+    store[Symbol.dispose]();
 });
