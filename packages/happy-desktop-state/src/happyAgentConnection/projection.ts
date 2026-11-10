@@ -2019,6 +2019,9 @@ function runEndProject(
     finalContextTokens?: number,
 ): Extract<ChatElement, { kind: "group_end" }> | undefined {
     if (run.status === "running" || run.endedAt === null) return undefined;
+    /* A standalone run was stored already finished, outside any model turn:
+       it holds records, and is no turn to end. */
+    if (run.kind === "standalone") return undefined;
     const reason =
         run.reason === "abort"
             ? "abort"

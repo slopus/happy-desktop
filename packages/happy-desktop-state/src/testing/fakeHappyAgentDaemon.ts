@@ -1317,18 +1317,20 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 role: "service",
             };
             uiAttempts.set(request.id, message);
-            // An attempt record stands in a finished run of its own.
+            // An attempt record stands in a standalone run: stored already
+            // finished, never started, and finished before its message.
             const run: Run = {
                 costUsd: null,
                 endedAt: 1,
                 id: `action-${request.id}`,
+                kind: "standalone",
                 reason: null,
                 startedAt: 1,
                 status: "completed",
                 usage: {},
             };
             historyOf(agentId).runs.push({ ...run, messages: [message] });
-            emit("run.started", { acceptedMessageIds: [], agentId, run });
+            emit("run.finished", { agentId, run });
             emit("message.created", { agentId, message, runId: run.id });
             // A held "sendUiAction:respond" gate delays only the HTTP response.
             const respond = gates.get("sendUiAction:respond");

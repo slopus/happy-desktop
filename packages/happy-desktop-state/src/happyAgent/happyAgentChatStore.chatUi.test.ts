@@ -78,7 +78,10 @@ const suggested: Message = {
 
 async function chatOpen(
     messages: Message[],
-    options: { uiGrantedFollow?: ChatUiGrantedFollow } = {},
+    options: {
+        uiGrantedFollow?: ChatUiGrantedFollow;
+        onTopLevelSessionFinished?: (sessionId: string) => void;
+    } = {},
 ) {
     const daemon = fakeHappyAgentDaemonCreate();
     const project = daemon.projectSeed({ id: "project-a" });
@@ -90,6 +93,9 @@ async function chatOpen(
         client: daemon.client,
         wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
         now: () => 1_000,
+        ...(options.onTopLevelSessionFinished
+            ? { onTopLevelSessionFinished: options.onTopLevelSessionFinished }
+            : {}),
     });
     openConnections.push(connection);
     connection.connectGroups({ onChange: () => undefined, onError: () => undefined });
@@ -158,6 +164,23 @@ it("shows a document on its message's entry, under the words before it", async (
     expect(ui.offer).toEqual(offer);
     expect(ui.document).toEqual(document);
     expect(ui.attempts.size).toBe(0);
+});
+
+it("takes a click's standalone run as no turn: nothing finishes and no turn ends", async () => {
+    const finished = vi.fn();
+    const { store } = await chatOpen([offered], { onTopLevelSessionFinished: finished });
+    const before = store.get();
+    const statuses = (entries: readonly ConversationEntry[]) =>
+        entries.filter((entry) => entry.kind === "turnStatus").map((entry) => entry.id);
+    await setModel(store);
+    await vi.waitFor(() => expect(uiOf(store).attempts.get("model")).toBeDefined());
+    // The answer carries the record; give the stream's own `run.finished` time to land too.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const after = store.get();
+    expect(finished).not.toHaveBeenCalled();
+    expect(after.runStatus).toBe("idle");
+    expect(after.turnElapsedMs).toBe(before.turnElapsedMs);
+    expect(statuses(after.entries)).toEqual(statuses(before.entries));
 });
 
 it("sends a click as one typed request and shows its record on the component", async () => {

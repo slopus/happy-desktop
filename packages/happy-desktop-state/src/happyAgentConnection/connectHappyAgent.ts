@@ -4211,7 +4211,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         if (update.event.type === "run.finished") {
                             const { agentId, run } = update.event.payload;
                             const current = currentRuns.get(agentId);
+                            // A standalone run is no turn: the session finished nothing.
                             if (
+                                run.kind !== "standalone" &&
                                 agentOf(agentId)?.parentAgentId === null &&
                                 (current === undefined || current === run.id)
                             ) {
