@@ -53,8 +53,9 @@ export type UiProviderSignInRowActions = {
  * stands, and the one control it needs now. "Set up" installs the program
  * and signs in after it; the page, the code or the field a sign-in needs
  * shows in place while it waits; a token field only once a sign-in is
- * running or has failed and the person chose it. With `account: "new"` the
- * row adds an account beside the ones the program has.
+ * running or has failed and the person chose it. A signed-in AI offers "Use"
+ * until the person has chosen it. With `account: "new"` the row adds an
+ * account beside the ones the program has.
  *
  * Its height is one row whatever it shows, so the transcript knows it from
  * the component alone.
@@ -66,6 +67,11 @@ export function UiProviderSignInRow(
         readonly cli?: ProviderCli;
         /** Adds another account instead of signing the default one in. */
         readonly account?: "new";
+        /**
+         * The person already chose this signed-in AI here (`sign_in` connects it
+         * as it is): the row says so and offers nothing more.
+         */
+        readonly used?: boolean;
         /** A click from this window is on its way. */
         readonly requesting?: boolean;
         /** Why the last click was refused. */
@@ -309,6 +315,21 @@ export function UiProviderSignInRow(
                 variant="ghost"
             >
                 Sign in
+            </Button>,
+        );
+    if (!adding && !props.used && props.onSignIn)
+        return row(
+            "signed-in",
+            uiAccountsLine(accounts),
+            "done",
+            <Button
+                data-emphasis=""
+                data-strong=""
+                onClick={props.onSignIn}
+                size="medium"
+                variant="primary"
+            >
+                {`Use ${name}`}
             </Button>,
         );
     return row(

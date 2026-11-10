@@ -74,6 +74,10 @@ export function UiProviderSignIn(props: {
                 : {})}
             provider={props.provider}
             requesting={busyOf(control)}
+            used={
+                control.attempt?.action.type === "provider_sign_in.sign_in" &&
+                control.attempt.outcome.status === "accepted"
+            }
             {...(props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame })}
         />
     );
