@@ -29,10 +29,17 @@ export type HappyAgentConversationSummaryInput = Omit<
     "projectId" | "worktreeId"
 >;
 
+/**
+ * What a session is called before it has a title: the placeholder the sidebar
+ * shows for a new task, never its id. A new task goes a few seconds without one
+ * while its title is generated.
+ */
+export const HAPPY_AGENT_UNTITLED_SESSION_TITLE = "New task";
+
 function summaryTitle(session: HappyAgentConversationSummaryInput): string {
     if (session.title && session.title.trim().length > 0) return session.title;
     if (session.recap && session.recap.trim().length > 0) return session.recap;
-    return `Session ${session.id.slice(0, 8)}`;
+    return HAPPY_AGENT_UNTITLED_SESSION_TITLE;
 }
 
 /**

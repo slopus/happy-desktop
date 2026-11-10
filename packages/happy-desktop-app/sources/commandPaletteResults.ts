@@ -18,6 +18,7 @@ import type {
     ThemeMode,
 } from "happy-desktop-state";
 import {
+    HAPPY_AGENT_UNTITLED_SESSION_TITLE,
     happyAgentArtifactTypeLabel,
     happyAgentSessionGroupIdOf,
     happyAgentVaultNameShown,
@@ -911,7 +912,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
             row: {
                 kind: "command",
                 id: `chat:${session.id}`,
-                title: session.title?.trim() || `Session ${session.id.slice(0, 8)}`,
+                title: session.title?.trim() || HAPPY_AGENT_UNTITLED_SESSION_TITLE,
                 meta: `Closed · ${groupMeta(owner.project, owner.worktree)}`,
                 // Closed sessions wear the recents glyph, exactly as the
                 // workspace's own history menu marks them.
