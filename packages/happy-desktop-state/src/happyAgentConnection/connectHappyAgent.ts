@@ -5237,7 +5237,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 (response) => {
                     sendConfirmations.delete(mutationId);
                     if (response !== undefined) {
-                        updateMessage(sessionId, response.message, response.message.runId);
+                        // Happy Cloud answers before the run that takes the
+                        // message is announced, and without its runId. Until
+                        // run.started places it, it stays pending at the tail;
+                        // filed under an unknown run it would leave the
+                        // transcript for that moment.
+                        const message = response.message;
+                        if (message.runId == null)
+                            updateMessage(
+                                sessionId,
+                                message.role === "user"
+                                    ? { ...message, runId: null, status: "pending" }
+                                    : { ...message, runId: null },
+                                null,
+                            );
+                        else updateMessage(sessionId, message, message.runId);
                     }
                     acceptance.accept();
                 },
