@@ -621,8 +621,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 {...(rowWidth === undefined
                     ? {}
                     : {
-                          pillWidth: conversationQuickRepliesLayout(replies, rowWidth, textCache)
-                              .pillWidth,
+                          layout: conversationQuickRepliesLayout(replies, rowWidth, textCache),
                       })}
                 replies={replies}
                 style={props.style}

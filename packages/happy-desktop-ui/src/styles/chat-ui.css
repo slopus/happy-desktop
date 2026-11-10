@@ -152,12 +152,16 @@
     color: var(--text-secondary);
 }
 
+/* Two lines at most, then an ellipsis; the layout gives the pill that height. */
 .happy-chat-replies__label {
+    display: -webkit-box;
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .happy-chat-replies__mark {
@@ -169,9 +173,11 @@
     height: 16px;
 }
 
-/* What the option is about, live: quieter than the words, never squeezing them first. */
+/* What the option is about, live: quieter than the words, in a slot as wide
+   as the widest note, kept empty when there is none, so a note never moves the words. */
 .happy-chat-replies__note {
     flex: none;
+    text-align: right;
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 22px;

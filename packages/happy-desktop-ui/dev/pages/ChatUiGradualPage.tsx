@@ -75,7 +75,10 @@ const CLIS: Readonly<Record<ReplyProviderId, ProviderCli>> = {
 
 const about = (provider: ReplyProviderId): ReplyUi => ({ type: "provider", props: { provider } });
 
-/** A suggestion as the conversation carries it, drawn at the row's width. */
+/**
+ * A suggestion as the conversation carries it, drawn at the row's width. The
+ * wrapper names the heights the layout gave it, for the row-height check.
+ */
 function Replies(props: {
     readonly options: readonly (
         | string
@@ -83,6 +86,8 @@ function Replies(props: {
     )[];
     readonly chosen?: number;
     readonly clis?: Readonly<Record<ReplyProviderId, ProviderCli>>;
+    /** The row's width; the column's own by default. */
+    readonly width?: number;
 }) {
     const ui = props.options.map((option) =>
         typeof option === "string" ? null : about(option.about),
@@ -95,13 +100,20 @@ function Replies(props: {
         ...(props.chosen === undefined ? {} : { chosen: props.chosen }),
     };
     const clis = props.clis ?? CLIS;
+    const layout = conversationQuickRepliesLayout(replies, props.width ?? ROW_WIDTH);
     return (
-        <UiQuickReplies
-            notes={{ provider: (provider) => providerCliReplyNote(clis[provider]) }}
-            onSend={() => undefined}
-            pillWidth={conversationQuickRepliesLayout(replies, ROW_WIDTH).pillWidth}
-            replies={replies}
-        />
+        <div
+            data-layout-height={layout.height}
+            data-layout-pills={layout.pillHeights.join(" ")}
+            style={{ display: "flex", flexDirection: "column" }}
+        >
+            <UiQuickReplies
+                layout={layout}
+                notes={{ provider: (provider) => providerCliReplyNote(clis[provider]) }}
+                onSend={() => undefined}
+                replies={replies}
+            />
+        </div>
     );
 }
 
@@ -129,8 +141,18 @@ type Screen = {
     readonly id: string;
     readonly label: string;
     readonly height: number;
+    /** A column narrower than the conversation's usual one. */
+    readonly column?: number;
     readonly body: () => ReactNode;
 };
+
+const NARROW = 440;
+const NARROW_OPTIONS = [
+    { text: "Add another Claude Code account", about: "claude" as const },
+    { text: "Add another Codex account", about: "codex" as const },
+    "Show me every file you changed and why, then open the pull request once I've read it",
+    "Not yet",
+];
 
 const SCREENS: readonly Screen[] = [
     {
@@ -358,6 +380,40 @@ const SCREENS: readonly Screen[] = [
             );
         },
     },
+    {
+        id: "17-replies-narrow",
+        label: "Quick replies · narrow column, two lines then an ellipsis",
+        height: 420,
+        column: NARROW,
+        body: () => (
+            <>
+                <Agent body="Claude Code and Codex are connected. What next?" />
+                <Replies
+                    clis={{ ...CLIS, claude: CLAUDE_ONE }}
+                    options={NARROW_OPTIONS}
+                    width={NARROW}
+                />
+            </>
+        ),
+    },
+    {
+        id: "18-replies-narrow-chosen",
+        label: "Quick replies · narrow column, chosen: no height changes",
+        height: 480,
+        column: NARROW,
+        body: () => (
+            <>
+                <Agent body="Claude Code and Codex are connected. What next?" />
+                <Replies
+                    chosen={0}
+                    clis={{ ...CLIS, claude: CLAUDE_ONE }}
+                    options={NARROW_OPTIONS}
+                    width={NARROW}
+                />
+                <Person body="Add another Claude Code account" suggested />
+            </>
+        ),
+    },
 ];
 
 export function ChatUiGradualPage() {
@@ -375,10 +431,17 @@ export function ChatUiGradualPage() {
                         label={screen.label}
                         number={`${componentNumber}-${screen.id.slice(0, 2)}`}
                         screen={screen.id}
-                        window={{ width: 760, height: screen.height }}
+                        window={{
+                            width: (screen.column ?? ROW_WIDTH) + 120,
+                            height: screen.height,
+                        }}
                     >
                         <Stage>
-                            <ChatColumn>{screen.body()}</ChatColumn>
+                            <ChatColumn
+                                {...(screen.column === undefined ? {} : { width: screen.column })}
+                            >
+                                {screen.body()}
+                            </ChatColumn>
                         </Stage>
                     </FullScreenSpecimen>
                 ))}

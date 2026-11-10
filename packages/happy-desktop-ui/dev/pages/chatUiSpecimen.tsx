@@ -28,14 +28,14 @@ export function Stage(props: { readonly children: ReactNode }) {
 }
 
 /** One chat column: the agent's turn and what the person said, top to bottom. */
-export function ChatColumn(props: { readonly children: ReactNode }) {
+export function ChatColumn(props: { readonly children: ReactNode; readonly width?: number }) {
     return (
         <div
             style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: "16px",
-                width: "640px",
+                width: `${String(props.width ?? 640)}px`,
                 minWidth: 0,
             }}
         >

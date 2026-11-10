@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { ConversationQuickReplies, ReplyProviderId } from "happy-desktop-state";
 import { AssistantMark } from "../AssistantMark";
+import type { ConversationQuickRepliesLayout } from "../conversationRowHeight";
 import { Ionicon } from "../vectorIcons/VectorIcon";
 import { uiProviderMark } from "./UiProviderSignInRow";
 
@@ -16,10 +17,11 @@ export type ChatUiReplyNotes = {
 export type UiQuickRepliesProps = {
     readonly replies: ConversationQuickReplies;
     /**
-     * Every pill's width, from `conversationQuickRepliesLayout` at the row's
-     * width. Absent, the stack is as wide as its widest pill.
+     * Every pill's width, each pill's height and the note's room, from
+     * `conversationQuickRepliesLayout` at the row's width. Absent, the stack
+     * is as wide as its widest pill and each pill as tall as its words.
      */
-    readonly pillWidth?: number;
+    readonly layout?: ConversationQuickRepliesLayout;
     /**
      * Sends one option as the person's message. Absent, or the suggestion is
      * no longer the newest one nobody has answered, the replies take no tap.
@@ -41,11 +43,15 @@ export type UiQuickRepliesProps = {
  * answered takes a tap.
  *
  * An option about an AI wears its mark before the words and, while the stack
- * takes a tap, a quiet note at the end on how that AI stands now.
+ * takes a tap, a quiet note at the end on how that AI stands now, in a slot
+ * kept whether or not it holds one. Words wrap to two lines at most, then
+ * ellipsize; each pill's height is the layout's, so neither a choice nor a
+ * note moves anything.
  */
 export function UiQuickReplies(props: UiQuickRepliesProps) {
     const replies = props.replies;
     const send = replies.live ? props.onSend : undefined;
+    const layout = props.layout;
     return (
         <div
             className={["happy-chat-replies", props.className].filter(Boolean).join(" ")}
@@ -58,7 +64,7 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                 aria-label="Suggested replies"
                 className="happy-chat-replies__stack"
                 role="group"
-                style={props.pillWidth === undefined ? undefined : { width: props.pillWidth }}
+                style={layout === undefined ? undefined : { width: layout.pillWidth }}
             >
                 {replies.options.map((option, index) => {
                     const about = replies.ui?.[index];
@@ -74,6 +80,11 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                             disabled={send === undefined}
                             key={`${String(index)}:${option}`}
                             onClick={() => send?.(index)}
+                            style={
+                                layout === undefined
+                                    ? undefined
+                                    : { height: layout.pillHeights[index] }
+                            }
                             title={option}
                             type="button"
                         >
@@ -86,7 +97,18 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                                 </span>
                             ) : null}
                             <span className="happy-chat-replies__label">{option}</span>
-                            {note ? <span className="happy-chat-replies__note">{note}</span> : null}
+                            {about ? (
+                                <span
+                                    className="happy-chat-replies__note"
+                                    style={
+                                        layout === undefined
+                                            ? undefined
+                                            : { width: layout.noteWidth }
+                                    }
+                                >
+                                    {note}
+                                </span>
+                            ) : null}
                             <span aria-hidden="true" className="happy-chat-replies__tick">
                                 <Ionicon name="checkmark" size={16} />
                             </span>
