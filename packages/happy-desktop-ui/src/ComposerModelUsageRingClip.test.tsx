@@ -225,8 +225,11 @@ it("paints a ring round, edge to edge, between device pixels", async () => {
         { width: 640, height: 240 },
     );
     await view.ready();
+    // One black/white capture pair for every case: two per case outlasts the test's timeout.
+    const rings = cases.map((_, index) => view.$(`[data-case="${String(index)}"]`));
+    const metrics = await view.visibleMetrics(rings);
     for (const [index, { zoom, shift, tone }] of cases.entries()) {
-        const ink = (await view.$(`[data-case="${String(index)}"]`).visibleMetrics()).bounds;
+        const ink = metrics.get(rings[index]!)!.bounds;
         expect(
             ink.width,
             `zoom ${String(zoom)}, shift ${String(shift)}, ${tone}: width against height`,

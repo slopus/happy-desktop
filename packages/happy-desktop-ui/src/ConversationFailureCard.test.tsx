@@ -29,6 +29,7 @@ import {
 } from "./conversationSwitchTargets";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
+import { localClockTime, localWeekdayShort } from "./localTime";
 import { createRenderer } from "./testing";
 import "./styles.css";
 
@@ -797,6 +798,21 @@ it("never offers back the account that failed, and ranks one a usage limit stopp
         after.find((target) => target.providerId === "claude_work")?.usage?.limit,
     ).toBeUndefined();
     expect(conversationSwitchTargetPreferred(after, "claude")?.providerId).toBe("claude_work");
+
+    // A weekly limit days away says which day, as the usage readings do.
+    const weekly = NOW + 3 * 86_400_000;
+    const later = conversationSwitchFailed(
+        [
+            { ...limit(CLAUDE_WORK, weekly), id: "weekly" },
+            { ...limit(CODEX, null), id: "now" },
+        ],
+        "now",
+    );
+    expect(
+        conversationSwitchTargets(unread, USAGE, later, NOW).find(
+            (target) => target.providerId === "claude_work",
+        )?.usage?.limit,
+    ).toEqual({ resets: `${localWeekdayShort(weekly)} ${localClockTime(weekly)}` });
 });
 
 /**
