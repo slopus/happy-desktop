@@ -1,9 +1,14 @@
+import { useState } from "react";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { SetupPage, type SetupPageProps } from "./SetupPage";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
+import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { Ionicon } from "./vectorIcons/VectorIcon";
+import type { WelcomeSlide } from "./WelcomeDeck";
+import { WelcomeScreen } from "./WelcomeScreen";
 
 /** One Happy Cloud server the person belongs to. */
 export interface CloudConnectServer {
@@ -28,7 +33,22 @@ export type CloudConnectAvailability =
     | "reserved"
     | "invalid";
 
+/** Another Happy Agent of the reader's own, which the Chief of Staff sets up. */
+export type CloudConnectAgentAudience = "personal" | "team";
+
 export type CloudConnectView =
+    /**
+     * What to add: a Happy Agent of their own, one their small team shares,
+     * or Happy Cloud. The first two are drafted to the Chief of Staff.
+     */
+    | {
+          readonly kind: "choose";
+          /** Whose request is being written into the Chief of Staff's draft. */
+          readonly asking?: CloudConnectAgentAudience;
+          /** It is in the draft: the sheet leaves, onto that conversation. */
+          readonly asked?: true;
+          readonly error?: string;
+      }
     | {
           readonly kind: "welcome";
           /**
@@ -83,14 +103,18 @@ export type CloudConnectView =
 export interface CloudConnectScreenProps {
     readonly appearance: ThemeMode;
     readonly view: CloudConnectView;
-    /** Not now, Esc, and Cancel: back to the app. */
+    /** The close button, Esc, and Cancel: back to the app. */
     onClose(): void;
+    /** A Happy Agent of the reader's own, or their team's: drafted to the Chief of Staff. */
+    onAgentAdd(audience: CloudConnectAgentAudience): void;
+    /** Happy Cloud's own steps, from its welcome. */
+    onCloudOpen(): void;
     /** Welcome's Continue, and Try again after a failure. */
     onContinue(): void;
     onServerPick(id: string): void;
     onCreateOpen(): void;
     onJoinOpen(): void;
-    /** From create or join back to the servers. */
+    /** From create or join back to the servers, and from the welcome to the choices. */
     onBack(): void;
     onCreateNameChange(name: string): void;
     onCreate(): void;
@@ -157,21 +181,128 @@ function CloudConnectServerImage(props: {
 }
 
 /**
- * C-336 CloudConnectScreen — the sidebar's "+" to Happy Cloud, full window on
- * the onboarding sky: welcome, account sign-in in the browser, the account's
+ * The three ways to add to Happy, side by side like plans: who each is for,
+ * what it is, what it comes with, and the one button that starts it, in the
+ * order they grow: just you, a small team, an organization.
+ */
+const PLANS: readonly {
+    readonly id: CloudConnectAgentAudience | "cloud";
+    /** Grows from card to card: a seedling, a sprig, a tree. */
+    readonly scene: LottieSceneName;
+    /**
+     * Each drawing sits differently in its square, so this moves it sideways
+     * until its ink, not its box, starts on the card's text edge.
+     */
+    readonly sceneInset: number;
+    /** The plan the row recommends: its button is the one filled in. */
+    readonly recommended?: true;
+    readonly audience: string;
+    readonly title: string;
+    readonly detail: string;
+    readonly features: readonly string[];
+    readonly action: string;
+}[] = [
+    {
+        id: "personal",
+        scene: "seedling",
+        sceneInset: 0,
+        audience: "For you",
+        title: "Solo",
+        detail: "Your own Happy Agent on a machine you run.",
+        features: [
+            "Self-hosted on a server or an always-on computer",
+            "Keeps working while this computer is off",
+            "Just you, nobody else",
+        ],
+        action: "Set up via Chief of Staff",
+    },
+    {
+        id: "team",
+        scene: "sprig",
+        sceneInset: 10,
+        audience: "For people you trust",
+        title: "Shared",
+        detail: "Like Solo, shared with your team.",
+        features: [
+            "Everyone gets full access, so there's nothing to configure",
+            "You host it and you manage it",
+            "Sign in with your own auth, or with WorkOS",
+        ],
+        action: "Set up via Chief of Staff",
+    },
+    {
+        id: "cloud",
+        scene: "tree",
+        sceneInset: -3,
+        audience: "For lots of agents",
+        title: "Cloud",
+        detail: "A hardened, high-performance control plane, hosted by Happy.",
+        features: [
+            "Built for many agents at once, and the people running them",
+            "Run on our compute, or bring your own",
+            "Use our models, or your own inference",
+            "Programmable permissions for every agent",
+        ],
+        action: "Continue",
+        recommended: true,
+    },
+];
+
+/**
+ * Happy Cloud introducing itself, the way the first launch introduces Happy:
+ * one slide for what it is, then one for each thing the Cloud plan promises.
+ */
+const CLOUD_SLIDES: readonly WelcomeSlide[] = [
+    {
+        art: { kind: "scene", name: "cloud-variation" },
+        copy: "A hardened, high-performance control plane for your agents, hosted by Happy.",
+        id: "cloud",
+        title: "Happy Cloud",
+    },
+    {
+        art: { kind: "scene", name: "robot" },
+        copy: "Run many agents at once for your whole team, and no computer has to stay on.",
+        id: "scale",
+        title: "Built for lots of agents",
+    },
+    {
+        art: { kind: "scene", name: "sparkles" },
+        copy: "Run on our compute or bring your own. Use our models or your own inference.",
+        id: "yours",
+        title: "Ours or yours",
+    },
+    {
+        art: { kind: "scene", name: "closed-lock" },
+        copy: "Decide what every agent can see and do, and keep each one isolated.",
+        id: "permissions",
+        title: "Programmable permissions",
+    },
+];
+
+/**
+ * C-336 CloudConnectScreen — the sidebar's "+", full window on the onboarding
+ * sky. It opens on what to add: a personal remote agent or a shared team agent,
+ * which it hands to the Chief of Staff to set up, or Happy Cloud: welcome, account sign-in in the browser, the account's
  * servers, create or join one, then signing in to it. Each state is one
- * `SetupPage`, so titles, content and actions keep their places as it moves.
- * Esc returns to the app from every state. Props only.
+ * `SetupPage`, so titles, content and actions keep their places as it moves,
+ * except the welcome: that is a `WelcomeScreen` deck, like the first launch.
+ * Esc and the close button in the top-right corner return to the app from
+ * every state. The screen rises from the bottom when it opens and
+ * sinks back before `onClose` is called; that passing motion is its only state.
  */
 export function CloudConnectScreen(props: CloudConnectScreenProps) {
     const { view, onClose } = props;
+    // Leaving plays the sheet back down first; the caller hears once it is gone.
+    const [dismissed, dismissedSet] = useState(false);
+    // A choice drafted to the Chief of Staff leaves the same way, onto it.
+    const closing = dismissed || (view.kind === "choose" && view.asked === true);
+    const dismiss = () => dismissedSet(true);
     const frame = {
         backdrop: { appearance: props.appearance, kind: "sky" },
         className: "happy-cloud-connect",
         "data-testid": "cloud-connect",
         transitionKey: view.kind,
     } as const satisfies Partial<SetupPageProps>;
-    const notNow = { label: "Not now", onSelect: props.onClose };
     const back = (disabled?: boolean) => ({
         label: "Back",
         onSelect: props.onBack,
@@ -180,7 +311,15 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
     return (
         <div
             className="happy-cloud-connect__window"
+            // The close button sits on the sky too, outside any one page.
+            data-appearance={props.appearance}
+            data-backdrop="sky"
+            data-closing={closing ? "" : undefined}
             data-happy-desktop-ui="cloud-connect-screen"
+            onAnimationEnd={(event) => {
+                // Only the sheet's own motion; the pages inside dissolve too.
+                if (closing && event.target === event.currentTarget) onClose();
+            }}
             // Esc leaves from every state, wherever focus is: a waiting step
             // has nothing focused inside the screen to hear the key.
             ref={(element) => {
@@ -189,7 +328,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                 const keyDown = (event: KeyboardEvent) => {
                     if (event.key !== "Escape" || event.defaultPrevented) return;
                     event.preventDefault();
-                    onClose();
+                    dismiss();
                 };
                 document.addEventListener("keydown", keyDown);
                 return () => document.removeEventListener("keydown", keyDown);
@@ -200,22 +339,87 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
         >
             {(() => {
                 switch (view.kind) {
-                    case "welcome": {
-                        const test = view.testSignIn;
+                    case "choose":
                         return (
                             <SetupPage
                                 {...frame}
-                                action={{
-                                    autoFocus: !test,
-                                    disabled: test?.busy,
-                                    label: "Continue",
-                                    onSelect: props.onContinue,
+                                className="happy-cloud-connect happy-cloud-connect--plans"
+                                copy="Run agents somewhere other than this computer."
+                                placement="centered"
+                                {...(view.error ? { status: { label: view.error } } : {})}
+                                title="Add to Happy"
+                            >
+                                <div className="happy-cloud-connect__plans">
+                                    {PLANS.map((plan) => (
+                                        <article
+                                            className="happy-cloud-connect__plan"
+                                            data-happy-desktop-ui="cloud-connect-plan"
+                                            key={plan.id}
+                                        >
+                                            <LottieScene
+                                                className="happy-cloud-connect__plan-scene"
+                                                name={plan.scene}
+                                                replayLabel={plan.title}
+                                                size={64}
+                                                style={{ marginInlineStart: plan.sceneInset - 4 }}
+                                            />
+                                            <span className="happy-cloud-connect__plan-audience">
+                                                {plan.audience}
+                                            </span>
+                                            <h2 className="happy-cloud-connect__plan-title">
+                                                {plan.title}
+                                            </h2>
+                                            <p className="happy-cloud-connect__plan-detail">
+                                                {plan.detail}
+                                            </p>
+                                            <ul className="happy-cloud-connect__plan-features">
+                                                {plan.features.map((feature) => (
+                                                    <li key={feature}>
+                                                        <Ionicon name="checkmark" size={14} />
+                                                        <span>{feature}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            <Button
+                                                className="happy-cloud-connect__plan-action"
+                                                disabled={
+                                                    view.asking !== undefined &&
+                                                    view.asking !== plan.id
+                                                }
+                                                loading={view.asking === plan.id}
+                                                variant={plan.recommended ? "primary" : "secondary"}
+                                                onClick={() =>
+                                                    plan.id === "cloud"
+                                                        ? props.onCloudOpen()
+                                                        : props.onAgentAdd(plan.id)
+                                                }
+                                            >
+                                                {plan.action}
+                                            </Button>
+                                        </article>
+                                    ))}
+                                </div>
+                            </SetupPage>
+                        );
+                    case "welcome": {
+                        const test = view.testSignIn;
+                        return (
+                            <WelcomeScreen
+                                actionAutoFocus={!test}
+                                actionDisabled={test?.busy}
+                                actionLabel="Continue"
+                                appearance={props.appearance}
+                                backdrop={{ kind: "sky" }}
+                                className="happy-cloud-connect happy-cloud-connect--welcome"
+                                data-testid="cloud-connect"
+                                onAction={props.onContinue}
+                                onArtPress={props.onLogoPress}
+                                secondaryAction={{
+                                    label: "Back",
+                                    onAction: props.onBack,
+                                    ...(test?.busy ? { disabled: true } : {}),
                                 }}
-                                copy="Add a cloud team. Its agents run in the cloud, so no computer needs to stay on."
-                                onScenePress={props.onLogoPress}
-                                scene="cloud-variation"
-                                secondary={notNow}
-                                title="Happy Cloud"
+                                slides={CLOUD_SLIDES}
                             >
                                 {test ? (
                                     <div className="happy-cloud-connect__column">
@@ -265,7 +469,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                         </div>
                                     </div>
                                 ) : undefined}
-                            </SetupPage>
+                            </WelcomeScreen>
                         );
                     }
                     case "signingIn":
@@ -274,7 +478,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 {...frame}
                                 copy="Sign in or create an account in your browser, then come back here."
                                 scene="closed-lock"
-                                secondary={{ label: "Cancel", onSelect: props.onClose }}
+                                secondary={{ label: "Cancel", onSelect: dismiss }}
                                 status={{ busy: true, label: "Waiting for your browser…" }}
                                 title="Signing in"
                             />
@@ -285,7 +489,6 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 {...frame}
                                 copy="Pick a server to add it to Happy."
                                 scene="cloud-variation"
-                                secondary={notNow}
                                 {...(view.servers.status === "loading"
                                     ? { status: { busy: true, label: "Loading your servers…" } }
                                     : view.servers.status === "error"
@@ -357,7 +560,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 }}
                                 copy="Pick a name for your team’s server. You can change it later."
                                 scene="hatching-chick"
-                                secondary={view.back ? back(view.busy) : notNow}
+                                {...(view.back ? { secondary: back(view.busy) } : {})}
                                 title="Create a server"
                             >
                                 <div className="happy-cloud-connect__column">
@@ -460,7 +663,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                             <SetupPage
                                 {...frame}
                                 copy={`@${view.server.name}`}
-                                secondary={{ label: "Cancel", onSelect: props.onClose }}
+                                secondary={{ label: "Cancel", onSelect: dismiss }}
                                 status={{ busy: true, label: "Signing in to the server…" }}
                                 title={`Connecting to ${view.server.displayName}`}
                             >
@@ -504,12 +707,19 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 }}
                                 copy={view.message}
                                 scene="snail"
-                                secondary={notNow}
                                 title="Couldn’t connect"
                             />
                         );
                 }
             })()}
+            <Button
+                aria-label="Close"
+                className="happy-cloud-connect__close"
+                icon="close"
+                iconOnly
+                onClick={dismiss}
+                variant="ghost"
+            />
         </div>
     );
 }

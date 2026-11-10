@@ -41,3 +41,28 @@
 .happy-desktop-mobile-setup .happy-desktop-mobile-setup__download {
     --happy-qr-code-size: clamp(176px, 100cqh - 460px, 256px);
 }
+
+/*
+ * Get Mobile App and Scan This Code put their code in exactly one place, so
+ * going from one to the other moves nothing but what the code says. Both
+ * subtitles hold two lines, however many they use, and the download code
+ * keeps the room under it that the pairing code's copy link and countdown
+ * take (12px, a 28px link, 4px, a 16px line).
+ */
+.happy-desktop-mobile-setup .happy-setup-page__copy,
+.happy-local-onboarding__mobile .happy-setup-page__copy {
+    min-height: 48px;
+}
+
+.happy-desktop-mobile-setup .happy-desktop-mobile-setup__download {
+    padding-bottom: 60px;
+}
+
+/* The pairing code, and its place while it is on its way, take the download
+   code's place at exactly its size. */
+.happy-desktop-mobile-setup--options
+    .happy-mobile-pairing-options[data-layout="setup"][data-method],
+.happy-local-onboarding__mobile-options
+    .happy-mobile-pairing-options[data-layout="setup"][data-method] {
+    --happy-qr-code-size: clamp(176px, 100cqh - 460px, 256px);
+}

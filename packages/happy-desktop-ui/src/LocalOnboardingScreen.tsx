@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { type AssistantMarkName } from "./AssistantMark";
 import {
-    DesktopMobileSetup,
+    desktopMobileSetupPage,
     MobileAppCopy,
     desktopMobilePairingOptionsCopy,
     type DesktopMobilePairingOptions,
@@ -19,7 +19,7 @@ import {
 } from "./SetupAssistants";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
-import { WindowsSandboxSetup, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
+import { windowsSandboxSetupPage, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
 
 /** The coding assistants Happy looks for, and nothing beyond them. */
 export type LocalOnboardingAssistantId = "claude" | "codex" | "grok";
@@ -49,11 +49,8 @@ export interface LocalOnboardingAssistant {
     readonly status: "found" | "missing";
     /** Where the machine keeps it, when it has it. */
     readonly command?: string;
-    /**
-     * What Happy Agent can do about it itself. Absent on a Happy Agent that
-     * cannot install or sign in assistants, whose cards keep the commands.
-     */
-    readonly connect?: LocalOnboardingAssistantConnect;
+    /** What Happy Agent can do about it itself: every card is one button. */
+    readonly connect: LocalOnboardingAssistantConnect;
 }
 
 /** Happy Agent's own install and sign-in for one assistant. */
@@ -366,45 +363,42 @@ interface AssistantCardHandlers {
     readonly onClaudeConnect?: () => void;
 }
 
-/** Connected or still being checked: the card says so and asks for nothing. */
+/**
+ * Connected, or still being checked: the card asks for nothing. A card being
+ * checked holds its button's place empty, and the answer fades in there.
+ */
 function assistantSettledAction(
     assistant: LocalOnboardingAssistant,
 ): SetupAssistantAction | undefined {
     if (assistant.authentication === "valid") return { kind: "done", label: "Connected" };
-    if (assistant.authentication === "checking")
-        return { busy: true, kind: "button", label: "Checking" };
+    if (assistant.authentication === "checking") return { kind: "pending" };
     return undefined;
 }
 
 /**
- * A card that one press makes ready: Claude opens the dialog that explains its
- * setup token, and Codex and Grok install and sign in through Happy Agent with
- * the vendor's own page. The button is the card's status as well as its
- * action: what it says is where the assistant stands, and a connected one
- * keeps the button, disabled, so the row of buttons never loses a member.
- * Undefined where neither is on offer, and the card keeps its commands.
+ * Every card is one button: Claude opens the dialog that explains its setup
+ * token, and Codex and Grok install and sign in through Happy Agent with the
+ * vendor's own page. The button is the card's status as well as its action:
+ * what it says is where the assistant stands, and a connected one keeps its
+ * place, so the row never loses a member. A card never sends anyone to a
+ * terminal: there are no commands to copy.
  */
 function assistantConnectProject(
     assistant: LocalOnboardingAssistant,
     handlers: AssistantCardHandlers,
-): SetupAssistantAction | undefined {
+): SetupAssistantAction {
     const { onSignIn, onInstall, onCancel, onClaudeConnect } = handlers;
     const retry = assistant.authentication === "error";
-    if (assistant.id === "claude") {
-        if (!onClaudeConnect) return undefined;
-        return (
-            assistantSettledAction(assistant) ?? {
-                kind: "button",
-                label: retry ? "Connect again" : "Connect",
-                onSelect: onClaudeConnect,
-            }
-        );
-    }
-    const connect = assistant.connect;
-    if (!connect || !onSignIn || !onInstall) return undefined;
     const settled = assistantSettledAction(assistant);
     if (settled) return settled;
+    if (assistant.id === "claude")
+        return {
+            kind: "button",
+            label: retry ? "Connect again" : "Connect",
+            ...(onClaudeConnect ? { onSelect: onClaudeConnect } : {}),
+        };
     const id = assistant.id;
+    const connect = assistant.connect;
     const operation = connect.operation;
     if (operation?.status === "running")
         return {
@@ -420,99 +414,27 @@ function assistantConnectProject(
             onOpen: () => handlers.onExternalOpen?.(operation.url),
             ...(operation.userCode === undefined ? {} : { userCode: operation.userCode }),
         };
-    if (!connect.installed) {
-        if (!connect.installable) return undefined;
+    if (!connect.installed)
         return {
             kind: "button",
             label: operation?.status === "failed" ? "Try again" : "Install",
-            onSelect: () => onInstall(id),
+            // One Happy Agent cannot install keeps its button, not offered.
+            ...(onInstall && connect.installable ? { onSelect: () => onInstall(id) } : {}),
         };
-    }
     return {
         kind: "button",
         label: operation?.status === "failed" ? "Try again" : retry ? "Sign in again" : "Sign in",
-        onSelect: () => onSignIn(id),
+        ...(onSignIn ? { onSelect: () => onSignIn(id) } : {}),
     };
 }
 
 function assistantAuthenticationEntry(
     assistant: LocalOnboardingAssistant,
-    installShell: LocalOnboardingInstallShell,
     handlers: AssistantCardHandlers,
 ): SetupAssistantEntry {
     const vendor = ASSISTANTS[assistant.id];
-    const status =
-        assistant.authentication === "valid"
-            ? ("found" as const)
-            : assistant.authentication === "invalid" || assistant.authentication === "error"
-              ? ("signed-out" as const)
-              : assistant.authentication === "unavailable"
-                ? ("missing" as const)
-                : ("checking" as const);
-    const connected = assistantConnectProject(assistant, handlers);
-    if (connected)
-        return {
-            action: connected,
-            id: assistant.id,
-            mark: vendor.mark,
-            name: vendor.name,
-            status,
-        };
-    const { onCommandCopy } = handlers;
-    const detail = (() => {
-        switch (assistant.authentication) {
-            case "checking":
-                return "Checking…";
-            case "valid":
-                return "Ready ✓";
-            case "invalid":
-                return "Sign in by running:";
-            case "error":
-                return "Couldn't verify. Sign in:";
-            case "unavailable":
-                return "Install by running:";
-        }
-    })();
-    // What to do about it: get the thing, or sign in to the thing that is
-    // already here. A credential that failed its check gets the same sign-in,
-    // the main way into Happy, so a settled failure always has a way forward;
-    // a custom endpoint or proxy is the custom column's to offer. A working
-    // assistant is asked for nothing.
-    const action: SetupAssistantAction | undefined = (() => {
-        switch (assistant.authentication) {
-            case "unavailable":
-                return {
-                    command: vendor.install[installShell],
-                    kind: "command",
-                    label: `${vendor.name} install command`,
-                    ...(onCommandCopy
-                        ? {
-                              onCopy: () =>
-                                  onCommandCopy({ assistant: assistant.id, kind: "install" }),
-                          }
-                        : {}),
-                };
-            case "invalid":
-            case "error":
-                return {
-                    command: vendor.signIn,
-                    kind: "command",
-                    label: `${vendor.name} sign-in command`,
-                    ...(onCommandCopy
-                        ? {
-                              onCopy: () =>
-                                  onCommandCopy({ assistant: assistant.id, kind: "sign-in" }),
-                          }
-                        : {}),
-                };
-            case "checking":
-            case "valid":
-                return undefined;
-        }
-    })();
     return {
-        ...(action ? { action } : {}),
-        detail,
+        action: assistantConnectProject(assistant, handlers),
         id: assistant.id,
         mark: vendor.mark,
         name: vendor.name,
@@ -551,14 +473,14 @@ const AGENT_PROMPTS = [
  * cards rather than a card of its own: what is configured when something is,
  * and the prompts for the coding agent already on the machine. Access that is
  * configured but failed its check gets the same prompts: a base URL or proxy
- * the daemon could not reach is fixed the same way it is set up. Nothing is
- * said while it is still being checked.
+ * the daemon could not reach is fixed the same way it is set up. While it is
+ * still being checked the line is held empty.
  */
 function customAside(
     custom: LocalOnboardingCustom,
     promptsOpen = false,
     onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
-): SetupAssistantsAside | undefined {
+): SetupAssistantsAside {
     const prompts = (label: string): Extract<SetupAssistantAction, { kind: "prompts" }> => ({
         ...(promptsOpen ? { defaultOpen: true } : {}),
         kind: "prompts",
@@ -574,7 +496,8 @@ function customAside(
         case "valid":
             return { detail: `${named || "Custom setup"} ready ✓` };
         case "checking":
-            return undefined;
+            // The line is held, empty, so the cards above it never move.
+            return {};
         case "error":
             return {
                 action: prompts("Fix with your agent"),
@@ -585,10 +508,10 @@ function customAside(
     }
 }
 
-/** The stable, dimmed row shown before authentication resolves. */
+/** The row shown before authentication resolves: the cards, their buttons held. */
 const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSISTANTS).map(
     ([id, assistant]): SetupAssistantEntry => ({
-        detail: "Checking…",
+        action: { kind: "pending" },
         id,
         mark: assistant.mark,
         name: assistant.name,
@@ -607,7 +530,12 @@ interface MachineSetupProjection {
 }
 
 const SETUP_COPY = "One-time download for this machine.";
-const SUBSCRIPTIONS_COPY = "Seeing which of Claude, Codex, and Grok you already use.";
+/**
+ * Subscriptions says one thing from the moment it opens: the cards are where
+ * it stands, so the words above them never change while checks come back.
+ */
+const SUBSCRIPTIONS_TITLE = "Connect your AI";
+const SUBSCRIPTIONS_COPY = "Sign in to one you already use to get started. You can add more later.";
 
 function machineSetupProject(
     view: LocalOnboardingView,
@@ -628,57 +556,28 @@ function machineSetupProject(
             status: { label: "Starting…", progress: { kind: "waiting" } },
             title: "Setting up",
         };
+    // While anything is checked its card holds its button's place empty; there
+    // is no status line to appear and go again under the subtitle.
     if (view.kind === "examining")
         return {
             assistants: CHECKING_ASSISTANTS,
+            aside: {},
             copy: SUBSCRIPTIONS_COPY,
             hasValidAuthentication: false,
-            status: { busy: true, label: "Checking…" },
-            title: "Looking for your AI",
+            title: SUBSCRIPTIONS_TITLE,
         };
-    if (view.kind === "provider-authentication") {
-        const states = [
-            ...view.assistants.map((assistant) => assistant.authentication),
-            view.custom.authentication,
-        ];
-        const assistants = view.assistants.map((assistant) =>
-            assistantAuthenticationEntry(assistant, view.installShell, handlers),
-        );
-        const aside = customAside(view.custom, promptsOpen, handlers.onCommandCopy);
-        const row = { assistants, ...(aside ? { aside } : {}) };
-        if (states.includes("valid"))
-            return {
-                ...row,
-                hasValidAuthentication: true,
-                status: { label: "" },
-                title: "You're all set",
-                copy: "Your AI is connected. You can add more any time.",
-            };
-        if (states.includes("checking"))
-            return {
-                ...row,
-                copy: SUBSCRIPTIONS_COPY,
-                hasValidAuthentication: false,
-                status: { busy: true, label: "Checking…" },
-                title: "Looking for your AI",
-            };
-        // A failed check is a settled answer, not one still coming: each failed
-        // card carries its remedy, and Happy keeps checking in the background
-        // without presenting the screen as busy.
-        if (states.includes("error"))
-            return {
-                ...row,
-                copy: "Happy keeps trying. Sign in again, or pick another one.",
-                hasValidAuthentication: false,
-                title: "Couldn't check your AI",
-            };
+    if (view.kind === "provider-authentication")
         return {
-            ...row,
-            copy: "Sign in to one you already use to get started. You can add more later.",
-            hasValidAuthentication: false,
-            title: "Connect your AI",
+            assistants: view.assistants.map((assistant) =>
+                assistantAuthenticationEntry(assistant, handlers),
+            ),
+            aside: customAside(view.custom, promptsOpen, handlers.onCommandCopy),
+            copy: SUBSCRIPTIONS_COPY,
+            hasValidAuthentication:
+                view.custom.authentication === "valid" ||
+                view.assistants.some((assistant) => assistant.authentication === "valid"),
+            title: SUBSCRIPTIONS_TITLE,
         };
-    }
     return undefined;
 }
 
@@ -704,21 +603,26 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     // what saving the token does belongs to setup.
     const [claudeOpen, claudeOpenSet] = useState(props.claudeDialogOpen === true);
     const identity = props.node ? <OnboardingNode node={props.node} /> : undefined;
+    // Every step is drawn by this one `SetupPage`, never by a component of its
+    // own: a different component here would remount the sky and the step bar,
+    // and only the page's content is meant to change between steps.
     if (view.kind === "happy-mobile-desktop")
         return (
-            <DesktopMobileSetup
-                appearance={props.appearance}
-                help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
-                {...(identity ? { identity } : {})}
-                step={view.step}
-                onboarding={props.showSteps}
-                {...(props.sandboxStep ? { sandboxStep: true } : {})}
-                {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
-                {...(props.selectableStages ? { selectableStages: props.selectableStages } : {})}
-                onContinue={props.onHappyMobileConnect}
-                onSkip={props.onHappyMobileSkip}
-                onExternalOpen={props.onExternalOpen}
-                pairingOptions={props.happyMobilePairingOptions}
+            <SetupPage
+                {...desktopMobileSetupPage({
+                    appearance: props.appearance,
+                    help: <OnboardingHelp onExternalOpen={props.onExternalOpen} />,
+                    ...(identity ? { identity } : {}),
+                    step: view.step,
+                    ...(props.showSteps === undefined ? {} : { onboarding: props.showSteps }),
+                    ...(props.sandboxStep ? { sandboxStep: true } : {}),
+                    ...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {}),
+                    ...(props.selectableStages ? { selectableStages: props.selectableStages } : {}),
+                    onContinue: props.onHappyMobileConnect,
+                    onSkip: props.onHappyMobileSkip,
+                    ...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {}),
+                    pairingOptions: props.happyMobilePairingOptions,
+                })}
             />
         );
     // Download and start are one machine-setup surface, and discovery and
@@ -844,13 +748,15 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
 
     if (view.kind === "windows-sandbox")
         return (
-            <WindowsSandboxSetup
-                appearance={props.appearance}
-                help={frame.help}
-                {...(identity ? { identity } : {})}
-                state={view.state}
-                steps={frame.steps}
-                onContinue={() => props.onSandboxSetup?.()}
+            <SetupPage
+                {...windowsSandboxSetupPage({
+                    appearance: props.appearance,
+                    help: frame.help,
+                    ...(identity ? { identity } : {}),
+                    state: view.state,
+                    ...(frame.steps ? { steps: frame.steps } : {}),
+                    onContinue: () => props.onSandboxSetup?.(),
+                })}
             />
         );
 
@@ -934,13 +840,14 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 className="happy-local-onboarding__mobile happy-local-onboarding__mobile-options"
                 copy={desktopMobilePairingOptionsCopy(props.happyMobilePairingOptions)}
                 data-testid="local-onboarding-screen"
+                placement="centered"
                 {...(props.happyMobilePairingOptions.completed
                     ? { action: { label: "Continue", onSelect: props.onHappyMobileConnect } }
                     : { secondary: skipMobile })}
                 title={
                     props.happyMobilePairingOptions.completed
                         ? "Mobile App Linked"
-                        : "Link Mobile App"
+                        : "Scan This Code"
                 }
             >
                 {props.happyMobilePairingOptions.view}

@@ -17,6 +17,19 @@ export const componentNumber = "P-014";
 
 const noop = () => undefined;
 
+/**
+ * What setup actually shows a phone: the relay code alone, no Relay | Direct
+ * choice (renderer.tsx passes `relayOnly`). `starting` while it is on its way.
+ */
+function appPairingOptions(starting = false): DesktopMobilePairingOptions {
+    return setupPairingOptions({
+        direct: direct.waiting,
+        method: "relay",
+        methodFixed: true,
+        relay: starting ? { kind: "starting" } : relayWaiting,
+    });
+}
+
 /** The window Happy opens at, and the smallest one it allows. */
 const windows = [
     { id: "default", width: 1100, height: 760 },
@@ -41,7 +54,7 @@ function onboarding(
     selectableStages?: readonly OnboardingStage[],
     agentPromptsOpen = false,
     appearance: "dark" | "light" = "dark",
-    pairingOptions: DesktopMobilePairingOptions = setupPairingOptions(),
+    pairingOptions: DesktopMobilePairingOptions = appPairingOptions(),
 ) {
     // Until Happy Agent is installed and running there is no machine to name.
     const named =
@@ -170,13 +183,25 @@ const connectBusySubscriptions: LocalOnboardingView = {
 const mixedSubscriptions: LocalOnboardingView = {
     assistants: [
         {
+            connect: { installable: true, installed: true },
             authentication: "valid",
             command: "/opt/homebrew/bin/claude",
             id: "claude",
             status: "found",
         },
-        { authentication: "unavailable", id: "codex", status: "missing" },
-        { authentication: "invalid", command: "/usr/local/bin/grok", id: "grok", status: "found" },
+        {
+            connect: { installable: true, installed: false },
+            authentication: "unavailable",
+            id: "codex",
+            status: "missing",
+        },
+        {
+            connect: { installable: true, installed: true },
+            authentication: "invalid",
+            command: "/usr/local/bin/grok",
+            id: "grok",
+            status: "found",
+        },
     ],
     custom: { authentication: "invalid", providers: [] },
     kind: "provider-authentication",
@@ -190,13 +215,24 @@ const mixedSubscriptions: LocalOnboardingView = {
 const unverifiedSubscriptions: LocalOnboardingView = {
     assistants: [
         {
+            connect: { installable: true, installed: true },
             authentication: "error",
             command: "/opt/homebrew/bin/claude",
             id: "claude",
             status: "found",
         },
-        { authentication: "unavailable", id: "codex", status: "missing" },
-        { authentication: "unavailable", id: "grok", status: "missing" },
+        {
+            connect: { installable: true, installed: false },
+            authentication: "unavailable",
+            id: "codex",
+            status: "missing",
+        },
+        {
+            connect: { installable: true, installed: false },
+            authentication: "unavailable",
+            id: "grok",
+            status: "missing",
+        },
     ],
     custom: { authentication: "error", providers: ["Claude"] },
     kind: "provider-authentication",
@@ -265,13 +301,24 @@ const screens: readonly {
             onboarding({
                 assistants: [
                     {
+                        connect: { installable: true, installed: true },
                         authentication: "invalid",
                         command: "/opt/homebrew/bin/claude",
                         id: "claude",
                         status: "found",
                     },
-                    { authentication: "unavailable", id: "codex", status: "missing" },
-                    { authentication: "unavailable", id: "grok", status: "missing" },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "codex",
+                        status: "missing",
+                    },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "grok",
+                        status: "missing",
+                    },
                 ],
                 custom: { authentication: "invalid", providers: [] },
                 kind: "provider-authentication",
@@ -284,9 +331,24 @@ const screens: readonly {
         render: () =>
             onboarding({
                 assistants: [
-                    { authentication: "unavailable", id: "claude", status: "missing" },
-                    { authentication: "unavailable", id: "codex", status: "missing" },
-                    { authentication: "unavailable", id: "grok", status: "missing" },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "claude",
+                        status: "missing",
+                    },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "codex",
+                        status: "missing",
+                    },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "grok",
+                        status: "missing",
+                    },
                 ],
                 custom: { authentication: "invalid", providers: [] },
                 kind: "provider-authentication",
@@ -300,9 +362,24 @@ const screens: readonly {
             onboarding(
                 {
                     assistants: [
-                        { authentication: "unavailable", id: "claude", status: "missing" },
-                        { authentication: "unavailable", id: "codex", status: "missing" },
-                        { authentication: "unavailable", id: "grok", status: "missing" },
+                        {
+                            connect: { installable: true, installed: false },
+                            authentication: "unavailable",
+                            id: "claude",
+                            status: "missing",
+                        },
+                        {
+                            connect: { installable: true, installed: false },
+                            authentication: "unavailable",
+                            id: "codex",
+                            status: "missing",
+                        },
+                        {
+                            connect: { installable: true, installed: false },
+                            authentication: "unavailable",
+                            id: "grok",
+                            status: "missing",
+                        },
                     ],
                     custom: { authentication: "invalid", providers: [] },
                     kind: "provider-authentication",
@@ -328,9 +405,24 @@ const screens: readonly {
         render: () =>
             onboarding({
                 assistants: [
-                    { authentication: "unavailable", id: "claude", status: "missing" },
-                    { authentication: "unavailable", id: "codex", status: "missing" },
-                    { authentication: "unavailable", id: "grok", status: "missing" },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "claude",
+                        status: "missing",
+                    },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "codex",
+                        status: "missing",
+                    },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "grok",
+                        status: "missing",
+                    },
                 ],
                 custom: { authentication: "valid", providers: ["Bedrock"] },
                 kind: "provider-authentication",
@@ -344,13 +436,24 @@ const screens: readonly {
             onboarding({
                 assistants: [
                     {
+                        connect: { installable: true, installed: true },
                         authentication: "valid",
                         command: "/opt/homebrew/bin/claude",
                         id: "claude",
                         status: "found",
                     },
-                    { authentication: "unavailable", id: "codex", status: "missing" },
-                    { authentication: "unavailable", id: "grok", status: "missing" },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "codex",
+                        status: "missing",
+                    },
+                    {
+                        connect: { installable: true, installed: false },
+                        authentication: "unavailable",
+                        id: "grok",
+                        status: "missing",
+                    },
                 ],
                 custom: { authentication: "invalid", providers: [] },
                 kind: "provider-authentication",
@@ -398,10 +501,16 @@ const screens: readonly {
         id: "connect-code-loading",
         label: "Link Mobile App · code on its way (shown at least 1s)",
         render: () =>
-            onboarding({
-                kind: "happy-mobile-desktop",
-                step: { kind: "link", phase: { kind: "checking" } },
-            }),
+            onboarding(
+                {
+                    kind: "happy-mobile-desktop",
+                    step: { kind: "link", phase: { kind: "checking" } },
+                },
+                undefined,
+                false,
+                "dark",
+                appPairingOptions(true),
+            ),
     },
     {
         id: "connect-phone",

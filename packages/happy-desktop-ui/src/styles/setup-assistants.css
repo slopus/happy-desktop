@@ -141,6 +141,24 @@
     max-width: 100%;
     margin-top: 16px;
     opacity: 1;
+    /* "Checking" and the answer that replaces it each fade in where they
+       stand, in the same box, so nothing in the row moves. */
+    animation: happy-setup-assistants-fade-in 240ms ease both;
+}
+
+/* While a card is checked: a quiet spinner and word in the box a button
+   takes (36px tall, the same width). */
+.happy-setup-assistants__checking {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
 }
 
 /* Connected, in the box a medium button takes (36px tall, the same width),
@@ -196,10 +214,27 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
+    /* As tall as its link, held while it is empty, so the row above never
+       shifts when what it says arrives. */
+    min-height: 36px;
     margin: 16px 0 0;
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 16px;
+}
+
+.happy-setup-assistants__aside > * {
+    animation: happy-setup-assistants-fade-in 240ms ease both;
+}
+
+@keyframes happy-setup-assistants-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 /* Under the row the prompts open centred on their link, not from its right edge. */

@@ -30,6 +30,11 @@ export interface WelcomeDeckProps {
     /** At least one. The first is shown first. */
     readonly slides: readonly WelcomeSlide[];
     readonly tint?: WelcomeDeckTint;
+    /**
+     * A press anywhere on the art's square. It is not announced: it is for
+     * flows that hide something behind the picture.
+     */
+    readonly onArtPress?: () => void;
 }
 
 /**
@@ -156,7 +161,12 @@ export function WelcomeDeck(props: WelcomeDeckProps) {
             data-testid={props["data-testid"]}
             data-tint={props.tint === "sky" ? "sky" : undefined}
         >
-            <div className="happy-welcome-deck__stage" data-happy-desktop-ui="welcome-stage">
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a hidden, pointer-only gesture by design */}
+            <div
+                className="happy-welcome-deck__stage"
+                data-happy-desktop-ui="welcome-stage"
+                onClick={props.onArtPress}
+            >
                 {active ? welcomeArt(active) : null}
             </div>
 

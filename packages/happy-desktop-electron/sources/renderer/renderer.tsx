@@ -66,6 +66,7 @@ import {
     UserError,
     happyAgentMobileConnectorStoreNoop,
     type AppearanceStore,
+    type HappyAgentChiefOfStaffRequest,
     type HappyAgentClockStore,
     type HappyLinkInboxStore,
     type HappyAgentAttentionStore,
@@ -1385,8 +1386,10 @@ function DesktopCloudConnect(props: {
     return (
         <CloudConnectScreen
             appearance={appearance.mode}
+            onAgentAdd={props.store.agentAdd}
             onBack={props.store.back}
             onClose={props.store.connectCancel}
+            onCloudOpen={props.store.cloudOpen}
             onContinue={props.store.connectConfirm}
             onCreate={props.store.serverCreate}
             onCreateNameChange={props.store.createNameUpdate}
@@ -1828,27 +1831,25 @@ if (mediaPreviewBridge) {
                 );
             },
         });
+        // Written into This Mac's Chief of Staff draft, whose conversation
+        // then opens; nothing is sent for the reader.
+        const chiefOfStaffAsk = async (request: HappyAgentChiefOfStaffRequest) => {
+            const workspace = happyAgents
+                .get()
+                .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)?.session?.workspace;
+            if (!workspace)
+                throw new UserError(
+                    "The Happy Agent on this computer isn't connected. Try again once it is.",
+                );
+            await workspace.chiefOfStaffDraftAppend(request);
+            happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
+        };
         const serverSignIn = happyAgents.happyAgentSignIn;
         const serverSignInStop = happyAgents.happyAgentSignInCancel;
         const servers: AppServers | undefined =
             serverHost && serverSignIn && serverSignInStop
                 ? {
-                      add: serverAddStoreCreate({
-                          // Written into This Mac's Chief of Staff draft, whose
-                          // conversation then opens; nothing is sent for the reader.
-                          async chiefOfStaffAsk(request) {
-                              const workspace = happyAgents
-                                  .get()
-                                  .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
-                                  ?.session?.workspace;
-                              if (!workspace)
-                                  throw new UserError(
-                                      "The Happy Agent on this computer isn't connected. Try again once it is.",
-                                  );
-                              await workspace.chiefOfStaffDraftAppend(request);
-                              happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
-                          },
-                      }),
+                      add: serverAddStoreCreate({ chiefOfStaffAsk }),
                       directory: happyAgents,
                       signIn: serverSignIn,
                       signInCancel: serverSignInStop,
@@ -1861,6 +1862,7 @@ if (mediaPreviewBridge) {
                 ? desktopCloudConnectStoreCreate({
                       cloud: desktopBridge.happyCloud,
                       bridge: desktopBridge,
+                      chiefOfStaffAsk,
                       connect: cloudConnectAction,
                   })
                 : undefined;
@@ -2134,9 +2136,6 @@ if (mediaPreviewBridge) {
             <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
-                {cloudConnect ? (
-                    <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
-                ) : null}
                 <DesktopHappyLinkNotice
                     store={happyLinkInbox}
                     {...(servers
@@ -2200,6 +2199,12 @@ if (mediaPreviewBridge) {
                         agentBroken={agentBroken}
                     />
                 </CodeHighlightWorkers>
+                {/* After the app, not before it: the window folds drag regions in
+                    tree order and later ones win, so the app's title-bar band would
+                    otherwise re-cover the sheet's close button and leave it dead. */}
+                {cloudConnect ? (
+                    <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
+                ) : null}
             </DesktopAppearance>,
         );
     };

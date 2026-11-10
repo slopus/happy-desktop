@@ -32,10 +32,13 @@ function storeCreate(cloud: DesktopHappyCloud) {
     const store = desktopCloudConnectStoreCreate({
         cloud,
         bridge: {},
+        chiefOfStaffAsk: async () => undefined,
         connect: async () => ({ ok: true }),
         now: () => clock,
     });
     store.connectOpen();
+    // The test sign-in lives on Happy Cloud's welcome, past the choices.
+    store.cloudOpen();
     return {
         store,
         press(times: number, every: number) {

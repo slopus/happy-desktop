@@ -46,8 +46,18 @@ const SPECIMENS: readonly {
     readonly window?: { readonly width: number; readonly height: number };
 }[] = [
     {
+        label: "Choose",
+        detail: "the sidebar's + · three plans side by side",
+        view: { kind: "choose" },
+    },
+    {
+        label: "Choose asking",
+        detail: "the personal agent being drafted to the Chief of Staff",
+        view: { kind: "choose", asking: "personal" },
+    },
+    {
         label: "Welcome",
-        detail: "the sidebar's + · Continue or Not now",
+        detail: "Happy Cloud slides, like the first launch · Continue or Back",
         view: { kind: "welcome" },
     },
     {
@@ -173,7 +183,9 @@ export function CloudConnectScreenPage() {
                             <ThemeScope mode={specimen.mode}>
                                 <CloudConnectScreen
                                     appearance={specimen.mode}
+                                    onAgentAdd={noop}
                                     onBack={noop}
+                                    onCloudOpen={noop}
                                     onClose={noop}
                                     onContinue={noop}
                                     onCreate={noop}

@@ -288,7 +288,8 @@ function RelaySlot(
                     data={relay.data}
                     expiresAt={relay.expiresAt}
                     label="QR code to pair through Happy relay"
-                    mark="link"
+                    // Setup shows it plain, like the download code before it.
+                    {...(props.layout === "setup" ? {} : { mark: "link" as const })}
                     now={props.now}
                     size={props.codeSize}
                     testId="happy-mobile-relay"

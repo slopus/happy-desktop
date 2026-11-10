@@ -8,7 +8,7 @@ import {
 } from "./OnboardingSteps";
 import { QRCode } from "./QRCode";
 import { SetupDrift } from "./SetupDrift";
-import { SetupPage } from "./SetupPage";
+import { SetupPage, type SetupPageProps } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
 
 export type DesktopMobileSetupStep =
@@ -140,6 +140,14 @@ export function MobileStoreDownload() {
 
 /** Optional desktop-to-phone setup. All operations and progress arrive through props. */
 export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
+    return <SetupPage {...desktopMobileSetupPage(props)} />;
+}
+
+/**
+ * The same steps as setup pages, for a flow that draws every step with one
+ * retained `SetupPage` so its sky and step bar stay put between steps.
+ */
+export function desktopMobileSetupPage(props: DesktopMobileSetupProps): SetupPageProps {
     const { step } = props;
     const mobile: MobileOnboardingStage =
         step.kind === "intro" ? "get-app" : step.kind === "link" ? "connect-phone" : "complete";
@@ -173,51 +181,44 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
     // the code. Like Subscriptions it is a choice, so no picture and centred
     // words. Confirming it asks for the pairing code.
     if (step.kind === "intro")
-        return (
-            <SetupPage
-                {...frame}
-                action={{ label: "Downloaded and opened", onSelect: props.onContinue }}
-                copy={<GetMobileAppCopy onExternalOpen={props.onExternalOpen} />}
-                decoration={<SetupDrift scenes={DOWNLOAD_DRIFT} />}
-                placement="centered"
-                secondary={skip}
-                title="Get Mobile App"
-            >
-                <MobileStoreDownload />
-            </SetupPage>
-        );
+        return {
+            ...frame,
+            action: { label: "Downloaded and opened", onSelect: props.onContinue },
+            children: <MobileStoreDownload />,
+            copy: <GetMobileAppCopy onExternalOpen={props.onExternalOpen} />,
+            decoration: <SetupDrift scenes={DOWNLOAD_DRIFT} />,
+            placement: "centered",
+            secondary: skip,
+            title: "Get Mobile App",
+        };
 
+    // Laid out as getting the app was: one title, then the code alone on the
+    // axis, with the same scenes drifting round it.
     if (step.kind === "link")
-        return (
-            <SetupPage
-                {...frame}
-                className="happy-desktop-mobile-setup happy-desktop-mobile-setup--options"
-                copy={desktopMobilePairingOptionsCopy(props.pairingOptions)}
-                scene="closed-lock"
-                {...(props.pairingOptions.completed
-                    ? { action: { label: "Continue", onSelect: props.onContinue } }
-                    : { secondary: skip })}
-                title={props.pairingOptions.completed ? "Mobile App Linked" : "Link Mobile App"}
-            >
-                {props.pairingOptions.view}
-            </SetupPage>
-        );
+        return {
+            ...frame,
+            ...(props.pairingOptions.completed
+                ? { action: { label: "Continue", onSelect: props.onContinue } }
+                : { secondary: skip }),
+            children: props.pairingOptions.view,
+            className: "happy-desktop-mobile-setup happy-desktop-mobile-setup--options",
+            copy: desktopMobilePairingOptionsCopy(props.pairingOptions),
+            decoration: <SetupDrift scenes={DOWNLOAD_DRIFT} />,
+            placement: "centered",
+            title: props.pairingOptions.completed ? "Mobile App Linked" : "Scan This Code",
+        };
 
-    return (
-        <SetupPage
-            {...frame}
-            action={{ label: "Continue", onSelect: props.onContinue }}
-            scene="confetti-ball"
-            {...(step.online
-                ? {}
-                : {
-                      status: {
-                          label:
-                              step.message ??
-                              "Remote control resumes when your computer is online.",
-                      },
-                  })}
-            title="Mobile App Linked"
-        />
-    );
+    return {
+        ...frame,
+        action: { label: "Continue", onSelect: props.onContinue },
+        scene: "confetti-ball",
+        ...(step.online
+            ? {}
+            : {
+                  status: {
+                      label: step.message ?? "Remote control resumes when your computer is online.",
+                  },
+              }),
+        title: "Mobile App Linked",
+    };
 }

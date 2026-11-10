@@ -19,6 +19,15 @@ export type HappyAgentChiefOfStaffRequest =
     | { readonly kind: "accountsManage" }
     | {
           /**
+           * The reader wants another Happy Agent of their own: a personal one
+           * on a machine they run, or one their small team shares. The Chief
+           * of Staff asks where and does the deployment.
+           */
+          readonly kind: "happyAgentAdd";
+          readonly audience: "personal" | "team";
+      }
+    | {
+          /**
            * The reader belongs to Happy teams that this Happy Agent has no
            * connection to. Only each team's name and organization ID travel;
            * the Chief of Staff resolves the server through its own
@@ -146,6 +155,18 @@ export function happyAgentChiefOfStaffRequestText(request: HappyAgentChiefOfStaf
                 "Manage connected accounts",
                 'I want to manage my connected accounts: add an account, pool accounts, or hide some from the picker. Use the "Accounts and models" recipe and help me set it up.',
             ].join("\n\n");
+        case "happyAgentAdd":
+            return request.audience === "personal"
+                ? [
+                      "Set up a personal remote agent",
+                      "I want my own Happy Agent on another machine I run, a server or a computer that stays on, so my work keeps going when this computer is off.",
+                      'Use the "Deploy a standalone remote agent" recipe. Ask me which machine to use and how to reach it, deploy it, connect it to this Happy, and check that it works. Ask before changing anything on that machine.',
+                  ].join("\n\n")
+                : [
+                      "Set up a shared team agent",
+                      "I want a Happy Agent that my small team shares, on a server we run ourselves.",
+                      'Use the "Create and deploy a Happy team" recipe. Ask me where to host it and what to call the team, deploy it, connect it to this Happy, and check that it works. Ask me before inviting anyone.',
+                  ].join("\n\n");
         case "teamConnectionAdd":
             return [
                 `Add team connection: ${teamsWords(request.teams)}`,

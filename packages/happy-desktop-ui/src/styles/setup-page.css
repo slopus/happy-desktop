@@ -407,6 +407,12 @@
     color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
 }
 
+/* The way out under the primary action hovers in the primary's own pill, so
+   the two read as one pair of buttons rather than a pill over a tile. */
+.happy-setup-page__footer-secondary > .happy-button[data-variant="ghost"] {
+    border-radius: var(--happy-radius-pill);
+}
+
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="ghost"]:hover:not(:disabled) {
     background: color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
     color: var(--onboarding-foreground);

@@ -32,10 +32,13 @@ import openHandsUrl from "./assets/animations/open-hands.json?url";
 import owlUrl from "./assets/animations/owl.json?url";
 import partyUrl from "./assets/animations/party.json?url";
 import robotUrl from "./assets/animations/robot.json?url";
+import seedlingUrl from "./assets/animations/seedling.json?url";
 import snailUrl from "./assets/animations/snail.json?url";
 import sparklesUrl from "./assets/animations/sparkles.json?url";
 import spiderCatchingBugUrl from "./assets/animations/spider-catching-bug.json?url";
+import sprigUrl from "./assets/animations/sprig.json?url";
 import ticketsUrl from "./assets/animations/tickets.json?url";
+import treeUrl from "./assets/animations/tree.json?url";
 import wandUrl from "./assets/animations/wand.json?url";
 
 /**
@@ -58,6 +61,9 @@ import wandUrl from "./assets/animations/wand.json?url";
  * - `owl` — we are looking, and there is nothing found yet (search).
  * - `party` — a group is celebrating a shared completion.
  * - `robot` — an agent is ready to work, and waiting to be told what to do.
+ * - `seedling`, `sprig`, `tree` — one way of running Happy grown to the
+ *   next: just you, a small team, a whole organization. Shown together, in
+ *   that order, so the row reads as growth.
  * - `snail` — something is being read right now, and it is taking a moment.
  * - `sparkles` — the absence is the good outcome; there is nothing left to do.
  * - `spider-catching-bug` — a safety net helps catch unintended agent actions.
@@ -83,10 +89,13 @@ export type LottieSceneName =
     | "owl"
     | "party"
     | "robot"
+    | "seedling"
     | "snail"
     | "sparkles"
     | "spider-catching-bug"
+    | "sprig"
     | "tickets"
+    | "tree"
     | "wand";
 
 /**
@@ -114,10 +123,13 @@ const SOURCES: Record<LottieSceneName, string> = {
     owl: owlUrl,
     party: partyUrl,
     robot: robotUrl,
+    seedling: seedlingUrl,
     snail: snailUrl,
     sparkles: sparklesUrl,
     "spider-catching-bug": spiderCatchingBugUrl,
+    sprig: sprigUrl,
     tickets: ticketsUrl,
+    tree: treeUrl,
     wand: wandUrl,
 };
 

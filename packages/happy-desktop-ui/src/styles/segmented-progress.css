@@ -110,9 +110,11 @@
 }
 
 /* Grows from empty even when its first paint already carries a number: a bar
-   that appears part full reads as one that lost its beginning. */
+   that appears part full reads as one that lost its beginning. A row of steps
+   is not a measurement filling up: it appears where it stands, and glides only
+   when the step changes. */
 @starting-style {
-    .happy-segmented-progress__fill {
+    .happy-segmented-progress:not([data-mode="steps"]) .happy-segmented-progress__fill {
         transform: translateX(-100%);
     }
 }

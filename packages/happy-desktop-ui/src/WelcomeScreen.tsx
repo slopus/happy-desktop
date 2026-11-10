@@ -1,5 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
-import { type CSSProperties } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { NightSkyShader, type NightSkyShaderMotion } from "./NightSkyShader";
@@ -33,14 +33,26 @@ export interface WelcomeScreenProps {
     readonly slides: readonly WelcomeSlide[];
     /** Primary action label. Defaults to "Go Happy". */
     readonly actionLabel?: string;
+    readonly actionDisabled?: boolean;
+    /** The primary action takes focus with the screen, so Enter answers it. */
+    readonly actionAutoFocus?: boolean;
     /** Optional decorative scenery behind the welcome deck. */
     readonly backdrop?: WelcomeScreenBackdrop;
     onAction(): void;
     /** A quieter second way in, under the primary action. */
-    readonly secondaryAction?: { readonly label: string; onAction(): void };
+    readonly secondaryAction?: {
+        readonly label: string;
+        readonly disabled?: boolean;
+        onAction(): void;
+    };
+    /** Between the deck and the actions, for what a flow reveals there. */
+    readonly children?: ReactNode;
+    /** A hidden, pointer-only press on the deck's art. */
+    readonly onArtPress?: () => void;
     /** Which appearance this window is on. */
     readonly appearance: HappyAgentAppearanceChoice;
-    onAppearanceChange(appearance: HappyAgentAppearanceChoice): void;
+    /** Omit to leave out the corner switcher, on a screen inside the app. */
+    onAppearanceChange?(appearance: HappyAgentAppearanceChoice): void;
 }
 
 /**
@@ -99,9 +111,13 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "style",
         "slides",
         "actionLabel",
+        "actionDisabled",
+        "actionAutoFocus",
         "backdrop",
         "onAction",
         "secondaryAction",
+        "children",
+        "onArtPress",
         "appearance",
         "onAppearanceChange",
     ]);
@@ -140,13 +156,19 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                 <div className="happy-welcome-screen__body" data-happy-desktop-ui="welcome-body">
                     <WelcomeDeck
                         label="Welcome slides"
+                        onArtPress={local.onArtPress}
                         slides={local.slides}
                         tint={local.backdrop?.kind === "sky" ? "sky" : "surface"}
                     />
 
+                    {local.children}
+
                     <div className="happy-welcome-screen__actions">
                         <Button
+                            // eslint-disable-next-line jsx-a11y/no-autofocus -- a screen that asks one thing starts the keyboard there
+                            autoFocus={local.actionAutoFocus}
                             className="happy-welcome-screen__action"
+                            disabled={local.actionDisabled}
                             onClick={local.onAction}
                             size="large"
                         >
@@ -155,6 +177,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                         {local.secondaryAction ? (
                             <Button
                                 className="happy-welcome-screen__secondary"
+                                disabled={local.secondaryAction.disabled}
                                 onClick={local.secondaryAction.onAction}
                                 variant="ghost"
                             >
@@ -168,17 +191,21 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
             {/* Outside the scrollport as well as outside the flex flow: it is a
                 corner of the window rather than the last item of a column, and
                 it has to stay in that corner while a short window scrolls. */}
-            <Button
-                aria-label={APPEARANCE_CYCLE[local.appearance].label}
-                className="happy-welcome-screen__appearance"
-                data-appearance={local.appearance}
-                iconOnly
-                onClick={() => local.onAppearanceChange(APPEARANCE_CYCLE[local.appearance].next)}
-                size="small"
-                variant="ghost"
-            >
-                {appearanceGlyph(local.appearance)}
-            </Button>
+            {local.onAppearanceChange ? (
+                <Button
+                    aria-label={APPEARANCE_CYCLE[local.appearance].label}
+                    className="happy-welcome-screen__appearance"
+                    data-appearance={local.appearance}
+                    iconOnly
+                    onClick={() =>
+                        local.onAppearanceChange?.(APPEARANCE_CYCLE[local.appearance].next)
+                    }
+                    size="small"
+                    variant="ghost"
+                >
+                    {appearanceGlyph(local.appearance)}
+                </Button>
+            ) : null}
         </div>
     );
 }

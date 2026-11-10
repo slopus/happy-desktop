@@ -3,6 +3,7 @@ import { AssistantMark, type AssistantMarkName } from "./AssistantMark";
 import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
 import { SetupCommand } from "./SetupCommand";
+import { Spinner } from "./Spinner";
 import { Icon, type IconName } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
@@ -51,6 +52,11 @@ export type SetupAssistantAction =
      * column does not move when a sign-in lands.
      */
     | { readonly kind: "done"; readonly label: string }
+    /**
+     * Not known yet: a quiet spinner and "Checking" in the box a button takes,
+     * and the answer fades in there in its place.
+     */
+    | { readonly kind: "pending" }
     /**
      * A sign-in waiting on the vendor's page: the code to confirm there when
      * the page asks for one, a way back to the page, and a way out.
@@ -210,8 +216,21 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                                   <span
                                       className="happy-setup-assistants__action"
                                       data-happy-desktop-ui="setup-assistants-action"
+                                      // Checking and its answer are two mounts, so
+                                      // the answer fades in where "Checking" was.
+                                      key={action.kind === "pending" ? "pending" : "settled"}
                                   >
-                                      {action.kind === "command" ? (
+                                      {action.kind === "pending" ? (
+                                          <span
+                                              className="happy-setup-assistants__checking"
+                                              data-happy-desktop-ui="setup-assistants-checking"
+                                              role="status"
+                                              style={{ width: ASSISTANT_BUTTON_WIDTH }}
+                                          >
+                                              <Spinner size={14} tone="muted" />
+                                              Checking
+                                          </span>
+                                      ) : action.kind === "command" ? (
                                           <>
                                               <SetupCommand
                                                   command={action.command}

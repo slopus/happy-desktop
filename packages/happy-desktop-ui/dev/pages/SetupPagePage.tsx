@@ -422,18 +422,21 @@ export function SetupPagePage() {
                             view={{
                                 assistants: [
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "checking",
                                         command: "/opt/homebrew/bin/claude",
                                         id: "claude",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "checking",
                                         command: "/opt/homebrew/bin/codex",
                                         id: "codex",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: false },
                                         authentication: "unavailable",
                                         id: "grok",
                                         status: "missing",
@@ -466,18 +469,21 @@ export function SetupPagePage() {
                             view={{
                                 assistants: [
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "valid",
                                         command: "/opt/homebrew/bin/claude",
                                         id: "claude",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "invalid",
                                         command: "/opt/homebrew/bin/codex",
                                         id: "codex",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: false },
                                         authentication: "unavailable",
                                         id: "grok",
                                         status: "missing",
@@ -510,16 +516,19 @@ export function SetupPagePage() {
                             view={{
                                 assistants: [
                                     {
+                                        connect: { installable: true, installed: false },
                                         authentication: "unavailable",
                                         id: "claude",
                                         status: "missing",
                                     },
                                     {
+                                        connect: { installable: true, installed: false },
                                         authentication: "unavailable",
                                         id: "codex",
                                         status: "missing",
                                     },
                                     {
+                                        connect: { installable: true, installed: false },
                                         authentication: "unavailable",
                                         id: "grok",
                                         status: "missing",
@@ -577,18 +586,21 @@ export function SetupPagePage() {
                             view={{
                                 assistants: [
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "invalid",
                                         command: "/opt/homebrew/bin/claude",
                                         id: "claude",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "invalid",
                                         command: "/opt/homebrew/bin/codex",
                                         id: "codex",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "invalid",
                                         command: "/opt/homebrew/bin/grok",
                                         id: "grok",
@@ -622,18 +634,21 @@ export function SetupPagePage() {
                             view={{
                                 assistants: [
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "error",
                                         command: "/opt/homebrew/bin/claude",
                                         id: "claude",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: true },
                                         authentication: "error",
                                         command: "/opt/homebrew/bin/codex",
                                         id: "codex",
                                         status: "found",
                                     },
                                     {
+                                        connect: { installable: true, installed: false },
                                         authentication: "unavailable",
                                         id: "grok",
                                         status: "missing",

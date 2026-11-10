@@ -1,4 +1,6 @@
+import type { HappyAgentChiefOfStaffRequest } from "happy-desktop-state";
 import type {
+    CloudConnectAgentAudience,
     CloudConnectAvailability,
     CloudConnectServer,
     CloudConnectView,
@@ -14,9 +16,13 @@ export interface DesktopCloudConnectStore {
     /** The screen on show, or nothing. */
     get(): CloudConnectView | undefined;
     subscribe(listener: () => void): () => void;
-    /** The sidebar's "+". */
+    /** The sidebar's "+": what to add. */
     connectOpen(): void;
-    /** Not now, Esc and Cancel. */
+    /** Drafts setting up a personal or team Happy Agent to the Chief of Staff. */
+    agentAdd(audience: CloudConnectAgentAudience): void;
+    /** Happy Cloud, from the choices: its welcome. */
+    cloudOpen(): void;
+    /** The close button, Esc and Cancel. */
     connectCancel(): void;
     /** Signs in to the account if it needs to, then lists its servers. */
     connectConfirm(): void;
@@ -63,6 +69,11 @@ export function desktopCloudConnectStoreCreate(input: {
     readonly connect: (
         connectionId: string,
     ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+    /**
+     * Writes the request into This Mac's Chief of Staff draft and opens that
+     * conversation; nothing is sent. Rejects with a displayable `UserError`.
+     */
+    readonly chiefOfStaffAsk: (request: HappyAgentChiefOfStaffRequest) => Promise<void>;
     readonly now?: () => number;
 }): DesktopCloudConnectStore {
     const now = input.now ?? Date.now;
@@ -236,6 +247,34 @@ export function desktopCloudConnectStoreCreate(input: {
             logoPresses = [];
             images.clear();
             servers = [];
+            set({ kind: "choose" });
+        },
+        agentAdd(audience) {
+            if (view?.kind !== "choose" || view.asking) return;
+            generation += 1;
+            const asked = generation;
+            set({ kind: "choose", asking: audience });
+            input.chiefOfStaffAsk({ kind: "happyAgentAdd", audience }).then(
+                () => {
+                    // In the draft, its conversation already behind the sheet,
+                    // which leaves onto it and then closes.
+                    if (current(asked)) set({ kind: "choose", asking: audience, asked: true });
+                },
+                (error: unknown) => {
+                    if (!current(asked)) return;
+                    set({
+                        kind: "choose",
+                        error:
+                            error instanceof Error && error.message
+                                ? error.message
+                                : "Happy couldn't reach your Chief of Staff. Try again.",
+                    });
+                },
+            );
+        },
+        cloudOpen() {
+            if (view?.kind !== "choose" || view.asking) return;
+            logoPresses = [];
             set({ kind: "welcome" });
         },
         connectCancel() {
@@ -271,6 +310,12 @@ export function desktopCloudConnectStoreCreate(input: {
             set({ kind: "join", name: "", code: "" });
         },
         back() {
+            if (view?.kind === "welcome") {
+                if (view.testSignIn?.busy) return;
+                generation += 1;
+                set({ kind: "choose" });
+                return;
+            }
             if (view?.kind !== "create" && view?.kind !== "join") return;
             if (view.busy) return;
             if (availabilityTimer) clearTimeout(availabilityTimer);

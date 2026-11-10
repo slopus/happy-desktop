@@ -52,7 +52,10 @@ August 2026. `disguised-face.json` was supplied by the project owner on 23
 August 2026. `cherry-blossom.json`, `front-facing-baby-chick.json`,
 `mirror-ball.json`, and `open-hands.json` were supplied by the project owner on
 26 August 2026, and `cloud-variation.json` and `monkey-hear-no-evil.json` on 27
-August 2026. Their upstream sources are not recorded in the files.
+August 2026. `seedling.json`, `sprig.json`, and `tree.json` were supplied by the
+project owner on 9 November 2026 (as `seeding.json`, `spring.json`, and
+`tree.json`) and copied unchanged under these names. Their upstream sources are
+not recorded in the files.
 
 | File                           | SHA-256                                                            | Format                                        | Size              |
 | ------------------------------ | ------------------------------------------------------------------ | --------------------------------------------- | ----------------- |
@@ -73,9 +76,12 @@ August 2026. Their upstream sources are not recorded in the files.
 | `owl.json`                     | `95402270d116a310aa4b1606f88a2bbc79d2b4d947b5d84181c0b126c7aaba59` | Lottie 5.5.2, 512×512, 60fps, 131f, 18 layers | 284 KB / 47 KB gz |
 | `party.json`                   | `de4ac9e38f2c7c3bc1e4022be841ec0c26b9b75cca51df43aaf9c0e97aaa1492` | Lottie 5.5.2, 512×512, 60fps, 180f, 40 layers | 131 KB / 15 KB gz |
 | `robot.json`                   | `eeabc392ba20328ce97452eb826dddf3e306129e360ce4847c3b48470ffc053b` | Lottie 5.5.2, 512×512, 60fps, 180f, 13 layers | 343 KB / 30 KB gz |
+| `seedling.json`                | `7502aa8d2b1d6741d9232115fe575298865de93d0c6a223c2d6f40bcb55652f9` | Lottie 5.5.2, 512×512, 60fps, 120f, 11 layers | 244 KB / 54 KB gz |
 | `snail.json`                   | `6a9c7b648681ae9d15b31455a76f7d47c5f53d6d72da10b8e43ba134fbd47a2c` | Lottie 5.5.2, 512×512, 60fps, 180f, 19 layers | 368 KB / 42 KB gz |
 | `sparkles.json`                | `b14e504ce3467a6ba1c519348dee9fc4e05286b9e4f058f33df9175865bde4b9` | Lottie 5.5.2, 512×512, 60fps, 180f, 23 layers | 104 KB / 8 KB gz  |
+| `sprig.json`                   | `c85b8dd18781f0b6af739999a88c3d6864c5c3cfe825d629d75e744a278decc0` | Lottie 5.5.2, 512×512, 60fps, 180f, 11 layers | 329 KB / 49 KB gz |
 | `tickets.json`                 | `8715ac66cadbd7cba548b81f7366e190592a7c515811c0df69d65ac8e9db51d4` | Lottie 5.5.2, 512×512, 60fps, 180f, 18 layers | 597 KB / 61 KB gz |
+| `tree.json`                    | `cb7c9a130992909adba37c6032799c130fe455cdc5a93e16e50f89c3eaba0eee` | Lottie 5.5.2, 512×512, 60fps, 178f, 36 layers | 250 KB / 32 KB gz |
 | `unicorn.json`                 | `1e250cde4b49782d9c3140faaf50bee1bfbe88478ac794bf0c92402ff9b01b60` | Lottie 5.5.2, 512×512, 60fps, 180f, 31 layers | 463 KB / 60 KB gz |
 | `wand.json`                    | `8de70508fe1ebdeb08fc7005820329696f28ec84adc94f3cc4362cf7d3e72870` | Lottie 5.5.2, 512×512, 60fps, 176f, 30 layers | 193 KB / 16 KB gz |
 
@@ -104,7 +110,8 @@ Contributors`. That is a
   `disguised-face.json`, `fox.json`, `hatching-chick.json`, `llama.json`,
   `party.json`, `unicorn.json`, `cherry-blossom.json`,
   `front-facing-baby-chick.json`, `mirror-ball.json`, `open-hands.json`,
-  `cloud-variation.json`, and `monkey-hear-no-evil.json`** not
+  `cloud-variation.json`, `monkey-hear-no-evil.json`, `seedling.json`,
+  `sprig.json`, and `tree.json`** not
   recorded in the supplied files. Their upstream licensing has not been
   independently established here.
 

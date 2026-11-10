@@ -1,7 +1,8 @@
 /*
  * CloudConnectScreen — the sidebar "+" to Happy Cloud, full window on the
- * onboarding sky. Every state is a SetupPage; this file only draws what sits
- * in its slot: the server rows, the handle field, the links and the hero.
+ * onboarding sky. Every state is a SetupPage except Happy Cloud's welcome,
+ * which is the first launch's WelcomeScreen; this file only draws what sits
+ * in their slots: the server rows, the handle field, the links and the hero.
  */
 
 .happy-cloud-connect__window {
@@ -12,9 +13,94 @@
     background: var(--groupped-background);
 }
 
-.happy-cloud-connect__window > .happy-setup-page {
+.happy-cloud-connect__window > .happy-setup-page,
+.happy-cloud-connect__window > .happy-welcome-screen {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+/* The welcome dissolves in like every setup page beside it. */
+.happy-cloud-connect--welcome .happy-welcome-screen__body {
+    animation: happy-cloud-connect-dissolve 180ms ease both;
+}
+
+@keyframes happy-cloud-connect-dissolve {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/*
+ * The sheet rises from the window's bottom edge and sinks back into it, by
+ * transform alone so the compositor carries it and nothing inside relays out.
+ * Rising decelerates hard into place, the way a sheet settles; sinking starts
+ * at speed and is over in well under half the time, so leaving never waits.
+ */
+.happy-cloud-connect__window {
+    /* Backwards only: once risen it keeps no transform, which would otherwise
+       become the containing block of everything fixed inside it. */
+    animation: happy-cloud-connect-rise 520ms cubic-bezier(0.32, 0.72, 0, 1) backwards;
+}
+
+.happy-cloud-connect__window[data-closing] {
+    /* Gone at once: moving from the first frame, off the window in 180ms. */
+    animation: happy-cloud-connect-sink 180ms cubic-bezier(0.3, 0.3, 0.7, 1) both;
+    pointer-events: none;
+}
+
+@keyframes happy-cloud-connect-rise {
+    from {
+        transform: translate3d(0, 100%, 0);
+    }
+
+    to {
+        transform: none;
+    }
+}
+
+@keyframes happy-cloud-connect-sink {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+
+    to {
+        transform: translate3d(0, 100%, 0);
+    }
+}
+
+/* Still ends, so closing still reaches the caller. */
+@media (prefers-reduced-motion: reduce) {
+    .happy-cloud-connect__window,
+    .happy-cloud-connect__window[data-closing],
+    .happy-cloud-connect--welcome .happy-welcome-screen__body {
+        animation-duration: 1ms;
+    }
+}
+
+/*
+ * Top right, the same 12px from the top edge as from the right, so it sits
+ * square in the corner, clear of the window's rounded corner. A plain ghost
+ * button, round: the window and the class together outrank the shared ghost
+ * shape, so the hover stays a circle rather than a rounded square.
+ */
+.happy-cloud-connect__window > .happy-cloud-connect__close.happy-button {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 3;
+    border-radius: var(--happy-radius-pill);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
+.happy-cloud-connect__window > .happy-cloud-connect__close.happy-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: var(--onboarding-foreground);
 }
 
 /* Steps change quickly here; the dissolve stays under 200ms. */
@@ -67,6 +153,111 @@
 .happy-cloud-connect__server:disabled {
     cursor: default;
     opacity: 0.6;
+}
+
+/*
+ * What to add, as three plans side by side: equal columns, each a card on the
+ * sky with who it is for, what it is, what it comes with, and its button
+ * pinned to the card's foot so the three buttons share one line.
+ */
+/* Every Happy Cloud page is as wide as first-run setup's machine pages
+   (960px), so its words keep the same measure and the subtitle one line. */
+.happy-cloud-connect .happy-setup-page__body {
+    max-width: 960px;
+}
+
+.happy-cloud-connect__plans {
+    display: flex;
+    align-items: stretch;
+    gap: 16px;
+    width: 100%;
+}
+
+.happy-cloud-connect__plan {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 24px;
+    border: 1px solid color-mix(in srgb, var(--onboarding-foreground) 18%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    color: var(--onboarding-foreground);
+    text-align: start;
+}
+
+.happy-cloud-connect__plan-scene {
+    flex: none;
+    margin-top: -4px;
+    margin-bottom: 12px;
+}
+
+.happy-cloud-connect__plan-audience {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+.happy-cloud-connect__plan-title {
+    margin: 4px 0 0;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 28px;
+    letter-spacing: -0.01em;
+}
+
+.happy-cloud-connect__plan-detail {
+    min-height: 40px;
+    margin: 4px 0 0;
+    font-size: 14px;
+    line-height: 20px;
+    opacity: 0.72;
+}
+
+.happy-cloud-connect__plan-features {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    margin: 16px 0 24px;
+    padding: 16px 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
+    list-style: none;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-cloud-connect__plan-features > li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.happy-cloud-connect__plan-features > li > :first-child {
+    flex: none;
+    margin-top: 2px;
+    opacity: 0.7;
+}
+
+/* The plans not recommended get an outlined button on the sky, so only Pro's
+   is filled and the row has one obvious way forward. */
+.happy-cloud-connect__plan-action.happy-button[data-variant="secondary"] {
+    border-color: color-mix(in srgb, var(--onboarding-foreground) 32%, transparent);
+    background: transparent;
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-connect__plan-action.happy-button[data-variant="secondary"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+}
+
+.happy-cloud-connect__plan-action.happy-button {
+    align-self: stretch;
+    margin-top: auto;
 }
 
 .happy-cloud-connect__server:focus-visible {

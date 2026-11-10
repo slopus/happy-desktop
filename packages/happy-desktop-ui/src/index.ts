@@ -664,6 +664,7 @@ export {
     CloudConnectScreen,
     type CloudConnectAvailability,
     type CloudConnectScreenProps,
+    type CloudConnectAgentAudience,
     type CloudConnectServer,
     type CloudConnectView,
 } from "./CloudConnectScreen";

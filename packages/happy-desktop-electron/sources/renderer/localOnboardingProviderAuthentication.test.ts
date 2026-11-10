@@ -120,9 +120,15 @@ function storeOpen() {
     return store;
 }
 
-/** Which providers had a paid inference check, in no particular order. */
+/**
+ * Which providers had a paid inference check, in no particular order. The
+ * free authentication check a failed inference falls back to is not one.
+ */
 function verifiedIds(): readonly string[] {
-    return daemon.verifyProvider.mock.calls.map(([id]) => String(id)).sort();
+    return daemon.verifyProvider.mock.calls
+        .filter(([, request]) => (request as { level: string }).level === "inference")
+        .map(([id]) => String(id))
+        .sort();
 }
 
 it("settles a check that never answers as couldn't verify", async () => {
@@ -262,10 +268,10 @@ it("asks for the install, not a sign-in, when an assistant that is not here fail
         assistants: [{ authentication: "unavailable", id: "claude", status: "missing" }, {}, {}],
     });
     const claude = cardFind(screenRender(view as LocalOnboardingView), "Claude Code");
-    expect(
-        claude?.querySelector('[data-happy-desktop-ui="setup-assistants-detail"]')?.textContent,
-    ).toBe("Install by running:");
-    expect(claude?.textContent).toContain("curl -fsSL https://claude.ai/install.sh | bash");
+    // Claude's one button opens the dialog that installs it first; the card
+    // itself never shows a command.
+    expect(claude?.querySelector("button")?.textContent).toBe("Connect");
+    expect(claude?.textContent).not.toContain("curl");
     expect(claude?.textContent).not.toContain("claude auth login");
 });
 
@@ -322,42 +328,60 @@ function cardFind(root: HTMLElement, name: string): Element | undefined {
 }
 
 it.each(["error", "invalid"] as const)(
-    "keeps sign-in on a failed CLI and the custom endpoint on the custom card (%s)",
+    "keeps sign-in on a failed CLI and the custom endpoint on the custom line (%s)",
     (custom) => {
         const root = screenRender({
             assistants: [
                 {
+                    connect: { installable: true, installed: true },
                     authentication: "error",
                     command: "/opt/homebrew/bin/claude",
                     id: "claude",
                     status: "found",
                 },
-                { authentication: "unavailable", id: "codex", status: "missing" },
-                { authentication: "unavailable", id: "grok", status: "missing" },
+                {
+                    connect: { installable: true, installed: false },
+                    authentication: "unavailable",
+                    id: "codex",
+                    status: "missing",
+                },
+                {
+                    connect: { installable: true, installed: false },
+                    authentication: "unavailable",
+                    id: "grok",
+                    status: "missing",
+                },
             ],
             custom: { authentication: custom, providers: custom === "error" ? ["Claude"] : [] },
             kind: "provider-authentication",
             installShell: "posix",
         });
 
-        expect(root.textContent).toContain("Couldn't verify a subscription");
+        // The words above the cards hold still: the cards say how each went.
+        expect(root.textContent).toContain("Connect your AI");
         expect(root.textContent).toContain(
-            "Sign in again, or set up a custom endpoint with your agent.",
+            "Sign in to one you already use to get started. You can add more later.",
         );
-        // Signing in is the main way in, so a failed CLI still offers it, and
-        // only it.
+        // Connecting is the main way in, so a failed CLI still offers it, as
+        // its one button and never as a command to run.
         const claude = cardFind(root, "Claude Code");
+        expect(claude?.querySelector("button")?.textContent).toBe("Connect again");
         expect(
-            claude?.querySelector('[data-happy-desktop-ui="setup-assistants-detail"]')?.textContent,
-        ).toBe("Couldn't verify. Sign in:");
-        expect(claude?.textContent).toContain("claude auth login");
+            claude?.querySelector('[data-happy-desktop-ui="setup-assistants-detail"]'),
+        ).toBeNull();
+        expect(root.querySelector('[data-happy-desktop-ui="setup-command"]')).toBeNull();
+        expect(root.textContent).not.toContain("claude auth login");
+        expect(root.textContent).not.toContain("curl");
         expect(claude?.querySelector(".happy-setup-assistants__prompts")).toBeNull();
-        // A custom endpoint or proxy belongs to the custom card, custom setup first.
-        const prompts = [
-            ...(cardFind(root, "Custom configuration")?.querySelectorAll(
-                ".happy-setup-assistants__prompt",
-            ) ?? []),
-        ].map((prompt) => prompt.textContent);
+        // A custom endpoint or proxy belongs to the custom line under the
+        // cards, custom setup first.
+        const aside = root.querySelector('[data-happy-desktop-ui="setup-assistants-aside"]');
+        expect(
+            aside?.querySelector('[data-happy-desktop-ui="setup-assistants-link"]')?.textContent,
+        ).toBe(custom === "error" ? "Fix with your agent" : "Use an API key or another provider");
+        const prompts = [...(aside?.querySelectorAll(".happy-setup-assistants__prompt") ?? [])].map(
+            (prompt) => prompt.textContent,
+        );
         expect(prompts).toHaveLength(2);
         expect(prompts[0]).toContain("My setup is custom");
         expect(prompts[0]).toContain("~/.claude/settings.json");

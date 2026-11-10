@@ -1411,7 +1411,11 @@ function assistantsProject(
         return {
             authentication: unavailable ? "unavailable" : result,
             ...(assistant.command ? { command: assistant.command } : {}),
-            ...(cli ? { connect: assistantConnectProject(cli) } : {}),
+            // Before Happy Agent has answered, the card still offers its button,
+            // read from the shell's own finding, so it never flashes the commands.
+            connect: cli
+                ? assistantConnectProject(cli)
+                : { installable: true, installed: !missing },
             id: assistant.id,
             status: assistant.status,
         };
