@@ -95,10 +95,7 @@ export function happyAgentConversationExtras(
                       provider_sign_in: (component, control) =>
                           component.type === "provider_sign_in" ? (
                               <HappyAgentChatProviderSignIn
-                                  /* LOCAL until the client package types `account` on the props. */
-                                  account={
-                                      (component.props as { readonly account?: "new" }).account
-                                  }
+                                  account={component.props.account}
                                   control={control}
                                   linkOpen={linkOpen}
                                   provider={component.props.provider}

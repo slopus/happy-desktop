@@ -1,8 +1,13 @@
-import type { ConversationMediaItem } from "happy-desktop-state";
+import {
+    layoutMedia,
+    MEDIA_GAP,
+    MEDIA_ROW_HEIGHT_DESKTOP,
+    type ConversationMediaItem,
+    type MediaFrame,
+} from "happy-desktop-state";
 import { MediaImageTile } from "../ConversationMedia";
 import { MediaVideoTile } from "../MediaVideoTile";
 import { thumbhashDataUrl } from "../thumbhashDataUrl";
-import { uiMediaLayout, UI_MEDIA_ROW_HEIGHT } from "./uiMediaLayout";
 
 export type UiMediaProps = {
     /** The pictures and recordings, in order, each already resolved to its bytes on this connection. */
@@ -22,30 +27,62 @@ function labelOf(labels: UiMediaProps["labels"], index: number): string | undefi
 
 /** The component's height at `width`, from the items' stated sizes alone. */
 export function uiMediaHeight(props: Omit<UiMediaProps, "onItemOpen">): number {
-    return uiMediaLayoutOf(props).height;
+    return uiMediaRows(props).height;
 }
 
-function uiMediaLayoutOf(props: Omit<UiMediaProps, "onItemOpen">) {
-    return uiMediaLayout(
-        props.items.map((item, index) => ({
-            kind: item.kind,
-            ...(item.width === undefined ? {} : { width: item.width }),
-            ...(item.height === undefined ? {} : { height: item.height }),
-            labelled: labelOf(props.labels, index) !== undefined,
-        })),
+type UiMediaRow = {
+    readonly height: number;
+    readonly items: readonly { readonly index: number; readonly frame: MediaFrame }[];
+    readonly labelled: boolean;
+};
+
+/**
+ * The shared `layoutMedia` frames, grouped into the rows they sit in, so the
+ * rows draw as flex rows: each row as tall as its pictures and label line.
+ */
+function uiMediaRows(props: Omit<UiMediaProps, "onItemOpen">): {
+    readonly rows: readonly UiMediaRow[];
+    readonly height: number;
+} {
+    const arrangement = layoutMedia(
+        props.items.map((item, index) => {
+            const label = labelOf(props.labels, index);
+            return {
+                kind: item.kind,
+                ...(item.width === undefined ? {} : { width: item.width }),
+                ...(item.height === undefined ? {} : { height: item.height }),
+                ...(label === undefined ? {} : { label }),
+            };
+        }),
         props.width,
-        UI_MEDIA_ROW_HEIGHT,
+        MEDIA_ROW_HEIGHT_DESKTOP,
     );
+    const rows: { top: number; items: UiMediaRow["items"][number][] }[] = [];
+    for (const [index, frame] of arrangement.frames.entries()) {
+        const row = rows.at(-1);
+        if (row?.top === frame.y) row.items.push({ index, frame });
+        else rows.push({ top: frame.y, items: [{ index, frame }] });
+    }
+    return {
+        height: arrangement.height,
+        rows: rows.map((row, rowIndex) => ({
+            items: row.items,
+            labelled: row.items.some((item) => arrangement.labels[item.index] !== null),
+            /* To the next row's top, less the gap; the last row to the whole height. */
+            height:
+                (rows[rowIndex + 1]?.top ?? arrangement.height + MEDIA_GAP) - row.top - MEDIA_GAP,
+        })),
+    };
 }
 
 /**
  * Chat UI `media`: the pictures and recordings a `show_ui` call placed, in
- * justified rows laid out from their own sizes (`uiMediaLayout`). Every box
+ * justified rows laid out from their own sizes (the client's `layoutMedia`). Every box
  * is in whole pixels before a byte arrives, and a picture covers its box, so
  * nothing moves when the bytes load. A label is one line under its item.
  */
 export function UiMedia(props: UiMediaProps) {
-    const layout = uiMediaLayoutOf(props);
+    const layout = uiMediaRows(props);
     const open = props.onItemOpen;
     return (
         <div
@@ -62,7 +99,7 @@ export function UiMedia(props: UiMediaProps) {
                     {row.items.map((placed) => {
                         const item = props.items[placed.index]!;
                         const label = labelOf(props.labels, placed.index);
-                        const box = { width: placed.width, height: placed.height };
+                        const box = { width: placed.frame.width, height: placed.frame.height };
                         const placeholderUrl = item.thumbhash
                             ? thumbhashDataUrl(item.thumbhash)
                             : undefined;
@@ -70,7 +107,7 @@ export function UiMedia(props: UiMediaProps) {
                             <figure
                                 className="happy-chat-media__item"
                                 key={placed.index}
-                                style={{ width: placed.width }}
+                                style={{ width: placed.frame.width }}
                             >
                                 {item.kind === "video" ? (
                                     <MediaVideoTile

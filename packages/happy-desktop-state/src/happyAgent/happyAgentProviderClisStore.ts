@@ -61,25 +61,12 @@ export interface HappyAgentProviderClisStore {
     [Symbol.dispose](): void;
 }
 
-/**
- * One account a provider CLI's type is signed in with: each configured
- * provider of that type. LOCAL until the client package types
- * `ProviderCli.accounts` (change 2, 1c).
- */
-export type ProviderCliAccount = {
-    readonly id: string;
-    /** What the vendor reports: an email or a name. */
-    readonly label: string;
-    readonly email?: string | null;
-    readonly plan?: string | null;
-    readonly signIn: "signed_in" | "signed_out" | "unknown";
-};
+/** One account a provider CLI's type is signed in with: each configured provider of that type. */
+export type ProviderCliAccount = NonNullable<ProviderCli["accounts"]>[number];
 
 /** The accounts a program has: its `accounts` when the server lists them, else its one sign-in. */
 export function providerCliAccounts(cli: ProviderCli): readonly ProviderCliAccount[] {
-    const listed = (cli as ProviderCli & { readonly accounts?: readonly ProviderCliAccount[] })
-        .accounts;
-    if (listed !== undefined) return listed;
+    if (cli.accounts !== undefined) return cli.accounts;
     if (cli.signIn.status !== "signed_in") return [];
     const account = cli.signIn.account;
     return [

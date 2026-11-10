@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
     chatUiActionAllowed,
     chatUiComponentKey,
-    chatUiMediaComponent,
     type ChatUiGranted,
     type ConversationUi,
     type UiActionInput,
@@ -120,20 +119,9 @@ function UiComponentView(props: {
         if (draw === undefined) return <UiFallback text={component.fallback} />;
         return <LiveBox type={component.type}>{draw(component, control)}</LiveBox>;
     }
-    const media = chatUiMediaComponent(component);
-    if (media) return <UiMediaView entries={media.props.items} view={view} />;
     switch (component.type) {
-        /* Until the client package carries `media`, a document's `images` draws the same way. */
-        case "images":
-            return (
-                <UiMediaView
-                    entries={component.props.images.map((image) => ({
-                        mediaIndex: image.mediaIndex,
-                        ...(image.caption ? { label: image.caption } : {}),
-                    }))}
-                    view={view}
-                />
-            );
+        case "media":
+            return <UiMediaView entries={component.props.items} view={view} />;
         case "file_tree": {
             /* PROTOTYPE: `entries` (a path with a note and a status) is the proposed prop. */
             const entries = (component.props as { readonly entries?: readonly UiFileTreeEntry[] })

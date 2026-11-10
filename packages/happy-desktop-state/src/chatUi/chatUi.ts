@@ -1,4 +1,6 @@
+import { Value } from "@sinclair/typebox/value";
 import {
+    knownReplyUiSchema,
     uiActionAllowed,
     uiActionDefinition,
     type UiActionBlock,
@@ -7,7 +9,10 @@ import {
     type UiActionOutcome,
     type UiComponent,
     type UiDocument,
+    type KnownReplyUi,
+    type ReplyUi as WireReplyUi,
     type UiPermissionId,
+    type UiProvider,
 } from "@slopus/happy-agent-client";
 import type { ConversationMediaItem } from "../conversation/conversationEntry.js";
 
@@ -75,51 +80,26 @@ export type ConversationQuickReplies = {
     readonly live: boolean;
 };
 
-/*
- * LOCAL until the happy-agent contract for change 2 is published: the reply
- * component catalog (`sources/replies/**`) and the `media` component. Swap
- * these for the client package's types when it carries them.
- */
+/** One option's reply component as this build draws it: a known type, props checked. */
+export type ReplyUi = KnownReplyUi;
 
-/** An AI whose program a reply option can be about. */
-export type ReplyProviderId = "claude" | "codex" | "grok" | "antigravity";
+/** An AI whose program a reply option or a sign-in row is about. */
+export type ReplyProviderId = UiProvider;
 
-/** A reply component: what one quick-reply option is about. v1 has `provider` alone. */
-export type ReplyUi = {
-    readonly type: "provider";
-    readonly props: { readonly provider: ReplyProviderId };
-};
-
-const REPLY_PROVIDERS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "antigravity"]);
-
-/** One stored `ui` entry as this build draws it, or `null` for anything else. */
-export function replyUiRead(value: unknown): ReplyUi | null {
-    if (typeof value !== "object" || value === null) return null;
-    const { type, props } = value as { readonly type?: unknown; readonly props?: unknown };
-    if (type !== "provider" || typeof props !== "object" || props === null) return null;
-    const provider = (props as { readonly provider?: unknown }).provider;
-    return typeof provider === "string" && REPLY_PROVIDERS.has(provider)
-        ? { type: "provider", props: { provider: provider as ReplyProviderId } }
-        : null;
+/** One stored `ui` entry as this build draws it, or `null` for a bare option or an unknown type. */
+export function replyUiRead(value: WireReplyUi | null): ReplyUi | null {
+    return value !== null && Value.Check(knownReplyUiSchema, value) ? value : null;
 }
 
-/** One picture or recording of a `media` component, by its index in the presentation's `items`. */
-export type UiMediaEntry = { readonly mediaIndex: number; readonly label?: string };
-
-/** The `media` component: pictures and recordings laid out from their own sizes, labels under. */
-export type UiMediaComponent = {
-    readonly id: string;
-    readonly fallback: string;
-    readonly type: "media";
-    readonly props: { readonly items: readonly UiMediaEntry[] };
-};
-
-/** `component` as the `media` component, when it is one. */
-export function chatUiMediaComponent(component: {
-    readonly type: string;
-}): UiMediaComponent | undefined {
-    return component.type === "media" ? (component as UiMediaComponent) : undefined;
-}
+/** The shared `media` layout every client draws with; see the client's `layoutMedia`. */
+export {
+    layoutMedia,
+    MEDIA_GAP,
+    MEDIA_ROW_HEIGHT_DESKTOP,
+    type MediaArrangement,
+    type MediaArrangementItem,
+    type MediaFrame,
+} from "@slopus/happy-agent-client";
 
 /** The key a component's local state is kept under in its conversation. */
 export function chatUiComponentKey(offer: ConversationUiOffer, componentId: string): string {

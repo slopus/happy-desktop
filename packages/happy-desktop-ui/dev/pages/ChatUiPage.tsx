@@ -74,14 +74,13 @@ const MEDIA: readonly ConversationMediaItem[] = [
 
 const IMAGES: UiComponent = {
     id: "shots",
-    type: "images",
-    fallback: "Two screenshots",
+    type: "media",
+    fallback: "2 images: The forecast, wide · The forecast on a phone",
     props: {
-        images: [
-            { mediaIndex: 0, alt: "The forecast, wide" },
-            { mediaIndex: 1, alt: "The forecast on a phone" },
+        items: [
+            { mediaIndex: 0, label: "The forecast, wide" },
+            { mediaIndex: 1, label: "The forecast on a phone" },
         ],
-        columns: 2,
     },
 };
 
@@ -240,7 +239,7 @@ const SPECIMENS: readonly {
         id: "C-338i",
         label: "Fallback",
         detail: "a type this build doesn't know, and one this server doesn't serve",
-        view: { ui: documentOf([UNKNOWN, FILE_TREE]), served: new Set(["images"]) },
+        view: { ui: documentOf([UNKNOWN, FILE_TREE]), served: new Set(["media"]) },
     },
     {
         id: "C-338j",

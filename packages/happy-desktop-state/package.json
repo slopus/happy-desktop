@@ -22,7 +22,7 @@
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@slopus/happy-agent-client": "file:../../.context/packs/slopus-happy-agent-client-0.0.161-preview.14.tgz",
+        "@slopus/happy-agent-client": "file:../../.context/packs/slopus-happy-agent-client-0.0.162-preview.1.tgz",
         "picomatch": "4.0.5",
         "yjs": "^13.6.31",
         "zustand": "5.0.14"

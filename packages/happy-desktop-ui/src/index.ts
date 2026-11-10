@@ -604,12 +604,6 @@ export {
 export { UiFileTree, uiFileTreeNodes, type UiFileTreeProps } from "./ui/UiFileTree";
 export { UiMedia, uiMediaHeight, type UiMediaProps } from "./ui/UiMedia";
 export {
-    uiMediaLayout,
-    UI_MEDIA_ROW_HEIGHT,
-    type UiMediaLayout,
-    type UiMediaLayoutInput,
-} from "./ui/uiMediaLayout";
-export {
     UiComputeJoinRows,
     UiDefaultModelRow,
     UiFileTreeList,

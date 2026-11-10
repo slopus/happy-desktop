@@ -1,4 +1,9 @@
-import type { Message, UiActionBlock, UiDocument } from "@slopus/happy-agent-client";
+import type {
+    Message,
+    ReplyUi as WireReplyUi,
+    UiActionBlock,
+    UiDocument,
+} from "@slopus/happy-agent-client";
 import {
     replyUiRead,
     type ConversationQuickReplies,
@@ -95,7 +100,7 @@ export function quickRepliesOf(message: Message): readonly ConversationQuickRepl
             found.push({
                 messageId: message.id,
                 options: block.options,
-                ...replyUiOf(block, block.options.length),
+                ...replyUiOf(block),
                 live: false,
             });
         else if (
@@ -107,26 +112,19 @@ export function quickRepliesOf(message: Message): readonly ConversationQuickRepl
                 messageId: message.id,
                 toolCallId: block.id,
                 options: block.presentation.options,
-                ...replyUiOf(block.presentation, block.presentation.options.length),
+                ...replyUiOf(block.presentation),
                 live: false,
             });
     }
     return found;
 }
 
-/**
- * The options' reply components, when the suggestion carries them for every
- * option. LOCAL until the client package types `ui` on the block and the
- * presentation; then this reads the typed field.
- */
-function replyUiOf(
-    carrier: object,
-    length: number,
-): { readonly ui: readonly (ReplyUi | null)[] } | Record<string, never> {
-    const ui = (carrier as { readonly ui?: unknown }).ui;
-    if (!Array.isArray(ui) || ui.length !== length) return {};
-    const read = ui.map(replyUiRead);
-    return read.some((entry) => entry !== null) ? { ui: read } : {};
+/** The options' reply components this build draws, when the suggestion carries any. */
+function replyUiOf(carrier: {
+    readonly ui?: readonly (WireReplyUi | null)[];
+}): { readonly ui: readonly (ReplyUi | null)[] } | Record<string, never> {
+    const read = carrier.ui?.map(replyUiRead);
+    return read?.some((entry) => entry !== null) ? { ui: read } : {};
 }
 
 /** The key one suggestion and every `quickReply` naming it share. */
