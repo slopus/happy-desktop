@@ -158,6 +158,8 @@ const INITIAL_SEND_RETRY_MS = 250;
  * but message delivery never waits for draft persistence.
  */
 const DRAFT_SAVE_DEBOUNCE_MS = 300;
+/** How long after a delta skips text the session is read again, so one read covers a burst. */
+const DELTA_GAP_REREAD_MS = 300;
 /** How long typing pauses before a row's draft preview follows the composer. */
 const DRAFT_PREVIEW_PUBLISH_MS = 1_000;
 
@@ -270,6 +272,14 @@ interface SessionEntry {
     reconcileRequired: boolean;
     /** Deltas ignored until a complete message snapshot repairs their message. */
     corruptedMessageIds: Set<string>;
+    /**
+     * Messages whose stream skipped text and were read again for it. Kept
+     * across that read: if the read does not mend one, it waits for its
+     * complete snapshot instead of being read again with every delta.
+     */
+    deltaGapMessageIds: Set<string>;
+    /** The pending re-read a skipped delta asked for. */
+    deltaGapReread: Promise<void> | undefined;
     questionRecovery: Promise<void> | undefined;
     agent?: Agent;
     workspace?: Workspace;
@@ -2184,6 +2194,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             activityRevision: 0,
             reconcileRequired: false,
             corruptedMessageIds: new Set(),
+            deltaGapMessageIds: new Set(),
+            deltaGapReread: undefined,
             questionRecovery: undefined,
             answeredQuestions: [],
             slashCommands: [],
@@ -2934,6 +2946,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 }
                 entry?.messageBlockOffsets.delete(event.payload.messageId);
                 entry?.corruptedMessageIds.delete(event.payload.messageId);
+                entry?.deltaGapMessageIds.delete(event.payload.messageId);
                 if (entry !== undefined) publishSession(entry);
                 return;
             }
@@ -3081,6 +3094,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             knownUserMessageIds.delete(id);
             entry.messageBlockOffsets.delete(id);
             entry.corruptedMessageIds.delete(id);
+            entry.deltaGapMessageIds.delete(id);
         }
         entry.runsOrdered = undefined;
         entry.hasMore = true;
@@ -3382,6 +3396,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             if (entry !== undefined) {
                 entry.messageBlockOffsets.delete(message.id);
                 entry.corruptedMessageIds.delete(message.id);
+                entry.deltaGapMessageIds.delete(message.id);
             }
             updateMessage(agentId, message, runId);
             return;
@@ -3396,6 +3411,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const merged = liveMessageContentMerge(current.message.content, message.content);
         entry.messageBlockOffsets.set(message.id, merged.offset);
         entry.corruptedMessageIds.delete(message.id);
+        entry.deltaGapMessageIds.delete(message.id);
         updateMessage(agentId, { ...message, content: merged.content }, runId);
     };
 
@@ -3473,21 +3489,50 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     sessionId: payload.agentId,
                 }),
                 level: "warning",
-                message: "Message delta did not match local state; awaiting a complete snapshot",
+                message: "Message delta did not match local state; reading the session again",
                 source: "sync",
             });
-            // The protocol promises a complete `message.updated` snapshot after
-            // streaming deltas. Ignore this message's remaining deltas until it
-            // arrives; only a run boundary with no repair falls back to history.
+            // A delta went missing. Ignore this message's deltas until the
+            // session is read again, as iOS and Android do, rather than freeze
+            // it until the complete `message.updated` at the end of the turn.
             entry.corruptedMessageIds.add(payload.messageId);
+            deltaGapReread(entry, payload.messageId);
             return;
         }
         if (current === undefined) return;
+        entry.deltaGapMessageIds.delete(payload.messageId);
         entry.messages.set(payload.messageId, {
             ...current,
             message: applied.message,
         });
         publishSession(entry);
+    };
+
+    /**
+     * Reads a session again, 300 ms after a delta skipped text: the read
+     * clears its ignored deltas and lays the events since its cursor on it.
+     * Once per break: a message the read did not mend, whose next delta still
+     * skips, waits for its complete snapshot. Unwatched, it is read when next
+     * opened.
+     */
+    const deltaGapReread = (entry: SessionEntry, messageId: string): void => {
+        if (entry.deltaGapMessageIds.has(messageId)) return;
+        entry.deltaGapMessageIds.add(messageId);
+        if (entry.subscribers.size === 0) {
+            entry.reconcileRequired = true;
+            return;
+        }
+        if (entry.deltaGapReread !== undefined) return;
+        const reread: Promise<void> = wait(DELTA_GAP_REREAD_MS, rootController.signal)
+            .then(() => {
+                if (entry.deltaGapReread === reread) entry.deltaGapReread = undefined;
+                if (closed || rootController.signal.aborted || sessions.get(entry.id) !== entry)
+                    return;
+                if (entry.subscribers.size === 0) entry.reconcileRequired = true;
+                else background(requestSessionLoad(entry));
+            })
+            .catch(() => undefined);
+        entry.deltaGapReread = reread;
     };
 
     const recoverCorruptedMessages = (agentId: string): void => {
