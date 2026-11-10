@@ -8,23 +8,35 @@
  * on all three cards said only "these are command-line tools", which the reader
  * already knew.
  *
- * So they are inline single-path SVG, monochrome, and inherit `currentColor`
- * like the glyphs beside them. They are addressed by their own names rather than
+ * So they are inline single-path SVG. In ink they inherit `currentColor` like
+ * the glyphs beside them; in `brand` tone each wears its owner's own colour,
+ * where the owner has one: Claude's orange and Gemini's gradient. OpenAI and
+ * xAI publish their marks in black and white only, so those stay in ink. They are addressed by their own names rather than
  * by the command they belong to: the mark on the Codex card is OpenAI's, and
  * pretending otherwise would put a wrong name on somebody else's logo.
  *
  * Trademarks of their respective owners, used nominatively to identify the
  * product each card reports on. Nothing here is Happy's own mark, and none of
- * them may be restyled, recoloured beyond monochrome, or used to suggest an
- * endorsement.
+ * them may be restyled, recoloured beyond monochrome or the owner's own colour,
+ * or used to suggest an endorsement.
  */
+import { useId } from "react";
+
 export type AssistantMarkName = "claude" | "openai" | "grok" | "gemini";
 
 export interface AssistantMarkProps {
     readonly name: AssistantMarkName;
     /** Edge of the square box, in pixels. Defaults to the 20px card size. */
     readonly size?: number;
+    /** `brand` draws the owner's own colour where it has one. Defaults to `ink`. */
+    readonly tone?: "ink" | "brand";
 }
+
+/** The owners' published colours. A mark absent here is black and white only. */
+const MARK_BRAND: Partial<Record<AssistantMarkName, readonly string[]>> = {
+    claude: ["#D97757"],
+    gemini: ["#4796E3", "#9177C7", "#CA6673"],
+};
 
 /** Each mark's single path, on the 24-unit box every one of them is drawn in. */
 const MARK_PATHS: Record<AssistantMarkName, string> = {
@@ -43,18 +55,39 @@ const MARK_PATHS: Record<AssistantMarkName, string> = {
  */
 export function AssistantMark(props: AssistantMarkProps) {
     const size = props.size ?? 20;
+    const gradientId = useId();
+    const brand = props.tone === "brand" ? MARK_BRAND[props.name] : undefined;
+    const fill =
+        brand === undefined
+            ? "currentColor"
+            : brand.length === 1
+              ? brand[0]
+              : `url(#${gradientId})`;
     return (
         <svg
             aria-hidden="true"
             data-happy-desktop-ui="assistant-mark"
             data-mark={props.name}
-            fill="currentColor"
+            fill={fill}
             focusable="false"
             height={size}
             viewBox="0 0 24 24"
             width={size}
             xmlns="http://www.w3.org/2000/svg"
         >
+            {brand !== undefined && brand.length > 1 ? (
+                <defs>
+                    <linearGradient id={gradientId} x1="0" x2="1" y1="1" y2="0">
+                        {brand.map((color, index) => (
+                            <stop
+                                key={color}
+                                offset={index / (brand.length - 1)}
+                                stopColor={color}
+                            />
+                        ))}
+                    </linearGradient>
+                </defs>
+            ) : null}
             <path d={MARK_PATHS[props.name]} fillRule="evenodd" />
         </svg>
     );

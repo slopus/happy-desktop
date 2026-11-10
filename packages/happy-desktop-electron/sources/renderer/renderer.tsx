@@ -90,6 +90,8 @@ import {
 import {
     CodeHighlightWorkers,
     LocalOnboardingScreen,
+    localOnboardingStage,
+    type OnboardingStage,
     SetupHandoff,
     SetupPage,
     ThemeScope,
@@ -131,6 +133,7 @@ import {
     localOnboardingStoreCreate,
     localOnboardingView,
     type LocalOnboardingStore,
+    type LocalOnboardingViewSnapshot,
 } from "./localOnboardingStore";
 import {
     LOCAL_HAPPY_AGENT_ID,
@@ -545,11 +548,22 @@ function DesktopOnboardingGate(props: {
     bridge: HappyDesktopBridge;
     children: ReactNode;
     clock: HappyAgentClockStore;
+    happyAgents: HappyAgentDirectoryStore;
     mobilePairingMethod: MobilePairingMethodStore;
     platform: "desktop" | "web";
     store: LocalOnboardingStore;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    // The machine being set up, once its Happy Agent has said who it is.
+    const node = useSyncExternalStore(
+        props.happyAgents.subscribe,
+        () =>
+            props.happyAgents.get().happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
+                ?.node,
+        () =>
+            props.happyAgents.get().happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
+                ?.node,
+    );
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
         props.appearance.get,
@@ -591,6 +605,26 @@ function DesktopOnboardingGate(props: {
     // that time on the welcome.
     if (!snapshot.onboarding) return null;
     const reached = localOnboardingReachedStage(snapshot);
+    const current = view ? localOnboardingStage(view) : undefined;
+    const order: readonly OnboardingStage[] = [
+        "setup",
+        "subscriptions",
+        "sandbox",
+        "get-app",
+        "connect-phone",
+    ];
+    const behind = (stage: OnboardingStage) =>
+        current !== undefined && order.indexOf(stage) < order.indexOf(current);
+    // Back to Setup or Subscriptions from any later step, and, while Setup is
+    // being looked at again, forward to where the sequence actually stands —
+    // which is what that page's Continue does too. Subscriptions revisited
+    // offers no jump ahead: its own Continue is held until a sign-in works.
+    const forward =
+        view?.kind === "agent-ready" && reached && reached !== "setup" ? reached : undefined;
+    const selectable: readonly OnboardingStage[] = [
+        ...(["setup", "subscriptions"] as const).filter(behind),
+        ...(forward ? [forward] : []),
+    ];
     // The interface is the final onboarding step. Keep the sidebar (+) usable
     // while Chief of Staff's unsent draft is being prepared in the background.
     if (!view || view.kind === "finishing")
@@ -606,6 +640,17 @@ function DesktopOnboardingGate(props: {
     return (
         <LocalOnboardingScreen
             appearance={appearance.mode}
+            {...(node
+                ? {
+                      node: {
+                          name: node.name,
+                          // The installation names no ID of its own, so its
+                          // placeholder is picked by the name it goes by.
+                          placeholderSeed: node.name,
+                          ...(node.avatar ? { imageUrl: node.avatar.url } : {}),
+                      },
+                  }
+                : {})}
             showSteps
             onAssistantsContinue={() => props.store.assistantsContinue()}
             onSandboxSetup={() => props.store.sandboxSetup()}
@@ -614,14 +659,18 @@ function DesktopOnboardingGate(props: {
             onAgentUpdate={() => props.store.agentUpdate()}
             onHappyMobileConnect={() => props.store.happyMobileConnect()}
             onHappyMobileSkip={() => props.store.happyMobileSkip()}
-            onHappyMobilePlatformSelect={(platform) =>
-                props.store.happyMobilePlatformSelect(platform)
-            }
             happyMobilePairingOptions={pairingOptions}
             onStageSelect={(stage) => {
-                if (stage === "setup" || stage === "subscriptions") props.store.stepBack(stage);
+                if (stage === forward) props.store.assistantsContinue();
+                else if (stage === "setup" || stage === "subscriptions")
+                    props.store.stepBack(stage);
             }}
-            {...(reached ? { reachedStage: reached } : {})}
+            selectableStages={selectable}
+            onAssistantSignIn={(id) => props.store.assistantSignIn(id)}
+            onAssistantInstall={(id) => props.store.assistantInstall(id)}
+            onAssistantConnectCancel={(id) => props.store.assistantConnectCancel(id)}
+            onClaudeTokenSubmit={(token) => props.store.claudeSetupTokenSave(token)}
+            onClaudeTokenReset={() => props.store.claudeSetupTokenReset()}
             onExternalOpen={
                 props.platform === "desktop"
                     ? desktopExternalLinkOpen(props.bridge)
@@ -639,8 +688,8 @@ function DesktopOnboardingGate(props: {
  * talking, not a layout: `WelcomeScreen` owns the centred column, the slideshow,
  * and the button, and this is the only place that decides what any of it means.
  * The order is the value hierarchy, not a feature tour. The mark names the
- * category and carries the whole summary: one harness for the whole team,
- * available in the terminal, on desktop, and on mobile. The next two slides
+ * category and carries the whole summary: the whole team and every AI in one
+ * open-source app, on desktop and on mobile. The next two slides
  * make the differentiators concrete — the team inside the live session first,
  * then every agent mixed in one harness. Open source and being yours to change
  * close the deck with who controls the product.
@@ -654,6 +703,18 @@ function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
     if (snapshot.phase === "choosing" || snapshot.phase === "off") return false;
     if (snapshot.phase === "ready") return snapshot.mode === "local";
     return snapshot.request.mode === "local";
+}
+
+/**
+ * Whether first-run setup holds this machine's surface, read the way
+ * `DesktopOnboardingGate` decides it. Chief of Staff's handoff is the
+ * workspace, so it no longer counts.
+ */
+function desktopLocalSetupShown(snapshot: LocalOnboardingViewSnapshot): boolean {
+    if (!snapshot.runtime || !desktopLocalPhase(snapshot.runtime) || !snapshot.onboarding)
+        return false;
+    const view = localOnboardingView(snapshot);
+    return view !== undefined && view.kind !== "finishing";
 }
 
 interface DesktopRendererProps {
@@ -801,6 +862,20 @@ function DesktopScreens(props: DesktopRendererProps) {
         () => props.gptLive.get().voiceFocus?.target.connectionId,
         () => props.gptLive.get().voiceFocus?.target.connectionId,
     );
+    // Only whether setup holds the window: its download progress moves many
+    // times a second and must not re-render the shell either.
+    const localSetupShown = useSyncExternalStore(
+        props.onboarding.subscribe,
+        () => desktopLocalSetupShown(props.onboarding.get()),
+        () => desktopLocalSetupShown(props.onboarding.get()),
+    );
+    // First-run setup owns the window. With no other machine to switch to, the
+    // rail would only offer Home and a "+" beside it, so it stays away until
+    // setup hands over to the workspace.
+    const railHidden =
+        sidebarVisibility.hidden ||
+        (localSetupShown &&
+            directory.happyAgents.every((entry) => entry.id === LOCAL_HAPPY_AGENT_ID));
     const main = props.connectionUis.get(LOCAL_HAPPY_AGENT_ID);
     const surfaceWindowState = props.surfaceWindowState;
     // An update of the local daemon does not take the window: the shell stays
@@ -876,7 +951,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                 reordering={directory.reordering}
                 reorderError={directory.reorderError}
                 windowControls={props.platform === "desktop"}
-                collapsed={sidebarVisibility.hidden}
+                collapsed={railHidden}
                 error={directory.error}
                 {...(props.cloudConnect
                     ? {
@@ -977,6 +1052,7 @@ function DesktopLocalScreens(props: DesktopRendererProps) {
                 appearance={props.appearance}
                 bridge={props.bridge}
                 clock={onboardingClock}
+                happyAgents={props.happyAgents}
                 mobilePairingMethod={props.mobilePairingMethod}
                 platform={props.platform}
                 store={props.onboarding}
@@ -1828,6 +1904,7 @@ if (mediaPreviewBridge) {
             windowState,
             sidebarVisibility,
             happyAgents,
+            railAdd: cloudConnect !== undefined,
         });
         const notices = desktopCloudSignInNoticeStoreCreate({
             happyAgents,
@@ -1869,6 +1946,8 @@ if (mediaPreviewBridge) {
         // the same local connection store and transport as the workspace.
         const onboardingStore = localOnboardingStoreCreate(desktopBridge, {
             agentSetupActive: welcome.get().welcomeAcknowledged,
+            // A vendor's sign-in page opens in the person's own browser.
+            externalOpen: desktopExternalLinkOpen(desktopBridge),
             chiefOfStaff: {
                 get: () => {
                     const entry = happyAgents

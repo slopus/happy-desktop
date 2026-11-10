@@ -1,0 +1,54 @@
+/*
+ * SetupDrift — scenes scattered down the sides of a setup page, over the sky
+ * and under the page's own content. Each fades in after its own delay, then
+ * wanders between its spot and an offset for as long as the page is up.
+ */
+.happy-setup-drift {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.happy-setup-drift__item {
+    position: absolute;
+    top: var(--happy-setup-drift-y);
+    left: var(--happy-setup-drift-x);
+    translate: -50% -50%;
+    opacity: 0;
+    animation:
+        happy-setup-drift-in 1.6s ease-out var(--happy-setup-drift-delay) forwards,
+        happy-setup-drift-wander var(--happy-setup-drift-duration) ease-in-out
+            var(--happy-setup-drift-delay) infinite alternate;
+}
+
+@keyframes happy-setup-drift-in {
+    to {
+        opacity: 0.9;
+    }
+}
+
+@keyframes happy-setup-drift-wander {
+    from {
+        translate: -50% -50%;
+    }
+
+    to {
+        translate: calc(-50% + var(--happy-setup-drift-dx)) calc(-50% + var(--happy-setup-drift-dy));
+    }
+}
+
+/* A narrow window has no sides to spare beside the centred column. */
+@container (max-width: 899px) {
+    .happy-setup-drift {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-setup-drift__item {
+        opacity: 0.9;
+        animation: none;
+    }
+}

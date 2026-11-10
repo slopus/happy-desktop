@@ -32,8 +32,8 @@ function windowSnapshot(fullScreen: boolean, macOS: boolean): HappyAgentWindowSn
  * stands down because the rail's tiles already identify the window. Whether
  * the window is in full screen is still reported as it really is: the surface
  * lays out differently beside a rail in a window than beside one filling the
- * display. The rail shows when there is more than one Happy Agent and the
- * sidebar is not folded away.
+ * display. The rail shows, as `ConnectionShell` decides it, when there is more
+ * than one Happy Agent or a way to add one, and the sidebar is not folded away.
  *
  * This is one store for the window's lifetime rather than a swap between two:
  * a surface reads its window state through route context, which is captured
@@ -44,13 +44,16 @@ export function surfaceWindowStateStoreCreate(input: {
     readonly windowState: HappyAgentWindowStore;
     readonly sidebarVisibility: HappyAgentSidebarVisibilityStore;
     readonly happyAgents: HappyAgentDirectoryStore;
+    /** The rail carries an add button, so it shows beside a single Happy Agent too. */
+    readonly railAdd: boolean;
 }): HappyAgentWindowStore {
     let railedFrom: HappyAgentWindowSnapshot | undefined;
     let railed: HappyAgentWindowSnapshot | undefined;
     const compute = (): HappyAgentWindowSnapshot => {
         const window = input.windowState.get();
         const rail =
-            input.happyAgents.get().happyAgents.length > 1 && !input.sidebarVisibility.get().hidden;
+            (input.happyAgents.get().happyAgents.length > 1 || input.railAdd) &&
+            !input.sidebarVisibility.get().hidden;
         if (!rail) return window;
         if (railedFrom !== window || !railed) {
             railedFrom = window;

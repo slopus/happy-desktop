@@ -17,7 +17,7 @@
     "scripts": {
         "dev": "VITE_HAPPY_BROWSER_LOCAL=1 vite --host 127.0.0.1 --port ${PORT:-5174} --strictPort",
         "predev:electron": "pnpm build:artifact-code && node ../../scripts/name-dev-electron.mjs",
-        "dev:electron": "PORT=${PORT:-5174}; concurrently --kill-others-on-fail --names main,preload,renderer,electron \"vite build --config vite.main.config.ts --watch\" \"vite build --config vite.preload.config.ts --watch\" \"vite --host 127.0.0.1 --port $PORT --strictPort\" \"wait-on dist/main.js dist/preload.cjs tcp:$PORT && VITE_DEV_SERVER_URL=http://127.0.0.1:$PORT electron ./dist/main.js\"",
+        "dev:electron": "PORT=${PORT:-5174}; concurrently --kill-others-on-fail --names main,preload,renderer,electron \"vite build --config vite.main.config.ts --watch\" \"vite build --config vite.preload.config.ts --watch\" \"vite --host 127.0.0.1 --port $PORT --strictPort\" \"wait-on dist/main.js dist/preload.cjs tcp:$PORT && VITE_DEV_SERVER_URL=http://127.0.0.1:$PORT electron ./dist/main.js $HAPPY_DESKTOP_ELECTRON_ARGS\"",
         "dev:electron:profile": "export HAPPY_DESKTOP_PROFILE=1 HAPPY_DESKTOP_PROFILE_MODE=development; pnpm run dev:electron",
         "build:artifact-code": "pnpm --dir ../happy-desktop-ui exec vite build --config vite.artifact-code.config.ts --outDir ../happy-desktop-electron/dist/artifact-code --emptyOutDir",
         "build": "pnpm build:artifact-code && vite build && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",

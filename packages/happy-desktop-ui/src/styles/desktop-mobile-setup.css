@@ -14,33 +14,30 @@
     color: var(--onboarding-foreground);
 }
 
-/* The store code beside its platform pick, at 176px: large enough for its
-   store mark to read. */
+/* The download code alone on the axis, on its own white card with no shadow:
+   it sits flat on the page rather than floating over it. */
 .happy-desktop-mobile-setup__download {
     display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 16px;
 }
 
-/*
- * On a setup page, under the centre line hang the subtitle (48px with the
- * core's padding and gap), the code, and both footer slots (120px). The code
- * keeps 176px while that fits, and a shorter window shrinks it to 136px at
- * the smallest.
- */
+.happy-desktop-mobile-setup__download .happy-qr-code {
+    box-shadow: none;
+}
+
+/* Selected whole with one click, to copy or to read out. */
+.happy-desktop-mobile-setup__raw-url {
+    color: var(--text);
+    font-weight: 500;
+    user-select: all;
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-desktop-mobile-setup__raw-url {
+    color: var(--onboarding-foreground);
+}
+
+/* On a setup page the code centres with the title above the footer, at its
+   full 256px while the window is tall enough and 176px at the smallest. */
 .happy-desktop-mobile-setup .happy-desktop-mobile-setup__download {
-    --happy-qr-code-size: clamp(136px, 50cqh - 184px, 176px);
-}
-
-/* Each choice is a 36px pill (radius 18) inside 4px of padding, so the track's
-   22px corner is concentric with the selected pill. */
-.happy-desktop-mobile-setup__platform {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    width: 104px;
-    border-radius: 22px;
-    background: var(--surface);
-    padding: 4px;
+    --happy-qr-code-size: clamp(176px, 100cqh - 460px, 256px);
 }

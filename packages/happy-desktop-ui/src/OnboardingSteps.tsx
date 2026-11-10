@@ -16,12 +16,18 @@ export type OnboardingStepsProps =
           /** Native readiness decides whether this Windows-only step is in the flow. */
           readonly sandbox?: boolean;
           /**
-           * The furthest step setup actually reached. Going back to an earlier
-           * step lights that step without unwinding what is already done.
+           * The furthest step setup actually reached. After going back, the
+           * steps between here and there stay faint like any step ahead: the
+           * bar shows where you are, and `selectable` says where you can go.
            */
           readonly reached?: OnboardingStage;
           readonly failed?: boolean;
-          /** Returns to an earlier step, when that step can be returned to. */
+          /**
+           * The steps the flow can send you to from here, behind or ahead.
+           * Absent, every finished step before the current one.
+           */
+          readonly selectable?: readonly OnboardingStage[];
+          /** Goes to a step the bar offers. */
           onStageSelect?(stage: OnboardingStage): void;
       }
     | {
@@ -48,40 +54,39 @@ const mobileStages = [
 function segments(
     stages: readonly { readonly id: string; readonly label: string }[],
     current: string,
-    reached: string,
     complete: boolean,
     failed: boolean,
+    selectable?: readonly string[],
     onStageSelect?: (stage: string) => void,
 ): readonly SegmentedProgressSegment[] {
     const currentIndex = stages.findIndex((stage) => stage.id === current);
-    const reachedIndex = Math.max(
-        currentIndex,
-        stages.findIndex((stage) => stage.id === reached),
-    );
     return stages.map((stage, index) => {
+        // The bar says where you are. A step ahead of this one is drawn ahead
+        // even when it was reached before someone stepped back: drawing it
+        // finished would put the strongest ink on a step you are not on.
         const state = complete
             ? ("done" as const)
             : index === currentIndex
               ? failed
                   ? ("failed" as const)
                   : ("running" as const)
-              : // Behind the current step, or already passed before someone
-                // stepped back to an earlier one: both are finished work.
-                index < currentIndex || index <= reachedIndex
+              : index < currentIndex
                 ? ("done" as const)
                 : ("pending" as const);
+        const offered =
+            index !== currentIndex &&
+            (selectable
+                ? selectable.includes(stage.id)
+                : // Native sandbox setup is completed once, not a revisitable form.
+                  stage.id !== "sandbox" && index < currentIndex);
         return {
             ...stage,
             state,
             // A user-paced current step occupies its whole segment; colour,
             // rather than width, places it between completed and untouched.
             ...(state === "running" ? { fraction: 1 } : {}),
-            // Only a step already passed can be returned to, and only when the flow
-            // says it has somewhere to send you.
-            // Native sandbox setup is completed once, not a revisitable form.
-            ...(onStageSelect && stage.id !== "sandbox" && index < currentIndex
-                ? { onSelect: () => onStageSelect(stage.id) }
-                : {}),
+            // Only where the flow says it has somewhere to send you.
+            ...(onStageSelect && offered ? { onSelect: () => onStageSelect(stage.id) } : {}),
         };
     });
 }
@@ -97,12 +102,12 @@ export function OnboardingSteps(props: OnboardingStepsProps) {
                           stage.id !== "sandbox" || props.sandbox || props.stage === "sandbox",
                   ),
                   props.stage,
-                  props.reached ?? props.stage,
                   false,
                   props.failed === true,
+                  props.selectable,
                   props.onStageSelect as ((stage: string) => void) | undefined,
               )
-            : segments(mobileStages, props.stage, props.stage, complete, props.failed === true);
+            : segments(mobileStages, props.stage, complete, props.failed === true);
     return (
         <div className="happy-onboarding-steps" data-happy-desktop-ui="onboarding-steps">
             <SegmentedProgress

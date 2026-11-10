@@ -1,0 +1,71 @@
+/*
+ * C-341 ClaudeSetupTokenDialog — a short lead, then numbered steps. Each step
+ * is a 24px number chip beside its words; a command or the token field hangs
+ * under the words of its own step, so what to type is read with what it does.
+ */
+
+.happy-claude-setup-token__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-claude-setup-token__lead {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-claude-setup-token__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-claude-setup-token__step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.happy-claude-setup-token__number {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    background: var(--surface-ripple);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* The words start on the chip's centre line: 4px down to a 16px-tall first line. */
+.happy-claude-setup-token__words {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 2px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-claude-setup-token__words > .happy-text-field {
+    align-self: stretch;
+}
+
+.happy-claude-setup-token__words code {
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+}

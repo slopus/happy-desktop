@@ -42,7 +42,7 @@
     flex: 1 1 0;
     flex-direction: column;
     align-items: center;
-    /* Mark, name and state read as one label; the remedy keeps 8px below it. */
+    /* Mark, name and state read as one label; the remedy keeps 20px below it. */
     gap: 4px;
     min-width: 0;
     text-align: center;
@@ -54,22 +54,23 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    height: 28px;
+    height: 56px;
+    margin-bottom: 8px;
     color: var(--text);
 }
 
 .happy-setup-assistants__name {
     color: var(--text);
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 20px;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 24px;
 }
 
 /* Below 800px a column is too narrow for "Custom configuration" on one line
-   at 15px, and a wrapped name drops that column's remedy out of the row. */
+   at 18px, and a wrapped name drops that column's remedy out of the row. */
 @container (max-width: 799px) {
     .happy-setup-assistants__name {
-        font-size: 14px;
+        font-size: 16px;
     }
 }
 
@@ -114,9 +115,9 @@
  * ink; finding an installed command alone does not make it ready.
  */
 /* Dims what the column says about itself, never what it asks you to do: the
-   column nobody has signed into is precisely the one with something to act on. */
-.happy-setup-assistants__item:not([data-status="found"]) .happy-setup-assistants__mark,
-.happy-setup-assistants__item:not([data-status="found"]) .happy-setup-assistants__name,
+   column nobody has signed into is precisely the one with something to act on.
+   The mark and the name keep full ink, since a washed-out logo or name reads
+   as a broken one. */
 .happy-setup-assistants__item:not([data-status="found"]) .happy-setup-assistants__detail {
     opacity: 0.45;
 }
@@ -138,8 +139,74 @@
     gap: 6px;
     min-width: 0;
     max-width: 100%;
-    margin-top: 4px;
+    margin-top: 16px;
     opacity: 1;
+}
+
+/* Connected, in the box a medium button takes (36px tall, the same width),
+   so the column holds still when a button becomes this line. The word, not the
+   word with its check, sits on the column's axis under the logo and the name;
+   the check hangs off its left edge and adds nothing to the centred width. */
+.happy-setup-assistants__done {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 36px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-setup-assistants__done-word {
+    position: relative;
+}
+
+.happy-setup-assistants__done-word > :first-child {
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    margin-right: 4px;
+    transform: translateY(-50%);
+    /* The plain success green reads pale beside 600-weight text. */
+    color: color-mix(in srgb, var(--success) 80%, var(--text));
+}
+
+/* The code a device sign-in asks for, set to be read across a room. */
+.happy-setup-assistants__code {
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 0.08em;
+    user-select: all;
+}
+
+.happy-setup-assistants__links {
+    display: flex;
+    gap: 16px;
+}
+
+/* A way in that is none of the cards, one quiet line under them. */
+.happy-setup-assistants__aside {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 16px 0 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Under the row the prompts open centred on their link, not from its right edge. */
+.happy-setup-assistants__aside .happy-setup-assistants__popover {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .happy-setup-assistants__note {

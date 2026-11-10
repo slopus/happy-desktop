@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { AssistantMark, type AssistantMarkName } from "./AssistantMark";
+import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
 import { SetupCommand } from "./SetupCommand";
+import { Icon, type IconName } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /** One instruction somebody hands to the coding agent they already use. */
@@ -29,6 +31,38 @@ export type SetupAssistantAction =
           readonly onCopy?: () => void;
       }
     | { readonly kind: "link"; readonly label: string; readonly href: string }
+    /**
+     * One press does it: sign in, install, or open what explains how. The
+     * button also says where the assistant stands, so it stays when there is
+     * nothing to press: without `onSelect` it is drawn disabled, as for one
+     * already connected.
+     */
+    | {
+          readonly kind: "button";
+          readonly label: string;
+          readonly icon?: IconName;
+          /** The press started something that is still going. */
+          readonly busy?: boolean;
+          readonly onSelect?: () => void;
+      }
+    /**
+     * Nothing left to do, said in words rather than as a disabled button: a
+     * green check and the label, in exactly the box a button takes, so the
+     * column does not move when a sign-in lands.
+     */
+    | { readonly kind: "done"; readonly label: string }
+    /**
+     * A sign-in waiting on the vendor's page: the code to confirm there when
+     * the page asks for one, a way back to the page, and a way out.
+     */
+    | {
+          readonly kind: "waiting";
+          /** What the disabled button says while the page is open, e.g. "In your browser". */
+          readonly label: string;
+          readonly userCode?: string;
+          readonly onOpen: () => void;
+          readonly onCancel: () => void;
+      }
     | {
           readonly kind: "prompts";
           readonly label: string;
@@ -59,8 +93,11 @@ export interface SetupAssistantEntry {
      * the same three columns in place while their emphasis changes.
      */
     readonly status: "checking" | "found" | "signed-out" | "missing";
-    /** Where it is, or what to do about it, in one line under the name. */
-    readonly detail: string;
+    /**
+     * Where it is, or what to do about it, in one line under the name. Absent
+     * when the action button already says it.
+     */
+    readonly detail?: string;
     /**
      * What that line is. A path is set in the monospace face and allowed to
      * break at its separators, because it is read as a location rather than as a
@@ -71,12 +108,23 @@ export interface SetupAssistantEntry {
     readonly action?: SetupAssistantAction;
 }
 
+/** One quiet line under the row: a way in that is none of the cards. */
+export interface SetupAssistantsAside {
+    /** What is true of it, when anything is, such as "Bedrock ready ✓". */
+    readonly detail?: string;
+    readonly action?: Extract<SetupAssistantAction, { readonly kind: "prompts" }>;
+}
+
 export interface SetupAssistantsProps {
     readonly assistants: readonly SetupAssistantEntry[];
+    readonly aside?: SetupAssistantsAside;
     readonly "data-testid"?: string;
     /** Opens an official install page in the host's external browser. */
     readonly onExternalOpen?: (url: string) => void;
 }
+
+/** Every card's button one width, so the row of them reads as one line. */
+const ASSISTANT_BUTTON_WIDTH = 160;
 
 /**
  * Lets a path wrap where a reader would break it: after a separator.
@@ -135,9 +183,9 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                             data-happy-desktop-ui="setup-assistants-mark"
                         >
                             {assistant.mark === "custom" ? (
-                                <Ionicon name="key" size={28} />
+                                <Ionicon name="key" size={56} />
                             ) : (
-                                <AssistantMark name={assistant.mark} size={28} />
+                                <AssistantMark name={assistant.mark} size={56} tone="brand" />
                             )}
                         </span>
                         <span
@@ -146,15 +194,17 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                         >
                             {assistant.name}
                         </span>
-                        <span
-                            className="happy-setup-assistants__detail"
-                            data-happy-desktop-ui="setup-assistants-detail"
-                            data-kind={assistant.detailKind ?? "sentence"}
-                        >
-                            {assistant.detailKind === "path"
-                                ? pathBreakable(assistant.detail)
-                                : assistant.detail}
-                        </span>
+                        {assistant.detail === undefined ? null : (
+                            <span
+                                className="happy-setup-assistants__detail"
+                                data-happy-desktop-ui="setup-assistants-detail"
+                                data-kind={assistant.detailKind ?? "sentence"}
+                            >
+                                {assistant.detailKind === "path"
+                                    ? pathBreakable(assistant.detail)
+                                    : assistant.detail}
+                            </span>
+                        )}
                         {assistant.action
                             ? ((action) => (
                                   <span
@@ -178,6 +228,60 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                                           </>
                                       ) : action.kind === "prompts" ? (
                                           <SetupAssistantPrompts action={action} />
+                                      ) : action.kind === "button" ? (
+                                          <Button
+                                              disabled={!action.onSelect}
+                                              {...(action.icon ? { icon: action.icon } : {})}
+                                              loading={action.busy === true}
+                                              onClick={action.onSelect}
+                                              width={ASSISTANT_BUTTON_WIDTH}
+                                          >
+                                              {action.label}
+                                          </Button>
+                                      ) : action.kind === "done" ? (
+                                          <span
+                                              className="happy-setup-assistants__done"
+                                              data-happy-desktop-ui="setup-assistants-done"
+                                              role="status"
+                                              style={{ width: ASSISTANT_BUTTON_WIDTH }}
+                                          >
+                                              <span className="happy-setup-assistants__done-word">
+                                                  <Ionicon name="checkmark-sharp" size={16} />
+                                                  {action.label}
+                                              </span>
+                                          </span>
+                                      ) : action.kind === "waiting" ? (
+                                          <>
+                                              <Button loading width={ASSISTANT_BUTTON_WIDTH}>
+                                                  {action.label}
+                                              </Button>
+                                              {action.userCode === undefined ? null : (
+                                                  <span
+                                                      className="happy-setup-assistants__code"
+                                                      data-happy-desktop-ui="setup-assistants-code"
+                                                  >
+                                                      {action.userCode}
+                                                  </span>
+                                              )}
+                                              <span className="happy-setup-assistants__links">
+                                                  <button
+                                                      className="happy-setup-assistants__link"
+                                                      data-happy-desktop-ui="setup-assistants-link"
+                                                      onClick={action.onOpen}
+                                                      type="button"
+                                                  >
+                                                      Open again
+                                                  </button>
+                                                  <button
+                                                      className="happy-setup-assistants__link"
+                                                      data-happy-desktop-ui="setup-assistants-link"
+                                                      onClick={action.onCancel}
+                                                      type="button"
+                                                  >
+                                                      Cancel
+                                                  </button>
+                                              </span>
+                                          </>
                                       ) : (
                                           <>
                                               <a
@@ -202,6 +306,17 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                     </article>
                 ))}
             </div>
+            {props.aside ? (
+                <p
+                    className="happy-setup-assistants__aside"
+                    data-happy-desktop-ui="setup-assistants-aside"
+                >
+                    {props.aside.detail === undefined ? null : <span>{props.aside.detail}</span>}
+                    {props.aside.action ? (
+                        <SetupAssistantPrompts action={props.aside.action} />
+                    ) : null}
+                </p>
+            ) : null}
         </div>
     );
 }

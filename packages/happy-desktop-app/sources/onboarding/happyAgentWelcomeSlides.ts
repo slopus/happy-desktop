@@ -4,9 +4,9 @@ import type { WelcomeSlide } from "happy-desktop-ui";
 export const happyAgentWelcomeSlides: readonly WelcomeSlide[] = [
     {
         art: { kind: "logo" },
-        copy: "Happy integrates models, teams, and compute into one secure, open-source harness—accessible from terminal, desktop, and mobile, deployable anywhere, and adaptable to your team.",
+        copy: "Happy is open source, so anyone can check what it does. Run it on hardware you trust, and reach it from your phone with end-to-end encryption.",
         id: "happy",
-        title: "Any team. Any model. One harness.",
+        title: "Work with AI as a team. Safely.",
     },
     {
         art: { kind: "scene", name: "alien-monster" },

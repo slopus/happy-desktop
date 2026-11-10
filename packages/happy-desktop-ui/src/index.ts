@@ -606,6 +606,7 @@ export {
     type EmptyStateProps,
     type EmptyStateSize,
 } from "./EmptyState";
+export { SetupDrift, type SetupDriftProps } from "./SetupDrift";
 export {
     LottieScene,
     type LottieSceneName,
@@ -744,6 +745,9 @@ export {
     localOnboardingStage,
     type LocalOnboardingAgentSetupPhase,
     type LocalOnboardingAssistant,
+    type LocalOnboardingAssistantConnect,
+    type LocalOnboardingAssistantOperation,
+    type LocalOnboardingClaudeToken,
     type LocalOnboardingAssistantId,
     type LocalOnboardingCommandCopy,
     type LocalOnboardingInstallShell,
@@ -752,6 +756,8 @@ export {
     type LocalOnboardingScreenProps,
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
+export { OnboardingNode, type OnboardingNodeIdentity } from "./OnboardingNode";
+export { ClaudeSetupTokenDialog, type ClaudeSetupTokenDialogProps } from "./ClaudeSetupTokenDialog";
 export { ProfileSetupScreen, type ProfileSetupScreenProps } from "./ProfileSetupScreen";
 export {
     DesktopMobileSetup,

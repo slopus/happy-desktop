@@ -70,21 +70,25 @@
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
-    /* The centre line is measured on the window, not on whatever is above it. */
+    /* The anchor line is measured on the window, not on whatever is above it. */
     container-type: size;
+    /* Where the title's bottom edge sits: the window's centre line. */
+    --happy-setup-line: 50cqh;
+    /* What hangs under the line is budgeted against the room left below it. */
+    --happy-setup-below: calc(100cqh - var(--happy-setup-line));
     /*
      * A pairing code is the tallest thing that hangs under the line: the lead
      * (subtitle and status, 76px with the core's padding and gap), the code,
      * 8px, its 28px copy link, and both footer slots (120px). Full size while
      * that fits; a shorter window shrinks the code rather than move the line.
      */
-    --happy-setup-pairing-qr-size: clamp(88px, 50cqh - 232px, 136px);
+    --happy-setup-pairing-qr-size: clamp(88px, var(--happy-setup-below) - 232px, 136px);
     /*
      * One method's code has its copy link and countdown beside it, and the
      * Relay | Direct control in that link's place, so it also takes the room the
      * footer leaves free: 132px at the minimum window, without moving the footer.
      */
-    --happy-setup-pairing-single-qr-size: clamp(112px, 50cqh - 188px, 184px);
+    --happy-setup-pairing-single-qr-size: clamp(112px, var(--happy-setup-below) - 188px, 184px);
 }
 
 .happy-setup-page > .happy-window-drag-region {
@@ -111,16 +115,16 @@
 /*
  * Every setup page is the same three places:
  *
- *   header   scene and title — the title's bottom edge sits on the centre line
+ *   header   scene and title — the title's bottom edge sits on the anchor line
  *   core     subtitle, status, then what the page is for, hanging from it
  *   footer   primary action and a reserved slot for a way out, at the bottom
  *
  * The header grows upward from the line and the core grows downward from it,
  * so neither moves the other, and the footer is pinned to the foot.
  *
- * The line is the window's centre at every window size. What hangs below it
- * is budgeted for the smallest window (640px): a QR code scales with the
- * window rather than pushing the line up.
+ * The line is `--happy-setup-line`, the same share of the window at every
+ * window size. What hangs below it is budgeted for the smallest window
+ * (640px): a QR code scales with the window rather than pushing the line up.
  */
 .happy-setup-page__body {
     display: flex;
@@ -141,7 +145,7 @@
     justify-content: flex-end;
     gap: 8px;
     width: 100%;
-    min-height: 50cqh;
+    min-height: var(--happy-setup-line);
     /* Clear of the step bar overlaid across the top of the window. */
     padding-top: 96px;
 }
@@ -159,6 +163,33 @@
     flex: 1 0 auto;
     gap: 16px;
     padding-top: 8px;
+}
+
+/* A centred page drops the centre line. Its content (the slot) sits in the
+   middle of the room between the step bar and the footer: the header band
+   above it and the balance band below it share that room equally. The words
+   centre inside the header band, so they sit halfway between the step bar
+   and the content. The body starts at the step bar's bottom edge (the
+   controls band, 16px, and the bar's 24px), so nothing rides up under it. */
+.happy-setup-page[data-placement="centered"] .happy-setup-page__body {
+    padding-top: calc(var(--happy-window-controls-height) + 40px);
+}
+
+.happy-setup-page[data-placement="centered"] .happy-setup-page__header {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: auto;
+    padding: 16px 0;
+}
+
+.happy-setup-page[data-placement="centered"] .happy-setup-page__core {
+    flex: none;
+    padding-top: 0;
+}
+
+.happy-setup-page__balance {
+    flex: 1 1 0;
+    min-height: 16px;
 }
 
 /* The subtitle and the live line read as one sentence and its state. */
@@ -194,6 +225,18 @@
     z-index: 2;
 }
 
+/* Whose setup this is, standing exactly where the connection rail's first
+   tile stands once setup hands over (connections.css): under the
+   window-controls band, 8px below it and 14px from the left edge, clear of
+   the macOS traffic lights. Only the tile is drawn, not the rail. */
+.happy-setup-page__identity {
+    position: absolute;
+    top: calc(var(--happy-window-controls-height) + 8px);
+    left: 14px;
+    z-index: 2;
+    display: flex;
+}
+
 /* Overlaid rather than in the flow, so the anchor line is measured from the
    top of the window whether or not a page shows the step bar. It starts below
    the window-controls band, clear of the macOS traffic lights and of the
@@ -207,6 +250,13 @@
     display: flex;
     justify-content: center;
     padding: calc(var(--happy-window-controls-height) + 16px) 32px 8px;
+}
+
+/* Beside the identity tile the bar keeps at least 16px from it, on both sides
+   so it stays centred: a narrow window shortens the bar instead of running it
+   under the picture. 68px covers the 14px inset, 36px tile, and the gap. */
+.happy-setup-page[data-identity] .happy-setup-page__steps {
+    padding-inline: 68px;
 }
 
 /* The sky remains one stable full-window layer while a stage changes. Only the
@@ -246,6 +296,7 @@
     .happy-setup-page__progress-detail,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__mark,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__name,
+.happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__done,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__detail,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__note,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__link,
@@ -256,14 +307,11 @@
 }
 
 /* A column that is not ready yet steps back less on the gradient than on a
-   plain surface, where the grain would otherwise swallow it. */
+   plain surface, where the grain would otherwise swallow it. The mark and the
+   name keep full strength here too: the button says where the assistant stands. */
 .happy-setup-page[data-backdrop="sky"]
     .happy-setup-assistants__item:not([data-status="found"])
-    :is(
-        .happy-setup-assistants__mark,
-        .happy-setup-assistants__name,
-        .happy-setup-assistants__detail
-    ) {
+    .happy-setup-assistants__detail {
     opacity: 0.64;
 }
 
@@ -307,6 +355,9 @@
 .happy-local-onboarding__facts {
     display: flex;
     flex: none;
+    /* The row may be stretched to the column's width; its facts stay on the
+       page's centre line with the title above them. */
+    justify-content: center;
     gap: 16px;
     color: var(--text-secondary);
     font-family: var(--happy-font-mono);

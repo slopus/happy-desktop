@@ -19,15 +19,15 @@ export function OnboardingHelp(props: { onExternalOpen?(url: string): void }) {
             align="end"
             icon="users"
             items={HELP_LINKS.map((link) => ({ id: link.id, kind: "item", label: link.label }))}
-            label="Get help"
-            menuLabel="Get help"
+            label="Ask a question"
+            menuLabel="Ask a question"
             placement="above"
             onSelect={(id) => {
                 const link = HELP_LINKS.find((candidate) => candidate.id === id);
                 if (link) props.onExternalOpen?.(link.url);
             }}
             size="medium"
-            text="Get help"
+            text="Ask a question"
             variant="ghost"
         />
     );

@@ -1,5 +1,8 @@
 import type {
     LocalOnboardingAssistant,
+    LocalOnboardingAssistantConnect,
+    LocalOnboardingAssistantOperation,
+    LocalOnboardingClaudeToken,
     LocalOnboardingCustom,
     LocalOnboardingView,
     OnboardingStage,
@@ -20,6 +23,13 @@ import type {
     LocalOnboardingSnapshot,
     LocalOnboardingStepBack,
 } from "../shared/desktopContract";
+import {
+    LocalProviderClisUnavailable,
+    LocalProviderCliRefused,
+    localProviderClisApiCreate,
+    type LocalProviderCli,
+    type LocalProviderCliId,
+} from "./localProviderClis";
 
 type ProviderAuthenticationResult = "checking" | "valid" | "invalid" | "error";
 
@@ -65,6 +75,14 @@ export interface LocalOnboardingViewSnapshot {
     /** The optional mobile steps, materialized only until setup completes. */
     readonly happyMobile?: HappyMobileOnboardingSnapshot;
     readonly chiefOfStaffReady: boolean;
+    /**
+     * Happy Agent's own install and sign-in for each assistant, read while
+     * Subscriptions is on screen. Absent until read, and on a Happy Agent
+     * that has no such routes.
+     */
+    readonly providerClis?: ReadonlyMap<LocalProviderCliId, LocalProviderCli>;
+    /** Saving a pasted Claude setup token; absent until one is pasted. */
+    readonly claudeToken?: LocalOnboardingClaudeToken;
 }
 
 export interface LocalOnboardingStore {
@@ -78,11 +96,20 @@ export interface LocalOnboardingStore {
     chiefOfStaffSetup(): void;
     assistantsContinue(): void;
     stepBack(step: LocalOnboardingStepBack): void;
+    /** Runs Codex's or Grok's own sign-in through Happy Agent, opening its page. */
+    assistantSignIn(id: LocalProviderCliId): void;
+    /** Installs a missing assistant from its vendor through Happy Agent. */
+    assistantInstall(id: LocalProviderCliId): void;
+    /** Stops the install or sign-in going on for one assistant. */
+    assistantConnectCancel(id: LocalProviderCliId): void;
+    /** Hands a pasted Claude setup token to Happy Agent. Never kept here. */
+    claudeSetupTokenSave(token: string): void;
+    /** Forgets how the last token save went, as the dialog opens again. */
+    claudeSetupTokenReset(): void;
     /** Starts Windows sandbox setup; Windows' administrator prompt opens from here. */
     sandboxSetup(): void;
     happyMobileConnect(): void;
     happyMobileSkip(): void;
-    happyMobilePlatformSelect(platform: "ios" | "android"): void;
     /** The direct connector the mobile steps offer beside the relay code. */
     happyMobileDirect(): HappyAgentMobileConnectorStore;
 }
@@ -111,6 +138,8 @@ export interface LocalOnboardingStoreOptions {
     };
     /** True when the welcome was acknowledged before this window opened. */
     readonly agentSetupActive?: boolean;
+    /** Opens a vendor's sign-in page in the person's browser. */
+    readonly externalOpen?: (url: string) => void;
 }
 
 /**
@@ -123,6 +152,8 @@ export interface LocalOnboardingStoreOptions {
 const providerRecheckMs = 2_000;
 /** A failed network check must not turn the local discovery poll into paid traffic. */
 const providerVerificationRetryMs = 30_000;
+/** How often an install or sign-in going on is asked about. */
+const providerClisPollMs = 1_500;
 /**
  * How long one inference check may take before it counts as failed. A base URL
  * or proxy that never answers would otherwise hold the pass open, and with it
@@ -179,6 +210,12 @@ export function localOnboardingStoreCreate(
     /** The configured custom providers the last inference check was made against. */
     let customVerificationConfig: string | undefined;
     let providerRecheck: ReturnType<typeof setInterval> | undefined;
+    let providerClisPoll: ReturnType<typeof setInterval> | undefined;
+    /** The runtime connection whose provider CLIs have been read. */
+    let providerClisReadFor: number | undefined;
+    let providerClisReading = false;
+    /** Sign-ins this window asked for, whose page it opens once it exists. */
+    const signInRequested = new Set<LocalProviderCliId>();
     let happyMobileStore: HappyMobileOnboardingStore | undefined;
     let happyMobileUnsubscribe: (() => void) | undefined;
     let happyMobileSourceUnsubscribe: (() => void) | undefined;
@@ -736,10 +773,20 @@ export function localOnboardingStoreCreate(
                                 { level: "inference" },
                                 { signal: within(providerVerificationTimeoutMs) },
                             );
+                            // The API's failed result includes outages and usage limits;
+                            // it does not prove that the person needs to sign in. The
+                            // account itself answering is what onboarding asks: someone
+                            // over today's limit is still connected.
                             const passed =
-                                result.status === "passed" && result.performedLevel === "inference";
-                            // The API's failed result includes outages and rate limits;
-                            // it does not prove that the person needs to sign in.
+                                (result.status === "passed" &&
+                                    result.performedLevel === "inference") ||
+                                (
+                                    await client.verifyProvider(
+                                        assistant.id,
+                                        { level: "authentication" },
+                                        { signal: within(providerVerificationTimeoutMs) },
+                                    )
+                                ).status === "passed";
                             if (passed) verificationRetryAt.delete(assistant.id);
                             else
                                 verificationRetryAt.set(
@@ -774,8 +821,149 @@ export function localOnboardingStoreCreate(
             });
     }
 
+    /** The local Happy Agent's provider CLI routes, while it is the one connected. */
+    function providerClisApi() {
+        const runtime = snapshot.runtime;
+        if (runtime?.phase !== "ready" || runtime.mode !== "local") return undefined;
+        return localProviderClisApiCreate({
+            endpoint: runtime.activeTarget.happyAgentHttpUrl,
+            token: "happy-local-capability",
+        });
+    }
+
+    function providerClisPollStop() {
+        if (!providerClisPoll) return;
+        clearInterval(providerClisPoll);
+        providerClisPoll = undefined;
+    }
+
+    /** The assistants with an install or sign-in still going. */
+    function providerClisActive(): LocalProviderCliId[] {
+        return [...(snapshot.providerClis?.values() ?? [])]
+            .filter(
+                (cli) => cli.operation?.status === "running" || cli.operation?.status === "waiting",
+            )
+            .map((cli) => cli.id);
+    }
+
+    /**
+     * Follows an install or sign-in while one is going and Subscriptions is on
+     * screen. Happy Agent says how it went on its event stream, which setup
+     * does not hold, so this is the stopgap poll, and it stops with the work.
+     */
+    function providerClisPollSynchronize() {
+        if (!providerAuthenticationLive() || providerClisActive().length === 0) {
+            providerClisPollStop();
+            return;
+        }
+        if (providerClisPoll) return;
+        providerClisPoll = setInterval(() => {
+            const api = providerClisApi();
+            const active = providerClisActive();
+            if (!api || !providerAuthenticationLive() || active.length === 0) {
+                providerClisPollStop();
+                return;
+            }
+            for (const id of active)
+                void api.get(id).then(
+                    (cli) => cli && providerCliAdopt(cli),
+                    () => undefined,
+                );
+        }, providerClisPollMs);
+    }
+
+    function providerCliAdopt(cli: LocalProviderCli) {
+        const previous = snapshot.providerClis?.get(cli.id);
+        // UUIDv7 versions sort by time, so an answer older than the one held
+        // is one that crossed a newer answer on the way.
+        if (previous && cli.version !== "" && cli.version <= previous.version) return;
+        const providerClis = new Map(snapshot.providerClis);
+        providerClis.set(cli.id, cli);
+        publish({ ...snapshot, providerClis });
+        const operation = cli.operation;
+        // The vendor's page opens once, for a sign-in this window asked for,
+        // unless the vendor's own program already opened it.
+        if (
+            operation?.kind === "sign_in" &&
+            operation.status === "waiting" &&
+            operation.authorization &&
+            signInRequested.delete(cli.id) &&
+            !operation.authorization.openedByProgram
+        )
+            options.externalOpen?.(operation.authorization.url);
+        if (operation && operation.status !== "running" && operation.status !== "waiting")
+            signInRequested.delete(cli.id);
+        // A sign-in that just worked is checked at once, not after a backoff
+        // an earlier failed check started.
+        if (operation?.status === "succeeded") verificationRetryAt.delete(cli.id);
+        providerClisPollSynchronize();
+    }
+
+    /** Reads every assistant once per connection, as Subscriptions opens. */
+    function providerClisSynchronize() {
+        const runtime = snapshot.runtime;
+        const api = providerClisApi();
+        if (!api || runtime?.phase !== "ready" || !providerAuthenticationLive()) {
+            providerClisPollStop();
+            return;
+        }
+        if (providerClisReadFor === runtime.connectionId || providerClisReading) return;
+        providerClisReading = true;
+        const connectionId = runtime.connectionId;
+        void api
+            .list()
+            .then(
+                (clis) => {
+                    providerClisReadFor = connectionId;
+                    publish({
+                        ...snapshot,
+                        providerClis: new Map(clis.map((cli) => [cli.id, cli])),
+                    });
+                },
+                (error: unknown) => {
+                    // A Happy Agent without the routes keeps the cards' commands.
+                    if (!(error instanceof LocalProviderClisUnavailable)) return;
+                    providerClisReadFor = connectionId;
+                    const { providerClis: _gone, ...rest } = snapshot;
+                    publish(rest);
+                },
+            )
+            .finally(() => {
+                providerClisReading = false;
+                providerClisPollSynchronize();
+            });
+    }
+
+    /** One install, sign-in, or cancel; a refusal still carries the object as it is. */
+    function providerCliAttempt(
+        request: (
+            api: NonNullable<ReturnType<typeof providerClisApi>>,
+        ) => Promise<LocalProviderCli | undefined>,
+        failure: string,
+    ) {
+        const api = providerClisApi();
+        if (!api) return;
+        void request(api).then(
+            (cli) => cli && providerCliAdopt(cli),
+            (error: unknown) => {
+                if (error instanceof LocalProviderCliRefused && error.providerCli) {
+                    providerCliAdopt(error.providerCli);
+                    return;
+                }
+                publish({
+                    ...snapshot,
+                    failure: {
+                        cause: "request",
+                        message: error instanceof Error && error.message ? error.message : failure,
+                    },
+                });
+            },
+        );
+    }
+
     function providerAuthenticationSynchronize() {
         const live = providerAuthenticationLive();
+        providerClisSynchronize();
         if (!live) {
             providerRecheckStop();
             verificationAbort?.abort();
@@ -888,6 +1076,9 @@ export function localOnboardingStoreCreate(
                 localLostOn = undefined;
                 chiefOfStaffSynchronize();
                 providerRecheckStop();
+                providerClisPollStop();
+                providerClisReadFor = undefined;
+                signInRequested.clear();
                 verificationAbort?.abort();
                 verificationAbort = undefined;
                 verificationGeneration += 1;
@@ -931,6 +1122,55 @@ export function localOnboardingStoreCreate(
         stepBack(step) {
             attempt(bridge.onboardingStepBack(step), "Happy could not go back to that step.");
         },
+        assistantSignIn(id) {
+            signInRequested.add(id);
+            providerCliAttempt(
+                (api) => api.signIn(id, crypto.randomUUID()),
+                "Happy could not start that sign-in.",
+            );
+        },
+        assistantInstall(id) {
+            providerCliAttempt(
+                (api) => api.install(id, crypto.randomUUID()),
+                "Happy could not start that install.",
+            );
+        },
+        assistantConnectCancel(id) {
+            signInRequested.delete(id);
+            providerCliAttempt(
+                (api) => api.cancel(id, crypto.randomUUID()),
+                "Happy could not stop that.",
+            );
+        },
+        claudeSetupTokenSave(token) {
+            const api = providerClisApi();
+            if (!api || snapshot.claudeToken?.phase === "saving") return;
+            publish({ ...snapshot, claudeToken: { phase: "saving" } });
+            api.claudeSetupTokenSave(token, crypto.randomUUID()).then(
+                () => {
+                    verificationRetryAt.delete("claude");
+                    publish({ ...snapshot, claudeToken: { phase: "saved" } });
+                },
+                (error: unknown) => {
+                    publish({
+                        ...snapshot,
+                        claudeToken: {
+                            error:
+                                error instanceof LocalProviderClisUnavailable
+                                    ? "This version of Happy Agent can't take a setup token yet. Update Happy Agent, then try again."
+                                    : error instanceof LocalProviderCliRefused
+                                      ? error.message
+                                      : "Happy couldn't reach Happy Agent. Try again.",
+                            phase: "failed",
+                        },
+                    });
+                },
+            );
+        },
+        claudeSetupTokenReset() {
+            if (snapshot.claudeToken?.phase === "saving") return;
+            publish({ ...snapshot, claudeToken: { phase: "idle" } });
+        },
         sandboxSetup() {
             attempt(bridge.onboardingSandboxSetup(), "Happy could not start sandbox setup.");
         },
@@ -947,9 +1187,6 @@ export function localOnboardingStoreCreate(
             happyMobileSkipped = true;
             publish({ ...snapshot, happyMobile: HAPPY_MOBILE_SKIPPED });
             chiefOfStaffSetupAutomatically();
-        },
-        happyMobilePlatformSelect(platform) {
-            happyMobileStore?.happyMobilePlatformSelect(platform);
         },
         happyMobileDirect() {
             return happyMobileStore?.direct ?? happyAgentMobileConnectorStoreNoop;
@@ -1006,7 +1243,9 @@ export function localOnboardingView(
                     onboarding.assistants,
                     snapshot.providerAuthentication,
                     providersRefused(snapshot),
+                    snapshot.providerClis,
                 ),
+                ...(snapshot.claudeToken ? { claudeToken: snapshot.claudeToken } : {}),
                 custom: customProject(snapshot),
                 kind: "provider-authentication",
                 installShell: onboarding.installShell ?? rendererInstallShell(),
@@ -1149,6 +1388,7 @@ function assistantsProject(
     assistants: readonly LocalAssistantState[] | undefined,
     authentication: ProviderAuthenticationSnapshot,
     refused: boolean,
+    providerClis: ReadonlyMap<LocalProviderCliId, LocalProviderCli> | undefined,
 ): readonly LocalOnboardingAssistant[] {
     return (assistants ?? []).map((assistant) => {
         // Nothing can be checked against a daemon that would not start, and it
@@ -1162,15 +1402,55 @@ function assistantsProject(
         // short of that is fixed by signing in, which takes the command, so one
         // that is not here is installed first whether its check failed or found
         // nothing.
-        const unavailable =
-            assistant.status === "missing" && result !== "valid" && result !== "checking";
+        // Happy Agent looks in more places than the login shell does, inside the
+        // vendors' desktop apps among them, and installs there itself, so where
+        // it answers, its answer is whether the program is here.
+        const cli = providerClis?.get(assistant.id);
+        const missing = cli ? !cli.installed : assistant.status === "missing";
+        const unavailable = missing && result !== "valid" && result !== "checking";
         return {
             authentication: unavailable ? "unavailable" : result,
             ...(assistant.command ? { command: assistant.command } : {}),
+            ...(cli ? { connect: assistantConnectProject(cli) } : {}),
             id: assistant.id,
             status: assistant.status,
         };
     });
+}
+
+/**
+ * What a card says about Happy Agent's own install or sign-in. A finished or
+ * cancelled one says nothing more: the card's verified state answers for it.
+ */
+function assistantConnectProject(cli: LocalProviderCli): LocalOnboardingAssistantConnect {
+    const operation = cli.operation;
+    const kind = operation?.kind === "install" ? "install" : "sign-in";
+    const projected: LocalOnboardingAssistantOperation | undefined = (() => {
+        switch (operation?.status) {
+            case "running":
+                return { kind, status: "running" };
+            case "waiting":
+                return operation.authorization
+                    ? {
+                          kind: "sign-in",
+                          status: "waiting",
+                          url: operation.authorization.url,
+                          ...(operation.authorization.userCode
+                              ? { userCode: operation.authorization.userCode }
+                              : {}),
+                      }
+                    : { kind, status: "running" };
+            case "failed":
+                return { kind, message: operation.message, status: "failed" };
+            default:
+                return undefined;
+        }
+    })();
+    return {
+        installable: cli.installable,
+        installed: cli.installed,
+        ...(projected ? { operation: projected } : {}),
+    };
 }
 
 function assistantAuthenticationInitial(

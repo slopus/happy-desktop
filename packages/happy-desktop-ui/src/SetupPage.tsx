@@ -106,6 +106,8 @@ export interface SetupPageProps {
     readonly style?: CSSProperties;
     /** Optional first-run scenery. Other setup-shaped system screens stay plain. */
     readonly backdrop?: { readonly appearance: ThemeMode; readonly kind: "sky" };
+    /** Ambient pictures between the backdrop and the page, never information. */
+    readonly decoration?: ReactNode;
     /**
      * Stable identity of the setup stage. Changing it dissolves the new page
      * content into the retained frame; updates within one stage stay still.
@@ -121,6 +123,14 @@ export interface SetupPageProps {
      * flows that hide something behind the picture.
      */
     readonly onScenePress?: () => void;
+    /**
+     * Where the words sit. `line` (the default) hangs them from the window's
+     * centre line under a fixed scene square, so they hold one height across
+     * the sequence. `centered` drops the scene square and centres title and
+     * content together above the footer, for a page that is a choice rather
+     * than a report.
+     */
+    readonly placement?: "line" | "centered";
     readonly title: string;
     /** One short line under the title; may carry an inline link. Reserved when absent. */
     readonly copy?: ReactNode;
@@ -141,6 +151,8 @@ export interface SetupPageProps {
     readonly secondary?: SetupPageSecondaryAction;
     /** Pinned to the bottom-right corner, outside the page's own bands. */
     readonly help?: ReactNode;
+    /** Pinned top-left where the connection rail's first tile stands: whose setup this is. */
+    readonly identity?: ReactNode;
 }
 
 /**
@@ -177,6 +189,7 @@ export function SetupPage(props: SetupPageProps) {
         "data-testid",
         "style",
         "backdrop",
+        "decoration",
         "transitionKey",
         "scene",
         "onScenePress",
@@ -189,8 +202,40 @@ export function SetupPage(props: SetupPageProps) {
         "action",
         "secondary",
         "help",
+        "identity",
+        "placement",
         "steps",
     ]);
+    const centered = local.placement === "centered";
+    // The subtitle keeps its line when a page has none, so the status and
+    // content below start at one height. A centred page carries it in the
+    // header, with the title, above its content.
+    const lead = (
+        <div className="happy-setup-page__lead">
+            <p className="happy-setup-page__copy" data-happy-desktop-ui="setup-page-copy">
+                {local.copy}
+            </p>
+            {local.statusReserved ? (
+                <div
+                    aria-label="Status"
+                    className="happy-setup-page__status-slot"
+                    data-happy-desktop-ui="setup-page-status-slot"
+                    role="region"
+                    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- long recovery messages scroll in this bounded region, which keyboard users must be able to focus
+                    tabIndex={local.status ? 0 : -1}
+                >
+                    {local.status ? (
+                        <SetupStatus
+                            status={local.status}
+                            tone={local.backdrop ? "inverse" : "default"}
+                        />
+                    ) : null}
+                </div>
+            ) : local.status ? (
+                <SetupStatus status={local.status} tone={local.backdrop ? "inverse" : "default"} />
+            ) : null}
+        </div>
+    );
     return (
         <div
             className={["happy-setup-page", local.className].filter(Boolean).join(" ")}
@@ -200,9 +245,12 @@ export function SetupPage(props: SetupPageProps) {
             data-transition={local.transitionKey === undefined ? undefined : ""}
             data-testid={local["data-testid"]}
             data-steps={local.steps ? "true" : undefined}
+            data-identity={local.identity ? "true" : undefined}
+            data-placement={centered ? "centered" : undefined}
             style={local.style}
         >
             {local.backdrop ? <OnboardingSky appearance={local.backdrop.appearance} /> : null}
+            {local.decoration}
             <WindowDragRegion />
             {local.steps ? <div className="happy-setup-page__steps">{local.steps}</div> : null}
             <ScrollArea
@@ -217,67 +265,39 @@ export function SetupPage(props: SetupPageProps) {
                 >
                     {/* Scene and title, packed to the bottom of a band that ends
                         on the centre line, so the title sits at the same height on
-                        every page. */}
+                        every page. A centred page has no scene square at all. */}
                     <div
                         className="happy-setup-page__header"
                         data-happy-desktop-ui="setup-page-header"
                     >
-                        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a hidden, pointer-only gesture by design */}
-                        <span
-                            className="happy-setup-page__stage"
-                            data-happy-desktop-ui="setup-page-stage"
-                            onClick={local.onScenePress}
-                        >
-                            {local.scene ? (
-                                <LottieScene
-                                    name={local.scene}
-                                    // The picture repeats what the title already says, so
-                                    // the only thing worth offering is one more play.
-                                    replayLabel={local.title}
-                                    size={80}
-                                />
-                            ) : null}
-                        </span>
+                        {centered ? null : (
+                            /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a hidden, pointer-only gesture by design */
+                            <span
+                                className="happy-setup-page__stage"
+                                data-happy-desktop-ui="setup-page-stage"
+                                onClick={local.onScenePress}
+                            >
+                                {local.scene ? (
+                                    <LottieScene
+                                        name={local.scene}
+                                        // The picture repeats what the title already says, so
+                                        // the only thing worth offering is one more play.
+                                        replayLabel={local.title}
+                                        size={80}
+                                    />
+                                ) : null}
+                            </span>
+                        )}
                         <h1
                             className="happy-setup-page__title"
                             data-happy-desktop-ui="setup-page-title"
                         >
                             {local.title}
                         </h1>
+                        {centered ? lead : null}
                     </div>
                     <div className="happy-setup-page__core" data-happy-desktop-ui="setup-page-core">
-                        {/* The subtitle keeps its line when a page has none, so the
-                            status and content below start at one height. */}
-                        <div className="happy-setup-page__lead">
-                            <p
-                                className="happy-setup-page__copy"
-                                data-happy-desktop-ui="setup-page-copy"
-                            >
-                                {local.copy}
-                            </p>
-                            {local.statusReserved ? (
-                                <div
-                                    aria-label="Status"
-                                    className="happy-setup-page__status-slot"
-                                    data-happy-desktop-ui="setup-page-status-slot"
-                                    role="region"
-                                    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- long recovery messages scroll in this bounded region, which keyboard users must be able to focus
-                                    tabIndex={local.status ? 0 : -1}
-                                >
-                                    {local.status ? (
-                                        <SetupStatus
-                                            status={local.status}
-                                            tone={local.backdrop ? "inverse" : "default"}
-                                        />
-                                    ) : null}
-                                </div>
-                            ) : local.status ? (
-                                <SetupStatus
-                                    status={local.status}
-                                    tone={local.backdrop ? "inverse" : "default"}
-                                />
-                            ) : null}
-                        </div>
+                        {centered ? null : lead}
                         {local.command === undefined ? null : (
                             <SetupCommand command={local.command} label="command" />
                         )}
@@ -290,6 +310,10 @@ export function SetupPage(props: SetupPageProps) {
                             </div>
                         )}
                     </div>
+                    {/* The band under the content matches the header's above it,
+                        so the content sits in the middle and the words centre in
+                        the band between it and the step bar. */}
+                    {centered ? <div className="happy-setup-page__balance" aria-hidden /> : null}
                     {/* Both slots are always reserved, so the primary action sits
                         at one height on every page whether or not a page offers a
                         way out under it. */}
@@ -339,6 +363,14 @@ export function SetupPage(props: SetupPageProps) {
             {local.help ? (
                 <div className="happy-setup-page__help" data-happy-desktop-ui="setup-page-help">
                     {local.help}
+                </div>
+            ) : null}
+            {local.identity ? (
+                <div
+                    className="happy-setup-page__identity"
+                    data-happy-desktop-ui="setup-page-identity"
+                >
+                    {local.identity}
                 </div>
             ) : null}
         </div>

@@ -7,12 +7,13 @@ import {
     type OnboardingStage,
 } from "./OnboardingSteps";
 import { QRCode } from "./QRCode";
+import { SetupDrift } from "./SetupDrift";
 import { SetupPage } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
 
 export type DesktopMobileSetupStep =
-    /** Platform pick and store code; confirming it is the consent that starts setup. */
-    | { readonly kind: "intro"; readonly platform: "ios" | "android" }
+    /** The download code; confirming it is the consent that starts setup. */
+    | { readonly kind: "intro" }
     | {
           readonly kind: "link";
           readonly phase:
@@ -50,26 +51,36 @@ export interface DesktopMobileSetupProps {
     readonly sandboxStep?: boolean;
     /** Pinned bottom-right on every step, the way the rest of setup carries it. */
     readonly help?: ReactNode;
+    /** Pinned top-left on every step: whose setup this is. */
+    readonly identity?: ReactNode;
     /** Returns to an earlier onboarding step from the shared step bar. */
     onStageSelect?(stage: OnboardingStage): void;
+    /** The steps the shared bar may send someone to; absent, every finished one behind. */
+    readonly selectableStages?: readonly OnboardingStage[];
     readonly appearance: ThemeMode;
     readonly step: DesktopMobileSetupStep;
     readonly onContinue: () => void;
     readonly onSkip: () => void;
-    readonly onPlatformSelect?: (platform: "ios" | "android") => void;
     /** Opens an external page: the host owns how a link leaves the app. */
     onExternalOpen?(url: string): void;
     /** Both pairing methods, shown side by side on the link step, each with its own state. */
     readonly pairingOptions: DesktopMobilePairingOptions;
 }
 
-const STORE_URLS = {
-    // The short form of the App Store link: fewer bytes keep the code at a
-    // lower version, so it still decodes at the smallest window.
-    ios: "https://apps.apple.com/app/id6748571505",
-    android: "https://play.google.com/store/apps/details?id=com.ex3ndr.happy",
-} as const;
+/** One address for every phone: it sends each one on to its own store. */
+const DOWNLOAD_URL = "https://link.happy.engineering/download";
+/** The same address as someone types it, without the scheme. */
+const DOWNLOAD_LINK_TEXT = "link.happy.engineering/download";
 const ENCRYPTION_DOCS_URL = "https://happy.engineering/docs/security/";
+/** What drifts beside the download code: a phone, its privacy, and its company. */
+const DOWNLOAD_DRIFT = [
+    "alien-monster",
+    "monkey-hear-no-evil",
+    "sparkles",
+    "robot",
+    "closed-lock",
+    "cherry-blossom",
+] as const;
 
 /** The one line every phone screen leads with, and where encryption is explained. */
 export function MobileAppCopy(props: { onExternalOpen?(url: string): void }) {
@@ -81,12 +92,16 @@ export function MobileAppCopy(props: { onExternalOpen?(url: string): void }) {
     );
 }
 
-/** What to do with the store code, and where encryption is explained. */
+/**
+ * What to do with the download code, the same address written out for a phone
+ * without a camera, and where encryption is explained.
+ */
 export function GetMobileAppCopy(props: { onExternalOpen?(url: string): void }) {
     return (
         <>
-            Scan with your phone’s camera. End-to-end encrypted.{" "}
-            <EncryptionLink onExternalOpen={props.onExternalOpen} />
+            Scan with your phone’s camera or open{" "}
+            <span className="happy-desktop-mobile-setup__raw-url">{DOWNLOAD_LINK_TEXT}</span>.
+            End-to-end encrypted. <EncryptionLink onExternalOpen={props.onExternalOpen} />
         </>
     );
 }
@@ -109,41 +124,15 @@ function EncryptionLink(props: { onExternalOpen?(url: string): void }) {
     );
 }
 
-/** The platform pick beside the store code it selects. */
-export function MobileStoreDownload(props: {
-    readonly platform: "ios" | "android";
-    onPlatformSelect?(platform: "ios" | "android"): void;
-}) {
+/** The download code; the subtitle above it writes the same address out. */
+export function MobileStoreDownload() {
     return (
         <div className="happy-desktop-mobile-setup__download">
-            <div
-                className="happy-desktop-mobile-setup__platform"
-                role="group"
-                aria-label="Phone platform"
-            >
-                <Button
-                    aria-pressed={props.platform === "ios"}
-                    variant={props.platform === "ios" ? "primary" : "ghost"}
-                    onClick={() => props.onPlatformSelect?.("ios")}
-                    fullWidth
-                >
-                    iPhone
-                </Button>
-                <Button
-                    aria-pressed={props.platform === "android"}
-                    variant={props.platform === "android" ? "primary" : "ghost"}
-                    onClick={() => props.onPlatformSelect?.("android")}
-                    fullWidth
-                >
-                    Android
-                </Button>
-            </div>
             <QRCode
-                data={STORE_URLS[props.platform]}
+                data={DOWNLOAD_URL}
                 data-testid="happy-mobile-store-qr"
                 label="QR code to download Happy mobile app"
-                mark={props.platform === "ios" ? "app-store" : "google-play"}
-                size={176}
+                size={224}
             />
         </div>
     );
@@ -163,6 +152,7 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
             }
             {...(props.sandboxStep ? { sandbox: true } : {})}
             {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
+            {...(props.selectableStages ? { selectable: props.selectableStages } : {})}
         />
     ) : (
         <OnboardingSteps scope="mobile" stage={mobile} />
@@ -171,6 +161,7 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
         backdrop: { appearance: props.appearance, kind: "sky" },
         className: "happy-desktop-mobile-setup",
         ...(props.help ? { help: props.help } : {}),
+        ...(props.identity ? { identity: props.identity } : {}),
         steps,
         "data-testid": "local-onboarding-screen",
         // Approval replaces only the QR body, not the retained linking page or its sticker.
@@ -178,24 +169,21 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
     } as const;
     const skip = { label: "Skip mobile setup", onSelect: props.onSkip };
 
-    // One screen gets the app onto the phone: what to do with the code, the
-    // platform pick, and the store code. Confirming it asks for the pairing code.
+    // One screen gets the app onto the phone: what to do with the code, then
+    // the code. Like Subscriptions it is a choice, so no picture and centred
+    // words. Confirming it asks for the pairing code.
     if (step.kind === "intro")
         return (
             <SetupPage
                 {...frame}
                 action={{ label: "Downloaded and opened", onSelect: props.onContinue }}
                 copy={<GetMobileAppCopy onExternalOpen={props.onExternalOpen} />}
-                scene="closed-lock"
+                decoration={<SetupDrift scenes={DOWNLOAD_DRIFT} />}
+                placement="centered"
                 secondary={skip}
                 title="Get Mobile App"
             >
-                <MobileStoreDownload
-                    platform={step.platform}
-                    {...(props.onPlatformSelect
-                        ? { onPlatformSelect: props.onPlatformSelect }
-                        : {})}
-                />
+                <MobileStoreDownload />
             </SetupPage>
         );
 

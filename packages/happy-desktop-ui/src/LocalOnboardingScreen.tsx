@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { type AssistantMarkName } from "./AssistantMark";
 import {
     DesktopMobileSetup,
@@ -6,12 +7,15 @@ import {
     type DesktopMobilePairingOptions,
     type DesktopMobileSetupStep,
 } from "./DesktopMobileSetup";
+import { ClaudeSetupTokenDialog } from "./ClaudeSetupTokenDialog";
 import { OnboardingHelp } from "./OnboardingHelp";
+import { OnboardingNode, type OnboardingNodeIdentity } from "./OnboardingNode";
 import { OnboardingSteps, type OnboardingStage } from "./OnboardingSteps";
 import {
     SetupAssistants,
     type SetupAssistantAction,
     type SetupAssistantEntry,
+    type SetupAssistantsAside,
 } from "./SetupAssistants";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
@@ -45,6 +49,39 @@ export interface LocalOnboardingAssistant {
     readonly status: "found" | "missing";
     /** Where the machine keeps it, when it has it. */
     readonly command?: string;
+    /**
+     * What Happy Agent can do about it itself. Absent on a Happy Agent that
+     * cannot install or sign in assistants, whose cards keep the commands.
+     */
+    readonly connect?: LocalOnboardingAssistantConnect;
+}
+
+/** Happy Agent's own install and sign-in for one assistant. */
+export interface LocalOnboardingAssistantConnect {
+    /** Whether Happy Agent found the program, wherever it lives. */
+    readonly installed: boolean;
+    /** Whether Happy Agent can install it from the vendor's own installer. */
+    readonly installable: boolean;
+    /** The install or sign-in going on now, or the one that just failed. */
+    readonly operation?: LocalOnboardingAssistantOperation;
+}
+
+export type LocalOnboardingAssistantOperation =
+    | { readonly kind: "install" | "sign-in"; readonly status: "running" }
+    | {
+          readonly kind: "sign-in";
+          readonly status: "waiting";
+          /** The vendor's page that finishes it. */
+          readonly url: string;
+          /** The code to confirm on that page, for a sign-in on another device. */
+          readonly userCode?: string;
+      }
+    | { readonly kind: "install" | "sign-in"; readonly status: "failed"; readonly message: string };
+
+/** Saving a Claude setup token: idle, on its way, refused, or saved. */
+export interface LocalOnboardingClaudeToken {
+    readonly phase: "idle" | "saving" | "failed" | "saved";
+    readonly error?: string;
 }
 
 /**
@@ -112,6 +149,8 @@ export type LocalOnboardingView =
           readonly custom: LocalOnboardingCustom;
           /** Which of each vendor's install commands this machine can run. */
           readonly installShell: LocalOnboardingInstallShell;
+          /** Saving a Claude setup token, on a Happy Agent that takes one. */
+          readonly claudeToken?: LocalOnboardingClaudeToken;
       }
     | {
           /**
@@ -148,10 +187,17 @@ export interface LocalOnboardingScreenProps {
     readonly showSteps?: boolean;
     /** Opens the custom column's prompts with the page, for the Blueprint. */
     readonly agentPromptsOpen?: boolean;
+    /** Opens the Claude setup token dialog with the page, for the Blueprint. */
+    readonly claudeDialogOpen?: boolean;
     readonly appearance: ThemeMode;
     readonly view: LocalOnboardingView;
-    /** The furthest step setup has reached, for the bar's own drawing. */
-    readonly reachedStage?: OnboardingStage;
+    /** The Happy Agent being set up, once it has said who it is. */
+    readonly node?: OnboardingNodeIdentity;
+    /**
+     * The steps the bar may send someone to from here, behind or ahead.
+     * Absent, every finished step before the current one.
+     */
+    readonly selectableStages?: readonly OnboardingStage[];
     /** The Windows sandbox step is part of this machine's sequence. */
     readonly sandboxStep?: boolean;
     onAssistantsContinue(): void;
@@ -168,9 +214,18 @@ export interface LocalOnboardingScreenProps {
     onCommandCopy?(copy: LocalOnboardingCommandCopy): void;
     onHappyMobileConnect(): void;
     onHappyMobileSkip(): void;
-    onHappyMobilePlatformSelect?(platform: "ios" | "android"): void;
     /** Both pairing methods, shown side by side while linking. */
     readonly happyMobilePairingOptions: DesktopMobilePairingOptions;
+    /** Asks Happy Agent to run Codex's or Grok's own sign-in. */
+    onAssistantSignIn?(assistant: LocalOnboardingAssistantId): void;
+    /** Asks Happy Agent to install a missing assistant from its vendor. */
+    onAssistantInstall?(assistant: LocalOnboardingAssistantId): void;
+    /** Stops the install or sign-in going on for one assistant. */
+    onAssistantConnectCancel?(assistant: LocalOnboardingAssistantId): void;
+    /** A pasted Claude setup token, for Happy Agent to keep. */
+    onClaudeTokenSubmit?(token: string): void;
+    /** The Claude dialog opened again: forget how the last save went. */
+    onClaudeTokenReset?(): void;
 }
 
 /** What a reader is told to run when Happy cannot start their Happy Agent itself. */
@@ -300,12 +355,110 @@ export function localOnboardingInstallCommand(
     return ASSISTANTS[assistant].install[shell];
 }
 
+/** What a Subscriptions card can ask the host to do. */
+interface AssistantCardHandlers {
+    readonly onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void;
+    readonly onSignIn?: (assistant: LocalOnboardingAssistantId) => void;
+    readonly onInstall?: (assistant: LocalOnboardingAssistantId) => void;
+    readonly onCancel?: (assistant: LocalOnboardingAssistantId) => void;
+    readonly onExternalOpen?: (url: string) => void;
+    /** Opens the Claude setup token dialog. */
+    readonly onClaudeConnect?: () => void;
+}
+
+/** Connected or still being checked: the card says so and asks for nothing. */
+function assistantSettledAction(
+    assistant: LocalOnboardingAssistant,
+): SetupAssistantAction | undefined {
+    if (assistant.authentication === "valid") return { kind: "done", label: "Connected" };
+    if (assistant.authentication === "checking")
+        return { busy: true, kind: "button", label: "Checking" };
+    return undefined;
+}
+
+/**
+ * A card that one press makes ready: Claude opens the dialog that explains its
+ * setup token, and Codex and Grok install and sign in through Happy Agent with
+ * the vendor's own page. The button is the card's status as well as its
+ * action: what it says is where the assistant stands, and a connected one
+ * keeps the button, disabled, so the row of buttons never loses a member.
+ * Undefined where neither is on offer, and the card keeps its commands.
+ */
+function assistantConnectProject(
+    assistant: LocalOnboardingAssistant,
+    handlers: AssistantCardHandlers,
+): SetupAssistantAction | undefined {
+    const { onSignIn, onInstall, onCancel, onClaudeConnect } = handlers;
+    const retry = assistant.authentication === "error";
+    if (assistant.id === "claude") {
+        if (!onClaudeConnect) return undefined;
+        return (
+            assistantSettledAction(assistant) ?? {
+                kind: "button",
+                label: retry ? "Connect again" : "Connect",
+                onSelect: onClaudeConnect,
+            }
+        );
+    }
+    const connect = assistant.connect;
+    if (!connect || !onSignIn || !onInstall) return undefined;
+    const settled = assistantSettledAction(assistant);
+    if (settled) return settled;
+    const id = assistant.id;
+    const operation = connect.operation;
+    if (operation?.status === "running")
+        return {
+            busy: true,
+            kind: "button",
+            label: operation.kind === "install" ? "Installing" : "Opening",
+        };
+    if (operation?.status === "waiting")
+        return {
+            kind: "waiting",
+            label: "In your browser",
+            onCancel: () => onCancel?.(id),
+            onOpen: () => handlers.onExternalOpen?.(operation.url),
+            ...(operation.userCode === undefined ? {} : { userCode: operation.userCode }),
+        };
+    if (!connect.installed) {
+        if (!connect.installable) return undefined;
+        return {
+            kind: "button",
+            label: operation?.status === "failed" ? "Try again" : "Install",
+            onSelect: () => onInstall(id),
+        };
+    }
+    return {
+        kind: "button",
+        label: operation?.status === "failed" ? "Try again" : retry ? "Sign in again" : "Sign in",
+        onSelect: () => onSignIn(id),
+    };
+}
+
 function assistantAuthenticationEntry(
     assistant: LocalOnboardingAssistant,
     installShell: LocalOnboardingInstallShell,
-    onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
+    handlers: AssistantCardHandlers,
 ): SetupAssistantEntry {
     const vendor = ASSISTANTS[assistant.id];
+    const status =
+        assistant.authentication === "valid"
+            ? ("found" as const)
+            : assistant.authentication === "invalid" || assistant.authentication === "error"
+              ? ("signed-out" as const)
+              : assistant.authentication === "unavailable"
+                ? ("missing" as const)
+                : ("checking" as const);
+    const connected = assistantConnectProject(assistant, handlers);
+    if (connected)
+        return {
+            action: connected,
+            id: assistant.id,
+            mark: vendor.mark,
+            name: vendor.name,
+            status,
+        };
+    const { onCommandCopy } = handlers;
     const detail = (() => {
         switch (assistant.authentication) {
             case "checking":
@@ -393,87 +546,59 @@ const AGENT_PROMPTS = [
     },
 ] as const;
 
-const CUSTOM_NAME = "Custom configuration";
-
 /**
- * The fourth card: model access set up some other way. It reads like the three
- * beside it — a mark, a name, one line of state — and its remedy is the prompts
- * for the coding agent already on the machine rather than a command. Access
- * that is configured but failed its check gets the same prompts: a base URL or
- * proxy the daemon could not reach is fixed the same way it is set up.
+ * Model access set up some other way, as one quiet line under the three
+ * cards rather than a card of its own: what is configured when something is,
+ * and the prompts for the coding agent already on the machine. Access that is
+ * configured but failed its check gets the same prompts: a base URL or proxy
+ * the daemon could not reach is fixed the same way it is set up. Nothing is
+ * said while it is still being checked.
  */
-function customAuthenticationEntry(
+function customAside(
     custom: LocalOnboardingCustom,
     promptsOpen = false,
     onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
-): SetupAssistantEntry {
-    const prompts: SetupAssistantAction = {
+): SetupAssistantsAside | undefined {
+    const prompts = (label: string): Extract<SetupAssistantAction, { kind: "prompts" }> => ({
         ...(promptsOpen ? { defaultOpen: true } : {}),
         kind: "prompts",
-        label: "Set up with your agent",
+        label,
         ...(onCommandCopy
             ? { onCopy: () => onCommandCopy({ assistant: "custom", kind: "agent-prompt" }) }
             : {}),
         prompts: AGENT_PROMPTS,
         title: "Paste one into the coding agent you already use",
-    };
+    });
+    const named = custom.providers.join(", ");
     switch (custom.authentication) {
         case "valid":
-            return {
-                detail: "Ready ✓",
-                id: "custom",
-                mark: "custom",
-                name: CUSTOM_NAME,
-                status: "found",
-            };
+            return { detail: `${named || "Custom setup"} ready ✓` };
         case "checking":
-            return {
-                detail: "Checking…",
-                id: "custom",
-                mark: "custom",
-                name: CUSTOM_NAME,
-                status: "checking",
-            };
+            return undefined;
         case "error":
             return {
-                action: prompts,
-                detail:
-                    custom.providers.length > 0
-                        ? `Couldn't verify ${custom.providers.join(", ")}`
-                        : "Couldn't verify",
-                id: "custom",
-                mark: "custom",
-                name: CUSTOM_NAME,
-                status: "signed-out",
+                action: prompts("Fix with your agent"),
+                detail: `Couldn't verify ${named || "your custom setup"}.`,
             };
         case "invalid":
-            return {
-                action: prompts,
-                detail: "API key, Bedrock, other",
-                id: "custom",
-                mark: "custom",
-                name: CUSTOM_NAME,
-                status: "signed-out",
-            };
+            return { action: prompts("Use an API key or another provider") };
     }
 }
 
 /** The stable, dimmed row shown before authentication resolves. */
-const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = [
-    ...Object.entries(ASSISTANTS).map(
-        ([id, assistant]): SetupAssistantEntry => ({
-            detail: "Checking…",
-            id,
-            mark: assistant.mark,
-            name: assistant.name,
-            status: "checking",
-        }),
-    ),
-    customAuthenticationEntry({ authentication: "checking", providers: [] }),
-];
+const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSISTANTS).map(
+    ([id, assistant]): SetupAssistantEntry => ({
+        detail: "Checking…",
+        id,
+        mark: assistant.mark,
+        name: assistant.name,
+        status: "checking",
+    }),
+);
 
 interface MachineSetupProjection {
     readonly assistants?: readonly SetupAssistantEntry[];
+    readonly aside?: SetupAssistantsAside;
     readonly copy?: string;
     /** Whether anything found on this machine can actually be used to work. */
     readonly hasValidAuthentication: boolean;
@@ -482,12 +607,12 @@ interface MachineSetupProjection {
 }
 
 const SETUP_COPY = "One-time download for this machine.";
-const SUBSCRIPTIONS_COPY = "Looking for Claude, Codex, and Grok.";
+const SUBSCRIPTIONS_COPY = "Seeing which of Claude, Codex, and Grok you already use.";
 
 function machineSetupProject(
     view: LocalOnboardingView,
     promptsOpen: boolean,
-    onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
+    handlers: AssistantCardHandlers,
 ): MachineSetupProjection | undefined {
     if (view.kind === "agent-setup")
         return {
@@ -509,51 +634,49 @@ function machineSetupProject(
             copy: SUBSCRIPTIONS_COPY,
             hasValidAuthentication: false,
             status: { busy: true, label: "Checking…" },
-            title: "Checking subscriptions",
+            title: "Looking for your AI",
         };
     if (view.kind === "provider-authentication") {
         const states = [
             ...view.assistants.map((assistant) => assistant.authentication),
             view.custom.authentication,
         ];
-        const assistants = [
-            ...view.assistants.map((assistant) =>
-                assistantAuthenticationEntry(assistant, view.installShell, onCommandCopy),
-            ),
-            customAuthenticationEntry(view.custom, promptsOpen, onCommandCopy),
-        ];
+        const assistants = view.assistants.map((assistant) =>
+            assistantAuthenticationEntry(assistant, view.installShell, handlers),
+        );
+        const aside = customAside(view.custom, promptsOpen, handlers.onCommandCopy);
+        const row = { assistants, ...(aside ? { aside } : {}) };
         if (states.includes("valid"))
             return {
-                assistants,
+                ...row,
                 hasValidAuthentication: true,
                 status: { label: "" },
-                title: "You're set",
+                title: "You're all set",
+                copy: "Your AI is connected. You can add more any time.",
             };
         if (states.includes("checking"))
             return {
-                assistants,
+                ...row,
                 copy: SUBSCRIPTIONS_COPY,
                 hasValidAuthentication: false,
                 status: { busy: true, label: "Checking…" },
-                title: "Checking subscriptions",
+                title: "Looking for your AI",
             };
         // A failed check is a settled answer, not one still coming: each failed
         // card carries its remedy, and Happy keeps checking in the background
         // without presenting the screen as busy.
         if (states.includes("error"))
             return {
-                assistants,
-                copy: "Sign in again, or set up a custom endpoint with your agent.",
+                ...row,
+                copy: "Happy keeps trying. Sign in again, or pick another one.",
                 hasValidAuthentication: false,
-                status: { label: "Happy notices as soon as one works." },
-                title: "Couldn't verify a subscription",
+                title: "Couldn't check your AI",
             };
         return {
-            assistants,
-            copy: "One signed-in CLI is required.",
+            ...row,
+            copy: "Sign in to one you already use to get started. You can add more later.",
             hasValidAuthentication: false,
-            status: { busy: true, label: "Waiting for sign-in…" },
-            title: "Sign in to a CLI",
+            title: "Connect your AI",
         };
     }
     return undefined;
@@ -577,24 +700,31 @@ function machineSetupProject(
  */
 export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     const { view } = props;
+    // Whether the Claude dialog is open is this screen's own passing state;
+    // what saving the token does belongs to setup.
+    const [claudeOpen, claudeOpenSet] = useState(props.claudeDialogOpen === true);
+    const identity = props.node ? <OnboardingNode node={props.node} /> : undefined;
     if (view.kind === "happy-mobile-desktop")
         return (
             <DesktopMobileSetup
                 appearance={props.appearance}
                 help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
+                {...(identity ? { identity } : {})}
                 step={view.step}
                 onboarding={props.showSteps}
                 {...(props.sandboxStep ? { sandboxStep: true } : {})}
                 {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
+                {...(props.selectableStages ? { selectableStages: props.selectableStages } : {})}
                 onContinue={props.onHappyMobileConnect}
                 onSkip={props.onHappyMobileSkip}
-                onPlatformSelect={props.onHappyMobilePlatformSelect}
                 onExternalOpen={props.onExternalOpen}
                 pairingOptions={props.happyMobilePairingOptions}
             />
         );
-    // Download, start, discovery, and verification are one machine-setup
-    // surface. Mobile setup begins its own pages after that machine work.
+    // Download and start are one machine-setup surface, and discovery and
+    // verification another: Subscriptions is laid out differently, so it
+    // dissolves in rather than rearranging the setup page in place. Mobile
+    // setup begins its own pages after that machine work.
     const transitionKey = (() => {
         switch (view.kind) {
             case "finishing":
@@ -602,6 +732,9 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             case "happy-mobile-offer":
             case "happy-mobile-pairing":
                 return view.kind;
+            case "examining":
+            case "provider-authentication":
+                return "local-subscriptions";
             default:
                 return "local-agent-setup";
         }
@@ -610,11 +743,12 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         backdrop: { appearance: props.appearance, kind: "sky" },
         transitionKey,
         help: <OnboardingHelp onExternalOpen={props.onExternalOpen} />,
+        ...(identity ? { identity } : {}),
         steps: props.showSteps ? (
             <OnboardingSteps
                 scope="desktop"
                 stage={localOnboardingStage(view)}
-                {...(props.reachedStage ? { reached: props.reachedStage } : {})}
+                {...(props.selectableStages ? { selectable: props.selectableStages } : {})}
                 {...(props.sandboxStep ? { sandbox: true } : {})}
                 {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
                 failed={
@@ -625,40 +759,87 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             />
         ) : undefined,
     } as const;
-    const machineSetup = machineSetupProject(
-        view,
-        props.agentPromptsOpen === true,
-        props.onCommandCopy,
-    );
+    const claudeToken = view.kind === "provider-authentication" ? view.claudeToken : undefined;
+    const machineSetup = machineSetupProject(view, props.agentPromptsOpen === true, {
+        ...(props.onCommandCopy ? { onCommandCopy: props.onCommandCopy } : {}),
+        ...(props.onAssistantSignIn ? { onSignIn: props.onAssistantSignIn } : {}),
+        ...(props.onAssistantInstall ? { onInstall: props.onAssistantInstall } : {}),
+        ...(props.onAssistantConnectCancel ? { onCancel: props.onAssistantConnectCancel } : {}),
+        ...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {}),
+        ...(props.onClaudeTokenSubmit
+            ? {
+                  onClaudeConnect: () => {
+                      props.onClaudeTokenReset?.();
+                      claudeOpenSet(true);
+                  },
+              }
+            : {}),
+    });
+    const claude =
+        view.kind === "provider-authentication"
+            ? view.assistants.find((assistant) => assistant.id === "claude")
+            : undefined;
+    // Saved, or Claude already works: the dialog has nothing left to ask.
+    const claudeDialog =
+        claudeOpen &&
+        claude !== undefined &&
+        claude.authentication !== "valid" &&
+        claudeToken?.phase !== "saved" &&
+        props.onClaudeTokenSubmit !== undefined &&
+        view.kind === "provider-authentication" ? (
+            <ClaudeSetupTokenDialog
+                {...((claude.connect?.installed ?? claude.status === "found")
+                    ? {}
+                    : { installCommand: ASSISTANTS.claude.install[view.installShell] })}
+                phase={
+                    claudeToken?.phase === "saving" || claudeToken?.phase === "failed"
+                        ? claudeToken.phase
+                        : "idle"
+                }
+                {...(claudeToken?.error ? { error: claudeToken.error } : {})}
+                onClose={() => claudeOpenSet(false)}
+                onTokenSubmit={props.onClaudeTokenSubmit}
+            />
+        ) : null;
 
     if (machineSetup)
         return (
-            <SetupPage
-                {...frame}
-                {...(machineSetup.assistants
-                    ? {
-                          action: {
-                              disabled: !machineSetup.hasValidAuthentication,
-                              label: "Continue",
-                              onSelect: props.onAssistantsContinue,
-                          },
-                      }
-                    : {})}
-                className="happy-local-onboarding__machine-setup"
-                {...(machineSetup.copy ? { copy: machineSetup.copy } : {})}
-                data-testid="local-onboarding-screen"
-                scene="owl"
-                {...(machineSetup.status ? { status: machineSetup.status } : {})}
-                title={machineSetup.title}
-            >
-                {machineSetup.assistants ? (
-                    <SetupAssistants
-                        assistants={machineSetup.assistants}
-                        data-testid="local-onboarding-assistants"
-                        onExternalOpen={props.onExternalOpen}
-                    />
-                ) : undefined}
-            </SetupPage>
+            <>
+                <SetupPage
+                    {...frame}
+                    {...(machineSetup.assistants
+                        ? {
+                              action: {
+                                  disabled: !machineSetup.hasValidAuthentication,
+                                  label: "Continue",
+                                  onSelect: props.onAssistantsContinue,
+                              },
+                          }
+                        : {})}
+                    className="happy-local-onboarding__machine-setup"
+                    {...(machineSetup.copy ? { copy: machineSetup.copy } : {})}
+                    data-testid="local-onboarding-screen"
+                    // Subscriptions is a choice, not a report: no picture, and the
+                    // choices centred in the window. Setup keeps its owl on the line.
+                    {...(machineSetup.assistants
+                        ? { placement: "centered" as const }
+                        : { scene: "owl" as const })}
+                    {...(machineSetup.status ? { status: machineSetup.status } : {})}
+                    title={machineSetup.title}
+                >
+                    {machineSetup.assistants ? (
+                        <SetupAssistants
+                            assistants={machineSetup.assistants}
+                            {...(machineSetup.aside ? { aside: machineSetup.aside } : {})}
+                            data-testid="local-onboarding-assistants"
+                            onExternalOpen={props.onExternalOpen}
+                        />
+                    ) : undefined}
+                </SetupPage>
+                {/* Beside the page, not inside its scroll area: in there the dim would
+                paint under the page's pinned corners, the node and Ask a question. */}
+                {claudeDialog}
+            </>
         );
 
     if (view.kind === "windows-sandbox")
@@ -666,6 +847,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             <WindowsSandboxSetup
                 appearance={props.appearance}
                 help={frame.help}
+                {...(identity ? { identity } : {})}
                 state={view.state}
                 steps={frame.steps}
                 onContinue={() => props.onSandboxSetup?.()}

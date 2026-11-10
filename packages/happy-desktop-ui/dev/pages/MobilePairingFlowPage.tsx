@@ -164,7 +164,7 @@ const settingsScreens: readonly {
     {
         id: "link-intro",
         label: "Link a phone · get the app",
-        render: () => mobileLinkSpecimen({ categories, step: { kind: "intro", platform: "ios" } }),
+        render: () => mobileLinkSpecimen({ categories, step: { kind: "intro" } }),
     },
     {
         id: "link-relay",

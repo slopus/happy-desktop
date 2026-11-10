@@ -25,6 +25,14 @@ import { join, resolve } from "node:path";
  * Homebrew's bin off PATH, so the shell honestly answers that no Node runtime is
  * installed — which exercises the missing-prerequisite screen without letting
  * Happy install anything.
+ *
+ * Electron itself is kept in the sandbox as well. Its user data would otherwise
+ * be this checkout's ordinary development profile under the real
+ * ~/Library/Application Support, which `--reset` cannot clear. And `safeStorage`
+ * would use the login keychain item every development checkout shares ("Happy
+ * Dev Key"); under the sandbox HOME macOS cannot even find that keychain and
+ * blocks launch with a "Keychain Not Found" dialog. Chromium's mock keychain
+ * keeps the sandbox off the keychain entirely, so it has no key to share.
  */
 
 const workspace = resolve(import.meta.dirname, "..");
@@ -81,6 +89,14 @@ if (running) {
 const home = join(tmpdir(), "hds", options.name);
 const happyHome = join(home, ".happy");
 const temporary = join(home, "tmp");
+// A development build suffixes this with its checkout label, as it does for
+// every user-data directory, so the files land in `electron-<label>`.
+const electronUserData = join(home, "electron");
+if (/\s/u.test(electronUserData)) {
+    // The arguments reach Electron through a shell word split.
+    console.error(`The sandbox path contains whitespace: ${electronUserData}`);
+    process.exit(1);
+}
 
 // macOS refuses a unix socket path over 104 bytes, and the daemon's is
 // `<HOME>/.happy/agent/server.sock`. Better to say so here than to watch the
@@ -156,6 +172,7 @@ console.log("Happy Desktop development: Electron, sandboxed");
 console.log(`  home        ${options.realHome ? process.env.HOME : home}`);
 console.log(`  happy home  ${happyHome}`);
 console.log(`  socket      ${socketPath}`);
+console.log(`  electron    ${electronUserData}-<checkout>, mock keychain`);
 if (options.noNode) console.log("  node    hidden from the login shell");
 
 const portless = join(workspace, "node_modules", ".bin", "portless");
@@ -165,6 +182,7 @@ portlessArguments.push("pnpm", "--filter", "happy-desktop-electron", "dev:electr
 
 const portlessEnvironment = {
     ...sandboxEnvironment(),
+    HAPPY_DESKTOP_ELECTRON_ARGS: `--user-data-dir=${electronUserData} --use-mock-keychain`,
     PORTLESS_LAN: "0",
     PORTLESS_TLD: "localhost",
 };

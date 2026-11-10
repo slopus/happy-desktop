@@ -29,13 +29,12 @@ export function happyDesktopMobileOnboardingStoreCreate(
     let directOpen = false;
     let snapshot: HappyMobileOnboardingSnapshot = options.initialSkipped
         ? { status: "skipped" }
-        : { status: "desktop", step: { kind: "intro", platform: "ios" } };
+        : { status: "desktop", step: { kind: "intro" } };
     let consented = false;
     let skipped = options.initialSkipped === true;
     let continued = false;
     let disposed = false;
     let generation = 0;
-    let platform: "ios" | "android" = "ios";
     let integration: HappyIntegration | undefined;
     let network: AbortController | undefined;
     let networkError: string | undefined;
@@ -66,7 +65,7 @@ export function happyDesktopMobileOnboardingStoreCreate(
                     : {}),
             };
         }
-        if (!consented) return { kind: "intro", platform };
+        if (!consented) return { kind: "intro" };
         // An unsuccessful read is not evidence that there is no saved pairing.
         if (!integration || networkError || reading)
             return {
@@ -334,11 +333,6 @@ export function happyDesktopMobileOnboardingStoreCreate(
                 return;
             }
             pair();
-        },
-        happyMobilePlatformSelect(value) {
-            if (!active() || consented) return;
-            platform = value;
-            publish();
         },
         happyMobileSkip() {
             if (!active()) return;

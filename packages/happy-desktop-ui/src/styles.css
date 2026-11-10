@@ -121,11 +121,13 @@
 @import "./styles/welcome-screen.css";
 @import "./styles/split-column.css";
 @import "./styles/setup-page.css";
+@import "./styles/setup-drift.css";
 @import "./styles/qr-code.css";
 @import "./styles/segmented-progress.css";
 @import "./styles/onboarding-steps.css";
 @import "./styles/setup-choice.css";
 @import "./styles/setup-assistants.css";
+@import "./styles/claude-setup-token.css";
 @import "./styles/setup-command.css";
 @import "./styles/setup-prompt.css";
 @import "./styles/agent-update-card.css";

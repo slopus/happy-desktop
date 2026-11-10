@@ -164,7 +164,7 @@ it("offers mobile setup on a fresh machine's project stage", async () => {
     await vi.waitFor(() =>
         expect(localOnboardingView(store.get())).toEqual({
             kind: "happy-mobile-desktop",
-            step: { kind: "intro", platform: "ios" },
+            step: { kind: "intro" },
         }),
     );
     // The first conversation after mobile setup needs the workspace as well.

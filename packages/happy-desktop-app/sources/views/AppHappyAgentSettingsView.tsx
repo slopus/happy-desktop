@@ -1133,7 +1133,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     step={mobileLink.step}
                     pairingOptions={mobileLink.pairingOptions}
                     onContinue={mobileLink.setup.continue}
-                    onPlatformSelect={mobileLink.setup.platformSelect}
                 />
             ) : section === "servers" ? (
                 props.servers ? (

@@ -47,8 +47,7 @@ const handoffSteps: readonly { label: string; busy: boolean; message?: string }[
 ];
 
 const mobileSteps: readonly { label: string; step: DesktopMobileSetupStep }[] = [
-    { label: "Mobile · get the app", step: { kind: "intro", platform: "ios" } },
-    { label: "Mobile · Android", step: { kind: "intro", platform: "android" } },
+    { label: "Mobile · get the app", step: { kind: "intro" } },
     { label: "Mobile · code on its way", step: { kind: "link", phase: { kind: "checking" } } },
     {
         label: "Mobile · device QR",
@@ -759,7 +758,6 @@ export function SetupPagePage() {
                                 step={step}
                                 onContinue={noop}
                                 onSkip={noop}
-                                onPlatformSelect={noop}
                                 pairingOptions={setupPairingOptions({
                                     direct: direct.waiting,
                                     relay: relayOf(step),

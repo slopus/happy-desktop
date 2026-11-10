@@ -154,7 +154,7 @@ it("reports onboarding's choice showing once, and a relay code that linked a pho
     const { reported, observe } = observeCreate();
     const source = fakeCreate<HappyMobileOnboardingSnapshot>({
         status: "desktop",
-        step: { kind: "intro", platform: "ios" },
+        step: { kind: "intro" },
     });
     const store = observe.onboarding(source as unknown as HappyMobileOnboardingStore);
     const leave = store.subscribe(() => undefined);

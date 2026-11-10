@@ -106,7 +106,6 @@ export interface HappyAgentIntegrationStore {
         start(): void;
         continue(): void;
         close(): void;
-        platformSelect(platform: "ios" | "android"): void;
     };
     [Symbol.dispose](): void;
 }
@@ -321,8 +320,6 @@ export function happyAgentIntegrationStoreCreate(
                       start: setupStart,
                       continue: () => setup?.happyMobileConnect(),
                       close: () => setup?.happyMobileSkip(),
-                      platformSelect: (platform: "ios" | "android") =>
-                          setup?.happyMobilePlatformSelect(platform),
                   },
               }
             : {}),

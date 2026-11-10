@@ -15,7 +15,6 @@ export interface HappyAgentMobileLinkSettingsProps {
     /** Both pairing methods; the view is MobilePairingOptions in its `settings` layout. */
     readonly pairingOptions: DesktopMobilePairingOptions;
     readonly onContinue: () => void;
-    readonly onPlatformSelect: (platform: "ios" | "android") => void;
     /** Opens an external page: the host owns how a link leaves the app. */
     onExternalOpen?(url: string): void;
 }
@@ -53,10 +52,7 @@ export function HappyAgentMobileLinkSettings(props: HappyAgentMobileLinkSettings
                                 : {})}
                         />
                     </p>
-                    <MobileStoreDownload
-                        platform={step.platform}
-                        onPlatformSelect={props.onPlatformSelect}
-                    />
+                    <MobileStoreDownload />
                     <Button onClick={props.onContinue} variant="primary">
                         Downloaded and opened
                     </Button>

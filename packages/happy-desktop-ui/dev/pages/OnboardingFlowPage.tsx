@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { LocalOnboardingScreen, type LocalOnboardingView } from "../../src/LocalOnboardingScreen";
+import type { OnboardingNodeIdentity } from "../../src/OnboardingNode";
 import type { OnboardingStage } from "../../src/OnboardingSteps";
 import { ThemeScope } from "../../src/ThemeScope";
 import type { WelcomeSlide } from "../../src/WelcomeDeck";
@@ -26,24 +27,34 @@ const windows = [
 const pitch: readonly WelcomeSlide[] = [
     {
         art: { kind: "logo" },
-        copy: "Happy integrates models, teams, and compute into one secure, open-source harness—accessible from terminal, desktop, and mobile, deployable anywhere, and adaptable to your team.",
+        copy: "Happy is open source, so anyone can check what it does. Run it on hardware you trust, and reach it from your phone with end-to-end encryption.",
         id: "happy",
-        title: "Any team. Any model. One harness.",
+        title: "Work with AI as a team. Safely.",
     },
 ];
 
+/** The machine being set up, as its Happy Agent names itself; no picture, so its placeholder. */
+const node: OnboardingNodeIdentity = { name: "Studio Mac", placeholderSeed: "Studio Mac" };
+
 function onboarding(
     view: LocalOnboardingView,
-    reachedStage?: OnboardingStage,
+    selectableStages?: readonly OnboardingStage[],
     agentPromptsOpen = false,
     appearance: "dark" | "light" = "dark",
     pairingOptions: DesktopMobilePairingOptions = setupPairingOptions(),
 ) {
+    // Until Happy Agent is installed and running there is no machine to name.
+    const named =
+        view.kind !== "checking" &&
+        view.kind !== "node-missing" &&
+        view.kind !== "agent-setup" &&
+        view.kind !== "connecting";
     return (
         <LocalOnboardingScreen
             happyMobilePairingOptions={pairingOptions}
             agentPromptsOpen={agentPromptsOpen}
             appearance={appearance}
+            {...(named ? { node } : {})}
             onAssistantsContinue={noop}
             onConnectRetry={noop}
             onExternalOpen={noop}
@@ -52,10 +63,107 @@ function onboarding(
             onStageSelect={noop}
             showSteps
             view={view}
-            {...(reachedStage ? { reachedStage } : {})}
+            {...(selectableStages ? { selectableStages } : {})}
         />
     );
 }
+
+/**
+ * Subscriptions where Happy Agent signs the assistants in itself: each card's
+ * button carries its state, and a connected one says so in words.
+ */
+function connectOnboarding(view: LocalOnboardingView) {
+    return (
+        <LocalOnboardingScreen
+            happyMobilePairingOptions={setupPairingOptions()}
+            appearance="dark"
+            node={node}
+            onAssistantConnectCancel={noop}
+            onAssistantInstall={noop}
+            onAssistantSignIn={noop}
+            onAssistantsContinue={noop}
+            onClaudeTokenSubmit={noop}
+            onConnectRetry={noop}
+            onExternalOpen={noop}
+            onHappyMobileConnect={noop}
+            onHappyMobileSkip={noop}
+            onStageSelect={noop}
+            showSteps
+            view={view}
+        />
+    );
+}
+
+/** Claude to connect, Codex connected, Grok waiting on its page with a device code. */
+const connectSubscriptions: LocalOnboardingView = {
+    assistants: [
+        {
+            authentication: "invalid",
+            connect: { installable: true, installed: true },
+            id: "claude",
+            status: "found",
+        },
+        {
+            authentication: "valid",
+            connect: { installable: true, installed: true },
+            id: "codex",
+            status: "found",
+        },
+        {
+            authentication: "invalid",
+            connect: {
+                installable: true,
+                installed: true,
+                operation: {
+                    kind: "sign-in",
+                    status: "waiting",
+                    url: "https://accounts.x.ai/device",
+                    userCode: "WDJB-MJHT",
+                },
+            },
+            id: "grok",
+            status: "found",
+        },
+    ],
+    custom: { authentication: "invalid", providers: [] },
+    kind: "provider-authentication",
+    installShell: "posix",
+};
+
+/** Still checking Claude, installing Codex, and a Grok sign-in that did not finish. */
+const connectBusySubscriptions: LocalOnboardingView = {
+    assistants: [
+        {
+            authentication: "checking",
+            connect: { installable: true, installed: true },
+            id: "claude",
+            status: "found",
+        },
+        {
+            authentication: "unavailable",
+            connect: {
+                installable: true,
+                installed: false,
+                operation: { kind: "install", status: "running" },
+            },
+            id: "codex",
+            status: "missing",
+        },
+        {
+            authentication: "invalid",
+            connect: {
+                installable: true,
+                installed: true,
+                operation: { kind: "sign-in", message: "Sign-in was cancelled.", status: "failed" },
+            },
+            id: "grok",
+            status: "found",
+        },
+    ],
+    custom: { authentication: "invalid", providers: [] },
+    kind: "provider-authentication",
+    installShell: "posix",
+};
 
 /** First run in the order a new person meets it, one happy path, then a restart. */
 /** One of each card state side by side: signed in, not installed, not signed in, custom. */
@@ -250,6 +358,16 @@ const screens: readonly {
             }),
     },
     {
+        id: "subscriptions-connect",
+        label: "Subscriptions · connect, connected, waiting on the browser",
+        render: () => connectOnboarding(connectSubscriptions),
+    },
+    {
+        id: "subscriptions-connect-busy",
+        label: "Subscriptions · checking, installing, sign-in failed",
+        render: () => connectOnboarding(connectBusySubscriptions),
+    },
+    {
         id: "subscriptions-mixed",
         label: "Subscriptions · every card state",
         render: () => onboarding(mixedSubscriptions),
@@ -273,52 +391,33 @@ const screens: readonly {
     },
     {
         id: "mobile",
-        label: "Get Mobile App · iPhone",
-        render: () =>
-            onboarding(
-                { kind: "happy-mobile-desktop", step: { kind: "intro", platform: "ios" } },
-                "get-app",
-            ),
-    },
-    {
-        id: "mobile-android",
-        label: "Get Mobile App · Android",
-        render: () =>
-            onboarding(
-                { kind: "happy-mobile-desktop", step: { kind: "intro", platform: "android" } },
-                "get-app",
-            ),
+        label: "Get Mobile App",
+        render: () => onboarding({ kind: "happy-mobile-desktop", step: { kind: "intro" } }),
     },
     {
         id: "connect-code-loading",
         label: "Link Mobile App · code on its way (shown at least 1s)",
         render: () =>
-            onboarding(
-                {
-                    kind: "happy-mobile-desktop",
-                    step: { kind: "link", phase: { kind: "checking" } },
-                },
-                "connect-phone",
-            ),
+            onboarding({
+                kind: "happy-mobile-desktop",
+                step: { kind: "link", phase: { kind: "checking" } },
+            }),
     },
     {
         id: "connect-phone",
         label: "Link Mobile App · QR",
         render: () =>
-            onboarding(
-                {
-                    kind: "happy-mobile-desktop",
-                    step: {
-                        kind: "link",
-                        phase: {
-                            data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                            expiresAt: 1924992000000,
-                            kind: "pairing",
-                        },
+            onboarding({
+                kind: "happy-mobile-desktop",
+                step: {
+                    kind: "link",
+                    phase: {
+                        data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                        expiresAt: 1924992000000,
+                        kind: "pairing",
                     },
                 },
-                "connect-phone",
-            ),
+            }),
     },
     {
         id: "connect-phone-direct",
@@ -336,7 +435,7 @@ const screens: readonly {
                         },
                     },
                 },
-                "connect-phone",
+                undefined,
                 false,
                 "dark",
                 setupPairingOptions({
@@ -363,7 +462,7 @@ const screens: readonly {
                         },
                     },
                 },
-                "connect-phone",
+                undefined,
                 false,
                 "dark",
                 setupPairingOptions({
@@ -378,10 +477,7 @@ const screens: readonly {
         id: "phone-connected",
         label: "Link Mobile App · linked, the last page",
         render: () =>
-            onboarding(
-                { kind: "happy-mobile-desktop", step: { kind: "connected", online: true } },
-                "connect-phone",
-            ),
+            onboarding({ kind: "happy-mobile-desktop", step: { kind: "connected", online: true } }),
     },
     {
         id: "restart",

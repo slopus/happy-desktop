@@ -1091,7 +1091,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 label="Happy Mobile — link a phone"
                 number="01f-setup"
             >
-                {mobileLinkSpecimen({ categories, step: { kind: "intro", platform: "ios" } })}
+                {mobileLinkSpecimen({ categories, step: { kind: "intro" } })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A failed native status read shows its reason in the relay slot; the direct code stays usable."

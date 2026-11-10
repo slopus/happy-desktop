@@ -12,6 +12,8 @@ export interface WindowsSandboxSetupProps {
     readonly steps?: ReactNode;
     /** Pinned bottom-right, the way the rest of setup carries it. */
     readonly help?: ReactNode;
+    /** Pinned top-left: whose setup this is. */
+    readonly identity?: ReactNode;
     /** Starts explicit setup, or an explicit retry after the previous attempt ended. */
     onContinue(): void;
 }
@@ -32,6 +34,7 @@ export function WindowsSandboxSetup(props: WindowsSandboxSetupProps) {
             transitionKey="windows-sandbox"
             steps={props.steps ?? <OnboardingSteps scope="desktop" stage="sandbox" />}
             {...(props.help ? { help: props.help } : {})}
+            {...(props.identity ? { identity: props.identity } : {})}
             scene="spider-catching-bug"
             title="Set up a safety net for agents"
             copy="Happy’s sandbox lets agents work with fewer interruptions. Auto review helps catch unintended actions when they request access beyond it."

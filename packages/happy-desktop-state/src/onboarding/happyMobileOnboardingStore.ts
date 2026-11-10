@@ -14,8 +14,8 @@ export type HappyMobileLinkPhase =
     | { readonly kind: "failed"; readonly message: string };
 
 export type HappyDesktopMobileStep =
-    /** Platform pick and store code; confirming it is the consent that starts setup. */
-    | { readonly kind: "intro"; readonly platform: "ios" | "android" }
+    /** The download code; confirming it is the consent that starts setup. */
+    | { readonly kind: "intro" }
     | { readonly kind: "link"; readonly phase: HappyMobileLinkPhase }
     | { readonly kind: "connected"; readonly online: boolean; readonly message?: string };
 
@@ -54,7 +54,6 @@ export interface HappyMobileOnboardingStore {
     subscribe(listener: () => void): () => void;
     happyMobileConnect(): void;
     happyMobileSkip(): void;
-    happyMobilePlatformSelect(platform: "ios" | "android"): void;
     [Symbol.dispose](): void;
 }
 
@@ -342,7 +341,6 @@ export function happyMobileOnboardingStoreCreate(
             options.onOutput?.({ type: "happyMobileSkipped" });
             if (cancelPairing) void options.client.cancelHappyIntegration().catch(() => undefined);
         },
-        happyMobilePlatformSelect() {},
         [Symbol.dispose]() {
             if (directOpen) direct.pairingClose();
             directOpen = false;

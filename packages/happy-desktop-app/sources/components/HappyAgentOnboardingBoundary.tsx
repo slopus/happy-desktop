@@ -150,7 +150,6 @@ export function HappyAgentOnboardingBoundary(props: {
             onConnectRetry={props.onRetry}
             onHappyMobileConnect={props.store.mobile.happyMobileConnect}
             onHappyMobileSkip={props.store.mobile.happyMobileSkip}
-            onHappyMobilePlatformSelect={props.store.mobile.happyMobilePlatformSelect}
             happyMobilePairingOptions={pairingOptions}
         />
     );

@@ -179,7 +179,6 @@ function onboardingCreate() {
         stepBack: () => undefined,
         happyMobileConnect: () => undefined,
         happyMobileSkip: () => undefined,
-        happyMobilePlatformSelect: () => undefined,
     } as unknown as LocalOnboardingStore;
     const welcome = {
         get: () => ({ welcomeAcknowledged: true }),

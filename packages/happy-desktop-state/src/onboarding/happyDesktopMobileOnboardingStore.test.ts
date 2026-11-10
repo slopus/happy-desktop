@@ -64,7 +64,7 @@ it("keeps offering the guided phone step while the relay is on", async () => {
     const store = guided(unlinked);
     const leave = store.subscribe(() => undefined);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(store.get()).toEqual({ status: "desktop", step: { kind: "intro", platform: "ios" } });
+    expect(store.get()).toEqual({ status: "desktop", step: { kind: "intro" } });
     leave();
     store[Symbol.dispose]();
 });

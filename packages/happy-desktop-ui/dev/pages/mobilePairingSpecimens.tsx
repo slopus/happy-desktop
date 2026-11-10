@@ -105,7 +105,6 @@ export function mobileLinkSpecimen(props: {
         >
             <HappyAgentMobileLinkSettings
                 onContinue={noop}
-                onPlatformSelect={noop}
                 pairingOptions={pairingOptions}
                 step={props.step}
             />
