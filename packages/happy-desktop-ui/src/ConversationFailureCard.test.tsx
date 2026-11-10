@@ -21,6 +21,7 @@ import {
     conversationRetryingLabel,
 } from "./conversationFailureText";
 import {
+    conversationSwitchFailed,
     conversationSwitchTargetPreferred,
     conversationSwitchTargets,
     type ConversationSwitchSource,
@@ -44,6 +45,11 @@ const CLAUDE: ConversationFailureProvider = {
     label: "claude",
 };
 const NOW = CLOCK.now;
+const CLAUDE_WORK: ConversationFailureProvider = {
+    ...CLAUDE,
+    id: "claude_work",
+    label: "claude_work",
+};
 const model = (id: string, label: string) => ({
     id,
     label,
@@ -748,6 +754,49 @@ it("lists the picker's accounts besides the selected one, and prefers the unspen
     // Nothing read at all: list order.
     expect(preferred({ accounts: new Map(), now: NOW })).toBe("claude_work");
     expect(conversationSwitchTargetPreferred([], "claude")).toBeUndefined();
+});
+
+it("never offers back the account that failed, and ranks one a usage limit stopped here last until it resets", () => {
+    const CODEX: ConversationFailureProvider = {
+        id: "codex",
+        type: "codex",
+        vendorName: "Codex",
+        label: "codex",
+    };
+    const limit = (provider: ConversationFailureProvider, resetsAt: number | null) =>
+        notice({ kind: "usage_limit", provider, resetsAt, message: "Usage limit reached" });
+    // The composer shows claude_team while the turn failed on Codex: Codex is not offered back.
+    const codexFailed = { ...limit(CODEX, NOW + 3_600_000), id: "codex-failed" };
+    const failed = conversationSwitchFailed([codexFailed], "codex-failed");
+    expect(failed).toEqual({ providerId: "codex", limited: new Map([["codex", NOW + 3_600_000]]) });
+    const targets = conversationSwitchTargets(SOURCE, USAGE, failed, NOW);
+    expect(targets.map((target) => target.providerId)).toEqual([
+        "claude_work",
+        "claude_extra",
+        "grok",
+    ]);
+
+    // An earlier limit in this conversation holds that account back until it resets,
+    // even with a reading that says it has room, so a funded account ranks first.
+    const unread = { services: SERVICES, selection: { ...SELECTION, account: "grok" } };
+    const earlier = conversationSwitchFailed(
+        [
+            { ...limit(CLAUDE_WORK, NOW + 3_600_000), id: "earlier" },
+            { ...limit(CODEX, null), id: "now" },
+        ],
+        "now",
+    );
+    const ranked = conversationSwitchTargets(unread, USAGE, earlier, NOW);
+    expect(
+        ranked.find((target) => target.providerId === "claude_work")?.usage?.limit,
+    ).toBeDefined();
+    expect(conversationSwitchTargetPreferred(ranked, "claude")?.providerId).toBe("claude_extra");
+    // Once it has reset, its reading decides again.
+    const after = conversationSwitchTargets(unread, USAGE, earlier, NOW + 3_600_001);
+    expect(
+        after.find((target) => target.providerId === "claude_work")?.usage?.limit,
+    ).toBeUndefined();
+    expect(conversationSwitchTargetPreferred(after, "claude")?.providerId).toBe("claude_work");
 });
 
 /**

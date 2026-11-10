@@ -1,3 +1,4 @@
+import type { ConversationEntry } from "happy-desktop-state";
 import {
     composerModelAccountModel,
     type ComposerModelAccountUsage,
@@ -31,14 +32,57 @@ export interface ConversationSwitchTarget {
 }
 
 /**
- * Every account besides the selected one, each on the model the picker would
- * move to on it: the selected model where the account offers it, otherwise its
- * top model. The selected service comes first, then the others in catalog
+ * What the conversation's own failures say about its accounts, beside what
+ * their usage readings say: the one the failed turn ran on, and those a usage
+ * limit stopped here until a known moment.
+ */
+export interface ConversationSwitchFailed {
+    /** The account the failed turn ran on, which is never offered back. */
+    readonly providerId?: string;
+    /** Accounts a usage limit stopped, and when each is usable again (ms); `null` when unsaid. */
+    readonly limited: ReadonlyMap<string, number | null>;
+}
+
+/**
+ * Reads a conversation's failures for its switch: the current failure's
+ * account, and every account a usage limit stopped, the latest one saying
+ * when it resets.
+ */
+export function conversationSwitchFailed(
+    transcript: readonly ConversationEntry[],
+    currentFailureId: string | undefined,
+): ConversationSwitchFailed {
+    const limited = new Map<string, number | null>();
+    let providerId: string | undefined;
+    for (const entry of transcript) {
+        if (entry.kind !== "notice" || entry.variant === "compute" || entry.failure === undefined)
+            continue;
+        const failure = entry.failure;
+        if (failure.kind === "usage_limit") limited.set(failure.provider.id, failure.resetsAt);
+        if (entry.id === currentFailureId && "provider" in failure)
+            providerId = failure.provider.id;
+    }
+    return { ...(providerId === undefined ? {} : { providerId }), limited };
+}
+
+/** A limit's reset moment, worded the way usage readings word it. */
+function limitResets(resetsAt: number): string {
+    return new Date(resetsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Every account besides the selected one and the one the failed turn ran on,
+ * each on the model the picker would move to on it: the selected model where
+ * the account offers it, otherwise its top model. An account a usage limit
+ * stopped in this conversation reads as spent until that limit resets, or for
+ * as long as the conversation shows it when the limit gave no reset. The selected service comes first, then the others in catalog
  * order, accounts in the order the picker lists them.
  */
 export function conversationSwitchTargets(
     source: ConversationSwitchSource,
     usage: ComposerModelUsage | undefined,
+    failed?: ConversationSwitchFailed,
+    now: number = usage?.now ?? Date.now(),
 ): readonly ConversationSwitchTarget[] {
     const selection = source.selection;
     const services = [
@@ -47,10 +91,17 @@ export function conversationSwitchTargets(
     ];
     return services.flatMap((service) =>
         service.accounts.flatMap((account): ConversationSwitchTarget[] => {
-            if (account.id === selection?.account) return [];
+            if (account.id === selection?.account || account.id === failed?.providerId) return [];
             const model = composerModelAccountModel(account, selection?.model);
             if (model === undefined) return [];
-            const accountUsage = usage?.accounts.get(account.id);
+            const read = usage?.accounts.get(account.id);
+            // A limit this conversation ran into holds until it resets, whatever was last read.
+            const resetsAt = failed?.limited.get(account.id);
+            const limitedHere =
+                resetsAt !== undefined && (resetsAt === null || resetsAt > now) && !read?.limit;
+            const accountUsage: ComposerModelAccountUsage | undefined = limitedHere
+                ? { ...read, limit: resetsAt === null ? {} : { resets: limitResets(resetsAt) } }
+                : read;
             return [
                 {
                     service: service.id,

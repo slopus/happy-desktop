@@ -47,6 +47,7 @@ import {
 } from "./conversationFailureText";
 import {
     CONVERSATION_SWITCH_USAGE_NONE,
+    conversationSwitchFailed,
     conversationSwitchTargetPreferred,
     conversationSwitchTargets,
     conversationSwitchUsageFeed,
@@ -775,7 +776,12 @@ export function ConversationView(props: ConversationViewProps) {
         : CONVERSATION_SWITCH_USAGE_NONE;
     const switchUsage = useSyncExternalStore(switchFeed.subscribe, switchFeed.get, switchFeed.get);
     const switchTargets = switchSource
-        ? conversationSwitchTargets(switchSource, switchUsage)
+        ? conversationSwitchTargets(
+              switchSource,
+              switchUsage,
+              conversationSwitchFailed(transcript, currentFailureId),
+              switchUsage?.now ?? props.now ?? Date.now(),
+          )
         : undefined;
     const switchPreferred = switchTargets
         ? conversationSwitchTargetPreferred(switchTargets, switchSource?.selection?.service)
