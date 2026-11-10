@@ -56,3 +56,38 @@ it("counts each window's tokens as input plus output, over every provider and mo
     unsubscribe();
     store[Symbol.dispose]();
 });
+
+it("has no tokens when the reader's role may not see another member's usage", async () => {
+    const request = vi.fn<HappyCloudRequest>(async (_method, path) =>
+        path === "v0/roles"
+            ? { roles: [] }
+            : {
+                  user: {
+                      id: "usr_maya",
+                      name: "Maya",
+                      photo: null,
+                      role: null,
+                      teamRole: "member",
+                  },
+                  stats: {
+                      tasks: { total: 1, active: 1 },
+                      lastActivityAt: 1_000,
+                      activeDays: 1,
+                      usage: null,
+                  },
+                  recentTasks: [],
+              },
+    );
+    const store = happyAgentUserProfileStoreCreate({
+        userId: "usr_maya",
+        request,
+        endpoint: "https://cloud.example/",
+    });
+    const unsubscribe = store.subscribe(() => undefined);
+    await vi.waitFor(() => expect(store.get().loading).toBe(false));
+    expect(store.get().profile?.tokens).toBeNull();
+    expect(store.get().profile?.tasks).toEqual({ total: 1, active: 1 });
+    expect(store.get().profile?.activeDays).toBe(1);
+    unsubscribe();
+    store[Symbol.dispose]();
+});

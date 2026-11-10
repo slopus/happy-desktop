@@ -20,6 +20,8 @@ export interface HappyAgentUsageSettingsProps {
     error?: UserError;
     /** Now, in milliseconds: resets and ages are told from it. Absent, no age is told. */
     currentTime?: number;
+    /** The reader's role may not see the team's usage, so there is nothing to show. */
+    forbidden?: boolean;
 }
 
 /** Usage joined to the authoritative provider catalog by its stable routing ID. */
@@ -55,6 +57,14 @@ export function HappyAgentUsageSettings(props: HappyAgentUsageSettingsProps) {
     // Without a clock, resets name their day and no age is told.
     const now = props.currentTime;
     const usage = happyAgentComposerModelUsageProject({ providers, loading: false }, now ?? 0);
+    if (props.forbidden)
+        return (
+            <EmptyState
+                description="Ask a team owner or admin if you need to see what the team has spent."
+                icon="lock"
+                title="Your role doesn't include team usage"
+            />
+        );
     return (
         <>
             {props.error ? (

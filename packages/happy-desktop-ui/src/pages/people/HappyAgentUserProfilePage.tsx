@@ -32,8 +32,8 @@ export interface HappyAgentUserProfileView {
     readonly activeDays: number;
     /** When they last did anything, worded: "2 h ago", or "Never". */
     readonly lastActive: string;
-    /** Tokens per window, summed over every provider and model. */
-    readonly tokens: {
+    /** Tokens per window, summed over every provider and model; absent where the reader may not see them. */
+    readonly tokens?: {
         readonly hour: number;
         readonly day: number;
         readonly week: number;
@@ -164,17 +164,9 @@ export function HappyAgentUserProfilePage(props: HappyAgentUserProfilePageProps)
                                         value={profile.lastActive}
                                     />
                                 </div>
-                                <div className="happy-agent-user-profile__tiles">
-                                    {TOKEN_WINDOWS.map((window) => (
-                                        <StatTile
-                                            className="happy-agent-user-profile__tile"
-                                            hint="Tokens"
-                                            key={window.key}
-                                            label={window.label}
-                                            value={TOKENS.format(profile.tokens[window.key])}
-                                        />
-                                    ))}
-                                </div>
+                                {profile.tokens ? (
+                                    <HappyAgentUserProfileTokens tokens={profile.tokens} />
+                                ) : null}
                             </section>
                             <section className="happy-agent-user-profile__section">
                                 <h3 className="happy-agent-user-profile__section-title">
@@ -217,6 +209,25 @@ export function HappyAgentUserProfilePage(props: HappyAgentUserProfilePageProps)
                     )}
                 </div>
             </ScrollArea>
+        </div>
+    );
+}
+
+/** One tile per window of tokens. */
+function HappyAgentUserProfileTokens(props: {
+    readonly tokens: NonNullable<HappyAgentUserProfileView["tokens"]>;
+}) {
+    return (
+        <div className="happy-agent-user-profile__tiles">
+            {TOKEN_WINDOWS.map((window) => (
+                <StatTile
+                    className="happy-agent-user-profile__tile"
+                    hint="Tokens"
+                    key={window.key}
+                    label={window.label}
+                    value={TOKENS.format(props.tokens[window.key])}
+                />
+            ))}
         </div>
     );
 }

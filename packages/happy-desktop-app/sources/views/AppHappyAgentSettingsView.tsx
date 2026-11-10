@@ -1715,6 +1715,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     })}
                     {...(clockStore ? { currentTime } : {})}
                     {...(usage.error ? { error: usage.error } : {})}
+                    {...(usage.forbidden ? { forbidden: true } : {})}
                 />
             ) : (
                 <HappyAgentGeneralSettings
