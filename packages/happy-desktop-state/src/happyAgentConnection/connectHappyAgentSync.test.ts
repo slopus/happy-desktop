@@ -1132,6 +1132,99 @@ it("ignores a redelivered message.delta instead of appending its text twice", as
     expect(agentTexts(chat.elements)[0]?.text).toBe("Hello");
 });
 
+/** A turn streaming "Hello" into a1, one delta in. */
+async function streamingHarness() {
+    const harness = await liveHarness();
+    const { daemon, chat, sessionId } = harness;
+    daemon.eventEmit("run.started", {
+        agentId: sessionId,
+        run: fakeRun({ id: "r1", status: "running" }),
+        acceptedMessageIds: [],
+    });
+    daemon.eventEmit("message.created", {
+        agentId: sessionId,
+        message: fakeAgentMessage({ id: "a1", content: [{ type: "text", text: "Hel" }] }),
+        runId: "r1",
+    });
+    daemon.eventEmit("message.delta", {
+        agentId: sessionId,
+        runId: "r1",
+        messageId: "a1",
+        blockIndex: 0,
+        offset: 3,
+        append: "lo",
+    });
+    await vi.waitFor(() => expect(agentTexts(chat.elements)[0]?.text).toBe("Hello"));
+    const delta = (offset: number, append: string) =>
+        daemon.eventEmit("message.delta", {
+            agentId: sessionId,
+            runId: "r1",
+            messageId: "a1",
+            blockIndex: 0,
+            offset,
+            append,
+        });
+    const history = (text: string) =>
+        daemon.historySet(sessionId, [
+            fakeRun({
+                id: "r1",
+                status: "running",
+                messages: [fakeAgentMessage({ id: "a1", content: [{ type: "text", text }] })],
+            }),
+        ]);
+    return { ...harness, delta, history };
+}
+
+it("reads a message again when a delta goes missing mid-stream, and streams on from there", async () => {
+    const { daemon, chat, waits, delta, history } = await streamingHarness();
+    const loads = daemon.callCount("getMessages");
+    // ", " at offset 5 never arrives; the server has it.
+    history("Hello, world");
+    delta(7, "world");
+    await vi.waitFor(() => expect(agentTexts(chat.elements)[0]?.text).toBe("Hello, world"));
+    expect(daemon.callCount("getMessages")).toBe(loads + 1);
+    expect(waits).toContain(300);
+
+    // The stream carries on from the text read, before any complete snapshot.
+    delta(12, "!");
+    await vi.waitFor(() => expect(agentTexts(chat.elements)[0]?.text).toBe("Hello, world!"));
+    expect(agentTexts(chat.elements)).toHaveLength(1);
+
+    // A later gap in the same message is read for again.
+    history("Hello, world! How are you?");
+    delta(18, "are you?");
+    await vi.waitFor(() =>
+        expect(agentTexts(chat.elements)[0]?.text).toBe("Hello, world! How are you?"),
+    );
+    expect(daemon.callCount("getMessages")).toBe(loads + 2);
+});
+
+it("reads once for a gap the read does not mend, then waits for the complete message", async () => {
+    const { daemon, chat, sessionId, delta, history } = await streamingHarness();
+    const loads = daemon.callCount("getMessages");
+    // History lags the stream: the read cannot mend it.
+    history("Hello");
+    delta(7, "world");
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(loads + 1));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    delta(12, "!");
+    delta(13, " Bye");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(daemon.callCount("getMessages")).toBe(loads + 1);
+    expect(agentTexts(chat.elements)[0]?.text).toBe("Hello");
+
+    daemon.eventEmit("message.updated", {
+        agentId: sessionId,
+        runId: "r1",
+        message: fakeAgentMessage({
+            id: "a1",
+            content: [{ type: "text", text: "Hello, world! Bye" }],
+        }),
+    });
+    await vi.waitFor(() => expect(agentTexts(chat.elements)[0]?.text).toBe("Hello, world! Bye"));
+    expect(daemon.callCount("getMessages")).toBe(loads + 1);
+});
+
 it("drops an event replayed from before the bootstrap cursor", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     const project = daemon.projectSeed({ id: "project-a" });
