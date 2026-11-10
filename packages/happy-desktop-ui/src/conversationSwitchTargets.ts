@@ -6,6 +6,7 @@ import {
     type ComposerModelUsage,
     type ComposerModelUsageWatch,
 } from "./ComposerModelControl";
+import { localDayTime } from "./localTime";
 
 /**
  * Where a failure card's switch reads its choices: the same services,
@@ -65,11 +66,6 @@ export function conversationSwitchFailed(
     return { ...(providerId === undefined ? {} : { providerId }), limited };
 }
 
-/** A limit's reset moment, worded the way usage readings word it. */
-function limitResets(resetsAt: number): string {
-    return new Date(resetsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
 /**
  * Every account besides the selected one and the one the failed turn ran on,
  * each on the model the picker would move to on it: the selected model where
@@ -100,7 +96,10 @@ export function conversationSwitchTargets(
             const limitedHere =
                 resetsAt !== undefined && (resetsAt === null || resetsAt > now) && !read?.limit;
             const accountUsage: ComposerModelAccountUsage | undefined = limitedHere
-                ? { ...read, limit: resetsAt === null ? {} : { resets: limitResets(resetsAt) } }
+                ? {
+                      ...read,
+                      limit: resetsAt === null ? {} : { resets: localDayTime(resetsAt, now) },
+                  }
                 : read;
             return [
                 {
