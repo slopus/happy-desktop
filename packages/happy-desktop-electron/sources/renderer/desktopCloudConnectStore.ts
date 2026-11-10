@@ -2,6 +2,7 @@ import type { HappyAgentChiefOfStaffRequest } from "happy-desktop-state";
 import type {
     CloudConnectAgentAudience,
     CloudConnectAvailability,
+    CloudConnectJoin,
     CloudConnectServer,
     CloudConnectView,
 } from "happy-desktop-ui";
@@ -16,8 +17,13 @@ export interface DesktopCloudConnectStore {
     /** The screen on show, or nothing. */
     get(): CloudConnectView | undefined;
     subscribe(listener: () => void): () => void;
-    /** The sidebar's "+": what to add. */
+    /** The sidebar's "+": Happy Cloud's welcome, with a close button. */
     connectOpen(): void;
+    /**
+     * The start page's way to Happy Cloud: straight to its welcome, whose Back
+     * returns to the start page.
+     */
+    welcomeConnectOpen(): void;
     /** Drafts setting up a personal or team Happy Agent to the Chief of Staff. */
     agentAdd(audience: CloudConnectAgentAudience): void;
     /** Happy Cloud, from the choices: its welcome. */
@@ -26,7 +32,10 @@ export interface DesktopCloudConnectStore {
     connectCancel(): void;
     /** Signs in to the account if it needs to, then lists its servers. */
     connectConfirm(): void;
+    /** Joins one of the account's servers on its row; several can be joined. */
     serverPick(id: string): void;
+    /** Into the app, once at least one server is joined. */
+    serversContinue(): void;
     createOpen(): void;
     joinOpen(): void;
     back(): void;
@@ -35,8 +44,6 @@ export interface DesktopCloudConnectStore {
     joinNameUpdate(name: string): void;
     joinCodeUpdate(code: string): void;
     serverJoin(): void;
-    /** Success's Open: the new team is already selected behind the screen. */
-    connectedOpen(): void;
     /** A press on the welcome's logo; enough of them in a row reveal test sign-in. */
     logoPress(): void;
     testLoginUpdate(login: string): void;
@@ -81,11 +88,30 @@ export function desktopCloudConnectStoreCreate(input: {
     const { cloud, bridge } = input;
     const listeners = new Set<() => void>();
     let view: CloudConnectView | undefined;
+    // Opened from the start page rather than the sidebar's "+".
+    let fromStart = false;
+    const welcome = (
+        testSignIn?: Extract<CloudConnectView, { kind: "welcome" }>["testSignIn"],
+    ): CloudConnectView => ({
+        kind: "welcome",
+        ...(fromStart ? { start: true } : {}),
+        ...(testSignIn ? { testSignIn } : {}),
+    });
     // Each opening of the screen; an answer for an earlier one changes nothing.
     let generation = 0;
     let attemptId: string | undefined;
     let servers: readonly HappyCloudServer[] = [];
+    // The account's servers joined from this opening, or being joined, by ID.
+    let joins: ReadonlyMap<string, CloudConnectJoin> = new Map();
+    const joinsSet = (id: string, join: CloudConnectJoin | undefined): void => {
+        const next = new Map(joins);
+        if (join === undefined) next.delete(id);
+        else next.set(id, join);
+        joins = next;
+    };
     let availabilityTimer: ReturnType<typeof setTimeout> | undefined;
+    // Leaving the account for the welcome; the next sign-in starts after it.
+    let signedOut: Promise<void> | undefined;
 
     const set = (next: CloudConnectView | undefined): void => {
         view = next;
@@ -112,9 +138,11 @@ export function desktopCloudConnectStoreCreate(input: {
                 : {}),
         };
     };
-    const serversView = (): CloudConnectView => ({
+    const serversView = (error?: string): CloudConnectView => ({
         kind: "servers",
         servers: { status: "ready", servers: servers.map(serverView) },
+        joins,
+        ...(error === undefined ? {} : { error }),
     });
     const imagesRead = (asked: number): void => {
         for (const server of servers) {
@@ -127,11 +155,6 @@ export function desktopCloudConnectStoreCreate(input: {
                         ...view,
                         servers: { status: "ready", servers: servers.map(serverView) },
                     });
-                else if (
-                    (view?.kind === "connecting" || view?.kind === "connected") &&
-                    view.server.id === server.id
-                )
-                    set({ ...view, server: serverView(server) });
             });
         }
     };
@@ -147,7 +170,11 @@ export function desktopCloudConnectStoreCreate(input: {
         if (!answer.ok && answer.code === "sign_in_required") return "signInRequired";
         if (!answer.ok) {
             servers = [];
-            set({ kind: "servers", servers: { status: "error", message: answer.message } });
+            set({
+                kind: "servers",
+                servers: { status: "error", message: answer.message },
+                joins,
+            });
             return "done";
         }
         servers = answer.value;
@@ -177,13 +204,14 @@ export function desktopCloudConnectStoreCreate(input: {
     };
 
     const open = async (asked: number): Promise<void> => {
+        await signedOut;
         if ((await list(asked)) === "done") return;
         if (await signIn(asked)) await list(asked);
     };
 
-    /** A failed pick, create or join stays on its own step, saying why. */
+    /** A failed create or join stays on its own step, saying why. */
     const failed = (message: string): void => {
-        if (view?.kind === "servers" || view?.kind === "create" || view?.kind === "join")
+        if (view?.kind === "create" || view?.kind === "join")
             set({ ...view, busy: undefined, error: message });
     };
 
@@ -209,30 +237,36 @@ export function desktopCloudConnectStoreCreate(input: {
         else failed(answer.message);
     };
 
+    /** Signs this app in to one of the account's servers, which selects it behind the screen. */
+    const enter = async (
+        server: HappyCloudServer,
+    ): Promise<
+        | { readonly ok: true }
+        | { readonly ok: false; readonly code?: string; readonly message: string }
+    > => {
+        const added = await cloud.serverConnect(server.id);
+        if (!added.ok) return added;
+        return input.connect(added.value);
+    };
+
+    /**
+     * A server just created or joined by invite: once in, the screen goes and
+     * the app is there, on that server's home.
+     */
     const connect = async (server: HappyCloudServer): Promise<void> => {
         const asked = generation;
-        if (!servers.some((entry) => entry.id === server.id)) servers = [...servers, server];
-        set({ kind: "connecting", server: serverView(server) });
-        imagesRead(asked);
-        const added = await cloud.serverConnect(server.id);
+        const answer = await enter(server).catch(() => ({
+            ok: false as const,
+            message: "Happy Cloud isn't reachable right now.",
+        }));
         if (!current(asked)) return;
-        if (!added.ok) {
-            if (added.code === "sign_in_required") signInAgain();
-            else set({ kind: "failed", message: added.message });
+        if (!answer.ok) {
+            if ("code" in answer && answer.code === "sign_in_required") signInAgain();
+            else failed(answer.message);
             return;
         }
-        const connected = await input.connect(added.value);
-        const kept = connected.ok ? await cloud.signInsKept().catch(() => true) : true;
-        if (!current(asked)) return;
-        set(
-            connected.ok
-                ? {
-                      kind: "connected",
-                      server: serverView(server),
-                      ...(kept ? {} : { notKept: true as const }),
-                  }
-                : { kind: "failed", message: connected.message },
-        );
+        generation += 1;
+        set(undefined);
     };
 
     return {
@@ -243,11 +277,23 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         connectOpen() {
             if (view !== undefined) return;
+            fromStart = false;
             generation += 1;
             logoPresses = [];
             images.clear();
             servers = [];
-            set({ kind: "choose" });
+            joins = new Map();
+            set(welcome());
+        },
+        welcomeConnectOpen() {
+            if (view !== undefined) return;
+            fromStart = true;
+            generation += 1;
+            logoPresses = [];
+            images.clear();
+            servers = [];
+            joins = new Map();
+            set(welcome());
         },
         agentAdd(audience) {
             if (view?.kind !== "choose" || view.asking) return;
@@ -275,7 +321,7 @@ export function desktopCloudConnectStoreCreate(input: {
         cloudOpen() {
             if (view?.kind !== "choose" || view.asking) return;
             logoPresses = [];
-            set({ kind: "welcome" });
+            set(welcome());
         },
         connectCancel() {
             generation += 1;
@@ -296,9 +342,32 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         serverPick(id) {
             const server = servers.find((entry) => entry.id === id);
-            if (!server || view?.kind !== "servers" || view.busy) return;
-            set({ ...view, busy: true, error: undefined });
-            void connect(server);
+            if (!server || view?.kind !== "servers" || joins.has(id)) return;
+            // Each row joins on its own button; several can be on their way.
+            const asked = generation;
+            joinsSet(id, "joining");
+            set(serversView());
+            void enter(server)
+                .catch(() => ({
+                    ok: false as const,
+                    message: "Happy Cloud isn't reachable right now.",
+                }))
+                .then((answer) => {
+                    if (!current(asked)) return;
+                    joinsSet(id, answer.ok ? "joined" : undefined);
+                    if (!answer.ok && "code" in answer && answer.code === "sign_in_required") {
+                        signInAgain();
+                        return;
+                    }
+                    if (view?.kind === "servers")
+                        set(answer.ok ? { ...view, joins } : serversView(answer.message));
+                });
+        },
+        serversContinue() {
+            if (view?.kind !== "servers" || ![...joins.values()].includes("joined")) return;
+            // The last server joined is already selected behind the screen.
+            generation += 1;
+            set(undefined);
         },
         createOpen() {
             if (view?.kind !== "servers" && view?.kind !== "join") return;
@@ -306,14 +375,40 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         joinOpen() {
             if (view?.kind !== "servers" && view?.kind !== "create") return;
-            if (view.busy) return;
+            if (view.kind === "create" && view.busy) return;
             set({ kind: "join", name: "", code: "" });
         },
         back() {
-            if (view?.kind === "welcome") {
-                if (view.testSignIn?.busy) return;
+            // Leaving the browser sign-in, or a failure, lands on the Cloud's welcome.
+            if (view?.kind === "signingIn" || view?.kind === "failed") {
                 generation += 1;
-                set({ kind: "choose" });
+                if (attemptId !== undefined) void bridge.serverSignInCancel?.(attemptId);
+                attemptId = undefined;
+                if (availabilityTimer) clearTimeout(availabilityTimer);
+                logoPresses = [];
+                set(welcome());
+                return;
+            }
+            // The servers, or a first one with none behind it, belong to the
+            // account; leaving them signs it out, so Continue can use another.
+            // Servers already joined stay in the app.
+            if (view?.kind === "servers" || (view?.kind === "create" && !view.back)) {
+                if (view.kind === "create" ? view.busy : [...joins.values()].includes("joining"))
+                    return;
+                generation += 1;
+                if (availabilityTimer) clearTimeout(availabilityTimer);
+                logoPresses = [];
+                images.clear();
+                servers = [];
+                joins = new Map();
+                const leaving = cloud
+                    .accountSignOut()
+                    .catch(() => undefined)
+                    .finally(() => {
+                        if (signedOut === leaving) signedOut = undefined;
+                    });
+                signedOut = leaving;
+                set(welcome());
                 return;
             }
             if (view?.kind !== "create" && view?.kind !== "join") return;
@@ -380,26 +475,21 @@ export function desktopCloudConnectStoreCreate(input: {
                 else void connect(answer.value);
             });
         },
-        connectedOpen() {
-            if (view?.kind !== "connected") return;
-            generation += 1;
-            set(undefined);
-        },
         logoPress() {
             if (view?.kind !== "welcome" || view.testSignIn) return;
             const at = now();
             logoPresses = [...logoPresses.filter((pressed) => at - pressed < LOGO_WINDOW_MS), at];
             if (logoPresses.length < LOGO_PRESSES) return;
             logoPresses = [];
-            set({ kind: "welcome", testSignIn: { login: "", password: "" } });
+            set(welcome({ login: "", password: "" }));
         },
         testLoginUpdate(login) {
             if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
-            set({ kind: "welcome", testSignIn: { login, password: view.testSignIn.password } });
+            set(welcome({ login, password: view.testSignIn.password }));
         },
         testPasswordUpdate(password) {
             if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
-            set({ kind: "welcome", testSignIn: { login: view.testSignIn.login, password } });
+            set(welcome({ login: view.testSignIn.login, password }));
         },
         testSignIn() {
             if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
@@ -408,34 +498,27 @@ export function desktopCloudConnectStoreCreate(input: {
             generation += 1;
             const asked = generation;
             // The password leaves this store with the request and is not kept.
-            set({ kind: "welcome", testSignIn: { login, password: "", busy: true } });
-            void cloud
-                .passwordSignIn(login.trim(), password)
+            set(welcome({ login, password: "", busy: true }));
+            const request = () => cloud.passwordSignIn(login.trim(), password);
+            void (signedOut ? signedOut.then(request) : request())
                 .then(async (answer) => {
                     if (!current(asked)) return;
                     if (!answer.ok) {
-                        set({
-                            kind: "welcome",
-                            testSignIn: { login, password: "", error: answer.message },
-                        });
+                        set(welcome({ login, password: "", error: answer.message }));
                         return;
                     }
                     if ((await list(asked)) === "signInRequired" && current(asked))
-                        set({
-                            kind: "welcome",
-                            testSignIn: { login, password: "", error: "Signing in didn't work." },
-                        });
+                        set(welcome({ login, password: "", error: "Signing in didn't work." }));
                 })
                 .catch(() => {
                     if (current(asked))
-                        set({
-                            kind: "welcome",
-                            testSignIn: {
+                        set(
+                            welcome({
                                 login,
                                 password: "",
                                 error: "Happy Cloud isn't reachable right now.",
-                            },
-                        });
+                            }),
+                        );
                 });
         },
     };

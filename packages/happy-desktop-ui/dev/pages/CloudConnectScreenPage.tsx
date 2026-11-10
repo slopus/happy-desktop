@@ -61,6 +61,11 @@ const SPECIMENS: readonly {
         view: { kind: "welcome" },
     },
     {
+        label: "Welcome from start",
+        detail: "the start page's Connect to Happy Cloud · Back to it, no close button",
+        view: { kind: "welcome", start: true },
+    },
+    {
         label: "Test sign-in",
         detail: "revealed by pressing the logo ten times",
         view: { kind: "welcome", testSignIn: { login: "qa-desktop", password: "secret" } },
@@ -85,12 +90,28 @@ const SPECIMENS: readonly {
     {
         label: "Servers loading",
         detail: "the account is signed in; its servers are on the way",
-        view: { kind: "servers", servers: { status: "loading" } },
+        view: { kind: "servers", servers: { status: "loading" }, joins: new Map() },
     },
     {
         label: "Servers",
         detail: "the account's servers, then create or join",
-        view: { kind: "servers", servers: { status: "ready", servers: [ACME, GUILD] } },
+        view: {
+            kind: "servers",
+            servers: { status: "ready", servers: [ACME, GUILD] },
+            joins: new Map(),
+        },
+    },
+    {
+        label: "Servers joining",
+        detail: "one joined, so Continue shows; another still joining on its button",
+        view: {
+            kind: "servers",
+            servers: { status: "ready", servers: [ACME, GUILD] },
+            joins: new Map([
+                [ACME.id, "joined"],
+                [GUILD.id, "joining"],
+            ]),
+        },
     },
     {
         label: "Create first",
@@ -134,16 +155,6 @@ const SPECIMENS: readonly {
         },
     },
     {
-        label: "Connecting",
-        detail: "signing in to the picked server",
-        view: { kind: "connecting", server: ACME },
-    },
-    {
-        label: "Connected",
-        detail: "Open drops the person into the new team",
-        view: { kind: "connected", server: GUILD },
-    },
-    {
         label: "Failed",
         detail: "the account sign-in did not finish",
         view: { kind: "failed", message: "Signing in didn’t finish. Try again." },
@@ -151,7 +162,11 @@ const SPECIMENS: readonly {
     {
         label: "Small window",
         detail: "720×560 · the page scrolls rather than clipping",
-        view: { kind: "servers", servers: { status: "ready", servers: [ACME, GUILD] } },
+        view: {
+            kind: "servers",
+            servers: { status: "ready", servers: [ACME, GUILD] },
+            joins: new Map(),
+        },
         window: SMALL_WINDOW,
     },
 ];
@@ -195,12 +210,12 @@ export function CloudConnectScreenPage() {
                                     onJoinCodeChange={noop}
                                     onJoinNameChange={noop}
                                     onJoinOpen={noop}
-                                    onOpen={noop}
                                     onLogoPress={noop}
                                     onTestLoginChange={noop}
                                     onTestPasswordChange={noop}
                                     onTestSignIn={noop}
                                     onServerPick={noop}
+                                    onServersContinue={noop}
                                     view={specimen.view}
                                 />
                             </ThemeScope>,

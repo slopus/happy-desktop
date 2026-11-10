@@ -663,6 +663,7 @@ export {
 export {
     CloudConnectScreen,
     type CloudConnectAvailability,
+    type CloudConnectJoin,
     type CloudConnectScreenProps,
     type CloudConnectAgentAudience,
     type CloudConnectServer,

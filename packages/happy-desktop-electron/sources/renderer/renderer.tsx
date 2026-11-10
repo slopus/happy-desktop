@@ -308,6 +308,12 @@ function cloudServerConnectionOf(id: string): string | undefined {
     return happyCloudServerNameOf(connectionId) === undefined ? undefined : connectionId;
 }
 
+/** A Happy Cloud server's handle, which picks the placeholder it wears without a picture. */
+function cloudServerNameOf(id: string): string | undefined {
+    const connectionId = cloudServerConnectionOf(id);
+    return connectionId === undefined ? undefined : happyCloudServerNameOf(connectionId);
+}
+
 function completionSoundOf(actionId: string): HappyAgentCompletionSound | undefined {
     return COMPLETION_SOUND_CHOICES.find(
         ({ sound }) => actionId === `${COMPLETION_SOUND_MENU_PREFIX}${sound}`,
@@ -805,16 +811,14 @@ function DesktopRenderer(props: DesktopRendererProps) {
                 }}
                 onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
                 // Someone who only uses Happy Cloud goes straight there and
-                // this computer is never set up to run a Happy Agent.
+                // this computer is never set up to run a Happy Agent. The start
+                // page stays behind the sheet until a team is connected, so
+                // Back lands on it again.
                 {...(props.cloudConnect
                     ? {
                           secondaryAction: {
                               label: "Connect to Happy Cloud",
-                              onAction: () => {
-                                  desktopBootSkip();
-                                  props.welcome.welcomeAcknowledge();
-                                  props.cloudConnect?.connectOpen();
-                              },
+                              onAction: () => props.cloudConnect?.welcomeConnectOpen(),
                           },
                       }
                     : {})}
@@ -877,6 +881,21 @@ function DesktopScreens(props: DesktopRendererProps) {
         sidebarVisibility.hidden ||
         (localSetupShown &&
             directory.happyAgents.every((entry) => entry.id === LOCAL_HAPPY_AGENT_ID));
+    // Someone who only uses Happy Cloud never set this computer up to run a
+    // Happy Agent; while a Cloud server is there, this computer has no place in
+    // the rail and the first server stands in for it.
+    const localOff = useSyncExternalStore(
+        props.store.subscribe,
+        () => props.store.get()?.phase === "off",
+        () => props.store.get()?.phase === "off",
+    );
+    const firstRemote = directory.happyAgents.find((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID);
+    const localHidden = localOff && firstRemote !== undefined;
+    const activeId =
+        localHidden &&
+        (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID) === LOCAL_HAPPY_AGENT_ID
+            ? firstRemote.id
+            : (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID);
     const main = props.connectionUis.get(LOCAL_HAPPY_AGENT_ID);
     const surfaceWindowState = props.surfaceWindowState;
     // An update of the local daemon does not take the window: the shell stays
@@ -886,15 +905,20 @@ function DesktopScreens(props: DesktopRendererProps) {
     return (
         <DesktopAgentBrokenGate store={props.agentBroken}>
             <ConnectionShell
-                items={directory.happyAgents.map((entry) => {
+                items={(localHidden
+                    ? directory.happyAgents.filter((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID)
+                    : directory.happyAgents
+                ).map((entry) => {
                     // Muted bots remain listed and working; hidden bots leave this set.
                     const listed = happyAgentListedConversations(
                         entry,
                         projectsVisibility,
                         attention,
                     );
+                    const cloudName = cloudServerNameOf(entry.id);
                     return {
                         id: entry.id,
+                        ...(cloudName === undefined ? {} : { placeholderSeed: cloudName }),
                         // The rail names a machine the way its own daemon does. The
                         // host's roster name stands in until that daemon has answered.
                         label: entry.node?.name ?? entry.label,
@@ -906,13 +930,12 @@ function DesktopScreens(props: DesktopRendererProps) {
                         ...(entry.node?.avatar ? { avatar: entry.node.avatar } : {}),
                         // A call pointing into a machine not on screen is said on its
                         // rail button, the one place that machine is visible.
-                        ...(voiceFocusConnectionId === entry.id &&
-                        entry.id !== (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)
+                        ...(voiceFocusConnectionId === entry.id && entry.id !== activeId
                             ? { voiceFocus: true }
                             : {}),
                     };
                 })}
-                selectedId={directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID}
+                selectedId={activeId}
                 onSelect={props.happyAgents.happyAgentActivate}
                 itemMenuItems={(item) => [
                     ...completionSoundMenuItems(
@@ -965,10 +988,7 @@ function DesktopScreens(props: DesktopRendererProps) {
             >
                 <ConnectionSurface
                     key={LOCAL_HAPPY_AGENT_ID}
-                    active={
-                        !directory.activeHappyAgentId ||
-                        directory.activeHappyAgentId === LOCAL_HAPPY_AGENT_ID
-                    }
+                    active={activeId === LOCAL_HAPPY_AGENT_ID}
                 >
                     <DesktopLocalScreens
                         {...props}
@@ -982,10 +1002,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                         const ui = props.connectionUis.get(entry.id);
                         if (!ui) return null;
                         return (
-                            <ConnectionSurface
-                                key={entry.id}
-                                active={directory.activeHappyAgentId === entry.id}
-                            >
+                            <ConnectionSurface key={entry.id} active={activeId === entry.id}>
                                 <HappyAgentBoundary
                                     appearance={props.appearance}
                                     browserPasswordsAvailable={props.browserPasswordsAvailable}
@@ -1398,12 +1415,12 @@ function DesktopCloudConnect(props: {
             onJoinCodeChange={props.store.joinCodeUpdate}
             onJoinNameChange={props.store.joinNameUpdate}
             onJoinOpen={props.store.joinOpen}
-            onOpen={props.store.connectedOpen}
             onLogoPress={props.store.logoPress}
             onTestLoginChange={props.store.testLoginUpdate}
             onTestPasswordChange={props.store.testPasswordUpdate}
             onTestSignIn={props.store.testSignIn}
             onServerPick={props.store.serverPick}
+            onServersContinue={props.store.serversContinue}
             view={view}
         />
     );
@@ -1863,7 +1880,16 @@ if (mediaPreviewBridge) {
                       cloud: desktopBridge.happyCloud,
                       bridge: desktopBridge,
                       chiefOfStaffAsk,
-                      connect: cloudConnectAction,
+                      // A start page left for Happy Cloud is acknowledged only
+                      // once a team is connected; until then Back returns to it.
+                      connect: async (connectionId) => {
+                          const connected = await cloudConnectAction(connectionId);
+                          if (connected.ok && !welcome.get().welcomeAcknowledged) {
+                              desktopBootSkip();
+                              welcome.welcomeAcknowledge();
+                          }
+                          return connected;
+                      },
                   })
                 : undefined;
         // What this window reports about how it is used, read from the same

@@ -34,7 +34,9 @@ export function ProfileSetupScreen(props: ProfileSetupScreenProps) {
             copy="Shown on your commits and messages."
             data-testid="profile-setup-screen"
             help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
-            scene="disguised-face"
+            // Centred like the Happy Cloud pages that lead here, so the form
+            // sits in the middle of the window rather than under its centre line.
+            placement="centered"
             {...(props.message ? { status: { label: props.message } } : {})}
             title="Create your profile"
             transitionKey="profile-setup"

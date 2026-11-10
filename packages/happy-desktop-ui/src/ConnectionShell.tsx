@@ -24,6 +24,12 @@ export interface ConnectionShellItem {
      * the generated tile alike; the thumbhash stands in until the bytes arrive.
      */
     readonly avatar?: { readonly url: string; readonly thumbhash: string };
+    /**
+     * Without a picture, the placeholder this picks is worn instead of an
+     * initial: a Happy Cloud server's handle, so it wears the same one
+     * everywhere it is shown.
+     */
+    readonly placeholderSeed?: string;
 }
 
 function ConnectionShellTile(props: { readonly item: ConnectionShellItem }) {
@@ -48,6 +54,9 @@ function ConnectionShellTile(props: { readonly item: ConnectionShellItem }) {
         <Avatar
             // A handle such as `@acme` takes its initial from the name.
             initials={item.label.replace(/^@/, "").slice(0, 1).toUpperCase()}
+            {...(item.placeholderSeed === undefined
+                ? {}
+                : { placeholderSeed: item.placeholderSeed })}
             size="md"
             style={{ width: 36, height: 36, borderRadius: 10 }}
             type="agent"

@@ -470,6 +470,9 @@ export function happyAgentConnectionOpen(input: {
         { deviceBridges: input.deviceBridges ?? false },
     );
     const welcome = welcomeStoreCreate(desktopWelcomePersistence(input.happyAgentId));
+    // A Happy Cloud server is reached through Happy Cloud's own welcome, so it
+    // opens on the server rather than introducing Happy from scratch again.
+    if (input.cloudServer && !welcome.get().welcomeAcknowledged) welcome.welcomeAcknowledge();
     // One clock and one mobile connector per Happy Agent: onboarding and
     // Settings show the same pairing, and both count its codes down.
     const clock = happyAgentClockStoreCreate();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
+import { SetupDrift } from "./SetupDrift";
 import { SetupPage, type SetupPageProps } from "./SetupPage";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
@@ -33,6 +34,9 @@ export type CloudConnectAvailability =
     | "reserved"
     | "invalid";
 
+/** Where joining one of the account's servers stands: on its row's button. */
+export type CloudConnectJoin = "joining" | "joined";
+
 /** Another Happy Agent of the reader's own, which the Chief of Staff sets up. */
 export type CloudConnectAgentAudience = "personal" | "team";
 
@@ -52,6 +56,11 @@ export type CloudConnectView =
     | {
           readonly kind: "welcome";
           /**
+           * Opened straight from the start page: Back returns to it, and
+           * there is no close button.
+           */
+          readonly start?: true;
+          /**
            * Test-account sign-in, revealed by pressing the logo ten times
            * in a row. Absent, nothing of it is drawn or announced.
            */
@@ -70,15 +79,21 @@ export type CloudConnectView =
               | { readonly status: "loading" }
               | { readonly status: "ready"; readonly servers: readonly CloudConnectServer[] }
               | { readonly status: "error"; readonly message: string };
-          /** A picked server is being added. */
-          readonly busy?: boolean;
+          /**
+           * Servers joined from here, or being joined, by ID. Several can be
+           * joined at once; Continue appears once one is in.
+           */
+          readonly joins: ReadonlyMap<string, CloudConnectJoin>;
           readonly error?: string;
       }
     | {
           readonly kind: "create";
           readonly name: string;
           readonly availability: CloudConnectAvailability;
-          /** The account already has servers to go back to; otherwise create leads. */
+          /**
+           * The account already has servers to go back to; otherwise create
+           * leads, and Back leaves the account for the welcome.
+           */
           readonly back: boolean;
           readonly busy?: boolean;
           readonly error?: string;
@@ -90,14 +105,8 @@ export type CloudConnectView =
           readonly busy?: boolean;
           readonly error?: string;
       }
-    /** Signing in to the chosen server. */
+    /** Signing in to the chosen server; once in, the screen is gone. */
     | { readonly kind: "connecting"; readonly server: CloudConnectServer }
-    | {
-          readonly kind: "connected";
-          readonly server: CloudConnectServer;
-          /** This computer can't keep the sign-in, so a restart asks for it again. */
-          readonly notKept?: true;
-      }
     | { readonly kind: "failed"; readonly message: string };
 
 export interface CloudConnectScreenProps {
@@ -111,18 +120,23 @@ export interface CloudConnectScreenProps {
     onCloudOpen(): void;
     /** Welcome's Continue, and Try again after a failure. */
     onContinue(): void;
+    /** A server row's Join. */
     onServerPick(id: string): void;
+    /** Continue, once a server is joined: into the app. */
+    onServersContinue(): void;
     onCreateOpen(): void;
     onJoinOpen(): void;
-    /** From create or join back to the servers, and from the welcome to the choices. */
+    /**
+     * From create or join back to the servers; from the servers or a first
+     * server back to the welcome, signed out so Continue can use another
+     * account; and from signing in or a failure back to the welcome.
+     */
     onBack(): void;
     onCreateNameChange(name: string): void;
     onCreate(): void;
     onJoinNameChange(name: string): void;
     onJoinCodeChange(code: string): void;
     onJoin(): void;
-    /** Success's Open: into the new cloud team. */
-    onOpen(): void;
     onLogoPress(): void;
     onTestLoginChange(login: string): void;
     onTestPasswordChange(password: string): void;
@@ -158,6 +172,8 @@ function CloudConnectServerImage(props: {
         return (
             <Avatar
                 initials={props.server.displayName.slice(0, 1).toUpperCase()}
+                // The same placeholder the server wears in the rail.
+                placeholderSeed={props.server.name}
                 size="lg"
                 style={{
                     width: props.size,
@@ -254,22 +270,16 @@ const PLANS: readonly {
  */
 const CLOUD_SLIDES: readonly WelcomeSlide[] = [
     {
-        art: { kind: "scene", name: "cloud-variation" },
+        art: { kind: "logo" },
         copy: "A hardened, high-performance control plane for your agents, hosted by Happy.",
         id: "cloud",
         title: "Happy Cloud",
     },
     {
         art: { kind: "scene", name: "robot" },
-        copy: "Run many agents at once for your whole team, and no computer has to stay on.",
+        copy: "Happy Cloud helps you unlock running any number of agents, unattended.",
         id: "scale",
         title: "Built for lots of agents",
-    },
-    {
-        art: { kind: "scene", name: "sparkles" },
-        copy: "Run on our compute or bring your own. Use our models or your own inference.",
-        id: "yours",
-        title: "Ours or yours",
     },
     {
         art: { kind: "scene", name: "closed-lock" },
@@ -277,13 +287,36 @@ const CLOUD_SLIDES: readonly WelcomeSlide[] = [
         id: "permissions",
         title: "Programmable permissions",
     },
+    {
+        art: { kind: "scene", name: "sparkles" },
+        copy: "Never locked into someone else's compute. Use ours or yours, and source tokens and RAM from anywhere.",
+        id: "yours",
+        title: "No lock-in",
+    },
+    {
+        art: { kind: "scene", name: "open-hands" },
+        copy: "We share every line of Happy Cloud with select customers and security companies to review.",
+        id: "source",
+        title: "Private open source",
+    },
 ];
+
+/** What drifts beside the Cloud's slides, the way it does beside the phone's. */
+const CLOUD_DRIFT = [
+    "cloud-variation",
+    "robot",
+    "sparkles",
+    "llama",
+    "closed-lock",
+    "tree",
+] as const;
 
 /**
  * C-336 CloudConnectScreen — the sidebar's "+", full window on the onboarding
  * sky. It opens on what to add: a personal remote agent or a shared team agent,
  * which it hands to the Chief of Staff to set up, or Happy Cloud: welcome, account sign-in in the browser, the account's
- * servers, create or join one, then signing in to it. Each state is one
+ * servers, create or join one, then signing in to it, after which the app is
+ * simply there with the new server open. Each state is one
  * `SetupPage`, so titles, content and actions keep their places as it moves,
  * except the welcome: that is a `WelcomeScreen` deck, like the first launch.
  * Esc and the close button in the top-right corner return to the app from
@@ -410,13 +443,16 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 actionLabel="Continue"
                                 appearance={props.appearance}
                                 backdrop={{ kind: "sky" }}
+                                decoration={<SetupDrift scenes={CLOUD_DRIFT} />}
                                 className="happy-cloud-connect happy-cloud-connect--welcome"
                                 data-testid="cloud-connect"
                                 onAction={props.onContinue}
                                 onArtPress={props.onLogoPress}
                                 secondaryAction={{
                                     label: "Back",
-                                    onAction: props.onBack,
+                                    // The welcome is the first step: Back sinks the
+                                    // sheet onto the start page or the app.
+                                    onAction: dismiss,
                                     ...(test?.busy ? { disabled: true } : {}),
                                 }}
                                 slides={CLOUD_SLIDES}
@@ -478,17 +514,27 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 {...frame}
                                 copy="Sign in or create an account in your browser, then come back here."
                                 scene="closed-lock"
-                                secondary={{ label: "Cancel", onSelect: dismiss }}
+                                secondary={{ label: "Cancel", onSelect: props.onBack }}
                                 status={{ busy: true, label: "Waiting for your browser…" }}
                                 title="Signing in"
                             />
                         );
-                    case "servers":
+                    case "servers": {
+                        const joins = [...view.joins.values()];
                         return (
                             <SetupPage
                                 {...frame}
-                                copy="Pick a server to add it to Happy."
-                                scene="cloud-variation"
+                                {...(joins.includes("joined")
+                                    ? {
+                                          action: {
+                                              label: "Continue",
+                                              onSelect: props.onServersContinue,
+                                          },
+                                      }
+                                    : {})}
+                                copy="Your account is already on these servers. Join as many as you like."
+                                placement="centered"
+                                secondary={back(joins.includes("joining"))}
                                 {...(view.servers.status === "loading"
                                     ? { status: { busy: true, label: "Loading your servers…" } }
                                     : view.servers.status === "error"
@@ -496,57 +542,73 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                       : view.error
                                         ? { status: { label: view.error } }
                                         : {})}
-                                title="Your servers"
+                                title="Join a server"
                             >
                                 <div className="happy-cloud-connect__column">
                                     {view.servers.status === "ready" ? (
                                         <div className="happy-cloud-connect__servers">
-                                            {view.servers.servers.map((server, index) => (
-                                                <button
-                                                    // eslint-disable-next-line jsx-a11y/no-autofocus -- the first server is where a keyboard starts on this screen
-                                                    autoFocus={index === 0}
-                                                    className="happy-cloud-connect__server"
-                                                    disabled={view.busy}
-                                                    key={server.id}
-                                                    onClick={() => props.onServerPick(server.id)}
-                                                    type="button"
-                                                >
-                                                    <CloudConnectServerImage
-                                                        server={server}
-                                                        size={44}
-                                                    />
-                                                    <span className="happy-cloud-connect__server-text">
-                                                        <span className="happy-cloud-connect__server-name">
-                                                            {server.displayName}
+                                            {view.servers.servers.map((server, index) => {
+                                                const join = view.joins.get(server.id);
+                                                return (
+                                                    <div
+                                                        className="happy-cloud-connect__server"
+                                                        data-happy-desktop-ui="cloud-connect-server"
+                                                        key={server.id}
+                                                    >
+                                                        <CloudConnectServerImage
+                                                            server={server}
+                                                            size={44}
+                                                        />
+                                                        <span className="happy-cloud-connect__server-text">
+                                                            <span className="happy-cloud-connect__server-name">
+                                                                {server.displayName}
+                                                            </span>
+                                                            <span className="happy-cloud-connect__server-detail">
+                                                                @{server.name}
+                                                            </span>
                                                         </span>
-                                                        <span className="happy-cloud-connect__server-detail">
-                                                            @{server.name}
-                                                        </span>
-                                                    </span>
-                                                </button>
-                                            ))}
+                                                        <Button
+                                                            aria-label={`Join ${server.displayName}`}
+                                                            // eslint-disable-next-line jsx-a11y/no-autofocus -- the first server is where a keyboard starts on this screen
+                                                            autoFocus={index === 0}
+                                                            disabled={join === "joined"}
+                                                            {...(join === "joined"
+                                                                ? { icon: "check" as const }
+                                                                : {})}
+                                                            loading={join === "joining"}
+                                                            onClick={() =>
+                                                                props.onServerPick(server.id)
+                                                            }
+                                                            variant={
+                                                                join === "joined"
+                                                                    ? "ghost"
+                                                                    : "secondary"
+                                                            }
+                                                            width={104}
+                                                        >
+                                                            {join === "joined" ? "Joined" : "Join"}
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     ) : null}
                                     <div className="happy-cloud-connect__links">
                                         <Button
-                                            disabled={view.busy}
                                             icon="plus"
                                             onClick={props.onCreateOpen}
                                             variant="ghost"
                                         >
-                                            Create a server
+                                            Bootstrap a new one
                                         </Button>
-                                        <Button
-                                            disabled={view.busy}
-                                            onClick={props.onJoinOpen}
-                                            variant="ghost"
-                                        >
+                                        <Button onClick={props.onJoinOpen} variant="ghost">
                                             Join with an invite
                                         </Button>
                                     </div>
                                 </div>
                             </SetupPage>
                         );
+                    }
                     case "create": {
                         const hint = view.error ?? availabilityHint(view.availability, view.name);
                         return (
@@ -555,13 +617,17 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 action={{
                                     busy: view.busy,
                                     disabled: view.availability !== "available",
-                                    label: "Create server",
+                                    label: "Bootstrap",
                                     onSelect: props.onCreate,
                                 }}
-                                copy="Pick a name for your team’s server. You can change it later."
-                                scene="hatching-chick"
-                                {...(view.back ? { secondary: back(view.busy) } : {})}
-                                title="Create a server"
+                                copy={
+                                    view.back
+                                        ? "Name your team’s new server. You can change it later."
+                                        : "Your account has no servers yet. Name your team’s first one."
+                                }
+                                placement="centered"
+                                secondary={back(view.busy)}
+                                title="Bootstrap a server"
                             >
                                 <div className="happy-cloud-connect__column">
                                     <TextField
@@ -619,9 +685,9 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     onSelect: props.onJoin,
                                 }}
                                 copy="Enter the server’s name and the invite code you were sent."
-                                scene="open-hands"
+                                placement="centered"
                                 secondary={back(view.busy)}
-                                title="Join a server"
+                                title="Join with an invite"
                             >
                                 <div className="happy-cloud-connect__column">
                                     <TextField
@@ -658,44 +724,6 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 </div>
                             </SetupPage>
                         );
-                    case "connecting":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                copy={`@${view.server.name}`}
-                                secondary={{ label: "Cancel", onSelect: dismiss }}
-                                status={{ busy: true, label: "Signing in to the server…" }}
-                                title={`Connecting to ${view.server.displayName}`}
-                            >
-                                <div className="happy-cloud-connect__hero">
-                                    <CloudConnectServerImage server={view.server} size={72} />
-                                </div>
-                            </SetupPage>
-                        );
-                    case "connected":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                action={{
-                                    autoFocus: true,
-                                    label: `Open ${view.server.displayName}`,
-                                    onSelect: props.onOpen,
-                                }}
-                                copy={`@${view.server.name} is now in your sidebar.`}
-                                {...(view.notKept
-                                    ? {
-                                          status: {
-                                              label: "This computer can’t keep sign-ins, so you’ll sign in again after a restart.",
-                                          },
-                                      }
-                                    : {})}
-                                title="You’re in"
-                            >
-                                <div className="happy-cloud-connect__hero">
-                                    <CloudConnectServerImage server={view.server} size={72} />
-                                </div>
-                            </SetupPage>
-                        );
                     case "failed":
                         return (
                             <SetupPage
@@ -707,19 +735,22 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 }}
                                 copy={view.message}
                                 scene="snail"
+                                secondary={back()}
                                 title="Couldn’t connect"
                             />
                         );
                 }
             })()}
-            <Button
-                aria-label="Close"
-                className="happy-cloud-connect__close"
-                icon="close"
-                iconOnly
-                onClick={dismiss}
-                variant="ghost"
-            />
+            {view.kind === "welcome" && view.start ? null : (
+                <Button
+                    aria-label="Close"
+                    className="happy-cloud-connect__close"
+                    icon="close"
+                    iconOnly
+                    onClick={dismiss}
+                    variant="ghost"
+                />
+            )}
         </div>
     );
 }

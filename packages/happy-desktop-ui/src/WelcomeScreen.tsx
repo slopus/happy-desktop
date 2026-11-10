@@ -38,6 +38,8 @@ export interface WelcomeScreenProps {
     readonly actionAutoFocus?: boolean;
     /** Optional decorative scenery behind the welcome deck. */
     readonly backdrop?: WelcomeScreenBackdrop;
+    /** Ambient pictures between the backdrop and the deck, never information. */
+    readonly decoration?: ReactNode;
     onAction(): void;
     /** A quieter second way in, under the primary action. */
     readonly secondaryAction?: {
@@ -114,6 +116,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "actionDisabled",
         "actionAutoFocus",
         "backdrop",
+        "decoration",
         "onAction",
         "secondaryAction",
         "children",
@@ -148,6 +151,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                     className="happy-welcome-screen__backdrop"
                 />
             ) : null}
+            {local.decoration}
             <ScrollArea
                 className="happy-welcome-screen__view"
                 data-happy-desktop-ui="welcome-view"
