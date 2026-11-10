@@ -87,3 +87,86 @@ export function UiRow(props: {
         </div>
     );
 }
+
+/**
+ * A row that keeps one box through every state it goes through: the frame's
+ * width and one height, a top line of mark, name (or the one field a state
+ * asks for) and two fixed slots on the right, the primary control and a
+ * dismiss, and under it one status line with an optional quiet action at its
+ * end. A state fills the slots or leaves them empty; nothing in the row moves
+ * or resizes when it does. A status is one short line that fits the narrowest
+ * column; anything longer the state has to say goes in its `title`.
+ */
+export function UiFixedRow(props: {
+    readonly mark: ReactNode;
+    readonly name: string;
+    /** What opens the status line, such as the accounts already signed in. */
+    readonly lead?: ReactNode;
+    /** Takes the name's place: the one field a state asks for. */
+    readonly field?: ReactNode;
+    readonly status: ReactNode;
+    /** The status in full, where the line had to say it short. */
+    readonly statusTitle?: string;
+    readonly tone?: UiRowTone;
+    readonly primary?: ReactNode;
+    readonly dismiss?: ReactNode;
+    /** A quiet action at the end of the status line. */
+    readonly aside?: ReactNode;
+    /** Pins the spinner on one frame, for a still fixture. */
+    readonly spinnerFrame?: number;
+    readonly state?: string;
+}) {
+    const tone = props.tone ?? "quiet";
+    return (
+        <div
+            className="happy-chat-row happy-chat-fixed-row"
+            data-happy-desktop-ui="chat-ui-row"
+            data-state={props.state}
+            data-tone={tone}
+        >
+            <span className="happy-chat-fixed-row__top">
+                <span className="happy-chat-row__mark">{props.mark}</span>
+                <span className="happy-chat-fixed-row__head">
+                    {props.field ?? (
+                        <span className="happy-chat-row__title">
+                            <span className="happy-chat-row__name">{props.name}</span>
+                        </span>
+                    )}
+                </span>
+                <span className="happy-chat-fixed-row__slot" data-slot="primary">
+                    {props.primary}
+                </span>
+                <span className="happy-chat-fixed-row__slot" data-slot="dismiss">
+                    {props.dismiss}
+                </span>
+            </span>
+            <span className="happy-chat-fixed-row__status">
+                <span className="happy-chat-row__line" role="status" title={props.statusTitle}>
+                    {tone === "quiet" ? null : (
+                        <span className="happy-chat-row__line-mark">
+                            {tone === "busy" ? (
+                                <Spinner
+                                    size={14}
+                                    tone="muted"
+                                    variant="arc"
+                                    {...(props.spinnerFrame === undefined
+                                        ? {}
+                                        : { frame: props.spinnerFrame })}
+                                />
+                            ) : tone === "done" ? (
+                                <Ionicon name="checkmark-circle" size={14} />
+                            ) : (
+                                <Ionicon name="alert-circle" size={14} />
+                            )}
+                        </span>
+                    )}
+                    {props.lead}
+                    <span className="happy-chat-row__line-text">{props.status}</span>
+                </span>
+                {props.aside ? (
+                    <span className="happy-chat-fixed-row__aside">{props.aside}</span>
+                ) : null}
+            </span>
+        </div>
+    );
+}

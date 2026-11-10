@@ -5,7 +5,7 @@ import {
     type HappyAgentDefaultModelSnapshot,
     type ProviderCli,
 } from "happy-desktop-state";
-import { AssistantMark, type AssistantMarkName } from "./AssistantMark";
+import { AssistantMark, assistantMarkOfProvider } from "./AssistantMark";
 import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
 import { MessageSettingsLinksContext } from "./MessageMarkdown";
@@ -22,14 +22,6 @@ import { Ionicon } from "./vectorIcons/VectorIcon";
  * in, so the height the transcript reserved for it holds from missing to
  * signed in. They draw props only; the widget supplies the live state.
  */
-
-/** The marks of the programs this build knows; a newer one is drawn without. */
-const PRODUCT_MARKS: ReadonlyMap<string, AssistantMarkName> = new Map([
-    ["claude", "claude"],
-    ["codex", "openai"],
-    ["grok", "grok"],
-    ["antigravity", "gemini"],
-]);
 
 const PRODUCT_NAMES: ReadonlyMap<string, string> = new Map([
     ["claude", "Claude Code"],
@@ -108,7 +100,7 @@ function cliState(cli: ProviderCli | undefined): CliState {
 export function ChatProviderCliFigure(props: ChatProviderCliFigureProps) {
     const state = cliState(props.cli);
     const name = props.cli?.name ?? PRODUCT_NAMES.get(props.cliId) ?? props.cliId;
-    const productMark = PRODUCT_MARKS.get(props.cliId);
+    const productMark = assistantMarkOfProvider(props.cliId);
     const vendor = props.cli?.vendor;
     const busy = props.requesting === true;
     let mark: ReactNode;

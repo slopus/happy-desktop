@@ -4,7 +4,7 @@ import {
     type HappyAgentDefaultModelSelection,
     type HappyAgentDefaultModelSnapshot,
 } from "happy-desktop-state";
-import { AssistantMark, type AssistantMarkName } from "../AssistantMark";
+import { AssistantMark, assistantMarkOfProvider } from "../AssistantMark";
 import { Button } from "../Button";
 import { CopyButton } from "../CopyButton";
 import { HAPPY_MOBILE_STORE_URLS } from "../DesktopMobileSetup";
@@ -24,13 +24,6 @@ import { UiRow, UiRows, type UiRowTone } from "./UiRows";
  * edge. A state changes words and controls, never the frame's height.
  */
 
-const MODEL_MARKS: ReadonlyMap<string, AssistantMarkName> = new Map([
-    ["claude", "claude"],
-    ["codex", "openai"],
-    ["grok", "grok"],
-    ["antigravity", "gemini"],
-]);
-
 const choiceKey = (selection: { providerId: string; modelId: string }) =>
     `${selection.providerId}\u0000${selection.modelId}`;
 
@@ -47,7 +40,7 @@ export function UiDefaultModelRow(props: {
         : undefined;
     const effort = shown?.effort ?? choice?.defaultEffort;
     const usable = props.onChange !== undefined && !state.loading && state.saving === undefined;
-    const vendor = choice ? MODEL_MARKS.get(choice.providerId) : undefined;
+    const vendor = choice ? assistantMarkOfProvider(choice.providerId) : undefined;
     const tone: UiRowTone = state.saveError
         ? "error"
         : state.saving || state.loading

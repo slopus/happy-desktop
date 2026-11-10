@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import {
-    providerCliReplyNote,
     type ConversationMediaItem,
     type ConversationQuickReplies,
     type ProviderCli,
@@ -12,6 +11,7 @@ import {
     messageContentMeasure,
 } from "../../src/conversationRowHeight";
 import { UiProviderSignIn } from "../../src/ui/UiLiveWidgets";
+import { UiProviderSignInRow } from "../../src/ui/UiProviderSignInRow";
 import { UiMedia } from "../../src/ui/UiMedia";
 import { UiQuickReplies } from "../../src/ui/UiQuickReplies";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -61,17 +61,9 @@ const usedControl = {
     },
 };
 
-const CODEX_ONE = cliSignedIn("codex", [{ label: "ada@example.com", plan: "Pro" }]);
 const CLAUDE_OUT = cliFixture("claude");
 const CLAUDE_ONE = cliSignedIn("claude", [{ label: "ada@example.com", plan: "Max" }]);
 const GROK_MISSING = cliMissing("grok");
-
-const CLIS: Readonly<Record<ReplyProviderId, ProviderCli>> = {
-    codex: CODEX_ONE,
-    claude: CLAUDE_OUT,
-    grok: GROK_MISSING,
-    antigravity: cliMissing("antigravity"),
-};
 
 const about = (provider: ReplyProviderId): ReplyUi => ({ type: "provider", props: { provider } });
 
@@ -85,7 +77,6 @@ function Replies(props: {
         | { readonly text: string; readonly about: ReplyProviderId }
     )[];
     readonly chosen?: number;
-    readonly clis?: Readonly<Record<ReplyProviderId, ProviderCli>>;
     /** The row's width; the column's own by default. */
     readonly width?: number;
 }) {
@@ -99,7 +90,6 @@ function Replies(props: {
         live: props.chosen === undefined,
         ...(props.chosen === undefined ? {} : { chosen: props.chosen }),
     };
-    const clis = props.clis ?? CLIS;
     const layout = conversationQuickRepliesLayout(replies, props.width ?? ROW_WIDTH);
     return (
         <div
@@ -107,12 +97,7 @@ function Replies(props: {
             data-layout-pills={layout.pillHeights.join(" ")}
             style={{ display: "flex", flexDirection: "column" }}
         >
-            <UiQuickReplies
-                layout={layout}
-                notes={{ provider: (provider) => providerCliReplyNote(clis[provider]) }}
-                onSend={() => undefined}
-                replies={replies}
-            />
+            <UiQuickReplies layout={layout} onSend={() => undefined} replies={replies} />
         </div>
     );
 }
@@ -145,6 +130,217 @@ type Screen = {
     readonly column?: number;
     readonly body: () => ReactNode;
 };
+
+/**
+ * The narrowest conversation a row draws in: at Happy's 720px window minimum
+ * the app's agent text is 274px and a row's frame 298px, measured in hidden
+ * Electron; this column gives the specimen the same frame.
+ */
+const NARROWEST = 368;
+
+const NOOP = () => undefined;
+const ROW_ACTIONS = {
+    onSignIn: NOOP,
+    onCode: NOOP,
+    onToken: NOOP,
+    onCancel: NOOP,
+    onPageOpen: NOOP,
+};
+const CODEX_ONE_ROW = cliSignedIn("codex", [{ label: "ada@example.com", plan: "Pro" }]);
+const CLAUDE_TWO = cliSignedIn("claude", [
+    { label: "ada@example.com", plan: "Max" },
+    { label: "grace@example.com", plan: "Max" },
+]);
+const installing = (cli: ProviderCli): ProviderCli => ({
+    ...cli,
+    operation: {
+        id: "op-1",
+        kind: "install",
+        status: "running",
+        message: "Downloading from claude.ai",
+        authorization: null,
+        output: [],
+        error: null,
+        startedAt: 0,
+        finishedAt: null,
+    },
+});
+const lapsedOne: ProviderCli = {
+    ...CLAUDE_TWO,
+    accounts: CLAUDE_TWO.accounts!.map((account, index) =>
+        index === 1 ? { ...account, signIn: "signed_out" as const } : account,
+    ),
+};
+
+/** Every state a sign-in row goes through, each in the one box the row keeps. */
+const ROW_STATES: readonly {
+    readonly label: string;
+    readonly row: () => ReactNode;
+}[] = [
+    {
+        label: "checking",
+        row: () => <UiProviderSignInRow provider="claude" spinnerFrame={STILL} />,
+    },
+    {
+        label: "missing",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={cliMissing("antigravity")}
+                provider="antigravity"
+            />
+        ),
+    },
+    {
+        label: "signed out",
+        row: () => <UiProviderSignInRow {...ROW_ACTIONS} cli={CLAUDE_OUT} provider="claude" />,
+    },
+    {
+        label: "signed in, Use",
+        row: () => <UiProviderSignInRow {...ROW_ACTIONS} cli={CLAUDE_ONE} provider="claude" />,
+    },
+    {
+        label: "installing",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={installing(cliMissing("claude"))}
+                provider="claude"
+                spinnerFrame={STILL}
+            />
+        ),
+    },
+    {
+        label: "signing in",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={CLAUDE_OUT}
+                provider="claude"
+                requesting
+                spinnerFrame={STILL}
+            />
+        ),
+    },
+    {
+        label: "waiting on the browser",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={cliWaiting(CLAUDE_OUT)}
+                provider="claude"
+                spinnerFrame={STILL}
+            />
+        ),
+    },
+    {
+        label: "device code",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={cliWaiting(CODEX_ONE_ROW, { userCode: "WXYZ-8F3K" })}
+                provider="codex"
+                spinnerFrame={STILL}
+            />
+        ),
+    },
+    {
+        label: "code field",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={cliWaiting(CLAUDE_OUT, { acceptsCode: true })}
+                provider="claude"
+                spinnerFrame={STILL}
+            />
+        ),
+    },
+    {
+        label: "token field",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={cliFailed(CLAUDE_OUT, "The sign-in page closed before it finished")}
+                provider="claude"
+                tokenOpen
+            />
+        ),
+    },
+    {
+        label: "adding account 2",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                account="new"
+                cli={cliWaiting(CODEX_ONE_ROW)}
+                provider="codex"
+                spinnerFrame={STILL}
+            />
+        ),
+    },
+    {
+        label: "failed",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={cliFailed(CLAUDE_OUT, "The sign-in page closed before it finished")}
+                provider="claude"
+            />
+        ),
+    },
+    {
+        label: "refused",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                cli={CLAUDE_OUT}
+                error="Another sign-in for Claude Code is already running"
+                provider="claude"
+            />
+        ),
+    },
+    {
+        label: "one account signed out",
+        row: () => <UiProviderSignInRow {...ROW_ACTIONS} cli={lapsedOne} provider="claude" />,
+    },
+    {
+        label: "done",
+        row: () => <UiProviderSignInRow {...ROW_ACTIONS} cli={CLAUDE_ONE} provider="claude" used />,
+    },
+    {
+        label: "done, add another",
+        row: () => (
+            <UiProviderSignInRow
+                {...ROW_ACTIONS}
+                account="new"
+                cli={CLAUDE_TWO}
+                provider="claude"
+            />
+        ),
+    },
+];
+
+/** The row states one under another, each named, for the size check. */
+function RowStates() {
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {ROW_STATES.map((state) => (
+                <div data-row-state={state.label} key={state.label}>
+                    <div
+                        style={{
+                            color: "var(--text-secondary)",
+                            font: "12px/16px var(--happy-font-mono)",
+                            marginBottom: "4px",
+                        }}
+                    >
+                        {state.label}
+                    </div>
+                    {state.row()}
+                </div>
+            ))}
+        </div>
+    );
+}
 
 const NARROW = 440;
 const NARROW_OPTIONS = [
@@ -234,7 +430,6 @@ const SCREENS: readonly Screen[] = [
                 </Agent>
                 <Agent body="Want another AI, or another account?" />
                 <Replies
-                    clis={{ ...CLIS, claude: CLAUDE_ONE }}
                     options={[
                         { text: "Add another Claude Code account", about: "claude" },
                         { text: "Add another Codex account", about: "codex" },
@@ -388,11 +583,7 @@ const SCREENS: readonly Screen[] = [
         body: () => (
             <>
                 <Agent body="Claude Code and Codex are connected. What next?" />
-                <Replies
-                    clis={{ ...CLIS, claude: CLAUDE_ONE }}
-                    options={NARROW_OPTIONS}
-                    width={NARROW}
-                />
+                <Replies options={NARROW_OPTIONS} width={NARROW} />
             </>
         ),
     },
@@ -404,14 +595,30 @@ const SCREENS: readonly Screen[] = [
         body: () => (
             <>
                 <Agent body="Claude Code and Codex are connected. What next?" />
-                <Replies
-                    chosen={0}
-                    clis={{ ...CLIS, claude: CLAUDE_ONE }}
-                    options={NARROW_OPTIONS}
-                    width={NARROW}
-                />
+                <Replies chosen={0} options={NARROW_OPTIONS} width={NARROW} />
                 <Person body="Add another Claude Code account" suggested />
             </>
+        ),
+    },
+    {
+        id: "19-row-states",
+        label: "Sign-in row · every state, one box",
+        height: 1700,
+        body: () => (
+            <Agent body="Every state the row goes through:">
+                <RowStates />
+            </Agent>
+        ),
+    },
+    {
+        id: "20-row-states-narrowest",
+        label: "Sign-in row · every state at the narrowest column",
+        height: 1700,
+        column: NARROWEST,
+        body: () => (
+            <Agent body="Every state the row goes through:">
+                <RowStates />
+            </Agent>
         ),
     },
 ];

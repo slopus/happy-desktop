@@ -64,7 +64,7 @@ export function UiDocumentView(props: UiDocumentViewProps) {
 
 /** The fixed box each live type is drawn in; `chat-action.css` gives each its height. */
 const LIVE_BOX: Record<string, { readonly className: string; readonly figure?: string }> = {
-    provider_sign_in: { className: "happy-chat-action__figure", figure: "provider-cli" },
+    provider_sign_in: { className: "happy-chat-action__figure", figure: "provider-sign-in" },
     default_model: { className: "happy-chat-action__figure", figure: "setting" },
     phone_pair: { className: "happy-chat-action__phone-pair" },
     invite: { className: "happy-chat-action__figure", figure: "invite" },

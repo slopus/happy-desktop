@@ -28,6 +28,13 @@ import { uiWidgetSend, type UiWidgetControl } from "./UiWidgetControl";
 const busyOf = (control: UiWidgetControl): boolean =>
     control.pending !== undefined || control.attempt?.outcome.status === "pending";
 
+/** The actions that sign the row's AI in here once accepted: the row has been used. */
+const SIGN_IN_USED: ReadonlySet<string> = new Set([
+    "provider_sign_in.sign_in",
+    "provider_sign_in.submit_code",
+    "provider_sign_in.submit_token",
+]);
+
 /** `provider_sign_in`: one AI's install and sign-in, from the server's provider CLI state, as one row. */
 export function UiProviderSignIn(props: {
     readonly provider: string;
@@ -75,8 +82,8 @@ export function UiProviderSignIn(props: {
             provider={props.provider}
             requesting={busyOf(control)}
             used={
-                control.attempt?.action.type === "provider_sign_in.sign_in" &&
-                control.attempt.outcome.status === "accepted"
+                control.attempt?.outcome.status === "accepted" &&
+                SIGN_IN_USED.has(control.attempt.action.type)
             }
             {...(props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame })}
         />

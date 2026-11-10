@@ -76,7 +76,8 @@
    going from missing to signed in, or a setting being saved, moves nothing.
 
      one row       1 frame · 58 row · 1 frame (`chat-ui-rows.css`)            =  60
-                   provider sign-in, default model, invite, GitHub, compute join
+                   default model, invite, GitHub, compute join
+     sign-in row   1 frame · 80 fixed row · 1 frame (`UiFixedRow`)            =  82
      settings      24 head · 4 · 20 line · 8 · 36 controls                    =  92 */
 .happy-chat-action__figure {
     width: 640px;
@@ -88,6 +89,10 @@
 .happy-chat-action__figure[data-figure="compute-join"],
 .happy-chat-action__figure[data-figure="invite"] {
     height: 60px;
+}
+
+.happy-chat-action__figure[data-figure="provider-sign-in"] {
+    height: 82px;
 }
 
 .happy-chat-action__figure[data-figure="settings"] {

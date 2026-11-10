@@ -7,19 +7,11 @@ import {
     type ProviderCliAccount,
     type ReplyProviderId,
 } from "happy-desktop-state";
-import { AssistantMark, type AssistantMarkName } from "../AssistantMark";
+import { ASSISTANT_PROVIDER_MARKS, AssistantMark, type AssistantMarkName } from "../AssistantMark";
 import { Button } from "../Button";
-import { CopyButton } from "../CopyButton";
 import { TextField } from "../TextField";
 import { Ionicon } from "../vectorIcons/VectorIcon";
-import { UiRow, UiRows } from "./UiRows";
-
-const MARKS: Readonly<Record<ReplyProviderId, AssistantMarkName>> = {
-    claude: "claude",
-    codex: "openai",
-    grok: "grok",
-    antigravity: "gemini",
-};
+import { UiFixedRow, UiRows } from "./UiRows";
 
 const NAMES: Readonly<Record<ReplyProviderId, string>> = {
     claude: "Claude Code",
@@ -30,12 +22,12 @@ const NAMES: Readonly<Record<ReplyProviderId, string>> = {
 
 /** Whether `provider` is an AI this build draws a mark for. */
 export function uiProviderKnown(provider: string): provider is ReplyProviderId {
-    return provider in MARKS;
+    return Object.hasOwn(NAMES, provider);
 }
 
 /** The mark an AI's row or reply option wears. */
 export function uiProviderMark(provider: ReplyProviderId): AssistantMarkName {
-    return MARKS[provider];
+    return ASSISTANT_PROVIDER_MARKS[provider];
 }
 
 /** What the person can do from the row. Absent, that control is inert. */
@@ -49,17 +41,35 @@ export type UiProviderSignInRowActions = {
     readonly onPageOpen?: (url: string) => void;
 };
 
+const ORDINALS = [
+    "second",
+    "third",
+    "fourth",
+    "fifth",
+    "sixth",
+    "seventh",
+    "eighth",
+    "ninth",
+    "tenth",
+];
+
+/** "Adding a second account…": the account a sign-in adds, by the count it makes. */
+function addingLine(accounts: number): string {
+    const ordinal = ORDINALS[accounts - 1];
+    return ordinal ? `Adding a ${ordinal} account…` : "Adding another account…";
+}
+
 /**
- * `provider_sign_in` as one row: the AI's mark and name, one line on how it
- * stands, and the one control it needs now. "Set up" installs the program
- * and signs in after it; the page, the code or the field a sign-in needs
- * shows in place while it waits; a token field only once a sign-in is
- * running or has failed and the person chose it. A signed-in AI offers "Use"
- * until the person has chosen it. With `account: "new"` the row adds an
- * account beside the ones the program has.
- *
- * Its height is one row whatever it shows, so the transcript knows it from
- * the component alone.
+ * `provider_sign_in` as one fixed row: the AI's mark and name, one short
+ * status line, and the controls it needs now in two fixed slots, the primary
+ * one and a dismiss. Whatever state the sign-in is in (checking, missing,
+ * signed out, signed in, starting, waiting on the browser, a device code or a
+ * pasted code, a token, failed, connected), the row keeps the frame's width
+ * and one height, its slots keep their places, and its status is own short
+ * copy that fits the narrowest column; a longer reason from the program goes
+ * in the status's title. "Set up" installs the program and signs in after it.
+ * A signed-in AI offers "Use" until the person has chosen it. With
+ * `account: "new"` the row adds an account beside the ones the program has.
  */
 export function UiProviderSignInRow(
     props: UiProviderSignInRowActions & {
@@ -85,6 +95,8 @@ export function UiProviderSignInRow(
 ) {
     /* The person chose to paste a token instead: the row's field, until sent or closed. */
     const [tokenChosen, setTokenChosen] = useState(props.tokenOpen ?? false);
+    /* What the person typed in the row's one field, a code or a token, until sent. */
+    const [typed, setTyped] = useState("");
     const known = uiProviderKnown(props.provider) ? props.provider : undefined;
     const cli = props.cli;
     const name = cli?.name ?? (known ? NAMES[known] : props.provider);
@@ -93,32 +105,40 @@ export function UiProviderSignInRow(
     const adding = props.account === "new";
     const signingIn =
         op?.kind === "sign_in" && (op.status === "running" || op.status === "waiting");
-    /* While another account signs in, the line counts it: "Adding account 3 · …". */
-    const counted = (rest: string) =>
-        adding && accounts.length > 0
-            ? `Adding account ${String(accounts.length + 1)} · ${rest}`
-            : rest.charAt(0).toUpperCase() + rest.slice(1);
+    /* While another account signs in, the status says which one it will be. */
+    const counted = (line: string) =>
+        adding && accounts.length > 0 ? addingLine(accounts.length) : line;
     const spin = props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame };
     const row = (
         state: string,
-        line: ReactNode,
+        status: ReactNode,
         tone: "quiet" | "busy" | "done" | "error",
-        controls: ReactNode,
+        slots: {
+            readonly primary?: ReactNode;
+            readonly dismiss?: ReactNode;
+            readonly aside?: ReactNode;
+            readonly field?: ReactNode;
+            readonly title?: string;
+        } = {},
     ) => (
         <UiRows data-happy-desktop-ui="chat-ui-provider-sign-in" label={name}>
-            <UiRow
-                beside={<UiAccountStack accounts={accounts} adding={adding && signingIn} />}
-                controls={controls}
-                line={line}
+            <UiFixedRow
+                {...(slots.aside ? { aside: slots.aside } : {})}
+                lead={<UiAccountStack accounts={accounts} adding={adding && signingIn} />}
+                {...(slots.dismiss ? { dismiss: slots.dismiss } : {})}
+                {...(slots.field ? { field: slots.field } : {})}
                 mark={
                     known ? (
-                        <AssistantMark name={MARKS[known]} size={20} />
+                        <AssistantMark name={uiProviderMark(known)} size={20} />
                     ) : (
                         <Ionicon name="sparkles-outline" size={20} />
                     )
                 }
                 name={name}
+                {...(slots.primary ? { primary: slots.primary } : {})}
                 state={state}
+                status={status}
+                {...(slots.title ? { statusTitle: slots.title } : {})}
                 tone={tone}
                 {...spin}
             />
@@ -138,11 +158,20 @@ export function UiProviderSignInRow(
             variant="ghost"
         />
     );
-    const useToken = props.onToken ? (
-        <Button onClick={() => setTokenChosen(true)} size="medium" variant="ghost">
-            Use a token
-        </Button>
-    ) : null;
+    /* A token signs in the program's own account, so a row adding another offers none. */
+    const useToken =
+        props.onToken && !adding ? (
+            <button
+                className="happy-chat-fixed-row__link"
+                onClick={() => {
+                    setTyped("");
+                    setTokenChosen(true);
+                }}
+                type="button"
+            >
+                Use a token
+            </button>
+        ) : null;
     const tryAgain = (
         <Button
             disabled={props.onSignIn === undefined}
@@ -154,46 +183,84 @@ export function UiProviderSignInRow(
         </Button>
     );
 
-    if (props.error)
-        return row(
-            "failed",
-            props.error,
-            "error",
-            <>
-                {useToken}
-                {tryAgain}
-            </>,
-        );
-
-    if (tokenChosen && op?.status !== "running")
-        return row(
-            "token",
-            "Paste a setup token or API key",
-            "quiet",
-            <>
-                <RowField
-                    label={`${name} setup token or API key`}
-                    onSend={(token) => {
-                        props.onToken?.(token);
-                        setTokenChosen(false);
-                    }}
-                    placeholder="Token or key"
-                    secret
-                    send="Save"
+    /*
+     * The row's one field takes the name's place and its button the primary
+     * slot; both stay inside the same row, so nothing remounts as it opens.
+     */
+    const field = (
+        label: string,
+        placeholder: string,
+        secret: boolean,
+        onSend: (value: string) => void,
+    ) => {
+        const usable = typed.trim() !== "";
+        const submit = () => {
+            if (!usable) return;
+            onSend(typed.trim());
+            setTyped("");
+        };
+        return {
+            field: (
+                <TextField
+                    aria-label={label}
+                    autoComplete={secret ? "off" : "one-time-code"}
+                    onSubmit={submit}
+                    onValueChange={setTyped}
+                    placeholder={placeholder}
+                    size="medium"
+                    {...(secret ? { type: "password" as const } : {})}
+                    value={typed}
                 />
+            ),
+            submit,
+            usable,
+        };
+    };
+    const sendButton = (label: string, entry: { submit: () => void; usable: boolean }) => (
+        <Button
+            data-emphasis=""
+            data-strong=""
+            disabled={!entry.usable}
+            onClick={entry.submit}
+            size="medium"
+            variant="primary"
+        >
+            {label}
+        </Button>
+    );
+
+    if (props.error)
+        return row("failed", "Didn't go through", "error", {
+            primary: tryAgain,
+            aside: useToken,
+            title: props.error,
+        });
+
+    if (tokenChosen && op?.status !== "running") {
+        const token = field(`${name} setup token or API key`, "Token", true, (value) => {
+            props.onToken?.(value);
+            setTokenChosen(false);
+        });
+        return row("token", "Paste a setup token or API key", "quiet", {
+            field: token.field,
+            primary: sendButton("Save", token),
+            dismiss: (
                 <Button
                     aria-label="Close"
                     icon="close"
                     iconOnly
-                    onClick={() => setTokenChosen(false)}
+                    onClick={() => {
+                        setTokenChosen(false);
+                        setTyped("");
+                    }}
                     size="medium"
                     variant="ghost"
                 />
-            </>,
-        );
+            ),
+        });
+    }
 
-    if (cli === undefined)
-        return row("checking", `Checking ${name} on this computer…`, "busy", null);
+    if (cli === undefined) return row("checking", "Checking this computer…", "busy");
 
     if (op?.status === "waiting" && op.authorization) {
         const auth = op.authorization;
@@ -206,161 +273,156 @@ export function UiProviderSignInRow(
                 size="medium"
                 variant={auth.openedByProgram ? "outline" : "primary"}
             >
-                {auth.openedByProgram ? "Reopen page" : "Open sign-in page"}
+                {auth.openedByProgram ? "Reopen" : "Open page"}
             </Button>
         );
-        if (auth.acceptsCode)
-            return row(
-                "code",
-                counted("paste the code"),
-                "busy",
-                <>
-                    <RowField
-                        label="Code from the sign-in page"
-                        onSend={(code) => props.onCode?.(code)}
-                        placeholder="Code from the page"
-                        send="Continue"
-                    />
-                    {cancel}
-                </>,
+        if (auth.acceptsCode) {
+            const code = field("Code from the sign-in page", "Code", false, (value) =>
+                props.onCode?.(value),
             );
+            return row("code", counted("Paste the code from the page"), "busy", {
+                field: code.field,
+                primary: sendButton("Continue", code),
+                dismiss: cancel,
+            });
+        }
         if (auth.userCode)
             return row(
                 "device",
                 <>
-                    Enter <code>{auth.userCode}</code> on {`${name}'s page`}
+                    Enter <code>{auth.userCode}</code>
                 </>,
                 "busy",
-                <>
-                    <CopyButton label="Copy the code" text={auth.userCode} />
-                    {open}
-                    {cancel}
-                </>,
+                {
+                    primary: open,
+                    dismiss: cancel,
+                    aside: <CopyLink text={auth.userCode} />,
+                    title: `Enter ${auth.userCode} on ${name}'s page`,
+                },
             );
-        return row(
-            "browser",
-            counted("finish in your browser"),
-            "busy",
-            <>
-                {useToken}
-                {open}
-                {cancel}
-            </>,
-        );
+        return row("browser", counted("Finish in your browser"), "busy", {
+            primary: open,
+            dismiss: cancel,
+            aside: useToken,
+            title: "Finish in your browser",
+        });
     }
 
     if (op?.status === "running" || op?.status === "waiting")
-        return row(
-            op.kind === "install" ? "installing" : "starting",
-            op.kind === "install" ? op.message : counted(op.message),
-            "busy",
-            cancel,
-        );
+        return op.kind === "install"
+            ? row("installing", `Installing ${name}…`, "busy", {
+                  dismiss: cancel,
+                  title: op.message,
+              })
+            : row("starting", counted("Starting sign-in…"), "busy", {
+                  dismiss: cancel,
+                  title: op.message,
+              });
 
     if (op?.status === "failed")
-        return row(
-            "failed",
-            op.error?.message ?? op.message,
-            "error",
-            <>
-                {useToken}
-                {tryAgain}
-            </>,
-        );
+        return row("failed", "Sign-in didn't finish", "error", {
+            primary: tryAgain,
+            aside: useToken,
+            title: op.error?.message ?? op.message,
+        });
 
-    if (props.requesting) return row("starting", counted("starting…"), "busy", null);
+    if (props.requesting) return row("starting", counted("Starting sign-in…"), "busy");
 
     if (cli.installation.status === "missing")
         return row(
             "missing",
-            cli.installer
-                ? `Not on this computer yet · comes from ${cli.installer.sourceHost}`
-                : "Not on this computer yet",
+            cli.installer ? `Not installed · from ${cli.installer.sourceHost}` : "Not installed",
             "quiet",
-            <Button
-                disabled={props.onSignIn === undefined || cli.installer === null}
-                onClick={props.onSignIn}
-                size="medium"
-                variant="ghost"
-            >
-                Set up
-            </Button>,
+            {
+                primary: (
+                    <Button
+                        disabled={props.onSignIn === undefined || cli.installer === null}
+                        onClick={props.onSignIn}
+                        size="medium"
+                        variant="outline"
+                    >
+                        Set up
+                    </Button>
+                ),
+            },
         );
 
-    const lapsed = accounts.find((account) => account.signIn === "signed_out");
-    if (lapsed && !adding)
+    const signIn = (label: string) => (
+        <Button
+            disabled={props.onSignIn === undefined}
+            onClick={props.onSignIn}
+            size="medium"
+            variant="outline"
+        >
+            {label}
+        </Button>
+    );
+    /* Some accounts signed out while others still work; all of them out is just signed out. */
+    const lapsed = accounts.filter((account) => account.signIn === "signed_out");
+    if (lapsed.length > 0 && lapsed.length < accounts.length && !adding)
         return row(
             "lapsed",
-            accounts.length > 1
-                ? `${providerCliAccountsCount(accounts.length)} · ${providerCliAccountName(lapsed)} needs to sign in again`
-                : `${providerCliAccountName(lapsed)} needs to sign in again`,
+            `${String(lapsed.length)} of ${providerCliAccountsCount(accounts.length)} signed out`,
             "quiet",
-            <Button
-                disabled={props.onSignIn === undefined}
-                onClick={props.onSignIn}
-                size="medium"
-                variant="outline"
-            >
-                Sign in again
-            </Button>,
+            {
+                primary: signIn("Sign in"),
+                title: lapsed.map((account) => providerCliAccountName(account)).join(", "),
+            },
         );
-    if (accounts.length === 0)
-        return row(
-            "signed-out",
-            "Not signed in",
-            "quiet",
-            <Button
-                disabled={props.onSignIn === undefined}
-                onClick={props.onSignIn}
-                size="medium"
-                variant="ghost"
-            >
-                Sign in
-            </Button>,
-        );
+    if (lapsed.length === accounts.length)
+        return row("signed-out", "Not signed in", "quiet", { primary: signIn("Sign in") });
     if (!adding && !props.used && props.onSignIn)
-        return row(
-            "signed-in",
-            uiAccountsLine(accounts),
-            "done",
-            <Button
-                data-emphasis=""
-                data-strong=""
-                onClick={props.onSignIn}
-                size="medium"
-                variant="primary"
-            >
-                {`Use ${name}`}
-            </Button>,
-        );
-    return row(
-        "connected",
-        uiAccountsLine(accounts),
-        "done",
-        adding ? (
-            <Button
-                disabled={props.onSignIn === undefined}
-                icon="plus"
-                onClick={props.onSignIn}
-                size="medium"
-                variant="ghost"
-            >
-                Add account
-            </Button>
-        ) : null,
-    );
+        return row("signed-in", uiAccountsLine(accounts), "done", {
+            primary: (
+                <Button
+                    data-emphasis=""
+                    data-strong=""
+                    onClick={props.onSignIn}
+                    size="medium"
+                    variant="primary"
+                >
+                    Use
+                </Button>
+            ),
+            title: accountNames(accounts),
+        });
+    return row("connected", uiAccountsLine(accounts), "done", {
+        ...(adding
+            ? {
+                  primary: (
+                      <Button
+                          aria-label="Add account"
+                          disabled={props.onSignIn === undefined}
+                          icon="plus"
+                          onClick={props.onSignIn}
+                          size="medium"
+                          variant="outline"
+                      >
+                          Add
+                      </Button>
+                  ),
+              }
+            : {}),
+        title: uiAccountsLine(accounts),
+    });
 }
 
 /**
- * How many accounts a program has, in words: one is its name and plan; more
- * are "2 accounts · ada@example.com +1". Signed-out accounts still count.
+ * How many accounts a program has, in words short enough for the narrowest
+ * row: one is its name and plan; more are "2 accounts", their initials
+ * opening the line. Signed-out accounts still count.
  */
 export function uiAccountsLine(accounts: readonly ProviderCliAccount[]): string {
     const first = accounts[0];
     if (first === undefined) return "Not signed in";
     if (accounts.length === 1)
         return [providerCliAccountName(first), first.plan].filter(Boolean).join(" · ");
-    return `${providerCliAccountsCount(accounts.length)} · ${providerCliAccountName(first)} +${String(accounts.length - 1)}`;
+    return providerCliAccountsCount(accounts.length);
+}
+
+/** Every account by name, for the status's title. */
+function accountNames(accounts: readonly ProviderCliAccount[]): string {
+    return accounts.map((account) => providerCliAccountName(account)).join(", ");
 }
 
 const TONES = ["ocean", "mint", "ember"] as const;
@@ -406,45 +468,18 @@ export function UiAccountStack(props: {
     );
 }
 
-/** A row's one field: a code or a token, sent with its button or Enter, emptied once sent. */
-function RowField(props: {
-    readonly label: string;
-    readonly placeholder: string;
-    readonly send: string;
-    readonly secret?: boolean;
-    readonly onSend: (value: string) => void;
-}) {
-    const [value, setValue] = useState("");
-    const usable = value.trim() !== "";
-    const submit = () => {
-        if (!usable) return;
-        props.onSend(value.trim());
-        setValue("");
-    };
+/** A status line's copy action: the code to type on the vendor's page. */
+function CopyLink(props: { readonly text: string }) {
+    const [copied, setCopied] = useState(false);
     return (
-        <>
-            <span className="happy-chat-row__field">
-                <TextField
-                    aria-label={props.label}
-                    autoComplete={props.secret ? "off" : "one-time-code"}
-                    onSubmit={submit}
-                    onValueChange={setValue}
-                    placeholder={props.placeholder}
-                    size="medium"
-                    {...(props.secret ? { type: "password" as const } : {})}
-                    value={value}
-                />
-            </span>
-            <Button
-                data-emphasis=""
-                data-strong=""
-                disabled={!usable}
-                onClick={submit}
-                size="medium"
-                variant="primary"
-            >
-                {props.send}
-            </Button>
-        </>
+        <button
+            className="happy-chat-fixed-row__link"
+            onClick={() => {
+                void navigator.clipboard?.writeText(props.text).then(() => setCopied(true));
+            }}
+            type="button"
+        >
+            {copied ? "Copied" : "Copy code"}
+        </button>
     );
 }
