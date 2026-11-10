@@ -369,6 +369,7 @@ import {
 import { APP_SHORTCUTS } from "./appShortcuts";
 import { happyAgentConversationContent } from "happy-desktop-state";
 import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
+import { happyAgentChatUi } from "./components/HappyAgentChatUi";
 import {
     commandPaletteHeld,
     commandPaletteIndexMove,
@@ -10330,6 +10331,15 @@ function HappyAgentConversationSurface(props: {
     return (
         <ConversationView
             references={references}
+            chatUi={happyAgentChatUi({
+                conversation,
+                workspace,
+                writable:
+                    !props.readOnly &&
+                    props.writeRefusal === undefined &&
+                    props.unavailable === undefined,
+                online: props.happyAgentOnline,
+            })}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
             agentAuthor={agentAuthor}
