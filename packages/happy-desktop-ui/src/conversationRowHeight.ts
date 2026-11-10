@@ -695,16 +695,17 @@ export function messageContentMeasure(width: number, treatment: MessageTreatment
 }
 /*
  * `.happy-chat-replies`: 8px over and under the stack, pills 6px apart, each
- * 10px + one or two 22px lines + 10px tall. Across a pill: 12px padding either
- * side, the 15px words, a 16px tick 8px after them; an option about an AI adds
- * its 16px mark 8px before the words and a slot as wide as its widest 13px
- * note 8px after, kept whether or not a note is in it.
+ * 10px + one or two 22px lines of words + 10px tall; an option about an AI
+ * adds its 18px note line under the words, kept whether or not a note is in
+ * it. Across a pill: 12px padding either side, the 15px words, a 16px tick
+ * 8px after them; an option about an AI adds its 16px mark 8px before them.
  */
 const REPLIES_PADDING = 8;
 const REPLY_GAP = 6;
 const REPLY_PADDING_Y = 10;
 const REPLY_LINE = 22;
 const REPLY_LINES_MAX = 2;
+const REPLY_NOTE_LINE = 18;
 const REPLY_PADDING_X = 12;
 const REPLY_ICON = 16;
 const REPLY_ICON_GAP = 8;
@@ -713,27 +714,27 @@ const REPLY_ICON_GAP = 8;
 export type ConversationQuickRepliesLayout = {
     readonly height: number;
     readonly pillWidth: number;
-    /** Each option's pill: one line, or two when its words wrap at `pillWidth`. */
+    /** Each option's pill: one or two lines of words, and an AI's note line. */
     readonly pillHeights: readonly number[];
-    /** The room an option about an AI keeps for its note, 0 when no option is. */
-    readonly noteWidth: number;
 };
 
 /**
  * Lays a suggestion out at the row's `width`, from its options' words alone:
- * every pill as wide as the widest one's natural width, the tick's room and
- * the widest note an option could wear included, and no wider than the
- * person's own widest bubble. At that width an option's words wrap to at most
- * two lines, past which they ellipsize, and its pill is as tall as its lines.
- * A reply chosen or a note changing moves nothing.
+ * every pill as wide as the widest one's words (or, for an option about an
+ * AI, the widest note it could wear under them) with the tick's room, and no
+ * wider than the person's own widest bubble. At that width an option's words
+ * wrap to at most two lines, past which they ellipsize, and its pill is as
+ * tall as its lines and note line. A reply chosen or a note changing moves
+ * nothing.
  */
 export function conversationQuickRepliesLayout(
     replies: ConversationQuickReplies,
     width: number,
     cache?: MessageTextLayoutCache,
 ): ConversationQuickRepliesLayout {
+    const about = (index: number) => (replies.ui?.[index] ?? null) !== null;
     let noteWidth = 0;
-    if (replies.ui?.some((about) => about !== null))
+    if (replies.ui?.some((entry) => entry !== null))
         for (const sample of PROVIDER_CLI_REPLY_NOTE_SAMPLES)
             noteWidth = Math.max(noteWidth, uiTextNaturalWidth(sample, 13, cache));
     /* What an option keeps beside its words. */
@@ -741,25 +742,31 @@ export function conversationQuickRepliesLayout(
         2 * REPLY_PADDING_X +
         REPLY_ICON_GAP +
         REPLY_ICON +
-        ((replies.ui?.[index] ?? null) === null
-            ? 0
-            : REPLY_ICON + REPLY_ICON_GAP + REPLY_ICON_GAP + noteWidth);
+        (about(index) ? REPLY_ICON + REPLY_ICON_GAP : 0);
     let widest = 0;
     for (const [index, option] of replies.options.entries())
-        widest = Math.max(widest, chrome(index) + uiTextNaturalWidth(option, 15, cache));
+        widest = Math.max(
+            widest,
+            chrome(index) +
+                Math.max(uiTextNaturalWidth(option, 15, cache), about(index) ? noteWidth : 0),
+        );
     const cap = Math.floor((width - OWN_INSET) * BUBBLE_CAP);
     const pillWidth = Math.min(cap, Math.ceil(widest + 0.5));
     const pillHeights = replies.options.map((option, index) => {
         const lines = Math.round(
             uiTextHeight(option, 15, REPLY_LINE, pillWidth - chrome(index), cache) / REPLY_LINE,
         );
-        return 2 * REPLY_PADDING_Y + Math.min(REPLY_LINES_MAX, Math.max(1, lines)) * REPLY_LINE;
+        return (
+            2 * REPLY_PADDING_Y +
+            Math.min(REPLY_LINES_MAX, Math.max(1, lines)) * REPLY_LINE +
+            (about(index) ? REPLY_NOTE_LINE : 0)
+        );
     });
     const height =
         2 * REPLIES_PADDING +
         pillHeights.reduce((sum, pill) => sum + pill, 0) +
         Math.max(0, pillHeights.length - 1) * REPLY_GAP;
-    return { height, pillWidth, pillHeights, noteWidth };
+    return { height, pillWidth, pillHeights };
 }
 /** Height of a message's photos at the measure its treatment leaves them. */
 export function messageMediaHeight(

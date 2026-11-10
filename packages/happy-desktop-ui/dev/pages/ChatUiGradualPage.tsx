@@ -158,7 +158,7 @@ const SCREENS: readonly Screen[] = [
     {
         id: "01-sign-in-ask",
         label: "Sign-in · which AI",
-        height: 360,
+        height: 400,
         body: () => (
             <>
                 <Agent body="Which AI should I work with? Pick one to start — you can add more later." />
@@ -226,7 +226,7 @@ const SCREENS: readonly Screen[] = [
     {
         id: "06-sign-in-next",
         label: "Sign-in · done, the next replies",
-        height: 440,
+        height: 480,
         body: () => (
             <>
                 <Agent body="Claude Code is connected.">
@@ -383,7 +383,7 @@ const SCREENS: readonly Screen[] = [
     {
         id: "17-replies-narrow",
         label: "Quick replies · narrow column, two lines then an ellipsis",
-        height: 420,
+        height: 460,
         column: NARROW,
         body: () => (
             <>
@@ -399,7 +399,7 @@ const SCREENS: readonly Screen[] = [
     {
         id: "18-replies-narrow-chosen",
         label: "Quick replies · narrow column, chosen: no height changes",
-        height: 480,
+        height: 560,
         column: NARROW,
         body: () => (
             <>

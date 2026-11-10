@@ -152,11 +152,17 @@
     color: var(--text-secondary);
 }
 
+/* The words, and an AI's note line under them. */
+.happy-chat-replies__words {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
 /* Two lines at most, then an ellipsis; the layout gives the pill that height. */
 .happy-chat-replies__label {
     display: -webkit-box;
-    flex: 1 1 auto;
-    min-width: 0;
     overflow: hidden;
     overflow-wrap: break-word;
     -webkit-box-orient: vertical;
@@ -173,14 +179,16 @@
     height: 16px;
 }
 
-/* What the option is about, live: quieter than the words, in a slot as wide
-   as the widest note, kept empty when there is none, so a note never moves the words. */
+/* How the AI an option is about stands now, under its words: one quiet line,
+   kept at its height when it is empty, so a note never moves anything. */
 .happy-chat-replies__note {
     flex: none;
-    text-align: right;
+    height: 18px;
+    overflow: hidden;
     color: var(--text-secondary);
     font-size: 13px;
-    line-height: 22px;
+    line-height: 18px;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 

@@ -17,7 +17,7 @@ export type ChatUiReplyNotes = {
 export type UiQuickRepliesProps = {
     readonly replies: ConversationQuickReplies;
     /**
-     * Every pill's width, each pill's height and the note's room, from
+     * Every pill's width and each pill's height, from
      * `conversationQuickRepliesLayout` at the row's width. Absent, the stack
      * is as wide as its widest pill and each pill as tall as its words.
      */
@@ -43,10 +43,10 @@ export type UiQuickRepliesProps = {
  * answered takes a tap.
  *
  * An option about an AI wears its mark before the words and, while the stack
- * takes a tap, a quiet note at the end on how that AI stands now, in a slot
- * kept whether or not it holds one. Words wrap to two lines at most, then
- * ellipsize; each pill's height is the layout's, so neither a choice nor a
- * note moves anything.
+ * takes a tap, a quiet line under them on how that AI stands now; the line
+ * keeps its height whether or not it holds a note. Words wrap to two lines at
+ * most, then ellipsize; each pill's height is the layout's, so neither a
+ * choice nor a note moves anything.
  */
 export function UiQuickReplies(props: UiQuickRepliesProps) {
     const replies = props.replies;
@@ -96,19 +96,12 @@ export function UiQuickReplies(props: UiQuickRepliesProps) {
                                     />
                                 </span>
                             ) : null}
-                            <span className="happy-chat-replies__label">{option}</span>
-                            {about ? (
-                                <span
-                                    className="happy-chat-replies__note"
-                                    style={
-                                        layout === undefined
-                                            ? undefined
-                                            : { width: layout.noteWidth }
-                                    }
-                                >
-                                    {note}
-                                </span>
-                            ) : null}
+                            <span className="happy-chat-replies__words">
+                                <span className="happy-chat-replies__label">{option}</span>
+                                {about ? (
+                                    <span className="happy-chat-replies__note">{note}</span>
+                                ) : null}
+                            </span>
                             <span aria-hidden="true" className="happy-chat-replies__tick">
                                 <Ionicon name="checkmark" size={16} />
                             </span>
