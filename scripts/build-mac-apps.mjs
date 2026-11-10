@@ -155,6 +155,7 @@ function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
                       "dist/assets/**/*.js",
                       "dist/artifact-code/**",
                       "dist/preload.cjs",
+                      "dist/browserPasswordGuestPreload.cjs",
                       "assets/app-icon/generated/app-icon.png",
                       "package.json",
                   ],
@@ -215,6 +216,7 @@ async function releaseVerify(selectedFlavor, output) {
         ]);
         packagedFilesVerify(join(application, "Contents", "Resources", "app.asar"), [
             "dist/artifact-code/code.js",
+            "dist/browserPasswordGuestPreload.cjs",
         ]);
         await run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", application]);
         await staplerValidate(application);
