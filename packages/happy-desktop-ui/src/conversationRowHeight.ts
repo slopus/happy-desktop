@@ -385,12 +385,8 @@ const MEDIA_MARGIN_BARE = 4;
 /** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
 const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
-/** `.happy-story-quote`: a 9:16 frame at most 202.5px wide beside an 11px bar, 4px over the body. */
-const STORY_QUOTE_WIDTH = 202.5;
-const STORY_QUOTE_BAR = 11;
-const STORY_QUOTE_GAP = 4;
-/** An own reply's "You replied to your story" line: 20px and its 5px close. */
-const STORY_QUOTE_OWN_LINE = 25;
+/** An own suggested reply's label: 20px and its 5px close. */
+const SUGGESTED_REPLY_OWN_LINE = 25;
 /** Collapsed `.happy-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40, agentMessage: 32 } as const;
 /** Expanded reasoning: outer/header/gap chrome around its Markdown body. */
@@ -1475,14 +1471,7 @@ export function conversationRowHeight(
                 (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
                 cards * ATTACHMENT_CARD_HEIGHT +
                 (cards - 1) * ATTACHMENT_CARD_GAP;
-        if (message.storyQuote) {
-            const measure = messageContentMeasure(width, treatment) - STORY_QUOTE_BAR;
-            height += (Math.min(STORY_QUOTE_WIDTH, measure) * 16) / 9 + STORY_QUOTE_GAP;
-            if (own) height += STORY_QUOTE_OWN_LINE;
-        } else if (own && entry.quickReply) {
-            /* "↩ Suggested reply" stands over the bubble on the line a story reply uses. */
-            height += STORY_QUOTE_OWN_LINE;
-        }
+        if (own && entry.quickReply) height += SUGGESTED_REPLY_OWN_LINE;
         if (!own && !grouped && entry.contextNote) height += 21;
         /* A document sits in the attachment slot, under any cards, at the content's measure. */
         if (entry.ui)

@@ -191,12 +191,10 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     };
     /** Attachment cards (runs, approvals, events) rendered below the body. */
     children?: ReactNode;
-    /** What the message answers, such as a story, shown above its body. */
-    quote?: ReactNode;
     /**
-     * What the author did, after their name: "Replied to your story", or
-     * "replied" after an own message's "You". The face then joins the author
-     * line, and an own message, which has none, gains one naming "You".
+     * What the author did, after their name, such as "↩ Suggested reply".
+     * The face then joins the author line, and an own message, which has
+     * none, gains one naming "You".
      */
     authorNote?: string;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
@@ -421,7 +419,6 @@ export function Message(props: MessageProps) {
         "onReactionSelect",
         "own",
         "ownActions",
-        "quote",
         "authorNote",
         "reactions",
         "style",
@@ -782,7 +779,6 @@ export function Message(props: MessageProps) {
                         <span className="happy-message__author-note">{local.authorNote}</span>
                     </div>
                 ) : null}
-                {local.quote}
                 {ownBubbleLine ? (
                     <div
                         className="happy-message__bubble-line"

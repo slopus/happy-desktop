@@ -77,12 +77,10 @@ export interface HappyAgentBot {
     readonly conversation: ConversationSummary;
     readonly subtasks: readonly HappyAgentBotSubtask[];
     readonly name: string;
-    /** A generated name short enough for a story ring's label; absent until there is one. */
+    /** A generated short name; absent until there is one. */
     readonly shortName?: string;
     /** Immutable local snake_case name, also the folder the bot works in. */
     readonly username: string;
-    /** Confirmed posting setting; absent when this daemon cannot configure bot Stories. */
-    readonly stories?: boolean;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
     readonly systemKey?: string | null;
     /** Fractional index the host sorts the bot catalog by. */
@@ -148,7 +146,7 @@ export interface HappyAgentTask {
     readonly id: HappyAgentTaskId;
     readonly workspaceId: HappyAgentWorktreeId;
     readonly name: string;
-    /** A generated name short enough for a story ring's label; absent until there is one. */
+    /** A generated short name; absent until there is one. */
     readonly shortName?: string;
     readonly conversation: ConversationSummary;
     readonly subtasks: readonly HappyAgentBotSubtask[];

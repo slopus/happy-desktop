@@ -377,7 +377,6 @@ function botProject(bot: BotGroup): HappyAgentBot {
         name: bot.name,
         ...(bot.shortName === undefined ? {} : { shortName: bot.shortName }),
         username: bot.username,
-        ...(bot.stories === undefined ? {} : { stories: bot.stories }),
         ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
         orderKey: bot.orderKey,
         path: bot.path,

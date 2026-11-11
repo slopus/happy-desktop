@@ -76,8 +76,6 @@ export function conversationMessageGrouped(
     /* The turn's one trace control owns its header, on the turn's first row
        on screen, expanded or collapsed. */
     if (entry.message.agentTrace && !entry.message.agentTrace.quiet) return false;
-    /* A story reply's header says who replied, so it is never folded away. */
-    if (entry.message.storyQuote) return false;
     if (entry.message.sender?.kind === "agent" && agentOwnedRow(entries[index - 1])) return true;
     const previous = previousMessage(entries, index);
     return previous !== undefined && sameSender(entry, previous);

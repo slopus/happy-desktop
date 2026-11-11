@@ -3,7 +3,6 @@ import {
     agentCatalogOwnerUpdate,
     agentCatalogStore,
     agentHolderProjects,
-    agentRootTask,
     type AgentCatalogIndex,
     type AgentCatalogOwners,
 } from "./agentCatalogIndex.js";
@@ -582,7 +581,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
               readonly memberships: readonly TaskMembership[];
               readonly profilesRevision: number;
               readonly currentUserId: string | undefined;
-              readonly storiesSupported: boolean;
           }
         | undefined;
 
@@ -895,13 +893,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             changes = groupsProject(daemonConfig, touchedAgents);
             const current = groupsStore.getState();
             const tracked = ownedGroupsTracked;
-            const storiesSupported = sync.source.health()?.capabilities?.storyFeed === true;
             const contextSame =
                 tracked !== undefined &&
                 tracked.config === daemonConfig &&
                 tracked.workspaces === current.workspaces &&
                 touchedAgents !== undefined;
-            const botContextSame = contextSame && tracked.storiesSupported === storiesSupported;
+            const botContextSame = contextSame;
             const taskContextSame =
                 contextSame &&
                 tracked.memberships === current.taskMemberships &&
@@ -959,7 +956,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                               daemonConfig,
                               agentDrafts,
                               agentModes,
-                              storiesSupported,
                               botRows,
                           ),
                           (row) => {
@@ -996,7 +992,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 memberships: current.taskMemberships,
                 profilesRevision: userProfilesRevision,
                 currentUserId,
-                storiesSupported,
             };
             if (botGroups !== current.botGroups || taskGroups !== current.taskGroups)
                 groupsStore.setState({ botGroups, taskGroups });
@@ -1029,17 +1024,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     const projectionOf = (entry: SessionEntry): SessionProjectionInput | undefined => {
         if (entry.agent === undefined || config === undefined) return undefined;
-        // A bot, or a task nobody else owns, is the reader's: its stories are theirs.
-        const { id } = entry.agent;
-        const owner = agentRootTask(agentIndexCurrent(), id)?.ownerUserId ?? null;
         return {
             agent: entry.agent,
             config,
             connection: groupsStore.getState().connection,
             endpoint,
             mediaUrl: toolCallMediaUrl,
-            quoteFrameUrl: (agentId, messageId) => client.storyQuoteFrameUrl(agentId, messageId),
-            agentOwned: owner === null || owner === currentUserId,
             hasMore: entry.hasMore,
             messages: [...entry.messages.values()],
             userProfiles: users.profiles,
@@ -5881,29 +5871,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         },
         renameGroup(target, name) {
             return renameGroup(target, name);
-        },
-        setBotStories(botId, stories) {
-            const mutationId = nextId();
-            return mutation(
-                "set_bot_stories",
-                mutationId,
-                () => {
-                    const bot = botOf(botId);
-                    if (!bot) throw new Error("The bot is not loaded.");
-                    return client.renameBot(
-                        botId,
-                        { stories, mutationId },
-                        { ifMatch: bot.version, signal: rootController.signal },
-                    );
-                },
-                ({ bot }) => {
-                    groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
-                    publishGroups();
-                },
-                undefined,
-                undefined,
-                `bot:${botId}`,
-            );
         },
         createBot(name) {
             // All three identities are named here and handed to the daemon,

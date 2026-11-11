@@ -68,16 +68,7 @@ import {
     happyAgentTaskSettingsStoreCreate,
     type HappyAgentTaskSettingsStore,
 } from "./happyAgentTaskSettingsStore.js";
-import {
-    happyAgentStoriesStoreCreate,
-    type HappyAgentStoriesStore,
-} from "../stories/storiesStore.js";
-import { storyMediaPreload } from "../stories/storyMediaPreload.js";
 import { happyAgentCloudTeamUsageAllowed } from "./happyAgentCloudTeamUsage.js";
-import {
-    happyAgentAutoJoinSettingsCreate,
-    type HappyAgentAutoJoinSettingsStore,
-} from "./happyAgentAutoJoinSettings.js";
 import {
     happyAgentSurfaceSettingsStoreCreate,
     type HappyAgentSurfaceSettingsStore,
@@ -290,9 +281,6 @@ export interface HappyAgentWorkspaceClient {
     taskSettings(): HappyAgentTaskSettingsStore;
     /** The authenticated person's Surface autojoin preference, materialized on first access. */
     surfaceSettings(): HappyAgentSurfaceSettingsStore;
-    /** The authenticated person's `stories` setting, and the stories it shows them. */
-    storiesSettings(): HappyAgentAutoJoinSettingsStore;
-    stories(): HappyAgentStoriesStore;
     /**
      * This Happy Agent's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -711,13 +699,6 @@ export function happyAgentWorkspaceClientCreate(
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
-    let storiesSettingsStore: HappyAgentAutoJoinSettingsStore | undefined;
-    let storiesStore: HappyAgentStoriesStore | undefined;
-    const storiesSettings = (): HappyAgentAutoJoinSettingsStore => {
-        if (disposed) throw new Error("The Happy Agent client is disposed.");
-        const source = { client: deps.client, sync: deps.connection.sync };
-        return (storiesSettingsStore ??= happyAgentAutoJoinSettingsCreate(source, "stories"));
-    };
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
     let secretsStore: HappyAgentSecretsStore | undefined;
@@ -1157,16 +1138,6 @@ export function happyAgentWorkspaceClientCreate(
             });
             return taskSettingsStore;
         },
-        storiesSettings,
-        stories() {
-            storiesStore ??= happyAgentStoriesStoreCreate({
-                client: deps.client,
-                sync: deps.connection.sync,
-                settings: storiesSettings(),
-                preload: storyMediaPreload,
-            });
-            return storiesStore;
-        },
         surfaceSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             surfaceSettingsStore ??= happyAgentSurfaceSettingsStoreCreate({
@@ -1371,10 +1342,6 @@ export function happyAgentWorkspaceClientCreate(
             taskSettingsStore = undefined;
             surfaceSettingsStore?.[Symbol.dispose]();
             surfaceSettingsStore = undefined;
-            storiesStore?.[Symbol.dispose]();
-            storiesStore = undefined;
-            storiesSettingsStore?.[Symbol.dispose]();
-            storiesSettingsStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();

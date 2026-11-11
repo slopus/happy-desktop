@@ -26,7 +26,6 @@ import type {
     Question,
     Run,
     SlashCommand,
-    StoryQuote,
     Task,
     TaskMembership,
     UsageBreakdown,
@@ -78,10 +77,6 @@ export interface SessionProjectionInput {
      * presented, on the same authenticated origin as every other image it names.
      */
     mediaUrl: (agentId: string, toolCallId: string, index: number) => string;
-    /** Where a story reply's quoted still is served. */
-    quoteFrameUrl: (agentId: string, messageId: string) => string;
-    /** Whether the reader owns this agent, so its stories are theirs. */
-    agentOwned?: boolean;
     hasMore: boolean;
     messages: readonly TranscriptMessage[];
     userProfiles?: ReadonlyMap<string, UserProfile>;
@@ -422,8 +417,6 @@ function projectQuestionElement(question: Question): Extract<ChatElement, { kind
 export function projectElements(input: SessionProjectionInput): readonly ChatElement[] {
     const reader: TranscriptReader = {
         mediaUrl: input.mediaUrl,
-        quoteFrameUrl: input.quoteFrameUrl,
-        agentOwned: input.agentOwned ?? true,
         agentId: input.agent.id,
         userProfiles: input.userProfiles,
         currentUserId: input.currentUserId,
@@ -985,7 +978,6 @@ export function projectBots(
     config: DaemonConfig,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
-    storiesSupported = false,
     /** Owned by the caller's unchanged projection context, never shared across contexts. */
     rows?: WeakMap<Bot, BotGroup>,
 ): readonly BotGroup[] {
@@ -1003,7 +995,6 @@ export function projectBots(
                 workspaceId: bot.workspaceId,
                 name: bot.name,
                 ...(bot.shortName === undefined ? {} : { shortName: bot.shortName }),
-                ...(storiesSupported && bot.stories !== undefined ? { stories: bot.stories } : {}),
                 username: bot.username,
                 ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
                 orderKey: bot.orderKey,
@@ -1653,8 +1644,6 @@ interface MessageElements {
 interface TranscriptReader {
     /** Stable for the connection's life, so it takes no part in the memory below. */
     readonly mediaUrl: SessionProjectionInput["mediaUrl"];
-    readonly quoteFrameUrl: SessionProjectionInput["quoteFrameUrl"];
-    readonly agentOwned: boolean;
     readonly userProfiles?: ReadonlyMap<string, UserProfile>;
     readonly currentUserId?: string;
     readonly agentId: string;
@@ -1683,8 +1672,7 @@ function projectMessage(
         cached.own === own &&
         cached.runId === runId &&
         cached.runStatus === runStatus &&
-        cached.reader.agentId === reader.agentId &&
-        cached.reader.agentOwned === reader.agentOwned
+        cached.reader.agentId === reader.agentId
     )
         return cached.elements;
     const elements = messageElementsProject(entry, runId, runStatus, reader, chatUi);
@@ -1697,25 +1685,6 @@ function projectMessage(
         own,
     });
     return elements;
-}
-
-/** A story reply's quote, with its still at its own address. */
-function storyQuoteProject(
-    messageId: string,
-    quote: StoryQuote,
-    reader: TranscriptReader,
-): NonNullable<Extract<ChatElement, { kind: "user_message" }>["quote"]> {
-    const { frame } = quote;
-    return {
-        storyId: quote.storyId,
-        agentId: quote.agentId,
-        expiresAt: quote.expiresAt,
-        yours: reader.agentOwned,
-        frame: frame && {
-            url: reader.quoteFrameUrl(reader.agentId, messageId),
-            ...(frame.thumbhash === undefined ? {} : { thumbhash: frame.thumbhash }),
-        },
-    };
 }
 
 /** Everything a message says as one block of text, in the order it says it. */
@@ -1816,9 +1785,6 @@ function messageElementsProject(
                             block.type === "image",
                     )
                     .map((block) => ({ data: block.data, mediaType: block.mimeType })),
-                ...(message.quote?.kind === "story"
-                    ? { quote: storyQuoteProject(message.id, message.quote, reader) }
-                    : {}),
                 ...(message.quickReply === undefined ? {} : { quickReply: message.quickReply }),
             },
         ];

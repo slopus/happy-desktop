@@ -359,7 +359,6 @@ export interface HappyAgentSessionListStore {
     botCreate(input: HappyAgentBotCreateInput): Promise<HappyAgentBotCreation>;
     /** Renames a bot the way `taskRename` renames a task. */
     botRename(botId: string, name: string): Promise<boolean>;
-    botStoriesUpdate(botId: string, stories: boolean): void;
     /**
      * Archives a bot, preserving its dedicated folder for a later restore. It
      * goes from `bots` at once and stays gone through any read that still
@@ -608,7 +607,6 @@ export interface HappyAgentSessionListDeps {
         | "renameTask"
         | "renameWait"
         | "setBotAvatar"
-        | "setBotStories"
         | "setEffort"
         | "setPermissionMode"
         | "setServiceTier"
@@ -3015,9 +3013,6 @@ export function happyAgentSessionListStoreCreate(
             nameSave("bots", botId, name, () =>
                 deps.connectActions.renameGroup({ kind: "bot", botId }, name),
             ),
-        botStoriesUpdate: (botId, stories) => {
-            connectMutationTrack(deps.connectActions.setBotStories(botId, stories));
-        },
         botArchive: (botId) =>
             removal(() => {
                 const pending = botArchives.get(botId);

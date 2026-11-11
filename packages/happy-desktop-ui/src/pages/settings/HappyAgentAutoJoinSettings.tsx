@@ -16,10 +16,10 @@ export interface HappyAgentAutoJoinSettingsProps {
     onAutoJoinChange(enabled: boolean): void;
 }
 
-/** Shared presentation for the per-user on/off preferences: membership and stories. */
+/** Shared presentation for the per-user membership preferences. */
 export function HappyAgentAutoJoinSettings(
     props: HappyAgentAutoJoinSettingsProps & {
-        readonly entity: "task" | "Surface" | "Stories";
+        readonly entity: "task" | "Surface";
         readonly label: string;
         readonly description: string;
         readonly unsupportedMessage?: string;
@@ -27,7 +27,7 @@ export function HappyAgentAutoJoinSettings(
 ) {
     const id = useId();
     // What the banners call the preference; the Surface one is autojoin.
-    const Noun = { task: "Task", Surface: "Autojoin", Stories: "Stories" }[props.entity];
+    const Noun = { task: "Task", Surface: "Autojoin" }[props.entity];
     return (
         // Rows only: HappyAgentConnectionSettingsSection names the connection
         // and says once when it is unreachable; `unavailable` only disables here.

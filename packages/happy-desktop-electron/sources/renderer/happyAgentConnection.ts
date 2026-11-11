@@ -165,8 +165,6 @@ export interface HappyAgentSession {
     readonly voiceSettings: HappyAgentVoiceSettingsStore;
     readonly taskSettings: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
     readonly surfaceSettings: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
-    readonly storiesSettings: () => import("happy-desktop-state").HappyAgentAutoJoinSettingsStore;
-    readonly stories: () => import("happy-desktop-state").HappyAgentStoriesStore;
     readonly workspace: HappyAgentWorkspaceStore;
     readonly instructions: HappyAgentInstructionsStore;
     readonly securityPolicy: HappyAgentSecurityPolicyStore;
@@ -681,8 +679,6 @@ export function happyAgentConnectionOpen(input: {
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),
-                    storiesSettings: () => client.storiesSettings(),
-                    stories: () => client.stories(),
                     workspace: preparedWorkspace,
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
@@ -739,10 +735,6 @@ export function happyAgentConnectionOpen(input: {
             if (!session) input.deps.changed();
         }),
         ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
-        // Following from before bootstrap, the stories setting arrives with it and is not read again.
-        client.storiesSettings().subscribe(() => undefined),
-        // So does the feed itself, with its media fetched ahead before the row is drawn.
-        client.stories().subscribe(() => undefined),
     );
 
     return {

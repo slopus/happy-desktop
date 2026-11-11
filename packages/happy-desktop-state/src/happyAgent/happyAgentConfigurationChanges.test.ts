@@ -136,7 +136,6 @@ it("projects wire configuration and error data into stable, visible rows and pre
         connection: "live",
         endpoint: "http://fake.test",
         mediaUrl: () => "",
-        quoteFrameUrl: () => "",
         hasMore: false,
         messages: messages.map((message) => ({ message, runId: run.id })),
         runs: [run],

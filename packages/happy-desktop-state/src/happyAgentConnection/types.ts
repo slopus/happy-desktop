@@ -172,16 +172,6 @@ export interface UserMessageElement extends BaseChatElement {
     attachments?: readonly { data: string; mediaType: string }[];
     /** Files uploaded to Happy Cloud and named by this message, by attachment ID. */
     files?: readonly UserMessageFile[];
-    /** The story this message replies to, with its still at its own address. */
-    quote?: {
-        readonly storyId: string;
-        /** The story's agent, which is this conversation's. */
-        readonly agentId: string;
-        readonly expiresAt: number;
-        /** The reader owns the story's agent: a bot, a standalone task, or their own team task. */
-        readonly yours: boolean;
-        readonly frame: { readonly url: string; readonly thumbhash?: string } | null;
-    };
     source?: "notification";
     /**
      * The agent that put this message in the user slot, when one did, and where
@@ -757,10 +747,8 @@ export interface BotGroup {
     /** The bot's dedicated workspace, which is what its conversation addresses. */
     workspaceId: string;
     name: string;
-    /** The generated short title its story label shows, when the daemon has one. */
+    /** The generated short title, when the daemon has one. */
     shortName?: string;
-    /** Present only with storyFeed and a daemon-provided bot Stories setting. */
-    stories?: boolean;
     /** Immutable local snake_case name, also the bot's folder name. */
     username: string;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
@@ -814,7 +802,7 @@ export interface TaskGroup {
     /** The task's dedicated workspace, which is what its conversation addresses. */
     workspaceId: string;
     name: string;
-    /** The generated short title its story label shows, when the daemon has one. */
+    /** The generated short title, when the daemon has one. */
     shortName?: string;
     path: string;
     createdAt: number;
@@ -899,7 +887,6 @@ export type MutationAction =
     | "set_session_archived"
     | "mark_session_read"
     | "rename_group"
-    | "set_bot_stories"
     | "reorder_group"
     | "reorder_bot"
     | "reorder_session"
@@ -1288,7 +1275,6 @@ export interface HappyAgentConnection {
     sendUiAction(sessionId: string, request: UiActionRequest): Promise<UiActionResponse>;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
-    setBotStories(botId: string, stories: boolean): MutationId;
     /**
      * Creates a bot, its dedicated workspace, and its one agent.
      *

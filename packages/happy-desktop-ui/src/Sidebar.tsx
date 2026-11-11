@@ -34,7 +34,6 @@ import { Spinner } from "./Spinner";
 import { Tooltip } from "./Tooltip";
 import { type ImageMark } from "./imageMark";
 import { ScrollArea } from "./Scrollbar";
-import { StoryRing } from "./StoriesRow";
 import { useDevicePixelRatio } from "./devicePixelRatio";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
@@ -218,10 +217,6 @@ export type SidebarItem = {
      * go without the sidebar claiming they already went there.
      */
     voiceFocus?: boolean;
-    /** A live story, outlined on the mark (accent unseen, grey seen); the mark opens it. */
-    story?: "unseen" | "seen";
-    /** Its ring's key, and its live and watched stories: an arc each once there are two. */
-    storyRing?: { readonly key: string; readonly seen: number; readonly total: number };
 };
 /**
  * Left inset of the row content at depth 0: `--happy-sidebar-row-leading`,
@@ -237,12 +232,6 @@ export const SIDEBAR_ROW_HEIGHT = 32;
 export const SIDEBAR_ROW_GAP = 2;
 /** Width of the leading lane whose centre carries a tree stem. */
 export const SIDEBAR_LEADING_SLOT = 20;
-/**
- * The box a row's identity mark occupies. It is the `xs` avatar's own edge, so
- * a generated mark and an initials tile are the same square and a row swapping
- * one for the other never moves its name.
- */
-const SIDEBAR_AVATAR_SIZE = 20;
 /**
  * How far below the parent row's centre a stem begins, so it starts 2px under
  * that row's 16px glyph rather than at the row's midline.
@@ -561,8 +550,6 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onItemAction?: (id: string) => void;
     /** Invoked when a row's name-side `secondaryAction` control is used. */
     onItemSecondaryAction?: (id: string) => void;
-    /** Invoked when the outline of a row's `story` is clicked. */
-    onItemStoryOpen?: (id: string) => void;
     /**
      * Enables arranging the pinned `actions` and reports the one move a drag or
      * a keyboard move made. Without it the pinned rows are fixed, which is what
@@ -1555,7 +1542,6 @@ interface SidebarRowHandlers {
     readonly renameSubmit: (key: string, name: string) => void;
     readonly secondaryAction: (key: string) => void;
     readonly select: (id: string) => void;
-    readonly storyOpen: (key: string) => void;
 }
 
 /** One section row, rendered again only when its own props change. */
@@ -1567,7 +1553,6 @@ const SidebarListRow = memo(function SidebarListRow({
     canCollapse,
     canRename,
     canSecondaryAction,
-    canStoryOpen,
     ...rest
 }: {
     handlers: SidebarRowHandlers;
@@ -1579,7 +1564,6 @@ const SidebarListRow = memo(function SidebarListRow({
     canCollapse: boolean;
     canRename: boolean;
     canSecondaryAction: boolean;
-    canStoryOpen: boolean;
     active: boolean;
     /** See `SidebarRow.tabStop`. */
     tabStop?: boolean;
@@ -1620,7 +1604,6 @@ const SidebarListRow = memo(function SidebarListRow({
             onPointerMove={rest.reorderable ? handlers.pointerMove : undefined}
             onPointerUp={rest.reorderable ? (event) => handlers.pointerUp(rowId, event) : undefined}
             onCollapseToggle={canCollapse ? () => handlers.collapseToggle(rowId) : undefined}
-            onStoryOpen={canStoryOpen ? () => handlers.storyOpen(rowId) : undefined}
             onAction={canAction ? () => handlers.action(rowId) : undefined}
             onSecondaryAction={
                 canSecondaryAction ? () => handlers.secondaryAction(rowId) : undefined
@@ -1671,8 +1654,6 @@ function SidebarRow({
     onSecondaryAction?: () => void;
     /** Folds or unfolds this row; absent when the row draws no fold control. */
     onCollapseToggle?: () => void;
-    /** Opens the row's live story; absent when it has none. */
-    onStoryOpen?: () => void;
     /**
      * The row holds rows under it that its `collapsed` shows or hides, whether
      * or not it draws a fold control: it says so to assistive technology.
@@ -1959,11 +1940,7 @@ function SidebarRow({
             : controls * SIDEBAR_SLOT_CELL + (controls - 1) * SIDEBAR_CONTROL_GAP;
     };
     const foldInBranch = () => !showsLeadingSlot(item()) && !activityLeading();
-    // A live story owns the mark of an open row, so no chevron is laid over it; a
-    // shut row keeps its fold there, or what it folded away could not come back.
-    const markFolds = () =>
-        props.onCollapseToggle !== undefined &&
-        (props.foldControlPlacement === "trailing" || !props.onStoryOpen || !!item().collapsed);
+    const markFolds = () => props.onCollapseToggle !== undefined;
     // A trailing fold puts the row in fixed lanes: name and marks, then controls, then the fold.
     const lanes = props.foldControlPlacement === "trailing";
     // The row is already a button, so its pointer disclosure stays a span.
@@ -2288,31 +2265,7 @@ function SidebarRow({
                     ) : !showsLeadingSlot(item()) ? null : item().kind === "person" ||
                       item().kind === "agent" ||
                       item().kind === "project" ? (
-                        <>
-                            {identityMark()}
-                            {item().story && props.onStoryOpen ? (
-                                /* A pointer target over the mark, as the fold is; the row stays the one button. */
-                                <span
-                                    aria-hidden="true"
-                                    className="happy-sidebar__item-story"
-                                    data-happy-desktop-ui="sidebar-item-story"
-                                    data-seen={item().story === "seen" ? "" : undefined}
-                                    data-story-ring={item().storyRing?.key}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        props.onStoryOpen?.();
-                                    }}
-                                    onPointerDown={(event) => event.stopPropagation()}
-                                >
-                                    <StoryRing
-                                        {...item().storyRing}
-                                        radius={item().kind === "person" ? 10 : 6}
-                                        size={SIDEBAR_AVATAR_SIZE}
-                                        state={item().story!}
-                                    />
-                                </span>
-                            ) : null}
-                        </>
+                        identityMark()
                     ) : item().emoji !== undefined ? (
                         /* The character the reader chose, in a fixed square the
                            same size as the glyph lane beside it, so a row whose
@@ -2723,7 +2676,6 @@ export function Sidebar(props: SidebarProps) {
         "onItemIntent",
         "onItemAction",
         "onItemSecondaryAction",
-        "onItemStoryOpen",
         "onItemMenuSelect",
         "onItemCollapseToggle",
         "itemFoldControls",
@@ -4207,8 +4159,6 @@ export function Sidebar(props: SidebarProps) {
         return {
             action: (key) =>
                 void latest().act(key, ({ item }) => latest().local.onItemAction?.(item.id)),
-            storyOpen: (key) =>
-                void latest().act(key, ({ item }) => latest().local.onItemStoryOpen?.(item.id)),
             collapseToggle: (key) => {
                 // A section folds from a click on the whole row, and the click
                 // that ends a drag of one is not that.
@@ -4994,10 +4944,6 @@ export function Sidebar(props: SidebarProps) {
                                                     canSecondaryAction={
                                                         local.onItemSecondaryAction !== undefined &&
                                                         item.secondaryAction !== undefined
-                                                    }
-                                                    canStoryOpen={
-                                                        local.onItemStoryOpen !== undefined &&
-                                                        item.story !== undefined
                                                     }
                                                     active={item.id === local.activeItemId}
                                                     activityPlacement={local.activityPlacement}

@@ -151,7 +151,7 @@ const PHASES: readonly Phase[] = [
             reason: "restart",
             failedAt: "starting",
             message:
-                'Error: The applied migrations for module "stories" are not a prefix of its current migrations.\n' +
+                'Error: The applied migrations for module "tasks" are not a prefix of its current migrations.\n' +
                 Array.from(
                     { length: 12 },
                     (_, index) => `    at startDaemon (happy-agent:${String(index + 1)}:42)`,

@@ -44,8 +44,8 @@ const textOnly: MenuItem[] = [
 const states: MenuItem[] = [
     { kind: "item", id: "reply", label: "Reply", icon: "reply" },
     { kind: "item", id: "pin", label: "Pin (disabled)", icon: "star", disabled: true },
-    { kind: "item", id: "stories", label: "Stories", checked: true },
-    { kind: "item", id: "stories-off", label: "Stories (off)", checked: false },
+    { kind: "item", id: "notifications", label: "Notifications", checked: true },
+    { kind: "item", id: "muted", label: "Muted", checked: false },
     { kind: "separator" },
     { kind: "item", id: "remove", label: "Remove", icon: "close", danger: true },
 ];

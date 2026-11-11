@@ -1604,13 +1604,7 @@
     }
 }
 
-/* A quote sits right above the body that answers it. */
-.happy-message__content > .happy-story-quote {
-    margin-bottom: 4px;
-}
-
-/* "Replied to your story": after the name, quieter, and the face the name's size, on the
-   bubble's edge. */
+/* An author note follows the name, on the bubble's edge. */
 .happy-message__author-note {
     overflow: hidden;
     color: var(--text-secondary);

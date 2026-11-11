@@ -175,9 +175,6 @@ import {
     happyAgentSearchStoreNone,
     happyAgentSurfaceCatalogStoreNoop,
     happyAgentSurfaceSupportStoreNone,
-    type HappyAgentStoriesSnapshot,
-    type HappyAgentStoriesStore as StoriesStore,
-    type HappyAgentStoryTile,
     calendarTimeZones,
     happyAgentSurfaceReferenceFind,
     happyAgentSurfaceChatSupported,
@@ -321,10 +318,6 @@ import {
     HappyAgentDevicesPanel,
     SegmentedControl,
     Sidebar,
-    StoriesRow,
-    StoryViewer,
-    type StoryFace,
-    localAgoTime,
     SidebarFooter,
     SidebarAgentUpdate,
     SidebarUpdateAction,
@@ -395,7 +388,7 @@ import {
 import { BlueprintView } from "./views/BlueprintView";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
-import { botFace, ownerFace, ownerInitials, taskFace } from "./agentFaces";
+import { botFace, ownerInitials, taskFace } from "./agentFaces";
 import { sidebarReadAheadRows } from "./sidebarReadAhead";
 import type {
     AppHappyAgentDaemonSnapshot,
@@ -728,9 +721,6 @@ export interface AppHappyAgentSession {
     readonly taskSettings?: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
     /** This connection's authenticated person's Surface membership preference. */
     readonly surfaceSettings?: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
-    /** This connection's person's `stories` setting, and the stories it shows them. */
-    readonly storiesSettings?: () => import("happy-desktop-state").HappyAgentAutoJoinSettingsStore;
-    readonly stories?: () => import("happy-desktop-state").HappyAgentStoriesStore;
     /** This Happy Agent's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: HappyAgentInstructionsStore;
     /** This Happy Agent's machine-wide permission-review policy. */
@@ -1159,77 +1149,6 @@ function botCreatingSidebarItem(
     };
 }
 
-const STORIES_OFF: HappyAgentStoriesSnapshot = { mode: "off" };
-const storiesNone = { get: () => STORIES_OFF, subscribe: () => () => {} };
-type StoryWho = Pick<HappyAgentStoryTile, "poster" | "agentId" | "userId">;
-/** Who posted a story or replied, read against the people the stories have met. */
-type StoryPoster = (
-    who: StoryWho,
-    people: Extract<HappyAgentStoriesSnapshot, { mode: "on" }>["people"] | undefined,
-) => { name: string; shortName?: string; face: StoryFace; owner?: StoryFace };
-const storiesUnder = new WeakMap<StoriesStore, HappyAgentStoriesSnapshot>();
-/**
- * The rows' view of the stories, which waits while a story is open over them: opening and
- * stepping then render the viewer alone, and the rings catch up as it closes.
- */
-const storiesUnderViewer = (store: StoriesStore) => () => {
-    const now = store.get(),
-        held = storiesUnder.get(store);
-    if (held && now.mode === "on" && (now.open || now.draft)) return held;
-    storiesUnder.set(store, now);
-    return now;
-};
-
-/** The story over the window, subscribed on its own: opening and stepping render it alone. */
-function AppStoryViewer(props: {
-    readonly store: StoriesStore;
-    readonly poster: StoryPoster;
-    readonly now: () => number;
-    readonly onChatOpen: (agentId: string) => void;
-}) {
-    const { store } = props;
-    const stories = useSyncExternalStore(store.subscribe, store.get, store.get);
-    if (stories.mode !== "on") return null;
-    const { open: storyOpen, draft: storyDraft, people } = stories;
-    const storyMedia = storyDraft
-        ? { kind: storyDraft.kind, url: storyDraft.mediaUrl }
-        : (storyOpen?.media ?? null);
-    if (!storyMedia) return null;
-    const poster = (who: StoryWho) => props.poster(who, people);
-    const agentId = storyOpen?.story.agentId;
-    return (
-        <StoryViewer
-            id={storyOpen?.story.id ?? "draft"}
-            {...(storyOpen ? { ring: storyOpen.key } : {})}
-            caption={storyOpen?.story.caption ?? null}
-            media={storyMedia}
-            mediaLayers={storyOpen?.mediaLayers ?? []}
-            {...(storyOpen?.story.layers?.text ? { text: storyOpen.story.layers.text } : {})}
-            {...(storyDraft ? { onPost: store.storyPost } : {})}
-            notice={stories.failure?.message ?? null}
-            onClose={store.viewerClose}
-            {...(storyOpen?.story.canDelete ? { onDelete: store.storyDelete } : {})}
-            onRepliesOpen={store.repliesOpen}
-            onReplySend={store.replySend}
-            {...(storyOpen?.story.poster === "agent" ? { onRepost: store.storyRepost } : {})}
-            onStep={store.storyStep}
-            {...(agentId ? { onChatOpen: () => props.onChatOpen(agentId) } : {})}
-            poster={poster(storyOpen?.story ?? { poster: "person", agentId: null, userId: null })}
-            replies={(storyOpen?.replies ?? []).map((reply) => ({
-                id: reply.id,
-                text: reply.text,
-                ...poster({ poster: "person", agentId: "", userId: reply.userId }),
-            }))}
-            replyCount={storyOpen?.story.replyCount ?? 0}
-            {...(storyOpen && storyOpen.story.repostOf !== null
-                ? { repost: { from: poster({ ...storyOpen.story, poster: "agent" }) } }
-                : {})}
-            segment={storyOpen?.segment ?? { index: 0, total: 1 }}
-            time={storyOpen ? localAgoTime(storyOpen.story.postedAt, props.now()) : "Now"}
-        />
-    );
-}
-
 /**
  * A joined task as its row: a bot's row in every respect but the face, which
  * in a team is the owner's rather than the task's own — a task has none. The
@@ -1457,7 +1376,6 @@ const ROW_MENU_LEAVE = "leave";
 const ROW_MENU_MUTE = "mute";
 /** Takes a bot out of the sidebar; the Bots heading lists it to bring it back. */
 const ROW_MENU_HIDE = "hide";
-const ROW_MENU_STORIES = "stories";
 /** The Bots heading's menu of hidden bots: one row per bot, and one for all of them. */
 const BOTS_MENU_SHOW_PREFIX = "show:";
 const BOTS_MENU_SHOW_ALL = "show-all";
@@ -1639,19 +1557,7 @@ function rowMenuItems(
         // but never archived.
         const archivable = !(chiefOfStaffKept && bot.systemKey === "chief_of_staff");
         const groups: MenuItem[][] = [
-            [
-                { kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" },
-                ...(bot.stories === undefined
-                    ? []
-                    : [
-                          {
-                              kind: "item" as const,
-                              id: ROW_MENU_STORIES,
-                              label: "Stories",
-                              checked: bot.stories,
-                          },
-                      ]),
-            ],
+            [{ kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" }],
             botAttention ? botAttentionMenuItems(botAttention(bot)) : [],
             archivable
                 ? [
@@ -2596,7 +2502,6 @@ function happyAgentSections(
                     const botAttention = happyAgentBotAttention(attention, happyAgent.id, bot.id);
                     if (botAttention === "hidden") return [];
                     const muted = botAttention === "muted";
-                    // Rows wear no story ring, whose fold sits on that mark: the stories row has them.
                     return [
                         botSidebarItem(bot, titleShimmerEnabled, muted),
                         ...botSubtaskSidebarItems(
@@ -3729,45 +3634,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         surfaceSupportStore.get,
         surfaceSupportStore.get,
     );
-    // The addressed Happy Agent's live stories: the stories row above its list, and the viewer.
-    const storiesStore = active?.session?.stories?.();
-    const storiesGet = storiesStore ? storiesUnderViewer(storiesStore) : storiesNone.get;
-    const stories = useSyncExternalStore(
-        storiesStore?.subscribe ?? storiesNone.subscribe,
-        storiesGet,
-        storiesGet,
-    );
-    // Who posted a story or replied: an agent by its bot or task, a person by their photo.
-    const storyPoster: StoryPoster = (
-        who,
-        people = stories.mode === "on" ? stories.people : undefined,
-    ) => {
-        if (who.poster === "person") {
-            const person = who.userId === null ? surfaceCatalog.profile : people?.get(who.userId);
-            const name = person?.name ?? "Someone";
-            const photo = person?.photo ? { imageUrl: person.photo.url } : {};
-            // A team member wears the placeholder their user id picks, as on the phone.
-            const userId = who.userId ?? surfaceCatalog.viewer?.userId ?? null;
-            const placeholder = userId === null ? {} : { placeholderSeed: userId };
-            return {
-                name,
-                face: { initials: ownerInitials(name), type: "human", ...placeholder, ...photo },
-            };
-        }
-        const bot = active?.bots.find((each) => each.conversation.id === who.agentId);
-        const task = active?.tasks?.find((each) => each.conversation.id === who.agentId);
-        const name = bot?.name ?? task?.name ?? "Agent";
-        const shortName = bot ? bot.shortName : task?.shortName;
-        // An agent posts as itself, badged with the team member it works for; a bot names nobody.
-        const face = bot ? botFace(bot) : task ? { placeholderSeed: task.id } : {};
-        const owner = bot || task?.owner?.userId === undefined ? null : task.owner;
-        return {
-            name,
-            ...(shortName ? { shortName } : {}),
-            face: { initials: ownerInitials(name), ...face, type: "agent" },
-            ...(owner ? { owner: { ...ownerFace(owner), type: "human" } } : {}),
-        };
-    };
     /**
      * Opens what an artifact, bot, or task Surface points at, where it always
      * opens: the artifact viewer, or the bot's or task's own chat. Answers
@@ -4092,30 +3958,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     <Banner tone="neutral">Loading sessions…</Banner>
                 ) : undefined
             }
-            // Stories open the list and scroll away with its rows rather than staying pinned.
-            bodyLeading={
-                stories.mode === "on" && storiesStore ? (
-                    <StoriesRow
-                        items={stories.row.map((tile) => ({
-                            id: tile.key,
-                            state: tile.state,
-                            seen: tile.seen,
-                            total: tile.total,
-                            ...storyPoster(tile, stories.people),
-                        }))}
-                        onOpen={storiesStore.tileOpen}
-                        create={{
-                            id: `person:${surfaceCatalog.viewer?.userId ?? ""}`,
-                            face: storyPoster(
-                                { poster: "person", agentId: null, userId: null },
-                                stories.people,
-                            ).face,
-                            onPick: storiesStore.storyDraftOpen,
-                        }}
-                        notice={stories.failure?.message}
-                    />
-                ) : undefined
-            }
             itemMenuItems={(item) => {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
@@ -4314,8 +4156,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const bot = happyAgent.bots.find((candidate) => candidate.workspaceId === row.id);
                 if (bot) {
-                    if (actionId === ROW_MENU_STORIES && bot.stories !== undefined)
-                        workspace.botStoriesUpdate(bot.id, !bot.stories);
                     if (actionId === ROW_MENU_ARCHIVE)
                         void workspace.botArchive(bot.id).catch(() => undefined);
                     return;
@@ -4955,7 +4795,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <HappyAgentWorkspaceSurface
                     instanceId={active.instanceId}
                     {...(active.workspacesUnavailable ? { workspacesUnavailable: true } : {})}
-                    {...(storiesStore ? { onStoryOpen: storiesStore.storyOpen } : {})}
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
                     availability={
                         activeAvailability ??
@@ -5102,20 +4941,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     >
                         {routeContent()}
                     </AppShell>
-                    {storiesStore ? (
-                        <AppStoryViewer
-                            store={storiesStore}
-                            poster={storyPoster}
-                            now={() => active?.session?.clock.get() ?? 0}
-                            onChatOpen={(id) => {
-                                const target =
-                                    active?.tasks?.find((task) => task.conversation.id === id) ??
-                                    active?.bots.find((bot) => bot.conversation.id === id);
-                                storiesStore.viewerClose();
-                                if (active) props.onChatSelect(active.id, target?.workspaceId, id);
-                            }}
-                        />
-                    ) : null}
                     {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.
                 It only opens. The dispatcher stands down while any dialog is
@@ -7043,8 +6868,6 @@ interface HappyAgentWorkspaceSurfaceProps {
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
     onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
-    /** Opens a live story a reply in the transcript quotes. */
-    onStoryOpen?: (storyId: string) => void;
     onFileClose(groupId: string, path: string): void;
     onFileSelect(
         groupId: string,
@@ -8010,7 +7833,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 {...chiefOfStaffNameProps(workspace.list.bots)}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 onReferenceGroupOpen={referenceGroupOpen}
-                onStoryOpen={props.onStoryOpen}
                 activitySelected={panel.open && panel.activeViewId === "activity"}
                 conversation={conversation}
                 {...(workspace.fileOpenFailure === undefined
@@ -9658,7 +9480,6 @@ function HappyAgentConversationBody(props: {
     chiefOfStaffName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
-    onStoryOpen?: (storyId: string) => void;
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
     modelUsageWatch?: ComposerModelUsageWatch;
@@ -9726,7 +9547,6 @@ function HappyAgentConversationBody(props: {
                     ? {}
                     : { chiefOfStaffName: props.chiefOfStaffName })}
                 onReferenceGroupOpen={props.onReferenceGroupOpen}
-                onStoryOpen={props.onStoryOpen}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 modelUsageWatch={props.modelUsageWatch}
                 conversation={conversation.value}
@@ -10128,7 +9948,6 @@ function HappyAgentConversationSurface(props: {
     chiefOfStaffName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
-    onStoryOpen?: (storyId: string) => void;
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
     modelUsageWatch?: ComposerModelUsageWatch;
@@ -10560,7 +10379,6 @@ function HappyAgentConversationSurface(props: {
             onImageOpen={(messageId, attachmentId) => {
                 if (props.happyAgentOnline()) workspace.imageOpen(messageId, attachmentId);
             }}
-            onStoryOpen={props.onStoryOpen}
             onAttachmentOpen={(attachment) => {
                 // An attached document is a page, not a file to save. When it
                 // lives in a checkout this workspace reads, it opens the way a

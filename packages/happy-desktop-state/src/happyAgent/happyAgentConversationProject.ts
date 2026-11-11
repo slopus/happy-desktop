@@ -10,7 +10,6 @@ import {
     type ConversationEntry,
     type ConversationJson,
     type ConversationMessageProjection,
-    type ConversationStoryQuote,
     type ConversationRequestEntry,
     type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
@@ -733,9 +732,6 @@ function happyAgentConnectGroupProject(
                                 }),
                             ),
                         ],
-                        ...(element.quote
-                            ? { storyQuote: storyQuoteProject(element.quote, input) }
-                            : {}),
                     }),
                 });
                 break;
@@ -1263,21 +1259,6 @@ function happyAgentConnectGroupProject(
     return visibleCollapsed.map((entry) => (entry === lead ? tracedLead : entry));
 }
 
-/** A quoted story, as the reader's own or as the named agent's. */
-function storyQuoteProject(
-    quote: NonNullable<Extract<ChatElement, { kind: "user_message" }>["quote"]>,
-    input: HappyAgentConversationInput,
-): ConversationStoryQuote {
-    return {
-        storyId: quote.storyId,
-        expiresAt: quote.expiresAt,
-        frame: quote.frame,
-        owner: quote.yours
-            ? "yours"
-            : { name: senderOf(input, quote.agentId).agentName ?? "this agent" },
-    };
-}
-
 function messageProject(input: {
     readonly id: string;
     readonly sessionId: string;
@@ -1286,7 +1267,6 @@ function messageProject(input: {
     readonly createdAt: number;
     readonly author: ConversationAuthor;
     readonly attachments?: ConversationMessageProjection["attachments"];
-    readonly storyQuote?: ConversationStoryQuote;
     readonly generationStatus?: ConversationMessageProjection["generationStatus"];
 }): ConversationMessageProjection {
     return {
@@ -1298,7 +1278,6 @@ function messageProject(input: {
         sender: input.author,
         text: input.text,
         attachments: input.attachments ?? [],
-        ...(input.storyQuote ? { storyQuote: input.storyQuote } : {}),
         reactions: [],
         createdAt: new Date(input.createdAt).toISOString(),
         ...(input.generationStatus ? { generationStatus: input.generationStatus } : {}),

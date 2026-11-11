@@ -8,15 +8,15 @@ import { createRenderer, type VisiblePixelMetrics } from "./testing";
 
 const FIGTREE = "happy Figtree, system-ui, sans-serif";
 
-it("gives checked and unchecked Stories rows checkbox semantics with a real check glyph", async () => {
+it("gives checked and unchecked rows checkbox semantics with a real check glyph", async () => {
     const selected: string[] = [];
     const view = createRenderer();
     view.render(
         () => (
             <Menu
                 items={[
-                    { kind: "item", id: "on", label: "Stories", checked: true },
-                    { kind: "item", id: "off", label: "Stories", checked: false },
+                    { kind: "item", id: "on", label: "Notifications", checked: true },
+                    { kind: "item", id: "off", label: "Notifications", checked: false },
                 ]}
                 onSelect={(id) => selected.push(id)}
             />
