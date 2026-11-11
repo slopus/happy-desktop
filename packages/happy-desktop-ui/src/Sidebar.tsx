@@ -4031,19 +4031,34 @@ export function Sidebar(props: SidebarProps) {
             restArrangement.current !== arrangement && !reducedMotion()
                 ? restTops.current
                 : undefined;
+        // Every read comes before every write, and the rows' animations are
+        // asked for once. Each `getAnimations()` call brings the document's
+        // style up to date, and each write between reads makes the next read
+        // lay the page out again: with a few hundred rows wearing spinners,
+        // asking per row took two seconds of the main thread on every leave
+        // or insert, and a second on every render.
+        const rowAnimations = new Map<Element, Animation[]>();
+        for (const animation of root.getAnimations({ subtree: true })) {
+            const effect = animation.effect;
+            if (!(effect instanceof KeyframeEffect) || effect.pseudoElement !== null) continue;
+            const target = effect.target;
+            if (target === null) continue;
+            const held = rowAnimations.get(target);
+            if (held) held.push(animation);
+            else rowAnimations.set(target, [animation]);
+        }
         // Read where each row is painted now before anything is cancelled, so a
         // row caught mid-glide carries on from where it actually is.
         const offsets = nodes.map(([, node]) =>
-            node.getAnimations().length > 0
-                ? Number.parseFloat(getComputedStyle(node).top) || 0
-                : 0,
+            rowAnimations.has(node) ? Number.parseFloat(getComputedStyle(node).top) || 0 : 0,
         );
         if (previous)
             for (const [id, node] of nodes)
                 if (previous.has(id))
-                    for (const animation of node.getAnimations()) animation.cancel();
+                    for (const animation of rowAnimations.get(node) ?? []) animation.cancel();
         const rootTop = root.getBoundingClientRect().top;
         const tops = new Map<string, number>();
+        const glides: [HTMLElement, number][] = [];
         for (const [index, [id, node]] of nodes.entries()) {
             const top = node.getBoundingClientRect().top - rootTop;
             const from = previous?.get(id);
@@ -4053,12 +4068,13 @@ export function Sidebar(props: SidebarProps) {
             }
             tops.set(id, top);
             const delta = from + offsets[index]! - top;
-            if (Math.abs(delta) >= 0.5)
-                node.animate([{ top: `${String(delta)}px` }, { top: "0px" }], {
-                    duration: SETTLE_MS,
-                    easing: SETTLE_EASING,
-                });
+            if (Math.abs(delta) >= 0.5) glides.push([node, delta]);
         }
+        for (const [node, delta] of glides)
+            node.animate([{ top: `${String(delta)}px` }, { top: "0px" }], {
+                duration: SETTLE_MS,
+                easing: SETTLE_EASING,
+            });
         restTops.current = tops;
         restArrangement.current = arrangement;
     });
