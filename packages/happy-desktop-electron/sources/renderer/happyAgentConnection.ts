@@ -56,6 +56,7 @@ import {
     type ServerCompatibility,
     type TerminalColorScheme,
 } from "happy-desktop-state";
+import { desktopUserEnvironment } from "./desktopUserEnvironment";
 import { imageCropOpen } from "happy-desktop-ui";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
 import { desktopWelcomePersistence } from "./desktopWelcome";
@@ -443,6 +444,7 @@ export function happyAgentConnectionOpen(input: {
         // Read ahead the sessions most likely opened next, so a first open, of a remote's
         // session above all, shows its transcript instead of a loading line.
         preloadedSessions: PRELOADED_SESSIONS,
+        environment: desktopUserEnvironment(),
         onDebugEntry: debugEntry,
         onMutationRejected: (rejection) => {
             for (const listener of mutationListeners) listener(rejection);

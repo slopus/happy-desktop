@@ -33,6 +33,7 @@ import type {
     HappyAgentRepositoryBinding,
 } from "../happyAgent/happyAgentTypes.js";
 import type { HappyAgentSync } from "./happyAgentSync.js";
+import type { UserEnvironmentSource } from "./userEnvironment.js";
 import type { UserProfile } from "./userProfiles.js";
 
 export type { MutationId };
@@ -1118,6 +1119,11 @@ export interface ConnectHappyAgentOptions {
      * once. The live update feed keeps them current from then on. Defaults to none.
      */
     preloadedSessions?: number;
+    /**
+     * This device's time zone and languages, told to a daemon that takes them. Without it, or
+     * with a daemon that does not, nothing is reported and sends name no device.
+     */
+    environment?: UserEnvironmentSource;
 }
 
 /**

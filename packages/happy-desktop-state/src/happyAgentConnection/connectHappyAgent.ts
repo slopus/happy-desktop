@@ -3707,6 +3707,36 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
+    // This device's environment, told to every process that takes it and named on every send to
+    // one. A process may keep its own store, so each new one is told again.
+    const environment = options.environment;
+    let environmentServed = false;
+    let environmentReported: string | undefined;
+    const environmentReport = (): void => {
+        if (environment === undefined || !environmentServed || rootController.signal.aborted)
+            return;
+        const report = {
+            deviceId: environment.deviceId,
+            deviceKind: environment.deviceKind,
+            ...environment.current(),
+        };
+        // The offset follows the zone and is never stored, so it alone is never news.
+        const reported = JSON.stringify({ ...report, utcOffsetMinutes: undefined });
+        if (reported === environmentReported) return;
+        environmentReported = reported;
+        client.reportEnvironment(report, { signal: rootController.signal }).catch((error) => {
+            if (environmentReported === reported) environmentReported = undefined;
+            if (rootController.signal.aborted) return;
+            reportDebug({
+                detail: errorDetail(error),
+                level: "warning",
+                message: "Reporting the user environment failed",
+                source: "connection",
+            });
+        });
+    };
+    const environmentChangesStop = environment?.changes(environmentReport);
+
     /**
      * What a daemon's health admits: whether it is ready, and speaks a protocol this client
      * does. Health is read for every new process, so this is also where a replacement that
@@ -3720,6 +3750,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             source: "connection",
         });
         sync.writer.healthReceived(health);
+        environmentServed = health.capabilities?.userEnvironment === true;
+        environmentReported = undefined;
         // Health is read for every new process, so this is where a
         // replacement that admits work again is first known.
         // A read sent before the drain now known answered for the moment before it.
@@ -3727,7 +3759,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             admittingSet(health.draining !== true && health.shuttingDown !== true, health.drain);
         const nextCompatibility = serverCompatibility(health.version);
         reportCompatibility(nextCompatibility);
-        return nextCompatibility.status === "compatible" && health.ready;
+        const admitted = nextCompatibility.status === "compatible" && health.ready;
+        if (admitted) environmentReport();
+        return admitted;
     };
 
     /**
@@ -4292,9 +4326,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     ): Promise<SendMessageResponse | undefined> => {
         let retryMs = INITIAL_SEND_RETRY_MS;
         for (let attempt = 1; ; attempt += 1) {
+            // Only a daemon that takes environments accepts the device; an older one refuses
+            // the whole send.
+            const sent =
+                environmentServed && environment !== undefined
+                    ? { ...request, deviceId: environment.deviceId }
+                    : request;
             try {
                 return await Promise.race([
-                    client.sendMessage(sessionId, request, { signal: deadlineSignal() }),
+                    client.sendMessage(sessionId, sent, { signal: deadlineSignal() }),
                     confirmed.then(() => undefined),
                 ]);
             } catch (error) {
@@ -6270,6 +6310,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 source: "connection",
             });
             rootController.abort();
+            environmentChangesStop?.();
             sync.writer.close();
             updatesAttemptController?.abort();
             retryWake?.();
