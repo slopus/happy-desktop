@@ -1,6 +1,8 @@
 import { partitionComponentProps } from "./componentProps";
 import {
+    createContext,
     memo,
+    use,
     useCallback,
     useEffectEvent,
     useLayoutEffect,
@@ -826,6 +828,8 @@ const LIFT_MS = 120;
 
 /** How long a dropped row takes to travel from where it was to where it now is. */
 const SETTLE_MS = 160;
+/** How far outside the scrollport a stopped spinner starts turning again: about three rows. */
+const SPINNER_SIGHT_MARGIN = 96;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 /**
  * How long a drop holds the geometry it captured while it waits for the render
@@ -1620,6 +1624,15 @@ const SidebarListRow = memo(function SidebarListRow({
     );
 });
 
+/**
+ * Where a row's working spinner reports itself, so the sidebar can stop the
+ * ones scrolled out of view. A row outside a sidebar hears nothing and its
+ * spinner simply turns.
+ */
+const SidebarSpinnerSight = createContext<
+    ((node: HTMLElement | null) => (() => void) | undefined) | undefined
+>(undefined);
+
 function SidebarRow({
     nodeRef,
     ...props
@@ -1879,6 +1892,7 @@ function SidebarRow({
        square a control occupies, so the two centre on one column when they
        exchange places at the trailing edge, and it is the square a glyph
        occupies at the leading one. */
+    const spinnerSight = use(SidebarSpinnerSight);
     const activityMark = () => {
         const state = activity();
         if (!state) return undefined;
@@ -1887,6 +1901,7 @@ function SidebarRow({
                 className="happy-sidebar__item-activity"
                 data-activity={state.kind === "spinner" ? "spinner" : state.lifecycle}
                 data-happy-desktop-ui="sidebar-item-activity"
+                ref={state.kind === "spinner" ? spinnerSight : undefined}
             >
                 {state.kind === "spinner" ? (
                     <Spinner
@@ -3168,6 +3183,51 @@ export function Sidebar(props: SidebarProps) {
     // Whether rows sit under the header; the header then fades into the list.
     const [scrolled, setScrolled] = useState(false);
     /*
+     * A working spinner turns on the compositor, but every one still running
+     * makes each main-thread style pass refresh its dots: with a couple of
+     * hundred working rows that is most of what any frame costs, though only
+     * the few on screen can be seen. One observer on the scrollport marks the
+     * spinners well out of view, which stop turning, and lets them start
+     * again a little before they come back into it. A spinner keeps its
+     * markup, frames and place; only its dots' animations go.
+     */
+    const [spinnerSight] = useState(() => {
+        const nodes = new Set<HTMLElement>();
+        let observer: IntersectionObserver | undefined;
+        let scrollport: HTMLElement | undefined;
+        // Only a row inside the scrollport can scroll out of it; a pinned row
+        // above it is always on screen.
+        const watch = (node: HTMLElement): void => {
+            if (scrollport?.contains(node)) observer?.observe(node);
+        };
+        return {
+            root: (viewport: HTMLElement | null) => {
+                observer?.disconnect();
+                observer = undefined;
+                scrollport = viewport ?? undefined;
+                if (!viewport || typeof IntersectionObserver === "undefined") return;
+                observer = new IntersectionObserver(
+                    (entries) => {
+                        for (const entry of entries)
+                            entry.target.toggleAttribute("data-offscreen", !entry.isIntersecting);
+                    },
+                    { root: viewport, rootMargin: `${String(SPINNER_SIGHT_MARGIN)}px 0px` },
+                );
+                for (const node of nodes) watch(node);
+            },
+            node: (node: HTMLElement | null) => {
+                if (!node) return undefined;
+                nodes.add(node);
+                watch(node);
+                return () => {
+                    nodes.delete(node);
+                    observer?.unobserve(node);
+                    node.removeAttribute("data-offscreen");
+                };
+            },
+        };
+    });
+    /*
      * The top of the rows never moves for something below it. The rows stand
      * at least as tall as the bottom of what is on screen, so a fold, a row
      * leaving near the end shortens them without the
@@ -3241,6 +3301,7 @@ export function Sidebar(props: SidebarProps) {
             },
             ref: (viewport: HTMLDivElement | null) => {
                 bodyViewport.current = viewport;
+                spinnerSight.root(viewport);
                 observer?.disconnect();
                 mutations?.disconnect();
                 cancelAnimationFrame(sightFrame);
@@ -4267,7 +4328,7 @@ export function Sidebar(props: SidebarProps) {
             : walkedIds.includes(local.activeItemId)
               ? local.activeItemId
               : walkedIds[0];
-    return (
+    const sidebar = (
         <nav
             {...rest}
             className={["happy-sidebar", local.className].filter(Boolean).join(" ")}
@@ -5182,4 +5243,5 @@ export function Sidebar(props: SidebarProps) {
             ) : null}
         </nav>
     );
+    return <SidebarSpinnerSight value={spinnerSight.node}>{sidebar}</SidebarSpinnerSight>;
 }

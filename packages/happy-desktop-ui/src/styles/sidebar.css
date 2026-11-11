@@ -1159,6 +1159,31 @@
     pointer-events: none;
 }
 
+/* A braille spinner scrolled well out of the sidebar's view stops turning,
+   and starts again a little before it comes back into it, so on screen it is
+   already turning. Its dots lose their animations rather than pausing them:
+   a paused CSS animation beside running ones makes Chromium run the main
+   thread every frame, which costs more than the turning dots ever did.
+   Stopped, the cell stands on the frame it starts again from — dot4 dim, as
+   its phase puts it at time zero — so a row that arrives faster than the
+   observer answers shows that frame for a moment rather than a full cell. */
+.happy-sidebar__item-activity[data-offscreen] .happy-spinner[data-variant="braille-2"] * {
+    animation-name: none;
+}
+
+.happy-sidebar__item-activity[data-offscreen]
+    .happy-spinner[data-variant="braille-2"]
+    .happy-spinner__dot {
+    opacity: 1;
+}
+
+.happy-sidebar__item-activity[data-offscreen]
+    .happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:last-child
+    .happy-spinner__dot:nth-child(1) {
+    opacity: 0.18;
+}
+
 /* A wait is the same quiet report as the working spinner, in the spinner's own
    muted ink; only the motion is gone. A question is the one thing here that
    needs the reader, so it is the one mark in red. */
