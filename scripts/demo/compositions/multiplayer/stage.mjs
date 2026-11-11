@@ -28,7 +28,7 @@ export const stage = {
         width: 1434,
     },
     /** How much darker the session pane is drawn where a segment asks for `dim: "session"`. */
-    dim: 0.13,
+    dim: 0.45,
     title: { centerY: 1003, size: 50, lineHeight: 60 },
     /** Seconds one segment dissolves into the next. */
     dissolve: 0.12,

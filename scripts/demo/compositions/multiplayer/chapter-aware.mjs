@@ -9,7 +9,7 @@ export default {
             kind: "window",
             take: "aware",
             from: 0,
-            seconds: 4.7,
+            seconds: 4.0,
             title: "See who’s working on what",
             dim: "session",
         },

@@ -208,7 +208,7 @@ function clip(frame, left, top, width, height) {
 const overlayCache = new Map();
 /** The window's own layers at one size and clipping: what is drawn over it, its shape, its shadow. */
 async function windowLayers(cut, segment, rect) {
-    const key = `${segment.dim ?? ""}:${rect.left}:${rect.top}:${rect.width}`;
+    const key = `${segment.dim ?? ""}:${segment.dimAmount ?? ""}:${rect.left}:${rect.top}:${rect.width}`;
     if (overlayCache.has(key)) return overlayCache.get(key);
     const frame = cut.output;
     const scale = rect.width / cut.window.cssWidth;
@@ -217,7 +217,7 @@ async function windowLayers(cut, segment, rect) {
     const viewBox = `${visible.dx} ${visible.dy} ${visible.width} ${visible.height}`;
     const dim =
         segment.dim === "session"
-            ? `<rect x="${cut.window.sidebarEdge * scale}" y="0" width="${rect.width}" height="${rect.height}" fill="#000" opacity="${cut.dim}"/>`
+            ? `<rect x="${cut.window.sidebarEdge * scale}" y="0" width="${rect.width}" height="${rect.height}" fill="#000" opacity="${segment.dimAmount ?? cut.dim}"/>`
             : "";
     const over = await sharp(
         svg(

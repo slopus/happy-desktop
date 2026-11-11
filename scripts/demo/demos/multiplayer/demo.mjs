@@ -231,6 +231,43 @@ async function readAll(client) {
     await client.markFeedReadAll?.({}).catch(() => undefined);
 }
 
+/**
+ * The take has no Activity beat, so what teammates' new tasks post to Kirill's
+ * Activity is read as it lands: the moment his own event stream says something
+ * is unread, and every tenth of a second besides. One thing moves per shot.
+ */
+function activityKeptRead(client) {
+    let timer;
+    const stop = new AbortController();
+    const read = () => void client.markFeedReadAll({}).catch(() => undefined);
+    const follow = async () => {
+        while (!stop.signal.aborted) {
+            try {
+                for await (const frame of client.streamEvents({ signal: stop.signal }))
+                    if (
+                        frame.kind === "event" &&
+                        frame.event.type === "feed.unread.updated" &&
+                        frame.event.payload.unread > 0
+                    )
+                        read();
+            } catch {
+                // A dropped stream is followed again; the poll covers the gap.
+            }
+            await new Promise((settle) => setTimeout(settle, 100));
+        }
+    };
+    return {
+        start() {
+            void follow();
+            timer = setInterval(read, 100);
+        },
+        stop() {
+            clearInterval(timer);
+            stop.abort();
+        },
+    };
+}
+
 const sidebarRow = (page, label) =>
     page
         .locator('[data-happy-desktop-ui="sidebar-item"]:visible')
@@ -390,23 +427,48 @@ export default {
         });
         cue("open", demo);
         const lead = Number(process.env.MULTIPLAYER_LEAD_MS ?? 450);
-        const beat = Number(process.env.MULTIPLAYER_BEAT_MS ?? 1900);
-        const tail = Number(process.env.MULTIPLAYER_TAIL_MS ?? 2600);
+        const beat = Number(process.env.MULTIPLAYER_BEAT_MS ?? 800);
+        const tail = Number(process.env.MULTIPLAYER_TAIL_MS ?? 2200);
+        // A row's arrival is filmed in slow motion: while it slides in, the
+        // browser plays the page's own animations at `slow` of their speed
+        // (the DevTools animation-speed control), so the camera gets the
+        // app's 160 ms glide in more frames than it gives at 60 a second.
+        // Nothing is redrawn, and the rate is back to 1 once the row rests.
+        const slow = Number(process.env.MULTIPLAYER_SLOW ?? 0.33);
+        const slowHold = Number(process.env.MULTIPLAYER_SLOW_HOLD_MS ?? 560);
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send("Animation.enable");
+        const rate = (playbackRate) => cdp.send("Animation.setPlaybackRate", { playbackRate });
+        filmed.slowMotion = { rate: slow, holdMs: slowHold };
+        const activity = activityKeptRead(kirill);
+        activity.start();
         await demo.hold(lead);
         const pending = [];
         for (const [index, arrival] of world.arrivals.entries()) {
+            if (slow !== 1) await rate(slow);
             pending.push(arrivalStart(clients, arrival));
             cue(`arrival-sent:${arrival.name}`, demo);
             await until(
                 demo,
-                () => sidebarRow(page, arrival.name).isVisible(),
+                () => sidebarRow(page, arrival.name).count(),
                 `${arrival.name} in Kirill's sidebar`,
+                30000,
+                16,
             );
-            cue(`arrival:${arrival.name}`, demo, { rect: await rowRect(page, arrival.name) });
+            cue(`arrival:${arrival.name}`, demo);
+            if (slow !== 1) {
+                await demo.hold(slowHold);
+                await rate(1);
+            }
+            cue(`arrival-settled:${arrival.name}`, demo, {
+                rect: await rowRect(page, arrival.name),
+            });
             await demo.hold(index === world.arrivals.length - 1 ? tail : beat);
         }
         cue("end", demo);
         await demo.finish();
+        activity.stop();
+        await cdp.detach().catch(() => undefined);
         await Promise.all(pending);
         await page.screenshot({ path: join(output, "ending.png") });
         await writeFile(join(output, "ending.txt"), await page.locator("body").innerText());
