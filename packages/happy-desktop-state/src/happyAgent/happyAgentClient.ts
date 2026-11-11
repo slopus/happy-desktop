@@ -3,7 +3,7 @@ import type {
     TerminalColorScheme,
     TerminalDriverCreate,
 } from "../modules/terminal/terminalState.js";
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import { chatUiGrantedFollowCreate, type ChatUiGrantedFollow } from "../chatUi/chatUiGranted.js";
 import { happyAgentProjectAddError } from "./happyAgentProjectRegistration.js";
 import {
@@ -57,7 +57,7 @@ import type {
     HappyAgentOpenInTargets,
     HappyAgentWorkspaceFileBytes,
     HappyAgentWorkspaceFileDocument,
-    HappyAgentWorkspaceFileTreePage,
+    HappyAgentWorkspaceFileTreeRead,
     HappyAgentModelCatalog,
     HappyAgentProjectId,
     HappyAgentSessionId,
@@ -341,12 +341,15 @@ export interface HappyAgentWorkspaceClient {
      * them. Absent exactly where `deviceBridges` is.
      */
     deviceBridgeSupport(): HappyAgentDeviceBridgeSupportStore | undefined;
-    /** Reads one bounded page of one checkout directory. */
+    /**
+     * Reads one bounded page of one checkout directory, or says the checkout
+     * cannot be listed at all. Any other failure rejects.
+     */
     workspaceFileTreeRead(
         groupId: HappyAgentGroupId,
         path: string,
         cursor?: string,
-    ): Promise<HappyAgentWorkspaceFileTreePage>;
+    ): Promise<HappyAgentWorkspaceFileTreeRead>;
     /**
      * Searches one checkout for `@`-mention candidates. A pure query: the result
      * is transient composer typeahead and never enters a durable snapshot.
@@ -575,17 +578,30 @@ interface ChatBinding {
     restoring: boolean;
 }
 
-async function workspaceFileTreeRead(
+/** Reads one page of a checkout directory through the daemon's own route. */
+export async function happyAgentWorkspaceFileTreeRead(
     client: Pick<HappyAgentClient, "getFileTree">,
     groupId: HappyAgentGroupId,
     path: string,
     cursor?: string,
-): Promise<HappyAgentWorkspaceFileTreePage> {
-    const page = await client.getFileTree(groupId, {
-        ...(path === "" ? {} : { path }),
-        ...(cursor === undefined ? {} : { cursor }),
-        limit: 500,
-    });
+): Promise<HappyAgentWorkspaceFileTreeRead> {
+    let page: Awaited<ReturnType<typeof client.getFileTree>>;
+    try {
+        page = await client.getFileTree(groupId, {
+            ...(path === "" ? {} : { path }),
+            ...(cursor === undefined ? {} : { cursor }),
+            limit: 500,
+        });
+    } catch (error) {
+        // A Happy Cloud server answers `no_compute` while the conversation has
+        // nowhere to run, and a server without the route answers `501`. Neither
+        // is a read that failed, so neither is reported as one.
+        if (error instanceof HappyAgentApiError) {
+            if (error.code === "no_compute") return { kind: "unavailable", reason: "noCompute" };
+            if (error.status === 501) return { kind: "unavailable", reason: "unsupported" };
+        }
+        throw error;
+    }
     const entries = page.entries.flatMap((entry) => {
         // `.git` is never a browsable project entry. Older daemons exposed it
         // and then refused expansion; newer ones omit it at the source.
@@ -599,8 +615,11 @@ async function workspaceFileTreeRead(
         ];
     });
     return {
-        entries,
-        ...(page.nextCursor === null ? {} : { nextCursor: page.nextCursor }),
+        kind: "page",
+        page: {
+            entries,
+            ...(page.nextCursor === null ? {} : { nextCursor: page.nextCursor }),
+        },
     };
 }
 
@@ -826,7 +845,7 @@ export function happyAgentWorkspaceClientCreate(
         changedFileRead: (groupId, path, change, signal) =>
             changedFileRead(deps.client, groupId, path, change, signal),
         workspaceFileTreeRead: (groupId, path, cursor) =>
-            workspaceFileTreeRead(deps.client, groupId, path, cursor),
+            happyAgentWorkspaceFileTreeRead(deps.client, groupId, path, cursor),
         filesSearch: async (groupId, query, limit) =>
             (
                 await deps.client.searchFiles(groupId, {

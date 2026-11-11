@@ -1,13 +1,17 @@
+import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import { describe, expect, it } from "vitest";
-import type {
-    HappyAgentWorkspaceClient,
-    HappyAgentWorkspaceFilesChanged,
+import {
+    happyAgentWorkspaceFileTreeRead,
+    type HappyAgentWorkspaceClient,
+    type HappyAgentWorkspaceFilesChanged,
 } from "./happyAgentClient.js";
 import type {
+    HappyAgentCompute,
     HappyAgentGroupId,
     HappyAgentSessionId,
     HappyAgentWorkspaceFileTreeEntry,
-    HappyAgentWorkspaceFileTreePage,
+    HappyAgentWorkspaceFileTreeRead,
+    HappyAgentWorkspaceFilesUnavailable,
 } from "./happyAgentTypes.js";
 import type {
     HappyAgentViewPreferencesDocument,
@@ -27,6 +31,7 @@ function checkout() {
     const directories = new Map<string, HappyAgentWorkspaceFileTreeEntry[]>([["", []]]);
     const reads: string[] = [];
     const failing = new Set<string>();
+    let unavailable: HappyAgentWorkspaceFilesUnavailable | undefined;
     let held: Array<() => void> | undefined;
     let changed: ((change: HappyAgentWorkspaceFilesChanged) => void) | undefined;
     const entry = (path: string, kind: "file" | "directory"): HappyAgentWorkspaceFileTreeEntry => ({
@@ -37,6 +42,10 @@ function checkout() {
     return {
         reads,
         failing,
+        /** What the server answers for every directory, until it is cleared. */
+        unavailableSet(reason: HappyAgentWorkspaceFilesUnavailable | undefined): void {
+            unavailable = reason;
+        },
         add(path: string, kind: "file" | "directory" = "file"): void {
             const slash = path.lastIndexOf("/");
             const parent = slash < 0 ? "" : path.slice(0, slash);
@@ -54,13 +63,14 @@ function checkout() {
         emit(paths: readonly string[] | null): void {
             changed?.({ groupId: GROUP, paths });
         },
-        async read(path: string): Promise<HappyAgentWorkspaceFileTreePage> {
+        async read(path: string): Promise<HappyAgentWorkspaceFileTreeRead> {
             reads.push(path);
             // What the folder held when the read reached it, not when it returned.
             const entries = [...(directories.get(path) ?? [])];
             if (held) await new Promise<void>((resume) => held!.push(resume));
             if (failing.has(path)) throw new Error(`cannot read ${path}`);
-            return { entries };
+            if (unavailable !== undefined) return { kind: "unavailable", reason: unavailable };
+            return { kind: "page", page: { entries } };
         },
         subscribe(listener: (change: HappyAgentWorkspaceFilesChanged) => void): () => void {
             changed = listener;
@@ -99,9 +109,49 @@ function storage(): HappyAgentViewPreferencesPersistence {
     };
 }
 
+/**
+ * The open conversation's chat, holding only where its tools run. The test
+ * moves its compute the way the server would.
+ */
+function cloudChat(initial: HappyAgentCompute) {
+    let compute = initial;
+    const listeners = new Set<() => void>();
+    let snapshot: unknown;
+    const publish = (sessionId: HappyAgentSessionId): void => {
+        snapshot = new Proxy(
+            { sessionId, compute, ready: false, slashCommands: [] } as Record<PropertyKey, unknown>,
+            {
+                get: (target, property) => (property in target ? target[property] : inert()),
+            },
+        );
+    };
+    return {
+        computeUpdate(next: HappyAgentCompute): void {
+            compute = next;
+            publish((snapshot as { sessionId: HappyAgentSessionId }).sessionId);
+            for (const listener of listeners) listener();
+        },
+        acquire(sessionId: HappyAgentSessionId): Promise<unknown> {
+            publish(sessionId);
+            const chatStore = new Proxy(
+                {
+                    get: () => snapshot,
+                    subscribe: (listener: () => void) => {
+                        listeners.add(listener);
+                        return () => listeners.delete(listener);
+                    },
+                } as Record<PropertyKey, unknown>,
+                { get: (target, property) => (property in target ? target[property] : inert()) },
+            );
+            return Promise.resolve({ store: chatStore, [Symbol.dispose]: () => undefined });
+        },
+    };
+}
+
 function store(
     disk: ReturnType<typeof checkout>,
     viewPreferences: HappyAgentViewPreferencesPersistence = storage(),
+    chat?: ReturnType<typeof cloudChat>,
 ) {
     const loading = { type: "loading" } as const;
     const list = new Proxy(
@@ -130,7 +180,8 @@ function store(
                             property in target ? target[property as keyof typeof target] : inert(),
                     },
                 ),
-            chat: () => new Promise(() => undefined),
+            chat: (sessionId: HappyAgentSessionId) =>
+                chat ? chat.acquire(sessionId) : new Promise(() => undefined),
             openInTargetsRead: () => new Promise(() => undefined),
             globalSkills: () => ({
                 get: () => ({ skills: [] }),
@@ -365,5 +416,168 @@ describe("All files reads the folders it shows open", () => {
         expect(workspace.get().workspaceFiles?.directories.get("src")?.error).toBe(true);
         expect(disk.reads).toEqual(["", "src", ""]);
         unsubscribe();
+    });
+});
+
+describe("All files on a Happy Cloud conversation follows its compute", () => {
+    const SESSION = "ses_cloud" as HappyAgentSessionId;
+    const POOL: HappyAgentCompute = { kind: "pool", poolId: "pool_1", online: true };
+
+    it("says no compute is attached, without asking the server", async () => {
+        const disk = checkout();
+        const chat = cloudChat({ kind: "none" });
+        const { workspace, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+
+        const files = workspace.get().workspaceFiles;
+        expect(files?.unavailable).toBe("noCompute");
+        expect(files?.directories.get("")).toBeUndefined();
+        expect(workspace.get().workspaceFilesLoading).toBe(false);
+        expect(disk.reads).toEqual([]);
+        unsubscribe();
+    });
+
+    it("lists the root and the folders left open once compute attaches", async () => {
+        const disk = checkout();
+        disk.add("src", "directory");
+        disk.add("src/index.ts");
+        const chat = cloudChat({ kind: "none" });
+        const { workspace, names, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.fileTreeExpandedUpdate("src", true);
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(disk.reads).toEqual([]);
+
+        // Attached, but its machine has not come up yet.
+        chat.computeUpdate({ ...POOL, online: false });
+        await settle();
+        expect(workspace.get().workspaceFiles?.unavailable).toBeUndefined();
+        expect(names()).toEqual(["src"]);
+        expect(names("src")).toEqual(["src/index.ts"]);
+        unsubscribe();
+    });
+
+    it("reads again when compute comes online after the server said it had none", async () => {
+        const disk = checkout();
+        disk.add("README.md");
+        disk.unavailableSet("noCompute");
+        // The chat arrives saying nothing yet, so the server is asked.
+        const chat = cloudChat({ ...POOL, online: false });
+        const { workspace, names, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(workspace.get().workspaceFiles?.unavailable).toBe("noCompute");
+        expect(workspace.get().workspaceFiles?.directories.get("")).toBeUndefined();
+
+        disk.unavailableSet(undefined);
+        chat.computeUpdate(POOL);
+        await settle();
+
+        expect(workspace.get().workspaceFiles?.unavailable).toBeUndefined();
+        expect(names()).toEqual(["README.md"]);
+        unsubscribe();
+    });
+
+    it("retries a root that failed while the machine was offline", async () => {
+        const disk = checkout();
+        disk.add("README.md");
+        disk.failing.add("");
+        const chat = cloudChat({ ...POOL, online: false });
+        const { workspace, names, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(workspace.get().workspaceFiles?.directories.get("")?.error).toBe(true);
+
+        disk.failing.delete("");
+        chat.computeUpdate(POOL);
+        await settle();
+
+        expect(workspace.get().workspaceFiles?.directories.get("")?.error).toBeUndefined();
+        expect(names()).toEqual(["README.md"]);
+        unsubscribe();
+    });
+
+    it("stops listing when compute is taken away", async () => {
+        const disk = checkout();
+        disk.add("README.md");
+        const chat = cloudChat(POOL);
+        const { workspace, names, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(names()).toEqual(["README.md"]);
+
+        chat.computeUpdate({ kind: "none" });
+        await settle();
+
+        expect(workspace.get().workspaceFiles?.unavailable).toBe("noCompute");
+        expect(names()).toBeUndefined();
+        unsubscribe();
+    });
+
+    it("says a server without the route has no files, and does not ask it again", async () => {
+        const disk = checkout();
+        disk.unavailableSet("unsupported");
+        const { workspace, unsubscribe } = store(disk);
+        workspace.groupOpen(GROUP);
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(workspace.get().workspaceFiles?.unavailable).toBe("unsupported");
+        expect(workspace.get().workspaceFilesLoading).toBe(false);
+
+        workspace.fileScopeUpdate(GROUP, "changed");
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(disk.reads).toEqual([""]);
+        unsubscribe();
+    });
+});
+
+describe("Reading a checkout directory names why nothing can be listed", () => {
+    const answering = (error: unknown) =>
+        happyAgentWorkspaceFileTreeRead(
+            {
+                getFileTree: () => Promise.reject(error),
+            } as unknown as Pick<HappyAgentClient, "getFileTree">,
+            GROUP,
+            "",
+        );
+
+    it("maps the server's no-compute answer, whatever its status", async () => {
+        await expect(
+            answering(
+                new HappyAgentApiError(409, "No compute.", "no_compute", {
+                    error: "No compute.",
+                    code: "no_compute",
+                }),
+            ),
+        ).resolves.toEqual({ kind: "unavailable", reason: "noCompute" });
+    });
+
+    it("maps an unsupported route to a server without files", async () => {
+        await expect(
+            answering(
+                new HappyAgentApiError(501, "Unsupported.", "unsupported", {
+                    error: "Unsupported.",
+                    code: "unsupported",
+                }),
+            ),
+        ).resolves.toEqual({ kind: "unavailable", reason: "unsupported" });
+    });
+
+    it("keeps every other failure a failure", async () => {
+        const failure = new HappyAgentApiError(500, "Broken.", "internal", null);
+        await expect(answering(failure)).rejects.toBe(failure);
+        const offline = new Error("socket closed");
+        await expect(answering(offline)).rejects.toBe(offline);
     });
 });

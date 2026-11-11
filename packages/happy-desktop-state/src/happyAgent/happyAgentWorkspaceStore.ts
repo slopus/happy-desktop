@@ -161,6 +161,7 @@ import type {
     HappyAgentContextGauge,
     HappyAgentOpenInTarget,
     HappyAgentWorkspaceFiles,
+    HappyAgentWorkspaceFilesUnavailable,
     HappyAgentWorkspaceFileTreeDirectory,
     HappyAgentWorkspaceFileBytes,
     HappyAgentWorkspaceFileDocument,
@@ -2739,6 +2740,12 @@ export function happyAgentWorkspaceStoreCreate(
     let workspaceFileTreeLoadsActive = 0;
     /** Directories that changed while their read was in flight; each reads again after it. */
     let workspaceFilesRefreshPending = new Set<string>();
+    /**
+     * Whether the open conversation has somewhere to list files from, as last
+     * seen on its chat; absent on a Happy Agent, which states no compute, and
+     * until the conversation's chat arrives.
+     */
+    let workspaceFilesCompute: "none" | "offline" | "attached" | undefined;
     let groupComposer: ComposerStore | undefined;
     /** How the addressed group's first session will be configured. */
     let groupDraft: HappyAgentSessionDraftStore | undefined;
@@ -4825,6 +4832,7 @@ export function happyAgentWorkspaceStoreCreate(
         unsubscribeChat = undefined;
         chatStore = undefined;
         chatArrival = undefined;
+        workspaceFilesCompute = undefined;
         handle?.[Symbol.dispose]();
         handle = undefined;
     };
@@ -5621,9 +5629,11 @@ export function happyAgentWorkspaceStoreCreate(
                 };
                 unsubscribeChat = acquired.store.subscribe(() => {
                     reconcileComposer();
+                    workspaceFilesComputeReconcile(acquired.store.get().compute);
                     recompute();
                 });
                 reconcileComposer();
+                workspaceFilesComputeReconcile(acquired.store.get().compute);
                 recompute();
             },
             (error: unknown) => {
@@ -6470,13 +6480,24 @@ export function happyAgentWorkspaceStoreCreate(
         if (request.path === "" && !request.refresh) workspaceFilesLoading = true;
         recompute();
 
-        const finish = (failed: boolean): void => {
+        const finish = (
+            failed: boolean,
+            unavailable?: HappyAgentWorkspaceFilesUnavailable,
+        ): void => {
             workspaceFileTreeLoadsActive -= 1;
             if (
                 !disposed &&
                 request.generation === workspaceFilesGeneration &&
                 request.groupId === workspaceFilesGroupId
             ) {
+                // Nothing in this checkout can be listed, so what was listed
+                // before is no longer shown either.
+                if (unavailable !== undefined) {
+                    workspaceFilesReset(unavailable);
+                    recompute();
+                    workspaceFilesDirectoryLoadPump();
+                    return;
+                }
                 // A refresh that failed leaves the last good listing standing.
                 const settled = failed && request.refresh ? shown : entries;
                 const cursor = failed && request.refresh ? previous?.nextCursor : nextCursor;
@@ -6498,18 +6519,20 @@ export function happyAgentWorkspaceStoreCreate(
             workspaceFilesDirectoryLoadPump();
         };
 
-        void (async () => {
+        void (async (): Promise<HappyAgentWorkspaceFilesUnavailable | undefined> => {
             do {
-                const page = await client.workspaceFileTreeRead(
+                const read = await client.workspaceFileTreeRead(
                     request.groupId,
                     request.path,
                     nextCursor,
                 );
-                entries = [...entries, ...page.entries];
-                nextCursor = page.nextCursor;
+                if (read.kind === "unavailable") return read.reason;
+                entries = [...entries, ...read.page.entries];
+                nextCursor = read.page.nextCursor;
             } while (request.path === "" && nextCursor !== undefined);
+            return undefined;
         })().then(
-            () => finish(false),
+            (unavailable) => finish(unavailable !== undefined, unavailable),
             () => finish(true),
         );
     }
@@ -6641,11 +6664,41 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
+     * Drops every listed directory and retires reads in flight, leaving the
+     * tree empty or, given a reason, saying why nothing can be listed.
+     */
+    function workspaceFilesReset(unavailable?: HappyAgentWorkspaceFilesUnavailable): void {
+        workspaceFiles =
+            unavailable === undefined
+                ? { directories: new Map() }
+                : { directories: new Map(), unavailable };
+        workspaceFileTreeLoadQueue = [];
+        workspaceFilesRefreshPending = new Set();
+        workspaceFilesGeneration += 1;
+        workspaceFilesLoading = false;
+    }
+
+    /**
+     * The compute the addressed conversation states, when its chat has arrived.
+     * The chat still held while navigation moves to another conversation says
+     * nothing about the new one.
+     */
+    const addressedComputeOf = (): HappyAgentCompute | undefined => {
+        const chat = chatStore?.get();
+        return chat !== undefined && chat.sessionId === address.conversationId
+            ? chat.compute
+            : undefined;
+    };
+
+    /**
      * Opens the all-files tree at its root once per group. Switching sessions in
      * one checkout reuses every branch already materialized; switching checkouts
      * retires in-flight pages and starts with one root read. A root already
      * listed is still walked for open folders, because which ones stand open can
      * change while the panel shows only the changes.
+     *
+     * A Happy Cloud conversation with no compute has no folder to list, so it is
+     * not asked; its compute attaching is what reads the root.
      */
     const workspaceFilesEnsure = (groupId: HappyAgentGroupId): void => {
         const root = workspaceFiles?.directories.get("");
@@ -6653,14 +6706,60 @@ export function happyAgentWorkspaceStoreCreate(
             workspaceFilesOpenedEnsure(groupId);
             return;
         }
+        // A server without the route will not grow one by asking again.
+        if (workspaceFilesGroupId === groupId && workspaceFiles?.unavailable === "unsupported")
+            return;
         if (workspaceFilesGroupId !== groupId) {
             workspaceFilesGroupId = groupId;
-            workspaceFiles = { directories: new Map() };
-            workspaceFileTreeLoadQueue = [];
-            workspaceFilesRefreshPending = new Set();
-            workspaceFilesGeneration += 1;
+            workspaceFilesReset();
         }
+        if (addressedComputeOf()?.kind === "none") {
+            if (workspaceFiles?.unavailable !== "noCompute") {
+                workspaceFilesReset("noCompute");
+                recompute();
+            }
+            return;
+        }
+        if (workspaceFiles?.unavailable !== undefined)
+            workspaceFiles = { directories: workspaceFiles.directories };
         workspaceFilesDirectoryEnsure(groupId, "");
+    };
+
+    /**
+     * Follows the open conversation's compute into its checkout's tree. Losing
+     * compute leaves nothing to list; gaining it, or its machine coming online,
+     * reads the root and every folder standing open again, so the files appear
+     * without the reader reopening the panel. A Happy Agent states no compute,
+     * so its tree never passes through here.
+     */
+    const workspaceFilesComputeReconcile = (compute: HappyAgentCompute | undefined): void => {
+        if (compute === undefined) return;
+        const next =
+            compute.kind === "none" ? "none" : compute.online === false ? "offline" : "attached";
+        const previous = workspaceFilesCompute;
+        if (next === previous) return;
+        workspaceFilesCompute = next;
+        const groupId = addressedGroupId;
+        if (groupId === undefined || workspaceFilesGroupId !== groupId || !workspaceFiles) return;
+        if (next === "none") {
+            if (workspaceFiles.unavailable === "noCompute") return;
+            workspaceFilesReset("noCompute");
+            recompute();
+            return;
+        }
+        // Bound to a machine that is still coming up is worth asking once; a
+        // machine that went away keeps what was listed until it is back.
+        if (next === "offline" && previous !== "none") return;
+        const root = workspaceFiles.directories.get("");
+        if (workspaceFiles.unavailable !== undefined || root === undefined || root.error) {
+            // Open folders are read once the root lists them again.
+            workspaceFilesReset();
+            workspaceFilesDirectoryEnsure(groupId, "");
+            recompute();
+            return;
+        }
+        // A listing read before the machine went away may have moved on since.
+        if (previous !== undefined) workspaceFilesTreeInvalidate(groupId, null);
     };
 
     /**

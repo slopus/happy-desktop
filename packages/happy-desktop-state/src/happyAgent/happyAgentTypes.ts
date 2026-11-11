@@ -1040,6 +1040,18 @@ export interface HappyAgentWorkspaceFileTreePage {
 }
 
 /**
+ * Why a checkout's files cannot be listed at all, as opposed to one read that
+ * failed: a Happy Cloud conversation with no compute attached has no folder to
+ * list yet, and a server without the route never will.
+ */
+export type HappyAgentWorkspaceFilesUnavailable = "noCompute" | "unsupported";
+
+/** What reading one checkout directory answered. */
+export type HappyAgentWorkspaceFileTreeRead =
+    | { readonly kind: "page"; readonly page: HappyAgentWorkspaceFileTreePage }
+    | { readonly kind: "unavailable"; readonly reason: HappyAgentWorkspaceFilesUnavailable };
+
+/**
  * The materialized part of one checkout directory. A directory enters this map
  * when the root opens or pointer, keyboard, or disclosure intent warms it;
  * untouched descendants remain names in their parent and cost no transport work.
@@ -1055,6 +1067,8 @@ export interface HappyAgentWorkspaceFileTreeDirectory {
 /** The lazily materialized all-files tree, keyed by directory path; `""` is the root. */
 export interface HappyAgentWorkspaceFiles {
     readonly directories: ReadonlyMap<string, HappyAgentWorkspaceFileTreeDirectory>;
+    /** Present when nothing can be listed; the directories are empty then. */
+    readonly unavailable?: HappyAgentWorkspaceFilesUnavailable;
 }
 
 /** One application a project directory can be opened in. */

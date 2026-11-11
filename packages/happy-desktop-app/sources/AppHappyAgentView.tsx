@@ -11739,10 +11739,16 @@ function HappyAgentPanelBody(props: {
                                     : all
                                       ? // A root that failed to read is not an
                                         // empty folder; it is retried on the
-                                        // next change in the checkout.
-                                        props.workspaceFiles?.directories.get("")?.error
-                                          ? "Files could not be loaded."
-                                          : "No files."
+                                        // next change in the checkout. A
+                                        // checkout with nowhere to list from is
+                                        // neither, and says why.
+                                        props.workspaceFiles?.unavailable === "noCompute"
+                                          ? "No compute attached."
+                                          : props.workspaceFiles?.unavailable === "unsupported"
+                                            ? "Files aren't available on this server."
+                                            : props.workspaceFiles?.directories.get("")?.error
+                                              ? "Files could not be loaded."
+                                              : "No files."
                                       : changesUnavailable
                                         ? "Git changes are temporarily unavailable."
                                         : "No changed files."
