@@ -1,26 +1,32 @@
 /*
- * The multiplayer video's cut: recorded takes of the app window, laid whole
- * on the site's dark backdrop, with a title under each chapter and a card
- * between chapters.
+ * The multiplayer video's cut: recorded takes of the app window on the App
+ * Store videos' moving shader backdrop, with a title under each chapter and
+ * a short card between chapters.
  *
  *   node scripts/demo/compositions/multiplayer/compose.mjs <cut.mjs> \
- *       --take aware=<take.mp4> [--take bots=<take.mp4> ...] \
- *       --out <directory> [--stills 0,0.6,4.5]
+ *       --backdrop <loop.mp4> --take aware=<take.mp4> [--take ... ] \
+ *       --out <directory> [--name <name>] [--stills 4.2,9.8] [--poster 3.4]
  *
  * Nothing here retimes or repaints the app. A window segment is a take's own
- * frames from `from` to `to`, scaled as one picture; the only things drawn
- * over the window are macOS's window buttons (the take reserves their lane)
- * and, where a segment asks for it, a slight even dimming of the session
- * pane. Geometry is in output pixels; `css` values are CSS pixels of the
- * recorded window.
+ * frames from `from` for `seconds`, scaled as one picture. Its camera moves
+ * between keys: each key names the part of the window to show (`css`: its
+ * top-left corner and output pixels per CSS pixel) or the window whole
+ * (`rest`), and the move into it ends at `at` after `move` seconds on one
+ * eased curve, pan and zoom together. Pushed in, the whole window is drawn
+ * larger and runs past the frame's edges; the frame alone cuts it. Where it
+ * runs under the chapter's caption, the caption sits on a dark pill that
+ * fades in with how much of it the window covers. Drawn over the window: macOS's
+ * window buttons (the take reserves their lane), a hairline edge, and where a
+ * segment asks for it an even dimming of part of the window, eased in and
+ * out over a quarter second.
  *
- * A phone segment is a recorded phone screen, whole, in the core demo's
- * iPhone frame, beside its title.
+ * Segments hand over with a short dissolve. Words never overlap: a caption
+ * or card fades out before the dissolve and the next fades in after it.
  */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const workspace = resolve(import.meta.dirname, "../../../..");
@@ -44,12 +50,15 @@ function parse(argv) {
             const [name, path] = rest.shift().split("=");
             options.takes[name] = resolve(path);
         } else if (argument === "--out") options.out = resolve(rest.shift());
+        else if (argument === "--backdrop") options.backdrop = resolve(rest.shift());
         else if (argument === "--stills") options.stills = rest.shift().split(",").map(Number);
+        else if (argument === "--poster") options.poster = Number(rest.shift());
         else if (argument === "--name") options.name = rest.shift();
         else if (!options.cut) options.cut = resolve(argument);
         else throw new Error(`Unknown argument: ${argument}`);
     }
-    if (!options.cut || !options.out) throw new Error("Name a cut and --out.");
+    if (!options.cut || !options.out || !options.backdrop)
+        throw new Error("Name a cut, --backdrop and --out.");
     return options;
 }
 
@@ -69,7 +78,11 @@ function cubicBezier([x1, y1, x2, y2]) {
         return curve(y1, y2, (low + high) / 2);
     };
 }
-const ease = cubicBezier([0.45, 0, 0.2, 1]);
+/** The camera's one curve: ease-in-out, no overshoot. */
+const ease = cubicBezier([0.65, 0, 0.35, 1]);
+/** Words arriving: a quick start that settles. */
+const settle = cubicBezier([0.2, 0.8, 0.2, 1]);
+const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
 const svg = (width, height, body, viewBox) =>
     Buffer.from(
@@ -78,82 +91,82 @@ const svg = (width, height, body, viewBox) =>
         }>${body}</svg>`,
     );
 
-// ---------------------------------------------------------------- text and backdrop
+// ---------------------------------------------------------------- words
 
 async function fontFace(family, file, weight) {
     const data = await readFile(join(import.meta.dirname, "fonts", file));
     return `@font-face { font-family: "${family}"; font-weight: ${weight}; src: url(data:font/woff2;base64,${data.toString("base64")}) format("woff2"); }`;
 }
 
-/** Chromium draws every still layer once: the backdrop, the titles, the cards. */
-async function layersDraw(cut) {
+/** Chromium draws every piece of text once, transparent, at the frame's size. */
+async function wordsDraw(cut) {
     const { chromium } = gymRequire("playwright");
     const browser = await chromium.launch({ headless: true, args: ["--force-color-profile=srgb"] });
     const { width, height } = cut.output;
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-    const palette = cut.palette;
+    const type = cut.type;
     const style = `
         ${await fontFace("IBM Plex Sans", "ibm-plex-sans-latin.woff2", "400 700")}
         ${await fontFace("Bricolage Grotesque", "bricolage-grotesque-latin.woff2", "200 800")}
         html, body { margin: 0; background: transparent; }
         body { width: ${width}px; height: ${height}px; overflow: hidden; position: relative;
             font-family: "IBM Plex Sans"; -webkit-font-smoothing: antialiased; color: #fff; }
-        .backdrop { position: absolute; inset: 0; background:
-            radial-gradient(ellipse 900px 700px at 100% 0%, ${palette.glow}66, ${palette.patch}33 45%, transparent 72%),
-            radial-gradient(ellipse 900px 700px at 0% 100%, ${palette.glow}55, ${palette.patch}2b 45%, transparent 72%),
-            radial-gradient(ellipse 700px 500px at 0% 0%, ${palette.violet}2e, transparent 70%),
-            radial-gradient(ellipse 700px 500px at 100% 100%, ${palette.violet}2e, transparent 70%),
-            ${palette.back}; }
-        .grain { position: absolute; inset: 0; opacity: 0.16; mix-blend-mode: screen; }
+        .shade { text-shadow: 0 2px 24px rgba(20, 0, 40, 0.45), 0 1px 3px rgba(20, 0, 40, 0.35); }
         .title { position: absolute; left: 0; right: 0; text-align: center; font-weight: 600;
             letter-spacing: -0.025em; white-space: nowrap; }
         .card { position: absolute; inset: 0; display: flex; flex-direction: column;
             align-items: center; justify-content: center; text-align: center; }
-        .card h1 { margin: 0; font-weight: 600; font-size: 92px; line-height: 104px; letter-spacing: -0.03em; }
-        .card .word { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: 168px;
-            line-height: 170px; letter-spacing: -0.03em; }
-        .card p { margin: 22px 0 0; font-size: 46px; line-height: 58px; font-weight: 500;
-            letter-spacing: -0.02em; color: rgba(255,255,255,0.87); }
-        .side { position: absolute; font-weight: 600; letter-spacing: -0.03em; }
-        .card small { display: block; margin-top: 30px; font-size: 34px; line-height: 44px;
-            font-weight: 500; color: ${palette.accent}; letter-spacing: -0.01em; }
+        .card h1 { margin: 0; max-width: ${type.cardWidth}px; font-weight: 600; font-size: ${type.card}px;
+            line-height: 1.12; letter-spacing: -0.03em; text-wrap: balance; }
+        .card .word { font-family: "Bricolage Grotesque"; font-weight: 700; font-size: ${type.wordmark}px;
+            line-height: 1; letter-spacing: -0.03em; }
+        .card p { margin: ${type.gap}px 0 0; max-width: ${type.cardWidth}px; font-size: ${type.line}px;
+            line-height: 1.25; font-weight: 500; letter-spacing: -0.02em; text-wrap: balance; }
+        .card small { display: block; margin-top: ${type.gap}px; font-size: ${type.small}px; line-height: 1.25;
+            font-weight: 500; letter-spacing: -0.01em; }
     `;
-    const backdrop = `<div class="backdrop"></div><svg class="grain" width="${width}" height="${height}"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 0.75  0 0 0 0 0.7  0 0 0 0 1  0.9 0.9 0.9 0 -0.75"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>`;
-    const draw = async (body, transparent = false) => {
+    const draw = async (body) => {
         await page.setContent(`<style>${style}</style>${body}`);
         await page.evaluate(() => document.fonts.ready);
-        return page.screenshot({ omitBackground: transparent, type: "png" });
+        return page.screenshot({ omitBackground: true, type: "png" });
     };
     const escape = (value) =>
         value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-    const layers = { backdrop: await draw(backdrop), titles: new Map(), cards: new Map() };
+    const words = { titles: new Map(), cards: new Map() };
     for (const segment of cut.segments) {
-        if (segment.kind === "window" && segment.title && !layers.titles.has(segment.title)) {
+        if (segment.kind === "window" && segment.title && !words.titles.has(segment.title)) {
             const band = cut.title;
-            layers.titles.set(
-                segment.title,
-                await draw(
-                    `<div class="title" style="top:${band.centerY - band.lineHeight / 2}px;font-size:${band.size}px;line-height:${band.lineHeight}px">${escape(segment.title)}</div>`,
-                    true,
-                ),
+            const text = await draw(
+                `<div class="title shade" style="top:${band.centerY - band.lineHeight / 2}px;font-size:${band.size}px;line-height:${band.lineHeight}px"><span id="words">${escape(segment.title)}</span></div>`,
             );
-        }
-        if (segment.kind === "phone" && segment.title && !layers.titles.has(segment.title)) {
-            const side = cut.phone.title;
-            layers.titles.set(
-                segment.title,
-                await draw(
-                    `<div class="side" style="left:${side.left}px;top:${side.top}px;width:${side.width}px;font-size:${side.size}px;line-height:${side.lineHeight}px">${escape(segment.title)}</div>`,
-                    true,
+            // The caption's pill, drawn under the words where the window runs beneath them.
+            const box = await page.locator("#words").boundingBox();
+            const pad = { x: Math.round(band.size * 0.6), y: Math.round(band.size * 0.2) };
+            const pill = {
+                left: Math.round(box.x - pad.x),
+                top: Math.round(box.y - pad.y),
+                width: Math.round(box.width + pad.x * 2),
+                height: Math.round(box.height + pad.y * 2),
+            };
+            const back = await sharp(
+                svg(
+                    pill.width,
+                    pill.height,
+                    `<rect width="${pill.width}" height="${pill.height}" rx="${pill.height / 2}" fill="#140a22" fill-opacity="0.78"/>`,
                 ),
-            );
+            )
+                .png()
+                .toBuffer();
+            words.titles.set(segment.title, { text, pill, back });
         }
         if (segment.kind === "card")
-            layers.cards.set(
+            words.cards.set(
                 segment,
                 await draw(
-                    `${backdrop}<div class="card">${
-                        segment.wordmark ? `<div class="word">${escape(segment.wordmark)}</div>` : ""
+                    `<div class="card shade">${
+                        segment.wordmark
+                            ? `<div class="word">${escape(segment.wordmark)}</div>`
+                            : ""
                     }${segment.text ? `<h1>${escape(segment.text)}</h1>` : ""}${
                         segment.line ? `<p>${escape(segment.line)}</p>` : ""
                     }${segment.small ? `<small>${escape(segment.small)}</small>` : ""}</div>`,
@@ -161,7 +174,27 @@ async function layersDraw(cut) {
             );
     }
     await browser.close();
-    return layers;
+    return words;
+}
+
+/** A transparent layer at `opacity`, cached by a twentieth. */
+const faded = new Map();
+async function fade(layer, opacity) {
+    const step = Math.round(clamp01(opacity) * 20);
+    const cache = faded.get(layer) ?? new Map();
+    faded.set(layer, cache);
+    if (!cache.has(step))
+        cache.set(
+            step,
+            step === 20
+                ? layer
+                : await sharp(layer)
+                      .ensureAlpha()
+                      .linear([1, 1, 1, step / 20], [0, 0, 0, 0])
+                      .png()
+                      .toBuffer(),
+        );
+    return cache.get(step);
 }
 
 // ---------------------------------------------------------------- the window
@@ -180,106 +213,160 @@ function trafficLights(scale) {
         .join("");
 }
 
-/** What a window segment's camera shows at `t` seconds into it: the window's rectangle. */
+/**
+ * A camera key as the part of the window in view, in CSS pixels: `x`, `y` at
+ * the stage's top-left corner, and `scale` output pixels per CSS pixel.
+ */
+function viewOf(cut, key) {
+    if (!key.css) {
+        const scale = cut.window.width / cut.window.cssWidth;
+        return {
+            x: (cut.stage.x - cut.window.x) / scale,
+            y: (cut.stage.y - cut.window.y) / scale,
+            scale,
+        };
+    }
+    return key.css;
+}
+
+/** The window's rectangle in the frame at `t` seconds into a segment. */
 function windowRect(cut, segment, t) {
-    const rest = { x: cut.window.x, y: cut.window.y, width: cut.window.width };
-    const keys = segment.camera ?? [{ at: 0, ...rest }];
-    const full = keys.map((key) => ({ ...rest, ...key }));
-    let rect = full[0];
-    for (let index = 1; index < full.length; index += 1) {
-        const from = full[index - 1];
-        const to = full[index];
+    const keys = segment.camera ?? [{ at: 0 }];
+    let view = viewOf(cut, keys[0]);
+    for (let index = 1; index < keys.length; index += 1) {
+        const to = keys[index];
         const start = to.at - (to.move ?? 0.8);
         if (t <= start) break;
-        const k = ease(Math.min(1, (t - start) / (to.at - start)));
-        rect = {
-            x: from.x + (to.x - from.x) * k,
-            y: from.y + (to.y - from.y) * k,
-            width: from.width + (to.width - from.width) * k,
-        };
+        const from = view;
+        const target = viewOf(cut, to);
+        const k = ease(clamp01((t - start) / (to.at - start)));
+        // The zoom changes at an even rate to the eye: its logarithm is eased.
+        const scale = Math.exp(
+            Math.log(from.scale) + (Math.log(target.scale) - Math.log(from.scale)) * k,
+        );
+        // The view's centre travels in a straight line across the stage.
+        const half = { x: cut.stage.width / 2, y: cut.stage.height / 2 };
+        const centre = (v) => ({ x: v.x + half.x / v.scale, y: v.y + half.y / v.scale });
+        const a = centre(from);
+        const b = centre(target);
+        const c = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+        view = { x: c.x - half.x / scale, y: c.y - half.y / scale, scale };
         if (t < to.at) break;
-        rect = to;
+        view = target;
     }
-    const width = Math.round(rect.width);
+    const width = Math.round(cut.window.cssWidth * view.scale);
     return {
-        left: Math.round(rect.x),
-        top: Math.round(rect.y),
+        left: Math.round(cut.stage.x - view.x * view.scale),
+        top: Math.round(cut.stage.y - view.y * view.scale),
         width,
-        height: Math.round((width * cut.window.cssHeight) / cut.window.cssWidth),
+        height: Math.round(cut.window.cssHeight * view.scale),
+        scale: view.scale,
     };
 }
 
-/** The part of a layer at (left, top) that falls inside the frame. */
-function clip(frame, left, top, width, height) {
-    const x0 = Math.max(0, left);
-    const y0 = Math.max(0, top);
-    const x1 = Math.min(frame.width, left + width);
-    const y1 = Math.min(frame.height, top + height);
-    if (x1 <= x0 || y1 <= y0) return undefined;
-    return { left: x0, top: y0, width: x1 - x0, height: y1 - y0, dx: x0 - left, dy: y0 - top };
+/** Each dimmed part of the window at `t`: its CSS rectangle and how dark. */
+function dimsAt(segment, t) {
+    return (segment.dims ?? [])
+        .map((dim) => {
+            const into = clamp01((t - (dim.from ?? 0)) / 0.25);
+            const out = dim.to === undefined ? 1 : clamp01((dim.to - t) / 0.25);
+            return {
+                rect: dim.rect,
+                amount: Math.round(dim.amount * Math.min(into, out) * 50) / 50,
+            };
+        })
+        .filter((dim) => dim.amount > 0);
 }
 
-const overlayCache = new Map();
-/** The window's own layers at one size and clipping: what is drawn over it, its shape, its shadow. */
-async function windowLayers(cut, segment, rect) {
-    const key = `${segment.dim ?? ""}:${segment.dimAmount ?? ""}:${rect.left}:${rect.top}:${rect.width}`;
-    if (overlayCache.has(key)) return overlayCache.get(key);
-    const frame = cut.output;
-    const scale = rect.width / cut.window.cssWidth;
-    const radius = cut.window.cssRadius * scale;
-    const visible = clip(frame, rect.left, rect.top, rect.width, rect.height);
-    const viewBox = `${visible.dx} ${visible.dy} ${visible.width} ${visible.height}`;
-    const dim =
-        segment.dim === "session"
-            ? `<rect x="${cut.window.sidebarEdge * scale}" y="0" width="${rect.width}" height="${rect.height}" fill="#000" opacity="${segment.dimAmount ?? cut.dim}"/>`
-            : "";
+/** The part of a rectangle inside another. */
+function intersect(a, b) {
+    const x0 = Math.max(a.left, b.left);
+    const y0 = Math.max(a.top, b.top);
+    const x1 = Math.min(a.left + a.width, b.left + b.width);
+    const y1 = Math.min(a.top + a.height, b.top + b.height);
+    if (x1 <= x0 || y1 <= y0) return undefined;
+    return { left: x0, top: y0, width: x1 - x0, height: y1 - y0 };
+}
+
+/** What is drawn over and around the window at one size: buttons, edge, dims, its shape, its shadow. */
+async function windowLayers(cut, rect, dims) {
+    const frame = { left: 0, top: 0, width: cut.output.width, height: cut.output.height };
+    // Pushed in, the window is simply larger: whatever falls outside the frame is cut by the frame.
+    const shown = intersect(rect, frame);
+    const radius = cut.window.cssRadius * rect.scale;
+    const local = (x, y) => `translate(${x - shown.left} ${y - shown.top})`;
+    const dimBody = dims
+        .map(
+            (dim) =>
+                `<rect x="${dim.rect.x * rect.scale}" y="${dim.rect.y * rect.scale}" width="${dim.rect.width * rect.scale}" height="${dim.rect.height * rect.scale}" fill="#000" opacity="${dim.amount}"/>`,
+        )
+        .join("");
     const over = await sharp(
         svg(
-            visible.width,
-            visible.height,
-            `${dim}${trafficLights(scale)}<rect x="0.5" y="0.5" width="${rect.width - 1}" height="${rect.height - 1}" rx="${radius}" fill="none" stroke="#fff" stroke-opacity="0.13"/>`,
-            viewBox,
+            shown.width,
+            shown.height,
+            `<g transform="${local(rect.left, rect.top)}">${dimBody}${trafficLights(rect.scale)}<rect x="0.5" y="0.5" width="${rect.width - 1}" height="${rect.height - 1}" rx="${radius}" fill="none" stroke="#fff" stroke-opacity="0.16"/></g>`,
         ),
     )
         .png()
         .toBuffer();
     const mask = await sharp(
         svg(
-            visible.width,
-            visible.height,
-            `<rect width="${rect.width}" height="${rect.height}" rx="${radius}" fill="#fff"/>`,
-            viewBox,
+            shown.width,
+            shown.height,
+            `<rect x="${rect.left - shown.left}" y="${rect.top - shown.top}" width="${rect.width}" height="${rect.height}" rx="${radius}" fill="#fff"/>`,
         ),
     )
         .png()
         .toBuffer();
-    const pad = 160;
-    const shadowBox = clip(
+    const pad = 150;
+    const halo = intersect(
+        {
+            left: shown.left - pad,
+            top: shown.top - pad,
+            width: shown.width + pad * 2,
+            height: shown.height + pad * 2,
+        },
         frame,
-        rect.left - pad,
-        rect.top - pad,
-        rect.width + pad * 2,
-        rect.height + pad * 2,
     );
     const shadow = await sharp(
         svg(
-            shadowBox.width,
-            shadowBox.height,
-            `<rect x="${pad}" y="${pad + 24}" width="${rect.width}" height="${rect.height}" rx="${radius}" fill="#000" fill-opacity="0.55"/>`,
-            `${shadowBox.dx} ${shadowBox.dy} ${shadowBox.width} ${shadowBox.height}`,
+            halo.width,
+            halo.height,
+            `<rect x="${rect.left - halo.left}" y="${rect.top - halo.top + 22}" width="${rect.width}" height="${rect.height}" rx="${radius}" fill="#12002a" fill-opacity="0.55"/>`,
         ),
     )
-        .blur(36)
+        .blur(34)
         .png()
         .toBuffer();
-    const layers = { visible, over, mask, shadow, shadowBox };
-    if (overlayCache.size > 400) overlayCache.clear();
-    overlayCache.set(key, layers);
-    return layers;
+    return { shown, over, mask, shadow, halo };
 }
 
-/** A take's frames from `from` for `count` frames, as raw RGB. */
-function decoderOpen(file, from, count, fps, size) {
+// ---------------------------------------------------------------- decoding
+
+function framesOf(child, bytes) {
+    return (async function* () {
+        let frame = Buffer.allocUnsafe(bytes);
+        let filled = 0;
+        for await (const chunk of child.stdout) {
+            let offset = 0;
+            while (offset < chunk.length) {
+                const take = Math.min(bytes - filled, chunk.length - offset);
+                chunk.copy(frame, filled, offset, offset + take);
+                filled += take;
+                offset += take;
+                if (filled === bytes) {
+                    yield frame;
+                    frame = Buffer.allocUnsafe(bytes);
+                    filled = 0;
+                }
+            }
+        }
+    })();
+}
+
+/** A take's frames from `from` for `count` frames, as raw RGB at its own size. */
+function takeOpen(file, from, count, fps, size) {
     const child = spawn(
         "ffmpeg",
         [
@@ -303,32 +390,50 @@ function decoderOpen(file, from, count, fps, size) {
         ],
         { stdio: ["ignore", "pipe", "inherit"] },
     );
-    const bytes = size.width * size.height * 3;
-    async function* frames() {
-        let frame = Buffer.allocUnsafe(bytes);
-        let filled = 0;
-        for await (const chunk of child.stdout) {
-            let offset = 0;
-            while (offset < chunk.length) {
-                const take = Math.min(bytes - filled, chunk.length - offset);
-                chunk.copy(frame, filled, offset, offset + take);
-                filled += take;
-                offset += take;
-                if (filled === bytes) {
-                    yield frame;
-                    frame = Buffer.allocUnsafe(bytes);
-                    filled = 0;
-                }
-            }
-        }
-    }
-    return frames();
+    return framesOf(child, size.width * size.height * 3);
+}
+
+/** The backdrop loop, endlessly, covering the frame. */
+function backdropOpen(file, fps, size) {
+    const child = spawn(
+        "ffmpeg",
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-stream_loop",
+            "-1",
+            "-i",
+            file,
+            "-an",
+            "-vf",
+            `fps=${fps},scale=${size.width}:${size.height}:force_original_aspect_ratio=increase:${decodeColour},crop=${size.width}:${size.height}`,
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "pipe:1",
+        ],
+        { stdio: ["ignore", "pipe", "inherit"] },
+    );
+    const frames = framesOf(child, size.width * size.height * 3);
+    return { next: async () => (await frames.next()).value, kill: () => child.kill("SIGKILL") };
 }
 
 async function probe(file) {
     const child = spawn(
         "ffprobe",
-        ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", file],
+        [
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+            file,
+        ],
         { stdio: ["ignore", "pipe", "inherit"] },
     );
     let out = "";
@@ -339,44 +444,93 @@ async function probe(file) {
 
 // ---------------------------------------------------------------- the cut
 
+/**
+ * Each take's cues, by take name and cue name, in seconds, from the
+ * `cues.json` beside it; `rects` holds the CSS rectangle a cue points at.
+ */
+async function cuesRead(takes) {
+    const cues = {};
+    for (const [name, file] of Object.entries(takes)) {
+        const list = JSON.parse(await readFile(join(dirname(file), "cues.json"), "utf8"));
+        cues[name] = Object.fromEntries(list.map((entry) => [entry.name, entry.seconds]));
+        cues[name].rects = Object.fromEntries(
+            list.filter((entry) => entry.rect).map((entry) => [entry.name, entry.rect]),
+        );
+    }
+    return cues;
+}
+
 const options = parse(process.argv.slice(2));
-const cut = (await import(pathToFileURL(options.cut).href)).default;
+// A cut is its segments, or a function that places them by the takes' cues.
+const loaded = (await import(pathToFileURL(options.cut).href)).default;
+const cut = typeof loaded === "function" ? loaded(await cuesRead(options.takes)) : loaded;
 const { width, height, fps } = cut.output;
-const frame = { width, height };
-await mkdir(options.out, { recursive: true });
-const layers = await layersDraw(cut);
-const backdropRaw = await sharp(layers.backdrop).removeAlpha().raw().toBuffer();
 const raw = { raw: { width, height, channels: 3 } };
+await mkdir(options.out, { recursive: true });
+const words = await wordsDraw(cut);
+const backdrop = backdropOpen(options.backdrop, fps, { width, height });
+
+/**
+ * How much of a segment's words show at `t`: one caption or card at a time.
+ * They come in once the dissolve into the segment is over and are gone before
+ * the dissolve out of it starts, except at the video's two ends.
+ */
+function wordsShown(segment, t, first, last) {
+    const handover = cut.dissolve ?? 0;
+    const into = first ? 1 : clamp01((t - handover) / 0.3);
+    const out = last ? 1 : clamp01((segment.seconds - 1 / fps - t) / 0.15);
+    return { into, amount: Math.min(into, out) };
+}
 
 /** Every segment as a run of finished frames. */
-async function* segmentFrames(segment) {
+async function* segmentFrames(segment, first, last) {
     const count = Math.round(segment.seconds * fps);
     if (segment.kind === "card") {
-        const card = await sharp(layers.cards.get(segment)).removeAlpha().raw().toBuffer();
-        for (let index = 0; index < count; index += 1) yield card;
+        const layer = words.cards.get(segment);
+        const rise = cut.type.rise;
+        for (let index = 0; index < count; index += 1) {
+            const t = index / fps;
+            // The words fade and rise into place over 0.3 s, once the dissolve is over.
+            const shownNow = wordsShown(segment, t, first, last);
+            const k = settle(shownNow.into);
+            const back = await backdrop.next();
+            yield await sharp(back, raw)
+                .composite([
+                    {
+                        input: await fade(layer, shownNow.amount),
+                        left: 0,
+                        top: Math.round((1 - k) * rise),
+                    },
+                ])
+                .removeAlpha()
+                .raw()
+                .toBuffer();
+        }
         return;
     }
     const source = options.takes[segment.take];
     if (!source) throw new Error(`No --take ${segment.take}= was named.`);
     const size = await probe(source);
-    const title = segment.title ? layers.titles.get(segment.title) : undefined;
-    if (segment.kind === "phone") {
-        yield* phoneFrames(segment, source, size, title, count);
-        return;
-    }
+    const title = segment.title ? words.titles.get(segment.title) : undefined;
     let index = 0;
-    for await (const picture of decoderOpen(source, segment.from, count, fps, size)) {
-        const rect = windowRect(cut, segment, index / fps);
-        const made = await windowLayers(cut, segment, rect);
-        const { visible } = made;
+    for await (const picture of takeOpen(source, segment.from, count, fps, size)) {
+        const t = index / fps;
+        const rect = windowRect(cut, segment, t);
+        const made = await windowLayers(cut, rect, dimsAt(segment, t));
+        const { shown } = made;
         const scaled = await sharp(picture, { raw: { ...size, channels: 3 } })
             .resize(rect.width, rect.height, { kernel: "lanczos3" })
-            .extract({ left: visible.dx, top: visible.dy, width: visible.width, height: visible.height })
+            .extract({
+                left: shown.left - rect.left,
+                top: shown.top - rect.top,
+                width: shown.width,
+                height: shown.height,
+            })
             .ensureAlpha()
             .raw()
             .toBuffer();
         const shaped = await sharp(scaled, {
-            raw: { width: visible.width, height: visible.height, channels: 4 },
+            raw: { width: shown.width, height: shown.height, channels: 4 },
         })
             .composite([
                 { input: made.over, left: 0, top: 0 },
@@ -384,11 +538,29 @@ async function* segmentFrames(segment) {
             ])
             .png({ compressionLevel: 0 })
             .toBuffer();
-        yield await sharp(backdropRaw, raw)
+        // Where the window runs under the caption, the caption sits on its pill.
+        const under = title ? intersect(rect, title.pill) : undefined;
+        const covered = under
+            ? (under.width * under.height) / (title.pill.width * title.pill.height)
+            : 0;
+        const caption = wordsShown(segment, t, first, last).amount;
+        const back = await backdrop.next();
+        yield await sharp(back, raw)
             .composite([
-                { input: made.shadow, left: made.shadowBox.left, top: made.shadowBox.top },
-                { input: shaped, left: visible.left, top: visible.top },
-                ...(title ? [{ input: title, left: 0, top: 0 }] : []),
+                { input: made.shadow, left: made.halo.left, top: made.halo.top },
+                { input: shaped, left: shown.left, top: shown.top },
+                ...(covered * caption > 0
+                    ? [
+                          {
+                              input: await fade(title.back, covered * caption),
+                              left: title.pill.left,
+                              top: title.pill.top,
+                          },
+                      ]
+                    : []),
+                ...(title && caption > 0
+                    ? [{ input: await fade(title.text, caption), left: 0, top: 0 }]
+                    : []),
             ])
             .removeAlpha()
             .raw()
@@ -397,80 +569,6 @@ async function* segmentFrames(segment) {
     }
     if (index !== count)
         throw new Error(`${segment.take} ended after ${index} of ${count} frames.`);
-}
-
-/** The phone's still layers at the cut's size: its frame, its screen's shape, its shadow. */
-async function phoneLayers() {
-    const phone = cut.phone;
-    const frameMeta = await sharp(resolve(import.meta.dirname, phone.frame)).metadata();
-    const scale = phone.height / frameMeta.height;
-    const width = Math.round(frameMeta.width * scale);
-    const screen = {
-        left: Math.round(phone.left + phone.screen.x * scale),
-        top: Math.round(phone.top + phone.screen.y * scale),
-        width: Math.round(phone.screen.width * scale),
-        height: Math.round(phone.screen.height * scale),
-    };
-    const bezel = await sharp(resolve(import.meta.dirname, phone.frame))
-        .resize(width, phone.height, { kernel: "lanczos3" })
-        .png()
-        .toBuffer();
-    const mask = await sharp(resolve(import.meta.dirname, phone.alpha))
-        .resize(screen.width, screen.height, { kernel: "lanczos3" })
-        .toColourspace("b-w")
-        .raw()
-        .toBuffer();
-    const pad = 120;
-    const shadowBox = clip(frame, phone.left - pad, phone.top - pad, width + pad * 2, phone.height + pad * 2);
-    const shadow = await sharp(
-        svg(
-            shadowBox.width,
-            shadowBox.height,
-            `<rect x="${pad + 10}" y="${pad + 30}" width="${width - 20}" height="${phone.height - 40}" rx="${width * 0.17}" fill="#000" fill-opacity="0.6"/>`,
-            `${shadowBox.dx} ${shadowBox.dy} ${shadowBox.width} ${shadowBox.height}`,
-        ),
-    )
-        .blur(40)
-        .png()
-        .toBuffer();
-    return { bezel, mask, shadow, shadowBox, screen };
-}
-
-let phoneMade;
-async function* phoneFrames(segment, source, size, title, count) {
-    phoneMade ??= await phoneLayers();
-    const { bezel, mask, shadow, shadowBox, screen } = phoneMade;
-    let index = 0;
-    for await (const picture of decoderOpen(source, segment.from, count, fps, size)) {
-        const rgb = await sharp(picture, { raw: { ...size, channels: 3 } })
-            .resize(screen.width, screen.height, { kernel: "lanczos3" })
-            .raw()
-            .toBuffer();
-        const rgba = Buffer.allocUnsafe(screen.width * screen.height * 4);
-        for (let pixel = 0; pixel < screen.width * screen.height; pixel += 1) {
-            rgba[pixel * 4] = rgb[pixel * 3];
-            rgba[pixel * 4 + 1] = rgb[pixel * 3 + 1];
-            rgba[pixel * 4 + 2] = rgb[pixel * 3 + 2];
-            rgba[pixel * 4 + 3] = mask[pixel];
-        }
-        yield await sharp(backdropRaw, raw)
-            .composite([
-                { input: shadow, left: shadowBox.left, top: shadowBox.top },
-                {
-                    input: rgba,
-                    raw: { width: screen.width, height: screen.height, channels: 4 },
-                    left: screen.left,
-                    top: screen.top,
-                },
-                { input: bezel, left: cut.phone.left, top: cut.phone.top },
-                ...(title ? [{ input: title, left: 0, top: 0 }] : []),
-            ])
-            .removeAlpha()
-            .raw()
-            .toBuffer();
-        index += 1;
-    }
-    if (index !== count) throw new Error(`${segment.take} ended after ${index} of ${count} frames.`);
 }
 
 const name = options.name ?? cut.id;
@@ -508,19 +606,19 @@ const encoder = spawn(
     ],
     { stdio: ["pipe", "inherit", "inherit"] },
 );
-const encoded = new Promise((settle, fail) => {
+const encoded = new Promise((settled, fail) => {
     encoder.once("error", fail);
     encoder.once("exit", (code) =>
-        code === 0 ? settle() : fail(new Error(`ffmpeg exited with ${code}.`)),
+        code === 0 ? settled() : fail(new Error(`ffmpeg exited with ${code}.`)),
     );
 });
 const write = (buffer) =>
-    new Promise((settle) => {
-        if (encoder.stdin.write(buffer)) settle();
-        else encoder.stdin.once("drain", settle);
+    new Promise((settled) => {
+        if (encoder.stdin.write(buffer)) settled();
+        else encoder.stdin.once("drain", settled);
     });
 
-/** A short dissolve where one segment hands to the next. */
+/** One frame dissolving into the next, eased. */
 const blend = (from, to, k) => {
     const out = Buffer.allocUnsafe(from.length);
     for (let index = 0; index < from.length; index += 1)
@@ -529,38 +627,54 @@ const blend = (from, to, k) => {
 };
 
 const stills = new Map(options.stills.map((seconds) => [Math.round(seconds * fps), seconds]));
+const posterFrame = Math.round((options.poster ?? 0) * fps);
 const timeline = [];
 let total = 0;
 let previous;
-for (const segment of cut.segments) {
+for (const [position, segment] of cut.segments.entries()) {
     const start = total;
     const dissolve = previous ? Math.round((cut.dissolve ?? 0) * fps) : 0;
     let index = 0;
-    for await (const picture of segmentFrames(segment)) {
+    const first = position === 0;
+    const last = position === cut.segments.length - 1;
+    for await (const picture of segmentFrames(segment, first, last)) {
         const out =
-            index < dissolve ? blend(previous, picture, ease((index + 1) / (dissolve + 1))) : picture;
+            index < dissolve
+                ? blend(previous, picture, ease((index + 1) / (dissolve + 1)))
+                : picture;
         await write(out);
-        if (stills.has(total)) {
-            const seconds = stills.get(total);
+        if (stills.has(total))
             await sharp(out, raw)
                 .png()
-                .toFile(join(options.out, `${name}-${seconds.toFixed(2)}s.png`));
+                .toFile(join(options.out, `${name}-${stills.get(total).toFixed(2)}s.png`));
+        if (total === posterFrame) {
+            await sharp(out, raw)
+                .webp({ quality: 92 })
+                .toFile(join(options.out, `${name}-poster.webp`));
+            await sharp(out, raw)
+                .png()
+                .toFile(join(options.out, `${name}-poster.png`));
         }
-        if (index === 0 && total === 0)
-            await sharp(out, raw).webp({ quality: 92 }).toFile(join(options.out, `${name}-poster.webp`));
-        previous = picture;
+        // The last frame of a segment stands still while the next one dissolves in over it.
+        if (index === Math.round(segment.seconds * fps) - 1) previous = picture;
         index += 1;
         total += 1;
     }
+    const label = segment.title ?? segment.text ?? segment.wordmark ?? "";
     timeline.push({
         kind: segment.kind,
         take: segment.take,
-        title: segment.title ?? segment.text ?? segment.wordmark,
+        title: label,
         from: start / fps,
         to: total / fps,
+        // Where the segment starts in its take, to find a take's moment in the cut.
+        ...(segment.kind === "window" ? { takeFrom: segment.from } : {}),
     });
-    process.stdout.write(`  ${segment.kind.padEnd(7)}${(start / fps).toFixed(2)}–${(total / fps).toFixed(2)} s  ${segment.title ?? segment.text ?? segment.wordmark ?? ""}\n`);
+    process.stdout.write(
+        `  ${segment.kind.padEnd(7)}${(start / fps).toFixed(2)}–${(total / fps).toFixed(2)} s  ${label}\n`,
+    );
 }
+backdrop.kill();
 encoder.stdin.end();
 await encoded;
 await writeFile(

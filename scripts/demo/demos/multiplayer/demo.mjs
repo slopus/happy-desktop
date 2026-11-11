@@ -1,8 +1,11 @@
 import * as world from "./world.mjs";
 import { cuid, nodeAvatarSet, personalOpen, photoSet } from "./personal.mjs";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+
+const sharp = createRequire(import.meta.url)("sharp");
 
 /**
  * The whole app as one window, the team demo's 1133×700, dark. Recorded at 2×
@@ -15,8 +18,8 @@ const viewport = requestedViewport
     : { width: 1133, height: 700 };
 
 /**
- * Which chapter this run films: `aware`, `bots` or `step-in`. `explore`
- * writes stills of the world instead.
+ * Which chapter this run films: `aware`, `activity`, `bots`, `artifacts` or
+ * `step-in`. `explore` writes stills of the world instead.
  */
 const shot = process.env.MULTIPLAYER_SHOT ?? "aware";
 
@@ -58,12 +61,6 @@ async function wait(read, label, timeout = 90000) {
     }
 }
 
-const exists = (path) =>
-    access(path).then(
-        () => true,
-        () => false,
-    );
-
 /** A member's profile on Happy Core: their name, their picture, setup done. */
 async function memberPrepare(client, member) {
     const { profile } = await client.getProfile();
@@ -95,6 +92,16 @@ async function projectPicturesSet(client, projectIds) {
 }
 
 /** The team's bots, made once, each with its picture. */
+/** The still of the app's placeholder picture `index`, from the app being filmed. */
+function placeholderPath(index) {
+    const app = process.env.HAPPY_DEMO_APP_SOURCE ?? join(import.meta.dirname, "../../../..");
+    return join(
+        app,
+        "packages/happy-desktop-ui/src/assets/avatar-placeholders",
+        `avatar-placeholder-${String(index).padStart(3, "0")}.webp`,
+    );
+}
+
 async function botsPrepare(client) {
     for (const entry of world.bots) {
         const { bots } = await client.listBots();
@@ -105,11 +112,13 @@ async function botsPrepare(client) {
                 username: entry.username,
                 isAdmin: false,
             }));
-        const picture = world.assetPath(`${entry.username}.png`);
-        if (!bot.avatar && (await exists(picture)))
+        if (!bot.avatar)
             await client.setBotAvatar(
                 bot.id,
-                { contentType: "image/png", data: await readFile(picture) },
+                {
+                    contentType: "image/png",
+                    data: await sharp(placeholderPath(entry.placeholder)).png().toBuffer(),
+                },
                 { ifMatch: bot.version },
             );
     }
@@ -170,15 +179,14 @@ async function botJobPrepare(clients) {
         mode: world.agentMode,
     });
     await wait(() => settled(owner, agentId), "Desktop Releases' first answer");
+    // Up to chapter 3, Anna has not written yet: she does on camera.
+    if (shot === "activity" || shot === "bots") return bot;
     await clients[follow.from].sendMessage(await theirs(follow.from), {
         id: cuid(),
         text: follow.text,
         mode: world.agentMode,
     });
-    await wait(
-        () => world.hasReached(shot === "bots" ? "bots:report" : "bots:reported"),
-        "Desktop Releases to be at work",
-    );
+    await wait(() => world.hasReached("bots:reported"), "Desktop Releases to be at work");
     return bot;
 }
 
@@ -224,13 +232,10 @@ async function doneTasksPrepare(clients) {
                 text: more.message,
                 mode: world.agentMode,
             });
-            const held = shot === "step-in" && entry.name === world.openTask;
             await wait(
                 async () =>
-                    held
-                        ? world.hasReached("step:ask")
-                        : (await client.getMessages(task.agent.id, { limit: 16 })).runs.length >
-                              before && (await settled(client, task.agent.id)),
+                    (await client.getMessages(task.agent.id, { limit: 16 })).runs.length > before &&
+                    (await settled(client, task.agent.id)),
                 `${entry.name}'s next turn`,
             );
         }
@@ -265,10 +270,14 @@ async function liveTaskPrepare(client) {
     await client.sendMessage(task.agent.id, {
         id: cuid(),
         text: world.liveTask.message,
-        mode: world.seedMode,
+        // Chapter 5 shows this task's composer, and its mode under it.
+        mode: shot === "step-in" ? world.agentMode : world.seedMode,
     });
     await wait(
-        () => world.hasReached("live:coordinator") && world.hasReached("live:subtask"),
+        () =>
+            world.hasReached("live:coordinator") &&
+            world.hasReached("live:subtask") &&
+            (shot !== "step-in" || world.hasReached("step:ask")),
         "Steve's live task to be working",
         180000,
     );
@@ -359,15 +368,13 @@ async function rowRect(page, label) {
 /** A teammate starts a task through their own sign-in; it is not awaited on camera. */
 function arrivalStart(clients, arrival) {
     const client = clients[arrival.owner];
-    return client
-        .createTask({ name: arrival.name, mutationId: randomUUID() })
-        .then(({ task }) =>
-            client.sendMessage(task.agent.id, {
-                id: cuid(),
-                text: arrival.message,
-                mode: world.seedMode,
-            }),
-        );
+    return client.createTask({ name: arrival.name, mutationId: randomUUID() }).then(({ task }) =>
+        client.sendMessage(task.agent.id, {
+            id: cuid(),
+            text: arrival.message,
+            mode: world.seedMode,
+        }),
+    );
 }
 
 export default {
@@ -394,6 +401,9 @@ export default {
         { scope: "demo", source: "../team/patches/server-sign-in.patch" },
         // The gym's accounts have no provider to read usage from.
         { scope: "demo", source: "../team/patches/account-usage.patch" },
+        // The recorder's browser reads an artifact's pages through the daemon,
+        // as the desktop's artifact scheme does.
+        { scope: "demo", source: "../team/patches/artifact-site.patch" },
     ],
     async run(demo, gym, { output } = {}) {
         world.rehearse();
@@ -424,9 +434,10 @@ export default {
         filmed.liveTaskId = live.id;
         await sidebarArrange(kirill);
         const pending = [];
-        if (shot !== "aware") {
-            // After chapter 1: its two tasks are already in the sidebar,
-            // working, and Desktop Releases is in the middle of its job.
+        // From chapter 2 on, chapter 1's three tasks are working. Chapter 2
+        // opens on their unread Activity, so there they start after
+        // everything else has been read.
+        const arrivalsSettle = async () => {
             for (const arrival of world.arrivals) {
                 pending.push(arrivalStart(clients, arrival));
                 await wait(
@@ -434,6 +445,9 @@ export default {
                     `${arrival.name} to be working`,
                 );
             }
+        };
+        if (shot !== "aware") {
+            if (shot !== "activity") await arrivalsSettle();
             const bot = await botJobPrepare(clients);
             filmed.botAgentId = bot.agent.id;
         }
@@ -448,6 +462,11 @@ export default {
                     localStorage.setItem(key, JSON.stringify({ welcomeAcknowledged: true }));
             },
             ["happy.welcome.v1", `happy.welcome.v1:${world.connectionId}`],
+        );
+        // The window's clock reads late morning: the take is shot with
+        // HAPPY_DEMO_LOCAL_HOUR=10.5, which sets the browser's time zone.
+        filmed.timezone = await page.evaluate(
+            () => Intl.DateTimeFormat().resolvedOptions().timeZone,
         );
         await page.setViewportSize(viewport);
         await page.reload({ waitUntil: "domcontentloaded" });
@@ -467,19 +486,34 @@ export default {
         await sidebarRow(page, world.liveTask.subtask.title)
             .filter({ hasText: /\+\d/u })
             .waitFor({ timeout: 60000 });
-        // Kirill is in his own task.
-        await sidebarRow(page, world.openTask).click();
-        const opened = world.doneTasks.find((task) => task.name === world.openTask);
-        await page
-            .getByText((opened.more?.at(-1) ?? opened).reply)
-            .first()
-            .waitFor({ timeout: 30000 });
+        // Where each chapter finds Kirill: where the one before left him.
+        const opening = {
+            aware: world.openTask,
+            activity: world.openTask,
+            bots: "Activity",
+            artifacts: world.releaseBot.name,
+            "step-in": world.stepIn.task,
+            explore: world.openTask,
+        }[shot];
+        await sidebarRow(page, opening).click();
+        if (opening === world.openTask) {
+            const opened = world.doneTasks.find((task) => task.name === world.openTask);
+            await page
+                .getByText((opened.more?.at(-1) ?? opened).reply)
+                .first()
+                .waitFor({ timeout: 30000 });
+        }
         // His hand is off the window and off the keyboard: no caret blinks in the composer.
         await page.mouse.move(viewport.width - 2, viewport.height - 2);
         await page.evaluate(() => document.activeElement?.blur?.());
         await page.waitForTimeout(1500);
         for (const client of [...Object.values(clients), personal.client]) await readAll(client);
-        await page.waitForTimeout(800);
+        if (shot === "activity") {
+            await arrivalsSettle();
+            for (const arrival of world.arrivals)
+                await sidebarRow(page, arrival.name).waitFor({ timeout: 30000 });
+        }
+        await page.waitForTimeout(1500);
 
         const still = async (name) => {
             await page.waitForTimeout(1200);
@@ -510,6 +544,10 @@ export default {
             }
             await sidebarRow(page, "Activity").click();
             await still("activity");
+            await sidebarRow(page, "Artifacts").click();
+            await still("artifacts");
+            await page.getByText(world.artifacts[0].title).first().click();
+            await still("artifact-open");
             await sidebarRow(page, world.openTask).click();
             framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
             await demo.hold(300);
@@ -543,21 +581,35 @@ export default {
             filmed.slowMotion.arrivals.push(name);
         };
         const activity = activityKeptRead(kirill);
+        // Activity is the subject of chapters 1 and 2; after them it stays read.
+        if (shot !== "aware" && shot !== "activity") activity.start();
         framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
         await writeFile(join(output, "framing.json"), JSON.stringify(framing, null, 2));
+        /** Where a thing is on screen now, in CSS pixels, for the cut's camera. */
+        const place = async (locator) => {
+            const box = await locator.boundingBox().catch(() => null);
+            return box ? { rect: box } : {};
+        };
+        // The hand, where a chapter has one, rests on the empty middle of the pane.
+        const rest = { x: Math.round(viewport.width * 0.62), y: Math.round(viewport.height * 0.2) };
+        /** The hand glides to a target, dwells a quarter second, and clicks it. */
+        const choose = async (target, name) => {
+            await demo.moveTo(target);
+            await demo.hold(250);
+            cue(`${name}-click`, demo);
+            await demo.click(target, { after: 0 });
+        };
 
         if (shot === "aware") {
             // Chapter 1, "See who's working on what": Kirill is in his own task
-            // and touches nothing. Steve, then Leo, start tasks from their own
-            // sign-ins, and each one is in Kirill's sidebar as it starts.
+            // and touches nothing. Steve, Leo and Anna start tasks from their
+            // own sign-ins, and each one is in Kirill's sidebar as it starts;
+            // his Activity counts them.
             await demo.pointerVisible(false);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo);
-            const lead = Number(process.env.MULTIPLAYER_LEAD_MS ?? 450);
-            const beat = Number(process.env.MULTIPLAYER_BEAT_MS ?? 800);
-            const tail = Number(process.env.MULTIPLAYER_TAIL_MS ?? 2200);
-            activity.start();
-            await demo.hold(lead);
+            const beats = [1500, 1300, 1600];
+            await demo.hold(Number(process.env.MULTIPLAYER_LEAD_MS ?? 300));
             for (const [index, arrival] of world.arrivals.entries()) {
                 await arrivalFilm(
                     `arrival:${arrival.name}`,
@@ -567,70 +619,131 @@ export default {
                 cue(`arrival-settled:${arrival.name}`, demo, {
                     rect: await rowRect(page, arrival.name),
                 });
-                await demo.hold(index === world.arrivals.length - 1 ? tail : beat);
+                await demo.hold(beats[index]);
             }
         }
 
-        if (shot === "bots") {
-            // Chapter 2, "Shared bots for the standing jobs": Kirill opens
-            // Desktop Releases. Steve and Anna have both written in it, and it
-            // answers Anna while he looks.
-            const job = world.releaseBot;
-            // His hand rests on the empty top of the pane, over no message.
-            await demo.pointerPlace({ x: 452, y: 168 });
+        if (shot === "activity") {
+            // Chapter 2, "Catch up on what shipped": Kirill opens Activity, which
+            // counts what his teammates started and what their agents published.
+            const row = sidebarRow(page, "Activity");
+            await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
-            cue("open", demo);
-            activity.start();
-            await demo.hold(450);
-            await demo.click(sidebarRow(page, job.name), { after: 0 });
-            cue("bot-opened", demo);
+            cue("open", demo, await place(row));
+            await demo.hold(700);
+            await choose(row, "activity");
             await until(
                 demo,
-                () => page.getByText(job.turns[1].text).first().isVisible(),
+                () => page.getByText(world.arrivals.at(-1).name).nth(1).isVisible(),
+                "the Activity page",
+            );
+            cue("activity-open", demo);
+            await demo.hold(3600);
+        }
+
+        if (shot === "bots") {
+            // Chapter 3, "Shared bots for the standing jobs": Kirill opens
+            // Desktop Releases, where Steve's request is already answered. Anna
+            // writes in it from her own sign-in, and it answers her.
+            const job = world.releaseBot;
+            const [, follow] = job.turns;
+            await demo.pointerPlace(rest);
+            await page.screenshot({ path: join(output, "opening.png") });
+            cue("open", demo);
+            await demo.hold(700);
+            await choose(sidebarRow(page, job.name), "bot");
+            await until(
+                demo,
+                () => page.getByText(job.turns[0].reply).first().isVisible(),
                 "Desktop Releases' conversation",
             );
-            await demo.hold(120);
-            world.release("bots:report");
-            cue("report-released", demo);
+            cue("bot-opened", demo);
+            await demo.hold(1400);
+            const anna = clients[follow.from];
+            const theirs = (await botFind(anna, job.username)).agent.id;
+            await arrivalFilm(
+                "message",
+                async () =>
+                    void pending.push(
+                        anna.sendMessage(theirs, {
+                            id: cuid(),
+                            text: follow.text,
+                            mode: world.agentMode,
+                        }),
+                    ),
+                () => page.getByText(follow.text).first().isVisible(),
+            );
             await until(
                 demo,
                 () => page.getByText("Windows is still building.").first().isVisible(),
-                "Desktop Releases' report",
+                "Desktop Releases' answer",
             );
             cue("report", demo);
-            await demo.hold(2600);
+            await demo.hold(1800);
+        }
+
+        if (shot === "artifacts") {
+            // Chapter 4, "Share what your agents make": Kirill opens Artifacts,
+            // where his teammates' agents' pages are, each under the task it
+            // came from, and opens one.
+            const artifact = world.artifacts.find((entry) => entry.task === "Sync Benchmarks");
+            await demo.pointerPlace(rest);
+            await page.screenshot({ path: join(output, "opening.png") });
+            cue("open", demo);
+            await demo.hold(700);
+            await choose(sidebarRow(page, "Artifacts"), "artifacts");
+            const entry = page.getByText(artifact.title).first();
+            await until(demo, () => entry.isVisible(), "the Artifacts page");
+            cue("artifacts-open", demo);
+            await demo.hold(1700);
+            await choose(entry, "artifact");
+            await until(
+                demo,
+                () => page.getByText("History").first().isVisible(),
+                "the artifact's page",
+            );
+            cue("artifact-open", demo);
+            // The hand leaves the page's table before the camera reads it.
+            await demo.hold(300);
+            await demo.moveTo({
+                x: Math.round(viewport.width * 0.7),
+                y: Math.round(viewport.height * 0.8),
+            });
+            cue("pointer-away", demo);
+            await demo.hold(2400);
         }
 
         if (shot === "step-in") {
-            // Chapter 3, "Step in when it's your call": the agent in Kirill's
-            // task asks Steve by name; Steve answers from his own sign-in, and
-            // his words land under his name and face.
+            // Chapter 5, "Step in when it's your call": Kirill is in Steve's
+            // task. Its agent asks him by name; he answers, and it takes his answer.
             const step = world.stepIn;
-            await demo.pointerVisible(false);
+            const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
+            // The hand waits just above the composer, clear of the question, so
+            // its glide to the composer is short.
+            const box = await composer.boundingBox();
+            await demo.pointerPlace({
+                x: Math.round(box.x + box.width * 0.62),
+                y: Math.round(box.y - 30),
+            });
             await page.screenshot({ path: join(output, "opening.png") });
-            cue("open", demo);
-            activity.start();
-            await demo.hold(600);
+            cue("open", demo, await place(composer));
+            await demo.hold(Number(process.env.MULTIPLAYER_ASK_AT_MS ?? 2300));
             world.release("step:ask");
+            cue("ask-released", demo);
             await until(
                 demo,
                 () => page.getByText(step.askTail).first().isVisible(),
                 "the agent's question",
             );
-            cue("ask", demo);
-            await demo.hold(1300);
-            const steve = clients[step.from];
-            const task = await taskFind(steve, world.openTask);
+            // Where the question stands once asked: the composition dims what is above it.
+            cue("ask", demo, await place(page.getByText(step.askTail).first()));
+            await demo.hold(600);
+            await demo.click({ ...box, offset: { x: 0.5, y: 0.5 } });
+            cue("typing", demo);
+            await demo.type(step.answer, { perKey: 80 });
             await arrivalFilm(
                 "answer",
-                async () =>
-                    void pending.push(
-                        steve.sendMessage(task.agent.id, {
-                            id: cuid(),
-                            text: step.answer,
-                            mode: world.agentMode,
-                        }),
-                    ),
+                () => page.keyboard.press("Enter"),
                 () => page.getByText(step.answer).first().isVisible(),
             );
             await until(
@@ -639,7 +752,7 @@ export default {
                 "the agent's reply",
             );
             cue("reply", demo);
-            await demo.hold(1800);
+            await demo.hold(1700);
         }
 
         await finish();

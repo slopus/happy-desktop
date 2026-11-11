@@ -24,7 +24,8 @@ async function until(read, label, timeout = 60000) {
             .then(read)
             .catch(() => undefined);
         if (value) return value;
-        if (Date.now() > deadline) throw new Error(`Multiplayer demo: timed out waiting for ${label}.`);
+        if (Date.now() > deadline)
+            throw new Error(`Multiplayer demo: timed out waiting for ${label}.`);
         await new Promise((settle) => setTimeout(settle, 250));
     }
 }

@@ -274,6 +274,20 @@ async function processTreeStop(child) {
  * recorder closes it and materializes a new app when that set changes, so no
  * take inherits another take's source even when `--all` records one session.
  */
+/**
+ * The browser's time zone. `HAPPY_DEMO_LOCAL_HOUR` (for example `10.5`) picks
+ * the whole-hour UTC offset at which the window's clock reads about that hour
+ * whenever the take is shot; otherwise the window keeps Pacific time.
+ */
+function timezoneFor(hour) {
+    if (!hour) return "America/Los_Angeles";
+    const now = new Date();
+    let offset = Math.round(Number(hour) - now.getUTCHours() - now.getUTCMinutes() / 60);
+    if (offset < -12) offset += 24;
+    if (offset > 14) offset -= 24;
+    return offset === 0 ? "Etc/UTC" : `Etc/GMT${offset > 0 ? "-" : "+"}${Math.abs(offset)}`;
+}
+
 export async function stageOpen(options) {
     if (
         options.staticDirectory &&
@@ -323,7 +337,7 @@ export async function stageOpen(options) {
             deviceScaleFactor,
             locale: "en-US",
             reducedMotion: "no-preference",
-            timezoneId: "America/Los_Angeles",
+            timezoneId: timezoneFor(process.env.HAPPY_DEMO_LOCAL_HOUR),
             viewport,
             ...(options.staticDirectory ? { offline: true, serviceWorkers: "block" } : {}),
         });

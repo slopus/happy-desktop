@@ -248,13 +248,15 @@ export function turnFind() {
 
 /**
  * The team's bots beside its Chief of Staff: one per standing job. Each
- * wears the generated picture named after its username.
+ * wears one of the app's own placeholder pictures, the one numbered here. The
+ * app would pick one by a hash of the bot's ID, which is new in every take,
+ * so the take sets it and the bots look the same in every chapter.
  */
 export const bots = [
-    { name: "Desktop Releases", username: "desktop_releases" },
-    { name: "Mobile Releases", username: "mobile_releases" },
-    { name: "Alerts", username: "alerts" },
-    { name: "Growth", username: "growth" },
+    { name: "Desktop Releases", username: "desktop_releases", placeholder: 12 },
+    { name: "Mobile Releases", username: "mobile_releases", placeholder: 3 },
+    { name: "Alerts", username: "alerts", placeholder: 17 },
+    { name: "Growth", username: "growth", placeholder: 20 },
 ];
 
 /**
@@ -275,7 +277,7 @@ export const releaseBot = {
             from: "anna",
             text: "Tell me when it's out and I'll post the changelog.",
             report: (mention) =>
-                `Will do, ${mention}. macOS is signed and notarized. Windows is still building.`,
+                `${mention}, will do. macOS is signed and notarized. Windows is still building.`,
         },
     ],
 };
@@ -287,6 +289,19 @@ export const releaseBot = {
  * it names a subtask its agent put the work there, in the named repository.
  */
 export const doneTasks = [
+    {
+        owner: "kirill",
+        name: "Voice waveform",
+        message: "Add an animated waveform to the voice agent.",
+        reply: "On it. I'm reading the voice bar components first, then I'll put the waveform in.",
+        // What he adds, and what it answers: plain words, so the pane he has open holds still.
+        more: [
+            {
+                message: "Keep it small. It sits next to the mute button.",
+                reply: "Noted: one row, at the mute button's height.",
+            },
+        ],
+    },
     {
         owner: "steve",
         name: "Activity Feed Design",
@@ -315,18 +330,27 @@ export const doneTasks = [
         message: "Draft the three onboarding emails for new teams.",
         reply: "Three drafts are in: welcome, your first shared task, and invite your team.",
     },
+];
+
+/**
+ * What earlier tasks published, made off camera by each task's own agent with
+ * the daemon's artifact tools: the team's shared artifacts.
+ */
+export const artifacts = [
     {
-        owner: "kirill",
-        name: "Voice waveform",
-        message: "Add an animated waveform to the voice agent.",
-        reply: "On it. I'm reading the voice bar components first, then I'll put the waveform in.",
-        // What he adds, and what it answers: plain words, so the pane he has open holds still.
-        more: [
-            {
-                message: "Keep it small. It sits next to the mute button.",
-                reply: "Got it. I'll size it to the mute button's height and keep it on one row.",
-            },
-        ],
+        task: "Activity Feed Design",
+        title: "Activity feed mockup",
+        page: `<!doctype html><meta charset="utf-8"><style>body{font:15px system-ui;margin:24px;color:#eee;background:#1c1c1e}h1{font-size:20px}.day{margin:18px 0 6px;color:#999;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.row{padding:10px 12px;border-radius:10px;background:#2a2a2d;margin:6px 0}</style><h1>Activity</h1><div class="day">Today</div><div class="row">Steve started Team Servers</div><div class="row">Release bot cut 2026.11.4</div><div class="day">Yesterday</div><div class="row">Kirill merged iOS Overlay Layout</div>`,
+    },
+    {
+        task: "Sync Benchmarks",
+        title: "Cold sync benchmark",
+        page: `<!doctype html><meta charset="utf-8"><style>body{font:15px system-ui;margin:24px;color:#eee;background:#1c1c1e}h1{font-size:20px}td{padding:6px 14px 6px 0}</style><h1>Cold sync, 10k tasks</h1><table><tr><td>Task list query</td><td>1.21 s</td></tr><tr><td>Bots and Surfaces</td><td>0.34 s</td></tr><tr><td>Render</td><td>0.25 s</td></tr><tr><td><b>Total</b></td><td><b>1.80 s</b></td></tr></table>`,
+    },
+    {
+        task: "Onboarding Emails",
+        title: "Onboarding email drafts",
+        page: `<!doctype html><meta charset="utf-8"><style>body{font:15px system-ui;margin:24px;color:#eee;background:#1c1c1e;line-height:1.5}h1{font-size:20px}h2{font-size:15px;color:#c4b5fd;margin:18px 0 4px}</style><h1>Onboarding emails</h1><h2>1. Welcome to your team server</h2><p>Your teammates and their agents, in one sidebar.</p><h2>2. Your first shared task</h2><p>Start a task; everyone on the team sees it as it starts.</p><h2>3. Invite your team</h2><p>Add people by email from Settings.</p>`,
     },
 ];
 
@@ -359,6 +383,11 @@ export const arrivals = [
         name: "Docs Search",
         message: "Add search to the docs site.",
     },
+    {
+        owner: "anna",
+        name: "Launch Email",
+        message: "Draft the launch email for team servers.",
+    },
 ];
 
 /**
@@ -366,13 +395,18 @@ export const arrivals = [
  * answers through his own sign-in, and the agent takes his answer.
  */
 export const stepIn = {
+    /** The task Kirill has open in chapter 5: Steve's, still working. */
+    task: "Team Servers",
+    // One line in the wide take's pane, so nothing above it moves while it streams.
     ask: (mention) =>
-        `The waveform is in, on one row at the mute button's height. ${mention}, five bars or seven on the phone?`,
+        `${mention}, should team servers use the same account as the desktop, or their own?`,
     /** The words of the question a take can wait for: the mention is drawn by the app. */
-    askTail: "five bars or seven on the phone?",
-    from: "steve",
-    answer: "Five. Seven crowds the mute button.",
-    reply: "Five bars it is.",
+    askTail: "or their own?",
+    /** What the agent said when it handed the first part to its subtask. */
+    waiting: "Waiting on the agent's sign-in.",
+    from: "kirill",
+    answer: "Same account.",
+    reply: "Same account it is. Wiring the desktop's sign-in into it now.",
 };
 
 /** Kirill's sidebar on Happy Core, top to bottom, before anyone starts anything. */
@@ -426,14 +460,21 @@ export function shotSet(value) {
 
 const text = (value) => ({ type: "text", text: value });
 const tool = (name, args) => ({ type: "toolCall", name, arguments: args });
-/** On camera: words arrive over about half a second, as a fast model's do. */
-const paced = (content) => ({
+/** A reply on camera, at a pace a viewer reads: about a word every 0.1 s. */
+const streamed = (content, timing = {}) => ({
     content,
-    textDeltaChunkSize: 9,
-    textDeltaDelayMs: 34,
-    toolCallDeltaDelayMs: 200,
-    completionDelayMs: 80,
+    textDeltaChunkSize: 6,
+    textDeltaDelayMs: 100,
+    toolCallDeltaDelayMs: 120,
+    completionDelayMs: 60,
+    ...timing,
 });
+/**
+ * A reply that opens with a mention. The app shows a link's opening bracket
+ * until its `](` arrives, so the first delta must carry `[Name](` whole; the
+ * link's address then streams unseen while the reply still reads "Working".
+ */
+const addressed = (content) => streamed(content, { textDeltaChunkSize: 9, textDeltaDelayMs: 170 });
 /** Off camera nothing waits: every delta at once. */
 const quick = (content) => ({
     content,
@@ -506,7 +547,11 @@ async function checkoutPrepare(system) {
     );
     if (!present)
         await execFile("git", ["clone", "--quiet", join(projectsRoot, "happy"), checkout], {
-            env: { PATH: "/usr/bin:/bin:/opt/homebrew/bin", GIT_CONFIG_NOSYSTEM: "1", HOME: folder },
+            env: {
+                PATH: "/usr/bin:/bin:/opt/homebrew/bin",
+                GIT_CONFIG_NOSYSTEM: "1",
+                HOME: folder,
+            },
         });
     return checkout;
 }
@@ -551,8 +596,32 @@ export async function reply(payload) {
         return quick([text("Done.")]);
     }
 
-    // Earlier tasks: at most one subtask each, which writes its change and reports.
+    // Earlier tasks: at most one subtask each, which writes its change and reports;
+    // a task with an artifact publishes it before its last word.
     for (const task of doneTasks) {
+        const artifact = artifacts.find((entry) => entry.task === task.name);
+        if (turn.text === task.message && artifact && !task.subtask) {
+            if (turn.answered === 0)
+                return quick([tool("create_artifact", { type: "html", title: artifact.title })]);
+            if (turn.answered === 1) {
+                const results = turn.after
+                    .filter((message) => message.role !== "assistant")
+                    .map(textOf)
+                    .join("\n");
+                const found = results.match(
+                    /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id=")([a-z0-9]{20,32})\b/u,
+                );
+                if (!found) throw new Error(`create_artifact named no artifact: ${results}`);
+                return quick([
+                    tool("write_artifact_file", {
+                        artifactId: found[1],
+                        path: "index.html",
+                        content: artifact.page,
+                    }),
+                ]);
+            }
+            return quick([text(task.reply)]);
+        }
         if (turn.text === task.message) {
             if (task.subtask && turn.answered === 0)
                 return quick([
@@ -576,23 +645,9 @@ export async function reply(payload) {
 
     for (const task of doneTasks)
         for (const turnMore of task.more ?? [])
-            if (turn.text === turnMore.message) {
-                // Chapter 3 finds the open task's agent still at work: it has
-                // answered, read the component, and is about to ask Steve.
-                if (shot !== "step-in" || task.name !== openTask)
-                    return quick([text(turnMore.reply)]);
-                if (turn.answered === 0) {
-                    await checkoutPrepare(system);
-                    return quick([
-                        text(turnMore.reply),
-                        tool("Read", { file_path: `happy/${barsPath}` }),
-                    ]);
-                }
-                await gate("step:ask");
-                return paced([text(stepIn.ask(mention("Steve")))]);
-            }
-    // Steve's answer is taken at once: the agent starts writing as it lands.
-    if (turn.text === stepIn.answer) return paced([text(stepIn.reply)]);
+            if (turn.text === turnMore.message) return quick([text(turnMore.reply)]);
+    // Kirill's answer is taken at once, its words streamed over about 0.4 s.
+    if (turn.text === stepIn.answer) return streamed([text(stepIn.reply)]);
 
     // Desktop Releases: Steve's request is answered at once. Anna's is
     // answered on camera in chapter 2, and after that the bot waits on the
@@ -601,11 +656,13 @@ export async function reply(payload) {
     if (turn.text === asked.text) return quick([text(asked.reply)]);
     if (turn.text === follow.text) {
         if (turn.answered === 0) {
-            if (shot === "bots") await gate("bots:report");
-            const content = [text(follow.report(mention("Anna"))), tool("wait", { duration: "20m" })];
+            const content = [
+                text(follow.report(mention("Anna"))),
+                tool("wait", { duration: "20m" }),
+            ];
             // Off camera the bot is at work once it has answered and started waiting.
             reached.add("bots:reported");
-            return shot === "bots" ? paced(content) : quick(content);
+            return shot === "bots" ? addressed(content) : quick(content);
         }
         await gate("bots:after");
         return quick([text("Stopped.")]);
@@ -623,6 +680,11 @@ export async function reply(payload) {
                     text: `LIVE ${liveTask.subtask.title} for: ${liveTask.message}`,
                 }),
             ]);
+        // Chapter 5 is filmed in this task: its agent waits for the subtask.
+        if (shot === "step-in") {
+            reached.add("live:coordinator");
+            return quick([text(stepIn.waiting)]);
+        }
         await gate("live:coordinator");
         return quick([text("The agent's sign-in is in; the desktop is next.")]);
     }
@@ -631,11 +693,22 @@ export async function reply(payload) {
             const from = await staged("live-sign-in.txt", liveTask.subtask.change.after);
             return quick([copyCall(from, liveTask.subtask.change.path)]);
         }
-        await gate("live:subtask");
+        // In chapter 5 the subtask finishes on camera, and its report brings
+        // the agent to Kirill (below).
+        if (shot === "step-in") {
+            reached.add("live:subtask");
+            await gate("step:ask");
+        } else await gate("live:subtask");
         return quick([text("Done.")]);
     }
     // A finished part's report reaching the coordinator keeps it working.
     if (textOf(messages.find((message) => message.role === "user")) === liveTask.message) {
+        // Chapter 5: the subtask's report is in, and the agent's next word is
+        // to Kirill. Its turn ends on the question, so it is seen waiting on him.
+        if (shot === "step-in" && !reached.has("step:asked")) {
+            reached.add("step:asked");
+            return addressed([text(stepIn.ask(mention("Kirill")))]);
+        }
         await gate("live:coordinator:report");
         return quick([text("Noted.")]);
     }
