@@ -1164,6 +1164,16 @@ export {
     type HappyAgentRepositoryRow,
 } from "./pages/settings/HappyAgentRepositoriesSettings";
 export {
+    HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeSettings,
+    type HappyAgentComputeCapacityRow,
+    type HappyAgentComputeMachineAddDialogProps,
+    type HappyAgentComputeMachineRow,
+    type HappyAgentComputeMachineRowStatus,
+    type HappyAgentComputePoolRow,
+    type HappyAgentComputeSettingsProps,
+} from "./pages/settings/HappyAgentComputeSettings";
+export {
     HappyAgentCredentialImport,
     type HappyAgentCredentialImportProps,
     type HappyAgentCredentialImportRow,

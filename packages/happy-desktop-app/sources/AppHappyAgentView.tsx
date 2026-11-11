@@ -705,6 +705,8 @@ export interface AppHappyAgentSession {
     readonly repositories?: () =>
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
+    /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
+    readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
     /**
      * Settings › AI providers, on a Happy Cloud server in the desktop or on
      * the web; absent or undefined elsewhere.

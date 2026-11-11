@@ -1253,3 +1253,181 @@
     font-size: 13px;
     line-height: 18px;
 }
+
+/* ---- Compute ------------------------------------------------------------- */
+
+.happy-agent-compute__empty {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+}
+
+.happy-agent-compute__list {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-compute__row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-compute__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background-color: var(--surface-high);
+    color: var(--text);
+}
+
+.happy-agent-compute__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-compute__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-agent-compute__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-compute__meta,
+.happy-agent-compute__fault,
+.happy-agent-compute__load,
+.happy-agent-compute__status {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-compute__fault {
+    color: var(--status-error);
+}
+
+.happy-agent-compute__load {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-agent-compute__status {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    width: 76px;
+}
+
+.happy-agent-compute__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--status-default);
+}
+
+.happy-agent-compute__status[data-status="online"] {
+    color: var(--status-connected);
+}
+
+.happy-agent-compute__status[data-status="online"] .happy-agent-compute__dot {
+    background-color: var(--status-connected);
+}
+
+.happy-agent-compute__status[data-status="draining"] .happy-agent-compute__dot,
+.happy-agent-compute__status[data-status="enrolling"] .happy-agent-compute__dot {
+    background-color: var(--status-connecting);
+}
+
+.happy-agent-compute__none {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-compute__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.happy-agent-compute__form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-agent-compute__note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-compute__command {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-agent-compute__command-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* The command is the whole point of the dialog, so its copy is always shown. */
+.happy-agent-compute__copy.happy-copy-button {
+    opacity: 1;
+}
+
+.happy-agent-compute__command-text {
+    box-sizing: border-box;
+    display: block;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background-color: var(--surface-selected);
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
