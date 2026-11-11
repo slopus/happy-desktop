@@ -10,8 +10,16 @@
 /** Default delivery. A measured panel take sets its exact even-pixel aspect before shooting. */
 export const output = { width: 1920, height: 1080 };
 
-/** Working canvas. 1.667x the output, which is the zoom budget. */
-export const scene = { width: 3200, height: 1800 };
+/**
+ * Working canvas. 1.667x the output, which is the zoom budget. A raw-window
+ * take that a composition will crop far closer than that may ask for a larger
+ * one, `HAPPY_DEMO_SCENE=3740x2390`, so its window is captured with the
+ * pixels those close-ups need.
+ */
+const requested = /^(\d+)x(\d+)$/u.exec(process.env.HAPPY_DEMO_SCENE ?? "");
+export const scene = requested
+    ? { width: Number(requested[1]), height: Number(requested[2]) }
+    : { width: 3200, height: 1800 };
 
 /** Space between the app window and the edge of the scene. */
 export const margin = 70;

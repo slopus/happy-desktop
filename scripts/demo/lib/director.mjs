@@ -77,6 +77,7 @@ export class Director {
     #maxFrameLatenessMs = 0;
     #lockedCrop;
     #restCrop;
+    #pointerExternal = false;
 
     constructor(options) {
         this.#page = options.page;
@@ -185,7 +186,7 @@ export class Director {
                 this.#pointer.x,
                 this.#pointer.y,
                 this.#pointer.press,
-                this.#pointer.visible,
+                this.#pointer.visible && !this.#pointerExternal,
                 step / 460,
                 this.#keysBadge(step),
                 step,
@@ -203,6 +204,16 @@ export class Director {
                 ...(this.#card ? { card: this.#card } : {}),
                 ...(this.#typingSpeed === 3 ? { typingSpeed: 3 } : {}),
                 ...(this.#playbackSpeed !== 1 ? { playbackSpeed: this.#playbackSpeed } : {}),
+                ...(this.#pointerExternal
+                    ? {
+                          pointer: {
+                              x: Math.round(this.#pointer.x * 100) / 100,
+                              y: Math.round(this.#pointer.y * 100) / 100,
+                              press: Math.round(this.#pointer.press * 1000) / 1000,
+                              visible: this.#pointer.visible,
+                          },
+                      }
+                    : {}),
                 ...this.#stickerPose(this.#step),
                 ...this.#confettiTick(),
             },
@@ -507,10 +518,11 @@ export class Director {
         });
         await this.#page.mouse.down();
         this.#sounds.push({ frame: this.#sink.frames.length, sound: "click" });
-        await this.#page.evaluate(
-            ([x, y]) => window.__happyDemo.ripple(x, y),
-            [this.#pointer.x, this.#pointer.y],
-        );
+        if (!this.#pointerExternal)
+            await this.#page.evaluate(
+                ([x, y]) => window.__happyDemo.ripple(x, y),
+                [this.#pointer.x, this.#pointer.y],
+            );
         await this.#page.mouse.up();
         await this.#render(130, (progress) => {
             this.#pointer.press = 1 - progress;
@@ -692,6 +704,21 @@ export class Director {
     }
 
     /**
+     * Leaves the pointer out of the captured window: the real mouse still
+     * moves, hovers and clicks, but nothing is drawn in the page. Every frame
+     * records the pointer's pose instead (`pointerTrack`), so a composition
+     * that crops the window draws it itself, sharp at any magnification.
+     */
+    pointerExternal(external = true) {
+        this.#pointerExternal = external;
+    }
+
+    /** The pointer's pose on every frame of a take shot with `pointerExternal`, in CSS pixels. */
+    get pointerTrack() {
+        return this.#sink.frames.map((frame) => frame.pointer ?? null);
+    }
+
+    /**
      * Puts the pointer, shown, on a target at once, the real mouse with it: where
      * a take's first frame finds the hand resting.
      */
@@ -702,10 +729,11 @@ export class Director {
         this.#pointer.visible = true;
         await this.#page.mouse.move(point.x, point.y);
         // Drawn now, so the first captured frame already has it.
-        await this.#page.evaluate(
-            ([x, y]) => window.__happyDemo?.pointer(x, y, 0, true),
-            [point.x, point.y],
-        );
+        if (!this.#pointerExternal)
+            await this.#page.evaluate(
+                ([x, y]) => window.__happyDemo?.pointer(x, y, 0, true),
+                [point.x, point.y],
+            );
         return point;
     }
 

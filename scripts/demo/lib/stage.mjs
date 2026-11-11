@@ -21,6 +21,16 @@ import { offlineStageInstall } from "./offline-stage.mjs";
 const workspace = resolve(import.meta.dirname, "../../..");
 const execFile = promisify(execFileCallback);
 const demoRoot = join(workspace, "scripts", "demo");
+/**
+ * Where the filmed application's source and its installed dependencies come
+ * from. A take of a released version names that release's own checkout, with
+ * its own `pnpm install`, in HAPPY_DEMO_APP_SOURCE; the recorder, the gym and
+ * the demo stay this workspace's. The source is only ever read: the take runs
+ * from the patched mirror under `.context/demo-app`.
+ */
+const appSource = process.env.HAPPY_DEMO_APP_SOURCE
+    ? resolve(process.env.HAPPY_DEMO_APP_SOURCE)
+    : workspace;
 
 function pathWithin(parent, candidate) {
     const value = relative(resolve(parent), resolve(candidate));
@@ -35,7 +45,7 @@ function pathWithin(parent, candidate) {
  * demo branch to that layer.
  */
 async function patchedSourcePrepare(patches, assets) {
-    if (patches.length === 0 && assets.length === 0) return workspace;
+    if (patches.length === 0 && assets.length === 0 && appSource === workspace) return workspace;
 
     const mirror = join(workspace, ".context", "demo-app");
     const temporary = join(mirror, ".tmp");
@@ -48,7 +58,7 @@ async function patchedSourcePrepare(patches, assets) {
         "tsconfig.base.json",
         "tsconfig.json",
     ]) {
-        await copyFile(join(workspace, file), join(mirror, file));
+        await copyFile(join(appSource, file), join(mirror, file));
     }
     for (const name of [
         "happy-desktop-analytics",
@@ -71,10 +81,10 @@ async function patchedSourcePrepare(patches, assets) {
                 "dist",
                 "--exclude",
                 "release",
-                `${join(workspace, "packages", name)}/`,
+                `${join(appSource, "packages", name)}/`,
                 `${target}/`,
             ],
-            { cwd: workspace },
+            { cwd: appSource },
         );
     }
 
@@ -82,7 +92,7 @@ async function patchedSourcePrepare(patches, assets) {
     // leaves resolve through this one read-only link to the real pnpm store.
     const modules = join(mirror, "node_modules");
     await rm(modules, { force: true, recursive: true });
-    await symlink(join(workspace, "node_modules"), modules, "dir");
+    await symlink(join(appSource, "node_modules"), modules, "dir");
 
     for (const resource of patches) {
         const patch = resolve(resource.source);
@@ -187,7 +197,7 @@ async function viteStart(options) {
                 // The mirror links to the workspace's existing pnpm install.
                 // Its literal Vite patch admits exactly that dependency root
                 // while keeping the rest of Vite's filesystem guard enabled.
-                HAPPY_DEMO_DEPENDENCY_ROOT: join(workspace, "node_modules"),
+                HAPPY_DEMO_DEPENDENCY_ROOT: join(appSource, "node_modules"),
                 VITE_HAPPY_BROWSER_LOCAL: "1",
                 ...(production ? { NODE_ENV: "production" } : {}),
             },
