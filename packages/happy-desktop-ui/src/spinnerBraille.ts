@@ -139,7 +139,7 @@ function dotsBuild(
     height: number,
     ratio: number,
     startTime: CSSNumberish | null,
-): void {
+): Animation[] {
     const document = root.ownerDocument;
     const diameter = dotDiameter(width, height);
     const stamp = dotStamp(diameter);
@@ -166,7 +166,7 @@ function dotsBuild(
         return element;
     });
     root.replaceChildren(...dots);
-    for (const [dot, element] of dots.entries()) {
+    const animations = dots.map((element, dot) => {
         // A whole cycle early, so every dot is already inside its loop at mount.
         const animation = element.animate(DOT_KEYFRAMES, {
             delay: DOT_PHASES[dot]! * BRAILLE_FRAME_MS - BRAILLE_CYCLE_MS,
@@ -175,8 +175,10 @@ function dotsBuild(
         });
         // Every rebuild keeps the loop's own start, so a resize never restarts it.
         animation.startTime = startTime;
-    }
+        return animation;
+    });
     dotsPark(root);
+    return animations;
 }
 
 /**
@@ -208,6 +210,17 @@ export function brailleSpinnerAttach(root: HTMLElement | null): (() => void) | u
     let width = -1;
     let height = -1;
     let ratio = -1;
+    /*
+     * An endless animation stays on the document's timeline after its dot
+     * leaves the page, holding the dot and every detached ancestor alive and
+     * costing the timeline a tick each frame. Replaced dots and an unmounted
+     * spinner cancel theirs.
+     */
+    let animations: Animation[] = [];
+    const animationsCancel = () => {
+        for (const animation of animations) animation.cancel();
+        animations = [];
+    };
     const resize = (nextWidth: number, nextHeight: number) => {
         const nextRatio = view.devicePixelRatio || 1;
         const roundedWidth = Math.max(0, Math.round(nextWidth));
@@ -216,7 +229,8 @@ export function brailleSpinnerAttach(root: HTMLElement | null): (() => void) | u
         width = roundedWidth;
         height = roundedHeight;
         ratio = nextRatio;
-        dotsBuild(root, width, height, ratio, startTime);
+        animationsCancel();
+        animations = dotsBuild(root, width, height, ratio, startTime);
     };
     const resizeFromCss = (box: Pick<DOMRectReadOnly, "width" | "height">) => {
         const nextRatio = view.devicePixelRatio || 1;
@@ -231,7 +245,11 @@ export function brailleSpinnerAttach(root: HTMLElement | null): (() => void) | u
             attributes: true,
         });
     }
-    if (typeof view.ResizeObserver !== "function") return () => parking.disconnect();
+    if (typeof view.ResizeObserver !== "function")
+        return () => {
+            parking.disconnect();
+            animationsCancel();
+        };
     const observer = new view.ResizeObserver(([entry]) => {
         if (!entry) return;
         const physical = entry.devicePixelContentBoxSize?.[0];
@@ -254,5 +272,6 @@ export function brailleSpinnerAttach(root: HTMLElement | null): (() => void) | u
     return () => {
         parking.disconnect();
         observer.disconnect();
+        animationsCancel();
     };
 }
