@@ -12,8 +12,12 @@
  *   line  13/18 secondary, one line, ellipsis
  *   tree  28px rows, 7px over and under them, 20px and a hairline guide a level
  *
- * A row never changes height: a spinner or a refusal takes the line, so the
- * frame holds whatever state the row is in.
+ * A row's state never changes its height: a spinner or a refusal takes the
+ * line, so the frame holds whatever state the row is in. Only the column's
+ * width does: where the words and the controls don't fit side by side the
+ * row is stacked, the controls on their own line under the words.
+ *
+ *   stacked  105px: the words' 58px + 36px controls + 11px to the frame
  */
 .happy-chat-rows {
     display: flex;
@@ -40,6 +44,27 @@
     height: 58px;
     min-width: 0;
     padding: 0 calc(var(--happy-chat-frame-outset) - 1px);
+}
+
+.happy-chat-row__head {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-chat-row[data-stacked] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    height: 105px;
+    padding-bottom: calc(var(--happy-chat-frame-outset) - 1px);
+}
+
+.happy-chat-row[data-stacked] .happy-chat-row__head {
+    flex: none;
+    height: 58px;
 }
 
 .happy-chat-row__mark {
@@ -107,6 +132,12 @@
 
 .happy-chat-row .happy-select {
     flex: none;
+}
+
+/* The one control of a stacked row that takes the width the others leave. */
+.happy-chat-row .happy-chat-row__grow {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 /* The agent's places, quiet. */

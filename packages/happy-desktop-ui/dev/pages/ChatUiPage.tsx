@@ -183,6 +183,8 @@ const DOCUMENTS: readonly {
     readonly label: string;
     readonly detail: string;
     readonly view: UiDocumentViewProps;
+    /** The measure the specimen is drawn at; absent, 600px. */
+    readonly width?: number;
 }[] = [
     {
         number: "C-339a",
@@ -262,6 +264,22 @@ const DOCUMENTS: readonly {
         label: "Default model, read only",
         detail: "a conversation that takes no message takes no click",
         view: { ui: documentOf([DEFAULT_MODEL]), defaultModel: MODELS },
+    },
+    {
+        number: "C-339s",
+        label: "Default model, narrow column",
+        detail: "under 540px the selects go under the words, at the column's width",
+        view: model(),
+        width: 320,
+    },
+    {
+        number: "C-339t",
+        label: "Default model, narrow column, refused",
+        detail: "the stacked row holds every state in the same box",
+        view: model({
+            errors: new Map([[MODEL_KEY, "Not allowed. Your role does not permit this."]]),
+        }),
+        width: 320,
     },
     {
         number: "C-339k",
@@ -361,10 +379,10 @@ export function ChatUiPage() {
                                 display: "flex",
                                 flexDirection: "column",
                                 padding: "24px",
-                                width: "648px",
+                                width: `${(specimen.width ?? 600) + 48}px`,
                             }}
                         >
-                            <UiDocumentView {...specimen.view} width={600} />
+                            <UiDocumentView {...specimen.view} width={specimen.width ?? 600} />
                         </div>
                     </Specimen>
                 ))}

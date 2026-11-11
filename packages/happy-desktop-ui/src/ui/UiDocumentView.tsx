@@ -11,7 +11,7 @@ import {
     type UiWireComponent,
 } from "happy-desktop-state";
 import type { MessageTextLayoutCache } from "../messageTextLayout";
-import { UI_DEFAULT_MODEL_HEIGHT, UiDefaultModel } from "./UiDefaultModel";
+import { UiDefaultModel, uiDefaultModelHeight } from "./UiDefaultModel";
 import { UiFallback, uiFallbackHeight } from "./UiFallback";
 import { UiFileTree, uiFileTreeHeight } from "./UiFileTree";
 import { UiMedia, uiMediaHeight, type UiMediaEntry } from "./UiMedia";
@@ -107,7 +107,7 @@ export function uiDocumentHeight(
                   ? uiMediaHeight(drawn.entries, width)
                   : drawn.type === "file_tree"
                     ? uiFileTreeHeight(drawn.paths)
-                    : UI_DEFAULT_MODEL_HEIGHT);
+                    : uiDefaultModelHeight(width));
     }
     return height;
 }
@@ -199,6 +199,7 @@ function UiComponentView(props: {
                         : {})}
                     saving={view.pending?.has(key) ?? false}
                     state={state}
+                    width={view.width ?? DOCUMENT_WIDTH_FALLBACK}
                 />
             );
         }

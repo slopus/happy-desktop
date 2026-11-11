@@ -8,10 +8,28 @@ import {
 import { AssistantMark, type AssistantMarkName } from "../AssistantMark";
 import { Select } from "../Select";
 import { Ionicon } from "../vectorIcons/VectorIcon";
-import { UI_ROW_HEIGHT, UI_ROWS_BORDER, UiRow, UiRows, type UiRowTone } from "./UiRows";
+import {
+    UI_ROW_HEIGHT,
+    UI_ROW_STACKED_HEIGHT,
+    UI_ROWS_BORDER,
+    UiRow,
+    UiRows,
+    type UiRowTone,
+} from "./UiRows";
 
-/** The component's height: one row in its frame, whatever its state. */
-export const UI_DEFAULT_MODEL_HEIGHT = UI_ROW_HEIGHT + 2 * UI_ROWS_BORDER;
+/**
+ * The measure under which the selects go under the words: beside them the two
+ * selects, the mark and the gaps take 348px, which below this leaves the name
+ * and its line less than 192px.
+ */
+const STACK_BELOW = 540;
+
+const stacked = (width: number | undefined) => width !== undefined && width < STACK_BELOW;
+
+/** The component's height at `width`: one row in its frame, whatever its state. */
+export function uiDefaultModelHeight(width: number): number {
+    return (stacked(width) ? UI_ROW_STACKED_HEIGHT : UI_ROW_HEIGHT) + 2 * UI_ROWS_BORDER;
+}
 
 /** The mark each kind of service is drawn with. */
 const MODEL_MARKS: ReadonlyMap<string, AssistantMarkName> = new Map([
@@ -42,6 +60,8 @@ export type UiDefaultModelProps = {
     readonly forbidden?: boolean;
     /** Sends one change. Absent, the selects take no input. */
     readonly onChange?: (change: UiDefaultModelChange) => void;
+    /** The measure the row is drawn at; a narrow one puts the selects under the words. */
+    readonly width?: number;
     /** Pins the spinner on one frame, for a still fixture. */
     readonly spinnerFrame?: number;
 };
@@ -65,6 +85,7 @@ export function UiDefaultModel(props: UiDefaultModelProps) {
         setPicked(next);
         props.onChange?.(next);
     };
+    const narrow = stacked(props.width);
     const vendor = choice ? MODEL_MARKS.get(choice.providerType) : undefined;
     const tone: UiRowTone =
         props.saving || state.loading ? "busy" : props.error ? "error" : "quiet";
@@ -85,6 +106,7 @@ export function UiDefaultModel(props: UiDefaultModelProps) {
                     <>
                         <Select
                             aria-label="Default model"
+                            {...(narrow ? { className: "happy-chat-row__grow" } : { width: 184 })}
                             disabled={!usable || state.choices.length === 0}
                             onValueChange={(value) => {
                                 const next = state.choices.find(
@@ -104,7 +126,6 @@ export function UiDefaultModel(props: UiDefaultModelProps) {
                             placeholder={state.loading ? "Loading…" : "No models yet"}
                             size="medium"
                             value={choice ? choiceKey(choice) : ""}
-                            width={184}
                         />
                         <Select
                             aria-label="Effort"
@@ -140,6 +161,7 @@ export function UiDefaultModel(props: UiDefaultModelProps) {
                     )
                 }
                 name="Default model"
+                stacked={narrow}
                 tone={tone}
                 {...(props.spinnerFrame === undefined ? {} : { spinnerFrame: props.spinnerFrame })}
             />
