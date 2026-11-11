@@ -24,7 +24,6 @@ import { existsSync } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { coverPath, pages } from "./artifacts/pages.mjs";
 
 const execFile = promisify(execFileCallback);
 
@@ -276,6 +275,7 @@ export const bots = [
     { name: "Mobile Releases", username: "mobile_releases", placeholder: 3 },
     { name: "Alerts", username: "alerts", placeholder: 17 },
     { name: "Growth", username: "growth", placeholder: 20 },
+    { name: "Product Health", username: "product_health", placeholder: 7 },
 ];
 
 /**
@@ -304,8 +304,10 @@ export const releaseBot = {
 // ------------------------------------------------------------------ tasks
 
 /**
- * Earlier tasks, oldest first: each owner made it and asked for it, and where
- * it names a subtask its agent put the work there, in the named repository.
+ * Earlier tasks, oldest first, in the order they are made: Activity lists
+ * them newest first. Each owner made it and asked for it, and where it names a
+ * subtask its agent put the work there, in the named repository. Steve's live
+ * task (`liveTask`) is made after `liveTaskAfter`.
  */
 export const doneTasks = [
     {
@@ -322,12 +324,6 @@ export const doneTasks = [
         ],
     },
     {
-        owner: "steve",
-        name: "Activity Feed Design",
-        message: "Design the activity feed: what changed, who did it, grouped by day.",
-        reply: "Entries group by day in inset cards, each with its subject's face and up to three people.",
-    },
-    {
         owner: "kirill",
         name: "iOS Overlay Layout",
         message: "The composer overlay jumps on send on iOS. Fix the layout.",
@@ -338,10 +334,22 @@ export const doneTasks = [
         reply: "iOS Send Fixes keeps the composer's frame through the send and the keyboard's return.",
     },
     {
+        owner: "steve",
+        name: "Activity Feed Design",
+        message: "Design the activity feed: what changed, who did it, grouped by day.",
+        reply: "Entries group by day in inset cards, each with its subject's face and up to three people.",
+    },
+    {
         owner: "emma",
         name: "Onboarding Emails",
         message: "Draft the three onboarding emails for new teams.",
         reply: "Three drafts are in: welcome, your first shared task, and invite your team.",
+    },
+    {
+        owner: "scoteezy",
+        name: "Push Token Refresh",
+        message: "Push tokens go stale after a reinstall. Refresh them on launch.",
+        reply: "Tokens now refresh on every launch and after a reinstall.",
     },
     {
         owner: "maya",
@@ -358,42 +366,28 @@ export const doneTasks = [
             },
         ],
     },
-];
-
-/**
- * What earlier tasks published, made off camera by each task's own agent with
- * the daemon's artifact tools: the team's shared artifacts.
- */
-export const artifacts = [
     {
-        task: "Activity Feed Design",
-        title: "Activity feed mockup",
-        page: "feed",
-        summary: "Entries grouped by day, each with its subject, the people who touched it, and a preview when there is one.",
+        owner: "sam",
+        name: "Changelog Template",
+        message: "Make a changelog template for the 2026.11 release.",
+        reply: "The template has three sections, new, changed and fixed, with one line per change.",
     },
     {
-        task: "Sync Benchmarks",
-        title: "Cold sync benchmark",
-        page: "benchmark",
-        summary: "A cold sync of 10k tasks takes 1.80 s. Two thirds of it is the task list query, the next thing to index.",
+        owner: "emma",
+        name: "Pricing Page Copy",
+        message: "Write the pricing page copy for team servers.",
+        reply: "Three tiers are drafted, each with one line on who it's for.",
     },
     {
-        task: "Onboarding Emails",
-        title: "Onboarding email drafts",
-        page: "onboarding",
-        summary: "Three emails for new teams: welcome on day 0, a first shared task on day 1, and inviting the team on day 3.",
+        owner: "sam",
+        name: "Windows Installer Signing",
+        message: "The Windows installer's certificate expired. Sign it with the renewed one.",
+        reply: "Signed with the renewed certificate; the installer passes SmartScreen.",
     },
 ];
 
-/** An artifact's page and cover, published by the daemon's own tool. */
-async function artifactFiles(key) {
-    const cover = await staged(`covers/${key}.webp`, await readFile(coverPath(key)));
-    return {
-        content: pages[key],
-        files: [{ fromPath: cover, path: "cover.webp" }],
-        cover: "cover.webp",
-    };
-}
+/** The earlier task Steve's live task is made after. */
+export const liveTaskAfter = "Sync Benchmarks";
 
 /**
  * The team's shared todo list: Steve makes it, and each teammate adds a todo
@@ -469,9 +463,13 @@ export const stepIn = {
 /** Kirill's sidebar on Happy Core, top to bottom, before anyone starts anything. */
 export const sidebarOrder = [
     "Voice waveform",
-    "Onboarding Emails",
     "Team Servers",
+    "Windows Installer Signing",
+    "Pricing Page Copy",
+    "Changelog Template",
+    "Onboarding Emails",
     "Sync Benchmarks",
+    "Push Token Refresh",
     "iOS Overlay Layout",
     "Activity Feed Design",
 ];
@@ -653,30 +651,8 @@ export async function reply(payload) {
         return quick([text("Done.")]);
     }
 
-    // Earlier tasks: at most one subtask each, which writes its change and reports;
-    // a task with an artifact publishes it before its last word.
+    // Earlier tasks: at most one subtask each, which writes its change and reports.
     for (const task of doneTasks) {
-        const artifact = artifacts.find((entry) => entry.task === task.name);
-        if (turn.text === task.message && artifact && !task.subtask) {
-            if (turn.answered === 0)
-                return quick([
-                    tool("create_artifact", {
-                        type: "html",
-                        title: artifact.title,
-                        summary: artifact.summary,
-                        ...(await artifactFiles(artifact.page)),
-                    }),
-                ]);
-            const results = turn.after
-                .filter((message) => message.role !== "assistant")
-                .map(textOf)
-                .join("\n");
-            const found = results.match(
-                /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id="|happy:\/\/artifacts\/)([a-z0-9]{20,32})\b/u,
-            );
-            if (!found) throw new Error(`create_artifact named no artifact: ${results}`);
-            return quick([text(task.reply)]);
-        }
         if (turn.text === task.message) {
             if (task.subtask && turn.answered === 0)
                 return quick([

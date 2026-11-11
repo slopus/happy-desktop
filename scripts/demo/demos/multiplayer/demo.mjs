@@ -18,8 +18,8 @@ const viewport = requestedViewport
     : { width: 1133, height: 700 };
 
 /**
- * Which chapter this run films: `aware`, `activity`, `bots`, `artifacts` or
- * `step-in`. `explore` writes stills of the world instead.
+ * Which chapter this run films: `aware`, `activity`, `bots` or `step-in`.
+ * `explore` writes stills of the world instead.
  */
 const shot = process.env.MULTIPLAYER_SHOT ?? "aware";
 
@@ -132,8 +132,10 @@ async function botFind(client, username) {
 
 /**
  * What a bot is to the members of a team server, asked of the daemon itself
- * before anything is filmed: who lists which bots, and whether a member who
- * is not the owner may make one. The probe's bot is archived at once.
+ * before anything is filmed: who lists which bots, and, with
+ * MULTIPLAYER_BOT_PROBE=1, whether a member who is not the owner may make one.
+ * The probe's bot is archived at once, but its creation stays in Activity, so
+ * takes leave it off.
  */
 async function botFacts(clients) {
     const facts = { listed: {}, memberCreate: undefined };
@@ -144,6 +146,7 @@ async function botFacts(clients) {
             .map((bot) => bot.name)
             .sort();
     }
+    if (process.env.MULTIPLAYER_BOT_PROBE !== "1") return facts;
     try {
         const { bot } = await clients.sam.createBot({
             name: "Probe",
@@ -208,11 +211,31 @@ async function settled(client, agentId, { subtask = false } = {}) {
     return sub.runs.length > 0 && sub.runs.every((run) => run.status !== "running");
 }
 
-/** Earlier work, made once: each owner's task, its subtask, and the subtask's change. */
+/**
+ * How long the earlier work is spread over, in real seconds: Activity shows
+ * each entry's own time, and the server stamps it when it is made, so the
+ * activity takes make the earlier tasks minutes apart
+ * (MULTIPLAYER_SPREAD_SECONDS, about 2100). Other takes make them at once.
+ */
+const spreadSeconds = Number(process.env.MULTIPLAYER_SPREAD_SECONDS ?? 0);
+/** One step of the spread: earlier tasks, the live task, then the checklist. */
+const spreadStep = () =>
+    spreadSeconds > 0
+        ? new Promise((settle) =>
+              setTimeout(settle, (spreadSeconds * 1000) / (world.doneTasks.length + 1)),
+          )
+        : undefined;
+
+/**
+ * Earlier work, made once and in order: each owner's task, its subtask, and the
+ * subtask's change, with Steve's live task among them. Returns the live task.
+ */
 async function doneTasksPrepare(clients) {
-    for (const entry of world.doneTasks) {
+    let live;
+    for (const [index, entry] of world.doneTasks.entries()) {
         const client = clients[entry.owner];
         if (await taskFind(client, entry.name)) continue;
+        if (index > 0) await spreadStep();
         const { task } = await client.createTask({ name: entry.name, mutationId: randomUUID() });
         await client.sendMessage(task.agent.id, {
             id: cuid(),
@@ -228,7 +251,13 @@ async function doneTasksPrepare(clients) {
         // The owner's own follow-ups; a teammate's come later (`followUpsPrepare`).
         for (const more of entry.more ?? []) if (!more.from) await turnSend(clients, task, entry, more);
         process.stdout.write(`    task      ${entry.name}\n`);
+        if (entry.name === world.liveTaskAfter) {
+            await spreadStep();
+            live = await liveTaskPrepare(clients[world.liveTask.owner]);
+            process.stdout.write(`    task      ${world.liveTask.name}\n`);
+        }
     }
+    return live;
 }
 
 /** One more message in an earlier task, and its agent's whole answer. */
@@ -250,8 +279,7 @@ async function turnSend(clients, task, entry, more) {
 
 /**
  * Teammates writing in each other's earlier tasks, through their own sign-ins:
- * Steve asks Maya's benchmark for the 50k run, and its agent publishes the
- * artifact's next version. In chapter 2 this is the newest thing in Activity.
+ * Steve asks Maya's benchmark about the 50k run.
  */
 async function followUpsPrepare(clients) {
     for (const entry of world.doneTasks)
@@ -438,9 +466,6 @@ export default {
         { scope: "demo", source: "../team/patches/server-sign-in.patch" },
         // The gym's accounts have no provider to read usage from.
         { scope: "demo", source: "../team/patches/account-usage.patch" },
-        // The recorder's browser reads an artifact's pages through the daemon,
-        // as the desktop's artifact scheme does.
-        { scope: "demo", source: "../team/patches/artifact-site.patch" },
     ],
     async run(demo, gym, { output } = {}) {
         world.rehearse();
@@ -476,17 +501,17 @@ export default {
                 );
             }
         };
-        // Chapter 2 is about what was made: there chapter 1's tasks are older
-        // than the artifacts, and the newest thing is the team's checklist.
+        // The bots are made first, then the earlier tasks, then the checklist:
+        // Activity lists them newest first, so the bots' entries sort last.
         await rehearsalsArchive(kirill);
-        if (shot === "activity") await arrivalsSettle();
-        const live = await liveTaskPrepare(clients[world.liveTask.owner]);
+        const live = await doneTasksPrepare(clients);
         filmed.liveTaskId = live.id;
-        await doneTasksPrepare(clients);
         await followUpsPrepare(clients);
-        if (shot !== "activity") await checklistPrepare(clients);
+        await spreadStep();
+        await checklistPrepare(clients);
         await sidebarArrange(kirill);
         if (shot !== "aware") {
+            // Chapter 2's three new tasks arrive after Kirill last read Activity.
             if (shot !== "activity") await arrivalsSettle();
             const bot = await botJobPrepare(clients);
             filmed.botAgentId = bot.agent.id;
@@ -531,7 +556,6 @@ export default {
             aware: world.openTask,
             activity: world.openTask,
             bots: "Activity",
-            artifacts: world.releaseBot.name,
             "step-in": world.stepIn.task,
             explore: world.openTask,
         }[shot];
@@ -548,20 +572,11 @@ export default {
         await page.evaluate(() => document.activeElement?.blur?.());
         await page.waitForTimeout(1500);
         for (const client of [...Object.values(clients), personal.client]) await readAll(client);
-        // Chapter 2: the team fills the checklist after Kirill last looked.
+        // Chapter 2: chapter 1's three tasks start after Kirill last read
+        // Activity, so they are its unread entries, on top.
         if (shot === "activity") {
-            await checklistPrepare(clients);
-            await sidebarRow(page, world.checklist.name).waitFor({ timeout: 30000 });
-        }
-        // Chapter 4 opens the benchmark on camera; it was opened once before, so
-        // it draws at once instead of loading.
-        if (shot === "artifacts") {
-            await sidebarRow(page, "Artifacts").click();
-            await page.getByText(world.artifacts[1].title).first().click();
-            await page.getByText("History").first().waitFor({ timeout: 30000 });
-            await page.waitForTimeout(1500);
-            await sidebarRow(page, opening).click();
-            await page.mouse.move(viewport.width - 2, viewport.height - 2);
+            await arrivalsSettle();
+            await sidebarRow(page, world.arrivals.at(-1).name).waitFor({ timeout: 30000 });
         }
         await page.waitForTimeout(1500);
 
@@ -594,10 +609,6 @@ export default {
             }
             await sidebarRow(page, "Activity").click();
             await still("activity");
-            await sidebarRow(page, "Artifacts").click();
-            await still("artifacts");
-            await page.getByText(world.artifacts[0].title).first().click();
-            await still("artifact-open");
             await sidebarRow(page, world.openTask).click();
             framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
             await demo.hold(300);
@@ -678,8 +689,8 @@ export default {
 
         if (shot === "activity") {
             // Chapter 2, "Catch up on what shipped": Kirill opens Activity. On top
-            // is the checklist his teammates filled in, then the benchmark Maya's
-            // agent published, as a post with its summary and cover.
+            // are chapter 1's three tasks, unread, then the checklist his
+            // teammates filled in and the team's earlier tasks.
             const row = sidebarRow(page, "Activity");
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
@@ -688,7 +699,7 @@ export default {
             await choose(row, "activity");
             await until(
                 demo,
-                () => page.getByText(world.artifacts[1].summary).first().isVisible(),
+                () => page.getByText(world.checklist.name).nth(1).isVisible(),
                 "the Activity page",
             );
             cue("activity-open", demo, await place(page.getByText(world.checklist.name).nth(1)));
@@ -739,34 +750,6 @@ export default {
             );
             cue("report", demo);
             await demo.hold(3200);
-        }
-
-        if (shot === "artifacts") {
-            // Chapter 4, "Share what your agents make": Kirill opens Artifacts,
-            // where his teammates' agents' pages are, each under the task it
-            // came from, and opens one.
-            const artifact = world.artifacts.find((entry) => entry.task === "Sync Benchmarks");
-            await demo.pointerPlace(rest);
-            await page.screenshot({ path: join(output, "opening.png") });
-            cue("open", demo);
-            await demo.hold(700);
-            await choose(sidebarRow(page, "Artifacts"), "artifacts");
-            const entry = page.getByText(artifact.title).first();
-            await until(demo, () => entry.isVisible(), "the Artifacts page");
-            cue("artifacts-open", demo);
-            await demo.hold(2600);
-            await choose(entry, "artifact");
-            await until(
-                demo,
-                () => page.getByText("History").first().isVisible(),
-                "the artifact's page",
-            );
-            cue("artifact-open", demo);
-            // The hand leaves the page before the camera reads it.
-            await demo.hold(300);
-            await demo.moveTo(away);
-            cue("pointer-away", demo);
-            await demo.hold(3600);
         }
 
         if (shot === "step-in") {
