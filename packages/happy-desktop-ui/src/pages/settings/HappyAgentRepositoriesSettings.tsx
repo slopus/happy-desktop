@@ -5,6 +5,7 @@ import { Button } from "../../Button";
 import { CopyButton } from "../../CopyButton";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
+import { IconTile } from "../../IconTile";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
@@ -124,9 +125,7 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
                         onClick={() => props.onOpen(repository.id)}
                         type="button"
                     >
-                        <span className="happy-agent-repositories__icon">
-                            <Icon name="repository" size={16} />
-                        </span>
+                        <IconTile icon="repository" tone="gray" />
                         <span className="happy-agent-repositories__text">
                             <span className="happy-agent-repositories__name">
                                 {repository.name}

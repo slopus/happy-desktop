@@ -13,6 +13,7 @@ export interface HappyAgentPasswordSettingsProps {
 export function HappyAgentPasswordSettings(props: HappyAgentPasswordSettingsProps) {
     return (
         <HappyAgentSettingsSection
+            rows="cards"
             description="Happy fills logins saved in your browsers, on demand. It never stores passwords, imports them in bulk, or copies sessions."
             title="Saved logins"
         >

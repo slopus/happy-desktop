@@ -23,8 +23,8 @@ export function HappyCloudWebSettingsPage() {
                     <HappyAgentSettingsShell
                         activeCategoryId="account"
                         categories={[
-                            { id: "general", icon: "settings", label: "General" },
-                            { id: "account", icon: "users", label: "Account" },
+                            { id: "general", icon: "settings", label: "General", tone: "gray" },
+                            { id: "account", icon: "users", label: "Account", tone: "blue" },
                         ]}
                         description="Your profile and Happy Cloud session"
                         onCategorySelect={noop}

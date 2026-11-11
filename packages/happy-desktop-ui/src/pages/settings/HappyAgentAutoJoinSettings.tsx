@@ -32,20 +32,25 @@ export function HappyAgentAutoJoinSettings(
         // Rows only: HappyAgentConnectionSettingsSection names the connection
         // and says once when it is unreachable; `unavailable` only disables here.
         <>
-            {props.error ? (
-                <Banner tone="danger" title={`${Noun} settings unavailable`}>
-                    {props.error}
-                </Banner>
-            ) : null}
-            {props.saveError ? (
-                <Banner tone="danger" title={`${Noun} preference not saved`}>
-                    {props.saveError}
-                </Banner>
-            ) : null}
-            {props.status === "unsupported" ? (
-                <Banner tone="neutral" title={`${Noun} settings unavailable`}>
-                    {props.unsupportedMessage ?? "This connection does not provide user settings."}
-                </Banner>
+            {props.error || props.saveError || props.status === "unsupported" ? (
+                <Box className="happy-agent-settings__notices">
+                    {props.error ? (
+                        <Banner tone="danger" title={`${Noun} settings unavailable`}>
+                            {props.error}
+                        </Banner>
+                    ) : null}
+                    {props.saveError ? (
+                        <Banner tone="danger" title={`${Noun} preference not saved`}>
+                            {props.saveError}
+                        </Banner>
+                    ) : null}
+                    {props.status === "unsupported" ? (
+                        <Banner tone="neutral" title={`${Noun} settings unavailable`}>
+                            {props.unsupportedMessage ??
+                                "This connection does not provide user settings."}
+                        </Banner>
+                    ) : null}
+                </Box>
             ) : null}
             <FormRow
                 control={

@@ -42,15 +42,15 @@ import {
 export const componentNumber = "P-012";
 
 const categories: readonly HappyAgentSettingsCategory[] = [
-    { icon: "settings", id: "general", label: "General" },
-    { icon: "users", id: "account", label: "Account" },
-    { icon: "file-diff", id: "file-tiers", label: "File tiers" },
-    { icon: "doc", id: "instructions", label: "Instructions" },
-    { icon: "lock", id: "secrets", label: "Secrets" },
-    { icon: "globe", id: "providers", label: "Providers" },
-    { icon: "zap", id: "usage", label: "Usage" },
-    { icon: "mobile", id: "mobile-access", label: "Mobile access" },
-    { icon: "code", id: "debug", label: "Dev tools" },
+    { icon: "settings", id: "general", label: "General", tone: "gray" },
+    { icon: "users", id: "account", label: "Account", tone: "blue" },
+    { icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
+    { icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
+    { icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "blue" },
+    { icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
 ];
 
 const usageDescription = "How much of each provider account's plan this machine has spent";
@@ -966,7 +966,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     activeCategoryId="experimental"
                     categories={[
                         ...categories,
-                        { id: "experimental", label: "Experimental", icon: "zap" },
+                        { id: "experimental", label: "Experimental", icon: "zap", tone: "purple" },
                     ]}
                     title="Experimental"
                     description="Features that are still being built"
@@ -1665,7 +1665,10 @@ export function HappyAgentSettingsBlueprintPage() {
             >
                 <HappyAgentSettingsShell
                     activeCategoryId="members"
-                    categories={[...categories, { icon: "users", id: "members", label: "Members" }]}
+                    categories={[
+                        ...categories,
+                        { icon: "users", id: "members", label: "Members", tone: "orange" },
+                    ]}
                     description="Who is on this server and what they may do"
                     onCategorySelect={noop}
                     onClose={noop}

@@ -1,0 +1,57 @@
+/*
+ * IconTile — a white glyph on a filled rounded square of one hue, as the native
+ * clients' settings rows lead with (iOS SettingsLayout: a 30px tile, 8px radius,
+ * 20px glyph). The desktop sizes keep those proportions: 20px in a sidebar's
+ * glyph lane and 28px at the head of a settings row. The glyph carries the
+ * primary action's white ink, which is white in every appearance.
+ */
+
+.happy-icon-tile {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--happy-tile-gray);
+    color: var(--button-primary-tint);
+}
+
+.happy-icon-tile[data-size="small"] {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+}
+
+.happy-icon-tile[data-size="medium"] {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+}
+
+.happy-icon-tile[data-tone="blue"] {
+    background: var(--happy-tile-blue);
+}
+
+.happy-icon-tile[data-tone="green"] {
+    background: var(--happy-tile-green);
+}
+
+.happy-icon-tile[data-tone="orange"] {
+    background: var(--happy-tile-orange);
+}
+
+.happy-icon-tile[data-tone="indigo"] {
+    background: var(--happy-tile-indigo);
+}
+
+.happy-icon-tile[data-tone="purple"] {
+    background: var(--happy-tile-purple);
+}
+
+.happy-icon-tile[data-tone="red"] {
+    background: var(--happy-tile-red);
+}
+
+.happy-icon-tile[data-tone="teal"] {
+    background: var(--happy-tile-teal);
+}

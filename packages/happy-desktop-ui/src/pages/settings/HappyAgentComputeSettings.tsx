@@ -8,7 +8,7 @@ import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
 import { Spinner } from "../../Spinner";
-import { Ionicon } from "../../vectorIcons/VectorIcon";
+import { IconTile } from "../../IconTile";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** Sandboxes in use against what the machines hold; `total` is null until all have said. */
@@ -68,6 +68,14 @@ const OS_GLYPH = {
     linux: "logo-tux",
     windows: "logo-windows",
     other: "server-outline",
+} as const;
+
+/** A machine's tile hue, by its operating system. */
+const OS_TONE = {
+    macos: "gray",
+    linux: "orange",
+    windows: "blue",
+    other: "indigo",
 } as const;
 
 function capacityText(capacity: HappyAgentComputeCapacityRow): string {
@@ -148,9 +156,7 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                                 data-happy-desktop-ui="compute-pool"
                                 key={pool.id}
                             >
-                                <span className="happy-agent-compute__icon">
-                                    <Ionicon name="layers-outline" size={16} />
-                                </span>
+                                <IconTile ionicon="layers-outline" tone="indigo" />
                                 <span className="happy-agent-compute__text">
                                     <span className="happy-agent-compute__title">
                                         <span className="happy-agent-compute__name">
@@ -198,9 +204,10 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                                     data-happy-desktop-ui="compute-machine"
                                     key={machine.id}
                                 >
-                                    <span className="happy-agent-compute__icon">
-                                        <Ionicon name={OS_GLYPH[machine.os]} size={16} />
-                                    </span>
+                                    <IconTile
+                                        ionicon={OS_GLYPH[machine.os]}
+                                        tone={OS_TONE[machine.os]}
+                                    />
                                     <span className="happy-agent-compute__text">
                                         <span className="happy-agent-compute__name">
                                             {machine.name}

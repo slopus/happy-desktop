@@ -370,17 +370,6 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy-mobile-direct-device__icon {
-    box-sizing: border-box;
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    color: var(--text-secondary);
-}
-
 .happy-mobile-direct-device__text {
     display: flex;
     flex: 1 1 0;

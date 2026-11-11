@@ -60,10 +60,10 @@ const sections: SidebarSection[] = [
 ];
 
 const categories: readonly HappyAgentSettingsCategory[] = [
-    { icon: "settings", id: "general", label: "General" },
-    { icon: "users", id: "account", label: "Account" },
-    { icon: "lock", id: "secrets", label: "Secrets" },
-    { icon: "mobile", id: "mobile-access", label: "Mobile access" },
+    { icon: "settings", id: "general", label: "General", tone: "gray" },
+    { icon: "users", id: "account", label: "Account", tone: "blue" },
+    { icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "blue" },
 ];
 
 /** Fixture-only stand-in for the native macOS traffic lights: 14px at x 14…68, y 13. */

@@ -44,7 +44,7 @@ it("renders the default-off opt-in and preserves switch identity and focus when 
     const section = view.$('[data-happy-desktop-ui="happy-agent-settings-section"]');
     expect(section.element.textContent).toContain("Adds a phone beside Settings.");
     expect(section.computedStyle("display")).toBe("flex");
-    expect(section.computedStyle("gap")).toBe("12px");
+    expect(section.computedStyle("gap")).toBe("8px");
     expect(section.bounds().width).toBe(672);
     const row = view.$('[data-happy-desktop-ui="form-row"]');
     const switchBox = view.$('[role="switch"]').bounds();

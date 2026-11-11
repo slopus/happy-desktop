@@ -20,6 +20,7 @@ import { CountBadge, KeyCap } from "./Badge";
 import { Button } from "./Button";
 import { happyWordmarkLightUrl } from "./assets";
 import { Icon, type IconName } from "./Icon";
+import { IconTile, type IconTileTone } from "./IconTile";
 import {
     commandShortcut,
     commandShortcutMatches,
@@ -105,6 +106,11 @@ export type SidebarItem = {
      * keeps the neutral chip; a picture or placeholder face ignores it.
      */
     tint?: AvatarTint;
+    /**
+     * Paints a glyph row's `icon` white on a filled tile of this hue, as a
+     * settings category's mark is drawn. Absent keeps the bare glyph.
+     */
+    tile?: IconTileTone;
     id: string;
     imageUrl?: string;
     /** Unframed entity artwork in the existing 20px leading lane. */
@@ -2283,6 +2289,8 @@ function SidebarRow({
                                 {item().emoji}
                             </span>
                         </span>
+                    ) : item().tile !== undefined ? (
+                        <IconTile icon={leadingIcon(item())} size="small" tone={item().tile!} />
                     ) : (
                         <Icon name={leadingIcon(item())} size={16} />
                     )}

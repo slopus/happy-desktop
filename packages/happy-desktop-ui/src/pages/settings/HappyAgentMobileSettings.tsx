@@ -4,13 +4,14 @@ import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { Box } from "../../Box";
 import { FormRow } from "../../FormRow";
+import { IconTile } from "../../IconTile";
 import {
     MobileAccessConfirmation,
     type MobileAccessConfirmationState,
 } from "../../MobileAccessConfirmation";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
-import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
 export type HappyAgentMobileStatus =
@@ -105,7 +106,7 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
     const pairingTitle = props.pairingDirectOnly ? "Connect a phone directly" : "Connect a phone";
     return (
         <>
-            <HappyAgentSettingsSection>
+            <HappyAgentSettingsSection rows="cards">
                 {props.unavailable ? (
                     <Banner tone="warning" title="Happy Agent unavailable">
                         {props.unavailable}
@@ -118,28 +119,7 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
                     >
                         Phone pairing is turned off on this Happy Agent.
                     </p>
-                ) : (
-                    <FormRow
-                        align="start"
-                        control={
-                            <Button
-                                disabled={blocked}
-                                icon={props.pairingDirectOnly ? "mobile" : "link"}
-                                onClick={props.onPairingOptionsOpen}
-                                size="small"
-                                variant="primary"
-                            >
-                                {props.pairingDirectOnly ? "Show QR code" : "Connect phone"}
-                            </Button>
-                        }
-                        description={
-                            props.pairingDirectOnly
-                                ? "For the latest Happy phone app. Your Happy server link stays."
-                                : "Scan a code with Happy on your phone"
-                        }
-                        label={pairingTitle}
-                    />
-                )}
+                ) : null}
                 {props.error ? (
                     <Banner tone="danger" title="Happy Mobile status unavailable">
                         {props.error}
@@ -178,23 +158,51 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
                         {props.disconnectError}
                     </Banner>
                 ) : null}
-                {relayShown(props) ? (
-                    <FormRow
-                        control={
-                            <HappyAgentSettingsStatus
-                                label={mobile.label}
-                                variant={mobile.variant}
+                {props.pairingOff && !relayShown(props) && props.direct === undefined ? null : (
+                    <HappyAgentSettingsGroup>
+                        {props.pairingOff ? null : (
+                            <FormRow
+                                align="start"
+                                control={
+                                    <Button
+                                        disabled={blocked}
+                                        icon={props.pairingDirectOnly ? "mobile" : "link"}
+                                        onClick={props.onPairingOptionsOpen}
+                                        size="small"
+                                        variant="primary"
+                                    >
+                                        {props.pairingDirectOnly ? "Show QR code" : "Connect phone"}
+                                    </Button>
+                                }
+                                description={
+                                    props.pairingDirectOnly
+                                        ? "For the latest Happy phone app. Your Happy server link stays."
+                                        : "Scan a code with Happy on your phone"
+                                }
+                                icon={<IconTile ionicon="qr-code-outline" tone="green" />}
+                                label={pairingTitle}
                             />
-                        }
-                        description={
-                            props.status === "connected"
-                                ? "Phones on your Happy account reach this computer from anywhere"
-                                : statusDetail(mobile.description, props)
-                        }
-                        label="Happy server"
-                    />
-                ) : null}
-                {props.direct}
+                        )}
+                        {relayShown(props) ? (
+                            <FormRow
+                                control={
+                                    <HappyAgentSettingsStatus
+                                        label={mobile.label}
+                                        variant={mobile.variant}
+                                    />
+                                }
+                                description={
+                                    props.status === "connected"
+                                        ? "Phones on your Happy account reach this computer from anywhere"
+                                        : statusDetail(mobile.description, props)
+                                }
+                                icon={<IconTile ionicon="cloud-outline" tone="blue" />}
+                                label="Happy server"
+                            />
+                        ) : null}
+                        {props.direct}
+                    </HappyAgentSettingsGroup>
+                )}
             </HappyAgentSettingsSection>
             {paired ? (
                 <HappyAgentSettingsSection>
@@ -217,6 +225,7 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
                                 ? "Removes this computer and its chats from the Happy server. History on this computer stays."
                                 : "Forgets this computer's pairing. Your account, phones and history stay."
                         }
+                        icon={<IconTile icon="unlink" tone="red" />}
                         label="Disconnect this computer"
                     />
                 </HappyAgentSettingsSection>

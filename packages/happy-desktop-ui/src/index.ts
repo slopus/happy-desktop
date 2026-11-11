@@ -147,6 +147,7 @@ export {
     type ReactionChipProps,
 } from "./Badge";
 export { Box, type BoxProps } from "./Box";
+export { IconTile, type IconTileProps, type IconTileSize, type IconTileTone } from "./IconTile";
 export { DevBuildMenu, type DevBuildMenuProps } from "./DevBuildMenu";
 export {
     LivePerformanceIndicator,
@@ -999,9 +1000,11 @@ export {
 } from "./pages/surfaces/HappyAgentSurfaceCreateDialog";
 export { happyAgentSurfaceBackdropsPreload } from "./pages/surfaces/surfaceBackdropsPreload";
 export {
+    HappyAgentSettingsGroup,
     HappyAgentSettingsSection,
     HappyAgentSettingsShell,
     type HappyAgentSettingsCategory,
+    type HappyAgentSettingsGroupProps,
     type HappyAgentSettingsSectionProps,
     type HappyAgentSettingsShellProps,
 } from "./pages/settings/HappyAgentSettingsShell";

@@ -53,7 +53,7 @@ export function GptLiveVoiceSettings(props: GptLiveVoiceSettingsProps) {
     const fastModeId = useId();
     if (props.loading)
         return (
-            <HappyAgentSettingsSection title="Voice controller">
+            <HappyAgentSettingsSection rows="cards" title="Voice controller">
                 <div className="happy-agent-settings__pending">
                     <Spinner size={16} />
                     <span>Reading voice settings…</span>
@@ -62,7 +62,7 @@ export function GptLiveVoiceSettings(props: GptLiveVoiceSettingsProps) {
         );
     if (props.unavailable)
         return (
-            <HappyAgentSettingsSection title="Voice controller">
+            <HappyAgentSettingsSection rows="cards" title="Voice controller">
                 <Banner tone="warning" title="Voice settings unavailable">
                     {props.unavailable}
                 </Banner>

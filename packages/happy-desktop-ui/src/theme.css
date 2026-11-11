@@ -228,6 +228,8 @@
     --happy-tile-red-fill: rgb(255 59 48 / 0.11);
     --happy-tile-teal: #1c9fb8;
     --happy-tile-teal-fill: rgb(48 176 199 / 0.14);
+    /* iOS's system grey, for a solid settings tile (IconTile); no fill pair. */
+    --happy-tile-gray: #8e8e93;
     --happy-mention-tint: rgb(26 127 153 / 0.16);
     /* A mention of the reader themselves, and the words of a mention in a
        sent message, which are not drawn by a textarea and can take a colour. */
@@ -668,6 +670,7 @@
         --happy-tile-red-fill: rgb(255 69 58 / 0.2);
         --happy-tile-teal: #40c8e0;
         --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
+        --happy-tile-gray: #8e8e93;
         --happy-mention-tint: rgb(92 200 226 / 0.24);
         --happy-mention-tint-self: rgb(92 200 226 / 0.42);
         --happy-mention-text: #9be0f0;
@@ -892,6 +895,7 @@
     --happy-tile-red-fill: rgb(255 69 58 / 0.2);
     --happy-tile-teal: #40c8e0;
     --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
+    --happy-tile-gray: #8e8e93;
     --happy-mention-tint: rgb(92 200 226 / 0.24);
     --happy-mention-tint-self: rgb(92 200 226 / 0.42);
     --happy-mention-text: #9be0f0;

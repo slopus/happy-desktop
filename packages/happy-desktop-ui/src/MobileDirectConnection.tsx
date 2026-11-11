@@ -5,6 +5,7 @@ import { HappyAgentSettingsStatus } from "./pages/settings/HappyAgentSettingsSta
 import { Box } from "./Box";
 import { Button } from "./Button";
 import { FormRow } from "./FormRow";
+import { IconTile, type IconTileTone } from "./IconTile";
 import { Modal } from "./Modal";
 import { ModalOverlay } from "./ModalOverlay";
 import { Spinner } from "./Spinner";
@@ -16,7 +17,7 @@ import {
     PairingResult,
     pairingCountdown,
 } from "./MobilePairingParts";
-import { Ionicon } from "./vectorIcons/VectorIcon";
+import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 
 /** What a phone says it runs. Self-reported, so it is shown as a claim. */
 export type MobileDirectPlatform = "ios" | "android" | "other";
@@ -115,19 +116,21 @@ const PLATFORM_LABELS: Record<MobileDirectPlatform, string> = {
     other: "Phone",
 };
 
+const PLATFORM_GLYPHS: Record<MobileDirectPlatform, IoniconName> = {
+    ios: "logo-apple",
+    android: "logo-android",
+    other: "phone-portrait-outline",
+};
+
+/** A paired phone's tile hue, by the kind of phone it is. */
+const PLATFORM_TONES: Record<MobileDirectPlatform, IconTileTone> = {
+    ios: "gray",
+    android: "green",
+    other: "blue",
+};
+
 function PlatformIcon(props: { readonly platform: MobileDirectPlatform; readonly size: number }) {
-    return (
-        <Ionicon
-            name={
-                props.platform === "ios"
-                    ? "logo-apple"
-                    : props.platform === "android"
-                      ? "logo-android"
-                      : "phone-portrait-outline"
-            }
-            size={props.size}
-        />
-    );
+    return <Ionicon name={PLATFORM_GLYPHS[props.platform]} size={props.size} />;
 }
 
 export interface MobileDirectPairingPanelProps {
@@ -758,6 +761,7 @@ export function MobileDirectConnectionSection(props: MobileDirectConnectionSecti
                     {...(state.description || failure
                         ? { description: [state.description, failure].filter(Boolean).join(" ") }
                         : {})}
+                    icon={<IconTile icon="mobile" tone="indigo" />}
                     label="Direct connection"
                 />
             ) : null}
@@ -773,9 +777,10 @@ export function MobileDirectConnectionSection(props: MobileDirectConnectionSecti
                                 data-happy-desktop-ui="mobile-direct-device"
                                 key={device.id}
                             >
-                                <span className="happy-mobile-direct-device__icon">
-                                    <PlatformIcon platform={device.platform} size={16} />
-                                </span>
+                                <IconTile
+                                    ionicon={PLATFORM_GLYPHS[device.platform]}
+                                    tone={PLATFORM_TONES[device.platform]}
+                                />
                                 <span className="happy-mobile-direct-device__text">
                                     <span className="happy-mobile-direct-device__name">
                                         {device.name}

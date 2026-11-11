@@ -1,7 +1,8 @@
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { FormRow } from "../../FormRow";
-import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { IconTile } from "../../IconTile";
+import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentAccountSettingsProps {
     readonly status: "loading" | "disconnected" | "authorizing" | "connected" | "unavailable";
@@ -19,7 +20,7 @@ export interface HappyAgentAccountSettingsProps {
 export function HappyAgentAccountSettings(props: HappyAgentAccountSettingsProps) {
     const connected = props.status === "connected";
     return (
-        <HappyAgentSettingsSection>
+        <HappyAgentSettingsSection rows="cards">
             {props.unavailable ? (
                 <Banner tone="warning" title="Happy Agent unavailable">
                     {props.unavailable}
@@ -30,27 +31,32 @@ export function HappyAgentAccountSettings(props: HappyAgentAccountSettingsProps)
                     {props.error}
                 </Banner>
             ) : null}
-            <FormRow
-                label="Happy account"
-                description={accountDescription(props)}
-                control={
-                    <Button
-                        disabled={props.unavailable !== undefined || props.status === "unavailable"}
-                        icon={connected ? "unlink" : undefined}
-                        loading={
-                            props.status === "loading" ||
-                            props.authorizationStarting ||
-                            props.authorizationCompleting ||
-                            props.disconnecting
-                        }
-                        onClick={connected ? props.onDisconnect : props.onConnect}
-                        size="small"
-                        variant={connected ? "secondary" : "primary"}
-                    >
-                        {connected ? "Disconnect" : "Connect account"}
-                    </Button>
-                }
-            />
+            <HappyAgentSettingsGroup>
+                <FormRow
+                    icon={<IconTile ionicon="person-circle-outline" tone="blue" />}
+                    label="Happy account"
+                    description={accountDescription(props)}
+                    control={
+                        <Button
+                            disabled={
+                                props.unavailable !== undefined || props.status === "unavailable"
+                            }
+                            icon={connected ? "unlink" : undefined}
+                            loading={
+                                props.status === "loading" ||
+                                props.authorizationStarting ||
+                                props.authorizationCompleting ||
+                                props.disconnecting
+                            }
+                            onClick={connected ? props.onDisconnect : props.onConnect}
+                            size="small"
+                            variant={connected ? "secondary" : "primary"}
+                        >
+                            {connected ? "Disconnect" : "Connect account"}
+                        </Button>
+                    }
+                />
+            </HappyAgentSettingsGroup>
         </HappyAgentSettingsSection>
     );
 }

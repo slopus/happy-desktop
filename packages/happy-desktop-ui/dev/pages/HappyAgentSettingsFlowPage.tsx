@@ -41,18 +41,18 @@ export const componentNumber = "P-012f";
 
 /** Every category the settings window lists, in the app's order. */
 const categories: readonly HappyAgentSettingsCategory[] = [
-    { icon: "settings", id: "general", label: "General" },
-    { icon: "files", id: "sharing", label: "Sharing" },
-    { icon: "users", id: "account", label: "Account" },
-    { icon: "file-diff", id: "file-tiers", label: "File tiers" },
-    { icon: "doc", id: "instructions", label: "Instructions" },
-    { icon: "lock", id: "secrets", label: "Secrets" },
-    { icon: "globe", id: "providers", label: "Providers" },
-    { icon: "zap", id: "usage", label: "Usage" },
-    { icon: "call", id: "voice", label: "Voice" },
-    { icon: "mobile", id: "mobile-access", label: "Mobile access" },
-    { icon: "zap", id: "experimental", label: "Experimental" },
-    { icon: "code", id: "debug", label: "Dev tools" },
+    { icon: "settings", id: "general", label: "General", tone: "gray" },
+    { icon: "files", id: "sharing", label: "Sharing", tone: "teal" },
+    { icon: "users", id: "account", label: "Account", tone: "blue" },
+    { icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
+    { icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
+    { icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    { icon: "call", id: "voice", label: "Voice", tone: "orange" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "blue" },
+    { icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
+    { icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
 ];
 
 /** The app's category descriptions, keyed like the categories. */

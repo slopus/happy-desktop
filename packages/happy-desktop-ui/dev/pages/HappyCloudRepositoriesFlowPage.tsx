@@ -23,13 +23,13 @@ export const componentNumber = "P-040";
 
 /** The settings categories a Happy Cloud server lists. */
 const categories: readonly HappyAgentSettingsCategory[] = [
-    { icon: "settings", id: "general", label: "General" },
-    { icon: "users", id: "account", label: "Account" },
-    { icon: "lock", id: "secrets", label: "Secrets" },
-    { icon: "globe", id: "providers", label: "Providers" },
-    { icon: "repository", id: "repositories", label: "Repositories" },
-    { icon: "users", id: "members", label: "Members" },
-    { icon: "zap", id: "usage", label: "Usage" },
+    { icon: "settings", id: "general", label: "General", tone: "gray" },
+    { icon: "users", id: "account", label: "Account", tone: "blue" },
+    { icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
+    { icon: "users", id: "members", label: "Members", tone: "orange" },
+    { icon: "zap", id: "usage", label: "Usage", tone: "teal" },
 ];
 
 const noop = () => undefined;

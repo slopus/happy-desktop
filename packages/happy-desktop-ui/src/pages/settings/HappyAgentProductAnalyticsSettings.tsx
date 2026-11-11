@@ -2,7 +2,7 @@ import { Banner } from "../../Banner";
 import { DataDisclosure, type DataDisclosureGroup } from "../../DataDisclosure";
 import { FormRow } from "../../FormRow";
 import { Switch } from "../../Switch";
-import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** What product analytics sends and, above all, what it never sends. */
 const PRODUCT_ANALYTICS_DISCLOSURE: readonly DataDisclosureGroup[] = [
@@ -48,21 +48,27 @@ export interface HappyAgentProductAnalyticsSettingsProps {
  */
 export function HappyAgentProductAnalyticsSettings(props: HappyAgentProductAnalyticsSettingsProps) {
     return (
-        <HappyAgentSettingsSection title="Privacy">
-            <FormRow
-                control={
-                    <Switch
-                        aria-label="Share product analytics"
-                        checked={props.enabled}
-                        id="happy-agent-settings-product-analytics"
-                        onChange={props.onChange}
-                        size="small"
-                    />
-                }
-                description="Helps us see where setup gets stuck, which errors people hit, and which features they use. Events are tied to a random ID for this installation, not to you; turning this off deletes it, and turning it back on starts a new one. Our analytics provider, PostHog, receives your IP address with each event and may keep it; we turn off its location lookup and don't use your IP."
-                htmlFor="happy-agent-settings-product-analytics"
-                label="Share product analytics"
-            />
+        <HappyAgentSettingsSection rows="cards" title="Privacy">
+            <HappyAgentSettingsGroup>
+                <FormRow
+                    control={
+                        <Switch
+                            aria-label="Share product analytics"
+                            checked={props.enabled}
+                            id="happy-agent-settings-product-analytics"
+                            onChange={props.onChange}
+                            size="small"
+                        />
+                    }
+                    description="Helps us see where setup gets stuck, which errors people hit, and which features they use. Events are tied to a random ID for this installation, not to you; turning this off deletes it, and turning it back on starts a new one. Our analytics provider, PostHog, receives your IP address with each event and may keep it; we turn off its location lookup and don't use your IP."
+                    htmlFor="happy-agent-settings-product-analytics"
+                    label="Share product analytics"
+                />
+                <DataDisclosure
+                    data-testid="happy-agent-settings-product-analytics-disclosure"
+                    groups={PRODUCT_ANALYTICS_DISCLOSURE}
+                />
+            </HappyAgentSettingsGroup>
             {props.saveFailed ? (
                 <Banner tone="danger" title="Choice not saved">
                     {props.enabled
@@ -70,10 +76,6 @@ export function HappyAgentProductAnalyticsSettings(props: HappyAgentProductAnaly
                         : "Analytics is off in this window, but Happy could not save that, so it may be back on after a restart. Try switching it again."}
                 </Banner>
             ) : null}
-            <DataDisclosure
-                data-testid="happy-agent-settings-product-analytics-disclosure"
-                groups={PRODUCT_ANALYTICS_DISCLOSURE}
-            />
         </HappyAgentSettingsSection>
     );
 }

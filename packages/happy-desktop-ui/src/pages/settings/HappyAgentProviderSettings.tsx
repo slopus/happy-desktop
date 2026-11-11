@@ -6,6 +6,7 @@ import { Button } from "../../Button";
 import { TextField } from "../../TextField";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
+import { IconTile } from "../../IconTile";
 import { Spinner } from "../../Spinner";
 import { Switch } from "../../Switch";
 import {
@@ -175,12 +176,7 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     >
                         <header className="happy-agent-provider__header">
                             <Box className="happy-agent-provider__identity">
-                                <span
-                                    className="happy-agent-provider__glyph"
-                                    data-happy-desktop-ui="happy-agent-provider-glyph"
-                                >
-                                    <Icon name="globe" size={16} />
-                                </span>
+                                <IconTile icon="globe" tone="indigo" />
                                 <Box className="happy-agent-provider__naming">
                                     <span
                                         className="happy-agent-provider__name"

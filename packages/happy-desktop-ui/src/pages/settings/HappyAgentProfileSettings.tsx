@@ -9,7 +9,7 @@ import { ProfilePhotoCropDialog, type ProfilePhotoCropSource } from "../../Profi
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
 import { thumbhashDataUrl } from "../../thumbhashDataUrl";
-import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** The stored photo: its ThumbHash, and the address of its bytes once they are read. */
 export interface HappyAgentProfileSettingsPhoto {
@@ -109,7 +109,7 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
             ? undefined
             : (props.photo.imageUrl ?? thumbhashDataUrl(props.photo.thumbhash));
     return (
-        <HappyAgentSettingsSection>
+        <HappyAgentSettingsSection rows="cards">
             {props.unavailable ? <Banner tone="warning">{props.unavailable}</Banner> : null}
             {props.error ? (
                 <Banner tone="danger" title="Profile unavailable">
@@ -140,90 +140,96 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
                             {props.saveError}
                         </Banner>
                     ) : null}
-                    <FormRow
-                        control={
-                            <Box className="happy-agent-profile__photo-actions">
-                                <Avatar
-                                    data-testid="happy-agent-profile-avatar"
-                                    imageUrl={photoUrl}
-                                    initials={initials(props.name) || "?"}
-                                    size="lg"
-                                />
-                                {props.photo ? (
+                    <HappyAgentSettingsGroup>
+                        <FormRow
+                            control={
+                                <Box className="happy-agent-profile__photo-actions">
+                                    <Avatar
+                                        data-testid="happy-agent-profile-avatar"
+                                        imageUrl={photoUrl}
+                                        initials={initials(props.name) || "?"}
+                                        size="lg"
+                                    />
+                                    {props.photo ? (
+                                        <Button
+                                            data-testid="happy-agent-profile-photo-remove"
+                                            disabled={blocked || photoBusy}
+                                            loading={props.photoRemoving}
+                                            onClick={props.onPhotoRemove}
+                                            size="small"
+                                            variant="ghost"
+                                        >
+                                            Remove
+                                        </Button>
+                                    ) : null}
                                     <Button
-                                        data-testid="happy-agent-profile-photo-remove"
-                                        disabled={blocked || photoBusy}
-                                        loading={props.photoRemoving}
-                                        onClick={props.onPhotoRemove}
+                                        data-testid="happy-agent-profile-photo-choose"
+                                        disabled={photoBlocked || photoBusy}
+                                        loading={
+                                            props.photoCrop === undefined && props.photoUploading
+                                        }
+                                        onClick={(event) => {
+                                            // The crop dialog hands focus back to
+                                            // whatever had it, and not every engine
+                                            // focuses a clicked button itself.
+                                            event.currentTarget.focus();
+                                            photoInput.current?.click();
+                                        }}
                                         size="small"
-                                        variant="ghost"
+                                        variant="secondary"
                                     >
-                                        Remove
+                                        {props.photo ? "Replace photo" : "Upload photo"}
                                     </Button>
-                                ) : null}
-                                <Button
-                                    data-testid="happy-agent-profile-photo-choose"
-                                    disabled={photoBlocked || photoBusy}
-                                    loading={props.photoCrop === undefined && props.photoUploading}
-                                    onClick={(event) => {
-                                        // The crop dialog hands focus back to
-                                        // whatever had it, and not every engine
-                                        // focuses a clicked button itself.
-                                        event.currentTarget.focus();
-                                        photoInput.current?.click();
-                                    }}
-                                    size="small"
-                                    variant="secondary"
-                                >
-                                    {props.photo ? "Replace photo" : "Upload photo"}
-                                </Button>
-                                <input
-                                    accept={PHOTO_ACCEPT}
-                                    data-testid="happy-agent-profile-photo-input"
-                                    hidden
-                                    onChange={(event) => {
-                                        const file = event.currentTarget.files?.[0];
-                                        // Picking the same file again is a new choice.
-                                        event.currentTarget.value = "";
-                                        if (file) props.onPhotoChoose(file);
-                                    }}
-                                    ref={photoInput}
-                                    type="file"
+                                    <input
+                                        accept={PHOTO_ACCEPT}
+                                        data-testid="happy-agent-profile-photo-input"
+                                        hidden
+                                        onChange={(event) => {
+                                            const file = event.currentTarget.files?.[0];
+                                            // Picking the same file again is a new choice.
+                                            event.currentTarget.value = "";
+                                            if (file) props.onPhotoChoose(file);
+                                        }}
+                                        ref={photoInput}
+                                        type="file"
+                                    />
+                                </Box>
+                            }
+                            description={
+                                props.photoUnavailable ?? "PNG, JPEG, or WebP, up to 8 MiB"
+                            }
+                            label="Photo"
+                        />
+                        <FormRow
+                            control={
+                                <TextField
+                                    className="happy-agent-profile__field"
+                                    disabled={blocked}
+                                    onValueChange={props.onNameChange}
+                                    placeholder="Your name"
+                                    size="medium"
+                                    value={props.name}
                                 />
-                            </Box>
-                        }
-                        description={props.photoUnavailable ?? "PNG, JPEG, or WebP, up to 8 MiB"}
-                        label="Photo"
-                    />
-                    <FormRow
-                        control={
-                            <TextField
-                                className="happy-agent-profile__field"
-                                disabled={blocked}
-                                onValueChange={props.onNameChange}
-                                placeholder="Your name"
-                                size="medium"
-                                value={props.name}
-                            />
-                        }
-                        description="Shown on work this machine authors"
-                        label="Name"
-                    />
-                    <FormRow
-                        control={
-                            <TextField
-                                className="happy-agent-profile__field"
-                                disabled={blocked}
-                                onValueChange={props.onEmailChange}
-                                placeholder="you@example.com"
-                                size="medium"
-                                type="email"
-                                value={props.email}
-                            />
-                        }
-                        description="The Git author address on every commit made here"
-                        label="Git email"
-                    />
+                            }
+                            description="Shown on work this machine authors"
+                            label="Name"
+                        />
+                        <FormRow
+                            control={
+                                <TextField
+                                    className="happy-agent-profile__field"
+                                    disabled={blocked}
+                                    onValueChange={props.onEmailChange}
+                                    placeholder="you@example.com"
+                                    size="medium"
+                                    type="email"
+                                    value={props.email}
+                                />
+                            }
+                            description="The Git author address on every commit made here"
+                            label="Git email"
+                        />
+                    </HappyAgentSettingsGroup>
                     {/* No saved-state line: both controls are disabled until
                         the fields differ from what is stored, so the pair
                         already says whether there is anything unsaved, and Save

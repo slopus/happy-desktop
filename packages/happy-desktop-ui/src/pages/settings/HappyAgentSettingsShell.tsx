@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { APP_SHELL_SIDEBAR_DEFAULT_WIDTH, AppShell } from "../../AppShell";
 import { Box } from "../../Box";
 import { Icon, type IconName } from "../../Icon";
+import { IconTile, type IconTileTone } from "../../IconTile";
 import { PanelHeader } from "../../PanelHeader";
 import { ScrollArea } from "../../Scrollbar";
 import { Sidebar } from "../../Sidebar";
@@ -10,6 +11,8 @@ export interface HappyAgentSettingsCategory {
     readonly id: string;
     readonly label: string;
     readonly icon: IconName;
+    /** The hue of the tile the category's glyph sits on, in the column and the header. */
+    readonly tone: IconTileTone;
 }
 
 export type HappyAgentSettingsShellProps = {
@@ -68,6 +71,7 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
                                 id: category.id,
                                 kind: "view" as const,
                                 label: category.label,
+                                tile: category.tone,
                             })),
                         },
                     ]}
@@ -88,7 +92,14 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
                     </button>
                 ) : null}
                 <Box className="happy-agent-settings__heading">
-                    {props.onBack ? null : <Icon name={categoryIcon(props)} size={16} />}
+                    {props.onBack ? null : (
+                        <IconTile
+                            className="happy-agent-settings__heading-tile"
+                            icon={activeCategory(props)?.icon ?? "settings"}
+                            size="small"
+                            tone={activeCategory(props)?.tone ?? "gray"}
+                        />
+                    )}
                     <span
                         className="happy-agent-settings__heading-title"
                         data-happy-desktop-ui="happy-agent-settings-heading-title"
@@ -116,26 +127,23 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
     );
 }
 
-function categoryLabel(props: HappyAgentSettingsShellProps): string {
-    return (
-        props.categories.find((category) => category.id === props.activeCategoryId)?.label ??
-        "Settings"
-    );
+function activeCategory(
+    props: HappyAgentSettingsShellProps,
+): HappyAgentSettingsCategory | undefined {
+    return props.categories.find((category) => category.id === props.activeCategoryId);
 }
 
-function categoryIcon(props: HappyAgentSettingsShellProps): IconName {
-    return (
-        props.categories.find((category) => category.id === props.activeCategoryId)?.icon ??
-        "settings"
-    );
+function categoryLabel(props: HappyAgentSettingsShellProps): string {
+    return activeCategory(props)?.label ?? "Settings";
 }
 
 export interface HappyAgentSettingsSectionProps {
     children: ReactNode;
     description?: string;
     /**
-     * `form` tiles `FormRow`s, which already carry their own hairline, so the
-     * block adds no gap. `cards` separates free-standing cards instead.
+     * `form` puts the children in one inset group, as rows split by hairlines.
+     * `cards` stacks free-standing blocks with a gap instead — notices, editors,
+     * and `HappyAgentSettingsGroup`s the section composes itself.
      */
     rows?: "form" | "cards";
     /**
@@ -146,7 +154,7 @@ export interface HappyAgentSettingsSectionProps {
     title?: string;
 }
 
-/** One block of settings rows inside a category body, titled or not. */
+/** One block of settings rows inside a category body, titled or not: a heading over its group. */
 export function HappyAgentSettingsSection(props: HappyAgentSettingsSectionProps) {
     return (
         <section
@@ -173,9 +181,34 @@ export function HappyAgentSettingsSection(props: HappyAgentSettingsSectionProps)
                     ) : null}
                 </Box>
             )}
-            <Box className="happy-agent-settings__section-rows" data-rows={props.rows ?? "form"}>
-                {props.children}
-            </Box>
+            {props.rows === "cards" ? (
+                <Box className="happy-agent-settings__section-rows" data-rows="cards">
+                    {props.children}
+                </Box>
+            ) : (
+                <HappyAgentSettingsGroup>{props.children}</HappyAgentSettingsGroup>
+            )}
         </section>
+    );
+}
+
+export interface HappyAgentSettingsGroupProps {
+    children: ReactNode;
+}
+
+/**
+ * The inset group settings rows sit in, as the native clients draw theirs: one
+ * rounded card on the grouped background, its rows split by hairlines. A row
+ * owns its hairline, and the group hides the last one so the card's own edge
+ * closes it.
+ */
+export function HappyAgentSettingsGroup(props: HappyAgentSettingsGroupProps) {
+    return (
+        <Box
+            className="happy-agent-settings__group"
+            data-happy-desktop-ui="happy-agent-settings-group"
+        >
+            {props.children}
+        </Box>
     );
 }

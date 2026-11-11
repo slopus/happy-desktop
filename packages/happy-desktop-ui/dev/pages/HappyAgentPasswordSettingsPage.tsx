@@ -25,8 +25,8 @@ function PasswordSettingsSpecimen(props: {
                 <HappyAgentSettingsShell
                     activeCategoryId="passwords"
                     categories={[
-                        { id: "general", icon: "settings", label: "General" },
-                        { id: "passwords", icon: "lock", label: "Passwords" },
+                        { id: "general", icon: "settings", label: "General", tone: "gray" },
+                        { id: "passwords", icon: "lock", label: "Passwords", tone: "red" },
                     ]}
                     description="Saved logins from your browsers"
                     onCategorySelect={noop}

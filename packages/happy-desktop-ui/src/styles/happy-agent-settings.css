@@ -3,9 +3,12 @@
  * and the provider cards inside the Providers category.
  */
 
-/* The band's title stands on the content column, over the section titles. */
+/* The band's title stands on the content column, over the section titles. It
+   sits on the same grouped ground as the body, so the band and the groups
+   below it read as one page. */
 .happy-agent-settings__header {
     padding-inline: var(--happy-content-inline);
+    background: var(--groupped-background);
 }
 
 /* The band is one 20px line. A header never truncates, so when the column is
@@ -23,8 +26,8 @@
     color: var(--text-secondary);
 }
 
-/* The sidebar drill-down's back control, standing where the category icon
-   stands: its 28px hover box is centred on the icon's 16px slot, and the
+/* The sidebar drill-down's back control, standing where the category tile
+   stands: its 28px hover box is centred on the tile's 20px slot, and the
    margins take back what the box adds, so the title keeps its coordinate. */
 .happy-agent-settings__back {
     display: flex;
@@ -33,7 +36,7 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    margin: 0 -10px 0 -6px;
+    margin: 0 -8px 0 -4px;
     padding: 0;
     border: 0;
     border-radius: var(--happy-hover-radius);
@@ -41,6 +44,12 @@
     color: var(--text-secondary);
     cursor: pointer;
     appearance: none;
+}
+
+/* The tile is the band's one 20px line tall, so it stands at the line's top
+   rather than on the baseline its glyph would otherwise lend it. */
+.happy-agent-settings__heading-tile {
+    align-self: flex-start;
 }
 
 .happy-agent-settings__back .happy-icon {
@@ -81,7 +90,7 @@
     flex: 1 1 0%;
     min-height: 0;
     width: 100%;
-    background: var(--surface);
+    background: var(--groupped-background);
 }
 
 .happy-agent-settings__body-viewport {
@@ -97,7 +106,7 @@
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
-    gap: 32px;
+    gap: 28px;
     width: 100%;
     max-width: var(--happy-content-measure);
     margin-inline: auto;
@@ -108,37 +117,85 @@
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
+/* The heading stands over its group, its words on the column the rows' words
+   start on inside the card, as the native clients set a section's header. */
 .happy-agent-settings__section-heading {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    padding-inline: 16px;
 }
 
 .happy-agent-settings__section-title {
     margin: 0;
-    color: var(--text);
-    font-size: 15px;
+    color: var(--groupped-section-title);
+    font-size: 13px;
     font-weight: 600;
-    line-height: 20px;
+    line-height: 18px;
 }
 
 .happy-agent-settings__section-description {
     margin: 0;
     color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 18px;
+    font-size: 12px;
+    line-height: 16px;
 }
 
 .happy-agent-settings__section-rows {
     display: flex;
     flex-direction: column;
+    gap: 12px;
 }
 
-.happy-agent-settings__section-rows[data-rows="cards"] {
-    gap: 12px;
+/*
+ * The inset group: one rounded card of rows on the grouped ground. The card's
+ * inline padding is the rows' inset, so a row's hairline stops that far short
+ * of either edge, as macOS draws its grouped settings. A dark appearance puts
+ * the surface only a step above the ground, so a hairline ring states the
+ * card's edge in every appearance. It never clips: a row's menus and pickers
+ * open out of it.
+ */
+.happy-agent-settings__group {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    padding-inline: 16px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+}
+
+/* Rows inside a group are 12px from the card's top and bottom where they meet
+   it, so their words sit as far from those edges as from its side. */
+.happy-agent-settings__group .happy-form-row {
+    padding-block: 12px;
+}
+
+/* Every row draws the hairline under it, however deep a list nests it. The
+   card's own edge closes the group, so a 1px strip of the card's fill is laid
+   over the last row's hairline: whichever row ends the card, it keeps its
+   height and shows no rule. */
+.happy-agent-settings__group::after {
+    position: relative;
+    flex: none;
+    height: 1px;
+    margin-top: -1px;
+    background: var(--surface);
+    content: "";
+}
+
+/* Notices that belong to the row under them, inside a group: a row of their
+   own, ruled like any other. */
+.happy-agent-settings__notices {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-block: 12px;
+    border-bottom: 1px solid var(--divider);
 }
 
 .happy-agent-settings__pending {
@@ -213,7 +270,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 16px 0 8px;
+    padding: 12px 0 8px;
     border-bottom: 1px solid var(--divider);
 }
 
@@ -231,21 +288,6 @@
     min-width: 0;
 }
 
-.happy-agent-provider__glyph {
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 20px;
-    height: 20px;
-    color: var(--text-secondary);
-}
-
-.happy-agent-provider[data-status="ready"] .happy-agent-provider__glyph {
-    color: var(--text);
-}
-
 /* A provider that cannot be used yet still lists what it would offer, muted so
    the models read as unavailable rather than as switched off by the reader. */
 .happy-agent-provider:not([data-status="ready"]) .happy-agent-provider__models {
@@ -254,7 +296,7 @@
 
 .happy-agent-provider__hint {
     margin: 0;
-    padding: 0 0 8px 32px;
+    padding: 0 0 8px 40px;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
@@ -283,11 +325,11 @@
     line-height: 16px;
 }
 
-/* Models start under the provider's name, past its 20px glyph and 12px gap. */
+/* Models start under the provider's name, past its 28px tile and 12px gap. */
 .happy-agent-provider__models {
     display: flex;
     flex-direction: column;
-    padding-left: 32px;
+    padding-left: 40px;
 }
 
 .happy-agent-provider__model {
@@ -359,7 +401,7 @@
 .happy-agent-provider__keys {
     display: flex;
     flex-direction: column;
-    padding-left: 32px;
+    padding-left: 40px;
 }
 
 .happy-agent-provider__key {
@@ -613,13 +655,16 @@
     gap: 12px;
 }
 
+/* Each list is a titled group: its title over the card, on the rows' words. */
 .happy-agent-ai-providers__group {
     display: flex;
     flex-direction: column;
+    gap: 8px;
 }
 
 .happy-agent-ai-providers__group-title {
-    margin: 0 0 4px;
+    margin: 0;
+    padding-inline: 16px;
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 600;
@@ -627,8 +672,7 @@
 }
 
 .happy-agent-ai-providers__empty {
-    padding: 8px 0;
-    border-top: 1px solid var(--divider);
+    padding: 12px 0;
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 18px;
@@ -637,7 +681,7 @@
 .happy-agent-ai-providers__connection {
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
 }
 
 /* A connection that can't serve the reader now reads greyed, its keys too. */
@@ -882,15 +926,14 @@
 }
 
 /*
- * No card. The profile is a category of settings like every other one in this
- * window, so its fields are hairline-separated rows and the block carries no
- * border, fill, or radius of its own — a frame here read as an object placed
- * inside settings rather than a part of them. The rows tile themselves, so the
- * only gap is the one under the identity summary above them.
+ * The profile is a category of settings like every other one in this window:
+ * its fields are one inset group of rows, with its notices above the group and
+ * its Revert and Save under it.
  */
 .happy-agent-profile {
     display: flex;
     flex-direction: column;
+    gap: 12px;
     margin: 0;
 }
 
@@ -936,7 +979,6 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    padding-top: 16px;
 }
 
 /* Remove leads and the picker trails, so the picker stays at the row's edge
@@ -1104,18 +1146,6 @@
     text-decoration: underline;
 }
 
-.happy-agent-repositories__icon {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background-color: var(--surface-high);
-    color: var(--text);
-}
-
 .happy-agent-repositories__text {
     display: flex;
     flex: 1 1 0%;
@@ -1278,18 +1308,6 @@
     min-height: 56px;
     padding: 8px 0;
     border-bottom: 1px solid var(--divider);
-}
-
-.happy-agent-compute__icon {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background-color: var(--surface-high);
-    color: var(--text);
 }
 
 .happy-agent-compute__text {

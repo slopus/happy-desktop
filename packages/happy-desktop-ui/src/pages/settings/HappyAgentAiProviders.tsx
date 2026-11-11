@@ -13,7 +13,7 @@ import {
     HappyAgentProviderEditDialog,
     type HappyAgentProviderEditDialogProps,
 } from "./HappyAgentProviderEditDialog";
-import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
 /** Where one credential stands, as the server reports it. */
@@ -105,6 +105,7 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
     return (
         <HappyAgentSettingsSection
             description="What your conversations run on. Add your own key or subscription to use your own account."
+            rows="cards"
             title="AI providers"
         >
             <Box
@@ -144,24 +145,28 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
                                 <h3 className="happy-agent-ai-providers__group-title">
                                     {group.title}
                                 </h3>
-                                {rows.length === 0 ? (
-                                    <span className="happy-agent-ai-providers__empty">
-                                        Nothing added yet
-                                    </span>
-                                ) : (
-                                    rows.map((row) => (
-                                        <HappyAgentAiProviderConnection
-                                            key={row.id}
-                                            manageable={group.id !== "team" || props.teamManageable}
-                                            row={row}
-                                            {...(props.onEdit ? { onEdit: props.onEdit } : {})}
-                                            onCredentialEnabledChange={
-                                                props.onCredentialEnabledChange
-                                            }
-                                            onCredentialRemove={props.onCredentialRemove}
-                                        />
-                                    ))
-                                )}
+                                <HappyAgentSettingsGroup>
+                                    {rows.length === 0 ? (
+                                        <span className="happy-agent-ai-providers__empty">
+                                            Nothing added yet
+                                        </span>
+                                    ) : (
+                                        rows.map((row) => (
+                                            <HappyAgentAiProviderConnection
+                                                key={row.id}
+                                                manageable={
+                                                    group.id !== "team" || props.teamManageable
+                                                }
+                                                row={row}
+                                                {...(props.onEdit ? { onEdit: props.onEdit } : {})}
+                                                onCredentialEnabledChange={
+                                                    props.onCredentialEnabledChange
+                                                }
+                                                onCredentialRemove={props.onCredentialRemove}
+                                            />
+                                        ))
+                                    )}
+                                </HappyAgentSettingsGroup>
                             </Box>
                         );
                     })

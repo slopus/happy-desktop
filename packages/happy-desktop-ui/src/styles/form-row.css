@@ -54,6 +54,21 @@
     align-items: flex-start;
 }
 
+/* An inline row's mark and words: the mark centred on the words, 12px apart,
+   the pair taking the room the words would. */
+.happy-form-row__lead {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-form-row__icon {
+    display: flex;
+    flex: none;
+}
+
 .happy-form-row__text {
     display: flex;
     flex: 1 1 auto;

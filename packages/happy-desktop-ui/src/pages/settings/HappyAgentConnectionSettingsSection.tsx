@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Banner } from "../../Banner";
-import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentConnectionSettingsSectionProps {
     /** The connection the rows below belong to, such as "This Mac". */
@@ -18,13 +18,13 @@ export function HappyAgentConnectionSettingsSection(
     props: HappyAgentConnectionSettingsSectionProps,
 ) {
     return (
-        <HappyAgentSettingsSection title={props.connectionLabel}>
+        <HappyAgentSettingsSection rows="cards" title={props.connectionLabel}>
             {props.unavailable ? (
                 <Banner tone="neutral" title="Connection unavailable">
                     {props.unavailable}
                 </Banner>
             ) : null}
-            {props.children}
+            <HappyAgentSettingsGroup>{props.children}</HappyAgentSettingsGroup>
         </HappyAgentSettingsSection>
     );
 }
