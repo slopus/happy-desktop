@@ -1,5 +1,4 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { brailleSpinnerAttach } from "./spinnerBraille";
 
 export type SpinnerVariant =
     | "braille-2"
@@ -127,16 +126,6 @@ function bracketed(track: ReactNode) {
 }
 
 function variantParts(variant: SpinnerVariant) {
-    if (variant === "braille-2") {
-        return (
-            <span
-                aria-hidden="true"
-                className="happy-spinner__braille-stamps"
-                data-happy-desktop-ui="spinner-braille-stamps"
-                ref={brailleSpinnerAttach}
-            />
-        );
-    }
     if (variant.startsWith("braille")) {
         /* Always the full 2x4 cell: left column top to bottom is dots 1,2,3,7
          * and right column is dots 4,5,6,8 — the order spinner-braille.css
@@ -188,10 +177,8 @@ function variantParts(variant: SpinnerVariant) {
 /**
  * Spinner — the ASCII terminal loaders (braille cells, |/-\, ◜◝◞◟, ◐◓◑◒,
  * ▁▃▅▇, [####  ], [ =  ], …, ▮▯, .oO@, ▁▄▆█, ▏▍▊█, ◢◣◤◥, ◰◳◲◱, ▖▘▝▗, ☱☲☴,
- * ▓▒░, ←↖↑↗) redrawn as CSS shapes. The production `braille-2` loop is the
- * exception: its tiny dots are stamped onto the actual device-pixel grid so
- * all eight retain one identical mask through their shared opacity cycle,
- * which the compositor runs.
+ * ▓▒░, ←↖↑↗) redrawn as CSS shapes. The component renders static markup
+ * only; no script runs while a loader turns.
  *
  * Every loop moves only `transform` and `opacity`, so it runs on the
  * compositor and keeps turning while the page's main thread is busy.

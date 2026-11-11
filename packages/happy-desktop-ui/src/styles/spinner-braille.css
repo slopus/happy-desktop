@@ -1,11 +1,9 @@
 /*
- * Spinner — CSS reproductions of the cli-spinners braille loaders that still
- * use layout shapes: `dots9`, `dots10`, `dots11`, `dots13`, and `sand`.
- * Production `dots2` is instead stamped by `spinnerBraille.ts`, where all
- * eight dots can share one exact device-pixel stamp. The library's six-dot
- * loaders — `dots`, `dots3` through `dots8` — are deliberately not included:
- * they never light dot7 or dot8, so beside these they read as a differently
- * shaped, lopsided cell. Names keep the upstream numbering so each variant is
+ * Spinner — CSS reproductions of the cli-spinners braille loaders: `dots2`
+ * (production), `dots9`, `dots10`, `dots11`, `dots13`, and `sand`. The
+ * library's six-dot loaders — `dots`, `dots3` through `dots8` — are
+ * deliberately not included: they never light dot7 or dot8, so beside these
+ * they read as a differently shaped, lopsided cell. Names keep the upstream numbering so each variant is
  * traceable to its original. Layout, colour, sizing, and the frame-parking
  * equation all live in `spinner.css`; this file only says which CSS dots are
  * lit on which frame.
@@ -33,6 +31,92 @@
  * Frame counts live beside the variant names in `Spinner.tsx`; each duration
  * below is 100ms per frame.
  */
+
+/* ---- braille-2 — ⣾⣽⣻⢿⡿⣟⣯⣷ */
+
+/*
+ * cli-spinners `dots2`: 8 frames, one dot dark per frame, in the order dot1,
+ * dot2, dot3, dot7, dot8, dot6, dot5, dot4. Every dot runs the one program —
+ * down to 18% over 60ms, held dim to 100ms, back up by 160ms — and differs
+ * only by its phase, so no dot can fade differently from another.
+ */
+.happy-spinner[data-variant="braille-2"] {
+    --happy-spinner-duration: 800ms;
+}
+
+.happy-spinner[data-variant="braille-2"] .happy-spinner__dot {
+    animation-name: happy-spinner-braille-2;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:first-child
+    .happy-spinner__dot:nth-child(1) {
+    --happy-spinner-phase: 0;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:first-child
+    .happy-spinner__dot:nth-child(2) {
+    --happy-spinner-phase: 0.875;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:first-child
+    .happy-spinner__dot:nth-child(3) {
+    --happy-spinner-phase: 0.75;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:first-child
+    .happy-spinner__dot:nth-child(4) {
+    --happy-spinner-phase: 0.625;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:last-child
+    .happy-spinner__dot:nth-child(1) {
+    --happy-spinner-phase: 0.125;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:last-child
+    .happy-spinner__dot:nth-child(2) {
+    --happy-spinner-phase: 0.25;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:last-child
+    .happy-spinner__dot:nth-child(3) {
+    --happy-spinner-phase: 0.375;
+}
+
+.happy-spinner[data-variant="braille-2"]
+    .happy-spinner__column:last-child
+    .happy-spinner__dot:nth-child(4) {
+    --happy-spinner-phase: 0.5;
+}
+
+@keyframes happy-spinner-braille-2 {
+    0% {
+        opacity: 1;
+    }
+
+    7.5% {
+        opacity: 0.18;
+    }
+
+    12.5% {
+        opacity: 0.18;
+    }
+
+    20% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
 
 /* ---- braille-9 — ⢹⢺⢼⣸⣇⡧⡗⡏ */
 
