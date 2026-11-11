@@ -9,9 +9,15 @@ import { join } from "node:path";
  * (`HAPPY_DEMO_DEVICE_SCALE=2`); the `multiplayer` composition shows the
  * window whole, so nothing is enlarged past what was captured.
  */
-const viewport = { width: 1133, height: 700 };
+const requestedViewport = /^(\d+)x(\d+)$/u.exec(process.env.MULTIPLAYER_VIEWPORT ?? "");
+const viewport = requestedViewport
+    ? { width: Number(requestedViewport[1]), height: Number(requestedViewport[2]) }
+    : { width: 1133, height: 700 };
 
-/** Which chapter this run films; `explore` writes stills of the world instead. */
+/**
+ * Which chapter this run films: `aware`, `bots` or `step-in`. `explore`
+ * writes stills of the world instead.
+ */
 const shot = process.env.MULTIPLAYER_SHOT ?? "aware";
 
 /** Kirill's own computer, opened beside the gym; the window runs on it. */
@@ -109,6 +115,73 @@ async function botsPrepare(client) {
     }
 }
 
+/** A bot by username, as the caller's own sign-in lists it. */
+async function botFind(client, username) {
+    const { bots } = await client.listBots();
+    return bots.find((bot) => bot.username === username && bot.status === "active");
+}
+
+/**
+ * What a bot is to the members of a team server, asked of the daemon itself
+ * before anything is filmed: who lists which bots, and whether a member who
+ * is not the owner may make one. The probe's bot is archived at once.
+ */
+async function botFacts(clients) {
+    const facts = { listed: {}, memberCreate: undefined };
+    for (const [key, client] of Object.entries(clients)) {
+        const { bots } = await client.listBots();
+        facts.listed[key] = bots
+            .filter((bot) => bot.status === "active")
+            .map((bot) => bot.name)
+            .sort();
+    }
+    try {
+        const { bot } = await clients.anna.createBot({
+            name: "Probe",
+            username: "probe_bot",
+            isAdmin: false,
+        });
+        facts.memberCreate = { allowed: true };
+        const seenByOwner = Boolean(await botFind(clients[world.owner], "probe_bot"));
+        facts.memberCreate.listedForOwner = seenByOwner;
+        await clients.anna.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
+    } catch (error) {
+        facts.memberCreate = { allowed: false, error: String(error?.message ?? error) };
+    }
+    return facts;
+}
+
+/**
+ * Desktop Releases' conversation, made once per world: Steve asks and is
+ * answered; Anna asks, and the bot's answer to her waits for the camera in
+ * chapter 2, or is given at once and the bot waits on its build.
+ */
+async function botJobPrepare(clients) {
+    const job = world.releaseBot;
+    const owner = clients[world.owner];
+    const bot = await botFind(owner, job.username);
+    const agentId = bot.agent.id;
+    if ((await owner.getMessages(agentId, { limit: 4 })).runs.length > 0) return bot;
+    const [asked, follow] = job.turns;
+    const theirs = async (key) => (await botFind(clients[key], job.username)).agent.id;
+    await clients[asked.from].sendMessage(await theirs(asked.from), {
+        id: cuid(),
+        text: asked.text,
+        mode: world.agentMode,
+    });
+    await wait(() => settled(owner, agentId), "Desktop Releases' first answer");
+    await clients[follow.from].sendMessage(await theirs(follow.from), {
+        id: cuid(),
+        text: follow.text,
+        mode: world.agentMode,
+    });
+    await wait(
+        () => world.hasReached(shot === "bots" ? "bots:report" : "bots:reported"),
+        "Desktop Releases to be at work",
+    );
+    return bot;
+}
+
 /** A task by name, among the caller's active ones. */
 async function taskFind(client, name) {
     const { tasks } = await client.listTasks();
@@ -151,10 +224,13 @@ async function doneTasksPrepare(clients) {
                 text: more.message,
                 mode: world.agentMode,
             });
+            const held = shot === "step-in" && entry.name === world.openTask;
             await wait(
                 async () =>
-                    (await client.getMessages(task.agent.id, { limit: 16 })).runs.length > before &&
-                    (await settled(client, task.agent.id)),
+                    held
+                        ? world.hasReached("step:ask")
+                        : (await client.getMessages(task.agent.id, { limit: 16 })).runs.length >
+                              before && (await settled(client, task.agent.id)),
                 `${entry.name}'s next turn`,
             );
         }
@@ -321,25 +397,46 @@ export default {
     ],
     async run(demo, gym, { output } = {}) {
         world.rehearse();
+        world.shotSet(shot);
         world.projectIdsSet(gym.world.projectIds);
         world.projectsRootSet(gym.paths.projects);
         const clients = { [world.owner]: gym.client };
         for (const member of world.team.members)
             if (!member.owner) clients[member.key] = await gym.memberClient(member.key);
         const kirill = clients[world.owner];
+        filmed.shot = shot;
         filmed.profiles = {};
         for (const member of world.team.members) {
             const profile = await memberPrepare(clients[member.key], member);
             filmed.profiles[member.key] = { userId: profile.userId, name: profile.name };
+            world.userIdSet(member.name, profile.userId);
         }
         await nodeAvatarSet(kirill, world.team.picture, world.seedMode);
         await projectPicturesSet(kirill, gym.world.projectIds);
         await botsPrepare(kirill);
+        if (shot !== "aware") {
+            filmed.botFacts = await botFacts(clients);
+            process.stdout.write(`    bots      ${JSON.stringify(filmed.botFacts)}\n`);
+        }
         await doneTasksPrepare(clients);
         await rehearsalsArchive(kirill);
         const live = await liveTaskPrepare(clients[world.liveTask.owner]);
         filmed.liveTaskId = live.id;
         await sidebarArrange(kirill);
+        const pending = [];
+        if (shot !== "aware") {
+            // After chapter 1: its two tasks are already in the sidebar,
+            // working, and Desktop Releases is in the middle of its job.
+            for (const arrival of world.arrivals) {
+                pending.push(arrivalStart(clients, arrival));
+                await wait(
+                    () => world.hasReached(`arrival:${arrival.name}`),
+                    `${arrival.name} to be working`,
+                );
+            }
+            const bot = await botJobPrepare(clients);
+            filmed.botAgentId = bot.agent.id;
+        }
         for (const client of [...Object.values(clients), personal.client]) await readAll(client);
 
         const page = demo.page;
@@ -392,6 +489,18 @@ export default {
                 await page.locator("body").innerText(),
             );
         };
+        const finish = async () => {
+            cue("end", demo);
+            await demo.finish();
+            // The still after the take: the hand off the window, no hover left behind.
+            await page.evaluate(() => window.__happyDemo?.pointer(0, 0, 0, false));
+            await page.mouse.move(viewport.width - 2, viewport.height - 2);
+            await page.waitForTimeout(400);
+            await page.screenshot({ path: join(output, "ending.png") });
+            await writeFile(join(output, "ending.txt"), await page.locator("body").innerText());
+            await writeFile(join(output, "filmed.json"), JSON.stringify(filmed, null, 2));
+            await writeFile(join(output, "cues.json"), JSON.stringify(cues, null, 2));
+        };
 
         if (shot === "explore") {
             await still("team");
@@ -409,71 +518,134 @@ export default {
             return;
         }
 
-        // Chapter 1, "See who's working on what": Kirill is in his own task and
-        // touches nothing. Steve, then Leo, start tasks from their own
-        // sign-ins, and each one is in Kirill's sidebar as it starts.
-        await demo.pointerVisible(false);
-        framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
-        await writeFile(join(output, "framing.json"), JSON.stringify(framing, null, 2));
-        await page.screenshot({ path: join(output, "opening.png") });
-        filmed.rows = { opening: {} };
-        for (const name of world.sidebarOrder)
-            filmed.rows.opening[name] = await rowRect(page, name);
-        const sidebar = page.locator('[data-happy-desktop-ui="sidebar-item"]:visible').first();
-        filmed.sidebar = await sidebar.evaluate((row) => {
-            const pane = row.closest('[data-happy-desktop-ui="sidebar"]') ?? row.parentElement;
-            const box = pane.getBoundingClientRect();
-            return { x: box.x, y: box.y, width: box.width, height: box.height };
-        });
-        cue("open", demo);
-        const lead = Number(process.env.MULTIPLAYER_LEAD_MS ?? 450);
-        const beat = Number(process.env.MULTIPLAYER_BEAT_MS ?? 800);
-        const tail = Number(process.env.MULTIPLAYER_TAIL_MS ?? 2200);
-        // A row's arrival is filmed in slow motion: while it slides in, the
-        // browser plays the page's own animations at `slow` of their speed
-        // (the DevTools animation-speed control), so the camera gets the
-        // app's 160 ms glide in more frames than it gives at 60 a second.
-        // Nothing is redrawn, and the rate is back to 1 once the row rests.
+        // A row's or a message's arrival is filmed in slow motion: while it
+        // comes in, the browser plays the page's own animations at `slow` of
+        // their speed (the DevTools animation-speed control), so the camera
+        // gets the app's 160 ms glide in more frames than it gives at 60 a
+        // second. Nothing is redrawn, and the rate is back to 1 once the
+        // arrival rests. Nothing that is not an arrival is slowed.
         const slow = Number(process.env.MULTIPLAYER_SLOW ?? 0.33);
         const slowHold = Number(process.env.MULTIPLAYER_SLOW_HOLD_MS ?? 560);
         const cdp = await page.context().newCDPSession(page);
         await cdp.send("Animation.enable");
         const rate = (playbackRate) => cdp.send("Animation.setPlaybackRate", { playbackRate });
-        filmed.slowMotion = { rate: slow, holdMs: slowHold };
-        const activity = activityKeptRead(kirill);
-        activity.start();
-        await demo.hold(lead);
-        const pending = [];
-        for (const [index, arrival] of world.arrivals.entries()) {
+        filmed.slowMotion = { rate: slow, holdMs: slowHold, arrivals: [] };
+        const arrivalFilm = async (name, start, arrived) => {
             if (slow !== 1) await rate(slow);
-            pending.push(arrivalStart(clients, arrival));
-            cue(`arrival-sent:${arrival.name}`, demo);
-            await until(
-                demo,
-                () => sidebarRow(page, arrival.name).count(),
-                `${arrival.name} in Kirill's sidebar`,
-                30000,
-                16,
-            );
-            cue(`arrival:${arrival.name}`, demo);
+            await start();
+            cue(`${name}-sent`, demo);
+            await until(demo, arrived, name, 30000, 16);
+            cue(name, demo);
             if (slow !== 1) {
                 await demo.hold(slowHold);
                 await rate(1);
             }
-            cue(`arrival-settled:${arrival.name}`, demo, {
-                rect: await rowRect(page, arrival.name),
-            });
-            await demo.hold(index === world.arrivals.length - 1 ? tail : beat);
+            filmed.slowMotion.arrivals.push(name);
+        };
+        const activity = activityKeptRead(kirill);
+        framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
+        await writeFile(join(output, "framing.json"), JSON.stringify(framing, null, 2));
+
+        if (shot === "aware") {
+            // Chapter 1, "See who's working on what": Kirill is in his own task
+            // and touches nothing. Steve, then Leo, start tasks from their own
+            // sign-ins, and each one is in Kirill's sidebar as it starts.
+            await demo.pointerVisible(false);
+            await page.screenshot({ path: join(output, "opening.png") });
+            cue("open", demo);
+            const lead = Number(process.env.MULTIPLAYER_LEAD_MS ?? 450);
+            const beat = Number(process.env.MULTIPLAYER_BEAT_MS ?? 800);
+            const tail = Number(process.env.MULTIPLAYER_TAIL_MS ?? 2200);
+            activity.start();
+            await demo.hold(lead);
+            for (const [index, arrival] of world.arrivals.entries()) {
+                await arrivalFilm(
+                    `arrival:${arrival.name}`,
+                    async () => void pending.push(arrivalStart(clients, arrival)),
+                    () => sidebarRow(page, arrival.name).count(),
+                );
+                cue(`arrival-settled:${arrival.name}`, demo, {
+                    rect: await rowRect(page, arrival.name),
+                });
+                await demo.hold(index === world.arrivals.length - 1 ? tail : beat);
+            }
         }
-        cue("end", demo);
-        await demo.finish();
+
+        if (shot === "bots") {
+            // Chapter 2, "Shared bots for the standing jobs": Kirill opens
+            // Desktop Releases. Steve and Anna have both written in it, and it
+            // answers Anna while he looks.
+            const job = world.releaseBot;
+            // His hand rests on the empty top of the pane, over no message.
+            await demo.pointerPlace({ x: 452, y: 168 });
+            await page.screenshot({ path: join(output, "opening.png") });
+            cue("open", demo);
+            activity.start();
+            await demo.hold(450);
+            await demo.click(sidebarRow(page, job.name), { after: 0 });
+            cue("bot-opened", demo);
+            await until(
+                demo,
+                () => page.getByText(job.turns[1].text).first().isVisible(),
+                "Desktop Releases' conversation",
+            );
+            await demo.hold(120);
+            world.release("bots:report");
+            cue("report-released", demo);
+            await until(
+                demo,
+                () => page.getByText("Windows is still building.").first().isVisible(),
+                "Desktop Releases' report",
+            );
+            cue("report", demo);
+            await demo.hold(2600);
+        }
+
+        if (shot === "step-in") {
+            // Chapter 3, "Step in when it's your call": the agent in Kirill's
+            // task asks Steve by name; Steve answers from his own sign-in, and
+            // his words land under his name and face.
+            const step = world.stepIn;
+            await demo.pointerVisible(false);
+            await page.screenshot({ path: join(output, "opening.png") });
+            cue("open", demo);
+            activity.start();
+            await demo.hold(600);
+            world.release("step:ask");
+            await until(
+                demo,
+                () => page.getByText(step.askTail).first().isVisible(),
+                "the agent's question",
+            );
+            cue("ask", demo);
+            await demo.hold(1300);
+            const steve = clients[step.from];
+            const task = await taskFind(steve, world.openTask);
+            await arrivalFilm(
+                "answer",
+                async () =>
+                    void pending.push(
+                        steve.sendMessage(task.agent.id, {
+                            id: cuid(),
+                            text: step.answer,
+                            mode: world.agentMode,
+                        }),
+                    ),
+                () => page.getByText(step.answer).first().isVisible(),
+            );
+            await until(
+                demo,
+                () => page.getByText(step.reply).first().isVisible(),
+                "the agent's reply",
+            );
+            cue("reply", demo);
+            await demo.hold(1800);
+        }
+
+        await finish();
         activity.stop();
         await cdp.detach().catch(() => undefined);
-        await Promise.all(pending);
-        await page.screenshot({ path: join(output, "ending.png") });
-        await writeFile(join(output, "ending.txt"), await page.locator("body").innerText());
-        await writeFile(join(output, "filmed.json"), JSON.stringify(filmed, null, 2));
-        await writeFile(join(output, "cues.json"), JSON.stringify(cues, null, 2));
+        await Promise.all(pending.map((promise) => promise.catch(() => undefined)));
     },
     async evidence() {
         return { fixture: { inference: "screenplay" }, viewport, cues, filmed, framing };

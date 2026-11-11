@@ -15,9 +15,13 @@
 // chooses the agents' words, tool calls and pace; the tools themselves are
 // the daemon's. The take's own beats wait at named gates the director
 // releases.
+import { execFile as execFileCallback } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+
+const execFile = promisify(execFileCallback);
 
 export const id = "multiplayer";
 
@@ -197,6 +201,13 @@ const changes = {
     ),
 };
 
+/** The component the open task reads, as the core demo's fixture has it. */
+export const barsPath = "sources/components/VoiceBars.tsx";
+const barsSource = await readFile(
+    join(import.meta.dirname, "../core/assets/VoiceBars.tsx.txt"),
+    "utf8",
+);
+
 // ------------------------------------------------------------------ repositories
 
 export const repository = {
@@ -204,6 +215,7 @@ export const repository = {
     avatar: teamAsset("happy.png"),
     files: {
         "README.md": "# Happy\n\nRemote access to your coding agents.\n",
+        [barsPath]: barsSource,
         [changes.sendFixes.path]: changes.sendFixes.before,
     },
 };
@@ -244,6 +256,29 @@ export const bots = [
     { name: "Alerts", username: "alerts" },
     { name: "Growth", username: "growth" },
 ];
+
+/**
+ * Desktop Releases' conversation: two teammates wrote in it, each through
+ * their own sign-in, and it is in the middle of the job when the take opens.
+ * `report` is what it says on camera, to whoever the take names.
+ */
+export const releaseBot = {
+    username: "desktop_releases",
+    name: "Desktop Releases",
+    turns: [
+        {
+            from: "steve",
+            text: "Cut a preview once main is green.",
+            reply: "Main is green. Cutting the preview now: macOS first, then Windows.",
+        },
+        {
+            from: "anna",
+            text: "Tell me when it's out and I'll post the changelog.",
+            report: (mention) =>
+                `Will do, ${mention}. macOS is signed and notarized. Windows is still building.`,
+        },
+    ],
+};
 
 // ------------------------------------------------------------------ tasks
 
@@ -326,6 +361,20 @@ export const arrivals = [
     },
 ];
 
+/**
+ * Chapter 3, in the task Kirill has open: its agent asks Steve by name, Steve
+ * answers through his own sign-in, and the agent takes his answer.
+ */
+export const stepIn = {
+    ask: (mention) =>
+        `The waveform is in, on one row at the mute button's height. ${mention}, five bars or seven on the phone?`,
+    /** The words of the question a take can wait for: the mention is drawn by the app. */
+    askTail: "five bars or seven on the phone?",
+    from: "steve",
+    answer: "Five. Seven crowds the mute button.",
+    reply: "Five bars it is.",
+};
+
 /** Kirill's sidebar on Happy Core, top to bottom, before anyone starts anything. */
 export const sidebarOrder = [
     "Voice waveform",
@@ -364,10 +413,27 @@ async function gate(name) {
     await new Promise((settle) => gates.set(name, settle));
 }
 
+/**
+ * Which chapter is being filmed. Off camera every reply is immediate; the
+ * chapter's own replies wait at its gates.
+ */
+let shot = "aware";
+export function shotSet(value) {
+    shot = value;
+}
+
 // ------------------------------------------------------------------ screenplay
 
 const text = (value) => ({ type: "text", text: value });
 const tool = (name, args) => ({ type: "toolCall", name, arguments: args });
+/** On camera: words arrive over about half a second, as a fast model's do. */
+const paced = (content) => ({
+    content,
+    textDeltaChunkSize: 9,
+    textDeltaDelayMs: 34,
+    toolCallDeltaDelayMs: 200,
+    completionDelayMs: 80,
+});
 /** Off camera nothing waits: every delta at once. */
 const quick = (content) => ({
     content,
@@ -411,6 +477,38 @@ export function projectIdsSet(ids) {
 let projectsRoot;
 export function projectsRootSet(path) {
     projectsRoot = path;
+}
+
+/** Members' user IDs on Happy Core by name, for an agent to mention them by; the take fills it in. */
+const userIds = new Map();
+export function userIdSet(name, userId) {
+    userIds.set(name, userId);
+}
+/** The app's own mention of a member: a link to their user. */
+function mention(name) {
+    const userId = userIds.get(name);
+    if (!userId) throw new Error(`The take named no user for ${name}.`);
+    return `[${name}](happy://users/${userId})`;
+}
+
+/**
+ * The open task's own folder holds a checkout of the fixture happy repository
+ * by the time its agent reads it: finding the repository is not this take's
+ * story, and Auto mode keeps reads inside the task's folder.
+ */
+async function checkoutPrepare(system) {
+    const folder = system.match(/Primary working directory: (.+)/u)?.[1]?.trim();
+    if (!folder || !projectsRoot) throw new Error("The open task named no folder of its own.");
+    const checkout = join(folder, "happy");
+    const present = await access(checkout).then(
+        () => true,
+        () => false,
+    );
+    if (!present)
+        await execFile("git", ["clone", "--quiet", join(projectsRoot, "happy"), checkout], {
+            env: { PATH: "/usr/bin:/bin:/opt/homebrew/bin", GIT_CONFIG_NOSYSTEM: "1", HOME: folder },
+        });
+    return checkout;
 }
 
 /** A whole new version of a fixture file, written beside the world for an agent to copy in. */
@@ -478,7 +576,40 @@ export async function reply(payload) {
 
     for (const task of doneTasks)
         for (const turnMore of task.more ?? [])
-            if (turn.text === turnMore.message) return quick([text(turnMore.reply)]);
+            if (turn.text === turnMore.message) {
+                // Chapter 3 finds the open task's agent still at work: it has
+                // answered, read the component, and is about to ask Steve.
+                if (shot !== "step-in" || task.name !== openTask)
+                    return quick([text(turnMore.reply)]);
+                if (turn.answered === 0) {
+                    await checkoutPrepare(system);
+                    return quick([
+                        text(turnMore.reply),
+                        tool("Read", { file_path: `happy/${barsPath}` }),
+                    ]);
+                }
+                await gate("step:ask");
+                return paced([text(stepIn.ask(mention("Steve")))]);
+            }
+    // Steve's answer is taken at once: the agent starts writing as it lands.
+    if (turn.text === stepIn.answer) return paced([text(stepIn.reply)]);
+
+    // Desktop Releases: Steve's request is answered at once. Anna's is
+    // answered on camera in chapter 2, and after that the bot waits on the
+    // Windows build with the daemon's own `wait`.
+    const [asked, follow] = releaseBot.turns;
+    if (turn.text === asked.text) return quick([text(asked.reply)]);
+    if (turn.text === follow.text) {
+        if (turn.answered === 0) {
+            if (shot === "bots") await gate("bots:report");
+            const content = [text(follow.report(mention("Anna"))), tool("wait", { duration: "20m" })];
+            // Off camera the bot is at work once it has answered and started waiting.
+            reached.add("bots:reported");
+            return shot === "bots" ? paced(content) : quick(content);
+        }
+        await gate("bots:after");
+        return quick([text("Stopped.")]);
+    }
 
     // Steve's live task: its agent starts one subtask and keeps working.
     if (turn.text === liveTask.message) {

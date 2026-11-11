@@ -13,6 +13,9 @@
  * and, where a segment asks for it, a slight even dimming of the session
  * pane. Geometry is in output pixels; `css` values are CSS pixels of the
  * recorded window.
+ *
+ * A phone segment is a recorded phone screen, whole, in the core demo's
+ * iPhone frame, beside its title.
  */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -111,6 +114,7 @@ async function layersDraw(cut) {
             line-height: 170px; letter-spacing: -0.03em; }
         .card p { margin: 22px 0 0; font-size: 46px; line-height: 58px; font-weight: 500;
             letter-spacing: -0.02em; color: rgba(255,255,255,0.87); }
+        .side { position: absolute; font-weight: 600; letter-spacing: -0.03em; }
         .card small { display: block; margin-top: 30px; font-size: 34px; line-height: 44px;
             font-weight: 500; color: ${palette.accent}; letter-spacing: -0.01em; }
     `;
@@ -130,6 +134,16 @@ async function layersDraw(cut) {
                 segment.title,
                 await draw(
                     `<div class="title" style="top:${band.centerY - band.lineHeight / 2}px;font-size:${band.size}px;line-height:${band.lineHeight}px">${escape(segment.title)}</div>`,
+                    true,
+                ),
+            );
+        }
+        if (segment.kind === "phone" && segment.title && !layers.titles.has(segment.title)) {
+            const side = cut.phone.title;
+            layers.titles.set(
+                segment.title,
+                await draw(
+                    `<div class="side" style="left:${side.left}px;top:${side.top}px;width:${side.width}px;font-size:${side.size}px;line-height:${side.lineHeight}px">${escape(segment.title)}</div>`,
                     true,
                 ),
             );
@@ -346,6 +360,10 @@ async function* segmentFrames(segment) {
     if (!source) throw new Error(`No --take ${segment.take}= was named.`);
     const size = await probe(source);
     const title = segment.title ? layers.titles.get(segment.title) : undefined;
+    if (segment.kind === "phone") {
+        yield* phoneFrames(segment, source, size, title, count);
+        return;
+    }
     let index = 0;
     for await (const picture of decoderOpen(source, segment.from, count, fps, size)) {
         const rect = windowRect(cut, segment, index / fps);
@@ -379,6 +397,80 @@ async function* segmentFrames(segment) {
     }
     if (index !== count)
         throw new Error(`${segment.take} ended after ${index} of ${count} frames.`);
+}
+
+/** The phone's still layers at the cut's size: its frame, its screen's shape, its shadow. */
+async function phoneLayers() {
+    const phone = cut.phone;
+    const frameMeta = await sharp(resolve(import.meta.dirname, phone.frame)).metadata();
+    const scale = phone.height / frameMeta.height;
+    const width = Math.round(frameMeta.width * scale);
+    const screen = {
+        left: Math.round(phone.left + phone.screen.x * scale),
+        top: Math.round(phone.top + phone.screen.y * scale),
+        width: Math.round(phone.screen.width * scale),
+        height: Math.round(phone.screen.height * scale),
+    };
+    const bezel = await sharp(resolve(import.meta.dirname, phone.frame))
+        .resize(width, phone.height, { kernel: "lanczos3" })
+        .png()
+        .toBuffer();
+    const mask = await sharp(resolve(import.meta.dirname, phone.alpha))
+        .resize(screen.width, screen.height, { kernel: "lanczos3" })
+        .toColourspace("b-w")
+        .raw()
+        .toBuffer();
+    const pad = 120;
+    const shadowBox = clip(frame, phone.left - pad, phone.top - pad, width + pad * 2, phone.height + pad * 2);
+    const shadow = await sharp(
+        svg(
+            shadowBox.width,
+            shadowBox.height,
+            `<rect x="${pad + 10}" y="${pad + 30}" width="${width - 20}" height="${phone.height - 40}" rx="${width * 0.17}" fill="#000" fill-opacity="0.6"/>`,
+            `${shadowBox.dx} ${shadowBox.dy} ${shadowBox.width} ${shadowBox.height}`,
+        ),
+    )
+        .blur(40)
+        .png()
+        .toBuffer();
+    return { bezel, mask, shadow, shadowBox, screen };
+}
+
+let phoneMade;
+async function* phoneFrames(segment, source, size, title, count) {
+    phoneMade ??= await phoneLayers();
+    const { bezel, mask, shadow, shadowBox, screen } = phoneMade;
+    let index = 0;
+    for await (const picture of decoderOpen(source, segment.from, count, fps, size)) {
+        const rgb = await sharp(picture, { raw: { ...size, channels: 3 } })
+            .resize(screen.width, screen.height, { kernel: "lanczos3" })
+            .raw()
+            .toBuffer();
+        const rgba = Buffer.allocUnsafe(screen.width * screen.height * 4);
+        for (let pixel = 0; pixel < screen.width * screen.height; pixel += 1) {
+            rgba[pixel * 4] = rgb[pixel * 3];
+            rgba[pixel * 4 + 1] = rgb[pixel * 3 + 1];
+            rgba[pixel * 4 + 2] = rgb[pixel * 3 + 2];
+            rgba[pixel * 4 + 3] = mask[pixel];
+        }
+        yield await sharp(backdropRaw, raw)
+            .composite([
+                { input: shadow, left: shadowBox.left, top: shadowBox.top },
+                {
+                    input: rgba,
+                    raw: { width: screen.width, height: screen.height, channels: 4 },
+                    left: screen.left,
+                    top: screen.top,
+                },
+                { input: bezel, left: cut.phone.left, top: cut.phone.top },
+                ...(title ? [{ input: title, left: 0, top: 0 }] : []),
+            ])
+            .removeAlpha()
+            .raw()
+            .toBuffer();
+        index += 1;
+    }
+    if (index !== count) throw new Error(`${segment.take} ended after ${index} of ${count} frames.`);
 }
 
 const name = options.name ?? cut.id;
