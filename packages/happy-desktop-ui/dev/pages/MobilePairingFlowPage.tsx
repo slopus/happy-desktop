@@ -32,9 +32,9 @@ const noop = () => undefined;
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
-    { icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
-    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "blue" },
-    { icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "green" },
+    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { group: "Advanced", icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
 ];
 
 /** The window Happy opens at, and the smallest one it allows. */

@@ -99,8 +99,20 @@ export function HappyAgentSurfaceSettingsPage() {
                         activeCategoryId="surfaces"
                         categories={[
                             { icon: "settings", id: "general", label: "General", tone: "gray" },
-                            { icon: "check-circle", id: "tasks", label: "Tasks", tone: "teal" },
-                            { icon: "files", id: "surfaces", label: "Shared", tone: "purple" },
+                            {
+                                group: "Team",
+                                icon: "check-circle",
+                                id: "tasks",
+                                label: "Tasks",
+                                tone: "teal",
+                            },
+                            {
+                                group: "Team",
+                                icon: "files",
+                                id: "surfaces",
+                                label: "Shared",
+                                tone: "purple",
+                            },
                             { icon: "users", id: "account", label: "Account", tone: "blue" },
                         ]}
                         description="Which shared documents, todo lists and calendars you automatically join"

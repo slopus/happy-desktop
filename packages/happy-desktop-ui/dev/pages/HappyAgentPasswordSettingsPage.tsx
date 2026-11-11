@@ -26,7 +26,13 @@ function PasswordSettingsSpecimen(props: {
                     activeCategoryId="passwords"
                     categories={[
                         { id: "general", icon: "settings", label: "General", tone: "gray" },
-                        { id: "passwords", icon: "lock", label: "Passwords", tone: "red" },
+                        {
+                            group: "Agents",
+                            id: "passwords",
+                            icon: "lock",
+                            label: "Passwords",
+                            tone: "red",
+                        },
                     ]}
                     description="Saved logins from your browsers"
                     onCategorySelect={noop}

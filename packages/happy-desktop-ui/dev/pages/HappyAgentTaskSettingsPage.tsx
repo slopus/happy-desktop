@@ -96,7 +96,13 @@ export function HappyAgentTaskSettingsPage() {
                         activeCategoryId="tasks"
                         categories={[
                             { icon: "settings", id: "general", label: "General", tone: "gray" },
-                            { icon: "check-circle", id: "tasks", label: "Tasks", tone: "teal" },
+                            {
+                                group: "Team",
+                                icon: "check-circle",
+                                id: "tasks",
+                                label: "Tasks",
+                                tone: "teal",
+                            },
                             { icon: "users", id: "account", label: "Account", tone: "blue" },
                         ]}
                         description="Which tasks you automatically join on each connection"

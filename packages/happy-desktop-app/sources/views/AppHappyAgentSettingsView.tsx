@@ -145,32 +145,34 @@ import {
 
 /** The categories the local settings window offers, in the order they are listed. */
 export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategory[] = [
+    // Listed in blocks of like things, the everyday ones first and unheaded.
     { icon: "settings", id: "general", label: "General", tone: "gray" },
-    // Joining other people's tasks and their shared docs, lists and calendars.
-    { icon: "files", id: "sharing", label: "Sharing", tone: "teal" },
     // Local author identity and the optional WorkOS account share one category.
     { icon: "users", id: "account", label: "Account", tone: "blue" },
-    // Team servers this window signs in to; offered only by a host that can add them.
-    { icon: "globe", id: "servers", label: "Servers", tone: "indigo" },
-    // How each project's changes are split into tiers in the Changes listing.
-    { icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
-    { icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
-    { icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
-    { icon: "lock", id: "passwords", label: "Passwords", tone: "red" },
-    { icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
-    // Who is on a Happy Cloud server; offered only there.
-    { icon: "users", id: "members", label: "Members", tone: "orange" },
-    // The team's code on a Happy Cloud server; offered only there.
-    { icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
-    // The pools and machines agents run on, on a Happy Cloud server; offered only there.
-    { icon: "terminal", id: "compute", label: "Compute", tone: "indigo" },
+    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "green" },
+    { icon: "call", id: "voice", label: "Voice", tone: "orange" },
+    // What agents on this machine are told, run on, and may use.
+    { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
+    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
-    { icon: "zap", id: "usage", label: "Usage", tone: "teal" },
-    { icon: "call", id: "voice", label: "Voice", tone: "orange" },
-    { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "blue" },
-    { icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
-    { icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
+    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { group: "Agents", icon: "lock", id: "passwords", label: "Passwords", tone: "red" },
+    // Joining other people's tasks and their shared docs, lists and calendars.
+    { group: "Team", icon: "files", id: "sharing", label: "Sharing", tone: "teal" },
+    // Team servers this window signs in to; offered only by a host that can add them.
+    { group: "Team", icon: "globe", id: "servers", label: "Servers", tone: "blue" },
+    // Who is on a Happy Cloud server; offered only there.
+    { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
+    // The team's code on a Happy Cloud server; offered only there.
+    { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
+    // The pools and machines agents run on, on a Happy Cloud server; offered only there.
+    { group: "Team", icon: "terminal", id: "compute", label: "Compute", tone: "indigo" },
+    // How each project's changes are split into tiers in the Changes listing.
+    { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
+    { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
+    { group: "Advanced", icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
 ];
 
 export const HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY = "general";

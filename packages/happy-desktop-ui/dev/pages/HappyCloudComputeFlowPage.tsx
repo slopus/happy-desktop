@@ -17,12 +17,12 @@ export const componentNumber = "P-042";
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
-    { icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
-    { icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
-    { icon: "users", id: "members", label: "Members", tone: "orange" },
-    { icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
-    { icon: "terminal", id: "compute", label: "Compute", tone: "indigo" },
-    { icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
+    { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
+    { group: "Team", icon: "terminal", id: "compute", label: "Compute", tone: "indigo" },
 ];
 
 const noop = () => undefined;

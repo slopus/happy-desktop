@@ -5,7 +5,7 @@ import { Icon, type IconName } from "../../Icon";
 import { IconTile, type IconTileTone } from "../../IconTile";
 import { PanelHeader } from "../../PanelHeader";
 import { ScrollArea } from "../../Scrollbar";
-import { Sidebar } from "../../Sidebar";
+import { Sidebar, type SidebarSection } from "../../Sidebar";
 
 export interface HappyAgentSettingsCategory {
     readonly id: string;
@@ -13,6 +13,12 @@ export interface HappyAgentSettingsCategory {
     readonly icon: IconName;
     /** The hue of the tile the category's glyph sits on, in the column and the header. */
     readonly tone: IconTileTone;
+    /**
+     * The heading of the block this category is listed in. Consecutive
+     * categories with the same group share one block; absent lists the category
+     * in an unheaded block, as the window's first, everyday categories are.
+     */
+    readonly group?: string;
 }
 
 export type HappyAgentSettingsShellProps = {
@@ -63,18 +69,7 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
                     activeItemId={props.activeCategoryId}
                     onBack={props.onClose}
                     onItemSelect={props.onCategorySelect}
-                    sections={[
-                        {
-                            id: "categories",
-                            items: props.categories.map((category) => ({
-                                icon: category.icon,
-                                id: category.id,
-                                kind: "view" as const,
-                                label: category.label,
-                                tile: category.tone,
-                            })),
-                        },
-                    ]}
+                    sections={categorySections(props.categories)}
                     title="Settings"
                 />
             }
@@ -125,6 +120,36 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
             </ScrollArea>
         </AppShell>
     );
+}
+
+/**
+ * The column's blocks: each run of consecutive categories that share a group
+ * becomes one section under that group's heading, in the order given.
+ */
+function categorySections(categories: readonly HappyAgentSettingsCategory[]): SidebarSection[] {
+    const sections: SidebarSection[] = [];
+    for (const category of categories) {
+        const item = {
+            icon: category.icon,
+            id: category.id,
+            kind: "view" as const,
+            label: category.label,
+            tile: category.tone,
+        };
+        const last = sections.at(-1);
+        if (last !== undefined && last.label === category.group) last.items.push(item);
+        else
+            sections.push({
+                // Named by its group, so filtering categories never renames a
+                // block; a group listed apart twice numbers its second block.
+                id: `categories:${category.group ?? ""}:${String(
+                    sections.filter((section) => section.label === category.group).length,
+                )}`,
+                items: [item],
+                ...(category.group === undefined ? {} : { label: category.group }),
+            });
+    }
+    return sections;
 }
 
 function activeCategory(
