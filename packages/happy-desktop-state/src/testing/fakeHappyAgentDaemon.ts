@@ -78,12 +78,14 @@ export interface FakeHappyAgentDaemon {
     /**
      * Add a task with its own agent and workspace. `canArchive` is what the
      * task routes and the bootstrap answer for the viewer; `joinedKey` makes
-     * the viewer a member at that place in their own list.
+     * the viewer a member at that place in their own list, and `joinedUnread`
+     * is that membership's unread mark.
      */
     taskSeed(
         overrides?: Partial<Omit<Task, "agent">> & {
             readonly id?: string;
             readonly joinedKey?: string;
+            readonly joinedUnread?: TaskMembership["unread"];
         },
     ): Task;
     taskGet(taskId: string): Task;
@@ -1418,7 +1420,16 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async markAgentRead(agentId: string, ...rest: unknown[]) {
             await record("markAgentRead", [agentId, ...rest]);
-            return { agent: agentBump(agentId, { unread: null }) };
+            const read = agentBump(agentId, { unread: null });
+            // Opening a task's chat also clears the caller's own mark on that task.
+            const task = [...tasks.values()].find((entry) => entry.agent.id === agentId);
+            const membership = task === undefined ? undefined : memberships.get(task.id);
+            if (membership?.unread != null) {
+                const cleared: TaskMembership = { ...membership, unread: null };
+                memberships.set(cleared.taskId, cleared);
+                emit("task.membership.updated", { membership: cleared });
+            }
+            return { agent: read };
         },
         async archiveAgent(agentId: string, ...rest: unknown[]) {
             await record("archiveAgent", [agentId, ...rest]);
@@ -1565,9 +1576,10 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         overrides: Partial<Omit<Task, "agent">> & {
             readonly id?: string;
             readonly joinedKey?: string;
+            readonly joinedUnread?: TaskMembership["unread"];
         } = {},
     ): Task {
-        const { joinedKey, ...fields } = overrides;
+        const { joinedKey, joinedUnread, ...fields } = overrides;
         const id = fields.id ?? `task-${String((idCounter += 1))}`;
         const workspaceId = fields.workspaceId ?? `taskws-${id}`;
         const agent = seedAgent(workspaceId, { title: fields.name ?? id });
@@ -1595,6 +1607,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 orderKey: joinedKey,
                 taskId: id,
                 userId: profile.userId ?? null,
+                ...(joinedUnread === undefined ? {} : { unread: joinedUnread }),
             });
         return task;
     }

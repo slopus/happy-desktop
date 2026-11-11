@@ -173,6 +173,34 @@ it("keeps tasks and memberships current from the realtime events", async () => {
     expect(taskIn(watch.tasks, "task_b")?.name).toBe("Beta");
 });
 
+it("stays read after opening a task the bootstrap listed as unread for the viewer", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const task = daemon.taskSeed({
+        id: "task_unread",
+        name: "Launch",
+        joinedKey: "a1",
+        joinedUnread: { reason: "turn_finished", since: 5, count: 2 },
+    });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, "task_unread")?.session.unread).toMatchObject({
+            since: 5,
+            count: 2,
+        }),
+    );
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+
+    // Reading the task's chat clears the viewer's own membership mark, which the
+    // host announces only through `task.membership.updated`.
+    connection.markSessionRead(task.agent.id);
+    await vi.waitFor(() => expect(daemon.callCount("markAgentRead")).toBe(1));
+    expect(daemon.taskMembershipGet("task_unread")?.unread).toBeNull();
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, "task_unread")?.session.unread).toBeUndefined(),
+    );
+    expect(taskIn(watch.tasks, "task_unread")?.membership).toEqual({ orderKey: "a1", joinedAt: 1 });
+});
+
 it("joins, moves, and leaves through the task routes, putting a join at the top", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.taskSeed({ id: "task_a", joinedKey: "a1" });

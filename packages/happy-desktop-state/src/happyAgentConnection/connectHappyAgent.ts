@@ -2860,6 +2860,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             }
             case "task.joined":
             case "task.reordered":
+            case "task.membership.updated":
                 taskMembershipAdopt(event.payload.membership);
                 if (taskOf(event.payload.membership.taskId) === undefined)
                     taskRefetch(event.payload.membership.taskId);
@@ -6733,8 +6734,7 @@ function taskMembershipsReplace(
     const index = memberships.findIndex((entry) => entry.taskId === membership.taskId);
     if (index < 0) return [...memberships, membership];
     const current = memberships[index]!;
-    if (current.orderKey === membership.orderKey && current.joinedAt === membership.joinedAt)
-        return memberships;
+    if (deepEqual(current, membership)) return memberships;
     const next = [...memberships];
     next[index] = membership;
     return next;
