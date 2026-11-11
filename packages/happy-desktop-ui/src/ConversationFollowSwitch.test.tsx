@@ -468,3 +468,75 @@ it.each(kinds)(
         await showAndHold(h, (label) => expectAtEnd(h, `back to retry, ${label}`));
     },
 );
+
+it.each([
+    ["the turn starts with the switch", true],
+    ["the switch's notice comes first", false],
+] as const)(
+    "keeps a following chat at its live end when a failed turn is switched to another model (%s)",
+    async (_, startsWithSwitch) => {
+        const base = history("a", 16);
+        const h = harness({ activeId: "a", ids: ["a", "b"], entries: base, running: true });
+        h.usageSet(USAGE);
+        await h.view.ready();
+        await frame();
+        await frame();
+        h.set({ entries: [...base, failed], running: false });
+        await frame();
+        await frame();
+        expectAtEnd(h, "failure shown");
+
+        const switched: ConversationEntry = {
+            ...failed,
+            failure: {
+                ...FAILURE,
+                resolution: {
+                    action: "switched",
+                    at: NOW,
+                    providerId: "codex",
+                    providerLabel: "codex",
+                    modelId: "gpt-6.1-sol",
+                    modelName: "GPT-6.1 Sol",
+                },
+            },
+        };
+        const notice: ConversationEntry = {
+            kind: "notice",
+            variant: "configuration",
+            id: "model-changed",
+            sequence: "1000",
+            level: "info",
+            text: "Model Opus 5.5 → GPT-6.1 Sol",
+        };
+        // The reader's switch starts the turn: its status comes into view, as after a send.
+        if (startsWithSwitch) {
+            h.set({ entries: [...base, switched], running: true });
+            expectAtEnd(h, "switch commit");
+            await frame();
+            expectAtEnd(h, "switch shown");
+            h.set({ entries: [...base, switched, notice] });
+        } else {
+            h.set({ entries: [...base, switched, notice] });
+            expectAtEnd(h, "switch commit");
+            await frame();
+            expectAtEnd(h, "switch shown");
+            h.set({ running: true });
+        }
+        expectAtEnd(h, "turn commit");
+        await frame();
+        expectAtEnd(h, "turn shown");
+        for (const [step, text] of [
+            "Sure",
+            "Sure, picking up where it stopped. ".repeat(4),
+            "Sure, picking up where it stopped. ".repeat(20),
+        ].entries()) {
+            h.set({
+                entries: [...base, switched, notice, message("switch-answer", agent, text, true)],
+            });
+            expectAtEnd(h, `stream ${String(step)} commit`);
+            await frame();
+            expectAtEnd(h, `stream ${String(step)}`);
+        }
+        h.view.destroy();
+    },
+);

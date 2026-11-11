@@ -878,6 +878,21 @@ export function ConversationView(props: ConversationViewProps) {
        device: whatever the footer shows next is the start of its reply. */
     const newest = props.entries.at(-1);
     const replyNext = newest?.kind === "message" && newest.message.sender?.kind === "human";
+    /* The person retried a failed turn or switched it to another model, and
+       nothing has come of it but the switch's own configuration notices: the
+       footer shows the start of the reply they asked for, as after a send. */
+    let resumedIndex = props.entries.length - 1;
+    while (resumedIndex >= 0) {
+        const entry = props.entries[resumedIndex]!;
+        if (entry.kind !== "notice" || entry.variant !== "configuration") break;
+        resumedIndex -= 1;
+    }
+    const resumed = props.entries[resumedIndex];
+    const resumedAction =
+        resumed?.kind === "notice" && resumed.variant !== "compute"
+            ? resumed.failure?.resolution?.action
+            : undefined;
+    const resumeNext = resumedAction === "retried" || resumedAction === "switched";
     /* A send made mid-turn waits under the streaming reply, and a reader near
        the bottom follows it into view. A send made while the agent is idle
        moves nothing: a reader following the bottom keeps following it, and
@@ -1210,10 +1225,11 @@ export function ConversationView(props: ConversationViewProps) {
                         footer={workingStatusRow}
                         footerBefore={transcript.length}
                         /* The status and any queued message arrive with a
-                           send, whoever made it; a reader at the bottom sees
-                           where the reply will start rather than having it
-                           held below the composer. */
-                        footerFollowed={sendPending || replyNext}
+                           send, whoever made it, or with a retry or switch of a
+                           failed turn; a reader at the bottom sees where the
+                           reply will start rather than having it held below
+                           the composer. */
+                        footerFollowed={sendPending || replyNext || resumeNext}
                         footerReserveHeight={queuedStatusHeight}
                         followKey={props.steeringSendId}
                         {...(props.leadingHeader
