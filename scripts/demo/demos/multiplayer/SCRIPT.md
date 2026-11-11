@@ -35,16 +35,16 @@ re-recorded take needs no retiming in `chapters.mjs`.
 ## The takes
 
 1. **aware**, "See who's working on what". Kirill is in his own task and
-   touches nothing. Scoteezy starts Android Push Fixes, Leeroy Docs Search and
-   Xander Launch Email, each through their own sign-in; each row arrives at the
+   touches nothing. Scoteezy starts Android Push Fixes, Maya Docs Search and
+   Emma Launch Email, each through their own sign-in; each row arrives at the
    top of Kirill's TASKS with its owner's face, and Activity counts it.
 2. **activity**, "Catch up on what shipped". Kirill opens Activity. On top is
    the Launch checklist, a shared todo list Steve made and each teammate added
    to from their own sign-in (the entry stacks their faces), then the cold sync
-   benchmark Leeroy's agent published, drawn as a post with its summary and
+   benchmark Maya's agent published, drawn as a post with its summary and
    cover.
 3. **bots**, "Shared bots for the standing jobs". Kirill opens Desktop
-   Releases, where Steve's request is already answered. Andrew writes in it
+   Releases, where his own request is already answered. Steve writes in it
    through his own sign-in while Kirill looks; it answers him by name, then waits
    on the Windows build with the daemon's own `wait`.
 4. **artifacts**, "Share what your agents make". Kirill opens Artifacts, where
@@ -57,12 +57,20 @@ re-recorded take needs no retiming in `chapters.mjs`.
 
 ## What is staged
 
-- People: Kirill and Steve wear the team demo's pictures. Andrew, Leeroy,
-  Xander and Scoteezy are Happy's open-source contributors, cast at Kirill's
-  request, wearing their public GitHub pictures (`assets/andrew.jpg`,
-  `assets/leeroy.jpg`, `assets/xander.jpg`, `assets/scoteezy.jpg`). What they
-  say and do here is the screenplay's. First names only. The cast lives in `world.mjs`; swapping
-  a person is one entry and one picture, then one re-record per chapter.
+- People: Kirill and Steve wear the team demo's pictures, and every message,
+  mention and exchange on camera is between the two of them. Emma, Maya and
+  Sam are fictional teammates; Scoteezy is one of Happy's open-source
+  contributors, cast at Kirill's request in his public GitHub picture
+  (`assets/scoteezy.jpg`). Those four only own tasks that arrive in the
+  sidebar and show as faces in Activity; what they do here is the
+  screenplay's. First names only. The cast lives in `world.mjs`; swapping a
+  person is one entry and one picture, then one re-record per chapter.
+- Stock photographs: the fictional teammates wear free Unsplash photos under
+  the Unsplash License (free for commercial use, no attribution required),
+  each cropped to a 460 px square headshot:
+  - `assets/emma.jpg`: Vitaly Gariev, https://unsplash.com/photos/s3aDHKxHZSc
+  - `assets/maya.jpg`: alex starnes, https://unsplash.com/photos/WYE2UhXsU1Y
+  - `assets/sam.jpg`: Christian Buehner, https://unsplash.com/photos/DItYlc26zVI
 - Bots: Desktop Releases, Mobile Releases, Alerts and Growth are created in the
   gym. Each wears one of the app's own placeholder pictures, the still the app
   being filmed ships (`avatar-placeholders/`), pinned by number so a bot looks

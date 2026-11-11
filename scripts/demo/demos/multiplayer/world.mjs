@@ -4,10 +4,12 @@
 // second, standalone Happy Agent (personal.mjs) that reaches Happy Core
 // through a real server connection by URL, and the window runs on it.
 //
-// Kirill and Steve wear the pictures the team demo gave them. Andrew,
-// Leeroy, Xander and Scoteezy are Happy's own open-source contributors,
-// cast at Kirill's request, wearing their public GitHub pictures; the words
-// and work given to them here are the screenplay's. The job bots wear the
+// Kirill and Steve wear the pictures the team demo gave them, and every
+// exchange on camera is between the two of them. Emma, Maya and Sam are
+// fictional teammates wearing stock photographs (credited in SCRIPT.md);
+// Scoteezy, one of Happy's open-source contributors, wears his public GitHub
+// picture at Kirill's request. The others only own tasks that arrive and show
+// as faces in Activity; their work is the screenplay's. The job bots wear the
 // app's placeholder pictures. Nothing here is read from the real Happy Core
 // server, a real session, or anyone's `~/.happy`; the bots' jobs are named
 // after the kind of standing work a team gives a bot, and every word they
@@ -58,25 +60,25 @@ export const team = {
             photo: "steve.jpg",
         },
         {
-            key: "andrew",
-            name: "Andrew",
-            email: "andrew@happy.example",
+            key: "sam",
+            name: "Sam",
+            email: "sam@happy.example",
             role: "Engineer",
-            photo: "andrew.jpg",
+            photo: "sam.jpg",
         },
         {
-            key: "leeroy",
-            name: "Leeroy",
-            email: "leeroy@happy.example",
+            key: "maya",
+            name: "Maya",
+            email: "maya@happy.example",
             role: "Engineer",
-            photo: "leeroy.jpg",
+            photo: "maya.jpg",
         },
         {
-            key: "xander",
-            name: "Xander",
-            email: "xander@happy.example",
+            key: "emma",
+            name: "Emma",
+            email: "emma@happy.example",
             role: "Growth",
-            photo: "xander.jpg",
+            photo: "emma.jpg",
         },
         {
             key: "scoteezy",
@@ -277,7 +279,7 @@ export const bots = [
 ];
 
 /**
- * Desktop Releases' conversation: two teammates wrote in it, each through
+ * Desktop Releases' conversation: Kirill and Steve wrote in it, each through
  * their own sign-in, and it is in the middle of the job when the take opens.
  * `report` is what it says on camera, to whoever the take names.
  */
@@ -286,12 +288,12 @@ export const releaseBot = {
     name: "Desktop Releases",
     turns: [
         {
-            from: "steve",
+            from: "kirill",
             text: "Cut a preview once main is green.",
             reply: "Main is green. Cutting the preview now: macOS first, then Windows.",
         },
         {
-            from: "andrew",
+            from: "steve",
             text: "Tell me when it's out and I'll post the changelog.",
             report: (mention) =>
                 `${mention}, will do. macOS is signed and notarized. Windows is still building.`,
@@ -336,17 +338,17 @@ export const doneTasks = [
         reply: "iOS Send Fixes keeps the composer's frame through the send and the keyboard's return.",
     },
     {
-        owner: "xander",
+        owner: "emma",
         name: "Onboarding Emails",
         message: "Draft the three onboarding emails for new teams.",
         reply: "Three drafts are in: welcome, your first shared task, and invite your team.",
     },
     {
-        owner: "leeroy",
+        owner: "maya",
         name: "Sync Benchmarks",
         message: "Benchmark a cold sync on a team server with ten thousand tasks.",
         reply: "A cold sync of 10k tasks takes 1.8 s; most of it is the task list query.",
-        // Steve writes in Leeroy's task through his own sign-in, so the
+        // Steve writes in Maya's task through his own sign-in, so the
         // task's Activity entry carries both their faces.
         more: [
             {
@@ -402,9 +404,9 @@ export const checklist = {
     owner: "steve",
     todos: [
         { from: "steve", text: "Cut the 2026.11 preview" },
-        { from: "leeroy", text: "Index the task list query" },
-        { from: "andrew", text: "Post the changelog" },
-        { from: "xander", text: "Send the launch email" },
+        { from: "maya", text: "Index the task list query" },
+        { from: "sam", text: "Post the changelog" },
+        { from: "emma", text: "Send the launch email" },
         { from: "scoteezy", text: "Fix Android push before launch" },
     ],
 };
@@ -434,12 +436,12 @@ export const arrivals = [
         message: "Pushes stop on Android after the app sits in the background. Find out why.",
     },
     {
-        owner: "leeroy",
+        owner: "maya",
         name: "Docs Search",
         message: "Add search to the docs site.",
     },
     {
-        owner: "xander",
+        owner: "emma",
         name: "Launch Email",
         message: "Draft the launch email for team servers.",
     },
@@ -702,7 +704,7 @@ export async function reply(payload) {
     // Kirill's answer is taken at once, its words streamed over about 0.4 s.
     if (turn.text === stepIn.answer) return streamed([text(stepIn.reply)]);
 
-    // Desktop Releases: Steve's request is answered at once. Andrew's is
+    // Desktop Releases: Kirill's request is answered at once. Steve's is
     // answered on camera in chapter 2, and after that the bot waits on the
     // Windows build with the daemon's own `wait`.
     const [asked, follow] = releaseBot.turns;
@@ -710,7 +712,7 @@ export async function reply(payload) {
     if (turn.text === follow.text) {
         if (turn.answered === 0) {
             const content = [
-                text(follow.report(mention("Andrew"))),
+                text(follow.report(mention("Steve"))),
                 tool("wait", { duration: "20m" }),
             ];
             // Off camera the bot is at work once it has answered and started waiting.

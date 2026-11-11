@@ -90,7 +90,7 @@ export function chapters(stage, views, cues) {
                 title: "Shared bots for the standing jobs",
                 camera: [
                     ...pushIn(bots["bot-opened"] + 0.2 + move - botsFrom, views.bots),
-                    // The conversation grows up the pane as Andrew writes and
+                    // The conversation grows up the pane as Steve writes and
                     // the bot answers; the camera rises with it.
                     {
                         at: bots.message + 0.7 - botsFrom,

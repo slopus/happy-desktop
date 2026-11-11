@@ -20,8 +20,8 @@ export default (cues) =>
             // The Activity page's two newest entries: the shared checklist and
             // the benchmark's post, its summary and the top of its cover.
             activity: { x: 376, y: 105 },
-            // Steve's request and its answer, low in the pane; then the whole
-            // conversation, with Andrew's message and its answer.
+            // Kirill's request and its answer, low in the pane; then the whole
+            // conversation, with Steve's message and its answer.
             bots: { x: 376, y: 250 },
             botsGrown: { x: 376, y: 105 },
             // The Artifacts list; the opened page under the same view, then

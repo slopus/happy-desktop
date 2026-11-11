@@ -19,7 +19,7 @@ export default (cues) => ({
             aware: { x: 0, y: 112, scale: 1.9 },
             // The checklist entry, then the benchmark's post and its cover.
             activity: { x: 357, y: 100 },
-            // Steve's request and its answer; then the whole conversation.
+            // Kirill's request and its answer; then the whole conversation.
             bots: { x: 358, y: 230, scale: 2.05 },
             botsGrown: { x: 358, y: 30, scale: 2.05 },
             // Below the title bar, which is too narrow here for the artifact's title.

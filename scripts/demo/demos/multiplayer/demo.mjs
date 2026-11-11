@@ -145,7 +145,7 @@ async function botFacts(clients) {
             .sort();
     }
     try {
-        const { bot } = await clients.andrew.createBot({
+        const { bot } = await clients.sam.createBot({
             name: "Probe",
             username: "probe_bot",
             isAdmin: false,
@@ -153,7 +153,7 @@ async function botFacts(clients) {
         facts.memberCreate = { allowed: true };
         const seenByOwner = Boolean(await botFind(clients[world.owner], "probe_bot"));
         facts.memberCreate.listedForOwner = seenByOwner;
-        await clients.andrew.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
+        await clients.sam.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
     } catch (error) {
         facts.memberCreate = { allowed: false, error: String(error?.message ?? error) };
     }
@@ -161,8 +161,8 @@ async function botFacts(clients) {
 }
 
 /**
- * Desktop Releases' conversation, made once per world: Steve asks and is
- * answered; Andrew asks, and the bot's answer to him waits for the camera in
+ * Desktop Releases' conversation, made once per world: Kirill asks and is
+ * answered; Steve asks, and the bot's answer to him waits for the camera in
  * chapter 2, or is given at once and the bot waits on its build.
  */
 async function botJobPrepare(clients) {
@@ -179,7 +179,7 @@ async function botJobPrepare(clients) {
         mode: world.agentMode,
     });
     await wait(() => settled(owner, agentId), "Desktop Releases' first answer");
-    // Up to chapter 3, Andrew has not written yet: he does on camera.
+    // Up to chapter 3, Steve has not written yet: he does on camera.
     if (shot === "activity" || shot === "bots") return bot;
     await clients[follow.from].sendMessage(await theirs(follow.from), {
         id: cuid(),
@@ -250,7 +250,7 @@ async function turnSend(clients, task, entry, more) {
 
 /**
  * Teammates writing in each other's earlier tasks, through their own sign-ins:
- * Steve asks Leeroy's benchmark for the 50k run, and its agent publishes the
+ * Steve asks Maya's benchmark for the 50k run, and its agent publishes the
  * artifact's next version. In chapter 2 this is the newest thing in Activity.
  */
 async function followUpsPrepare(clients) {
@@ -655,7 +655,7 @@ export default {
 
         if (shot === "aware") {
             // Chapter 1, "See who's working on what": Kirill is in his own task
-            // and touches nothing. Scoteezy, Leeroy and Xander start tasks from their
+            // and touches nothing. Scoteezy, Maya and Emma start tasks from their
             // own sign-ins, and each one is in Kirill's sidebar as it starts;
             // his Activity counts them.
             await demo.pointerVisible(false);
@@ -678,7 +678,7 @@ export default {
 
         if (shot === "activity") {
             // Chapter 2, "Catch up on what shipped": Kirill opens Activity. On top
-            // is the checklist his teammates filled in, then the benchmark Leeroy's
+            // is the checklist his teammates filled in, then the benchmark Maya's
             // agent published, as a post with its summary and cover.
             const row = sidebarRow(page, "Activity");
             await demo.pointerPlace(rest);
@@ -700,7 +700,7 @@ export default {
 
         if (shot === "bots") {
             // Chapter 3, "Shared bots for the standing jobs": Kirill opens
-            // Desktop Releases, where Steve's request is already answered. Andrew
+            // Desktop Releases, where his own request is already answered. Steve
             // writes in it from his own sign-in, and it answers him.
             const job = world.releaseBot;
             const [, follow] = job.turns;
@@ -716,15 +716,15 @@ export default {
             );
             cue("bot-opened", demo);
             await demo.moveTo(away);
-            // Steve's request and its answer stand a while before Andrew writes.
+            // Kirill's request and its answer stand a while before Steve writes.
             await demo.hold(2000);
-            const andrew = clients[follow.from];
-            const theirs = (await botFind(andrew, job.username)).agent.id;
+            const steve = clients[follow.from];
+            const theirs = (await botFind(steve, job.username)).agent.id;
             await arrivalFilm(
                 "message",
                 async () =>
                     void pending.push(
-                        andrew.sendMessage(theirs, {
+                        steve.sendMessage(theirs, {
                             id: cuid(),
                             text: follow.text,
                             mode: world.agentMode,
