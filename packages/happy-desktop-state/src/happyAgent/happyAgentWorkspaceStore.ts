@@ -953,6 +953,8 @@ export type HappyAgentBotFaceSeeds = readonly [string, string, string, string];
 export interface HappyAgentBotCreateSnapshot {
     /** The chosen display name. Blank, the host names the bot from its first message. */
     readonly name: string;
+    /** Whether the bot is made an admin bot. Off unless the reader turns it on. */
+    readonly isAdmin: boolean;
     /** The four faces on offer; `faceSlot` says which one the bot gets. */
     readonly faces: HappyAgentBotFaceSeeds;
     /** The picked position. It is the position that is kept when the four are re-rolled. */
@@ -2077,6 +2079,8 @@ export interface HappyAgentWorkspaceStore {
     botCreateOpen(paint: HappyAgentBotFacePaint): void;
     /** Edits the name of the bot being made. */
     botCreateNameUpdate(name: string): void;
+    /** Turns admin on or off for the bot being made. */
+    botCreateAdminUpdate(isAdmin: boolean): void;
     /** Picks one of the four faces by position. */
     botCreateFacePick(slot: HappyAgentBotFaceSlot): void;
     /** Rolls four new faces. The picked position stays picked, now wearing its new face. */
@@ -2683,6 +2687,7 @@ export function happyAgentWorkspaceStoreCreate(
     /** The parts of a new bot the store holds itself; the composer is a store of its own. */
     interface BotCreateDraft {
         readonly name: string;
+        readonly isAdmin: boolean;
         readonly faces: HappyAgentBotFaceSeeds;
         readonly faceSlot: HappyAgentBotFaceSlot;
         readonly submitting: boolean;
@@ -6142,6 +6147,7 @@ export function happyAgentWorkspaceStoreCreate(
                       })
                     : await list.botCreate({
                           ...(name.length === 0 ? {} : { name }),
+                          ...(pending.isAdmin ? { isAdmin: true } : {}),
                           ...(avatar === undefined ? {} : { avatar }),
                           ...(selection === undefined ? {} : { selection }),
                       });
@@ -6261,6 +6267,7 @@ export function happyAgentWorkspaceStoreCreate(
         createKind = kind;
         botCreateDraft = {
             name: "",
+            isAdmin: false,
             faces: botFaceSeedsRoll(),
             faceSlot: 0,
             submitting: false,
@@ -8644,6 +8651,12 @@ export function happyAgentWorkspaceStoreCreate(
         botCreateServiceTierUpdate: (tier) => botCreateSessionDraft?.serviceTierUpdate(tier),
         botCreateNameUpdate(name) {
             if (createKind === "bot") createDraftNameUpdate(name);
+        },
+        botCreateAdminUpdate(isAdmin) {
+            if (createKind !== "bot" || !botCreateDraft || botCreateDraft.submitting) return;
+            if (botCreateDraft.isAdmin === isAdmin) return;
+            botCreateDraft = { ...botCreateDraft, isAdmin };
+            recompute();
         },
         botCreateFacePick(slot) {
             if (!botCreateDraft || botCreateDraft.submitting || botCreateDraft.faceSlot === slot)
