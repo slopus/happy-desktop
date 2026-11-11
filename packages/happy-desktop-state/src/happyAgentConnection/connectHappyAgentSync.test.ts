@@ -637,16 +637,26 @@ it("does not hold the live feed for the git watch", async () => {
     releaseWatch();
 });
 
-it("watches git only for finished checkouts, and adds one once it is made", async () => {
+it("watches git for the hundred most recently active finished checkouts, and renews as that changes", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.projectSeed({ id: "project-a" });
-    daemon.workspaceSeed("project-a", { id: "workspace-ready" });
+    // Workspace n was last worked in at 1000 + n, through its session or, with none, itself.
+    const agents: ReturnType<typeof daemon.agentSeed>[] = [];
+    for (let n = 0; n < 105; n += 1) {
+        const workspace = daemon.workspaceSeed("project-a", {
+            id: `workspace-${String(n)}`,
+            updatedAt: 1000 + n,
+        });
+        if (n % 2 === 0) agents.push(daemon.agentSeed(workspace.id, { updatedAt: 1000 + n }));
+    }
     daemon.workspaceSeed("project-a", {
         id: "workspace-failed",
+        updatedAt: 5000,
         initialization: { attempt: 1, error: "No checkout.", status: "failed" },
     });
     const creating = daemon.workspaceSeed("project-a", {
         id: "workspace-creating",
+        updatedAt: 5000,
         initialization: { attempt: 1, error: null, status: "initializing" },
     });
     const { connection } = harnessOpen(daemon);
@@ -655,19 +665,50 @@ it("watches git only for finished checkouts, and adds one once it is made", asyn
         daemon.calls
             .filter((call) => call.method === "watchGit")
             .map((call) => (call.args[0] as { readonly workspaceIds: string[] }).workspaceIds);
+    const newest = (from: number, to: number) =>
+        Array.from({ length: to - from + 1 }, (_, at) => `workspace-${String(to - at)}`);
 
     await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
-    await vi.waitFor(() => expect(watched()).toEqual([["project-a", "workspace-ready"]]));
+    await vi.waitFor(() => expect(watched()).toEqual([["project-a", ...newest(5, 104)]]));
 
+    // The checkout being made joins as soon as it is ready, as the most recent of all.
     daemon.eventEmit("workspace.updated", {
         workspaceId: creating.id,
         previousVersion: creating.version,
         version: "v-ready",
-        changes: { initialization: { attempt: 1, error: null, status: "ready" }, updatedAt: 2 },
+        changes: { initialization: { attempt: 1, error: null, status: "ready" }, updatedAt: 5000 },
     });
     await vi.waitFor(() =>
-        expect(watched().at(-1)).toEqual(["project-a", "workspace-ready", "workspace-creating"]),
+        expect(watched().at(-1)).toEqual(["project-a", "workspace-creating", ...newest(6, 104)]),
     );
+
+    // Work in the oldest workspace brings it back among the hundred.
+    const oldest = agents[0]!;
+    daemon.eventEmit("agent.updated", {
+        agentId: oldest.id,
+        previousVersion: oldest.version,
+        version: "v-active",
+        changes: { updatedAt: 6000 },
+    });
+    await vi.waitFor(() =>
+        expect(watched().at(-1)).toEqual([
+            "project-a",
+            "workspace-0",
+            "workspace-creating",
+            ...newest(7, 104),
+        ]),
+    );
+    const renewals = watched().length;
+    // Work already among the watched ones sends nothing.
+    const recent = agents.at(-1)!;
+    daemon.eventEmit("agent.updated", {
+        agentId: recent.id,
+        previousVersion: recent.version,
+        version: "v-recent",
+        changes: { updatedAt: 7000 },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(watched()).toHaveLength(renewals);
 });
 
 it("reports reconnecting after a server drop and resumes from the last applied cursor", async () => {

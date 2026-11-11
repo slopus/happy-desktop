@@ -117,6 +117,10 @@ const PRELOAD_DELAY_MS = 1_500;
 /** How often the read-ahead looks again while another session is loading. */
 const PRELOAD_BUSY_WAIT_MS = 100;
 const GIT_WATCH_RENEW_MS = 2 * 60 * 1000;
+/** The most workspaces one git watch names besides the projects, the most recently active first. */
+const GIT_WATCH_WORKSPACE_LIMIT = 100;
+/** The most ids the daemon accepts in one git watch. */
+const GIT_WATCH_ID_LIMIT = 256;
 const RECENT_EVENT_RETENTION_MS = 60_000;
 const SNAPSHOT_RESPONSE_TIMEOUT_MS = 60_000;
 /** How long applying a backlog of realtime updates may hold the thread before it yields. */
@@ -1322,6 +1326,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             entry.agent = agent;
             entry.workspace = workspaceOf(agent.workspaceId);
         }
+        gitWatchReach(agent);
     };
 
     /**
@@ -2269,7 +2274,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             }
             // Neither the first paint nor the update feed waits for the watch: its scans land
             // whenever they do, and anything it notices later arrives as `git.updated`.
-            gitWatchStart([...gitWorkspaceIds]);
+            gitWatchStart(gitWatchSelectNow(bootstrap.projects, bootstrap.workspaces));
             advanceCursor(bootstrap.cursor);
             // After a lost journal or a replaced process, the events remembered
             // so far belong to an interval this snapshot supersedes, and their
@@ -2380,6 +2385,41 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     // Only the watch sent for the newest bootstrap may land.
     let gitWatchGeneration = 0;
+    /** What the last git watch asked for. */
+    let gitWatched: GitWatchSelection = GIT_WATCH_NOTHING;
+    let gitWatchRenewQueued = false;
+
+    /** Chooses what the next git watch names, and remembers it. */
+    const gitWatchSelectNow = (
+        projects: readonly Project[],
+        workspaces: readonly Workspace[],
+    ): readonly string[] => {
+        gitWatched = gitWatchSelect(projects, workspaces);
+        return gitWatched.ids;
+    };
+
+    /**
+     * Renews the watch once an agent's activity lifts its workspace among the watched ones. Two
+     * comparisons settle almost every agent update; the lookup runs only for one that may count.
+     */
+    const gitWatchReach = (agent: Agent): void => {
+        if (agent.updatedAt <= gitWatched.floor || gitWatched.named.has(agent.workspaceId)) return;
+        const workspace = workspaceOf(agent.workspaceId);
+        // Judged by what the selection itself ranks on, so a renewal always takes the workspace in.
+        if (
+            workspace === undefined ||
+            !gitWatchable(workspace) ||
+            workspaceActivity(workspace) <= gitWatched.floor ||
+            gitWatchRenewQueued
+        )
+            return;
+        // One renewal answers every agent of the burst, once the burst is stored.
+        gitWatchRenewQueued = true;
+        queueMicrotask(() => {
+            gitWatchRenewQueued = false;
+            background(renewGitWatch());
+        });
+    };
 
     /**
      * Registers the bootstrap's workspaces with the daemon's git watcher and adopts the scans
@@ -2433,9 +2473,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const renewGitWatch = async (): Promise<void> => {
         if (config === undefined) return;
         const watched = groupsStore.getState();
+        const workspaceIds = gitWatchSelectNow(watched.projects, watched.workspaces);
         const watchedGit = await optional(() =>
             client.watchGit(
-                { workspaceIds: activeGitWorkspaceIds(watched.projects, watched.workspaces) },
+                { workspaceIds: [...workspaceIds] },
                 {
                     signal: AbortSignal.any([
                         rootController.signal,
@@ -6597,9 +6638,10 @@ async function optional<T>(read: () => Promise<T>): Promise<T | undefined> {
 }
 
 /**
- * The workspaces one git watch asks for. The daemon refuses the whole watch when any one of them
- * has no checkout yet or failed to make one, which would leave every row without its changes, so
- * only finished checkouts are named; one that finishes later is added when it does.
+ * Every project and workspace that may be watched for git changes. The daemon refuses the whole
+ * watch when any one of them has no checkout yet or failed to make one, which would leave every
+ * row without its changes, so only finished checkouts are named; one that finishes later is added
+ * when it does.
  */
 function activeGitWorkspaceIds(
     projects: readonly Project[],
@@ -6607,19 +6649,77 @@ function activeGitWorkspaceIds(
 ): string[] {
     return [
         ...new Set([
-            ...projects
-                .filter((project) => project.archivedAt === null && project.status === "active")
-                .map((project) => project.id),
-            ...workspaces
-                .filter(
-                    (workspace) =>
-                        workspace.archivedAt === null &&
-                        workspace.status === "active" &&
-                        workspace.initialization.status === "ready",
-                )
-                .map((workspace) => workspace.id),
+            ...projects.filter(gitWatchableProject).map((project) => project.id),
+            ...workspaces.filter(gitWatchable).map((workspace) => workspace.id),
         ]),
     ];
+}
+
+function gitWatchableProject(project: Project): boolean {
+    return project.archivedAt === null && project.status === "active";
+}
+
+function gitWatchable(workspace: Workspace): boolean {
+    return (
+        workspace.archivedAt === null &&
+        workspace.status === "active" &&
+        workspace.initialization.status === "ready"
+    );
+}
+
+interface GitWatchSelection {
+    /** What the watch sends: the projects, then the workspaces, most recently active first. */
+    readonly ids: readonly string[];
+    readonly named: ReadonlySet<string>;
+    /**
+     * The activity of the least recent workspace named while others were left out, so a
+     * workspace active after it belongs in the watch; `-Infinity` while every one fits.
+     */
+    readonly floor: number;
+}
+
+const GIT_WATCH_NOTHING: GitWatchSelection = {
+    ids: [],
+    named: new Set(),
+    floor: Number.NEGATIVE_INFINITY,
+};
+
+/**
+ * Every watchable project, and the watchable workspaces most recently active, as many as one
+ * watch may hold. A workspace is as recent as the newest of its own record and its sessions,
+ * which is what its sidebar row reports as when it was last worked in.
+ */
+function gitWatchSelect(
+    projects: readonly Project[],
+    workspaces: readonly Workspace[],
+): GitWatchSelection {
+    const projectIds = [
+        ...new Set(projects.filter(gitWatchableProject).map((project) => project.id)),
+    ].slice(0, GIT_WATCH_ID_LIMIT);
+    const named = new Set(projectIds);
+    // A project's root checkout shares its id and is already named as the project.
+    const ranked = workspaces
+        .filter((workspace) => !named.has(workspace.id) && gitWatchable(workspace))
+        .map((workspace) => ({ id: workspace.id, activity: workspaceActivity(workspace) }))
+        .sort((left, right) => right.activity - left.activity);
+    const limit = Math.min(GIT_WATCH_WORKSPACE_LIMIT, GIT_WATCH_ID_LIMIT - projectIds.length);
+    const chosen = ranked.slice(0, limit);
+    for (const { id } of chosen) named.add(id);
+    return {
+        ids: [...projectIds, ...chosen.map(({ id }) => id)],
+        named,
+        floor:
+            ranked.length <= limit
+                ? Number.NEGATIVE_INFINITY
+                : (chosen.at(-1)?.activity ?? Number.POSITIVE_INFINITY),
+    };
+}
+
+function workspaceActivity(workspace: Workspace): number {
+    let newest = workspace.updatedAt;
+    for (const agent of workspace.agents)
+        if (agent.archivedAt === null && agent.updatedAt > newest) newest = agent.updatedAt;
+    return newest;
 }
 
 /**
