@@ -3525,13 +3525,25 @@ export function MessageList(props: MessageListProps) {
                    of it, so the reader is taken there now rather than left a
                    line above a live end that every later notch chases. At a
                    fractional scale the notch scrolls up to the device pixel
-                   ratio further than its reported delta. */
+                   ratio further than its reported delta.
+                   Only a wheel the browser lets us cancel is taken over. Past
+                   a gesture's first event Chromium dispatches the rest, a
+                   trackpad fling's momentum included, uncancelable: that
+                   scroll goes on natively from where it was, and its next
+                   frame undoes a write here, so rows jump to the end and back.
+                   The gesture carries that reader to the end itself, and its
+                   scroll event resumes following there. */
                 const reach =
                     messageListWheelPixels(event, element) *
                     Math.max(1, targetWindow.devicePixelRatio);
-                if (!event.ctrlKey && bottomOffset <= Math.max(BOTTOM_WHEEL_EPSILON, reach))
+                const takeover = event.cancelable || bottomOffset <= BOTTOM_WHEEL_EPSILON;
+                if (
+                    event.cancelable &&
+                    !event.ctrlKey &&
+                    bottomOffset <= Math.max(BOTTOM_WHEEL_EPSILON, reach)
+                )
                     event.preventDefault();
-                if (bottomOffset <= Math.max(FOLLOW_BOTTOM_THRESHOLD, reach)) {
+                if (takeover && bottomOffset <= Math.max(FOLLOW_BOTTOM_THRESHOLD, reach)) {
                     escapedFromFollow.current = false;
                     following.current = true;
                     sparseInsetRelease();

@@ -312,6 +312,41 @@ it.each(["wheel", "ArrowDown"] as const)(
     },
 );
 
+it("leaves an uncancelable wheel to scroll natively and follows the end it lands on", async () => {
+    const view = createRenderer();
+    try {
+        const fixture = streamingFixture(view);
+        await view.ready();
+        await frame();
+        await frame();
+        const viewport = fixture.viewport();
+        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -60 }));
+        viewport.scrollTop -= 60;
+        await frame();
+        await frame();
+        expect(fixture.position()).not.toEqual({ type: "bottom" });
+        // A trackpad fling's momentum arrives uncancelable: the browser goes on
+        // scrolling natively, so a write here would be undone by its next frame.
+        const parked = viewport.scrollTop;
+        const wheel = new WheelEvent("wheel", { deltaY: 100 });
+        viewport.dispatchEvent(wheel);
+        expect(wheel.defaultPrevented).toBe(false);
+        expect(viewport.scrollTop).toBe(parked);
+        // The native scroll lands on the end, and the reader follows it there.
+        viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
+        await frame();
+        await frame();
+        for (let index = 0; index < 3; index += 1) {
+            fixture.grow();
+            await frame();
+        }
+        expect(fixture.position()).toEqual({ type: "bottom" });
+        expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+    } finally {
+        view.destroy();
+    }
+});
+
 it("never puts a scrollbar drag back when the stream commits before its scroll event", async () => {
     const view = createRenderer();
     try {
