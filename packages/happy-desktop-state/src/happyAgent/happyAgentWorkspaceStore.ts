@@ -2482,6 +2482,7 @@ export function happyAgentWorkspaceStoreCreate(
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
     let unsubscribeWorkspaceFiles: (() => void) | undefined;
+    let unsubscribeComputeRunners: (() => void) | undefined;
     let unsubscribeModels: (() => void) | undefined;
     /** True while the drafts re-derive from a catalog the daemon changed, which nobody chose. */
     let draftsCatalogApplying = false;
@@ -6763,6 +6764,24 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
+     * A machine coming online does not restate the compute of the agents it
+     * serves, so a tree waiting on an offline machine asks again whenever any
+     * runner changes. Nothing else listens: the hint names no agent.
+     */
+    const workspaceFilesRunnersChanged = (): void => {
+        const groupId = workspaceFilesGroupId;
+        if (
+            groupId === undefined ||
+            groupId !== addressedGroupId ||
+            workspaceFiles?.unavailable !== "computeOffline"
+        )
+            return;
+        workspaceFilesReset();
+        workspaceFilesDirectoryEnsure(groupId, "");
+        recompute();
+    };
+
+    /**
      * What the host's own answer means for this workspace's addressing and for a
      * destructive intent the reader is holding. It runs only when the list
      * reports a newly applied authoritative read, so nothing here can be
@@ -6994,6 +7013,7 @@ export function happyAgentWorkspaceStoreCreate(
         // The tree already listed is where removals are counted from.
         subtasksRemovedApply();
         unsubscribeWorkspaceFiles = client.workspaceFilesSubscribe(workspaceFilesChanged);
+        unsubscribeComputeRunners = client.computeRunnersSubscribe(workspaceFilesRunnersChanged);
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
@@ -7032,6 +7052,8 @@ export function happyAgentWorkspaceStoreCreate(
         unsubscribeList = undefined;
         unsubscribeWorkspaceFiles?.();
         unsubscribeWorkspaceFiles = undefined;
+        unsubscribeComputeRunners?.();
+        unsubscribeComputeRunners = undefined;
         unsubscribeModels?.();
         unsubscribeModels = undefined;
         fileDocumentsReconcileOnStart = true;

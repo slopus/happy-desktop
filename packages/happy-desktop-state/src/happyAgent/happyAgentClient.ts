@@ -374,6 +374,12 @@ export interface HappyAgentWorkspaceClient {
         listener: (change: HappyAgentWorkspaceFilesChanged) => void,
     ): () => void;
     /**
+     * Hints that a machine somewhere may have come or gone: a runner changed,
+     * or the connection may have missed hearing so. Nothing says which agents
+     * it serves, so a listener checks whatever was waiting on one.
+     */
+    computeRunnersSubscribe(listener: () => void): () => void;
+    /**
      * Reads one workspace file as bytes, for showing it rather than editing it.
      * Makes no claim that the file is text, so an image or a video arrives whole.
      */
@@ -594,10 +600,13 @@ export async function happyAgentWorkspaceFileTreeRead(
         });
     } catch (error) {
         // A Happy Cloud server answers `no_compute` while the conversation has
-        // nowhere to run, and a server without the route answers `501`. Neither
-        // is a read that failed, so neither is reported as one.
+        // nowhere to run and `runner_unavailable` while its machine is offline,
+        // and a server without the route answers `501`. None is a read that
+        // failed, so none is reported as one.
         if (error instanceof HappyAgentApiError) {
             if (error.code === "no_compute") return { kind: "unavailable", reason: "noCompute" };
+            if (error.code === "runner_unavailable")
+                return { kind: "unavailable", reason: "computeOffline" };
             if (error.status === 501) return { kind: "unavailable", reason: "unsupported" };
         }
         throw error;
@@ -870,6 +879,23 @@ export function happyAgentWorkspaceClientCreate(
                 },
             });
             return () => connection.close();
+        },
+        computeRunnersSubscribe(listener) {
+            const follow = new AbortController();
+            void (async () => {
+                for await (const input of deps.connection.sync.follow({
+                    signal: follow.signal,
+                    events: ["runners.updated"],
+                })) {
+                    if (
+                        input.kind === "update"
+                            ? input.update.kind === "event"
+                            : input.kind !== "error"
+                    )
+                        listener();
+                }
+            })();
+            return () => follow.abort();
         },
         workspaceFileBytesRead: (groupId, path, signal) =>
             deps.hostServices.workspaceFileBytesRead(groupId, path, signal),

@@ -34,6 +34,7 @@ function checkout() {
     let unavailable: HappyAgentWorkspaceFilesUnavailable | undefined;
     let held: Array<() => void> | undefined;
     let changed: ((change: HappyAgentWorkspaceFilesChanged) => void) | undefined;
+    let runnersChanged: (() => void) | undefined;
     const entry = (path: string, kind: "file" | "directory"): HappyAgentWorkspaceFileTreeEntry => ({
         kind,
         name: path.slice(path.lastIndexOf("/") + 1),
@@ -62,6 +63,16 @@ function checkout() {
         },
         emit(paths: readonly string[] | null): void {
             changed?.({ groupId: GROUP, paths });
+        },
+        /** A runner somewhere changed, naming no agent. */
+        runnersEmit(): void {
+            runnersChanged?.();
+        },
+        runnersSubscribe(listener: () => void): () => void {
+            runnersChanged = listener;
+            return () => {
+                runnersChanged = undefined;
+            };
         },
         async read(path: string): Promise<HappyAgentWorkspaceFileTreeRead> {
             reads.push(path);
@@ -191,6 +202,7 @@ function store(
             workspaceFilesSubscribe: (
                 listener: (change: HappyAgentWorkspaceFilesChanged) => void,
             ) => disk.subscribe(listener),
+            computeRunnersSubscribe: (listener: () => void) => disk.runnersSubscribe(listener),
         } as Record<PropertyKey, unknown>,
         { get: (target, property) => (property in target ? target[property] : inert()) },
     ) as unknown as HappyAgentWorkspaceClient;
@@ -524,6 +536,60 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         unsubscribe();
     });
 
+    it("says compute is offline, and asks again once it comes online", async () => {
+        const disk = checkout();
+        disk.add("README.md");
+        disk.unavailableSet("computeOffline");
+        const chat = cloudChat({ ...POOL, online: false });
+        const { workspace, names, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(workspace.get().workspaceFiles?.unavailable).toBe("computeOffline");
+        expect(workspace.get().workspaceFiles?.directories.get("")).toBeUndefined();
+        expect(workspace.get().workspaceFilesLoading).toBe(false);
+
+        disk.unavailableSet(undefined);
+        chat.computeUpdate(POOL);
+        await settle();
+
+        expect(workspace.get().workspaceFiles?.unavailable).toBeUndefined();
+        expect(names()).toEqual(["README.md"]);
+        unsubscribe();
+    });
+
+    it("asks an offline machine again when a runner changes, and only then", async () => {
+        const disk = checkout();
+        disk.add("README.md");
+        disk.unavailableSet("computeOffline");
+        const chat = cloudChat({ ...POOL, online: false });
+        const { workspace, names, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.fileScopeUpdate(GROUP, "all");
+        await settle();
+        expect(disk.reads).toEqual([""]);
+
+        // Still offline: asked again, and still says so.
+        disk.runnersEmit();
+        await settle();
+        expect(disk.reads).toEqual(["", ""]);
+        expect(workspace.get().workspaceFiles?.unavailable).toBe("computeOffline");
+
+        // The machine came up, but the agent's compute was not restated.
+        disk.unavailableSet(undefined);
+        disk.runnersEmit();
+        await settle();
+        expect(names()).toEqual(["README.md"]);
+
+        // A listed tree has nothing to wait for.
+        disk.runnersEmit();
+        await settle();
+        expect(disk.reads).toEqual(["", "", ""]);
+        unsubscribe();
+    });
+
     it("says a server without the route has no files, and does not ask it again", async () => {
         const disk = checkout();
         disk.unavailableSet("unsupported");
@@ -561,6 +627,17 @@ describe("Reading a checkout directory names why nothing can be listed", () => {
                 }),
             ),
         ).resolves.toEqual({ kind: "unavailable", reason: "noCompute" });
+    });
+
+    it("maps an unreachable machine to offline compute", async () => {
+        await expect(
+            answering(
+                new HappyAgentApiError(503, "Offline.", "runner_unavailable", {
+                    error: "Offline.",
+                    code: "runner_unavailable",
+                }),
+            ),
+        ).resolves.toEqual({ kind: "unavailable", reason: "computeOffline" });
     });
 
     it("maps an unsupported route to a server without files", async () => {
