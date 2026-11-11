@@ -1088,6 +1088,18 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async watchGit(...args: unknown[]) {
             await record("watchGit", args);
+            // Like the daemon, one workspace without a finished checkout refuses the whole watch.
+            const { workspaceIds } = args[0] as { readonly workspaceIds: readonly string[] };
+            for (const workspaceId of workspaceIds) {
+                const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+                if (workspace !== undefined && workspace.initialization.status !== "ready")
+                    throw new HappyAgentApiError(
+                        409,
+                        "The workspace is not available.",
+                        "conflict",
+                        null,
+                    );
+            }
             return { snapshots: {} };
         },
         async *streamEvents(options: EventStreamOptions = {}): AsyncGenerator<EventStreamFrame> {

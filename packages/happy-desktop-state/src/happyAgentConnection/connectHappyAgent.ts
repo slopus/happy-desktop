@@ -2597,8 +2597,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             workspaces: ownerResourceReplace(state.workspaces, workspace),
                         }));
                     publishGroups();
+                    gitWatchReadyRenew(latest, workspace);
                 }),
         );
+
+    /** A checkout that has just been made is watched now, not at the next renewal. */
+    const gitWatchReadyRenew = (before: Workspace | undefined, after: Workspace): void => {
+        if (before?.initialization.status === "ready" || after.initialization.status !== "ready")
+            return;
+        background(renewGitWatch());
+    };
 
     /**
      * Reads one task whole and adopts it with the caller's membership. It is
@@ -2837,6 +2845,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         workspaces: ownerResourceReplace(state.workspaces, workspace),
                     }));
                 publishGroups();
+                gitWatchReadyRenew(current, workspace);
                 return;
             }
             case "agent.created":
@@ -6587,6 +6596,11 @@ async function optional<T>(read: () => Promise<T>): Promise<T | undefined> {
     }
 }
 
+/**
+ * The workspaces one git watch asks for. The daemon refuses the whole watch when any one of them
+ * has no checkout yet or failed to make one, which would leave every row without its changes, so
+ * only finished checkouts are named; one that finishes later is added when it does.
+ */
 function activeGitWorkspaceIds(
     projects: readonly Project[],
     workspaces: readonly Workspace[],
@@ -6598,7 +6612,10 @@ function activeGitWorkspaceIds(
                 .map((project) => project.id),
             ...workspaces
                 .filter(
-                    (workspace) => workspace.archivedAt === null && workspace.status === "active",
+                    (workspace) =>
+                        workspace.archivedAt === null &&
+                        workspace.status === "active" &&
+                        workspace.initialization.status === "ready",
                 )
                 .map((workspace) => workspace.id),
         ]),

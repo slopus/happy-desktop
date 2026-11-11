@@ -637,6 +637,39 @@ it("does not hold the live feed for the git watch", async () => {
     releaseWatch();
 });
 
+it("watches git only for finished checkouts, and adds one once it is made", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.projectSeed({ id: "project-a" });
+    daemon.workspaceSeed("project-a", { id: "workspace-ready" });
+    daemon.workspaceSeed("project-a", {
+        id: "workspace-failed",
+        initialization: { attempt: 1, error: "No checkout.", status: "failed" },
+    });
+    const creating = daemon.workspaceSeed("project-a", {
+        id: "workspace-creating",
+        initialization: { attempt: 1, error: null, status: "initializing" },
+    });
+    const { connection } = harnessOpen(daemon);
+    const groups = groupsWatch(connection);
+    const watched = () =>
+        daemon.calls
+            .filter((call) => call.method === "watchGit")
+            .map((call) => (call.args[0] as { readonly workspaceIds: string[] }).workspaceIds);
+
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    await vi.waitFor(() => expect(watched()).toEqual([["project-a", "workspace-ready"]]));
+
+    daemon.eventEmit("workspace.updated", {
+        workspaceId: creating.id,
+        previousVersion: creating.version,
+        version: "v-ready",
+        changes: { initialization: { attempt: 1, error: null, status: "ready" }, updatedAt: 2 },
+    });
+    await vi.waitFor(() =>
+        expect(watched().at(-1)).toEqual(["project-a", "workspace-ready", "workspace-creating"]),
+    );
+});
+
 it("reports reconnecting after a server drop and resumes from the last applied cursor", async () => {
     const { daemon, groups, chat, sessionId } = await liveHarness();
     const event = daemon.eventEmit("message.created", {
