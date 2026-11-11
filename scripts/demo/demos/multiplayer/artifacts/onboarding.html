@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Onboarding email drafts</title>
+<style>
+    :root {
+        color-scheme: dark;
+        --ink: #f3f5fa;
+        --muted: #9aa3b5;
+        --faint: #6b7385;
+        --line: rgba(255, 255, 255, 0.07);
+        --card: rgba(255, 255, 255, 0.035);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+        font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(80% 60% at 0% 0%, #10324a 0%, #11141b 60%) #11141b;
+        min-height: 100vh;
+        padding: 18px 28px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .tile { flex: none; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .tile img { width: 17px; height: 17px; display: block; }
+    .tile.big { width: 42px; height: 42px; border-radius: 11px; }
+    .tile.big img { width: 24px; height: 24px; }
+    .sky { background: linear-gradient(135deg, #7dd3fc, #0284c7); }
+    .violet { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+    .green { background: linear-gradient(135deg, #6ee7b7, #059669); }
+    .amber { background: linear-gradient(135deg, #fcd34d, #d97706); }
+    .brand { background: linear-gradient(135deg, #38bdf8, #8b5cf6); }
+
+    header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    header .text { flex: 1; min-width: 220px; }
+    .eyebrow { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    h1 { margin: 3px 0 0; font-size: 23px; line-height: 1.15; letter-spacing: -0.02em; }
+    .chip { display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+    .chip i { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; }
+
+    .timeline { display: flex; align-items: center; gap: 0; padding: 0 6px; }
+    .stop { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .stop b { color: var(--ink); font-weight: 600; }
+    .stop .dot { width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18); }
+    .rule { flex: 1; height: 2px; margin: 0 12px; background: linear-gradient(90deg, rgba(56, 189, 248, 0.6), rgba(139, 92, 246, 0.6)); border-radius: 1px; }
+
+    .emails { display: flex; gap: 10px; flex-wrap: wrap; }
+    .email { flex: 1 1 200px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+    .email .head { display: flex; align-items: center; gap: 9px; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+    .email .head .who { flex: 1; min-width: 0; }
+    .email .head b { display: block; font-size: 12.5px; }
+    .email .head span { color: var(--faint); font-size: 11px; }
+    .email .hero { height: 54px; margin: 11px 12px 0; border-radius: 8px; display: flex; align-items: flex-end; padding: 8px 10px; font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
+    .email .body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
+    .email .body p { margin: 0; color: var(--muted); font-size: 12px; }
+    .email .steps { display: flex; flex-direction: column; gap: 5px; }
+    .email .steps div { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--ink); }
+    .email .steps i { width: 14px; height: 14px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 9px; font-weight: 700; color: #0b1220; background: #7dd3fc; }
+    .email .cta { margin-top: auto; align-self: flex-start; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 12px; color: #0b1220; background: linear-gradient(90deg, #38bdf8, #a78bfa); }
+
+    .stats { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat { flex: 1 1 140px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+    .stat .tile { width: 26px; height: 26px; border-radius: 7px; }
+    .stat .tile img { width: 15px; height: 15px; }
+    .stat b { display: block; font-size: 17px; letter-spacing: -0.02em; }
+    .stat span { color: var(--faint); font-size: 11px; }
+</style>
+<header>
+    <div class="tile big brand">{{icon:mail}}</div>
+    <div class="text">
+        <div class="eyebrow">Onboarding Emails · New teams</div>
+        <h1>From invite to the first shared task</h1>
+    </div>
+    <div class="chip"><i></i>Drafts · for review</div>
+</header>
+<div class="timeline">
+    <div class="stop"><div class="dot"></div><b>Day 0</b> server is up</div>
+    <div class="rule"></div>
+    <div class="stop"><div class="dot"></div><b>Day 1</b> first task</div>
+    <div class="rule"></div>
+    <div class="stop"><div class="dot"></div><b>Day 3</b> invite the team</div>
+</div>
+<div class="emails">
+    <section class="email">
+        <div class="head"><div class="tile sky">{{icon:rocket}}</div><div class="who"><b>Your team server is up</b><span>Happy · Day 0</span></div></div>
+        <div class="hero" style="background: linear-gradient(135deg, #0ea5e9, #6366f1)">Welcome to Happy</div>
+        <div class="body">
+            <p>Everyone you invite sees the same tasks, bots and artifacts.</p>
+            <div class="steps"><div><i>1</i>Open the desktop app</div><div><i>2</i>Sign in with your account</div></div>
+            <div class="cta">Open Happy</div>
+        </div>
+    </section>
+    <section class="email">
+        <div class="head"><div class="tile violet">{{icon:sparkles}}</div><div class="who"><b>Start your first shared task</b><span>Happy · Day 1</span></div></div>
+        <div class="hero" style="background: linear-gradient(135deg, #8b5cf6, #ec4899)">Give an agent a job</div>
+        <div class="body">
+            <p>Your whole team can watch it work, and step in when it asks.</p>
+            <div class="steps"><div><i>1</i>Press ⌘N for a new task</div><div><i>2</i>Say what you want done</div></div>
+            <div class="cta">Start a task</div>
+        </div>
+    </section>
+    <section class="email">
+        <div class="head"><div class="tile green">{{icon:people}}</div><div class="who"><b>Bring your team in</b><span>Happy · Day 3</span></div></div>
+        <div class="hero" style="background: linear-gradient(135deg, #10b981, #0ea5e9)">Work side by side</div>
+        <div class="body">
+            <p>Their tasks land in your sidebar the moment they start.</p>
+            <div class="steps"><div><i>1</i>Invite people by email</div><div><i>2</i>Share a bot for the standing jobs</div></div>
+            <div class="cta">Invite people</div>
+        </div>
+    </section>
+</div>
+<div class="stats">
+    <div class="stat"><div class="tile sky">{{icon:mail-open}}</div><div><b>3 emails</b><span>over the first 3 days</span></div></div>
+    <div class="stat"><div class="tile violet">{{icon:time}}</div><div><b>40 s</b><span>to read all three</span></div></div>
+    <div class="stat"><div class="tile amber">{{icon:checkmark-circle}}</div><div><b>1 ask each</b><span>one button per email</span></div></div>
+</div>
+</html>

@@ -1,0 +1,22 @@
+--- a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
++++ b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
+@@ -5078,7 +5078,7 @@
+                               }
+                             : {})}
+                         sidebarShortcut
+-                        windowControls={desktop}
++                        windowControls
+                         windowFullScreen={windowState.fullScreen}
+                         windowTrafficLights={windowState.trafficLights}
+                         connectionRail={windowState.connectionRail}
+--- a/packages/happy-desktop-electron/sources/renderer/renderer.tsx
++++ b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
+@@ -974,7 +974,7 @@
+                 }
+                 reordering={directory.reordering}
+                 reorderError={directory.reorderError}
+-                windowControls={props.platform === "desktop"}
++                windowControls
+                 collapsed={railHidden}
+                 error={directory.error}
+                 {...(props.cloudConnect

@@ -4,9 +4,11 @@
 // second, standalone Happy Agent (personal.mjs) that reaches Happy Core
 // through a real server connection by URL, and the window runs on it.
 //
-// Kirill and Steve wear the pictures the team demo gave them. Anna and Leo
-// are invented teammates with generated portraits, and the four job bots
-// wear generated pictures. Nothing here is read from the real Happy Core
+// Kirill and Steve wear the pictures the team demo gave them. Andrew,
+// Leeroy, Xander and Scoteezy are Happy's own open-source contributors,
+// cast at Kirill's request, wearing their public GitHub pictures; the words
+// and work given to them here are the screenplay's. The job bots wear the
+// app's placeholder pictures. Nothing here is read from the real Happy Core
 // server, a real session, or anyone's `~/.happy`; the bots' jobs are named
 // after the kind of standing work a team gives a bot, and every word they
 // say is this screenplay's.
@@ -20,6 +22,7 @@ import { existsSync } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { coverPath, pages } from "./artifacts/pages.mjs";
 
 const execFile = promisify(execFileCallback);
 
@@ -55,18 +58,32 @@ export const team = {
             photo: "steve.jpg",
         },
         {
-            key: "anna",
-            name: "Anna",
-            email: "anna@happy.example",
-            role: "Growth",
-            photo: "anna.jpg",
+            key: "andrew",
+            name: "Andrew",
+            email: "andrew@happy.example",
+            role: "Engineer",
+            photo: "andrew.jpg",
         },
         {
-            key: "leo",
-            name: "Leo",
-            email: "leo@happy.example",
+            key: "leeroy",
+            name: "Leeroy",
+            email: "leeroy@happy.example",
             role: "Engineer",
-            photo: "leo.jpg",
+            photo: "leeroy.jpg",
+        },
+        {
+            key: "xander",
+            name: "Xander",
+            email: "xander@happy.example",
+            role: "Growth",
+            photo: "xander.jpg",
+        },
+        {
+            key: "scoteezy",
+            name: "Scoteezy",
+            email: "scoteezy@happy.example",
+            role: "Engineer",
+            photo: "scoteezy.jpg",
         },
     ],
 };
@@ -274,7 +291,7 @@ export const releaseBot = {
             reply: "Main is green. Cutting the preview now: macOS first, then Windows.",
         },
         {
-            from: "anna",
+            from: "andrew",
             text: "Tell me when it's out and I'll post the changelog.",
             report: (mention) =>
                 `${mention}, will do. macOS is signed and notarized. Windows is still building.`,
@@ -319,16 +336,25 @@ export const doneTasks = [
         reply: "iOS Send Fixes keeps the composer's frame through the send and the keyboard's return.",
     },
     {
-        owner: "leo",
-        name: "Sync Benchmarks",
-        message: "Benchmark a cold sync on a team server with ten thousand tasks.",
-        reply: "A cold sync of 10k tasks takes 1.8 s; most of it is the task list query.",
-    },
-    {
-        owner: "anna",
+        owner: "xander",
         name: "Onboarding Emails",
         message: "Draft the three onboarding emails for new teams.",
         reply: "Three drafts are in: welcome, your first shared task, and invite your team.",
+    },
+    {
+        owner: "leeroy",
+        name: "Sync Benchmarks",
+        message: "Benchmark a cold sync on a team server with ten thousand tasks.",
+        reply: "A cold sync of 10k tasks takes 1.8 s; most of it is the task list query.",
+        // Steve writes in Leeroy's task through his own sign-in, so the
+        // task's Activity entry carries both their faces.
+        more: [
+            {
+                from: "steve",
+                message: "How does it hold up at 50k tasks?",
+                reply: "The 50k run is next. I'll put it beside the 10k one when it's done.",
+            },
+        ],
     },
 ];
 
@@ -340,19 +366,48 @@ export const artifacts = [
     {
         task: "Activity Feed Design",
         title: "Activity feed mockup",
-        page: `<!doctype html><meta charset="utf-8"><style>body{font:15px system-ui;margin:24px;color:#eee;background:#1c1c1e}h1{font-size:20px}.day{margin:18px 0 6px;color:#999;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.row{padding:10px 12px;border-radius:10px;background:#2a2a2d;margin:6px 0}</style><h1>Activity</h1><div class="day">Today</div><div class="row">Steve started Team Servers</div><div class="row">Release bot cut 2026.11.4</div><div class="day">Yesterday</div><div class="row">Kirill merged iOS Overlay Layout</div>`,
+        page: "feed",
+        summary: "Entries grouped by day, each with its subject, the people who touched it, and a preview when there is one.",
     },
     {
         task: "Sync Benchmarks",
         title: "Cold sync benchmark",
-        page: `<!doctype html><meta charset="utf-8"><style>body{font:15px system-ui;margin:24px;color:#eee;background:#1c1c1e}h1{font-size:20px}td{padding:6px 14px 6px 0}</style><h1>Cold sync, 10k tasks</h1><table><tr><td>Task list query</td><td>1.21 s</td></tr><tr><td>Bots and Surfaces</td><td>0.34 s</td></tr><tr><td>Render</td><td>0.25 s</td></tr><tr><td><b>Total</b></td><td><b>1.80 s</b></td></tr></table>`,
+        page: "benchmark",
+        summary: "A cold sync of 10k tasks takes 1.80 s. Two thirds of it is the task list query, the next thing to index.",
     },
     {
         task: "Onboarding Emails",
         title: "Onboarding email drafts",
-        page: `<!doctype html><meta charset="utf-8"><style>body{font:15px system-ui;margin:24px;color:#eee;background:#1c1c1e;line-height:1.5}h1{font-size:20px}h2{font-size:15px;color:#c4b5fd;margin:18px 0 4px}</style><h1>Onboarding emails</h1><h2>1. Welcome to your team server</h2><p>Your teammates and their agents, in one sidebar.</p><h2>2. Your first shared task</h2><p>Start a task; everyone on the team sees it as it starts.</p><h2>3. Invite your team</h2><p>Add people by email from Settings.</p>`,
+        page: "onboarding",
+        summary: "Three emails for new teams: welcome on day 0, a first shared task on day 1, and inviting the team on day 3.",
     },
 ];
+
+/** An artifact's page and cover, published by the daemon's own tool. */
+async function artifactFiles(key) {
+    const cover = await staged(`covers/${key}.webp`, await readFile(coverPath(key)));
+    return {
+        content: pages[key],
+        files: [{ fromPath: cover, path: "cover.webp" }],
+        cover: "cover.webp",
+    };
+}
+
+/**
+ * The team's shared todo list: Steve makes it, and each teammate adds a todo
+ * through their own sign-in, so its Activity entry carries all their faces.
+ */
+export const checklist = {
+    name: "Launch checklist",
+    owner: "steve",
+    todos: [
+        { from: "steve", text: "Cut the 2026.11 preview" },
+        { from: "leeroy", text: "Index the task list query" },
+        { from: "andrew", text: "Post the changelog" },
+        { from: "xander", text: "Send the launch email" },
+        { from: "scoteezy", text: "Fix Android push before launch" },
+    ],
+};
 
 /** Steve's task that is working when the take opens, and stays working. */
 export const liveTask = {
@@ -374,17 +429,17 @@ export const liveTask = {
  */
 export const arrivals = [
     {
-        owner: "steve",
+        owner: "scoteezy",
         name: "Android Push Fixes",
         message: "Pushes stop on Android after the app sits in the background. Find out why.",
     },
     {
-        owner: "leo",
+        owner: "leeroy",
         name: "Docs Search",
         message: "Add search to the docs site.",
     },
     {
-        owner: "anna",
+        owner: "xander",
         name: "Launch Email",
         message: "Draft the launch email for team servers.",
     },
@@ -602,24 +657,22 @@ export async function reply(payload) {
         const artifact = artifacts.find((entry) => entry.task === task.name);
         if (turn.text === task.message && artifact && !task.subtask) {
             if (turn.answered === 0)
-                return quick([tool("create_artifact", { type: "html", title: artifact.title })]);
-            if (turn.answered === 1) {
-                const results = turn.after
-                    .filter((message) => message.role !== "assistant")
-                    .map(textOf)
-                    .join("\n");
-                const found = results.match(
-                    /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id=")([a-z0-9]{20,32})\b/u,
-                );
-                if (!found) throw new Error(`create_artifact named no artifact: ${results}`);
                 return quick([
-                    tool("write_artifact_file", {
-                        artifactId: found[1],
-                        path: "index.html",
-                        content: artifact.page,
+                    tool("create_artifact", {
+                        type: "html",
+                        title: artifact.title,
+                        summary: artifact.summary,
+                        ...(await artifactFiles(artifact.page)),
                     }),
                 ]);
-            }
+            const results = turn.after
+                .filter((message) => message.role !== "assistant")
+                .map(textOf)
+                .join("\n");
+            const found = results.match(
+                /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id="|happy:\/\/artifacts\/)([a-z0-9]{20,32})\b/u,
+            );
+            if (!found) throw new Error(`create_artifact named no artifact: ${results}`);
             return quick([text(task.reply)]);
         }
         if (turn.text === task.message) {
@@ -649,7 +702,7 @@ export async function reply(payload) {
     // Kirill's answer is taken at once, its words streamed over about 0.4 s.
     if (turn.text === stepIn.answer) return streamed([text(stepIn.reply)]);
 
-    // Desktop Releases: Steve's request is answered at once. Anna's is
+    // Desktop Releases: Steve's request is answered at once. Andrew's is
     // answered on camera in chapter 2, and after that the bot waits on the
     // Windows build with the daemon's own `wait`.
     const [asked, follow] = releaseBot.turns;
@@ -657,7 +710,7 @@ export async function reply(payload) {
     if (turn.text === follow.text) {
         if (turn.answered === 0) {
             const content = [
-                text(follow.report(mention("Anna"))),
+                text(follow.report(mention("Andrew"))),
                 tool("wait", { duration: "20m" }),
             ];
             // Off camera the bot is at work once it has answered and started waiting.

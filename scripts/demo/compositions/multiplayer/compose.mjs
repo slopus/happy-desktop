@@ -20,6 +20,9 @@
  * segment asks for it an even dimming of part of the window, eased in and
  * out over a quarter second.
  *
+ * A segment may hold its take's first frame (`freeze`) or last frame
+ * (`tail`) still for some seconds: the take's own pixels, never repainted.
+ *
  * Segments hand over with a short dissolve. Words never overlap: a caption
  * or card fades out before the dissolve and the next fades in after it.
  */
@@ -483,7 +486,7 @@ function wordsShown(segment, t, first, last) {
 }
 
 /** Every segment as a run of finished frames. */
-async function* segmentFrames(segment, first, last) {
+async function* segmentFrames(segment, first, last, start) {
     const count = Math.round(segment.seconds * fps);
     if (segment.kind === "card") {
         const layer = words.cards.get(segment);
@@ -512,8 +515,25 @@ async function* segmentFrames(segment, first, last) {
     if (!source) throw new Error(`No --take ${segment.take}= was named.`);
     const size = await probe(source);
     const title = segment.title ? words.titles.get(segment.title) : undefined;
+    // A segment may open on its take's first frame held still (`freeze`
+    // seconds): the camera can move in before anything on screen does. It may
+    // close on its take's last frame held still (`tail` seconds), where the
+    // take ends on a settled window.
+    const held = Math.round((segment.freeze ?? 0) * fps);
+    const tail = Math.round((segment.tail ?? 0) * fps);
+    const pictures = (async function* () {
+        let lastPicture;
+        let shown = 0;
+        for await (const picture of takeOpen(source, segment.from, count - held - tail, fps, size)) {
+            if (!lastPicture) for (; shown < held; shown += 1) yield picture;
+            lastPicture = picture;
+            shown += 1;
+            yield picture;
+        }
+        for (; shown < count && lastPicture; shown += 1) yield lastPicture;
+    })();
     let index = 0;
-    for await (const picture of takeOpen(source, segment.from, count, fps, size)) {
+    for await (const picture of pictures) {
         const t = index / fps;
         const rect = windowRect(cut, segment, t);
         const made = await windowLayers(cut, rect, dimsAt(segment, t));
@@ -545,10 +565,19 @@ async function* segmentFrames(segment, first, last) {
             : 0;
         const caption = wordsShown(segment, t, first, last).amount;
         const back = await backdrop.next();
+        const windowOnly = [
+            { input: made.shadow, left: made.halo.left, top: made.halo.top },
+            { input: shaped, left: shown.left, top: shown.top },
+        ];
+        // A still for the page has no caption: the page sets its own words above it.
+        if (stills.has(start + index))
+            cleanStills.set(
+                start + index,
+                await sharp(back, raw).composite(windowOnly).removeAlpha().raw().toBuffer(),
+            );
         yield await sharp(back, raw)
             .composite([
-                { input: made.shadow, left: made.halo.left, top: made.halo.top },
-                { input: shaped, left: shown.left, top: shown.top },
+                ...windowOnly,
                 ...(covered * caption > 0
                     ? [
                           {
@@ -570,6 +599,10 @@ async function* segmentFrames(segment, first, last) {
     if (index !== count)
         throw new Error(`${segment.take} ended after ${index} of ${count} frames.`);
 }
+
+const stills = new Map(options.stills.map((seconds) => [Math.round(seconds * fps), seconds]));
+/** Each still's frame without its caption, by frame, as the segment draws it. */
+const cleanStills = new Map();
 
 const name = options.name ?? cut.id;
 const target = join(options.out, `${name}.mp4`);
@@ -626,7 +659,6 @@ const blend = (from, to, k) => {
     return out;
 };
 
-const stills = new Map(options.stills.map((seconds) => [Math.round(seconds * fps), seconds]));
 const posterFrame = Math.round((options.poster ?? 0) * fps);
 const timeline = [];
 let total = 0;
@@ -637,16 +669,22 @@ for (const [position, segment] of cut.segments.entries()) {
     let index = 0;
     const first = position === 0;
     const last = position === cut.segments.length - 1;
-    for await (const picture of segmentFrames(segment, first, last)) {
+    for await (const picture of segmentFrames(segment, first, last, start)) {
         const out =
             index < dissolve
                 ? blend(previous, picture, ease((index + 1) / (dissolve + 1)))
                 : picture;
         await write(out);
-        if (stills.has(total))
+        if (stills.has(total)) {
+            const at = stills.get(total).toFixed(2);
             await sharp(out, raw)
                 .png()
-                .toFile(join(options.out, `${name}-${stills.get(total).toFixed(2)}s.png`));
+                .toFile(join(options.out, `${name}-${at}s-caption.png`));
+            if (cleanStills.has(total))
+                await sharp(cleanStills.get(total), raw)
+                    .png()
+                    .toFile(join(options.out, `${name}-${at}s.png`));
+        }
         if (total === posterFrame) {
             await sharp(out, raw)
                 .webp({ quality: 92 })
@@ -667,8 +705,9 @@ for (const [position, segment] of cut.segments.entries()) {
         title: label,
         from: start / fps,
         to: total / fps,
-        // Where the segment starts in its take, to find a take's moment in the cut.
-        ...(segment.kind === "window" ? { takeFrom: segment.from } : {}),
+        // The take second drawn at the segment's start (before any frozen
+        // opening), to find a take's moment in the cut.
+        ...(segment.kind === "window" ? { takeFrom: segment.from - (segment.freeze ?? 0) } : {}),
     });
     process.stdout.write(
         `  ${segment.kind.padEnd(7)}${(start / fps).toFixed(2)}–${(total / fps).toFixed(2)} s  ${label}\n`,

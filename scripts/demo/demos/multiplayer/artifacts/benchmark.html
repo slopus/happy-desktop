@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cold sync benchmark</title>
+<style>
+    :root {
+        color-scheme: dark;
+        --ink: #f4f2fa;
+        --muted: #9d99b0;
+        --faint: #6f6b82;
+        --line: rgba(255, 255, 255, 0.07);
+        --card: rgba(255, 255, 255, 0.035);
+        --query: #8b5cf6;
+        --bots: #38bdf8;
+        --render: #f472b6;
+        --good: #34d399;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+        font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(90% 60% at 100% 0%, #2b1446 0%, #131119 60%) #131119;
+        min-height: 100vh;
+        padding: 18px 28px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        font-variant-numeric: tabular-nums;
+    }
+    .tile {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .tile img { width: 17px; height: 17px; display: block; }
+    .tile.big { width: 42px; height: 42px; border-radius: 11px; }
+    .tile.big img { width: 24px; height: 24px; }
+    .violet { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+    .pink { background: linear-gradient(135deg, #f9a8d4, #db2777); }
+    .blue { background: linear-gradient(135deg, #7dd3fc, #0284c7); }
+    .green { background: linear-gradient(135deg, #6ee7b7, #059669); }
+    .amber { background: linear-gradient(135deg, #fcd34d, #d97706); }
+    .brand { background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+
+    header { display: flex; align-items: center; gap: 14px; }
+    header .text { flex: 1; min-width: 0; }
+    .eyebrow { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    h1 { margin: 3px 0 0; font-size: 23px; line-height: 1.15; letter-spacing: -0.02em; }
+    .meta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 9px; border-radius: 999px;
+        background: var(--card); border: 1px solid var(--line);
+        color: var(--muted); font-size: 11.5px; white-space: nowrap;
+    }
+    .chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+
+    .kpis { display: flex; gap: 10px; flex-wrap: wrap; }
+    .kpi {
+        flex: 1 1 150px;
+        padding: 11px 13px 10px;
+        border-radius: 12px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .kpi .top { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .kpi .top .tile { width: 24px; height: 24px; border-radius: 7px; }
+    .kpi .top .tile img { width: 14px; height: 14px; }
+    .kpi .value { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+    .kpi b { font-size: 25px; line-height: 1; letter-spacing: -0.03em; font-weight: 700; }
+    .kpi b small { font-size: 14px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+    .kpi svg { flex: none; }
+    .kpi .note { font-size: 11.5px; color: var(--faint); }
+    .kpi .note.good { color: var(--good); }
+
+    .panels { display: flex; gap: 10px; flex-wrap: wrap; }
+    .panel {
+        flex: 1 1 300px;
+        padding: 12px 15px;
+        border-radius: 12px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        display: flex; flex-direction: column; gap: 10px;
+    }
+    .panel.whole { flex: none; }
+    .panel.wide { flex: 1.45 1 330px; }
+    .panel h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .panel h2 .tile { width: 22px; height: 22px; border-radius: 6px; }
+    .panel h2 .tile img { width: 13px; height: 13px; }
+    .panel h2 span { margin-left: auto; font-weight: 400; color: var(--faint); font-size: 11.5px; }
+
+    .legend { display: flex; gap: 14px; color: var(--muted); font-size: 11.5px; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .legend i { width: 8px; height: 8px; border-radius: 2px; }
+
+    .sizes { display: flex; flex-direction: column; gap: 9px; }
+    .size { display: flex; align-items: center; gap: 10px; }
+    .size label { width: 34px; flex: none; color: var(--muted); font-size: 12px; text-align: right; }
+    .size .track { flex: 1; display: flex; }
+    .size .stack { display: flex; height: 16px; border-radius: 5px; overflow: hidden; gap: 2px; }
+    .size .stack div:nth-child(1) { background: var(--query); }
+    .size .stack div:nth-child(2) { background: var(--bots); }
+    .size .stack div:nth-child(3) { background: var(--render); }
+    .size em { width: 44px; flex: none; font-style: normal; font-weight: 600; font-size: 12px; }
+    .size.current label, .size.current em { color: var(--ink); }
+
+    .queries { display: flex; flex-direction: column; }
+    .query { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+    .query:first-child { border-top: 0; padding-top: 0; }
+    .query code { flex: 1; font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); white-space: nowrap; }
+    .query .mini { width: 70px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); display: flex; }
+    .query .mini div { border-radius: 3px; }
+    .query em { width: 50px; text-align: right; font-style: normal; color: var(--muted); font-size: 12px; }
+
+    .next {
+        display: flex; align-items: center; gap: 14px;
+        padding: 13px 15px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, rgba(139, 92, 246, 0.16), rgba(236, 72, 153, 0.1));
+        border: 1px solid rgba(167, 139, 250, 0.28);
+    }
+    .next .text { flex: 1; min-width: 0; }
+    .next b { display: block; font-size: 13.5px; }
+    .next .text span { color: var(--muted); font-size: 12px; }
+    .next code { font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: #c4b5fd; }
+    .compare { flex: none; display: flex; flex-direction: column; gap: 5px; width: 190px; }
+    .compare div { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+    .compare i { height: 8px; border-radius: 4px; }
+    .compare b { display: inline; font-size: 12px; color: var(--ink); }
+
+    .trace { display: flex; flex-direction: column; gap: 3px; }
+    .span { display: flex; align-items: center; gap: 10px; height: 14px; }
+    .span label { width: 112px; flex: none; font: 11px ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); white-space: nowrap; }
+    .span .lane { flex: 1; position: relative; height: 100%; }
+    .span .lane div { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; }
+    .axis { position: relative; height: 14px; margin-left: 122px; color: var(--faint); font-size: 10.5px; }
+    .axis span { white-space: nowrap; position: absolute; top: 0; transform: translateX(-50%); }
+    .axis span:first-child { transform: none; }
+    .axis span:last-child { transform: translateX(-100%); }
+    footer { display: flex; gap: 14px; color: var(--faint); font-size: 11.5px; flex-wrap: wrap; }
+
+    @media (max-width: 560px) {
+        body { padding: 18px 16px; }
+        header { flex-wrap: wrap; }
+        h1 { font-size: 20px; }
+        .meta { width: 100%; justify-content: flex-start; }
+        .kpi { flex-basis: 140px; }
+        .next { flex-wrap: wrap; }
+        .next .text { flex-basis: calc(100% - 56px); }
+        .compare { width: 100%; }
+        .span label { width: 96px; }
+        .axis { margin-left: 106px; }
+    }
+</style>
+<header>
+    <div class="tile big brand">{{icon:speedometer}}</div>
+    <div class="text">
+        <div class="eyebrow">Sync Benchmarks · Team server</div>
+        <h1>Where a cold sync spends its time</h1>
+    </div>
+    <div class="meta">
+        <div class="chip"><i></i>20 runs · median</div>
+        <div class="chip">Nov 11</div>
+    </div>
+</header>
+<div class="kpis">{{KPIS}}</div>
+<div class="panels">
+    <section class="panel wide">
+        <h2><div class="tile violet">{{icon:stats-chart}}</div>Cold sync by team size<span>seconds</span></h2>
+        <div class="legend">{{LEGEND}}</div>
+        <div class="sizes">{{SIZES}}</div>
+    </section>
+    <section class="panel">
+        <h2><div class="tile blue">{{icon:server}}</div>Slowest queries<span>10k tasks</span></h2>
+        <div class="queries">{{QUERIES}}</div>
+    </section>
+</div>
+<section class="panel whole">
+    <h2><div class="tile pink">{{icon:layers}}</div>One cold sync, end to end<span>Fresh install · 10k tasks · 38 bots</span></h2>
+    <div class="trace">{{TRACE}}</div>
+</section>
+<div class="next">
+    <div class="tile big amber">{{icon:bulb}}</div>
+    <div class="text">
+        <b>Next: index the task list query</b>
+        <span>An index on <code>tasks (team_id, updated_at)</code> takes it from 0.97 s to about 0.15 s.</span>
+    </div>
+    <div class="compare">{{COMPARE}}</div>
+</div>
+</html>

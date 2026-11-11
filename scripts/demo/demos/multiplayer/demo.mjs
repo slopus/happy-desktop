@@ -145,7 +145,7 @@ async function botFacts(clients) {
             .sort();
     }
     try {
-        const { bot } = await clients.anna.createBot({
+        const { bot } = await clients.andrew.createBot({
             name: "Probe",
             username: "probe_bot",
             isAdmin: false,
@@ -153,7 +153,7 @@ async function botFacts(clients) {
         facts.memberCreate = { allowed: true };
         const seenByOwner = Boolean(await botFind(clients[world.owner], "probe_bot"));
         facts.memberCreate.listedForOwner = seenByOwner;
-        await clients.anna.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
+        await clients.andrew.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
     } catch (error) {
         facts.memberCreate = { allowed: false, error: String(error?.message ?? error) };
     }
@@ -162,7 +162,7 @@ async function botFacts(clients) {
 
 /**
  * Desktop Releases' conversation, made once per world: Steve asks and is
- * answered; Anna asks, and the bot's answer to her waits for the camera in
+ * answered; Andrew asks, and the bot's answer to him waits for the camera in
  * chapter 2, or is given at once and the bot waits on its build.
  */
 async function botJobPrepare(clients) {
@@ -179,7 +179,7 @@ async function botJobPrepare(clients) {
         mode: world.agentMode,
     });
     await wait(() => settled(owner, agentId), "Desktop Releases' first answer");
-    // Up to chapter 3, Anna has not written yet: she does on camera.
+    // Up to chapter 3, Andrew has not written yet: he does on camera.
     if (shot === "activity" || shot === "bots") return bot;
     await clients[follow.from].sendMessage(await theirs(follow.from), {
         id: cuid(),
@@ -225,22 +225,58 @@ async function doneTasksPrepare(clients) {
             `the earlier task ${entry.name}`,
             180000,
         );
-        for (const more of entry.more ?? []) {
-            const before = (await client.getMessages(task.agent.id, { limit: 16 })).runs.length;
-            await client.sendMessage(task.agent.id, {
-                id: cuid(),
-                text: more.message,
-                mode: world.agentMode,
-            });
-            await wait(
-                async () =>
-                    (await client.getMessages(task.agent.id, { limit: 16 })).runs.length > before &&
-                    (await settled(client, task.agent.id)),
-                `${entry.name}'s next turn`,
-            );
-        }
+        // The owner's own follow-ups; a teammate's come later (`followUpsPrepare`).
+        for (const more of entry.more ?? []) if (!more.from) await turnSend(clients, task, entry, more);
         process.stdout.write(`    task      ${entry.name}\n`);
     }
+}
+
+/** One more message in an earlier task, and its agent's whole answer. */
+async function turnSend(clients, task, entry, more) {
+    const client = clients[entry.owner];
+    const before = (await client.getMessages(task.agent.id, { limit: 16 })).runs.length;
+    await clients[more.from ?? entry.owner].sendMessage(task.agent.id, {
+        id: cuid(),
+        text: more.message,
+        mode: world.agentMode,
+    });
+    await wait(
+        async () =>
+            (await client.getMessages(task.agent.id, { limit: 16 })).runs.length > before &&
+            (await settled(client, task.agent.id)),
+        `${entry.name}'s next turn`,
+    );
+}
+
+/**
+ * Teammates writing in each other's earlier tasks, through their own sign-ins:
+ * Steve asks Leeroy's benchmark for the 50k run, and its agent publishes the
+ * artifact's next version. In chapter 2 this is the newest thing in Activity.
+ */
+async function followUpsPrepare(clients) {
+    for (const entry of world.doneTasks)
+        for (const more of entry.more ?? []) {
+            if (!more.from) continue;
+            const task = await taskFind(clients[entry.owner], entry.name);
+            await turnSend(clients, task, entry, more);
+            process.stdout.write(`    follow    ${entry.name}: ${more.from}\n`);
+        }
+}
+
+/** The shared todo list, and every teammate's todo in it, each through their own sign-in. */
+async function checklistPrepare(clients) {
+    const list = world.checklist;
+    const { surface } = await clients[list.owner].createSurface({
+        type: "todo",
+        name: list.name,
+        mutationId: randomUUID(),
+    });
+    for (const todo of list.todos) {
+        const client = clients[todo.from];
+        await client.joinSurface(surface.id, { mutationId: randomUUID() }).catch(() => undefined);
+        await client.createTodo(surface.id, { text: todo.text, mutationId: randomUUID() });
+    }
+    process.stdout.write(`    surface   ${list.name}\n`);
 }
 
 /** Archives a task and every subtask under it. */
@@ -395,8 +431,9 @@ export default {
         { scope: "shared", source: "browser-daemon.patch" },
         // The gym's own provider is not one a person has; the picker leaves it out.
         { scope: "demo", source: "../team/patches/gym-provider.patch" },
-        // The window reserves macOS's traffic-light lane, as the packaged app does.
-        { scope: "demo", source: "../team/patches/window-controls.patch" },
+        // The window reserves macOS's traffic-light lane, as the packaged app
+        // does: the team demo's patch, re-cut for the Desktop preview this films.
+        { scope: "demo", source: "patches/window-controls.patch" },
         // Kirill's sign-in to Happy Core, from the gym instead of the browser page.
         { scope: "demo", source: "../team/patches/server-sign-in.patch" },
         // The gym's accounts have no provider to read usage from.
@@ -428,15 +465,8 @@ export default {
             filmed.botFacts = await botFacts(clients);
             process.stdout.write(`    bots      ${JSON.stringify(filmed.botFacts)}\n`);
         }
-        await doneTasksPrepare(clients);
-        await rehearsalsArchive(kirill);
-        const live = await liveTaskPrepare(clients[world.liveTask.owner]);
-        filmed.liveTaskId = live.id;
-        await sidebarArrange(kirill);
         const pending = [];
-        // From chapter 2 on, chapter 1's three tasks are working. Chapter 2
-        // opens on their unread Activity, so there they start after
-        // everything else has been read.
+        // From chapter 2 on, chapter 1's three tasks are working.
         const arrivalsSettle = async () => {
             for (const arrival of world.arrivals) {
                 pending.push(arrivalStart(clients, arrival));
@@ -446,6 +476,16 @@ export default {
                 );
             }
         };
+        // Chapter 2 is about what was made: there chapter 1's tasks are older
+        // than the artifacts, and the newest thing is the team's checklist.
+        await rehearsalsArchive(kirill);
+        if (shot === "activity") await arrivalsSettle();
+        const live = await liveTaskPrepare(clients[world.liveTask.owner]);
+        filmed.liveTaskId = live.id;
+        await doneTasksPrepare(clients);
+        await followUpsPrepare(clients);
+        if (shot !== "activity") await checklistPrepare(clients);
+        await sidebarArrange(kirill);
         if (shot !== "aware") {
             if (shot !== "activity") await arrivalsSettle();
             const bot = await botJobPrepare(clients);
@@ -508,10 +548,20 @@ export default {
         await page.evaluate(() => document.activeElement?.blur?.());
         await page.waitForTimeout(1500);
         for (const client of [...Object.values(clients), personal.client]) await readAll(client);
+        // Chapter 2: the team fills the checklist after Kirill last looked.
         if (shot === "activity") {
-            await arrivalsSettle();
-            for (const arrival of world.arrivals)
-                await sidebarRow(page, arrival.name).waitFor({ timeout: 30000 });
+            await checklistPrepare(clients);
+            await sidebarRow(page, world.checklist.name).waitFor({ timeout: 30000 });
+        }
+        // Chapter 4 opens the benchmark on camera; it was opened once before, so
+        // it draws at once instead of loading.
+        if (shot === "artifacts") {
+            await sidebarRow(page, "Artifacts").click();
+            await page.getByText(world.artifacts[1].title).first().click();
+            await page.getByText("History").first().waitFor({ timeout: 30000 });
+            await page.waitForTimeout(1500);
+            await sidebarRow(page, opening).click();
+            await page.mouse.move(viewport.width - 2, viewport.height - 2);
         }
         await page.waitForTimeout(1500);
 
@@ -592,6 +642,9 @@ export default {
         };
         // The hand, where a chapter has one, rests on the empty middle of the pane.
         const rest = { x: Math.round(viewport.width * 0.62), y: Math.round(viewport.height * 0.2) };
+        // Where the hand goes once it is done: the empty top-left corner of the
+        // title bar, where it hovers nothing, out of every pushed-in view.
+        const away = { x: 40, y: 14 };
         /** The hand glides to a target, dwells a quarter second, and clicks it. */
         const choose = async (target, name) => {
             await demo.moveTo(target);
@@ -602,13 +655,13 @@ export default {
 
         if (shot === "aware") {
             // Chapter 1, "See who's working on what": Kirill is in his own task
-            // and touches nothing. Steve, Leo and Anna start tasks from their
+            // and touches nothing. Scoteezy, Leeroy and Xander start tasks from their
             // own sign-ins, and each one is in Kirill's sidebar as it starts;
             // his Activity counts them.
             await demo.pointerVisible(false);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo);
-            const beats = [1500, 1300, 1600];
+            const beats = [1900, 1900, 2600];
             await demo.hold(Number(process.env.MULTIPLAYER_LEAD_MS ?? 300));
             for (const [index, arrival] of world.arrivals.entries()) {
                 await arrivalFilm(
@@ -624,8 +677,9 @@ export default {
         }
 
         if (shot === "activity") {
-            // Chapter 2, "Catch up on what shipped": Kirill opens Activity, which
-            // counts what his teammates started and what their agents published.
+            // Chapter 2, "Catch up on what shipped": Kirill opens Activity. On top
+            // is the checklist his teammates filled in, then the benchmark Leeroy's
+            // agent published, as a post with its summary and cover.
             const row = sidebarRow(page, "Activity");
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
@@ -634,17 +688,20 @@ export default {
             await choose(row, "activity");
             await until(
                 demo,
-                () => page.getByText(world.arrivals.at(-1).name).nth(1).isVisible(),
+                () => page.getByText(world.artifacts[1].summary).first().isVisible(),
                 "the Activity page",
             );
-            cue("activity-open", demo);
-            await demo.hold(3600);
+            cue("activity-open", demo, await place(page.getByText(world.checklist.name).nth(1)));
+            await demo.hold(500);
+            await demo.moveTo(away);
+            cue("pointer-away", demo);
+            await demo.hold(4400);
         }
 
         if (shot === "bots") {
             // Chapter 3, "Shared bots for the standing jobs": Kirill opens
-            // Desktop Releases, where Steve's request is already answered. Anna
-            // writes in it from her own sign-in, and it answers her.
+            // Desktop Releases, where Steve's request is already answered. Andrew
+            // writes in it from his own sign-in, and it answers him.
             const job = world.releaseBot;
             const [, follow] = job.turns;
             await demo.pointerPlace(rest);
@@ -658,14 +715,16 @@ export default {
                 "Desktop Releases' conversation",
             );
             cue("bot-opened", demo);
-            await demo.hold(1400);
-            const anna = clients[follow.from];
-            const theirs = (await botFind(anna, job.username)).agent.id;
+            await demo.moveTo(away);
+            // Steve's request and its answer stand a while before Andrew writes.
+            await demo.hold(2000);
+            const andrew = clients[follow.from];
+            const theirs = (await botFind(andrew, job.username)).agent.id;
             await arrivalFilm(
                 "message",
                 async () =>
                     void pending.push(
-                        anna.sendMessage(theirs, {
+                        andrew.sendMessage(theirs, {
                             id: cuid(),
                             text: follow.text,
                             mode: world.agentMode,
@@ -679,7 +738,7 @@ export default {
                 "Desktop Releases' answer",
             );
             cue("report", demo);
-            await demo.hold(1800);
+            await demo.hold(3200);
         }
 
         if (shot === "artifacts") {
@@ -695,7 +754,7 @@ export default {
             const entry = page.getByText(artifact.title).first();
             await until(demo, () => entry.isVisible(), "the Artifacts page");
             cue("artifacts-open", demo);
-            await demo.hold(1700);
+            await demo.hold(2600);
             await choose(entry, "artifact");
             await until(
                 demo,
@@ -703,14 +762,11 @@ export default {
                 "the artifact's page",
             );
             cue("artifact-open", demo);
-            // The hand leaves the page's table before the camera reads it.
+            // The hand leaves the page before the camera reads it.
             await demo.hold(300);
-            await demo.moveTo({
-                x: Math.round(viewport.width * 0.7),
-                y: Math.round(viewport.height * 0.8),
-            });
+            await demo.moveTo(away);
             cue("pointer-away", demo);
-            await demo.hold(2400);
+            await demo.hold(3600);
         }
 
         if (shot === "step-in") {
@@ -735,7 +791,7 @@ export default {
                 () => page.getByText(step.askTail).first().isVisible(),
                 "the agent's question",
             );
-            // Where the question stands once asked: the composition dims what is above it.
+            // Where the question stands once asked, for the cut.
             cue("ask", demo, await place(page.getByText(step.askTail).first()));
             await demo.hold(600);
             await demo.click({ ...box, offset: { x: 0.5, y: 0.5 } });
@@ -746,13 +802,15 @@ export default {
                 () => page.keyboard.press("Enter"),
                 () => page.getByText(step.answer).first().isVisible(),
             );
+            // Sent, the hand leaves the composer and the camera's frame.
+            await demo.moveTo(away);
             await until(
                 demo,
                 () => page.getByText(step.reply).first().isVisible(),
                 "the agent's reply",
             );
             cue("reply", demo);
-            await demo.hold(1700);
+            await demo.hold(3000);
         }
 
         await finish();
