@@ -150,6 +150,8 @@ export type ConversationRowContext = {
     readonly errorAssistance?: ConversationErrorAssistance;
     /** What a failure card on this row offers, which sets the buttons it lays out. */
     readonly failure?: ConversationFailureRowContext;
+    /** A question's failed answer, drawn as a banner under it until it is sent again. */
+    readonly requestFailure?: ConversationRequestFailureRowContext;
     /**
      * What the Happy references in message bodies read as now. A reference is
      * laid out as its live title, the words the reader sees, so the row is
@@ -186,6 +188,12 @@ export type ConversationFailureRowContext = {
     /** The picked switch target's key, which sets the split button's label. */
     readonly target?: string;
     readonly clock?: ConversationFailureClock;
+};
+export type ConversationRequestFailureRowContext = {
+    /** Why the answer was not sent, the banner's message. */
+    readonly message: string;
+    /** The banner offers Retry. */
+    readonly retry: boolean;
 };
 /** A failure card whose owner offers nothing: its message and nothing else. */
 const FAILURE_ROW_INERT: ConversationFailureRowContext = {
@@ -485,6 +493,18 @@ const USER_INPUT_ANSWER_LINE = 24;
 const USER_INPUT_OPTION_VERTICAL_PADDING = 8;
 /** 12px parent gap, 4px padding either side of the 28px button. */
 const USER_INPUT_FOOTER_HEIGHT = 48;
+/** `.happy-agent-input` gap above the failed answer's banner. */
+const USER_INPUT_BANNER_GAP = 12;
+/** `.happy-banner`: 12px padding and a 1px border per side, 44px at the least. */
+const BANNER_VERTICAL_CHROME = 26;
+const BANNER_HORIZONTAL_CHROME = 30;
+const BANNER_MIN_HEIGHT = 44;
+/** `.happy-banner` gap between its text and its action, and between title and message. */
+const BANNER_ACTION_GAP = 12;
+const BANNER_TITLE_GAP = 4;
+const BANNER_LINE = 18;
+/** The title `HappyAgentUserInputPrompt` gives a failed answer's banner. */
+const USER_INPUT_FAILURE_TITLE = "Answer not sent";
 /* The card's own 153px, less 1px above its chip and plus 3px above and below
    its footer buttons, which the transcript pads by the chat frame outset. */
 const APPROVAL_CARD_FIXED_CHROME = 153 - 1 + 2 * 3;
@@ -957,6 +977,7 @@ function userInputEyebrowWrap(
 function userInputRequestHeight(
     request: Extract<ConversationRequest, { kind: "userInput" }>,
     width: number,
+    failure: ConversationRequestFailureRowContext | undefined,
     cache?: MessageTextLayoutCache,
 ): number {
     const contentWidth = width - USER_INPUT_HORIZONTAL_MARGIN;
@@ -997,8 +1018,36 @@ function userInputRequestHeight(
         if (question.options.length === 0)
             total += USER_INPUT_CONTENT_INSET + USER_INPUT_ANSWER_LINE;
     }
+    /* A failed answer's banner sits under the questions until it is sent again. */
+    if (failure && request.status !== "answered")
+        total += USER_INPUT_BANNER_GAP + userInputFailureHeight(failure, contentWidth, cache);
     const submitVisible = request.questions.every((question) => question.options.length > 0);
     return 2 * CHAT_FRAME_TEXT_INSET + total + (submitVisible ? USER_INPUT_FOOTER_HEIGHT : 0);
+}
+
+/**
+ * The failed answer's danger banner: its title over the message, beside the
+ * small Retry button when it offers one, all centered in one row.
+ */
+function userInputFailureHeight(
+    failure: ConversationRequestFailureRowContext,
+    width: number,
+    cache?: MessageTextLayoutCache,
+): number {
+    const measure =
+        width -
+        BANNER_HORIZONTAL_CHROME -
+        (failure.retry ? BANNER_ACTION_GAP + smallButtonWidth("Retry", cache) : 0);
+    const text =
+        (uiTextNaturalWidth(USER_INPUT_FAILURE_TITLE, 13, cache, 600) <= measure
+            ? BANNER_LINE
+            : uiTextHeight(USER_INPUT_FAILURE_TITLE, 13, BANNER_LINE, measure, cache)) +
+        BANNER_TITLE_GAP +
+        uiTextHeight(failure.message, 13, BANNER_LINE, measure, cache);
+    return Math.max(
+        BANNER_MIN_HEIGHT,
+        BANNER_VERTICAL_CHROME + Math.max(text, failure.retry ? SMALL_BUTTON_HEIGHT : 0),
+    );
 }
 
 /** Pending permission gate in its default collapsed transcript state. */
@@ -1346,11 +1395,16 @@ export function conversationRowHeight(
         return rowHeightCached(
             cache,
             entry,
-            `request:${String(width)}:${context.expanded ? "expanded" : "collapsed"}:${lead ? "lead" : "plain"}`,
+            `request:${String(width)}:${context.expanded ? "expanded" : "collapsed"}:${lead ? "lead" : "plain"}:${context.requestFailure ? `${context.requestFailure.retry ? "retry" : "failed"}:${context.requestFailure.message}` : ""}`,
             () =>
                 entry.request.kind === "userInput"
                     ? (lead ? ACTIVITY_LEAD_CHROME : 0) +
-                      userInputRequestHeight(entry.request, width, cache?.text)
+                      userInputRequestHeight(
+                          entry.request,
+                          width,
+                          context.requestFailure,
+                          cache?.text,
+                      )
                     : permissionRequestHeight(
                           entry.request,
                           width,

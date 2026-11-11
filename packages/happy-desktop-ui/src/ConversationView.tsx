@@ -78,6 +78,7 @@ import {
     conversationRowHeightCacheCreate,
     conversationRowHeightCachePrune,
     type ConversationFailureRowContext,
+    type ConversationRequestFailureRowContext,
     type ConversationRowContext,
     type ConversationRowHeightCache,
 } from "./conversationRowHeight";
@@ -793,6 +794,21 @@ export function ConversationView(props: ConversationViewProps) {
         switchSource?.usageWatch?.refresh(
             composerModelListedAccounts(switchSource.services, switchSource.selection),
         );
+    const submissionFor = (entry: ConversationEntry | undefined) =>
+        entry?.kind === "request"
+            ? props.requestSubmissions?.find(
+                  (candidate) => candidate.requestId === entry.request.requestId,
+              )
+            : undefined;
+    /* A failed answer's banner is part of its question's row until it is sent again. */
+    const requestFailureFor = (
+        entry: ConversationEntry | undefined,
+    ): ConversationRequestFailureRowContext | undefined => {
+        const submission = submissionFor(entry);
+        return submission?.status === "failed"
+            ? { message: submission.error.message, retry: props.onRequestAnswer !== undefined }
+            : undefined;
+    };
     const failureFor = (
         entry: ConversationEntry | undefined,
     ): ConversationEntryFailureProps | undefined => {
@@ -991,6 +1007,9 @@ export function ConversationView(props: ConversationViewProps) {
             ...((failure) => (failure ? { failure: failureRowContext(failure) } : {}))(
                 failureFor(entry),
             ),
+            ...((failure) => (failure ? { requestFailure: failure } : {}))(
+                requestFailureFor(entry),
+            ),
             expanded: entry === undefined ? false : rowExpanded(entry),
             messageExpanded:
                 entry?.kind === "message" && entry.message.sender?.kind === "human"
@@ -1173,6 +1192,9 @@ export function ConversationView(props: ConversationViewProps) {
                             const placed = [
                                 ...(inlineLayouts.hidden.get(entryKey(entry)) ?? []),
                             ].join(",");
+                            const failure = requestFailureFor(entry);
+                            if (failure)
+                                return `${placed}|${failure.retry ? "retry" : "failed"}:${failure.message}`;
                             const presentation =
                                 entry.kind === "agentActivity" && entry.activity.kind === "tool"
                                     ? entry.activity.tool.presentation
@@ -1244,13 +1266,7 @@ export function ConversationView(props: ConversationViewProps) {
                     >
                         {listEntries.map((entry, index) => {
                             const source = conversationRowSource(index);
-                            const submission =
-                                entry.kind === "request"
-                                    ? props.requestSubmissions?.find(
-                                          (candidate) =>
-                                              candidate.requestId === entry.request.requestId,
-                                      )
-                                    : undefined;
+                            const submission = submissionFor(entry);
                             const inlinePage = inlinePageOf(entry);
                             return (
                                 <ConversationRow
