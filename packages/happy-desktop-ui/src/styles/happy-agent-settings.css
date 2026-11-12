@@ -463,7 +463,7 @@
 }
 
 .happy-agent-members__row,
-.happy-agent-members__created {
+.happy-agent-members__notice {
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -519,20 +519,34 @@
     line-height: 16px;
 }
 
+/*
+ * One line, so a row or the notice keeps its height in a narrow window and
+ * when "Resend in a minute" comes and goes; the whole line is its title.
+ */
+.happy-agent-members__meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-members__refused {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
 .happy-agent-members__name[data-tone="danger"],
-.happy-agent-members__role[data-tone="danger"] {
+.happy-agent-members__role[data-tone="danger"],
+.happy-agent-members__refused[data-tone="danger"] {
     color: var(--status-error);
 }
 
-/* A link is unbounded, so it ends in an ellipsis; Copy holds all of it. */
-.happy-agent-members__link {
-    overflow: hidden;
-    color: var(--text);
-    font-family: var(--happy-font-mono);
-    font-size: 13px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* One height whatever the notice says, so the invite list below never moves. */
+.happy-agent-members__notice {
+    height: 52px;
 }
 
 /* In a narrow window the two buttons take a line of their own under the address. */

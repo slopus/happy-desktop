@@ -64,8 +64,12 @@ export interface HappyAgentInvite {
     readonly saving: boolean;
 }
 
-/** An invite just made. A link is shown this once; an email says whether it went. */
-export type HappyAgentInviteCreated =
+/**
+ * What the invite area says about the last invite change: a link just made,
+ * shown this once; an email just made and whether it went; or why a create,
+ * resend or revoke was refused.
+ */
+export type HappyAgentInviteNotice =
     | {
           readonly type: "link";
           readonly id: string;
@@ -83,7 +87,8 @@ export type HappyAgentInviteCreated =
           readonly expiresAt: number;
           /** A resend this window asked for and the server hasn't answered. */
           readonly saving: boolean;
-      };
+      }
+    | { readonly type: "refused"; readonly error: UserError };
 
 /** How long after an email goes out before the server sends it again. */
 export const HAPPY_AGENT_INVITE_RESEND_COOLDOWN_MS = 60_000;
@@ -108,7 +113,7 @@ export interface HappyAgentMembersSnapshot {
     readonly inviteEmail: string;
     /** Which kind of invite is being made. */
     readonly inviteCreating?: "link" | "email";
-    readonly inviteCreated?: HappyAgentInviteCreated;
+    readonly inviteNotice?: HappyAgentInviteNotice;
     /** Why the list could not be read. */
     readonly error?: UserError;
     /** Why the last change was refused; cleared by the next attempt. */
@@ -131,8 +136,8 @@ export interface HappyAgentMembersStore {
     inviteEmailCreate(roleId: string): void;
     /** Makes a link anyone holding it can join with as `roleId`. */
     inviteLinkCreate(roleId: string): void;
-    /** Forgets the link or delivery shown after an invite was made. */
-    inviteCreatedDismiss(): void;
+    /** Forgets what the invite area says: a link, a delivery or a refusal. */
+    inviteNoticeDismiss(): void;
     /** Sends a pending email invite's email again. */
     inviteResend(inviteId: string): void;
     inviteRevoke(inviteId: string): void;
@@ -312,7 +317,7 @@ export function happyAgentMembersStoreCreate(
                 (invite): HappyAgentInvite => ({ ...invite, saving: saving.has(invite.id) }),
             ),
         );
-        const { error: _cleared, inviteCreated, ...rest } = current;
+        const { error: _cleared, inviteNotice, ...rest } = current;
         store.setState(
             {
                 ...rest,
@@ -322,14 +327,14 @@ export function happyAgentMembersStoreCreate(
                 invites: invites.length === 0 ? NO_INVITES : invites,
                 roleId: read.roleId,
                 manage: read.manage,
-                ...(inviteCreated === undefined
+                ...(inviteNotice === undefined
                     ? {}
                     : {
-                          inviteCreated:
-                              inviteCreated.type === "email" &&
-                              inviteCreated.saving !== saving.has(inviteCreated.id)
-                                  ? { ...inviteCreated, saving: saving.has(inviteCreated.id) }
-                                  : inviteCreated,
+                          inviteNotice:
+                              inviteNotice.type === "email" &&
+                              inviteNotice.saving !== saving.has(inviteNotice.id)
+                                  ? { ...inviteNotice, saving: saving.has(inviteNotice.id) }
+                                  : inviteNotice,
                       }),
             },
             true,
@@ -413,16 +418,30 @@ export function happyAgentMembersStoreCreate(
         load();
     };
 
-    /** Marks one member or invite as changing until the server answers. */
+    /** Says why an invite change was refused, in the invite area rather than above the page. */
+    const inviteRefused = (error: UserError): void => {
+        store.setState({ inviteNotice: { type: "refused", error } }, false);
+    };
+
+    /**
+     * Marks one member or invite as changing until the server answers. A
+     * member's refusal shows above the page; an invite's in the invite area.
+     */
     const change = (
         id: string,
         send: () => Promise<unknown>,
-        refusal: (error: unknown) => UserError = happyAgentUserError,
+        refused: (error: unknown) => void = (error) =>
+            store.setState({ saveError: happyAgentUserError(error) }, false),
     ): void => {
         if (disposed || saving.has(id)) return;
         saving.add(id);
-        const { saveError: _cleared, ...rest } = store.getState();
-        store.setState(rest, true);
+        const { saveError: _cleared, inviteNotice, ...rest } = store.getState();
+        store.setState(
+            inviteNotice === undefined || inviteNotice.type === "refused"
+                ? rest
+                : { ...rest, inviteNotice },
+            true,
+        );
         publish();
         void send().then(
             () => {
@@ -435,14 +454,14 @@ export function happyAgentMembersStoreCreate(
                 saving.delete(id);
                 if (disposed) return;
                 publish();
-                store.setState({ saveError: refusal(error) }, false);
+                refused(error);
             },
         );
     };
 
     const inviteCreate = (roleId: string, email: string | undefined): void => {
         if (disposed || store.getState().inviteCreating !== undefined) return;
-        const { saveError: _cleared, inviteCreated: _previous, ...rest } = store.getState();
+        const { inviteNotice: _previous, ...rest } = store.getState();
         store.setState({ ...rest, inviteCreating: email === undefined ? "link" : "email" }, true);
         void deps
             .request("POST", "v0/invites", {
@@ -454,7 +473,7 @@ export function happyAgentMembersStoreCreate(
                 (answer) => {
                     if (disposed) return;
                     const invite = recordOf(recordOf(answer)?.invite);
-                    const created = ((): HappyAgentInviteCreated | undefined => {
+                    const created = ((): HappyAgentInviteNotice | undefined => {
                         if (typeof invite?.id !== "string") return undefined;
                         const common = {
                             id: invite.id,
@@ -478,14 +497,17 @@ export function happyAgentMembersStoreCreate(
                         created === undefined
                             ? {
                                   ...current,
-                                  saveError: new UserError("The server answered with no invite."),
+                                  inviteNotice: {
+                                      type: "refused",
+                                      error: new UserError("The server answered with no invite."),
+                                  },
                               }
                             : {
                                   ...current,
                                   // The address now has its invite, which a failed
                                   // email resends rather than making another.
                                   ...(created.type === "email" ? { inviteEmail: "" } : {}),
-                                  inviteCreated: created,
+                                  inviteNotice: created,
                               },
                         true,
                     );
@@ -497,10 +519,13 @@ export function happyAgentMembersStoreCreate(
                     store.setState(
                         {
                             ...current,
-                            saveError: inviteUserError(
-                                error,
-                                "Too many invites were made just now. Try again in a minute.",
-                            ),
+                            inviteNotice: {
+                                type: "refused",
+                                error: inviteUserError(
+                                    error,
+                                    "Too many invites were made just now. Try again in a minute.",
+                                ),
+                            },
                         },
                         true,
                     );
@@ -548,8 +573,8 @@ export function happyAgentMembersStoreCreate(
         inviteLinkCreate(roleId) {
             inviteCreate(roleId, undefined);
         },
-        inviteCreatedDismiss() {
-            const { inviteCreated: _dropped, ...rest } = store.getState();
+        inviteNoticeDismiss() {
+            const { inviteNotice: _dropped, ...rest } = store.getState();
             store.setState(rest, true);
         },
         inviteResend(inviteId) {
@@ -561,7 +586,7 @@ export function happyAgentMembersStoreCreate(
                         `v0/invites/${encodeURIComponent(inviteId)}/resend`,
                     );
                     const delivery = recordOf(recordOf(answer)?.invite)?.deliveryStatus;
-                    const created = store.getState().inviteCreated;
+                    const created = store.getState().inviteNotice;
                     if (
                         disposed ||
                         created?.type !== "email" ||
@@ -569,12 +594,14 @@ export function happyAgentMembersStoreCreate(
                         (delivery !== "sent" && delivery !== "failed")
                     )
                         return;
-                    store.setState({ inviteCreated: { ...created, delivery } }, false);
+                    store.setState({ inviteNotice: { ...created, delivery } }, false);
                 },
                 (error) =>
-                    inviteUserError(
-                        error,
-                        "Its email went out less than a minute ago. Resend it in a minute.",
+                    inviteRefused(
+                        inviteUserError(
+                            error,
+                            "Its email went out less than a minute ago. Resend it in a minute.",
+                        ),
                     ),
             );
         },
@@ -583,7 +610,9 @@ export function happyAgentMembersStoreCreate(
                 inviteId,
                 () => deps.request("DELETE", `v0/invites/${encodeURIComponent(inviteId)}`),
                 (error) =>
-                    inviteUserError(error, "Too many changes just now. Try again in a minute."),
+                    inviteRefused(
+                        inviteUserError(error, "Too many changes just now. Try again in a minute."),
+                    ),
             );
         },
         async serverLeave() {
@@ -629,7 +658,7 @@ export const happyAgentMembersStoreNoop: HappyAgentMembersStore = {
     inviteEmailUpdate: () => undefined,
     inviteEmailCreate: () => undefined,
     inviteLinkCreate: () => undefined,
-    inviteCreatedDismiss: () => undefined,
+    inviteNoticeDismiss: () => undefined,
     inviteResend: () => undefined,
     inviteRevoke: () => undefined,
     serverLeave: () => Promise.reject(new Error("Not available here.")),

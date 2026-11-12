@@ -15,7 +15,7 @@ import {
     type HappyAgentAiProviderConnectionRow,
     type HappyAgentProviderAddDialogProps,
     HappyAgentMembersSettings,
-    type HappyAgentInviteCreatedView,
+    type HappyAgentInviteNoticeView,
     type HappyAgentInviteRow,
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
@@ -737,6 +737,9 @@ function AiProvidersSpecimen(props: {
     );
 }
 
+/** Every members state at one size, so their invite areas can be laid over each other. */
+const MEMBERS_WINDOW = { width: 1100, height: 980 } as const;
+
 const membersRoles = [
     { id: "owner", name: "Owner" },
     { id: "admin", name: "Admin" },
@@ -820,7 +823,7 @@ function MembersSpecimen(props: {
     number: string;
     screen: string;
     defaultHistoryOpen?: boolean;
-    inviteCreated?: HappyAgentInviteCreatedView;
+    inviteNotice?: HappyAgentInviteNoticeView;
     inviteCreating?: "link" | "email";
     inviteEmail?: string;
     saveError?: string;
@@ -854,7 +857,7 @@ function MembersSpecimen(props: {
             >
                 <HappyAgentMembersSettings
                     {...(props.defaultHistoryOpen ? { defaultHistoryOpen: true } : {})}
-                    {...(props.inviteCreated ? { inviteCreated: props.inviteCreated } : {})}
+                    {...(props.inviteNotice ? { inviteNotice: props.inviteNotice } : {})}
                     {...(props.inviteCreating ? { inviteCreating: props.inviteCreating } : {})}
                     inviteEmail={inviteEmail}
                     invites={membersInvites}
@@ -887,7 +890,7 @@ function MembersSpecimen(props: {
                         },
                     ]}
                     onDelete={() => Promise.resolve()}
-                    onInviteCreatedDismiss={noop}
+                    onInviteNoticeDismiss={noop}
                     onInviteEmailChange={inviteEmailSet}
                     onInviteEmailCreate={noop}
                     onInviteLinkCreate={noop}
@@ -1835,43 +1838,31 @@ export function HappyAgentSettingsBlueprintPage() {
                 />
             </FullScreenSpecimen>
             <MembersSpecimen
-                detail="Happy Cloud members, seen by an owner: roles to change, a link invite shown once, pending email and link invites, past invites folded, and leaving or deleting the server"
-                inviteCreated={{
-                    type: "link",
-                    link: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
-                    detail: "Member · Expires in 7 days",
-                }}
+                detail="Happy Cloud members, seen by an owner: roles to change, the invite area's hint, pending email and link invites, past invites folded, and leaving or deleting the server"
                 label="Happy Agent settings — members"
                 number="03e"
                 screen="members"
+                window={MEMBERS_WINDOW}
             />
             <MembersSpecimen
-                detail="An email invite just sent, with the address cleared for the next one"
-                inviteCreated={{
-                    type: "email",
-                    id: "i9",
-                    email: "linus@example.com",
-                    delivery: "sent",
-                    detail: "Member · Expires in 7 days",
-                    saving: false,
-                }}
-                label="Happy Agent settings — members, email sent"
+                detail="A link being made: the button keeps its box while it spins"
+                inviteCreating="link"
+                label="Happy Agent settings — members, creating a link"
                 number="03e1"
-                screen="members-email-sent"
+                screen="members-creating-link"
+                window={MEMBERS_WINDOW}
             />
             <MembersSpecimen
-                detail="An email invite whose email didn't go out: the invite is made and can be resent"
-                inviteCreated={{
-                    type: "email",
-                    id: "i9",
-                    email: "linus@example.com",
-                    delivery: "failed",
+                detail="A link invite just made: the link in a field to copy, shown this once"
+                inviteNotice={{
+                    type: "link",
+                    link: "https://join.happybases.com/#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
                     detail: "Member · Expires in 7 days",
-                    saving: false,
                 }}
-                label="Happy Agent settings — members, email failed"
+                label="Happy Agent settings — members, link"
                 number="03e2"
-                screen="members-email-failed"
+                screen="members-link"
+                window={MEMBERS_WINDOW}
             />
             <MembersSpecimen
                 detail="An email invite on its way: the address stays while the server answers"
@@ -1880,33 +1871,105 @@ export function HappyAgentSettingsBlueprintPage() {
                 label="Happy Agent settings — members, sending"
                 number="03e3"
                 screen="members-sending"
+                window={MEMBERS_WINDOW}
             />
             <MembersSpecimen
-                detail="A server that can't send email yet refuses an email invite; a link still works"
-                inviteEmail="linus@example.com"
-                label="Happy Agent settings — members, no email"
+                detail="An email invite just sent, with the address cleared for the next one"
+                inviteNotice={{
+                    type: "email",
+                    id: "i9",
+                    email: "linus@example.com",
+                    delivery: "sent",
+                    detail: "Member · Expires in 7 days",
+                    saving: false,
+                }}
+                label="Happy Agent settings — members, email sent"
                 number="03e4"
-                saveError="This server can't send email yet. Create a link instead."
+                screen="members-email-sent"
+                window={MEMBERS_WINDOW}
+            />
+            <MembersSpecimen
+                detail="An email invite whose email didn't go out: the invite is made and can be resent"
+                inviteNotice={{
+                    type: "email",
+                    id: "i9",
+                    email: "linus@example.com",
+                    delivery: "failed",
+                    detail: "Member · Expires in 7 days",
+                    saving: false,
+                }}
+                label="Happy Agent settings — members, email failed"
+                number="03e5"
+                screen="members-email-failed"
+                window={MEMBERS_WINDOW}
+            />
+            <MembersSpecimen
+                detail="Resending that email: Resend keeps its box while it spins"
+                inviteNotice={{
+                    type: "email",
+                    id: "i9",
+                    email: "linus@example.com",
+                    delivery: "failed",
+                    detail: "Member · Expires in 7 days",
+                    saving: true,
+                }}
+                label="Happy Agent settings — members, resending"
+                number="03e6"
+                screen="members-resending"
+                window={MEMBERS_WINDOW}
+            />
+            <MembersSpecimen
+                detail="A server that can't send email yet refuses an email invite, said in the invite area; a link still works"
+                inviteEmail="linus@example.com"
+                inviteNotice={{
+                    type: "refused",
+                    message: "This server can't send email yet. Create a link instead.",
+                }}
+                label="Happy Agent settings — members, no email"
+                number="03e7"
                 screen="members-no-email"
+                window={MEMBERS_WINDOW}
+            />
+            <MembersSpecimen
+                detail="A resend refused for going too fast"
+                inviteNotice={{
+                    type: "refused",
+                    message: "Its email went out less than a minute ago. Resend it in a minute.",
+                }}
+                label="Happy Agent settings — members, resend too soon"
+                number="03e8"
+                screen="members-rate-limited"
+                window={MEMBERS_WINDOW}
             />
             <MembersSpecimen
                 defaultHistoryOpen
                 detail="Past invites unfolded: accepted by whom and when, revoked, expired and used up"
                 label="Happy Agent settings — members, past invites"
-                number="03e5"
+                number="03e9"
                 screen="members-history"
-                window={{ width: 1100, height: 980 }}
+                window={MEMBERS_WINDOW}
             />
             <MembersSpecimen
                 detail="At the smallest window, 720×640: the invite row keeps every control whole"
-                inviteCreated={{
+                inviteNotice={{
                     type: "link",
-                    link: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    link: "https://join.happybases.com/#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
                     detail: "Member · Expires in 7 days",
                 }}
                 label="Happy Agent settings — members, small window"
-                number="03e6"
+                number="03e10"
                 screen="members-small"
+                window={{ width: 720, height: 640 }}
+            />
+            <MembersSpecimen
+                detail="At the smallest window, a refusal in the invite area"
+                inviteNotice={{
+                    type: "refused",
+                    message: "Too many invites were made just now. Try again in a minute.",
+                }}
+                label="Happy Agent settings — members, small window refused"
+                number="03e11"
+                screen="members-small-refused"
                 window={{ width: 720, height: 640 }}
             />
             <FullScreenSpecimen

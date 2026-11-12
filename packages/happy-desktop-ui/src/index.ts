@@ -1117,7 +1117,7 @@ export {
 } from "./pages/settings/HappyAgentCustomProviderDialog";
 export {
     HappyAgentMembersSettings,
-    type HappyAgentInviteCreatedView,
+    type HappyAgentInviteNoticeView,
     type HappyAgentInviteRow,
     type HappyAgentInviteStatus,
     type HappyAgentMemberRow,

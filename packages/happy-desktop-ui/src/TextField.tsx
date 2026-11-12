@@ -39,6 +39,8 @@ export type TextFieldProps = {
     hint?: string;
     error?: string;
     disabled?: boolean;
+    /** Shows a value to select and copy, such as a link, without letting it be edited. */
+    readOnly?: boolean;
     required?: boolean;
     leadingIcon?: IconName;
     /** Fixed text before the value, such as `@` before a handle; not part of the value. */
@@ -95,6 +97,7 @@ export function TextField(props: TextFieldProps) {
         "onSubmit",
         "onValueChange",
         "placeholder",
+        "readOnly",
         "required",
         "rows",
         "size",
@@ -222,6 +225,7 @@ export function TextField(props: TextFieldProps) {
                             local.onSubmit();
                         }}
                         placeholder={local.placeholder}
+                        readOnly={local.readOnly}
                         ref={(element) => {
                             controlEl.current = element;
                         }}
