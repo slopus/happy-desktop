@@ -35,7 +35,11 @@ import {
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { artifactBesideOpen } from "./artifactOpen";
-import { conversationPreviewOpen, useConversationPreviews } from "./conversationPreviews";
+import {
+    conversationPreviewOpen,
+    useConversationPreviews,
+    type ConversationPreviewContext,
+} from "./conversationPreviews";
 import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
@@ -8056,6 +8060,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     // own — the reader's choice to have it open is untouched here.
                     panel.open && !checkoutClosed ? (
                         <HappyAgentPanelBody
+                            previewContext={{
+                                workspace: props.workspace,
+                                platform: props.platform,
+                                externalOpen: props.onExternalLinkOpen,
+                            }}
                             {...(panelCloseTarget ? { closeShortcut: APP_SHORTCUTS.tabClose } : {})}
                             {...(props.artifacts && props.onArtifactOpen
                                 ? {
@@ -8737,6 +8746,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                     workspace={props.workspace}
                                                 />
                                                 <HappyAgentToolBodies
+                                                    previewContext={{
+                                                        workspace: props.workspace,
+                                                        platform: props.platform,
+                                                        externalOpen: props.onExternalLinkOpen,
+                                                    }}
                                                     activeId={workspace.displayedMainViewId}
                                                     {...(props.artifacts
                                                         ? {
@@ -10101,11 +10115,12 @@ function HappyAgentConversationSurface(props: {
     workspace: HappyAgentWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
-    const previews = useConversationPreviews({
+    const previewBindings = useConversationPreviews({
         workspace,
         entries: conversation.entries,
         onOpen: props.onPreviewOpen,
     });
+    const previews = previewBindings.pages;
     // The one subscription the transcript's references read through: every
     // reference row fans out from this snapshot rather than subscribing itself.
     const titlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
@@ -10549,9 +10564,10 @@ function HappyAgentConversationSurface(props: {
             }
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
             onTracesSeen={(viewer, turnIds) => workspace.turnTracesSeen(viewer, turnIds)}
-            onEntriesSeen={(viewer, entryIds) =>
-                workspace.conversationEntriesSeen(viewer, entryIds)
-            }
+            onEntriesSeen={(viewer, entryIds) => {
+                workspace.conversationEntriesSeen(viewer, entryIds);
+                previewBindings.entriesSeen(viewer, entryIds);
+            }}
             overlay={
                 openImage ? (
                     <ModalOverlay onDismiss={() => workspace.imageClose()} placement="fill">
@@ -11400,6 +11416,7 @@ function HappyAgentDevicesSurface(props: { store: HappyAgentDeviceBridgesStore }
 }
 
 function HappyAgentPanelBody(props: {
+    previewContext: ConversationPreviewContext;
     activity?: HappyAgentConversationSnapshot;
     /**
      * What the open chat has published, offered only where the machine keeps
@@ -11771,6 +11788,7 @@ function HappyAgentPanelBody(props: {
                     transferTargets={PANEL_TRANSFER_TARGETS}
                 >
                     <HappyAgentToolBodies
+                        previewContext={props.previewContext}
                         activeId={props.panel.activeViewId}
                         browserStart={(tabId) => ({
                             tools: [
@@ -12091,9 +12109,17 @@ function mediaWindowShowable(kind: FilePreviewKind): boolean {
 function HappyAgentPanelChatSurface(props: {
     readonly store: HappyAgentPanelStore;
     readonly tabId: HappyAgentPanelTabId;
+    readonly previewContext: ConversationPreviewContext;
 }) {
     const chat = props.store.chat(props.tabId) ?? happyAgentPanelChatNone;
     const snapshot = useSyncExternalStore(chat.subscribe, chat.get, chat.get);
+    const chatSnapshot = snapshot.type === "ready" ? snapshot.chat : undefined;
+    const previewBindings = useConversationPreviews({
+        workspace: props.previewContext.workspace,
+        entries: chatSnapshot?.entries ?? NO_ENTRIES,
+        onOpen: (previewId) => conversationPreviewOpen({ ...props.previewContext, previewId }),
+    });
+    const previews = previewBindings.pages;
     if (snapshot.type === "error")
         return (
             <EmptyState
@@ -12103,9 +12129,20 @@ function HappyAgentPanelChatSurface(props: {
                 title="This chat could not be opened"
             />
         );
-    const chatSnapshot = snapshot.type === "ready" ? snapshot.chat : undefined;
     return (
         <ConversationView
+            {...(previews
+                ? {
+                      inlinePages: {
+                          previews,
+                          artifacts: inlineArtifactsStoreNoop.get(),
+                          artifactsRequest: inlineArtifactsStoreNoop.request,
+                          artifactsContentRequest: inlineArtifactsStoreNoop.contentRequest,
+                          artifactOpen: props.store.artifactViewOpen,
+                          pageOpen: props.previewContext.externalOpen,
+                      },
+                  }
+                : {})}
             {...(chatSnapshot ? { conversationId: chatSnapshot.sessionId } : {})}
             entries={chatSnapshot?.entries ?? []}
             steeringSendId={chatSnapshot?.steeringSendId}
@@ -12115,6 +12152,7 @@ function HappyAgentPanelChatSurface(props: {
             loading={chatSnapshot === undefined}
             onTraceToggle={chat.turnTraceToggle}
             onTracesSeen={chat.turnTracesSeen}
+            onEntriesSeen={previewBindings.entriesSeen}
             running={chatSnapshot?.runStatus === "running"}
         />
     );
@@ -12130,6 +12168,7 @@ const happyAgentPanelChatNone: HappyAgentPanelChatStore = {
 };
 
 function HappyAgentToolBodies(props: {
+    previewContext: ConversationPreviewContext;
     tabs: readonly HappyAgentPanelTabSnapshot[];
     activeId: string | undefined;
     store: HappyAgentPanelStore;
@@ -12263,7 +12302,12 @@ function HappyAgentToolBodies(props: {
                 )
             ) : null}
             {active?.kind === "chat" ? (
-                <HappyAgentPanelChatSurface key={active.id} store={props.store} tabId={active.id} />
+                <HappyAgentPanelChatSurface
+                    key={active.id}
+                    previewContext={props.previewContext}
+                    store={props.store}
+                    tabId={active.id}
+                />
             ) : null}
             {active?.kind === "terminal" ? (
                 <HappyAgentTerminalTab
