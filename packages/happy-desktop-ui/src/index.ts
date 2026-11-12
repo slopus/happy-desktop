@@ -1129,12 +1129,18 @@ export {
 } from "./pages/settings/HappyAgentRepositoriesSettings";
 export {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineEditDialog,
     HappyAgentComputeSettings,
-    type HappyAgentComputeCapacityRow,
+    type HappyAgentComputeAddAccess,
+    type HappyAgentComputeInstallView,
+    type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddDialogProps,
+    type HappyAgentComputeMachineAddDraft,
+    type HappyAgentComputeMachineAddStage,
+    type HappyAgentComputeMachineEditDialogProps,
     type HappyAgentComputeMachineRow,
     type HappyAgentComputeMachineRowStatus,
-    type HappyAgentComputePoolRow,
+    type HappyAgentComputeModeName,
     type HappyAgentComputeSettingsProps,
 } from "./pages/settings/HappyAgentComputeSettings";
 export {

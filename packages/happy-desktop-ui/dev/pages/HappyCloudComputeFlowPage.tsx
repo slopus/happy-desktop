@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
 import {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineEditDialog,
     HappyAgentComputeSettings,
     HappyAgentSettingsShell,
+    type HappyAgentComputeAddAccess,
+    type HappyAgentComputeInstallView,
+    type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddDialogProps,
     type HappyAgentComputeMachineRow,
-    type HappyAgentComputePoolRow,
     type HappyAgentSettingsCategory,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -28,88 +31,82 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 
 const noop = () => undefined;
 
-const pools: readonly HappyAgentComputePoolRow[] = [
-    {
-        id: "default",
-        name: "Default",
-        default: true,
-        machines: { total: 3, online: 2 },
-        sandboxes: { used: 5, total: 16 },
-    },
-    {
-        id: "gpu",
-        name: "GPU",
-        default: false,
-        machines: { total: 1, online: 1 },
-        sandboxes: { used: 1, total: 4 },
-    },
-    {
-        id: "windows",
-        name: "Windows builds",
-        default: false,
-        machines: { total: 0, online: 0 },
-        sandboxes: { used: 0, total: null },
-    },
-];
-
+/** The machines an admin sees: every mode, a held exclusive machine, and their own private one. */
 const machines: readonly HappyAgentComputeMachineRow[] = [
     {
         id: "m1",
-        name: "mac-studio",
-        status: "online",
-        os: "macos",
-        detail: "mac-studio.local · macOS arm64 · Default",
-        sandboxes: { used: 3, total: 8 },
-        agents: 3,
-    },
-    {
-        id: "m2",
         name: "build-01",
         status: "online",
         os: "linux",
-        detail: "build-01.acme.internal · Linux x86_64 · Default",
-        sandboxes: { used: 2, total: 8 },
-        agents: 2,
+        mode: "sandbox",
+        detail: "build-01.acme.internal · Linux x86_64",
+        description: "General builds and tests. Docker is installed; repos check out under /work.",
+        edit: true,
+        release: "none",
+    },
+    {
+        id: "m2",
+        name: "a100-box",
+        status: "busy",
+        os: "linux",
+        mode: "exclusive",
+        detail: "Linux x86_64",
+        description:
+            "GPU box, CUDA 12.4, use for training; repo checkouts under /data. One run at a time, so leave when you are done.",
+        heldBy: "Train the ranking model",
+        edit: true,
+        release: "offered",
     },
     {
         id: "m3",
-        name: "a100-box",
+        name: "steve-mbp",
         status: "online",
-        os: "linux",
-        detail: "Linux x86_64 · GPU",
-        sandboxes: { used: 1, total: 4 },
-        agents: 1,
+        os: "macos",
+        mode: "private",
+        detail: "steve-mbp.local · macOS arm64",
+        description: "My laptop. Xcode 26 and the iOS simulators.",
+        owner: { kind: "reader" },
+        edit: true,
+        release: "none",
     },
     {
         id: "m4",
-        name: "old-mini",
-        status: "draining",
+        name: "team-mac-mini",
+        status: "online",
         os: "macos",
-        detail: "macOS x86_64 · Default · 12 min ago",
-        sandboxes: { used: 0, total: 2 },
-        agents: 0,
-        sandboxError: "Seatbelt profile refused to load",
+        mode: "shared",
+        detail: "mac-mini.local · macOS arm64",
+        description: "Signing keys and the App Store Connect CLI live here.",
+        edit: true,
+        release: "none",
     },
     {
         id: "m5",
-        name: "steve-laptop",
+        name: "kirill-desktop",
         status: "offline",
-        os: "macos",
-        detail: "macOS arm64 · Default · 3 h ago",
-        sandboxes: { used: 0, total: null },
-        agents: 0,
+        os: "windows",
+        mode: "private",
+        detail: "Windows x86_64 · 3 h ago",
+        owner: { kind: "member", name: "Kirill" },
+        edit: true,
+        release: "none",
     },
 ];
 
-/** Runners as a member reads them: the same machines, with less detail. */
-const runners: readonly HappyAgentComputeMachineRow[] = machines.map(
-    ({ sandboxError: _hidden, ...machine }) => ({
+/** The same machines as a member sees them: another member's private machine is hidden. */
+const memberMachines: readonly HappyAgentComputeMachineRow[] = machines
+    .filter((machine) => machine.owner?.kind !== "member")
+    .map((machine) => ({
         ...machine,
-        detail: machine.detail.replace(/ · (Default|GPU)/u, ""),
-        sandboxes: { used: 0, total: null },
-        agents: 0,
-    }),
-);
+        edit: machine.owner?.kind === "reader",
+        release: "none",
+        ...(machine.heldBy ? { heldBy: "an agent" } : {}),
+    }));
+
+const requests: readonly HappyAgentComputeJoinRequestRow[] = [
+    { key: "m3/a1", agent: "Fix the flaky upload test", machine: "steve-mbp", when: "just now" },
+    { key: "m3/a2", agent: "Release notes for 2026.11", machine: "steve-mbp", when: "4 min ago" },
+];
 
 /** The window Happy opens at, and its minimum. */
 const WINDOWS = [
@@ -145,14 +142,21 @@ function Screen(props: { number: string; screen: string; detail: string; childre
     ));
 }
 
-function List(props: { manage: boolean; empty?: boolean }) {
+function List(props: {
+    add: HappyAgentComputeAddAccess;
+    empty?: boolean;
+    requests?: readonly HappyAgentComputeJoinRequestRow[];
+}) {
     return (
         <HappyAgentComputeSettings
+            add={props.add}
             loading={false}
-            machines={props.empty ? [] : props.manage ? machines : runners}
-            manage={props.manage}
+            machines={props.empty ? [] : props.add === "any" ? machines : memberMachines}
             onMachineAdd={noop}
-            pools={props.empty || !props.manage ? [] : pools}
+            onMachineEdit={noop}
+            onMachineRelease={noop}
+            onRequestAnswer={noop}
+            requests={props.requests ?? []}
         />
     );
 }
@@ -160,58 +164,122 @@ function List(props: { manage: boolean; empty?: boolean }) {
 function Add(props: Partial<HappyAgentComputeMachineAddDialogProps>) {
     return (
         <HappyAgentComputeMachineAddDialog
-            creating={false}
+            modes="any"
             onClose={noop}
             onCreate={noop}
-            onPoolChange={noop}
-            poolId="default"
-            pools={pools}
+            onDescriptionChange={noop}
+            onModeChange={noop}
+            onNameChange={noop}
+            stage={{
+                step: "form",
+                draft: { mode: "sandbox", name: "", description: "" },
+                creating: false,
+            }}
             {...props}
         />
     );
 }
 
-const TOKEN = "eyJhbGciOiJFZERTQSJ9.eyJwb29sIjoiZGVmYXVsdCIsImV4cCI6MTc5MzAwMDAwMH0.c2lnbmF0dXJl";
+const TOKEN =
+    "eyJhbGciOiJFZERTQSIsImtpZCI6IjEifQ.eyJzdWIiOiJwb29sOmRlZmF1bHQiLCJleHAiOjE3OTMwMDAwMDB9.c2lnbmF0dXJl";
+const CLUSTER = "https://acme.happy-clusters.com";
+const BASE = "https://get.happy-clusters.com";
+
+/** The install commands exactly as `POST /v0/compute/join-tokens` words them. */
+function install(mode: HappyAgentComputeInstallView["mode"]): HappyAgentComputeInstallView {
+    const sudo = mode === "private" ? "" : "sudo ";
+    return {
+        mode,
+        commands: {
+            unix: `curl -fsSL ${BASE}/install.sh | ${sudo}HAPPY_CLUSTER_URL='${CLUSTER}' HAPPY_JOIN_TOKEN='${TOKEN}' HAPPY_COMPUTE_MODE='${mode}' sh`,
+            windows: `$env:HAPPY_CLUSTER_URL='${CLUSTER}'; $env:HAPPY_JOIN_TOKEN='${TOKEN}'; $env:HAPPY_COMPUTE_MODE='${mode}'; irm ${BASE}/install.ps1 | iex`,
+        },
+        token: TOKEN,
+        clusterUrl: CLUSTER,
+        expires: "Expires in 1 hour",
+    };
+}
 
 export function HappyCloudComputeFlowPage() {
     return (
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's compute: its pools and the machines that joined them, adding a machine with a one-time install command, and the runners a member without pools.manage sees."
+            summary="A Happy Cloud server's compute: the machines agents join and their modes, the agents asking to join the reader's private machines, adding a machine with a one-time install command, and editing a machine's name and description."
             title="Happy Cloud compute flow"
             width={WINDOWS[0].width + 96}
         >
             <Screen detail="no compute yet" number="01" screen="01-empty">
-                <List empty manage />
+                <List add="any" empty />
             </Screen>
-            <Screen detail="pools and machines, for a pool manager" number="02" screen="02-list">
-                <List manage />
+            <Screen detail="machines in all four modes, for an admin" number="02" screen="02-list">
+                <List add="any" />
             </Screen>
-            <Screen detail="runners, for a member" number="03" screen="03-runners">
-                <List manage={false} />
+            <Screen detail="machines, for a member" number="03" screen="03-member">
+                <List add="private" />
             </Screen>
-            <Screen detail="adding a machine: choosing its pool" number="04" screen="04-add">
-                <List manage />
-                <Add />
+            <Screen detail="agents asking to join" number="04" screen="04-join-requests">
+                <List add="private" requests={requests} />
             </Screen>
-            <Screen detail="the one-time install command" number="05" screen="05-add-command">
-                <List manage />
+            <Screen detail="adding a machine, as an admin" number="05" screen="05-add-admin">
+                <List add="any" />
                 <Add
-                    install={{
-                        commands: {
-                            unix: `curl -fsSL https://acme.happy.dev/install.sh | sh -s -- --join ${TOKEN}`,
-                            windows: `iwr -useb https://acme.happy.dev/install.ps1 | iex; Install-Happy -Join ${TOKEN}`,
+                    stage={{
+                        step: "form",
+                        draft: {
+                            mode: "sandbox",
+                            name: "build-02",
+                            description: "Second build box. Docker and Node 24.",
                         },
-                        token: TOKEN,
-                        clusterUrl: "https://acme.happy.dev",
-                        expires: "Expires in 1 hour",
+                        creating: false,
                     }}
                 />
             </Screen>
-            <Screen detail="the server has no compute set up" number="06" screen="06-add-refused">
-                <List manage />
-                <Add error="This server isn't set up to run machines yet." />
+            <Screen detail="adding a machine, as a member" number="06" screen="06-add-member">
+                <List add="private" />
+                <Add
+                    modes="private"
+                    stage={{
+                        step: "form",
+                        draft: { mode: "private", name: "", description: "" },
+                        creating: false,
+                    }}
+                />
+            </Screen>
+            <Screen detail="the sandbox install command" number="07" screen="07-install-sandbox">
+                <List add="any" />
+                <Add stage={{ step: "install", install: install("sandbox") }} />
+            </Screen>
+            <Screen detail="the private install command" number="08" screen="08-install-private">
+                <List add="private" />
+                <Add modes="private" stage={{ step: "install", install: install("private") }} />
+            </Screen>
+            <Screen detail="the shared install command" number="09" screen="09-install-shared">
+                <List add="any" />
+                <Add stage={{ step: "install", install: install("shared") }} />
+            </Screen>
+            <Screen detail="editing a machine" number="10" screen="10-edit">
+                <List add="any" />
+                <HappyAgentComputeMachineEditDialog
+                    description="GPU box, CUDA 12.4, use for training; repo checkouts under /data. One run at a time, so leave when you are done."
+                    name="a100-box"
+                    onClose={noop}
+                    onDescriptionChange={noop}
+                    onNameChange={noop}
+                    onSave={noop}
+                    saving={false}
+                />
+            </Screen>
+            <Screen detail="the server has no compute set up" number="11" screen="11-add-refused">
+                <List add="any" />
+                <Add
+                    stage={{
+                        step: "form",
+                        draft: { mode: "shared", name: "", description: "" },
+                        creating: false,
+                        error: "This server isn't set up to run machines yet.",
+                    }}
+                />
             </Screen>
         </ComponentPage>
     );
