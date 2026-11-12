@@ -134,6 +134,10 @@ import {
     type HappyAgentComputeStore,
 } from "./happyAgentComputeStore.js";
 import {
+    happyAgentPreviewsStoreCreate,
+    type HappyAgentPreviewsStore,
+} from "./happyAgentPreviewsStore.js";
+import {
     happyAgentDailyUsageStoreCreate,
     type HappyAgentDailyUsageStore,
 } from "./happyAgentDailyUsageStore.js";
@@ -264,6 +268,8 @@ export interface HappyAgentWorkspaceClient {
     repositories(): HappyAgentRepositoriesStore | undefined;
     /** Settings › Compute on Happy Cloud: its pools and machines; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
+    /** Cloud development previews; undefined on ordinary Happy Agent connections. */
+    previews(): HappyAgentPreviewsStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
     dailyUsage(): HappyAgentDailyUsageStore | undefined;
     /**
@@ -730,6 +736,7 @@ export function happyAgentWorkspaceClientCreate(
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
+    let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
     const userProfileStores = new Map<string, HappyAgentUserProfileStore>();
@@ -1157,6 +1164,13 @@ export function happyAgentWorkspaceClientCreate(
             computeStore ??= happyAgentComputeStoreCreate({ request });
             return computeStore;
         },
+        previews() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            previewsStore ??= happyAgentPreviewsStoreCreate({ request });
+            return previewsStore;
+        },
         dailyUsage() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const read = deps.dailyUsageRead;
@@ -1393,6 +1407,8 @@ export function happyAgentWorkspaceClientCreate(
             repositoriesStore = undefined;
             computeStore?.[Symbol.dispose]();
             computeStore = undefined;
+            previewsStore?.[Symbol.dispose]();
+            previewsStore = undefined;
             dailyUsageStore?.[Symbol.dispose]();
             dailyUsageStore = undefined;
             membersStore?.[Symbol.dispose]();

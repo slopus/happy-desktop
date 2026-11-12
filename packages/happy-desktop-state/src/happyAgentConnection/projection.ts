@@ -1,4 +1,5 @@
 import type { ConversationUi } from "../chatUi/chatUi.js";
+import { happyAgentPreviewResultRead } from "../happyAgent/happyAgentPreviewsStore.js";
 import {
     chatUiConversation,
     chatUiMessage,
@@ -1903,6 +1904,10 @@ function messageElementsProject(
             /* As for the message's own `quick_replies` block. */
         } else if (block.type === "tool_call") {
             const presentation = block.presentation;
+            const preview =
+                block.name === "open_preview" && block.status === "completed"
+                    ? happyAgentPreviewResultRead(block.result)
+                    : undefined;
             elements.push({
                 ...base,
                 id,
@@ -1912,16 +1917,20 @@ function messageElementsProject(
                 arguments: block.arguments ?? {},
                 argumentsComplete: true,
                 status: projectToolStatus(block.status, runStatus),
-                ...(block.result === undefined ? {} : { result: stringify(block.result) }),
-                ...(presentation === undefined ||
-                presentation.type === "ui" ||
-                presentation.type === "quick_replies"
+                ...(block.result === undefined || preview
                     ? {}
-                    : {
-                          presentation: projectToolPresentation(presentation, (index) =>
-                              reader.mediaUrl(reader.agentId, block.id, index),
-                          ),
-                      }),
+                    : { result: stringify(block.result) }),
+                ...(preview
+                    ? { presentation: { kind: "preview" as const, ...preview } }
+                    : presentation === undefined ||
+                        presentation.type === "ui" ||
+                        presentation.type === "quick_replies"
+                      ? {}
+                      : {
+                            presentation: projectToolPresentation(presentation, (index) =>
+                                reader.mediaUrl(reader.agentId, block.id, index),
+                            ),
+                        }),
                 // Only a reviewed call carries elevation, and only the granted
                 // one is worth carrying: "not elevated" is the ordinary case
                 // every unreviewed call is already in.

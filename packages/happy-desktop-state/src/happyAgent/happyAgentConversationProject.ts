@@ -1192,6 +1192,7 @@ function happyAgentConnectGroupProject(
                 (entry.activity.tool.presentation?.type === "fileDiff" ||
                     entry.activity.tool.presentation?.type === "media" ||
                     entry.activity.tool.presentation?.type === "artifact" ||
+                    entry.activity.tool.presentation?.type === "preview" ||
                     entry.activity.tool.presentation?.type === "page")) ||
             (entry.kind === "notice" && !noticeInformational(entry)),
     );
@@ -1455,6 +1456,14 @@ function presentationProject(
     agents: HappyAgentConversationInput["agentIdentities"],
 ): ConversationActivityPresentation | undefined {
     switch (presentation.kind) {
+        case "preview":
+            return {
+                type: "preview",
+                previewId: presentation.previewId,
+                agentId: presentation.agentId,
+                port: presentation.port,
+                url: presentation.url,
+            };
         case "agent_spawn": {
             // The agent it made, as the window knows it now.
             const agent =

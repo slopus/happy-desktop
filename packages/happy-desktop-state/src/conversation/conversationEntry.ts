@@ -339,6 +339,13 @@ export function conversationMediaOrder(
 /** The rich body an activity expands into, when the producer knows its shape. */
 export type ConversationActivityPresentation =
     | {
+          readonly type: "preview";
+          readonly previewId: string;
+          readonly agentId: string;
+          readonly port: number;
+          readonly url: string;
+      }
+    | {
           readonly type: "agentSpawn";
           /** The catalog identity resolved for this spawn, never a live lookup. */
           readonly model?: {
