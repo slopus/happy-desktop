@@ -110,6 +110,10 @@ export type {
     HappyAgentToolMediaDocumentView,
 } from "./happyAgent/happyAgentToolMediaDocumentStore.js";
 export type { HappyAgentArtifactLiveTarget, HappyAgentArtifacts } from "./artifacts/artifacts.js";
+export type {
+    HappyAgentArtifactCreationSnapshot,
+    HappyAgentArtifactCreationStore,
+} from "./artifacts/artifactCreationStore.js";
 export * from "./feed/feed.js";
 export type {
     HappyAgentInlineArtifact,

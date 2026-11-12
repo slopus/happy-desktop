@@ -193,6 +193,11 @@ export interface HappyAgentSessionDeps {
      * to a row that no longer exists.
      */
     readonly groupForget: (groupId: string) => void;
+    /**
+     * Every group the host's first catalog read listed, so places remembered
+     * from an earlier run inside groups archived since can leave navigation.
+     */
+    readonly groupsListed?: (groupIds: ReadonlySet<string>) => void;
     /** Takes bot subtasks the host stopped listing out of this window's navigation. */
     readonly subtasksForget: (
         removed: readonly HappyAgentSessionLocation[],
@@ -635,6 +640,9 @@ export function happyAgentConnectionOpen(input: {
                             return;
                         case "groupRemoved":
                             input.deps.groupForget(event.groupId);
+                            return;
+                        case "groupsListed":
+                            input.deps.groupsListed?.(event.groupIds);
                             return;
                         case "subtasksRemoved":
                             input.deps.subtasksForget(event.removed, event.open);

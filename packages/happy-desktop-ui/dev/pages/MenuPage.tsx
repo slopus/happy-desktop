@@ -33,6 +33,29 @@ const grouped: MenuItem[] = [
     { kind: "item", id: "muted", label: "Include muted", icon: "bell", disabled: true },
 ];
 
+/** Rows that say when: the name gives way, the time stays whole. */
+const dated: MenuItem[] = [
+    { kind: "label", label: "Open" },
+    { kind: "item", id: "one", label: "Refactor the router", icon: "chat", detail: "now" },
+    {
+        kind: "item",
+        id: "two",
+        label: "Address local sessions by URL through a cloud-shaped router",
+        icon: "chat",
+        detail: "12m",
+    },
+    { kind: "separator" },
+    { kind: "label", label: "Closed" },
+    {
+        kind: "item",
+        id: "three",
+        label: "Fix the flaky upload test",
+        icon: "archive",
+        detail: "3h",
+    },
+    { kind: "item", id: "four", label: "Weekly plan usage", icon: "archive", detail: "10/19" },
+];
+
 const textOnly: MenuItem[] = [
     { kind: "item", id: "rename", label: "Rename" },
     { kind: "item", id: "duplicate", label: "Duplicate", shortcut: "⌘D" },
@@ -245,6 +268,18 @@ export function MenuPage() {
                 >
                     <div style={{ padding: "28px" }}>
                         <Menu items={createAndModify} width={220} />
+                    </div>
+                </Specimen>
+
+                <Specimen
+                    detail="a quiet word after the name, such as when · 12px secondary, tabular figures · stays whole while a long name ends in an ellipsis 8px before it"
+                    label="Rows with a detail"
+                    number="M-09"
+                    stage="app"
+                >
+                    <div style={{ padding: "28px" }}>
+                        <Menu items={dated} label="Chats" width={300} />
+                        <DimensionRule label="width 300 · detail flush 8 from the row's edge" />
                     </div>
                 </Specimen>
             </div>
