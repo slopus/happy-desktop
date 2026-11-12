@@ -21,6 +21,7 @@ import {
     happyAgentRouterConnectionForget,
     happyAgentRouterGroupForget,
     happyAgentRouterHappyLinkOpen,
+    happyAgentRouterExternalLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
     HappyAgentConnectionBoundary,
@@ -2082,11 +2083,13 @@ if (mediaPreviewBridge) {
             resolve: (instanceId) => happyAgentDirectoryLinkTarget(happyAgents.get(), instanceId),
             open(id, url) {
                 happyAgents.happyAgentActivate(id);
-                happyAgentRouterHappyLinkOpen(
+                // The connection may have gone live this instant, with the
+                // window's address not applied to it yet: the link waits for that.
+                void happyAgentRouterExternalLinkOpen(
                     connectionUis.get(id)?.router ?? happyAgentRouter,
                     url,
                     id,
-                );
+                ).catch(() => undefined);
             },
         });
         appDisposers.push(() => happyLinkInbox[Symbol.dispose]());

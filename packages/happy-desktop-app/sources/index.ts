@@ -59,6 +59,7 @@ export {
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
     happyAgentRouterHappyLinkOpen,
+    happyAgentRouterExternalLinkOpen,
     happyAgentRouterWorkspaceVisible,
     happyAgentRouterConnectionForget,
     happyAgentRouterGroupForget,
