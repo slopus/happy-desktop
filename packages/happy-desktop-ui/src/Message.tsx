@@ -2936,6 +2936,9 @@ export function MessageList(props: MessageListProps) {
         const geometryChanged: ResizeObserverCallback = (entries) => {
             const width = entries[0]!.contentRect.width;
             const height = entries[0]!.contentRect.height;
+            // A retained hidden view must report its rows again when shown,
+            // even when the restored range has exactly the same indices.
+            if (height <= 0) visibleRowsReported.current = undefined;
             /* ResizeObserver runs after layout. Rebuild every keyed size from
                that fractional content box before publishing the rect to
                TanStack. Rounding up can lose a wrapped line and overlap the
@@ -3784,6 +3787,8 @@ export function MessageList(props: MessageListProps) {
               });
         observer?.observe(element, { characterData: true, childList: true, subtree: true });
         return () => {
+            // Activity disconnects this lifetime while preserving the row DOM.
+            visibleRowsReported.current = undefined;
             wheelExpiryCancel();
             wheelScrollPending.current = false;
             // Activity may have disconnected the ref already. Capture from
