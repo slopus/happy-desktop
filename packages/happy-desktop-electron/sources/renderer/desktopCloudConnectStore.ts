@@ -50,11 +50,28 @@ export interface DesktopCloudConnectStore {
     testPasswordUpdate(password: string): void;
     /** Signs in to a test account, then lists its servers as after the browser. */
     testSignIn(): void;
+    /** The welcome's Continue with email, where the shell can sign in that way. */
+    emailOpen(): void;
+    emailUpdate(email: string): void;
+    /** Has Happy Cloud email a code to the address typed in, then asks for it. */
+    emailCodeSend(): void;
+    emailCodeUpdate(code: string): void;
+    /** Signs in with the emailed code, then lists the servers as after the browser. */
+    emailCodeVerify(): void;
+    /** Another code to the same address, once the cooldown has passed. */
+    emailCodeResend(): void;
+    /** From the code back to the address, kept as typed. */
+    emailChangeOpen(): void;
 }
 
 /** Presses on the logo, all within the window, that reveal test sign-in. */
 const LOGO_PRESSES = 10;
 const LOGO_WINDOW_MS = 4000;
+
+/** How long after a code is sent before another can be asked for. */
+const RESEND_COOLDOWN_MS = 60_000;
+/** How often the email steps' countdowns are read again. */
+const COUNTDOWN_TICK_MS = 250;
 
 /** How long typing pauses before a new server name is checked. */
 const AVAILABILITY_DELAY_MS = 300;
@@ -86,6 +103,11 @@ export function desktopCloudConnectStoreCreate(input: {
     const now = input.now ?? Date.now;
     let logoPresses: number[] = [];
     const { cloud, bridge } = input;
+    const { emailCodeStart, emailCodeVerify } = cloud;
+    const emailSignIn =
+        emailCodeStart !== undefined && emailCodeVerify !== undefined
+            ? { start: emailCodeStart, verify: emailCodeVerify }
+            : undefined;
     const listeners = new Set<() => void>();
     let view: CloudConnectView | undefined;
     // Opened from the start page rather than the sidebar's "+".
@@ -95,6 +117,7 @@ export function desktopCloudConnectStoreCreate(input: {
     ): CloudConnectView => ({
         kind: "welcome",
         ...(fromStart ? { start: true } : {}),
+        ...(emailSignIn ? { emailSignIn: true } : {}),
         ...(testSignIn ? { testSignIn } : {}),
     });
     // Each opening of the screen; an answer for an earlier one changes nothing.
@@ -269,6 +292,97 @@ export function desktopCloudConnectStoreCreate(input: {
         set(undefined);
     };
 
+    type EmailView = Extract<CloudConnectView, { kind: "email" | "emailCode" }>;
+    // When Resend is offered again, and, after Happy Cloud said there were
+    // too many tries, when it takes another and what it said; both read as
+    // seconds on the steps.
+    let resendAt = 0;
+    let waiting: { readonly until: number; readonly message: string } | undefined;
+    let countdownTimer: ReturnType<typeof setInterval> | undefined;
+    const secondsUntil = (at: number): number => Math.max(0, Math.ceil((at - now()) / 1000));
+    /** An email step with its countdowns as they stand now. */
+    const emailTimed = (next: EmailView): EmailView => {
+        const wait = waiting ? secondsUntil(waiting.until) : 0;
+        const { wait: _wait, ...rest } = next;
+        let timed: EmailView = rest;
+        if (waiting && wait > 0) timed = { ...rest, wait, error: waiting.message };
+        else if (waiting) {
+            // The wait is over, and its refusal with it.
+            waiting = undefined;
+            timed = { ...rest, error: undefined };
+        }
+        return timed.kind === "emailCode" ? { ...timed, resendIn: secondsUntil(resendAt) } : timed;
+    };
+    const countdownStop = (): void => {
+        if (countdownTimer) clearInterval(countdownTimer);
+        countdownTimer = undefined;
+    };
+    const emailSet = (next: EmailView): void => {
+        const timed = emailTimed(next);
+        set(timed);
+        const counting = Boolean(timed.wait) || (timed.kind === "emailCode" && timed.resendIn > 0);
+        if (!counting) countdownStop();
+        else
+            countdownTimer ??= setInterval(() => {
+                if (view?.kind !== "email" && view?.kind !== "emailCode") {
+                    countdownStop();
+                    return;
+                }
+                const timed = emailTimed(view);
+                if (
+                    timed.wait !== view.wait ||
+                    (timed.kind === "emailCode" &&
+                        view.kind === "emailCode" &&
+                        timed.resendIn !== view.resendIn)
+                )
+                    emailSet(timed);
+            }, COUNTDOWN_TICK_MS);
+    };
+    /** A refused email step: why, and how long to wait when there were too many tries. */
+    const emailRefused = (
+        next: EmailView,
+        answer: { readonly message: string; readonly retryAfter?: number },
+    ): void => {
+        if (answer.retryAfter !== undefined)
+            waiting = { until: now() + answer.retryAfter * 1000, message: answer.message };
+        emailSet({ ...next, error: answer.message });
+    };
+    const unreachable = { message: "Happy Cloud isn't reachable right now." } as const;
+    /** Sends a code; `resend` stays on the code step either way. */
+    const emailCodeRequest = (email: string, from: EmailView, resend: boolean): void => {
+        if (!emailSignIn) return;
+        generation += 1;
+        const asked = generation;
+        emailSet(
+            from.kind === "emailCode"
+                ? { ...from, resending: true, resent: undefined, error: undefined }
+                : { ...from, busy: true, error: undefined },
+        );
+        void emailSignIn
+            .start(email)
+            .catch(() => ({ ok: false as const, ...unreachable }))
+            .then((answer) => {
+                if (!current(asked) || (view?.kind !== "email" && view?.kind !== "emailCode"))
+                    return;
+                const settled: EmailView =
+                    view.kind === "emailCode"
+                        ? { ...view, resending: undefined }
+                        : { ...view, busy: undefined };
+                if (!answer.ok) {
+                    emailRefused(settled, answer);
+                    return;
+                }
+                resendAt = now() + RESEND_COOLDOWN_MS;
+                emailSet({
+                    kind: "emailCode",
+                    email,
+                    code: resend && settled.kind === "emailCode" ? settled.code : "",
+                    resendIn: 0,
+                    ...(resend ? { resent: true } : {}),
+                });
+            });
+    };
+
     return {
         get: () => view,
         subscribe(listener) {
@@ -325,6 +439,7 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         connectCancel() {
             generation += 1;
+            countdownStop();
             if (attemptId !== undefined) void bridge.serverSignInCancel?.(attemptId);
             attemptId = undefined;
             if (availabilityTimer) clearTimeout(availabilityTimer);
@@ -379,7 +494,16 @@ export function desktopCloudConnectStoreCreate(input: {
             set({ kind: "join", name: "", code: "" });
         },
         back() {
-            // Leaving the browser sign-in, or a failure, lands on the Cloud's welcome.
+            // Leaving the browser sign-in, an email step, or a failure lands
+            // on the Cloud's welcome.
+            if (view?.kind === "email" || view?.kind === "emailCode") {
+                if (view.busy) return;
+                generation += 1;
+                countdownStop();
+                logoPresses = [];
+                set(welcome());
+                return;
+            }
             if (view?.kind === "signingIn" || view?.kind === "failed") {
                 generation += 1;
                 if (attemptId !== undefined) void bridge.serverSignInCancel?.(attemptId);
@@ -520,6 +644,67 @@ export function desktopCloudConnectStoreCreate(input: {
                             }),
                         );
                 });
+        },
+        emailOpen() {
+            if (!emailSignIn || view?.kind !== "welcome" || view.testSignIn?.busy) return;
+            emailSet({ kind: "email", email: "" });
+        },
+        emailUpdate(email) {
+            if (view?.kind !== "email" || view.busy) return;
+            emailSet({ ...view, email, error: undefined });
+        },
+        emailCodeSend() {
+            if (view?.kind !== "email" || view.busy || view.wait) return;
+            const email = view.email.trim();
+            if (email === "") return;
+            emailCodeRequest(email, view, false);
+        },
+        emailCodeUpdate(code) {
+            if (view?.kind !== "emailCode" || view.busy) return;
+            emailSet({ ...view, code, resent: undefined, error: undefined });
+        },
+        emailCodeVerify() {
+            if (!emailSignIn || view?.kind !== "emailCode") return;
+            if (view.busy || view.resending || view.wait) return;
+            const { email } = view;
+            const code = view.code.trim();
+            if (code === "") return;
+            generation += 1;
+            const asked = generation;
+            emailSet({ ...view, busy: true, resent: undefined, error: undefined });
+            const request = () => emailSignIn.verify(email, code);
+            void (signedOut ? signedOut.then(request) : request())
+                .catch(() => ({ ok: false as const, ...unreachable }))
+                .then(async (answer) => {
+                    if (!current(asked) || view?.kind !== "emailCode") return;
+                    if (!answer.ok) {
+                        emailRefused({ ...view, busy: undefined }, answer);
+                        return;
+                    }
+                    countdownStop();
+                    if ((await list(asked)) === "signInRequired" && current(asked))
+                        emailSet({
+                            kind: "emailCode",
+                            email,
+                            code,
+                            resendIn: 0,
+                            error: "Signing in didn't work.",
+                        });
+                })
+                .catch(() => {
+                    if (current(asked))
+                        set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+                });
+        },
+        emailCodeResend() {
+            if (view?.kind !== "emailCode" || view.busy || view.resending) return;
+            if (view.wait || view.resendIn > 0) return;
+            emailCodeRequest(view.email, view, true);
+        },
+        emailChangeOpen() {
+            if (view?.kind !== "emailCode" || view.busy) return;
+            generation += 1;
+            emailSet({ kind: "email", email: view.email });
         },
     };
 }

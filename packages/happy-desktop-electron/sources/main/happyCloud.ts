@@ -10,6 +10,7 @@ import {
 } from "../shared/happyCloud";
 import type {
     DesktopHappyCloudAvailability,
+    DesktopHappyCloudEmailCodeResult,
     DesktopServerSignInResult,
 } from "../shared/desktopContract";
 import type { OAuthCredential } from "@slopus/happy-agent-client";
@@ -43,6 +44,13 @@ export interface HappyCloud {
      * the browser.
      */
     passwordSignIn(login: string, password: string): Promise<DesktopServerSignInResult<void>>;
+    /** Has the accounts service email a one-time sign-in code to `email`. */
+    emailCodeStart(email: string): Promise<DesktopHappyCloudEmailCodeResult>;
+    /**
+     * Signs in to the account with the code emailed to `email`; the pass is
+     * held like one from password sign-in.
+     */
+    emailCodeVerify(email: string, code: string): Promise<DesktopHappyCloudEmailCodeResult>;
 }
 
 type Failure = { readonly ok: false; readonly message: string; readonly code: string };
@@ -127,6 +135,83 @@ export function happyCloudCreate(input: {
         typeof value === "object" && value !== null && "ok" in value && value.ok === false
             ? value
             : { ok: true, value: value as T };
+
+    /** Holds the account pass a sign-in answered; it is never refreshed. */
+    const accountSignIn = (json: Record<string, unknown>): DesktopServerSignInResult<void> => {
+        if (typeof json.access_token !== "string" || json.access_token === "")
+            return failure(json, "Signing in didn't work.");
+        try {
+            input.sessions().directSignIn(HAPPY_CLOUD_ACCOUNT_ID, {
+                accessToken: json.access_token,
+                expiresAt:
+                    typeof json.expires_in === "number" && json.expires_in > 0
+                        ? Date.now() + json.expires_in * 1000
+                        : null,
+                refreshToken: null,
+                refreshUrl: null,
+                clientId: "happy",
+                resource: HAPPY_CLOUD_ACCOUNTS_URL,
+                serverUrl: HAPPY_CLOUD_ACCOUNTS_URL,
+            });
+        } catch (error) {
+            return {
+                ok: false,
+                message: error instanceof Error ? error.message : "Signing in didn't work.",
+                code: "failed",
+            };
+        }
+        return { ok: true, value: undefined };
+    };
+
+    /**
+     * One step of email-code sign-in, which needs no account pass: its
+     * refusals worded for the person, and a refusal for too many tries with
+     * how long to wait.
+     */
+    const emailCall = async (
+        path: string,
+        body: Record<string, string>,
+        unavailable: string,
+        answered: (json: Record<string, unknown>) => DesktopHappyCloudEmailCodeResult,
+    ): Promise<DesktopHappyCloudEmailCodeResult> => {
+        let response: Response;
+        try {
+            response = await input.fetch(new URL(path, HAPPY_CLOUD_ACCOUNTS_URL), {
+                method: "POST",
+                headers: { accept: "application/json", "content-type": "application/json" },
+                body: JSON.stringify(body),
+                redirect: "error",
+            });
+        } catch {
+            return {
+                ok: false,
+                message: "Happy Cloud isn't reachable right now.",
+                code: "remote_unavailable",
+            };
+        }
+        const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+        if (response.ok) return answered(json);
+        const code = typeof json.code === "string" ? json.code : "failed";
+        if (response.status === 429)
+            return {
+                ok: false,
+                message: "Too many tries.",
+                code: "rate_limited",
+                retryAfter: retryAfterRead(response.headers.get("retry-after"), json.retryAfter),
+            };
+        switch (code) {
+            case "invalid_email":
+                return { ok: false, message: "That email address doesn't look right.", code };
+            case "invalid_code":
+                return { ok: false, message: "That code is wrong or has expired.", code };
+            case "unavailable":
+                return { ok: false, message: unavailable, code };
+            case "unsupported_provider":
+                return failure(json, "Signing in by email isn't available.");
+            default:
+                return failure(json, "Signing in didn't work.");
+        }
+    };
 
     /** Ends a server's sign-in here and revokes it at the accounts service. */
     const signOut = async (connectionId: string): Promise<void> => {
@@ -300,30 +385,26 @@ export function happyCloudCreate(input: {
                     message: "That login or password is wrong.",
                     code: "invalid_credentials",
                 };
-            if (!response.ok || typeof json.access_token !== "string" || json.access_token === "")
-                return failure(json, "Signing in didn't work.");
-            try {
-                input.sessions().directSignIn(HAPPY_CLOUD_ACCOUNT_ID, {
-                    accessToken: json.access_token,
-                    expiresAt:
-                        typeof json.expires_in === "number" && json.expires_in > 0
-                            ? Date.now() + json.expires_in * 1000
-                            : null,
-                    refreshToken: null,
-                    refreshUrl: null,
-                    clientId: "happy",
-                    resource: HAPPY_CLOUD_ACCOUNTS_URL,
-                    serverUrl: HAPPY_CLOUD_ACCOUNTS_URL,
-                });
-            } catch (error) {
-                return {
-                    ok: false,
-                    message: error instanceof Error ? error.message : "Signing in didn't work.",
-                    code: "failed",
-                };
-            }
-            return { ok: true, value: undefined };
+            if (!response.ok) return failure(json, "Signing in didn't work.");
+            return accountSignIn(json);
         },
+        emailCodeStart: (email) =>
+            emailCall(
+                "v1/auth/email/start",
+                { email },
+                "Happy Cloud couldn't send a code right now. Try again.",
+                () => ({ ok: true }),
+            ),
+        emailCodeVerify: (email, code) =>
+            emailCall(
+                "v1/auth/email/verify",
+                { email, code },
+                "Happy Cloud couldn't check the code right now. Try again.",
+                (json) => {
+                    const signedIn = accountSignIn(json);
+                    return signedIn.ok ? { ok: true } : signedIn;
+                },
+            ),
         async serverConnect(serverId) {
             const server = known.get(serverId);
             if (!server)
@@ -360,6 +441,17 @@ export function happyCloudCreate(input: {
             return { ok: true, value: connectionId };
         },
     };
+}
+
+/**
+ * Seconds until the accounts service takes another try: its `Retry-After`
+ * header, else the body's `retryAfter`, else a minute.
+ */
+function retryAfterRead(header: string | null, body: unknown): number {
+    const seconds = header !== null && /^\d+$/u.test(header.trim()) ? Number(header) : body;
+    return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
+        ? Math.ceil(seconds)
+        : 60;
 }
 
 function listRead(path: string): string[] {

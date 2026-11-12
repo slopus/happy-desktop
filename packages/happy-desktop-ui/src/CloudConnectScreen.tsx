@@ -60,6 +60,8 @@ export type CloudConnectView =
            * there is no close button.
            */
           readonly start?: true;
+          /** The shell can sign in by a code sent to the person's email: offered under the deck. */
+          readonly emailSignIn?: true;
           /**
            * Test-account sign-in, revealed by pressing the logo ten times
            * in a row. Absent, nothing of it is drawn or announced.
@@ -73,6 +75,31 @@ export type CloudConnectView =
       }
     /** The account sign-in is open in the browser. */
     | { readonly kind: "signingIn" }
+    /** Signing in without the browser: the email a code goes to. */
+    | {
+          readonly kind: "email";
+          readonly email: string;
+          readonly busy?: boolean;
+          readonly error?: string;
+          /** Seconds until Happy Cloud takes another try, after too many. */
+          readonly wait?: number;
+      }
+    /** The code Happy Cloud emailed, typed in to finish signing in. */
+    | {
+          readonly kind: "emailCode";
+          readonly email: string;
+          readonly code: string;
+          readonly busy?: boolean;
+          /** A fresh code is being asked for. */
+          readonly resending?: boolean;
+          /** A fresh code was just sent. */
+          readonly resent?: true;
+          /** Seconds until Resend is offered again; 0 once it is. */
+          readonly resendIn: number;
+          readonly error?: string;
+          /** Seconds until Happy Cloud takes another try, after too many. */
+          readonly wait?: number;
+      }
     | {
           readonly kind: "servers";
           readonly servers:
@@ -141,6 +168,28 @@ export interface CloudConnectScreenProps {
     onTestLoginChange(login: string): void;
     onTestPasswordChange(password: string): void;
     onTestSignIn(): void;
+    /** The welcome's Continue with email. */
+    onEmailOpen(): void;
+    onEmailChange(email: string): void;
+    /** Sends a code to the email typed in. */
+    onEmailCodeSend(): void;
+    onEmailCodeChange(code: string): void;
+    /** Signs in with the code typed in. */
+    onEmailCodeVerify(): void;
+    onEmailCodeResend(): void;
+    /** From the code back to the email, to send the code somewhere else. */
+    onEmailChangeOpen(): void;
+}
+
+/** `m:ss`, the way a countdown reads. */
+function countdown(seconds: number): string {
+    return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** A refusal, with how long is left to wait when Happy Cloud asked for that. */
+function emailHint(error: string | undefined, wait: number | undefined): string | undefined {
+    if (error === undefined) return undefined;
+    return wait ? `${error} Try again in ${countdown(wait)}.` : error;
 }
 
 function availabilityHint(
@@ -457,6 +506,13 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 }}
                                 slides={CLOUD_SLIDES}
                             >
+                                {view.emailSignIn && !test ? (
+                                    <div className="happy-cloud-connect__links">
+                                        <Button onClick={props.onEmailOpen} variant="ghost">
+                                            Continue with email
+                                        </Button>
+                                    </div>
+                                ) : null}
                                 {test ? (
                                     <div className="happy-cloud-connect__column">
                                         <TextField
@@ -519,6 +575,118 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 title="Signing in"
                             />
                         );
+                    case "email":
+                        return (
+                            <SetupPage
+                                {...frame}
+                                action={{
+                                    busy: view.busy,
+                                    disabled: view.email.trim() === "" || Boolean(view.wait),
+                                    label: "Send code",
+                                    onSelect: props.onEmailCodeSend,
+                                }}
+                                copy="Enter your email and we’ll send you a code to sign in."
+                                placement="centered"
+                                secondary={back(view.busy)}
+                                title="Continue with email"
+                            >
+                                <div className="happy-cloud-connect__column">
+                                    <TextField
+                                        aria-label="Email"
+                                        autoComplete="email"
+                                        autoFocus
+                                        className="happy-cloud-connect__handle"
+                                        disabled={view.busy}
+                                        fullWidth
+                                        inputMode="email"
+                                        onSubmit={props.onEmailCodeSend}
+                                        onValueChange={props.onEmailChange}
+                                        placeholder="you@example.com"
+                                        size="large"
+                                        type="email"
+                                        value={view.email}
+                                    />
+                                    <p
+                                        className="happy-cloud-connect__hint"
+                                        data-tone={view.error ? "attention" : undefined}
+                                        role="status"
+                                    >
+                                        {emailHint(view.error, view.wait)}
+                                    </p>
+                                </div>
+                            </SetupPage>
+                        );
+                    case "emailCode": {
+                        const waiting = Boolean(view.wait);
+                        return (
+                            <SetupPage
+                                {...frame}
+                                action={{
+                                    busy: view.busy,
+                                    disabled: view.code.trim() === "" || waiting,
+                                    label: "Sign in",
+                                    onSelect: props.onEmailCodeVerify,
+                                }}
+                                copy={
+                                    <>
+                                        Enter the code we sent to{" "}
+                                        <strong className="happy-cloud-connect__email">
+                                            {view.email}
+                                        </strong>
+                                        .
+                                    </>
+                                }
+                                placement="centered"
+                                secondary={back(view.busy)}
+                                title="Check your email"
+                            >
+                                <div className="happy-cloud-connect__column">
+                                    <TextField
+                                        aria-label="Code"
+                                        autoComplete="one-time-code"
+                                        autoFocus
+                                        className="happy-cloud-connect__handle happy-cloud-connect__code"
+                                        disabled={view.busy}
+                                        fullWidth
+                                        inputMode="numeric"
+                                        name="one-time-code"
+                                        onSubmit={props.onEmailCodeVerify}
+                                        onValueChange={props.onEmailCodeChange}
+                                        placeholder="Code"
+                                        size="large"
+                                        value={view.code}
+                                    />
+                                    <p
+                                        className="happy-cloud-connect__hint"
+                                        data-tone={view.error ? "attention" : undefined}
+                                        role="status"
+                                    >
+                                        {emailHint(view.error, view.wait) ??
+                                            (view.resent ? "We sent you a new code." : undefined)}
+                                    </p>
+                                    <div className="happy-cloud-connect__links">
+                                        <Button
+                                            disabled={view.busy || view.resendIn > 0 || waiting}
+                                            loading={view.resending}
+                                            onClick={props.onEmailCodeResend}
+                                            variant="ghost"
+                                        >
+                                            {view.resendIn > 0
+                                                ? `Resend code in ${countdown(view.resendIn)}`
+                                                : "Resend code"}
+                                        </Button>
+                                        <Button
+                                            disabled={view.busy}
+                                            onClick={props.onEmailChangeOpen}
+                                            variant="ghost"
+                                        >
+                                            Change email
+                                        </Button>
+                                    </div>
+                                </div>
+                            </SetupPage>
+                        );
+                    }
                     case "servers": {
                         const joins = [...view.joins.values()];
                         return (

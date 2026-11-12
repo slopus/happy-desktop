@@ -24,6 +24,20 @@ export type DesktopServerSignInResult<T> =
     | { readonly ok: true; readonly value: T }
     | { readonly ok: false; readonly message: string; readonly code: string };
 
+/**
+ * One step of Happy Cloud email-code sign-in. A refusal for too many tries
+ * (`rate_limited`) says how long until the next one is taken.
+ */
+export type DesktopHappyCloudEmailCodeResult =
+    | { readonly ok: true }
+    | {
+          readonly ok: false;
+          readonly message: string;
+          readonly code: string;
+          /** Seconds until another try is taken; only with `rate_limited`. */
+          readonly retryAfter?: number;
+      };
+
 /** Whether a Happy Cloud server name can be taken, as the accounts API answered. */
 export type DesktopHappyCloudAvailability =
     | { readonly available: true }
@@ -137,6 +151,16 @@ export interface DesktopHappyCloud {
     accountSignOut(): Promise<void>;
     /** Signs in to a test account; the shell sends the password to accounts and keeps none of it. */
     passwordSignIn(login: string, password: string): Promise<DesktopServerSignInResult<void>>;
+    /**
+     * Has Happy Cloud email a one-time sign-in code. Absent on a shell from
+     * before email sign-in, where the window offers no such way in.
+     */
+    emailCodeStart?(email: string): Promise<DesktopHappyCloudEmailCodeResult>;
+    /**
+     * Signs in to the account with the emailed code; the shell holds the pass
+     * like password sign-in's. Absent with `emailCodeStart`.
+     */
+    emailCodeVerify?(email: string, code: string): Promise<DesktopHappyCloudEmailCodeResult>;
     /**
      * Looks for model provider credentials on this computer, where the
      * vendors' own tools keep them. The shell holds what it found for a few
@@ -1309,6 +1333,8 @@ export const desktopIpc = {
     happyCloudSignInsKept: "happy:happy-cloud:sign-ins-kept",
     happyCloudAccountSignOut: "happy:happy-cloud:account-sign-out",
     happyCloudPasswordSignIn: "happy:happy-cloud:password-sign-in",
+    happyCloudEmailCodeStart: "happy:happy-cloud:email-code-start",
+    happyCloudEmailCodeVerify: "happy:happy-cloud:email-code-verify",
     happyCloudCredentialScan: "happy:happy-cloud:credential-scan",
     happyCloudCredentialImport: "happy:happy-cloud:credential-import",
     serverSessionsChanged: "happy:server-sessions:changed",

@@ -47,6 +47,8 @@ export type TextFieldProps = {
     id?: string;
     name?: string;
     autoComplete?: string;
+    /** The on-screen keyboard and input hint, such as `numeric` for a code. */
+    inputMode?: "text" | "email" | "numeric";
 };
 /** Leading-icon glyph box by control size (matches Button's 14/16/18 ramp). */
 const iconSizes: Record<TextFieldSize, 14 | 16 | 18> = {
@@ -73,6 +75,7 @@ export function TextField(props: TextFieldProps) {
     const [local] = partitionComponentProps(props, [
         "aria-label",
         "autoComplete",
+        "inputMode",
         "autoFocus",
         "className",
         "data-testid",
@@ -203,6 +206,7 @@ export function TextField(props: TextFieldProps) {
                         autoComplete={local.autoComplete}
                         autoFocus={local.autoFocus}
                         className="happy-text-field__input"
+                        inputMode={local.inputMode}
                         data-happy-desktop-ui="text-field-input"
                         disabled={local.disabled}
                         id={fieldId()}

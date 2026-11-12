@@ -296,8 +296,25 @@
 
 .happy-setup-page[data-backdrop="sky"]
     .happy-cloud-connect__links
+    .happy-button[data-variant="ghost"],
+.happy-welcome-screen[data-backdrop="sky"]
+    .happy-cloud-connect__links
     .happy-button[data-variant="ghost"] {
     color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+}
+
+/* The address a code went to: whole, however long, in the page's copy. */
+.happy-cloud-connect__email {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+/* A code reads as one spaced-out token. */
+.happy-cloud-connect__code
+    .happy-text-field__control[data-size="large"]
+    input.happy-text-field__input:not(:placeholder-shown) {
+    letter-spacing: 0.2em;
+    font-variant-numeric: tabular-nums;
 }
 
 .happy-cloud-connect__hero {
