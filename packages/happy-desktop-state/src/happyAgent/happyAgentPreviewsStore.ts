@@ -18,7 +18,7 @@ export type HappyAgentPreviewStatus =
 export type HappyAgentPreviewState =
     | { readonly type: "opening" }
     | { readonly type: "available"; readonly status: HappyAgentPreviewStatus }
-    | { readonly type: "deleted" }
+    | { readonly type: "missing" }
     | { readonly type: "error"; readonly error: UserError };
 
 export type HappyAgentPreviewsSnapshot = ReadonlyMap<string, HappyAgentPreviewState>;
@@ -101,7 +101,7 @@ export function happyAgentPreviewsStoreCreate(input: {
         const previous = snapshot.get(id);
         if (
             previous?.type === state.type &&
-            (state.type === "deleted" ||
+            (state.type === "missing" ||
                 state.type === "opening" ||
                 (state.type === "available" &&
                     previous.type === "available" &&
@@ -119,7 +119,7 @@ export function happyAgentPreviewsStoreCreate(input: {
         publish(
             id,
             displayable.code === "not_found"
-                ? { type: "deleted" }
+                ? { type: "missing" }
                 : { type: "error", error: displayable },
         );
         return displayable;
