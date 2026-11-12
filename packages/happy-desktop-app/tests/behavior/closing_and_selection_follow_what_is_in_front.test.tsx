@@ -107,6 +107,28 @@ const PROJECTS_WITH_TWO_CHATS = [
     },
 ] as unknown as typeof PROJECTS;
 
+/** The same machine with a workspace under its project. */
+const PROJECTS_WITH_WORKTREE = [
+    {
+        ...(PROJECTS[0] as object),
+        worktrees: [
+            {
+                id: "wt_one",
+                projectId: "prj_one",
+                name: "fix-tabs",
+                creatorAgentId: null,
+                orderKey: "wt_one",
+                path: "/Users/happy/happy-worktrees/fix-tabs",
+                displayPath: "~/happy-worktrees/fix-tabs",
+                lifecycle: { phase: "ready" },
+                conversations: [],
+                activity: "idle",
+                updatedAt: NOW,
+            },
+        ],
+    },
+] as unknown as typeof PROJECTS;
+
 const BOT = {
     id: "bot_one",
     name: "Scout",
@@ -865,5 +887,46 @@ describe("Command-W with nothing left to close", () => {
         expect(opened.router.state.location.pathname).toBe(CHAT);
 
         expect(onWindowClose).not.toHaveBeenCalled();
+    });
+});
+
+describe("archiving a project or workspace from its sidebar row", () => {
+    const archiveChosen = async (
+        opened: Awaited<ReturnType<typeof windowOpen>>,
+        rowId: string,
+        label: string,
+    ) => {
+        fireEvent.contextMenu(opened.row(rowId)!, { clientX: 40, clientY: 40 });
+        await settle();
+        const item = [
+            ...opened.view.container.querySelectorAll<HTMLElement>(
+                '[data-happy-desktop-ui="sidebar-item-menu"] [role="menuitem"]',
+            ),
+        ].find((candidate) => candidate.textContent?.includes(label));
+        expect(item, label).toBeDefined();
+        fireEvent.click(item!);
+        await settle();
+    };
+
+    it("asks before archiving a project, and archives nothing on the menu item", async () => {
+        const opened = await windowOpen(CHAT, CHAT_ADDRESS);
+        await waitFor(() => expect(opened.row("local/prj_one")).not.toBeNull());
+
+        calls.length = 0;
+        await archiveChosen(opened, "local/prj_one", "Archive project");
+
+        expect(calls).toEqual(['groupArchiveOpen(["prj_one"])']);
+    });
+
+    it("asks before archiving a workspace, the same way", async () => {
+        const opened = await windowOpen(CHAT, CHAT_ADDRESS, false, CATALOG, {
+            projects: PROJECTS_WITH_WORKTREE,
+        });
+        await waitFor(() => expect(opened.row("local/wt_one")).not.toBeNull());
+
+        calls.length = 0;
+        await archiveChosen(opened, "local/wt_one", "Archive workspace");
+
+        expect(calls).toEqual(['groupArchiveOpen(["wt_one"])']);
     });
 });

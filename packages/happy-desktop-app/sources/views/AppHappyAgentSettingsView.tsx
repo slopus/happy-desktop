@@ -184,13 +184,14 @@ export const HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES: Readonly<Record<string, stri
 
 /**
  * The category a `happy://settings/<page>` link opens here, or nothing when
- * this window has no such page. Import lives on the Inference page.
+ * this window has no such page. Import lives on the Inference page, and a
+ * folded category's old address opens the one it moved into.
  */
 export function happyAgentSettingsSectionOf(page: string): string | undefined {
     const section =
         page === "providers/import" || happyAgentProviderAddLinkParse(page) !== undefined
             ? "providers"
-            : page;
+            : (HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES[page] ?? page);
     return happyAgentSettingsCategoryExists(section) ? section : undefined;
 }
 

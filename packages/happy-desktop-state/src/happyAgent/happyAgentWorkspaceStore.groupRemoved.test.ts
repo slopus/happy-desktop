@@ -132,6 +132,8 @@ function store(bots: readonly HappyAgentBot[]) {
         workspace,
         unsubscribe,
         removed: () => outputs.flatMap((event) => (event.type === "groupRemoved" ? [event] : [])),
+        listed: () =>
+            outputs.flatMap((event) => (event.type === "groupsListed" ? [event.groupIds] : [])),
         hostAnswers(next: Partial<HappyAgentSessionListSnapshot>) {
             list = { ...list, ...next, catalogRevision: list.catalogRevision + 1 };
             for (const listener of listeners) listener();
@@ -196,5 +198,14 @@ it("never reports a group the host has not listed yet", () => {
     hostAnswers({ bots: [bot("a")] });
 
     expect(removed()).toEqual([]);
+    unsubscribe();
+});
+
+it("lists every group the first read names, once, for a window to drop what went while it was closed", () => {
+    const { unsubscribe, listed, hostAnswers } = store([bot("a"), bot("b")]);
+    hostAnswers({ bots: [bot("a"), bot("b")] });
+    hostAnswers({ bots: [bot("a")] });
+
+    expect(listed().map((ids) => [...ids].sort())).toEqual([["ws_a", "ws_b"]]);
     unsubscribe();
 });

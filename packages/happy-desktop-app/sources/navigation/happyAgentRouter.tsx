@@ -11,7 +11,7 @@ import {
     useRouter,
 } from "@tanstack/react-router";
 import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAgentHistory";
-import { happyAgentRoutePathParse } from "./happyAgentRoute";
+import { happyAgentRoutePath, happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
 import {
@@ -798,6 +798,11 @@ function HappyAgentWorkspaceLayout() {
                     void router.load({ action: { type: "REPLACE" } });
                 return changed;
             }}
+            onChatCloseRefused={(happyAgentId, groupId, chatId) => {
+                const changed = router.history.sessionRemember(happyAgentId, groupId, chatId);
+                if (changed && router.history.subscribers.size === 0)
+                    void router.load({ action: { type: "REPLACE" } });
+            }}
             onFileClose={(happyAgentId, groupId, path) => {
                 // The route helper owns history repair; the surface owns the
                 // tab bytes and closes those immediately after this callback.
@@ -1345,19 +1350,25 @@ export function happyAgentRouterSubtasksForget(
         (shown?.kind === "chat" || shown?.kind === "file") &&
         shown.happyAgentId === happyAgentId &&
         removed.some((location) => location.sessionId === shown.chatId);
+    // The reader steps onto `open` first, so the repair below finds nobody
+    // standing in a removed conversation: it neither shows the emptied
+    // workspace on the way, nor leaves `open` twice in a row behind a replace.
+    // A push moves an earlier visit to `open` to the front, which together with
+    // the removal is the same as `open` taking the task's place.
+    if (open !== undefined && stoodInRemoved)
+        router.history.push(
+            happyAgentRoutePath({
+                chatId: open.sessionId,
+                groupId: open.groupId,
+                happyAgentId,
+                kind: "chat",
+            }),
+        );
     let changed = false;
     for (const location of removed)
         changed =
             router.history.sessionForget(happyAgentId, location.groupId, location.sessionId) ||
             changed;
-    if (open !== undefined && stoodInRemoved) {
-        void router.navigate({
-            params: { chatId: open.sessionId, groupId: open.groupId, happyAgentId },
-            replace: true,
-            to: "/chats/$happyAgentId/$groupId/$chatId",
-        });
-        return;
-    }
     if (changed && router.history.subscribers.size === 0)
         void router.load({ action: { type: "REPLACE" } });
 }
@@ -1384,6 +1395,21 @@ export function happyAgentRouterGroupForget(
     // notification above. One that is not — a window still starting up — has to
     // be told, the same way the router tells itself when it commits a location
     // with nothing listening.
+    if (changed && router.history.subscribers.size === 0)
+        void router.load({ action: { type: "REPLACE" } });
+}
+
+/**
+ * Takes groups archived while the window was closed out of the navigation it
+ * remembered from then, once the Happy Agent's first catalog read lists what
+ * still exists. Nobody is moved: only places behind or ahead of the reader go.
+ */
+export function happyAgentRouterGroupsUnlistedForget(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+    listed: ReadonlySet<string>,
+): void {
+    const changed = router.history.groupsUnlistedForget(happyAgentId, listed);
     if (changed && router.history.subscribers.size === 0)
         void router.load({ action: { type: "REPLACE" } });
 }

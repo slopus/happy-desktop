@@ -110,6 +110,29 @@ describe("a window's own stack", () => {
         expect(stack(history)).toBe("/settings/appearance");
     });
 
+    it("drops places in groups archived while it was closed, and leaves the reader where they are", () => {
+        const history = happyAgentHistoryCreate();
+        history.push("/chats/r1/gone");
+        history.push("/chats/r1/gone/c1");
+        history.push("/chats/r1/kept");
+        history.push("/chats/r2/elsewhere");
+        history.push("/chats/r1/arriving");
+
+        expect(history.groupsUnlistedForget("r1", new Set(["kept"]))).toBe(true);
+
+        // A group not listed yet may be one still arriving: the reader stays on it.
+        expect(stack(history)).toBe("/chats/r1/arriving");
+        const seen: string[] = [];
+        for (let step = 0; step < 6; step++) {
+            history.back();
+            seen.push(stack(history));
+        }
+        expect(seen.some((path) => path.startsWith("/chats/r1/gone"))).toBe(false);
+        expect(seen).toContain("/chats/r1/kept");
+        // Another Happy Agent's places are its own list's business.
+        expect(seen).toContain("/chats/r2/elsewhere");
+    });
+
     it("is inert when the archived group is not one this window has been in", () => {
         const history = happyAgentHistoryCreate();
         history.push("/chats/r1/g9");
@@ -392,6 +415,9 @@ describe("the router the window actually renders", () => {
             "/chats/local/ws_bot/ses_bot",
             "/chats/local/wt_task/ses_task",
         );
+        const shown: string[] = [];
+        const unsubscribe = history.subscribe(() => shown.push(history.location.pathname));
+        onTestFinished(unsubscribe);
 
         happyAgentRouterSubtasksForget(
             router,
@@ -407,10 +433,14 @@ describe("the router the window actually renders", () => {
         await router.load();
 
         expect(router.state.location.pathname).toBe("/chats/local/ws_bot/ses_bot");
-        // Back walks past where the task was rather than reopening it.
+        // The task's emptied workspace never shows on the way to the parent.
+        expect(shown).not.toContain("/chats/local/wt_task");
+        // The parent takes the task's place rather than standing twice in a
+        // row, so Back walks past both instead of appearing to do nothing.
+        expect(history.length).toBe(2);
         history.back();
         await router.load();
-        expect(router.state.location.pathname).not.toContain("ses_task");
+        expect(router.state.location.pathname).toBe("/chats/local");
     });
 
     it("leaves a reader elsewhere where they are when a subtask is archived", async () => {
