@@ -162,6 +162,11 @@ export interface FakeHappyAgentDaemon {
     /** Answer the next stream's hello with `gap: true` — the cursor was lost. */
     gapOnNextStream(): void;
     /**
+     * Refuse every stream opened from now on with `error`, as the host does while the daemon
+     * behind it is gone; `undefined` lets streams open again.
+     */
+    streamRefuse(error: Error | undefined): void;
+    /**
      * Whether the desktop bootstrap carries the daemon's health, as a current daemon's does.
      * Turned off, it is a daemon from before that, whose health is only on its own route.
      */
@@ -436,6 +441,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     const streams = new Set<StreamConnection>();
     const streamOpens: (string | undefined)[] = [];
     let nextStreamGap = false;
+    let streamRefusal: Error | undefined;
     let healthReady = true;
     let bootstrapHealth = true;
     /** Every event this process journaled; a replacement starts with none. */
@@ -1110,6 +1116,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             streamOpens.push(options.after ?? options.lastEventId);
             const opening = gates.get("streamEvents");
             if (opening !== undefined) await opening;
+            if (streamRefusal !== undefined) throw streamRefusal;
             const gap = nextStreamGap;
             nextStreamGap = false;
             const after = options.after ?? options.lastEventId;
@@ -1647,6 +1654,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         streamOpens,
         gapOnNextStream() {
             nextStreamGap = true;
+        },
+        streamRefuse(error) {
+            streamRefusal = error;
         },
         bootstrapHealthSet(carried) {
             bootstrapHealth = carried;

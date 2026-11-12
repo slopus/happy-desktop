@@ -28,6 +28,7 @@ import {
     happyAgentRouterConnectionChanged,
     type AppHappyAgentDaemonStore,
     type AppHappyAgentUpdateStore,
+    type AppHappyAgentOutageStore,
     type AppHappyAgentReleaseNotesStore,
     type AppHappyAgentUpdate,
     type AppHappyAgentDebugStore,
@@ -198,6 +199,7 @@ import { desktopAgentUpdateStoreCreate } from "./desktopAgentUpdateStore";
 import {
     DesktopAgentBrokenGate,
     desktopAgentBrokenStoreCreate,
+    desktopAgentOutageStoreCreate,
     type DesktopAgentBrokenStore,
 } from "./desktopAgentBroken";
 import {
@@ -466,6 +468,8 @@ function HappyAgentBoundary(props: {
     agentUpdate?: AppHappyAgentUpdateStore;
     /** What is new in the local agent's offered version; supplied with `daemon`. */
     agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
+    /** The local agent's outage, told beside its work; supplied with `daemon`. */
+    agentOutage?: AppHappyAgentOutageStore;
     debug?: AppHappyAgentDebugStore;
     performance?: LivePerformanceStore;
     profiler?: AppHappyAgentProfilerStore;
@@ -510,6 +514,7 @@ function HappyAgentBoundary(props: {
                 ...(props.daemon ? { daemon: props.daemon } : {}),
                 ...(props.agentUpdate ? { agentUpdate: props.agentUpdate } : {}),
                 ...(props.agentReleaseNotes ? { agentReleaseNotes: props.agentReleaseNotes } : {}),
+                ...(props.agentOutage ? { agentOutage: props.agentOutage } : {}),
                 debug: props.debug,
                 ...(props.performance ? { performance: props.performance } : {}),
                 profiler: props.profiler,
@@ -797,6 +802,8 @@ interface DesktopRendererProps {
     agentReleaseNotes: AppHappyAgentReleaseNotesStore;
     /** Whether the local Happy Agent is broken badly enough to own the whole window. */
     agentBroken: DesktopAgentBrokenStore;
+    /** The same outage once the window has reached the agent, told beside its work. */
+    agentOutage: AppHappyAgentOutageStore;
 }
 
 /**
@@ -1300,6 +1307,7 @@ function DesktopRuntimeContent(
             connectionOnboarding={cloudWeb}
             {...(props.daemon
                 ? {
+                      agentOutage: props.agentOutage,
                       agentReleaseNotes: props.agentReleaseNotes,
                       agentUpdate: props.agentUpdate,
                       daemon: props.daemon,
@@ -1957,6 +1965,10 @@ if (mediaPreviewBridge) {
                 runtime: runtimeStore,
             }),
         );
+        const agentOutage = desktopAgentOutageStoreCreate(
+            agentBroken,
+            (text) => void navigator.clipboard.writeText(text).catch(() => undefined),
+        );
         function activeRouter(): HappyAgentRouter {
             return (
                 connectionUis.get(happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)
@@ -2206,6 +2218,7 @@ if (mediaPreviewBridge) {
                         agentUpdate={agentUpdate}
                         agentReleaseNotes={agentReleaseNotes}
                         agentBroken={agentBroken}
+                        agentOutage={agentOutage}
                     />
                 </CodeHighlightWorkers>
                 {/* After the app, not before it: the window folds drag regions in

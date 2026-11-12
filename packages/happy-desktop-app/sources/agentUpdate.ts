@@ -99,3 +99,30 @@ export interface AppHappyAgentReleaseNotesStore {
     get(): SidebarUpdateNotes | undefined;
     subscribe(listener: () => void): () => void;
 }
+
+/** The local Happy Agent out of reach after the window had reached it. */
+export interface AppHappyAgentOutageSnapshot {
+    /** What the local connection last reported, verbatim. */
+    readonly message?: string;
+    /** This Happy installed the agent and can restart it. */
+    readonly restartable: boolean;
+    /** A restart under way, told as it goes; absent while none is. */
+    readonly restarting?: string;
+    /** A restart asked for here that failed, verbatim. */
+    readonly restartFailure?: string;
+}
+
+/**
+ * The local Happy Agent's outage, supplied only by the native desktop shell.
+ * It is told beside the local machine's work rather than over the whole window:
+ * the rest of the app, and every other Happy Agent, keeps working through it.
+ */
+export interface AppHappyAgentOutageStore {
+    /** The outage, or nothing while the local Happy Agent is reachable. */
+    get(): AppHappyAgentOutageSnapshot | undefined;
+    subscribe(listener: () => void): () => void;
+    /** Restarts the local Happy Agent through the host's managed restart. */
+    restart(): void;
+    /** Copies a prompt describing the outage, for another assistant. */
+    detailsCopy(): void;
+}

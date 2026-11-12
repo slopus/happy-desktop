@@ -1,5 +1,10 @@
 import { useSyncExternalStore, type ReactNode } from "react";
-import type { AppHappyAgentDaemonInstall, AppHappyAgentDaemonStore } from "happy-desktop-app";
+import type {
+    AppHappyAgentDaemonInstall,
+    AppHappyAgentDaemonStore,
+    AppHappyAgentOutageSnapshot,
+    AppHappyAgentOutageStore,
+} from "happy-desktop-app";
 import { SetupPage, SetupPrompt } from "happy-desktop-ui";
 import { drainKeyOf, PLANNED_RESTART_GRACE_MS } from "./desktopAgentUpdateStore";
 import { LOCAL_HAPPY_AGENT_ID, type HappyAgentDirectoryStore } from "./happyAgentDirectoryStore";
@@ -25,8 +30,15 @@ const HAPPY_URL = "https://happy.engineering";
 const HAPPY_AGENT_REPOSITORY_URL = "https://github.com/slopus/happy-agent";
 
 export interface DesktopAgentBrokenSnapshot {
-    /** The local Happy Agent is broken and the window should say only that. */
+    /** The local Happy Agent is broken. */
     readonly visible: boolean;
+    /**
+     * Where it is said. Before this window has once reached the local Happy
+     * Agent there is nothing of it to keep, and the whole window says only
+     * that. Once it has, the app stays as it is and a notice beside the local
+     * machine's work says it: losing a Happy Agent never unloads the app.
+     */
+    readonly presentation: "window" | "notice";
     /** What the local connection last reported, verbatim. */
     readonly message?: string;
     /** The local Happy Agent's version, when it has ever been known. */
@@ -54,6 +66,7 @@ export interface DesktopAgentBrokenStore {
 
 const hidden: DesktopAgentBrokenSnapshot = {
     visible: false,
+    presentation: "window",
     restartable: false,
     install: { phase: "idle" },
     reconnecting: false,
@@ -62,9 +75,11 @@ const hidden: DesktopAgentBrokenSnapshot = {
 /**
  * Whether the local Happy Agent is broken badly enough to own the window.
  *
- * Only the local host counts: every remote reaches this window through it, so
- * when it is gone nothing behind the ordinary layout works, while a remote that
- * fails is one machine of several and stays a notice beside itself. The startup
+ * Only the local host counts: the machines it is peered with reach this window
+ * through it, while a remote that fails is one machine of several and stays a
+ * notice beside itself. Even so, once the window has reached the local host, its
+ * loss is a notice too: Happy Cloud servers do not go through it, and what was
+ * already on screen stays readable (master plan 05). The startup
  * screens keep the window while the runtime still owns it, a protocol gap has a
  * screen of its own, and a restart someone started elsewhere keeps its update
  * card — unless it fails, which is a broken agent again.
@@ -88,6 +103,9 @@ export function desktopAgentBrokenStoreCreate(input: {
     let requested = false;
     let returnExpected = false;
     let recoveryVisible = false;
+    // Whether this window has reached the local Happy Agent at all. Kept for
+    // the window's life: it decides only where an outage is told.
+    let everConnected = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     // The daemon-announced restart being waited on, and the last one whose
     // wait ran out, both by process and drain start. A drain is reported again
@@ -112,6 +130,7 @@ export function desktopAgentBrokenStoreCreate(input: {
         const daemon = input.daemon.get();
         const runtime = input.runtime.get();
         const install = daemon.install;
+        if (local?.status === "connected") everConnected = true;
         const restarting = install.phase !== "idle" && install.phase !== "error";
         // The daemon's own word that a replacement follows, whoever restarted it.
         const drain = local?.drain?.intent === "restart" ? drainKeyOf(local.drain) : undefined;
@@ -184,6 +203,7 @@ export function desktopAgentBrokenStoreCreate(input: {
         const version = local?.version ?? daemon.installedVersion;
         return {
             visible,
+            presentation: everConnected ? "notice" : "window",
             ...(local?.message ? { message: local.message } : {}),
             ...(version ? { version } : {}),
             restartable: daemon.managed && daemon.installedVersion !== undefined,
@@ -283,15 +303,55 @@ function restartStatus(
 }
 
 /**
- * The whole window while the local Happy Agent is broken, and nothing at all
- * otherwise. Like the protocol gate, it is the host alone; see the store.
+ * The local outage as the app tells it beside the local machine's work, once the
+ * window has reached that machine: the same restart, its progress, and the same
+ * details to copy, while the window stays as it is.
+ */
+export function desktopAgentOutageStoreCreate(
+    broken: DesktopAgentBrokenStore,
+    copy: (text: string) => void,
+): AppHappyAgentOutageStore {
+    let from: DesktopAgentBrokenSnapshot | undefined;
+    let outage: AppHappyAgentOutageSnapshot | undefined;
+    const get = (): AppHappyAgentOutageSnapshot | undefined => {
+        const snapshot = broken.get();
+        if (snapshot === from) return outage;
+        from = snapshot;
+        if (!snapshot.visible || snapshot.presentation !== "notice") outage = undefined;
+        else {
+            const status = snapshot.reconnecting
+                ? { label: "Starting Happy Agent…", busy: true }
+                : restartStatus(snapshot.install);
+            outage = {
+                ...(snapshot.message ? { message: snapshot.message } : {}),
+                restartable: snapshot.restartable,
+                ...(status?.busy ? { restarting: status.label } : {}),
+                ...(snapshot.install.phase === "error"
+                    ? { restartFailure: `Restart failed: ${snapshot.install.message}` }
+                    : {}),
+            };
+        }
+        return outage;
+    };
+    return {
+        get,
+        subscribe: broken.subscribe,
+        restart: () => broken.restart(),
+        detailsCopy: () => copy(desktopAgentBrokenPrompt(broken.get())),
+    };
+}
+
+/**
+ * The whole window while the local Happy Agent is broken before this window
+ * ever reached it, and nothing at all otherwise. Like the protocol gate, it is
+ * the host alone; see the store.
  */
 export function DesktopAgentBrokenGate(props: {
     readonly children: ReactNode;
     readonly store: DesktopAgentBrokenStore;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
-    if (!snapshot.visible) return <>{props.children}</>;
+    if (!snapshot.visible || snapshot.presentation === "notice") return <>{props.children}</>;
     const status = snapshot.reconnecting
         ? { label: "Starting Happy Agent…", busy: true }
         : restartStatus(snapshot.install);

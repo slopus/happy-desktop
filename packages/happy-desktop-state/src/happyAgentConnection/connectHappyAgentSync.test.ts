@@ -1075,7 +1075,8 @@ it("close() severs the live stream and stops the reconnect loop", async () => {
 it("propagates connection state into open session snapshots", async () => {
     const { daemon, chat } = await liveHarness();
     expect(chat.session?.connection).toBe("live");
-    daemon.pause("getHealth");
+    // The feed is reopened at once, so the reopened stream is held before its hello.
+    daemon.pause("streamEvents");
     daemon.streamDropAll();
     await vi.waitFor(() => expect(chat.session?.connection).toBe("reconnecting"));
 });
@@ -1210,11 +1211,7 @@ it("ignores a redelivered message.delta instead of appending its text twice", as
 async function streamingHarness() {
     const harness = await liveHarness();
     const { daemon, chat, sessionId } = harness;
-    daemon.eventEmit("run.started", {
-        agentId: sessionId,
-        run: fakeRun({ id: "r1", status: "running" }),
-        acceptedMessageIds: [],
-    });
+    turnStartEmit(daemon, sessionId, "r1");
     daemon.eventEmit("message.created", {
         agentId: sessionId,
         message: fakeAgentMessage({ id: "a1", content: [{ type: "text", text: "Hel" }] }),
@@ -1937,6 +1934,68 @@ it("settles a finished run on the stream alone, without refetching history", asy
     // back: the transcript is what the events built.
     expect(daemon.callCount("getMessages")).toBe(loads);
     expect(agentTexts(chat.elements).map((element) => element.text)).toEqual(["final text"]);
+});
+
+/** Moves the agent's own status, as the host's `agent.updated` does. */
+function agentStatusEmit(
+    daemon: FakeHappyAgentDaemon,
+    agentId: string,
+    status: "idle" | "working",
+): void {
+    const current = daemon.agentGet(agentId);
+    const version = daemon.versionNext();
+    daemon.agentReplace({ ...current, status, version });
+    daemon.eventEmit("agent.updated", {
+        agentId,
+        previousVersion: current.version,
+        version,
+        changes: { status },
+    });
+}
+
+/** Starts a turn the way the host announces one. */
+function turnStartEmit(daemon: FakeHappyAgentDaemon, agentId: string, runId: string): void {
+    daemon.eventEmit("run.started", {
+        agentId,
+        run: fakeRun({ id: runId, status: "running" }),
+        acceptedMessageIds: [],
+    });
+    agentStatusEmit(daemon, agentId, "working");
+}
+
+it("reads a session again when its agent goes idle and the turn's run.finished never came", async () => {
+    const { daemon, chat, sessionId } = await liveHarness();
+    turnStartEmit(daemon, sessionId, "r1");
+    await vi.waitFor(() => expect(chat.session?.status).toBe("running"));
+    const loads = daemon.callCount("getMessages");
+
+    daemon.historySet(sessionId, [fakeRun({ id: "r1", status: "completed", endedAt: 2 })]);
+    agentStatusEmit(daemon, sessionId, "idle");
+
+    await vi.waitFor(() => expect(chat.session?.status).toBe("idle"));
+    expect(daemon.callCount("getMessages")).toBe(loads + 1);
+});
+
+it("reads a stuck session once per agent version, and Stop reads it again", async () => {
+    const { connection, daemon, chat, sessionId } = await liveHarness();
+    turnStartEmit(daemon, sessionId, "r1");
+    await vi.waitFor(() => expect(chat.session?.status).toBe("running"));
+    const loads = daemon.callCount("getMessages");
+
+    // The host itself still holds the turn running beside an idle agent: reading it again
+    // cannot end it, and must not be repeated for the same answer.
+    daemon.historySet(sessionId, [fakeRun({ id: "r1", status: "running" })]);
+    agentStatusEmit(daemon, sessionId, "idle");
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(loads + 1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(daemon.callCount("getMessages")).toBe(loads + 1);
+    expect(chat.session?.status).toBe("running");
+
+    // Stop answers with a new idle agent, which is worth one more read.
+    daemon.historySet(sessionId, [fakeRun({ id: "r1", status: "aborted", endedAt: 2 })]);
+    connection.stopRun(sessionId);
+    await vi.waitFor(() => expect(chat.session?.status).toBe("idle"));
+    expect(daemon.callCount("getMessages")).toBe(loads + 2);
 });
 
 it("requests full described tool data on initial history and pagination", async () => {
@@ -3171,4 +3230,54 @@ it("keeps a sent message in place when Happy Cloud's answer names a run not yet 
             { messageId: id, groupId: "cloud-run", delivery: "sent" },
         ]),
     );
+});
+
+it("asks a drained daemon that stopped a bounded number of times, and comes back when it does", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.projectSeed({ id: "project-a" });
+    // Each pause the connection takes, with how many streams had been opened when it began.
+    const pauses: { readonly ms: number; readonly opens: number }[] = [];
+    const connection = connectHappyAgent({
+        endpoint: "http://happy-agent.test/",
+        token: "token",
+        client: daemon.client,
+        wait: (milliseconds) => {
+            pauses.push({ ms: milliseconds, opens: daemon.streamOpens.length });
+            return new Promise((resolve) => setTimeout(resolve, 0));
+        },
+        // Inside the replacement window the whole time: the fastest the feed is ever asked.
+        now: () => 1_000,
+    });
+    openConnections.push(connection);
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+
+    const opensBefore = daemon.streamOpens.length;
+    const pausesBefore = pauses.length;
+    daemon.eventEmit("daemon.draining", {
+        daemonId: "daemon-1" as Parameters<
+            typeof daemon.eventEmit<"daemon.draining">
+        >[1]["daemonId"],
+        draining: true,
+    });
+    daemon.streamRefuse(new HappyAgentApiError(502, "Bad gateway", "bad_gateway", null));
+    daemon.streamDropAll();
+
+    // Twenty seconds of the outage, as the connection's own pauses add up.
+    const outage = () => pauses.slice(pausesBefore);
+    await vi.waitFor(
+        () => expect(outage().reduce((sum, pause) => sum + pause.ms, 0)).toBeGreaterThan(20_000),
+        { timeout: 2_000 },
+    );
+    let elapsed = 0;
+    const crossing = outage().find((pause) => (elapsed += pause.ms) > 20_000)!;
+    const asked = crossing.opens - opensBefore;
+    expect(groups.state.connection).toBe("reconnecting");
+    expect(asked).toBeGreaterThan(2);
+    expect(asked).toBeLessThanOrEqual(25);
+    // A replacement is still found within a second of answering.
+    expect(Math.max(...outage().map((pause) => pause.ms))).toBeLessThanOrEqual(1_000);
+
+    daemon.streamRefuse(undefined);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
 });
