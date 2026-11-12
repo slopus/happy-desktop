@@ -22,6 +22,7 @@ import {
     happyAgentRouterConnectionForget,
     happyAgentRouterGroupForget,
     happyAgentRouterHappyLinkOpen,
+    happyAgentRouterExternalLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
     happyAgentRouterConnectionChanged,
@@ -126,6 +127,7 @@ import { dockUnreadPublish, happyAgentEntryUnreadCount } from "./dockUnread";
 import { happyAgentListedConversations } from "./happyAgentListed";
 import { completionChimePlay, completionChimeWanted } from "./completionChime";
 import { desktopAttentionPersistence } from "./desktopAttention";
+import { desktopWindowClose } from "./desktopWindowClose";
 import { happyAgentDirectoryAgentWorking, keepAwakePublish } from "./keepAwake";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
 import {
@@ -495,6 +497,7 @@ function HappyAgentBoundary(props: {
     windowState: HappyAgentWindowStore;
 }) {
     const update = props.update;
+    const windowClose = desktopWindowClose(props.bridge);
     return (
         <RouterProvider
             context={{
@@ -522,6 +525,9 @@ function HappyAgentBoundary(props: {
                 ...(props.platform === "desktop"
                     ? { externalLinkOpen: desktopExternalLinkOpen(props.bridge) }
                     : {}),
+                // Only a shell new enough to close its window offers to; under an
+                // older one Command-W with nothing left to close does nothing.
+                ...(windowClose ? { onWindowClose: windowClose } : {}),
                 ...(update
                     ? {
                           onUpdateApply: () => {
@@ -2065,11 +2071,13 @@ if (mediaPreviewBridge) {
             resolve: (instanceId) => happyAgentDirectoryLinkTarget(happyAgents.get(), instanceId),
             open(id, url) {
                 happyAgents.happyAgentActivate(id);
-                happyAgentRouterHappyLinkOpen(
+                // The connection may have gone live this instant, with the
+                // window's address not applied to it yet: the link waits for that.
+                void happyAgentRouterExternalLinkOpen(
                     connectionUis.get(id)?.router ?? happyAgentRouter,
                     url,
                     id,
-                );
+                ).catch(() => undefined);
             },
         });
         appDisposers.push(() => happyLinkInbox[Symbol.dispose]());

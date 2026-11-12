@@ -343,6 +343,7 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.invoke(desktopIpc.runtimeStart, request),
     topologySelect: (topologyId) => ipcRenderer.invoke(desktopIpc.topologySelect, topologyId),
     updateInstall: () => ipcRenderer.invoke(desktopIpc.updateInstall),
+    windowClose: () => ipcRenderer.invoke(desktopIpc.windowClose),
     windowStateGet: () => ipcRenderer.invoke(desktopIpc.windowStateGet),
     windowStateSubscribe(listener: (state: DesktopWindowState) => void) {
         const receive = (_event: Electron.IpcRendererEvent, state: DesktopWindowState) =>

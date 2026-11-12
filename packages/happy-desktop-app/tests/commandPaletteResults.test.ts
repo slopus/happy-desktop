@@ -23,6 +23,7 @@ import type {
 import { commandShortcut } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "../sources/appShortcuts";
 import {
+    closedChatLatestFind,
     commandPaletteHeld,
     commandPaletteResults,
     type CommandPaletteInput,
@@ -247,6 +248,56 @@ it("answers “fold sidebar” with the sidebar's own action and chord", () => {
     });
     // A window that keeps no fold of its own offers none.
     expect(commandPaletteResults(input({ query: "fold sidebar" })).rows).toEqual([]);
+});
+
+it("offers to reopen the chat last closed where the reader is, by the chord that does it", () => {
+    const closed = (id: string, title: string, archivedAt: number | undefined, extra = {}) =>
+        ({
+            id,
+            title,
+            projectId: "prj_infra",
+            updatedAt: NOW,
+            ...(archivedAt === undefined ? {} : { archivedAt }),
+            ...extra,
+        }) as unknown as CommandPaletteInput["archivedSessions"][number];
+    const archivedSessions = [
+        closed("ses_older", "Shard plan", NOW - 2 * MINUTE),
+        closed("ses_newer", "Reindex dry run", NOW - MINUTE),
+        // Another project's chat, and a delegated one, are never the answer.
+        closed("ses_elsewhere", "Elsewhere", NOW, { projectId: "prj_other" }),
+        closed("ses_child", "Delegated", NOW, { parentSessionId: "ses_newer" }),
+    ];
+    expect(closedChatLatestFind(archivedSessions, "prj_infra")?.id).toBe("ses_newer");
+    // One closed a moment ago, which the host has not dated yet, is the newest.
+    expect(
+        closedChatLatestFind(
+            [closed("ses_now", "Just closed", undefined), ...archivedSessions],
+            "prj_infra",
+        )?.id,
+    ).toBe("ses_now");
+    expect(closedChatLatestFind(archivedSessions, "prj_empty")).toBeUndefined();
+
+    const result = commandPaletteResults(
+        input({ query: "reopen", groupId: "prj_infra", archivedSessions }),
+    );
+    expect(result.rows[0]).toMatchObject({
+        id: "action:chat-reopen",
+        title: "Reopen closed chat",
+        meta: "Reindex dry run",
+        shortcut: { caps: APP_SHORTCUTS.chatReopen.caps },
+        command: {
+            kind: "chatOpen",
+            happyAgentId: "local",
+            groupId: "prj_infra",
+            chatId: "ses_newer",
+            archived: true,
+        },
+    });
+    // Nothing closed here, or no project addressed, leaves nothing to offer.
+    const none = (overrides: Partial<CommandPaletteInput>) =>
+        ids(commandPaletteResults(input({ query: "reopen", ...overrides })));
+    expect(none({ groupId: "prj_infra" })).not.toContain("action:chat-reopen");
+    expect(none({ archivedSessions })).not.toContain("action:chat-reopen");
 });
 
 it("lists a section with a better answer first", () => {

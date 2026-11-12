@@ -1275,6 +1275,13 @@ export interface HappyDesktopBridge {
     runtimeStart(request: DesktopStartRequest): Promise<void>;
     topologySelect(topologyId: string): Promise<void>;
     updateInstall(): Promise<void>;
+    /**
+     * Closes the window this page is shown in, as its close button would. The
+     * page asks only when the close chord found nothing of its own left to
+     * close. Absent from shells older than this field, where the chord then
+     * does nothing, as it did before.
+     */
+    windowClose?(): Promise<void>;
     windowStateGet(): Promise<DesktopWindowState>;
     windowStateSubscribe(listener: (state: DesktopWindowState) => void): () => void;
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void;
@@ -1349,6 +1356,7 @@ export const desktopIpc = {
     mediaPreviewClose: "happy:media-preview:close",
     mediaPreviewGet: "happy:media-preview:get",
     mediaPreviewOpen: "happy:media-preview:open",
+    windowClose: "happy:window:close",
     /** Renderer → main only: the number of conversations waiting for the person. */
     dockUnreadSet: "happy:dock:unread-set",
     /** Renderer → main only: whether the computer should be held out of sleep. */

@@ -1,7 +1,9 @@
 import { useCallback, useId, useRef, useState } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "./Button";
 import { Icon, type IconName, type IconProps } from "./Icon";
+import { CLOSE_SHORTCUT, commandShortcutMatches } from "./keyboardShortcut";
 import { Menu, type MenuItem } from "./Menu";
+import { fixedBlockMeasure } from "./fixedBlock";
 import { WindowOverlay } from "./WindowOverlay";
 
 export interface MenuButtonProps {
@@ -101,15 +103,21 @@ export function MenuButton(props: MenuButtonProps) {
                 // Anchored to the trigger's near corner, then pushed back
                 // inside the window if the card would run past an edge.
                 const bounds = node.getBoundingClientRect();
+                // The trigger was measured against the window; the card is
+                // laid out against whatever contains it, which is not the
+                // window inside a connection.
+                const block = fixedBlockMeasure(node.parentElement ?? node);
                 const wanted = alignEnd ? trigger.right - bounds.width : trigger.left;
                 const left = Math.max(
                     VIEWPORT_MARGIN,
                     Math.min(wanted, window.innerWidth - bounds.width - VIEWPORT_MARGIN),
                 );
-                node.style.left = `${String(left)}px`;
+                node.style.left = `${String(left - block.left)}px`;
                 if (above) {
-                    const bottom = Math.max(VIEWPORT_MARGIN, window.innerHeight - trigger.top);
-                    node.style.bottom = `${String(bottom)}px`;
+                    // Held by its bottom edge, so a card that grows does
+                    // so away from the trigger rather than over it.
+                    const edge = Math.min(trigger.top, window.innerHeight - VIEWPORT_MARGIN);
+                    node.style.bottom = `${String(block.bottom - edge)}px`;
                 } else {
                     const top = Math.max(
                         VIEWPORT_MARGIN,
@@ -118,7 +126,7 @@ export function MenuButton(props: MenuButtonProps) {
                             window.innerHeight - bounds.height - VIEWPORT_MARGIN,
                         ),
                     );
-                    node.style.top = `${String(top)}px`;
+                    node.style.top = `${String(top - block.top)}px`;
                 }
             }
             node.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')?.focus();
@@ -227,7 +235,13 @@ export function MenuButton(props: MenuButtonProps) {
             // is elsewhere in the document but in place in the React tree.
             onKeyDown={(event) => {
                 if (!expanded) return;
-                if (event.key === "Escape") {
+                // The close chord closes what is in front, and an open menu is
+                // in front of everything behind it: it answers here, as Escape
+                // does, and the press goes no further.
+                if (
+                    event.key === "Escape" ||
+                    commandShortcutMatches(event.nativeEvent, CLOSE_SHORTCUT)
+                ) {
                     event.preventDefault();
                     event.stopPropagation();
                     close(true);

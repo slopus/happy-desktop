@@ -462,6 +462,14 @@ let browserProxyConnectionId: number | undefined;
 let browserProxyOperation = Promise.resolve();
 // In a hidden-window run, showing a window leaves it hidden (hiddenWindows.ts).
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
+/**
+ * Whether startup has put up its window. On macOS the app outlives its window,
+ * so from then on having no window means the person closed it: it stays closed
+ * until they ask for it again, and nothing the app does on its own reopens it.
+ */
+let windowOpened = false;
+/** The sleep assertion the presented window asked for, while it is held. */
+let keepAwakeBlocker: number | undefined;
 let browserPasswords: BrowserPasswords | undefined;
 const browserPasswordGuests = new Map<
     number,
@@ -592,7 +600,14 @@ function systemUrlDeliver(candidate: string): boolean {
         if (queue.length > CLOUD_AUTH_CALLBACKS_MAX) queue.shift();
     } else if (!server) return false;
     const window = windowLifecycle.get();
-    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return true;
+    if (!window) {
+        // The person closed the window and the app stayed. What arrived waits in
+        // its queue: the window opened for it takes it as it loads, and is shown
+        // when it is ready, like any other.
+        windowReopen();
+        return true;
+    }
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return true;
     if (taken)
         window.webContents.send(
             cloud ? desktopIpc.cloudAuthCallbackReceived : desktopIpc.happyLinkExternalReceived,
@@ -1373,6 +1388,13 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     };
     window.webContents.on("render-process-gone", cleanup);
     window.webContents.on("destroyed", cleanup);
+    // The sleep assertion belongs to the window that asked for it, as the mark
+    // on the Dock does. The app can outlive its window, so a closed window lets
+    // the machine sleep again, unless another is already presenting and will
+    // say for itself.
+    window.on("closed", () => {
+        if (!windowLifecycle.get()) keepAwakeRelease();
+    });
     // macOS full screen hides the traffic lights without changing anything the
     // renderer can query, so the window tells it directly and the shell drops the
     // lane it reserves for them.
@@ -1584,6 +1606,23 @@ function mediaPreviewRevalidate(): void {
     window.destroy();
 }
 
+/**
+ * Opens the window again when the person closed it and the app stayed, for
+ * something they have just asked of it. Before startup has put up its own window
+ * this opens nothing: startup does that, in its own order.
+ */
+function windowReopen(): BrowserWindow | undefined {
+    const window = windowLifecycle.get();
+    if (window || !windowOpened) return window;
+    return windowSynchronize(runtime.get());
+}
+
+function keepAwakeRelease(): void {
+    if (keepAwakeBlocker === undefined) return;
+    powerSaveBlocker.stop(keepAwakeBlocker);
+    keepAwakeBlocker = undefined;
+}
+
 function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): BrowserWindow {
     const restoredBounds = desktopWindowStateStore.restore(
         screen.getAllDisplays(),
@@ -1668,7 +1707,10 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
         label: target.label,
         type: "checkbox",
         checked: target.active,
-        click: () => void runtime.topologySelect(target.id).catch(() => undefined),
+        click: () => {
+            windowReopen();
+            void runtime.topologySelect(target.id).catch(() => undefined);
+        },
     }));
     if (instances.length === 0) instances.push({ label: "No saved instances", enabled: false });
     instances.push(
@@ -1676,7 +1718,10 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
         {
             label: "Choose or Add Instance…",
             accelerator: "CmdOrCtrl+Shift+I",
-            click: () => void runtime.reset().catch(() => undefined),
+            click: () => {
+                windowReopen();
+                void runtime.reset().catch(() => undefined);
+            },
         },
     );
     const navigationStepSend = (direction: "back" | "forward"): void => {
@@ -1969,9 +2014,13 @@ void app
             }
             mediaPreviewRevalidate();
             const previous = windowLifecycle.get();
-            const window = windowSynchronize(snapshot);
+            // A window the person closed stays closed. The update check alone
+            // changes the runtime every few minutes, and the window opened next
+            // reads the runtime as it loads, so it misses nothing.
+            const window = previous || !windowOpened ? windowSynchronize(snapshot) : undefined;
             applicationMenuInstall(snapshot);
             if (
+                window &&
                 window === previous &&
                 (desktopFlavor.kind === "local-web" ||
                     desktopWindowTarget(snapshot).kind === "local")
@@ -2385,18 +2434,15 @@ void app
         // guessed. `prevent-app-suspension` keeps the system running while
         // letting the display sleep, which is what "keep the computer awake"
         // means on every platform Electron runs on; the assertion dies with the
-        // process, so quitting never leaves a machine that cannot sleep.
-        let keepAwakeBlocker: number | undefined;
+        // process, so quitting never leaves a machine that cannot sleep, and the
+        // window gives it up when it closes (localWindowCreate).
         ipcMain.on(desktopIpc.keepAwakeSet, (event, raw: unknown) => {
             const presenting = windowLifecycle.get();
             if (!presenting || presenting.webContents !== event.sender) return;
             if (typeof raw !== "boolean") return;
             if (raw && keepAwakeBlocker === undefined)
                 keepAwakeBlocker = powerSaveBlocker.start("prevent-app-suspension");
-            else if (!raw && keepAwakeBlocker !== undefined) {
-                powerSaveBlocker.stop(keepAwakeBlocker);
-                keepAwakeBlocker = undefined;
-            }
+            else if (!raw) keepAwakeRelease();
         });
         ipcMain.handle(desktopIpc.mediaPreviewOpen, (event, raw: unknown) => {
             // Only the window this shell is presenting opens a preview window, so
@@ -2423,6 +2469,14 @@ void app
         ipcMain.handle(desktopIpc.mediaPreviewClose, (event) => {
             const window = BrowserWindow.fromWebContents(event.sender);
             if (window && window === mediaPreviewWindow) window.close();
+        });
+        // The close chord with nothing left in the page to close. Only the
+        // window this shell is presenting may be closed this way, and only by
+        // its own page: a guest, a preview, or a superseded renderer still
+        // shutting down closes nothing.
+        ipcMain.handle(desktopIpc.windowClose, (event) => {
+            const presenting = windowLifecycle.get();
+            if (presenting && presenting.webContents === event.sender) presenting.close();
         });
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
@@ -2485,6 +2539,7 @@ void app
             fullScreen: BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false,
         }));
         windowSynchronize(runtime.get());
+        windowOpened = true;
         desktopSmokeReportStart(desktopWindowsHidden, () => windowLifecycle.get());
         applicationMenuInstall(runtime.get());
         desktopDebugRuntimeLog(runtime.get());
@@ -2517,10 +2572,29 @@ app.on("second-instance", (_event, argv, _directory, launch) => {
     // the instance lock and forwards its arguments here.
     systemUrlFromArguments(argv);
     const window = windowLifecycle.get();
-    if (!window) return;
+    if (!window) {
+        // The person closed the window and the app stayed: launching it again
+        // asks for the window back. It is shown when it is ready.
+        windowReopen();
+        return;
+    }
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
+});
+
+/*
+ * Closing the last window ends the app on Windows and Linux, as it always has.
+ * On macOS the app stays in the Dock, as applications there do, and the Dock
+ * icon, a link, or a second launch brings the window back. A hidden run has
+ * nobody to bring it back, so it ends with its window on every platform. An
+ * update already downloaded installs when the app quits, so with one waiting
+ * the last window ends the app on macOS too, rather than leaving the update to
+ * wait in the Dock.
+ */
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin" || desktopWindowsHidden || desktopUpdater?.ready() === true)
+        app.quit();
 });
 
 app.on("before-quit", (event) => {
