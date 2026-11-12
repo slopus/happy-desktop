@@ -1,7 +1,6 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import {
-    happyAgentMobileConnectorStoreNoop,
-    mobilePairingMethodStoreNoop,
+    happyAgentMobileConnectorStoreUnfollowed,
     type AppearanceStore,
     type HappyAgentClockStore,
     type HappyAgentOnboardingStore,
@@ -25,8 +24,8 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly profile: HappyAgentProfileStore;
     readonly clock: HappyAgentClockStore;
     readonly online: boolean;
-    /** Which pairing method shows first; absent, Relay. */
-    readonly mobilePairingMethod?: MobilePairingMethodStore;
+    /** Which pairing method shows: this computer's default until the person picks on the page. */
+    readonly mobilePairingMethod: MobilePairingMethodStore;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
     readonly children: ReactNode;
@@ -52,7 +51,7 @@ export function HappyAgentOnboardingBoundary(props: {
         props.store.mobile.get,
         props.store.mobile.get,
     );
-    const methodStore = props.mobilePairingMethod ?? mobilePairingMethodStoreNoop;
+    const methodStore = props.mobilePairingMethod;
     const { method } = useSyncExternalStore(
         methodStore.subscribe,
         methodStore.get,
@@ -78,7 +77,7 @@ export function HappyAgentOnboardingBoundary(props: {
         direct:
             pairing && method === "direct"
                 ? props.store.mobile.direct
-                : happyAgentMobileConnectorStoreNoop,
+                : happyAgentMobileConnectorStoreUnfollowed,
         clock: props.clock,
         online: () => online,
         ...(online ? {} : { unavailable: "Happy can't reach this Happy Agent right now." }),
@@ -153,7 +152,11 @@ export function HappyAgentOnboardingBoundary(props: {
             onExternalOpen={props.onExternalOpen}
             onAssistantsContinue={() => undefined}
             onConnectRetry={props.onRetry}
-            onHappyMobileConnect={props.store.mobile.happyMobileConnect}
+            onHappyMobileConnect={() => {
+                // Linking from the offer opens the pairing page on the default.
+                if (mobile.status === "offer") methodStore.methodReset();
+                props.store.mobile.happyMobileConnect();
+            }}
             onHappyMobileSkip={props.store.mobile.happyMobileSkip}
             happyMobilePairingOptions={pairingOptions}
         />

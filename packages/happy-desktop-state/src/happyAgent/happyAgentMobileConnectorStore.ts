@@ -461,3 +461,13 @@ export const happyAgentMobileConnectorStoreNoop: HappyAgentMobileConnectorStore 
     deviceRemoveConfirm: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
+
+/**
+ * A stand-in for a connector this page does not follow while it shows Relay.
+ * Not followed is not off: it reads as not yet known, so the Direct | Relay
+ * control stays and choosing Direct follows the real connector.
+ */
+export const happyAgentMobileConnectorStoreUnfollowed: HappyAgentMobileConnectorStore = {
+    ...happyAgentMobileConnectorStoreNoop,
+    get: () => INITIAL,
+};

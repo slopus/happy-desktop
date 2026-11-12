@@ -152,8 +152,8 @@ export interface HappyAgentRouterContext {
      * in a host that remembers no such choice, which withholds them.
      */
     readonly experiments?: ExperimentsStore;
-    /** Which way pairing pages offer a phone first; absent, Relay. */
-    readonly mobilePairingMethod?: MobilePairingMethodStore;
+    /** Which way the open pairing page offers a phone: the host computer's default, else the pick on it. */
+    readonly mobilePairingMethod: MobilePairingMethodStore;
     /**
      * Whether the sidebar leaves the Projects sections out, for every
      * connection. Absent in a host that remembers no such choice, which shows them.
@@ -266,9 +266,7 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             clock={setup.clock}
             online={entry?.status === "connected"}
             onRetry={setup.retry}
-            {...(context.mobilePairingMethod
-                ? { mobilePairingMethod: context.mobilePairingMethod }
-                : {})}
+            mobilePairingMethod={context.mobilePairingMethod}
             {...(context.externalLinkOpen ? { onExternalOpen: context.externalLinkOpen } : {})}
         >
             {content}
@@ -860,9 +858,7 @@ function HappyAgentSettingsRoute() {
             {...(context.debug ? { debug: context.debug } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
-            {...(context.mobilePairingMethod
-                ? { mobilePairingMethod: context.mobilePairingMethod }
-                : {})}
+            mobilePairingMethod={context.mobilePairingMethod}
             {...(context.projectsVisibility
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}

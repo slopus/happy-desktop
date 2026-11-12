@@ -48,6 +48,7 @@ import {
     happyAgentAvailabilityProject,
     happyAgentIntegrationStoreNoop,
     happyAgentMobileConnectorStoreNoop,
+    happyAgentMobileConnectorStoreUnfollowed,
     happyAgentIntegrationRemovalIncomplete,
     happyAgentVersionAtLeast,
     HAPPY_AGENT_COMPUTER_REMOVAL_VERSION,
@@ -760,7 +761,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const mobileConnectorOwned =
         section === "mobile-access" ? host?.session?.mobileConnector?.() : undefined;
     const mobileConnectorStore =
-        (relayPageShown ? undefined : mobileConnectorOwned) ?? happyAgentMobileConnectorStoreNoop;
+        relayPageShown && mobileConnectorOwned
+            ? happyAgentMobileConnectorStoreUnfollowed
+            : (mobileConnectorOwned ?? happyAgentMobileConnectorStoreNoop);
     // A page that opened on Relay asks for a direct code as Direct shows.
     const pairingMethodSelect = (method: "relay" | "direct") => {
         if (method === "direct") mobileConnectorOwned?.pairingOpen();

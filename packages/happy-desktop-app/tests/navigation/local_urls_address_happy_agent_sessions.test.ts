@@ -11,6 +11,7 @@ import {
     appearanceStoreCreate,
     happyAgentHostNoop,
     happyAgentSettingsStoreCreate,
+    mobilePairingMethodStoreCreate,
 } from "happy-desktop-state";
 import type {
     AppHappyAgentDirectorySnapshot,
@@ -87,6 +88,7 @@ async function resolve(url: string) {
         appearance: appearanceStoreCreate(),
         happyAgents: directory(store),
         settings: happyAgentSettingsStoreCreate(),
+        mobilePairingMethod: mobilePairingMethodStoreCreate({ defaultMethod: "direct" }),
     };
     router.update({ context });
     await router.load();

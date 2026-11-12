@@ -65,7 +65,7 @@ import {
     serverSessionsStoreCreate,
     serverSourceHostCreate,
     UserError,
-    happyAgentMobileConnectorStoreNoop,
+    happyAgentMobileConnectorStoreUnfollowed,
     type AppearanceStore,
     type HappyAgentChiefOfStaffRequest,
     type HappyAgentClockStore,
@@ -605,7 +605,7 @@ function DesktopOnboardingGate(props: {
         direct:
             linking && method === "direct"
                 ? props.store.happyMobileDirect()
-                : happyAgentMobileConnectorStoreNoop,
+                : happyAgentMobileConnectorStoreUnfollowed,
         clock: props.clock,
         online: () => true,
     });
