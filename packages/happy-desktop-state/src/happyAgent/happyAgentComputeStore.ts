@@ -70,10 +70,10 @@ export interface HappyAgentComputeMachine {
 
 /** An agent waiting for the reader to let it join one of their private machines. */
 export interface HappyAgentComputeApproval {
-    /** `machineId/agentId`, the one request it is. */
+    /** `computerId/agentId`, the one request it is. */
     readonly key: string;
-    readonly machineId: string;
-    readonly machineName: string | null;
+    readonly computerId: string;
+    readonly computerName: string | null;
     readonly agentId: string;
     /** Null when the reader may not read that agent's conversation. */
     readonly agentTitle: string | null;
@@ -150,11 +150,11 @@ export interface HappyAgentComputeSnapshot {
 }
 
 /**
- * Settings › Compute on Happy Cloud: the machines agents join, the requests to
- * join the reader's private machines, adding a machine, and editing one. The
- * lists are read again on `runners.updated` and `compute.approvals.updated`,
- * and every few seconds while on screen, since a machine going offline is
- * announced by nothing.
+ * Settings › Compute on Happy Cloud: the computers agents join, the requests to
+ * join the reader's private computers, adding a computer, and editing one. The
+ * lists are read again on `runners.updated`, `compute.nodes.updated` and
+ * `compute.approvals.updated`, and every few seconds while on screen, since a
+ * computer going offline is announced by nothing.
  */
 export interface HappyAgentComputeStore {
     get(): HappyAgentComputeSnapshot;
@@ -193,7 +193,7 @@ function numberOr(value: unknown, fallback: number): number {
     return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function machineStatusOf(value: unknown): HappyAgentComputeMachineStatus | undefined {
+function computerStatusOf(value: unknown): HappyAgentComputeMachineStatus | undefined {
     return (["online", "offline", "draining", "enrolling"] as const).find(
         (status) => status === value,
     );
@@ -210,10 +210,10 @@ interface Reader {
     readonly names: ReadonlyMap<string, string | null>;
 }
 
-function machineModeRead(node: Record<string, unknown>, reader: Reader) {
-    const mode = modeOf(node.mode);
+function computerModeRead(computer: Record<string, unknown>, reader: Reader) {
+    const mode = modeOf(computer.mode);
     if (mode === "exclusive") {
-        const held = recordOf(node.exclusiveAgent);
+        const held = recordOf(computer.exclusiveAgent);
         return {
             mode,
             holder:
@@ -223,7 +223,7 @@ function machineModeRead(node: Record<string, unknown>, reader: Reader) {
         } satisfies HappyAgentComputeMachineMode;
     }
     if (mode === "private") {
-        const owner = textOrNull(node.owner);
+        const owner = textOrNull(computer.owner);
         return {
             mode,
             owner:
@@ -237,38 +237,42 @@ function machineModeRead(node: Record<string, unknown>, reader: Reader) {
     return mode === undefined ? undefined : { mode };
 }
 
-/** A node from `/v0/compute/nodes`; a revoked one is left out. */
-function machineRead(value: unknown, reader: Reader): HappyAgentComputeMachine | undefined {
-    const node = recordOf(value);
-    const status = machineStatusOf(node?.status);
-    if (!node || typeof node.id !== "string" || !status) return undefined;
-    const mode = machineModeRead(node, reader);
+/** A computer from `/v0/computers`; a revoked one is left out. */
+function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine | undefined {
+    const computer = recordOf(value);
+    const status = computerStatusOf(computer?.status);
+    if (!computer || typeof computer.id !== "string" || !status) return undefined;
+    const mode = computerModeRead(computer, reader);
     if (!mode) return undefined;
     return {
-        id: node.id,
-        name: textOrNull(node.name) ?? textOrNull(node.hostname) ?? node.id.slice(0, 8),
+        id: computer.id,
+        name: textOrNull(computer.name) ?? textOrNull(computer.hostname) ?? computer.id.slice(0, 8),
         status,
-        hostname: textOrNull(node.hostname),
-        os: textOrNull(node.os),
-        arch: textOrNull(node.arch),
+        hostname: textOrNull(computer.hostname),
+        os: textOrNull(computer.os),
+        arch: textOrNull(computer.arch),
         mode,
-        description: textOrNull(node.description),
+        description: textOrNull(computer.description),
         editable:
             reader.access === "manage" ||
             (mode.mode === "private" && mode.owner?.kind === "reader"),
-        sandboxError: textOrNull(node.sandboxError),
-        since: numberOr(node.since, 0),
+        sandboxError: textOrNull(computer.sandboxError),
+        since: numberOr(computer.since, 0),
     };
 }
 
 function approvalRead(value: unknown): HappyAgentComputeApproval | undefined {
     const approval = recordOf(value);
-    if (!approval || typeof approval.nodeId !== "string" || typeof approval.agentId !== "string")
+    if (
+        !approval ||
+        typeof approval.computerId !== "string" ||
+        typeof approval.agentId !== "string"
+    )
         return undefined;
     return {
-        key: `${approval.nodeId}/${approval.agentId}`,
-        machineId: approval.nodeId,
-        machineName: textOrNull(approval.nodeName),
+        key: `${approval.computerId}/${approval.agentId}`,
+        computerId: approval.computerId,
+        computerName: textOrNull(approval.computerName),
         agentId: approval.agentId,
         agentTitle: textOrNull(approval.agentTitle),
         createdAt: numberOr(approval.createdAt, 0),
@@ -302,7 +306,7 @@ function installRead(value: unknown): HappyAgentComputeInstall | undefined {
 }
 
 /** Online first, then by name, so the machines that can take work lead. */
-function machineCompare(left: HappyAgentComputeMachine, right: HappyAgentComputeMachine): number {
+function computerCompare(left: HappyAgentComputeMachine, right: HappyAgentComputeMachine): number {
     const online = Number(right.status === "online") - Number(left.status === "online");
     return online !== 0 ? online : left.name.localeCompare(right.name);
 }
@@ -365,11 +369,11 @@ export function happyAgentComputeStoreCreate(deps: {
     };
 
     /** Reads member names only while a machine names an owner it does not know. */
-    const namesRead = async (nodes: unknown): Promise<void> => {
+    const namesRead = async (computers: unknown): Promise<void> => {
         const owners = listRead(
-            nodes,
-            "nodes",
-            (node) => textOrNull(recordOf(node)?.owner) ?? undefined,
+            computers,
+            "computers",
+            (computer) => textOrNull(recordOf(computer)?.owner) ?? undefined,
         );
         if (owners.every((owner) => owner === userId || names.has(owner))) return;
         const members = listRead(await deps.request("GET", "v0/members"), "members", (item) => {
@@ -388,14 +392,14 @@ export function happyAgentComputeStoreCreate(deps: {
         if (profile !== undefined)
             userId = textOrNull(recordOf(recordOf(profile)?.profile)?.userId) ?? undefined;
         const access = accessRead(permissions);
-        const [nodes, approvals] =
+        const [computers, approvals] =
             access === "none"
                 ? [undefined, undefined]
                 : await Promise.all([
-                      deps.request("GET", "v0/compute/nodes"),
-                      deps.request("GET", "v0/compute/approvals"),
+                      deps.request("GET", "v0/computers"),
+                      deps.request("GET", "v0/computers/approvals"),
                   ]);
-        if (access === "manage") await namesRead(nodes);
+        if (access === "manage") await namesRead(computers);
         if (disposed) return;
         const reader: Reader = { userId, access, names };
         const current = store.getState();
@@ -407,9 +411,9 @@ export function happyAgentComputeStoreCreate(deps: {
                 access,
                 machines: referencesPreserve(
                     current.machines,
-                    listRead(nodes, "nodes", (node) => machineRead(node, reader)).sort(
-                        machineCompare,
-                    ),
+                    listRead(computers, "computers", (computer) =>
+                        computerRead(computer, reader),
+                    ).sort(computerCompare),
                 ),
                 approvals: referencesPreserve(
                     current.approvals,
@@ -450,7 +454,7 @@ export function happyAgentComputeStoreCreate(deps: {
             let greeted = false;
             for await (const input of sync.follow({
                 signal: active.signal,
-                events: ["runners.updated", "compute.approvals.updated"],
+                events: ["runners.updated", "compute.nodes.updated", "compute.approvals.updated"],
             })) {
                 const greeting = !greeted;
                 greeted = true;
@@ -558,7 +562,7 @@ export function happyAgentComputeStoreCreate(deps: {
             const name = draftText(add.draft.name);
             const description = draftText(add.draft.description);
             void deps
-                .request("POST", "v0/compute/join-tokens", {
+                .request("POST", "v0/computers/join-tokens", {
                     mode: add.draft.mode,
                     ...(name === null ? {} : { name }),
                     ...(description === null ? {} : { description }),
@@ -635,7 +639,7 @@ export function happyAgentComputeStoreCreate(deps: {
             const saving: HappyAgentComputeMachineEdit = { step: "saving", draft };
             set({ machineEdit: saving });
             void deps
-                .request("PATCH", `v0/compute/nodes/${encodeURIComponent(draft.machineId)}`, body)
+                .request("PATCH", `v0/computers/${encodeURIComponent(draft.machineId)}`, body)
                 .then(
                     () => {
                         if (disposed || store.getState().machineEdit !== saving) return;
@@ -667,7 +671,7 @@ export function happyAgentComputeStoreCreate(deps: {
                 () =>
                     deps.request(
                         "POST",
-                        `v0/compute/nodes/${encodeURIComponent(machineId)}/release-lock`,
+                        `v0/computers/${encodeURIComponent(machineId)}/release-lock`,
                         {},
                     ),
                 (current) => ({
@@ -689,7 +693,7 @@ export function happyAgentComputeStoreCreate(deps: {
                 () =>
                     deps.request(
                         "POST",
-                        `v0/compute/approvals/${encodeURIComponent(approval.machineId)}/${encodeURIComponent(approval.agentId)}`,
+                        `v0/computers/approvals/${encodeURIComponent(approval.computerId)}/${encodeURIComponent(approval.agentId)}`,
                         { approve: answer === "approve" },
                     ),
                 (current) => ({
