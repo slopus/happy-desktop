@@ -75,27 +75,54 @@ export interface HappyAgentComputeSettingsProps {
     onRequestAnswer: (key: string, approve: boolean) => void;
 }
 
-/** Each mode's name and the one sentence that says what it means. */
+/**
+ * Each mode's name, the sentence that says what it means, and the systems its
+ * installer accepts (happy-cluster deploy/README.md). Only private installs
+ * without sudo, and only private installs on Windows.
+ */
 const MODES: Readonly<
-    Record<HappyAgentComputeModeName, { readonly label: string; readonly description: string }>
+    Record<
+        HappyAgentComputeModeName,
+        {
+            readonly label: string;
+            readonly description: string;
+            /** What running the install command does. */
+            readonly install: string;
+            readonly systems: "linux" | "unix" | "any";
+        }
+    >
 > = {
     sandbox: {
         label: "Sandbox",
         description:
             "Each agent works in its own isolated sandbox, with optional CPU and memory limits. Linux only.",
+        install:
+            "Run this on a Linux machine. Sandbox mode is Linux only. It installs the Happy supervisor as root, joins the machine, and gives each agent its own sandbox.",
+        systems: "linux",
     },
     shared: {
         label: "Shared",
         description:
-            "Every agent works directly on the host. Only other agents' workspaces are hidden.",
+            "Every agent works directly on the host. Only other agents' workspaces are hidden. Linux only.",
+        install:
+            "Run this on a Linux machine. Shared mode is Linux only. It installs the Happy supervisor with sudo and joins the machine in shared mode.",
+        systems: "linux",
     },
     exclusive: {
         label: "Exclusive",
-        description: "One agent at a time works on the host. The rest see it as busy.",
+        description:
+            "One agent at a time works on the host. The rest see it as busy. Linux or macOS.",
+        install:
+            "Run this on a Linux or macOS machine. It installs the Happy supervisor with sudo and joins the machine in exclusive mode.",
+        systems: "unix",
     },
     private: {
         label: "Private",
-        description: "Your own machine. Only your agents can join, and you approve each one.",
+        description:
+            "Your own machine. Only your agents can join, and you approve each one. Linux, macOS or Windows.",
+        install:
+            "Run this on your own Linux, macOS or Windows machine, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the machine joins as yours.",
+        systems: "any",
     },
 };
 
@@ -402,24 +429,14 @@ function HappyAgentComputeCommand(props: {
     );
 }
 
-/** What running the command does, by mode. */
-const INSTALL_NOTE: Readonly<Record<HappyAgentComputeModeName, string>> = {
-    sandbox:
-        "Run this on a Linux machine. Sandbox mode is Linux only. It installs the Happy supervisor as root, joins the machine, and gives each agent its own sandbox.",
-    shared: "Run this on the machine. It installs the Happy supervisor with sudo and joins the machine in shared mode.",
-    exclusive:
-        "Run this on the machine. It installs the Happy supervisor with sudo and joins the machine in exclusive mode.",
-    private:
-        "Run this on your own machine, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the machine joins as yours.",
-};
-
 function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeInstallView }) {
     const { install } = props;
     const commands = install.commands;
+    const systems = MODES[install.mode].systems;
     return (
         <>
             <p className="happy-agent-compute__note">
-                {`${INSTALL_NOTE[install.mode]} The command works once. ${install.expires}.`}
+                {`${MODES[install.mode].install} The command works once. ${install.expires}.`}
             </p>
             {commands === null ? (
                 <>
@@ -438,15 +455,14 @@ function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeIn
                 <>
                     <HappyAgentComputeCommand
                         copyLabel={
-                            install.mode === "sandbox"
+                            systems === "linux"
                                 ? "Copy Linux command"
                                 : "Copy macOS and Linux command"
                         }
-                        label={install.mode === "sandbox" ? "Linux" : "macOS and Linux"}
+                        label={systems === "linux" ? "Linux" : "macOS and Linux"}
                         text={commands.unix}
                     />
-                    {/* Only a private machine installs on Windows. */}
-                    {install.mode === "private" ? (
+                    {systems === "any" ? (
                         <HappyAgentComputeCommand
                             copyLabel="Copy Windows command"
                             label="Windows (PowerShell)"
