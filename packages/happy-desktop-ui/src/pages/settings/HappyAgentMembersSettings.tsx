@@ -39,8 +39,12 @@ export interface HappyAgentInviteRow {
     readonly saving: boolean;
 }
 
-/** An invite just made: its link shown this once, or whether its email went. */
-export type HappyAgentInviteCreatedView =
+/**
+ * What the invite area says about the last invite change: a link just made,
+ * shown this once; an email just made and whether it went; or why a create,
+ * resend or revoke was refused.
+ */
+export type HappyAgentInviteNoticeView =
     | {
           readonly type: "link";
           readonly link: string;
@@ -56,7 +60,16 @@ export type HappyAgentInviteCreatedView =
           readonly detail: string;
           /** A resend asked for and not yet answered. */
           readonly saving: boolean;
-      };
+      }
+    | { readonly type: "refused"; readonly message: string };
+
+/*
+ * Wide enough for each label with the spinner beside it, so a button keeps its
+ * box while it works and nothing next to it moves.
+ */
+const INVITE_EMAIL_BUTTON_WIDTH = 132;
+const INVITE_LINK_BUTTON_WIDTH = 108;
+const RESEND_BUTTON_WIDTH = 92;
 
 const INVITE_STATUS_LABELS: Record<HappyAgentInviteStatus, string> = {
     pending: "Pending",
@@ -84,7 +97,7 @@ export interface HappyAgentMembersSettingsProps {
     readonly inviteEmail: string;
     /** Which kind of invite is being made. */
     readonly inviteCreating?: "link" | "email";
-    readonly inviteCreated?: HappyAgentInviteCreatedView;
+    readonly inviteNotice?: HappyAgentInviteNoticeView;
     /** Whether past invites start unfolded; they start folded otherwise. */
     readonly defaultHistoryOpen?: boolean;
     /** Opens a member's profile; absent where there are no profiles. */
@@ -95,7 +108,7 @@ export interface HappyAgentMembersSettingsProps {
     /** Emails an invite with the role to the address typed in. */
     onInviteEmailCreate: (roleId: string) => void;
     onInviteLinkCreate: (roleId: string) => void;
-    onInviteCreatedDismiss: () => void;
+    onInviteNoticeDismiss: () => void;
     onInviteResend: (inviteId: string) => void;
     onInviteRevoke: (inviteId: string) => void;
     /** Leaves the server; rejects with the reason to show. */
@@ -134,7 +147,8 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
     }));
     const roleName = (roleId: string): string =>
         props.roles.find((role) => role.id === roleId)?.name ?? roleId;
-    const pending = props.invites.filter((invite) => invite.status === "pending");
+    // Oldest first, so a new invite lands at the end and no pending row moves.
+    const pending = props.invites.filter((invite) => invite.status === "pending").reverse();
     const history = props.invites.filter((invite) => invite.status !== "pending");
     return (
         <>
@@ -212,13 +226,11 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                     description="Invite someone by email, or make a link anyone holding it can join with. A link is shown once, so copy it before you close it."
                     title="Invites"
                 >
-                    {props.inviteCreated ? (
-                        <HappyAgentInviteCreatedNotice
-                            created={props.inviteCreated}
-                            onDismiss={props.onInviteCreatedDismiss}
-                            onResend={props.onInviteResend}
-                        />
-                    ) : null}
+                    <HappyAgentInviteNotice
+                        {...(props.inviteNotice ? { notice: props.inviteNotice } : {})}
+                        onDismiss={props.onInviteNoticeDismiss}
+                        onResend={props.onInviteResend}
+                    />
                     <Box className="happy-agent-members__actions happy-agent-members__invite">
                         <Select
                             aria-label="Role for the invite"
@@ -254,6 +266,7 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                             onClick={() => props.onInviteEmailCreate(inviteRole)}
                             size="small"
                             variant="secondary"
+                            width={INVITE_EMAIL_BUTTON_WIDTH}
                         >
                             Invite by email
                         </Button>
@@ -263,6 +276,7 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                             onClick={() => props.onInviteLinkCreate(inviteRole)}
                             size="small"
                             variant="secondary"
+                            width={INVITE_LINK_BUTTON_WIDTH}
                         >
                             Create link
                         </Button>
@@ -331,52 +345,83 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
     );
 }
 
-/** The invite just made: its link to copy, or where its email went. */
-function HappyAgentInviteCreatedNotice(props: {
-    readonly created: HappyAgentInviteCreatedView;
+/**
+ * The invite area's one line of news, always in place at one height: a hint
+ * while nothing has happened, then the link to copy, where an email went, or
+ * why a change was refused. Whatever it says, nothing below it moves.
+ */
+function HappyAgentInviteNotice(props: {
+    readonly notice?: HappyAgentInviteNoticeView;
     onDismiss: () => void;
     onResend: (inviteId: string) => void;
 }) {
-    const created = props.created;
+    const notice = props.notice;
     return (
         <Box
-            className="happy-agent-members__created"
-            data-happy-desktop-ui="happy-agent-invite-created"
+            className="happy-agent-members__notice"
+            data-happy-desktop-ui="happy-agent-invite-notice"
+            data-kind={notice?.type ?? "idle"}
         >
-            <Box className="happy-agent-members__text">
-                {created.type === "link" ? (
-                    <code className="happy-agent-members__link">{created.link}</code>
-                ) : (
+            {notice === undefined ? (
+                <span className="happy-agent-members__meta">
+                    Pick a role, then invite someone by email or create a link.
+                </span>
+            ) : notice.type === "link" ? (
+                <Box className="happy-agent-members__email">
+                    <TextField
+                        aria-label="Invite link"
+                        fullWidth
+                        readOnly
+                        size="small"
+                        value={notice.link}
+                    />
+                </Box>
+            ) : notice.type === "refused" ? (
+                <Box className="happy-agent-members__text">
+                    {/* Up to two lines, so the notice keeps its height in a narrow window. */}
+                    <span
+                        className="happy-agent-members__refused"
+                        data-tone="danger"
+                        title={notice.message}
+                    >
+                        {notice.message}
+                    </span>
+                </Box>
+            ) : (
+                <Box className="happy-agent-members__text">
                     <span
                         className="happy-agent-members__name"
-                        data-tone={created.delivery === "failed" ? "danger" : undefined}
+                        data-tone={notice.delivery === "failed" ? "danger" : undefined}
                     >
-                        {created.delivery === "sent"
-                            ? `Sent to ${created.email}`
-                            : `Couldn't email ${created.email}`}
+                        {notice.delivery === "sent"
+                            ? `Sent to ${notice.email}`
+                            : `Couldn't email ${notice.email}`}
                     </span>
-                )}
-                <span className="happy-agent-members__meta">
-                    {created.type === "email" && created.delivery === "failed"
-                        ? "The invite was made, but its email didn't go out."
-                        : created.detail}
-                </span>
-            </Box>
-            {created.type === "link" ? (
-                <CopyButton caption="Copy link" label="Copy invite link" text={created.link} />
-            ) : created.delivery === "failed" ? (
+                    <span className="happy-agent-members__meta">
+                        {notice.delivery === "failed"
+                            ? "The invite was made, but its email didn't go out."
+                            : notice.detail}
+                    </span>
+                </Box>
+            )}
+            {notice?.type === "link" ? (
+                <CopyButton caption="Copy link" label="Copy invite link" text={notice.link} />
+            ) : notice?.type === "email" && notice.delivery === "failed" ? (
                 <Button
-                    loading={created.saving}
-                    onClick={() => props.onResend(created.id)}
+                    loading={notice.saving}
+                    onClick={() => props.onResend(notice.id)}
                     size="small"
                     variant="secondary"
+                    width={RESEND_BUTTON_WIDTH}
                 >
                     Resend
                 </Button>
             ) : null}
-            <Button onClick={props.onDismiss} size="small" variant="ghost">
-                Done
-            </Button>
+            {notice === undefined ? null : (
+                <Button onClick={props.onDismiss} size="small" variant="ghost">
+                    Done
+                </Button>
+            )}
         </Box>
     );
 }
@@ -397,7 +442,9 @@ function HappyAgentInviteRowView(props: {
         >
             <Box className="happy-agent-members__text">
                 <span className="happy-agent-members__name">{invite.email ?? "Link"}</span>
-                <span className="happy-agent-members__meta">{invite.detail}</span>
+                <span className="happy-agent-members__meta" title={invite.detail}>
+                    {invite.detail}
+                </span>
             </Box>
             {pending && invite.delivery === "failed" ? (
                 <span className="happy-agent-members__role" data-tone="danger">

@@ -69,7 +69,7 @@ import {
     HAPPY_AGENT_INVITE_RESEND_COOLDOWN_MS,
     happyAgentMembersStoreNoop,
     type HappyAgentInvite,
-    type HappyAgentInviteCreated,
+    type HappyAgentInviteNotice,
     type HappyAgentMembersSnapshot,
     type HappyAgentCredentialImportSnapshot,
     happyAgentSecretsStoreNoop,
@@ -104,7 +104,7 @@ import {
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderEditDialogProps,
     HappyAgentMembersSettings,
-    type HappyAgentInviteCreatedView,
+    type HappyAgentInviteNoticeView,
     type HappyAgentInviteRow,
     Banner,
     type HappyAgentCredentialImportRow,
@@ -1529,8 +1529,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(members.inviteCreating
                             ? { inviteCreating: members.inviteCreating }
                             : {})}
-                        {...(members.inviteCreated
-                            ? { inviteCreated: inviteCreatedView(members, members.inviteCreated) }
+                        {...(members.inviteNotice
+                            ? { inviteNotice: inviteNoticeView(members, members.inviteNotice) }
                             : {})}
                         invites={members.invites.map((invite) => inviteRow(members, invite))}
                         loading={members.loading}
@@ -1548,7 +1548,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             saving: member.saving,
                         }))}
                         onDelete={(confirm) => membersShown.serverDelete(confirm)}
-                        onInviteCreatedDismiss={() => membersShown.inviteCreatedDismiss()}
+                        onInviteNoticeDismiss={() => membersShown.inviteNoticeDismiss()}
                         onInviteEmailChange={(value) => membersShown.inviteEmailUpdate(value)}
                         onInviteEmailCreate={(roleId) => membersShown.inviteEmailCreate(roleId)}
                         onInviteLinkCreate={(roleId) => membersShown.inviteLinkCreate(roleId)}
@@ -2497,10 +2497,11 @@ function inviteRow(
     };
 }
 
-function inviteCreatedView(
+function inviteNoticeView(
     members: HappyAgentMembersSnapshot,
-    created: HappyAgentInviteCreated,
-): HappyAgentInviteCreatedView {
+    created: HappyAgentInviteNotice,
+): HappyAgentInviteNoticeView {
+    if (created.type === "refused") return { type: "refused", message: created.error.message };
     const detail = `${roleNameOf(members, created.roleId)} · ${expiresText(created.expiresAt)}`;
     return created.type === "link"
         ? { type: "link", link: created.link, detail }
