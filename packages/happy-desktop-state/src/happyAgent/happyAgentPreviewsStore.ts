@@ -29,6 +29,8 @@ export interface HappyAgentPreviewsStore {
     subscribe(listener: () => void): () => void;
     /** The transcript reports only preview actions currently on screen. */
     previewVisibilityUpdate(viewer: HappyAgentTraceViewer, previewIds: readonly string[]): void;
+    /** Report a browser popup block before requesting any launch credentials. */
+    previewOpenBlock(previewId: string): void;
     /** Checks availability and mints a new, single-use URL. Never caches launch credentials. */
     previewLaunch(previewId: string): Promise<string>;
     [Symbol.dispose](): void;
@@ -204,6 +206,15 @@ export function happyAgentPreviewsStoreCreate(input: {
             if (timer !== undefined) clearTimeout(timer);
             timer = undefined;
             if (observers.size > 0 && viewers.size > 0) timer = setTimeout(poll, 0);
+        },
+        previewOpenBlock(previewId) {
+            publish(previewId, {
+                type: "error",
+                error: new UserError(
+                    "Allow pop-ups for Happy to open this preview.",
+                    "popup_blocked",
+                ),
+            });
         },
         async previewLaunch(previewId) {
             if (disposed) throw new UserError("This Happy Cloud connection is closed.");
