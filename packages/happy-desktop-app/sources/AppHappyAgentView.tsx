@@ -12323,11 +12323,9 @@ function HappyAgentTerminalScreen(props: {
 /** The chip's words for a compute binding: its name, or a short ID when the server sent none. */
 function computeChipOf(compute: HappyAgentCompute): ComputeChipCompute {
     if (compute.kind === "none") return { kind: "none" };
-    const label =
-        compute.label ?? (compute.kind === "pool" ? compute.poolId : compute.runnerId.slice(0, 8));
     return {
-        kind: compute.kind,
-        label,
+        kind: "computer",
+        label: compute.label ?? compute.computerId.slice(0, 8),
         ...(compute.online === undefined ? {} : { online: compute.online }),
     };
 }

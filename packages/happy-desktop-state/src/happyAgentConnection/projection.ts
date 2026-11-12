@@ -184,28 +184,34 @@ function repositoryProject(agent: object): HappyAgentRepositoryBinding | undefin
     };
 }
 
+/**
+ * The computer binding Happy Cloud sends now, which the protocol package does
+ * not name yet: it still types the pool and runner bindings that came before.
+ */
+interface HappyCloudComputerCompute {
+    readonly type: "computer";
+    readonly computerId: string;
+    readonly label?: string;
+    readonly status?: "online" | "offline";
+}
+
 /** The cloud's compute binding, as the conversation shows it. */
-function computeProject(compute: AgentCompute): HappyAgentCompute {
-    const status =
-        compute.type === "none" || compute.status === undefined
-            ? {}
-            : { online: compute.status === "online" };
+function computeProject(compute: AgentCompute | HappyCloudComputerCompute): HappyAgentCompute {
     switch (compute.type) {
         case "none":
             return { kind: "none" };
         case "pool":
-            return {
-                kind: "pool",
-                poolId: compute.poolId,
-                ...(compute.label === undefined ? {} : { label: compute.label }),
-                ...status,
-            };
+            // Happy Cloud moved every pool binding onto its computer or to none.
+            // A pool can only come from a server older than that, and names no computer.
+            return { kind: "none" };
+        case "computer":
         case "runner":
+            // A runner from before computers is that computer, by the same ID.
             return {
-                kind: "runner",
-                runnerId: compute.runnerId,
+                kind: "computer",
+                computerId: compute.type === "computer" ? compute.computerId : compute.runnerId,
                 ...(compute.label === undefined ? {} : { label: compute.label }),
-                ...status,
+                ...(compute.status === undefined ? {} : { online: compute.status === "online" }),
             };
     }
 }

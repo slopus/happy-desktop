@@ -4,8 +4,8 @@ import { Icon } from "./Icon";
 export type ComputeChipCompute =
     | { readonly kind: "none" }
     | {
-          readonly kind: "pool" | "runner";
-          /** The pool's name or the machine's hostname. */
+          readonly kind: "computer";
+          /** The computer's name. */
           readonly label: string;
           /** Absent until the server has said; no dot is drawn then. */
           readonly online?: boolean;
@@ -16,15 +16,15 @@ export type ComputeChipProps = {
 };
 
 /**
- * C-337 ComputeChip — the machine a cloud conversation's tools run on, in the
- * composer's control row. Read-only: the agent attaches and detaches it itself.
+ * C-337 ComputeChip — the computer a cloud conversation's tools run on, in the
+ * composer's control row. Read-only: the agent joins and leaves it itself.
  */
 export function ComputeChip(props: ComputeChipProps) {
     const compute = props.compute;
     const title =
         compute.kind === "none"
-            ? "No machine is attached. The agent attaches one when the work needs it."
-            : `${compute.kind === "pool" ? "Runs on a machine in" : "Runs on"} ${compute.label}${compute.online === false ? " · offline" : ""}`;
+            ? "No computer is joined. The agent joins one when the work needs it."
+            : `Runs on ${compute.label}${compute.online === false ? " · offline" : ""}`;
     return (
         <span
             className="happy-compute-chip"
@@ -39,7 +39,7 @@ export function ComputeChip(props: ComputeChipProps) {
         >
             <Icon name="terminal" size={14} />
             <span className="happy-compute-chip__label">
-                {compute.kind === "none" ? "No machine" : compute.label}
+                {compute.kind === "none" ? "No computer" : compute.label}
             </span>
             {compute.kind === "none" || compute.online === undefined ? null : (
                 <span

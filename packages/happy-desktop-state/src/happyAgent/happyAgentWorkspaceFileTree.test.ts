@@ -433,7 +433,7 @@ describe("All files reads the folders it shows open", () => {
 
 describe("All files on a Happy Cloud conversation follows its compute", () => {
     const SESSION = "ses_cloud" as HappyAgentSessionId;
-    const POOL: HappyAgentCompute = { kind: "pool", poolId: "pool_1", online: true };
+    const COMPUTER: HappyAgentCompute = { kind: "computer", computerId: "node_1", online: true };
 
     it("says no compute is attached, without asking the server", async () => {
         const disk = checkout();
@@ -466,7 +466,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         expect(disk.reads).toEqual([]);
 
         // Attached, but its machine has not come up yet.
-        chat.computeUpdate({ ...POOL, online: false });
+        chat.computeUpdate({ ...COMPUTER, online: false });
         await settle();
         expect(workspace.get().workspaceFiles?.unavailable).toBeUndefined();
         expect(names()).toEqual(["src"]);
@@ -479,7 +479,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         disk.add("README.md");
         disk.unavailableSet("noCompute");
         // The chat arrives saying nothing yet, so the server is asked.
-        const chat = cloudChat({ ...POOL, online: false });
+        const chat = cloudChat({ ...COMPUTER, online: false });
         const { workspace, names, unsubscribe } = store(disk, storage(), chat);
         workspace.conversationOpen(SESSION, GROUP);
         workspace.fileScopeUpdate(GROUP, "all");
@@ -488,7 +488,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         expect(workspace.get().workspaceFiles?.directories.get("")).toBeUndefined();
 
         disk.unavailableSet(undefined);
-        chat.computeUpdate(POOL);
+        chat.computeUpdate(COMPUTER);
         await settle();
 
         expect(workspace.get().workspaceFiles?.unavailable).toBeUndefined();
@@ -500,7 +500,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         const disk = checkout();
         disk.add("README.md");
         disk.failing.add("");
-        const chat = cloudChat({ ...POOL, online: false });
+        const chat = cloudChat({ ...COMPUTER, online: false });
         const { workspace, names, unsubscribe } = store(disk, storage(), chat);
         workspace.conversationOpen(SESSION, GROUP);
         await settle();
@@ -509,7 +509,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         expect(workspace.get().workspaceFiles?.directories.get("")?.error).toBe(true);
 
         disk.failing.delete("");
-        chat.computeUpdate(POOL);
+        chat.computeUpdate(COMPUTER);
         await settle();
 
         expect(workspace.get().workspaceFiles?.directories.get("")?.error).toBeUndefined();
@@ -520,7 +520,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
     it("stops listing when compute is taken away", async () => {
         const disk = checkout();
         disk.add("README.md");
-        const chat = cloudChat(POOL);
+        const chat = cloudChat(COMPUTER);
         const { workspace, names, unsubscribe } = store(disk, storage(), chat);
         workspace.conversationOpen(SESSION, GROUP);
         await settle();
@@ -540,7 +540,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         const disk = checkout();
         disk.add("README.md");
         disk.unavailableSet("computeOffline");
-        const chat = cloudChat({ ...POOL, online: false });
+        const chat = cloudChat({ ...COMPUTER, online: false });
         const { workspace, names, unsubscribe } = store(disk, storage(), chat);
         workspace.conversationOpen(SESSION, GROUP);
         await settle();
@@ -551,7 +551,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         expect(workspace.get().workspaceFilesLoading).toBe(false);
 
         disk.unavailableSet(undefined);
-        chat.computeUpdate(POOL);
+        chat.computeUpdate(COMPUTER);
         await settle();
 
         expect(workspace.get().workspaceFiles?.unavailable).toBeUndefined();
@@ -563,7 +563,7 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         const disk = checkout();
         disk.add("README.md");
         disk.unavailableSet("computeOffline");
-        const chat = cloudChat({ ...POOL, online: false });
+        const chat = cloudChat({ ...COMPUTER, online: false });
         const { workspace, names, unsubscribe } = store(disk, storage(), chat);
         workspace.conversationOpen(SESSION, GROUP);
         await settle();
