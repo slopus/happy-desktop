@@ -826,10 +826,28 @@ function MembersSpecimen(props: {
     inviteNotice?: HappyAgentInviteNoticeView;
     inviteCreating?: "link" | "email";
     inviteEmail?: string;
-    saveError?: string;
+    /** Why Grace Hopper's role change was refused. */
+    refusal?: string;
     window?: { readonly width: number; readonly height: number };
 }) {
     const [inviteEmail, inviteEmailSet] = useState(props.inviteEmail ?? "");
+    // Invites made and revoked here change the list, so its glides can be seen.
+    const [invites, invitesSet] = useState(membersInvites);
+    const inviteAdd = (email?: string) =>
+        invitesSet([
+            {
+                id: `made-${String(invites.length)}`,
+                ...(email === undefined ? {} : { email, delivery: "sent" as const }),
+                status: "pending",
+                detail:
+                    email === undefined
+                        ? "Member · Expires in 7 days"
+                        : "Member · Sent just now · Resend in a minute · Expires in 7 days",
+                resendWaiting: email !== undefined,
+                saving: false,
+            },
+            ...invites,
+        ]);
     return (
         <FullScreenSpecimen
             detail={props.detail}
@@ -860,7 +878,7 @@ function MembersSpecimen(props: {
                     {...(props.inviteNotice ? { inviteNotice: props.inviteNotice } : {})}
                     {...(props.inviteCreating ? { inviteCreating: props.inviteCreating } : {})}
                     inviteEmail={inviteEmail}
-                    invites={membersInvites}
+                    invites={invites}
                     loading={false}
                     manage
                     members={[
@@ -879,6 +897,7 @@ function MembersSpecimen(props: {
                             joined: "Joined Nov 7",
                             self: false,
                             saving: false,
+                            ...(props.refusal ? { refusal: props.refusal } : {}),
                         },
                         {
                             id: "a3",
@@ -892,16 +911,31 @@ function MembersSpecimen(props: {
                     onDelete={() => Promise.resolve()}
                     onInviteNoticeDismiss={noop}
                     onInviteEmailChange={inviteEmailSet}
-                    onInviteEmailCreate={noop}
-                    onInviteLinkCreate={noop}
+                    onInviteEmailCreate={() => {
+                        inviteAdd(inviteEmail.trim());
+                        inviteEmailSet("");
+                    }}
+                    onInviteLinkCreate={() => inviteAdd()}
                     onInviteResend={noop}
-                    onInviteRevoke={noop}
+                    onInviteRevoke={(inviteId) =>
+                        invitesSet(
+                            invites.map((invite) =>
+                                invite.id === inviteId
+                                    ? {
+                                          ...invite,
+                                          status: "revoked",
+                                          detail: "Member · Revoked Nov 12",
+                                          resendWaiting: false,
+                                      }
+                                    : invite,
+                            ),
+                        )
+                    }
                     onLeave={() => Promise.resolve()}
                     onRemove={noop}
                     onRoleChange={noop}
                     owner
                     roles={membersRoles}
-                    {...(props.saveError ? { saveError: props.saveError } : {})}
                     serverName="acme"
                 />
             </HappyAgentSettingsShell>
@@ -1939,6 +1973,14 @@ export function HappyAgentSettingsBlueprintPage() {
                 label="Happy Agent settings — members, resend too soon"
                 number="03e8"
                 screen="members-rate-limited"
+                window={MEMBERS_WINDOW}
+            />
+            <MembersSpecimen
+                detail="A refused role change, said on that member's row in place of when they joined, so nothing moves"
+                label="Happy Agent settings — members, role change refused"
+                number="03e8a"
+                refusal="Only an owner may make another owner."
+                screen="members-member-refused"
                 window={MEMBERS_WINDOW}
             />
             <MembersSpecimen

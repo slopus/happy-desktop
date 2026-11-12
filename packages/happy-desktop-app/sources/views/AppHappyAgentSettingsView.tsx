@@ -1546,6 +1546,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             })}`,
                             self: member.self,
                             saving: member.saving,
+                            ...(member.refusal ? { refusal: member.refusal.message } : {}),
                         }))}
                         onDelete={(confirm) => membersShown.serverDelete(confirm)}
                         onInviteNoticeDismiss={() => membersShown.inviteNoticeDismiss()}
@@ -1569,7 +1570,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         }
                         owner={members.roleId === "owner"}
                         roles={members.roles}
-                        {...(members.saveError ? { saveError: members.saveError.message } : {})}
                         serverName={members.serverName}
                     />
                 ) : (

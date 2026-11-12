@@ -111,7 +111,8 @@ export function happyLinkInboxStoreCreate(deps: HappyLinkInboxStoreDeps): HappyL
         linkReceive(url) {
             if (disposed) return;
             const link = happyExternalLinkParse(url);
-            if (link.kind === "unsupported") {
+            // The Cloud servers link is the window's to show, not a server's to open.
+            if (link.kind !== "instance") {
                 noticeShow({ kind: "unsupported" });
                 return;
             }

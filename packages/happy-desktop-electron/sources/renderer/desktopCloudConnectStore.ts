@@ -45,6 +45,13 @@ export interface DesktopCloudConnectStore {
      * invite was accepted in the browser appears; the window calls it on focus.
      */
     serversRefresh(): void;
+    /**
+     * `happy://cloud/servers`, the browser's hand-back after an invite is
+     * accepted: the account's servers read afresh, each on its own Join. A
+     * screen already open is refreshed where it lists them and otherwise left
+     * as it is; an account that is not signed in lands on the welcome.
+     */
+    serversShow(): void;
     /** A press on the welcome's logo; enough of them in a row reveal test sign-in. */
     logoPress(): void;
     testLoginUpdate(login: string): void;
@@ -295,6 +302,37 @@ export function desktopCloudConnectStoreCreate(input: {
         set(undefined);
     };
 
+    const serversRefresh = (): void => {
+        // The servers, listed or failed, or a first server with none
+        // behind it: the screens a newly joined server belongs on.
+        const listed = view?.kind === "servers" && view.servers.status !== "loading";
+        const first = view?.kind === "create" && !view.back && !view.busy;
+        if (refreshing || (!listed && !first)) return;
+        refreshing = true;
+        const asked = generation;
+        void cloud
+            .serversList()
+            .then((answer) => {
+                // A refusal leaves what is on show; this was never asked for.
+                if (!current(asked) || !answer.ok) return;
+                if (view?.kind === "servers") {
+                    servers = answer.value;
+                    set(serversView(view.error));
+                    imagesRead(asked);
+                } else if (view?.kind === "create" && answer.value.length > 0) {
+                    // A name being typed for a first server gives way to
+                    // the server the account now has.
+                    servers = answer.value;
+                    set(serversView());
+                    imagesRead(asked);
+                }
+            })
+            .catch(() => undefined)
+            .finally(() => {
+                refreshing = false;
+            });
+    };
+
     type EmailView = Extract<CloudConnectView, { kind: "email" | "emailCode" }>;
     // When Resend is offered again, and, after Happy Cloud said there were
     // too many tries, when it takes another and what it said; both read as
@@ -487,35 +525,28 @@ export function desktopCloudConnectStoreCreate(input: {
             generation += 1;
             set(undefined);
         },
-        serversRefresh() {
-            // The servers, listed or failed, or a first server with none
-            // behind it: the screens a newly joined server belongs on.
-            const listed = view?.kind === "servers" && view.servers.status !== "loading";
-            const first = view?.kind === "create" && !view.back && !view.busy;
-            if (refreshing || (!listed && !first)) return;
-            refreshing = true;
+        serversRefresh,
+        serversShow() {
+            if (view !== undefined) {
+                serversRefresh();
+                return;
+            }
+            fromStart = false;
+            generation += 1;
             const asked = generation;
-            void cloud
-                .serversList()
-                .then((answer) => {
-                    // A refusal leaves what is on show; this was never asked for.
-                    if (!current(asked) || !answer.ok) return;
-                    if (view?.kind === "servers") {
-                        servers = answer.value;
-                        set(serversView(view.error));
-                        imagesRead(asked);
-                    } else if (view?.kind === "create" && answer.value.length > 0) {
-                        // A name being typed for a first server gives way to
-                        // the server the account now has.
-                        servers = answer.value;
-                        set(serversView());
-                        imagesRead(asked);
-                    }
-                })
-                .catch(() => undefined)
-                .finally(() => {
-                    refreshing = false;
-                });
+            logoPresses = [];
+            images.clear();
+            servers = [];
+            joins = new Map();
+            set({ kind: "servers", servers: { status: "loading" }, joins });
+            void (async () => {
+                await signedOut;
+                // Signing in is the person's step on the welcome, not the link's.
+                if ((await list(asked)) === "signInRequired" && current(asked)) set(welcome());
+            })().catch(() => {
+                if (current(asked))
+                    set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+            });
         },
         createOpen() {
             if (view?.kind !== "servers") return;

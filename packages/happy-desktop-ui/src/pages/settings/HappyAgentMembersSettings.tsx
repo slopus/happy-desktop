@@ -8,6 +8,7 @@ import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
+import { useGlide } from "../../useGlide";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentMemberRow {
@@ -20,6 +21,8 @@ export interface HappyAgentMemberRow {
     readonly joined: string;
     readonly self: boolean;
     readonly saving: boolean;
+    /** Why the last role change or removal of this member was refused. */
+    readonly refusal?: string;
 }
 
 /** Where an invite stands; only a pending one can be resent or revoked. */
@@ -82,8 +85,6 @@ const INVITE_STATUS_LABELS: Record<HappyAgentInviteStatus, string> = {
 export interface HappyAgentMembersSettingsProps {
     readonly loading: boolean;
     readonly error?: string;
-    /** Why the last change was refused. */
-    readonly saveError?: string;
     /** The server's name, which deleting it asks to be typed. */
     readonly serverName: string;
     readonly members: readonly HappyAgentMemberRow[];
@@ -126,6 +127,18 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
     const [inviteRole, setInviteRole] = useState("member");
     const [historyOpen, setHistoryOpen] = useState(props.defaultHistoryOpen ?? false);
     const [confirming, setConfirming] = useState<"leave" | "delete" | undefined>();
+    // Oldest first, so a new invite lands at the end and no pending row moves.
+    const pending = props.invites.filter((invite) => invite.status === "pending").reverse();
+    const history = props.invites.filter((invite) => invite.status !== "pending");
+    // What rows are on the page; when it changes, everything that moved glides.
+    const rootRef = useGlide(
+        [
+            props.members.map((member) => member.id).join(),
+            pending.map((invite) => invite.id).join(),
+            history.length > 0 ? "history" : "",
+            historyOpen ? history.map((invite) => invite.id).join() : "",
+        ].join("|"),
+    );
     if (props.error)
         return (
             <Banner tone="danger" title="Members unavailable">
@@ -147,16 +160,8 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
     }));
     const roleName = (roleId: string): string =>
         props.roles.find((role) => role.id === roleId)?.name ?? roleId;
-    // Oldest first, so a new invite lands at the end and no pending row moves.
-    const pending = props.invites.filter((invite) => invite.status === "pending").reverse();
-    const history = props.invites.filter((invite) => invite.status !== "pending");
     return (
-        <>
-            {props.saveError ? (
-                <Banner tone="danger" title="Nothing changed">
-                    {props.saveError}
-                </Banner>
-            ) : null}
+        <div className="happy-agent-members" ref={rootRef}>
             <HappyAgentSettingsSection
                 description="Everyone who can use this server, and what their role lets them do."
                 title="Members"
@@ -168,6 +173,7 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                     {props.members.map((member) => (
                         <Box
                             className="happy-agent-members__row"
+                            data-glide-key={`member:${member.id}`}
                             data-happy-desktop-ui="happy-agent-member"
                             key={member.id}
                         >
@@ -186,7 +192,20 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                                         {member.self ? `${member.name} (you)` : member.name}
                                     </span>
                                 )}
-                                <span className="happy-agent-members__meta">{member.joined}</span>
+                                {/* A refusal takes the line under the name, so nothing moves to make room. */}
+                                {member.refusal === undefined ? (
+                                    <span className="happy-agent-members__meta">
+                                        {member.joined}
+                                    </span>
+                                ) : (
+                                    <span
+                                        className="happy-agent-members__meta"
+                                        data-tone="danger"
+                                        title={member.refusal}
+                                    >
+                                        {member.refusal}
+                                    </span>
+                                )}
                             </Box>
                             {member.saving ? <Spinner size={16} /> : null}
                             {props.manage && !member.self ? (
@@ -222,116 +241,125 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                 </Box>
             </HappyAgentSettingsSection>
             {props.manage ? (
-                <HappyAgentSettingsSection
-                    description="Invite someone by email, or make a link anyone holding it can join with. A link is shown once, so copy it before you close it."
-                    title="Invites"
-                >
-                    <HappyAgentInviteNotice
-                        {...(props.inviteNotice ? { notice: props.inviteNotice } : {})}
-                        onDismiss={props.onInviteNoticeDismiss}
-                        onResend={props.onInviteResend}
-                    />
-                    <Box className="happy-agent-members__actions happy-agent-members__invite">
-                        <Select
-                            aria-label="Role for the invite"
-                            onValueChange={setInviteRole}
-                            options={roleOptions}
-                            size="small"
-                            value={inviteRole}
-                            width={140}
-                        />
-                        <Box className="happy-agent-members__email">
-                            <TextField
-                                aria-label="Email address to invite"
-                                autoComplete="off"
-                                disabled={props.inviteCreating !== undefined}
-                                fullWidth
-                                inputMode="email"
-                                onSubmit={() => {
-                                    if (props.inviteEmail.trim() !== "")
-                                        props.onInviteEmailCreate(inviteRole);
-                                }}
-                                onValueChange={props.onInviteEmailChange}
-                                placeholder="name@example.com"
-                                size="small"
-                                type="email"
-                                value={props.inviteEmail}
-                            />
-                        </Box>
-                        <Button
-                            disabled={
-                                props.inviteEmail.trim() === "" || props.inviteCreating === "link"
-                            }
-                            loading={props.inviteCreating === "email"}
-                            onClick={() => props.onInviteEmailCreate(inviteRole)}
-                            size="small"
-                            variant="secondary"
-                            width={INVITE_EMAIL_BUTTON_WIDTH}
-                        >
-                            Invite by email
-                        </Button>
-                        <Button
-                            disabled={props.inviteCreating === "email"}
-                            loading={props.inviteCreating === "link"}
-                            onClick={() => props.onInviteLinkCreate(inviteRole)}
-                            size="small"
-                            variant="secondary"
-                            width={INVITE_LINK_BUTTON_WIDTH}
-                        >
-                            Create link
-                        </Button>
-                    </Box>
-                    {pending.map((invite) => (
-                        <HappyAgentInviteRowView
-                            invite={invite}
-                            key={invite.id}
+                <Box data-glide-key="invites">
+                    <HappyAgentSettingsSection
+                        description="Invite someone by email, or make a link anyone holding it can join with. A link is shown once, so copy it before you close it."
+                        title="Invites"
+                    >
+                        <HappyAgentInviteNotice
+                            {...(props.inviteNotice ? { notice: props.inviteNotice } : {})}
+                            onDismiss={props.onInviteNoticeDismiss}
                             onResend={props.onInviteResend}
-                            onRevoke={props.onInviteRevoke}
                         />
-                    ))}
-                    {history.length > 0 ? (
-                        <Box className="happy-agent-members__actions">
-                            <Button
-                                aria-expanded={historyOpen}
-                                icon={historyOpen ? "chevron-down" : "chevron-right"}
-                                onClick={() => setHistoryOpen(!historyOpen)}
+                        <Box className="happy-agent-members__actions happy-agent-members__invite">
+                            <Select
+                                aria-label="Role for the invite"
+                                onValueChange={setInviteRole}
+                                options={roleOptions}
                                 size="small"
-                                variant="ghost"
+                                value={inviteRole}
+                                width={140}
+                            />
+                            <Box className="happy-agent-members__email">
+                                <TextField
+                                    aria-label="Email address to invite"
+                                    autoComplete="off"
+                                    disabled={props.inviteCreating !== undefined}
+                                    fullWidth
+                                    inputMode="email"
+                                    onSubmit={() => {
+                                        if (props.inviteEmail.trim() !== "")
+                                            props.onInviteEmailCreate(inviteRole);
+                                    }}
+                                    onValueChange={props.onInviteEmailChange}
+                                    placeholder="name@example.com"
+                                    size="small"
+                                    type="email"
+                                    value={props.inviteEmail}
+                                />
+                            </Box>
+                            <Button
+                                disabled={
+                                    props.inviteEmail.trim() === "" ||
+                                    props.inviteCreating === "link"
+                                }
+                                loading={props.inviteCreating === "email"}
+                                onClick={() => props.onInviteEmailCreate(inviteRole)}
+                                size="small"
+                                variant="secondary"
+                                width={INVITE_EMAIL_BUTTON_WIDTH}
                             >
-                                {history.length === 1
-                                    ? "1 past invite"
-                                    : `${String(history.length)} past invites`}
+                                Invite by email
+                            </Button>
+                            <Button
+                                disabled={props.inviteCreating === "email"}
+                                loading={props.inviteCreating === "link"}
+                                onClick={() => props.onInviteLinkCreate(inviteRole)}
+                                size="small"
+                                variant="secondary"
+                                width={INVITE_LINK_BUTTON_WIDTH}
+                            >
+                                Create link
                             </Button>
                         </Box>
-                    ) : null}
-                    {historyOpen
-                        ? history.map((invite) => (
-                              <HappyAgentInviteRowView
-                                  invite={invite}
-                                  key={invite.id}
-                                  onResend={props.onInviteResend}
-                                  onRevoke={props.onInviteRevoke}
-                              />
-                          ))
-                        : null}
-                </HappyAgentSettingsSection>
-            ) : null}
-            <HappyAgentSettingsSection title="Leave">
-                <Box className="happy-agent-members__actions">
-                    <Button onClick={() => setConfirming("leave")} size="small" variant="secondary">
-                        Leave this server
-                    </Button>
-                    {props.owner ? (
-                        <Button
-                            onClick={() => setConfirming("delete")}
-                            size="small"
-                            variant="danger"
-                        >
-                            Delete this server
-                        </Button>
-                    ) : null}
+                        {pending.map((invite) => (
+                            <HappyAgentInviteRowView
+                                invite={invite}
+                                key={invite.id}
+                                onResend={props.onInviteResend}
+                                onRevoke={props.onInviteRevoke}
+                            />
+                        ))}
+                        {history.length > 0 ? (
+                            <Box className="happy-agent-members__actions" data-glide-key="history">
+                                <Button
+                                    aria-expanded={historyOpen}
+                                    icon={historyOpen ? "chevron-down" : "chevron-right"}
+                                    onClick={() => setHistoryOpen(!historyOpen)}
+                                    size="small"
+                                    variant="ghost"
+                                >
+                                    {history.length === 1
+                                        ? "1 past invite"
+                                        : `${String(history.length)} past invites`}
+                                </Button>
+                            </Box>
+                        ) : null}
+                        {historyOpen
+                            ? history.map((invite) => (
+                                  <HappyAgentInviteRowView
+                                      invite={invite}
+                                      key={invite.id}
+                                      onResend={props.onInviteResend}
+                                      onRevoke={props.onInviteRevoke}
+                                  />
+                              ))
+                            : null}
+                    </HappyAgentSettingsSection>
                 </Box>
-            </HappyAgentSettingsSection>
+            ) : null}
+            <Box data-glide-key="leave">
+                <HappyAgentSettingsSection title="Leave">
+                    <Box className="happy-agent-members__actions">
+                        <Button
+                            onClick={() => setConfirming("leave")}
+                            size="small"
+                            variant="secondary"
+                        >
+                            Leave this server
+                        </Button>
+                        {props.owner ? (
+                            <Button
+                                onClick={() => setConfirming("delete")}
+                                size="small"
+                                variant="danger"
+                            >
+                                Delete this server
+                            </Button>
+                        ) : null}
+                    </Box>
+                </HappyAgentSettingsSection>
+            </Box>
             {confirming ? (
                 <HappyAgentMembersConfirmDialog
                     kind={confirming}
@@ -341,7 +369,7 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
                     serverName={props.serverName}
                 />
             ) : null}
-        </>
+        </div>
     );
 }
 
@@ -437,6 +465,7 @@ function HappyAgentInviteRowView(props: {
     return (
         <Box
             className="happy-agent-members__row"
+            data-glide-key={`invite:${invite.id}`}
             data-happy-desktop-ui="happy-agent-invite"
             data-status={invite.status}
         >

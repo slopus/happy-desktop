@@ -58,6 +58,7 @@ import {
     happyAgentAttentionConnection,
     happyAgentAttentionStoreOwnedCreate,
     happyAgentClockStoreCreate,
+    happyExternalLinkParse,
     happyLinkInboxStoreCreate,
     parseHappyUrl,
     serverSessionsStoreCreate,
@@ -2094,8 +2095,13 @@ if (mediaPreviewBridge) {
         const happyLinksTake = async (): Promise<void> => {
             const take = desktopBridge.happyLinkExternalTake;
             if (!take) return;
-            for (let url = await take(); url !== undefined; url = await take())
-                happyLinkInbox.linkReceive(url);
+            for (let url = await take(); url !== undefined; url = await take()) {
+                // The browser's hand-back after an invite: the Cloud's servers,
+                // read afresh. The shell has already raised the window.
+                if (cloudConnect && happyExternalLinkParse(url).kind === "cloudServers")
+                    cloudConnect.serversShow();
+                else happyLinkInbox.linkReceive(url);
+            }
         };
         const happyLinksReceived = desktopBridge.happyLinkExternalSubscribe?.(() => {
             void happyLinksTake().catch(() => undefined);
