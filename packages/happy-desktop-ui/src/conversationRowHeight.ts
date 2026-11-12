@@ -503,6 +503,8 @@ const BANNER_MIN_HEIGHT = 44;
 const BANNER_ACTION_GAP = 12;
 const BANNER_TITLE_GAP = 4;
 const BANNER_LINE = 18;
+/** `.happy-agent-input .happy-banner__content`: the room it keeps before Retry wraps below it. */
+const USER_INPUT_BANNER_TEXT_BASIS = 120;
 /** The title `HappyAgentUserInputPrompt` gives a failed answer's banner. */
 const USER_INPUT_FAILURE_TITLE = "Answer not sent";
 /* The card's own 153px, less 1px above its chip and plus 3px above and below
@@ -1027,23 +1029,24 @@ function userInputRequestHeight(
 
 /**
  * The failed answer's danger banner: its title over the message, beside the
- * small Retry button when it offers one, all centered in one row.
+ * small Retry button when it offers one, all centered in one row. In a card
+ * too narrow for both, Retry wraps onto a row of its own below the text.
  */
 function userInputFailureHeight(
     failure: ConversationRequestFailureRowContext,
     width: number,
     cache?: MessageTextLayoutCache,
 ): number {
-    const measure =
-        width -
-        BANNER_HORIZONTAL_CHROME -
-        (failure.retry ? BANNER_ACTION_GAP + smallButtonWidth("Retry", cache) : 0);
+    const inner = width - BANNER_HORIZONTAL_CHROME;
+    const action = failure.retry ? smallButtonWidth("Retry", cache) : 0;
+    const wrapped =
+        failure.retry && USER_INPUT_BANNER_TEXT_BASIS + BANNER_ACTION_GAP + action > inner;
+    const measure = failure.retry && !wrapped ? inner - BANNER_ACTION_GAP - action : inner;
     const text =
-        (uiTextNaturalWidth(USER_INPUT_FAILURE_TITLE, 13, cache, 600) <= measure
-            ? BANNER_LINE
-            : uiTextHeight(USER_INPUT_FAILURE_TITLE, 13, BANNER_LINE, measure, cache)) +
+        uiTextHeight(USER_INPUT_FAILURE_TITLE, 13, BANNER_LINE, measure, cache, 600) +
         BANNER_TITLE_GAP +
         uiTextHeight(failure.message, 13, BANNER_LINE, measure, cache);
+    if (wrapped) return BANNER_VERTICAL_CHROME + text + BANNER_ACTION_GAP + SMALL_BUTTON_HEIGHT;
     return Math.max(
         BANNER_MIN_HEIGHT,
         BANNER_VERTICAL_CHROME + Math.max(text, failure.retry ? SMALL_BUTTON_HEIGHT : 0),

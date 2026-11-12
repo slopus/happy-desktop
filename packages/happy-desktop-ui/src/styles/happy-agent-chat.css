@@ -245,6 +245,22 @@
     visibility: hidden;
 }
 
+/* A failed answer's banner wraps Retry onto a row of its own rather than
+   squeezing the reason away in a narrow card, and breaks a word wider than
+   the card, as the transcript's row model lays it out. */
+.happy-agent-input .happy-banner {
+    flex-wrap: wrap;
+}
+
+.happy-agent-input .happy-banner__content {
+    flex: 1 1 120px;
+}
+
+.happy-agent-input .happy-banner__title,
+.happy-agent-input .happy-banner__message {
+    overflow-wrap: anywhere;
+}
+
 .happy-agent-input__footer {
     display: flex;
     flex-direction: row;

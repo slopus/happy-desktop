@@ -492,3 +492,144 @@ it.each([360, 880])(
         }
     },
 );
+
+const MATRIX_ANSWERS = { permission: ["Allow once"] };
+const matrixSubmission = (
+    status: "pending" | "failed",
+    message = "Happy Agent is draining and no longer accepts mutations.",
+): ConversationRequestSubmission =>
+    status === "pending"
+        ? { requestId: "question", status, answers: MATRIX_ANSWERS }
+        : { requestId: "question", status, error: new UserError(message), answers: MATRIX_ANSWERS };
+it.each(
+    [180, 360, 880].flatMap((width) =>
+        [false, true].flatMap((lead) =>
+            (
+                [
+                    ["pending", undefined, true],
+                    ["submitting", matrixSubmission("pending"), true],
+                    ["failed with Retry", matrixSubmission("failed"), true],
+                    ["failed without Retry", matrixSubmission("failed"), false],
+                    [
+                        "failed with a long reason",
+                        matrixSubmission(
+                            "failed",
+                            "The connection to Happy Agent closed before the answer reached it. ".repeat(
+                                3,
+                            ),
+                        ),
+                        true,
+                    ],
+                    ["answered after a failure", matrixSubmission("failed"), true],
+                ] as const
+            ).map(([state, submission, answerable]) => ({
+                width,
+                lead,
+                state,
+                submission,
+                answerable,
+            })),
+        ),
+    ),
+)(
+    "models a question card's height as painted ($state, width $width, lead $lead)",
+    async ({ width, lead, state, submission, answerable }) => {
+        const answered = state === "answered after a failure";
+        const request: ConversationEntry = {
+            kind: "request",
+            id: "question",
+            sequence: "question",
+            request: {
+                kind: "userInput",
+                requestId: "question",
+                context: "Antigravity wants to do this:\n\n```\nFile ../docs/recipe.md\n```",
+                questions: [
+                    {
+                        id: "permission",
+                        header: "Permission",
+                        question: "Allow Antigravity to do this?",
+                        multiSelect: false,
+                        required: true,
+                        options: [
+                            { label: "Allow once", description: "Allow this one action." },
+                            {
+                                label: "Deny",
+                                description: "Antigravity is told it was not allowed.",
+                            },
+                        ],
+                    },
+                ],
+                ...(answered
+                    ? { status: "answered" as const, answers: MATRIX_ANSWERS }
+                    : { status: "pending" as const }),
+            },
+        };
+        const before: ConversationEntry = lead
+            ? {
+                  kind: "message",
+                  source: "server",
+                  delivery: "sent",
+                  message: {
+                      id: "asked",
+                      chatId: "matrix",
+                      sequence: "0",
+                      changePts: "0",
+                      sender: { id: "me", displayName: "Me", username: "me", kind: "human" },
+                      text: "Go ahead.",
+                      attachments: [],
+                      reactions: [],
+                      createdAt: "2026-09-06T12:34:00.000Z",
+                  },
+              }
+            : {
+                  kind: "notice",
+                  id: "before",
+                  level: "info",
+                  sequence: "0",
+                  text: "Line before the question.",
+                  variant: "notice",
+              };
+        const view = createRenderer();
+        view.render(
+            () => (
+                <div style={{ width, height: 900 }}>
+                    <ConversationView
+                        agentAuthor={agentAuthor}
+                        conversationId="matrix"
+                        entries={[before, request]}
+                        motion="calm"
+                        {...(answerable ? { onRequestAnswer: () => undefined } : {})}
+                        requestSelections={new Map([["question", MATRIX_ANSWERS]])}
+                        {...(submission ? { requestSubmissions: [submission] } : {})}
+                        running
+                    />
+                </div>
+            ),
+            { width: width + 40, height: 940 },
+        );
+        try {
+            await view.ready();
+            await frame();
+            await frame();
+            const card = view.container.querySelector<HTMLElement>(
+                '[data-happy-desktop-ui="happy-agent-user-input"]',
+            )!;
+            expect(
+                card.querySelector('[data-testid="happy-agent-user-input-error"]') !== null,
+                "banner shown",
+            ).toBe(state.startsWith("failed"));
+            const row = card.closest<HTMLElement>(".happy-message-list__virtual-row")!;
+            const next = row.nextElementSibling as HTMLElement;
+            const at = (element: HTMLElement) =>
+                Number.parseFloat(element.style.transform.slice("translateY(".length));
+            const modeled = at(next) - at(row);
+            const painted = row.getBoundingClientRect().height;
+            expect(
+                Math.abs(modeled - painted),
+                `model=${String(modeled)}, paint=${String(painted)}`,
+            ).toBeLessThanOrEqual(1);
+        } finally {
+            view.destroy();
+        }
+    },
+);

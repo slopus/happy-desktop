@@ -477,12 +477,12 @@ it.each([
     async (_, startsWithSwitch) => {
         const base = history("a", 16);
         const h = harness({ activeId: "a", ids: ["a", "b"], entries: base, running: true });
-        h.usageSet(USAGE);
         await h.view.ready();
         await frame();
         await frame();
         h.set({ entries: [...base, failed], running: false });
         await frame();
+        h.usageSet(USAGE);
         await frame();
         expectAtEnd(h, "failure shown");
 

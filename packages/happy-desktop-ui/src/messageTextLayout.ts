@@ -1018,8 +1018,10 @@ export function uiTextHeight(
     lineHeight: number,
     measure: number,
     cache: MessageTextLayoutCache = sharedCache,
+    weight = 400,
 ): number {
-    return runHeight(text, `${String(size)}px ${UI_FAMILY}`, lineHeight, measure, cache);
+    const font = `${weight === 400 ? "" : `${String(weight)} `}${String(size)}px ${UI_FAMILY}`;
+    return runHeight(text, font, lineHeight, measure, cache);
 }
 
 /**
