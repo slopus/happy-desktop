@@ -135,7 +135,7 @@ export function happyAgentPreviewsStoreCreate(input: {
         const pending = checking.get(id);
         if (pending) return pending;
         const request = input
-            .request("GET", `previews/${encodeURIComponent(id)}/status`)
+            .request("GET", `v0/previews/${encodeURIComponent(id)}/status`)
             .then((value) => {
                 const result = object(value);
                 if (result?.previewId !== id)
@@ -224,7 +224,7 @@ export function happyAgentPreviewsStoreCreate(input: {
                     );
                 }
                 const result = object(
-                    await input.request("POST", `previews/${encodeURIComponent(previewId)}/launch`),
+                    await input.request("POST", `v0/previews/${encodeURIComponent(previewId)}/launch`),
                 );
                 const url = previewUrl(result?.url);
                 if (
