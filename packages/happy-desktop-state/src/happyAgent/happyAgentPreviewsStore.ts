@@ -224,7 +224,10 @@ export function happyAgentPreviewsStoreCreate(input: {
                     );
                 }
                 const result = object(
-                    await input.request("POST", `v0/previews/${encodeURIComponent(previewId)}/launch`),
+                    await input.request(
+                        "POST",
+                        `v0/previews/${encodeURIComponent(previewId)}/launch`,
+                    ),
                 );
                 const url = previewUrl(result?.url);
                 if (
