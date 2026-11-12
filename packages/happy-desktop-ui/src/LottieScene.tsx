@@ -109,9 +109,12 @@ export type LottieSceneName =
  * plays once as the state it belongs to appears, and afterwards holds its last
  * frame. `on-demand` skips that first play and shows the same held frame from
  * the start — the deterministic form the blueprint is drawn with, and the right
- * choice for any surface that should not move on its own.
+ * choice for any surface that should not move on its own. `on-click` is
+ * `on-demand` that a passing pointer does not wake: it plays only when it is
+ * clicked, tapped, or pressed with Enter or Space, as the phone's create pages
+ * do.
  */
-export type LottieScenePlay = "on-appear" | "on-demand";
+export type LottieScenePlay = "on-appear" | "on-demand" | "on-click";
 
 const SOURCES: Record<LottieSceneName, string> = {
     "alien-monster": alienMonsterUrl,
@@ -145,11 +148,15 @@ const SOURCES: Record<LottieSceneName, string> = {
  * Frames are relative to the animation's in-point. The spider's source starts
  * at 120: source frame 250 (relative 130) holds the spider down with the bug
  * still caught and both wing rotations at their folded 0° keyframe, before
- * the bug's departure beginning at source frame 254.
+ * the bug's departure beginning at source frame 254. The clapper board's
+ * source starts at 0: by frame 80 it has clapped shut and "Action!" is fully
+ * written, settled, before the board reopens and the lettering is wiped from
+ * about frame 90.
  * Keep the original asset and end every play, replay, and reduced-motion hold
  * at this pose through the renderer's segment contract.
  */
 const PLAYBACK_SEGMENTS: Partial<Record<LottieSceneName, [number, number]>> = {
+    "clapper-board": [0, 80],
     "spider-catching-bug": [0, 130],
 };
 
@@ -192,9 +199,10 @@ export type LottieSceneProps = {
  *
  * It never loops unless its host passes `loop`. The scene plays once when the state it illustrates appears,
  * and then holds its playback range's last frame. Most scenes use the complete
- * animation; the spider ends on its selected caught-bug pose.
+ * animation; the spider ends on its selected caught-bug pose and the clapper
+ * board on "Action!".
  * After that it only moves when a reader asks: a click or tap, a fresh hover
- * entry, or Enter/Space while it has keyboard focus. A replay is refused while
+ * entry (except under `on-click`), or Enter/Space while it has keyboard focus. A replay is refused while
  * one is already running, so a pointer resting inside cannot turn "again" into
  * a loop.
  *
@@ -570,8 +578,9 @@ export function LottieScene(props: LottieSceneProps) {
             onClick={interactive ? () => replay.current() : undefined}
             onKeyDown={interactive ? onKeyDown : undefined}
             // Entering fires once per entry, so a pointer that comes to rest
-            // inside asks for exactly one replay and then nothing.
-            onPointerEnter={interactive ? () => replay.current() : undefined}
+            // inside asks for exactly one replay and then nothing. A scene that
+            // plays only on click is not woken by a pointer passing over it.
+            onPointerEnter={interactive && play !== "on-click" ? () => replay.current() : undefined}
             ref={canvas}
             role={interactive ? "button" : undefined}
             style={{ ...props.style, height: box, width: box }}

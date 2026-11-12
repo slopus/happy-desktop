@@ -60,7 +60,14 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                     className="happy-agent-create-bot__stage"
                     data-happy-desktop-ui="happy-agent-create-bot-stage"
                 >
-                    <LottieScene name="robot" replayLabel="Play the robot again" size={80} />
+                    {/* Still until clicked, as on the phone: one play, then
+                        back to the resting robot. */}
+                    <LottieScene
+                        name="robot"
+                        play="on-click"
+                        replayLabel="Play the robot"
+                        size={80}
+                    />
                 </span>
                 <h1
                     className="happy-agent-create-bot__title"

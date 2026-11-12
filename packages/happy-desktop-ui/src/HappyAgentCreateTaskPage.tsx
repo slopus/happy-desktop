@@ -43,9 +43,12 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     className="happy-agent-create-task__stage"
                     data-happy-desktop-ui="happy-agent-create-task-stage"
                 >
+                    {/* Still on "Action!" until clicked, as on the phone: one
+                        play, which ends on "Action!" again. */}
                     <LottieScene
                         name="clapper-board"
-                        replayLabel="Play the clapper board again"
+                        play="on-click"
+                        replayLabel="Play the clapper board"
                         size={80}
                     />
                 </span>
