@@ -662,10 +662,12 @@
 }
 
 /* The secondary control acts on the section's rows, so it shows while the
-   pointer is anywhere over them or the keyboard is among them, not only over
-   the heading. */
+   pointer is anywhere over them, not only over the heading. From the keyboard it
+   shows once focus is on the heading: a row clicked and then given any key
+   matches :focus-visible, and would hold the control up after the pointer left. */
 .happy-sidebar__section:hover .happy-sidebar__section-action[data-slot="secondary"],
-.happy-sidebar__section:has(:focus-visible) .happy-sidebar__section-action[data-slot="secondary"] {
+.happy-sidebar__section-head:has(:focus-visible)
+    .happy-sidebar__section-action[data-slot="secondary"] {
     opacity: 1;
 }
 
