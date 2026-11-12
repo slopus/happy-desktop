@@ -21,7 +21,9 @@ import {
     happyAgentRouterGroupOpen,
     happyAgentRouterConnectionForget,
     happyAgentRouterGroupForget,
+    happyAgentRouterGroupsUnlistedForget,
     happyAgentRouterHappyLinkOpen,
+    happyAgentRouterExternalLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
     happyAgentRouterConnectionChanged,
@@ -732,6 +734,24 @@ function DesktopOnboardingGate(props: {
 /** Counts setup's pairing codes down. It ticks only while one is on screen. */
 const onboardingClock = happyAgentClockStoreCreate();
 
+/**
+ * The Happy Agent the window shows. Someone who only uses Happy Cloud never set
+ * this computer up to run a Happy Agent; while a Cloud server is there, this
+ * computer has no place in the rail and the first server stands in for it. The
+ * rail, Back and Forward, links and Settings all act on this one.
+ */
+function desktopShownHappyAgentId(
+    directory: ReturnType<HappyAgentDirectoryStore["get"]>,
+    localOff: boolean,
+): string {
+    const active = directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+    if (!localOff || active !== LOCAL_HAPPY_AGENT_ID) return active;
+    return (
+        directory.happyAgents.find((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID)?.id ??
+        LOCAL_HAPPY_AGENT_ID
+    );
+}
+
 function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
     if (snapshot.phase === "choosing" || snapshot.phase === "off") return false;
     if (snapshot.phase === "ready") return snapshot.mode === "local";
@@ -905,21 +925,14 @@ function DesktopScreens(props: DesktopRendererProps) {
         sidebarVisibility.hidden ||
         (localSetupShown &&
             directory.happyAgents.every((entry) => entry.id === LOCAL_HAPPY_AGENT_ID));
-    // Someone who only uses Happy Cloud never set this computer up to run a
-    // Happy Agent; while a Cloud server is there, this computer has no place in
-    // the rail and the first server stands in for it.
     const localOff = useSyncExternalStore(
         props.store.subscribe,
         () => props.store.get()?.phase === "off",
         () => props.store.get()?.phase === "off",
     );
-    const firstRemote = directory.happyAgents.find((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID);
-    const localHidden = localOff && firstRemote !== undefined;
-    const activeId =
-        localHidden &&
-        (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID) === LOCAL_HAPPY_AGENT_ID
-            ? firstRemote.id
-            : (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID);
+    const localHidden =
+        localOff && directory.happyAgents.some((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID);
+    const activeId = desktopShownHappyAgentId(directory, localOff);
     const main = props.connectionUis.get(LOCAL_HAPPY_AGENT_ID);
     const surfaceWindowState = props.surfaceWindowState;
     // An update of the local daemon does not take the window: the shell stays
@@ -1809,6 +1822,12 @@ if (mediaPreviewBridge) {
                     happyAgentId,
                     groupId,
                 ),
+            groupsListed: (happyAgentId, groupIds) =>
+                happyAgentRouterGroupsUnlistedForget(
+                    connectionUis.get(happyAgentId)?.router ?? happyAgentRouter,
+                    happyAgentId,
+                    groupIds,
+                ),
             activity: (happyAgentId, activity) => analytics.activity(happyAgentId, activity),
             // Reported through `analytics`, which is made once the directory exists.
             mobilePairingObserve: (happyAgentId) =>
@@ -1932,9 +1951,11 @@ if (mediaPreviewBridge) {
             happyAgents,
             accountSettingsOpen(id) {
                 happyAgents.happyAgentActivate(id);
+                // Pushed, as every other way into Settings is, so closing it
+                // returns to the place the notice was answered from.
                 const history = connectionUis.get(id)?.router.history;
                 if (history && history.location.pathname !== "/settings/account")
-                    history.replace("/settings/account");
+                    history.push("/settings/account");
             },
         });
         signInNotice = notices;
@@ -1958,11 +1979,13 @@ if (mediaPreviewBridge) {
                 runtime: runtimeStore,
             }),
         );
+        /** The router of the Happy Agent on screen, which is not always the active one. */
         function activeRouter(): HappyAgentRouter {
-            return (
-                connectionUis.get(happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)
-                    ?.router ?? happyAgentRouter
+            const shown = desktopShownHappyAgentId(
+                happyAgents.get(),
+                runtimeStore.get()?.phase === "off",
             );
+            return connectionUis.get(shown)?.router ?? happyAgentRouter;
         }
         // Native first-run setup retains its lifetime, while mobile pairing uses
         // the same local connection store and transport as the workspace.
@@ -2065,11 +2088,13 @@ if (mediaPreviewBridge) {
             resolve: (instanceId) => happyAgentDirectoryLinkTarget(happyAgents.get(), instanceId),
             open(id, url) {
                 happyAgents.happyAgentActivate(id);
-                happyAgentRouterHappyLinkOpen(
+                // The connection may have gone live this instant, with the
+                // window's address not applied to it yet: the link waits for that.
+                void happyAgentRouterExternalLinkOpen(
                     connectionUis.get(id)?.router ?? happyAgentRouter,
                     url,
                     id,
-                );
+                ).catch(() => undefined);
             },
         });
         appDisposers.push(() => happyLinkInbox[Symbol.dispose]());

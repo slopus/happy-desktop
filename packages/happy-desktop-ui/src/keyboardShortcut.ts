@@ -66,6 +66,14 @@ export function commandShortcut(
     };
 }
 
+/**
+ * Closes the nearest thing that can be closed: Command-W on macOS, Ctrl-W
+ * elsewhere. One chord, named once, because every layer that can be closed
+ * answers it — a tab, a page, an overlay, a preview window — and the innermost
+ * one that is up is the one it means.
+ */
+export const CLOSE_SHORTCUT: CommandShortcut = commandShortcut("w");
+
 /** Matches one exact chord while leaving unrelated and composing input untouched. */
 export function commandShortcutMatches(event: KeyboardEvent, shortcut: CommandShortcut): boolean {
     if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat)

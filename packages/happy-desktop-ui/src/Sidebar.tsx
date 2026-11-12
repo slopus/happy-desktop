@@ -17,6 +17,7 @@ import {
 } from "react";
 import { Avatar, type AvatarTint, type ToneName } from "./Avatar";
 import { ChangeStats } from "./ChangeStats";
+import { fixedBlockMeasure } from "./fixedBlock";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
 import { Button } from "./Button";
@@ -465,6 +466,14 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onSectionCollapseToggle?: (sectionId: string) => void;
     onSectionTailToggle?: (sectionId: string) => void;
     activeItemId: string;
+    /**
+     * Other rows whose thing is in front as well as the place `activeItemId`
+     * names, such as a page kept at the top of the list while it is open
+     * beside the conversation the window is on. Each is marked as the active
+     * row is. Keyboard entry and a folded tail still follow `activeItemId`
+     * alone.
+     */
+    activeItemAliasIds?: readonly string[];
     /** Which end of a row reports work. Defaults to `trailing`. */
     activityPlacement?: SidebarActivityPlacement;
     /**
@@ -2668,6 +2677,7 @@ export function Sidebar(props: SidebarProps) {
     const [local, rest] = partitionComponentProps(props, [
         "actions",
         "actionsDivider",
+        "activeItemAliasIds",
         "activeItemId",
         "activityPlacement",
         "brand",
@@ -2720,6 +2730,9 @@ export function Sidebar(props: SidebarProps) {
         "title",
     ]);
     const interactionEnabled = props.interactionEnabled !== false;
+    /** The row the place on screen is, or another row listing that same place. */
+    const itemActive = (id: string): boolean =>
+        id === local.activeItemId || local.activeItemAliasIds?.includes(id) === true;
     const menuRoot = useRef<HTMLDivElement>(null);
     const createRowNode = useRef<HTMLElement | null>(null);
     // The item that last had focus, which stays the list's Tab stop until
@@ -2800,6 +2813,13 @@ export function Sidebar(props: SidebarProps) {
         y: number;
         /** Where the menu's bottom edge goes instead when it does not fit under `y`. */
         above?: number;
+        /**
+         * The fixed offsets that put the menu at `x`, `y` in the window, once
+         * measured: inside a connection the menu is laid out against the
+         * connection's surface, not the window the pointer was reported in.
+         */
+        left?: number;
+        top?: number;
     };
     const [itemMenu, itemMenuSet] = useState<OpenMenu>();
     const setItemMenu = useCallback(
@@ -2862,8 +2882,16 @@ export function Sidebar(props: SidebarProps) {
                     ? Math.min(itemMenu.y, window.innerHeight - bounds.height - 8)
                     : itemMenu.above - bounds.height,
             );
-            if (x !== itemMenu.x || y !== itemMenu.y) {
-                setItemMenu({ ...itemMenu, x, y });
+            const block = fixedBlockMeasure(menuRoot.current?.parentElement ?? document.body);
+            const left = x - block.left;
+            const top = y - block.top;
+            if (
+                x !== itemMenu.x ||
+                y !== itemMenu.y ||
+                left !== itemMenu.left ||
+                top !== itemMenu.top
+            ) {
+                setItemMenu({ ...itemMenu, x, y, left, top });
                 return;
             }
         }
@@ -4576,7 +4604,7 @@ export function Sidebar(props: SidebarProps) {
                                 const dragging = drag?.moved === true;
                                 return (
                                     <SidebarRow
-                                        active={local.activeItemId === action.id}
+                                        active={itemActive(action.id)}
                                         folded={folded}
                                         foldControlPlacement={local.foldControlPlacement}
                                         // A nested row is drawn as a section's is.
@@ -5037,7 +5065,7 @@ export function Sidebar(props: SidebarProps) {
                                                         local.onItemSecondaryAction !== undefined &&
                                                         item.secondaryAction !== undefined
                                                     }
-                                                    active={item.id === local.activeItemId}
+                                                    active={itemActive(item.id)}
                                                     activityPlacement={local.activityPlacement}
                                                     foldControlPlacement={
                                                         local.foldControlPlacement
@@ -5184,7 +5212,7 @@ export function Sidebar(props: SidebarProps) {
                                     <SidebarRow
                                         key={item.id}
                                         item={item}
-                                        active={local.activeItemId === item.id}
+                                        active={itemActive(item.id)}
                                         onContextMenu={openItemMenu}
                                         onSelect={local.onItemSelect}
                                     />
@@ -5204,7 +5232,7 @@ export function Sidebar(props: SidebarProps) {
                     className="happy-sidebar__item-menu"
                     data-happy-desktop-ui="sidebar-item-menu"
                     ref={menuRoot}
-                    style={{ left: itemMenu.x, top: itemMenu.y }}
+                    style={{ left: itemMenu.left ?? itemMenu.x, top: itemMenu.top ?? itemMenu.y }}
                 >
                     <Menu
                         // The create row's entries are read live, so one that

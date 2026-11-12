@@ -236,6 +236,7 @@ export {
 export { VideoViewer, type VideoViewerContent, type VideoViewerProps } from "./VideoViewer";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
 export {
+    CLOSE_SHORTCUT,
     commandShortcut,
     commandShortcutMatches,
     windowShortcutBlocked,
@@ -343,6 +344,7 @@ export {
 } from "./MessageMarkdown";
 export { type MessageReferences, type MessageReferenceView } from "./messageReferences";
 export { Lightbox, type LightboxProps } from "./Lightbox";
+export { FileModal, type FileModalProps } from "./FileModal";
 export { Rail, type RailItem, type RailProps } from "./Rail";
 export {
     ThemeScope,

@@ -60,8 +60,8 @@ export interface WorkFloatyProps {
 /**
  * C-299 Work floaty — what a chat changed, published and has working, in
  * sidebar rows on a fixed-width card. Outputs come first, then the agents and
- * their history after a half-row gap. A section with nothing in it takes no
- * space, and a card with nothing at all is not drawn.
+ * their history below a hairline. A section with nothing in it takes no space,
+ * and a card with nothing at all is not drawn.
  */
 export function WorkFloaty(props: WorkFloatyProps) {
     const outputs = [...props.changes, ...props.artifacts];
@@ -107,7 +107,15 @@ export function WorkFloaty(props: WorkFloatyProps) {
                     {item.trailing.type === "changes" ? (
                         <ChangeStats added={item.trailing.added} deleted={item.trailing.deleted} />
                     ) : item.trailing.type === "working" ? (
-                        <Spinner label={item.trailing.label} size={14} tone="muted" />
+                        // The circle, as a sidebar row whose work is reported
+                        // beside it: the braille dots read as a drag grip at
+                        // a row's end, and nothing on this card is dragged.
+                        <Spinner
+                            label={item.trailing.label}
+                            size={14}
+                            tone="muted"
+                            variant="circle"
+                        />
                     ) : (
                         <span className="happy-work-floaty__meta">
                             {compactCount(item.trailing.count)}

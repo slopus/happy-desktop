@@ -1908,6 +1908,41 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
+                detail="A page kept at the top that opens beside a conversation leaves the window on that conversation. While the page is in front there, its row is marked together with the conversation's (activeItemAliasIds), so the row that was clicked shows where it led. Keyboard entry still starts from the row named by activeItemId."
+                label="A kept page in front beside the conversation"
+                number="02d-aliases"
+                stage="app"
+            >
+                <Frame height={300}>
+                    <Sidebar
+                        actions={[
+                            { icon: "doc", id: "notes", kind: "action", label: "Notes" },
+                            {
+                                icon: "image",
+                                id: "kept-deck",
+                                kind: "action",
+                                label: "Launch deck",
+                            },
+                        ]}
+                        activeItemAliasIds={["kept-deck"]}
+                        activeItemId="happy"
+                        onItemSelect={() => {}}
+                        sections={[
+                            {
+                                id: "projects",
+                                items: [
+                                    { id: "happy", kind: "project", label: "happy" },
+                                    { id: "site", kind: "project", label: "site" },
+                                ],
+                                label: "Projects",
+                            },
+                        ]}
+                        title="Pinned"
+                    />
+                </Frame>
+            </Specimen>
+
+            <Specimen
                 detail="A heading control the section exists to offer stands without hover (reveal: always), spins in place while its act runs, and refuses a second press. A refusal is said under the heading in the reader's terms, because the thing it would have added never came into being and has no row to fail on."
                 label="Section heading action — resting, pending, refused"
                 number="02e"

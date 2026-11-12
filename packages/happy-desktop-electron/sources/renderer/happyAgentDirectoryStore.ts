@@ -214,6 +214,8 @@ export interface HappyAgentDirectoryDeps {
      * background one reporting a removal must not move the reader.
      */
     readonly groupForget: (happyAgentId: string, groupId: string) => void;
+    /** Every group a Happy Agent's first catalog read listed. */
+    readonly groupsListed?: (happyAgentId: string, groupIds: ReadonlySet<string>) => void;
     /**
      * Takes bot subtasks the host stopped listing out of the window's
      * navigation, moving a reader who stood in one to `open`.
@@ -786,6 +788,7 @@ export function happyAgentDirectoryStoreCreate(
                     deps.conversationOpen(happyAgent.entry.id, location),
                 groupOpen: (groupId) => deps.groupOpen(happyAgent.entry.id, groupId),
                 groupForget: (groupId) => deps.groupForget(happyAgent.entry.id, groupId),
+                groupsListed: (groupIds) => deps.groupsListed?.(happyAgent.entry.id, groupIds),
                 subtasksForget: (removed, open) =>
                     deps.subtasksForget(happyAgent.entry.id, removed, open),
                 activity: (activity) => deps.activity?.(happyAgent.entry.id, activity),

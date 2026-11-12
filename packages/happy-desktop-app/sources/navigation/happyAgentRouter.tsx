@@ -11,7 +11,7 @@ import {
     useRouter,
 } from "@tanstack/react-router";
 import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAgentHistory";
-import { happyAgentRoutePathParse } from "./happyAgentRoute";
+import { happyAgentRoutePath, happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
 import {
@@ -194,6 +194,11 @@ export interface HappyAgentRouterContext {
     /** Desktop-shell update state; absent when this route tree runs as plain web UI. */
     readonly update?: AppHappyAgentUpdate;
     readonly onUpdateApply?: () => void;
+    /**
+     * Closes the window this route tree is shown in. Only a shell that can do so
+     * supplies it; Command-W asks once it finds nothing of its own to close.
+     */
+    readonly onWindowClose?: () => void;
 }
 
 const rootRoute = createRootRouteWithContext<HappyAgentRouterContext>()({
@@ -780,6 +785,12 @@ function HappyAgentWorkspaceLayout() {
                 })
             }
             onArtifactClose={(happyAgentId) => happyAgentRouterArtifactClose(router, happyAgentId)}
+            onPageClose={() => {
+                // A page with nowhere behind it is all this window has shown, so
+                // there is nothing to leave it for and the window closes.
+                if (!happyAgentRouterPageClose(router)) context.onWindowClose?.();
+            }}
+            {...(context.onWindowClose ? { onWindowClose: context.onWindowClose } : {})}
             onUpdateApply={context.onUpdateApply}
             platform={context.platform}
             happyAgentId={params.happyAgentId ?? happyAgentDefaultId(context)}
@@ -813,6 +824,11 @@ function HappyAgentWorkspaceLayout() {
                 if (changed && router.history.subscribers.size === 0)
                     void router.load({ action: { type: "REPLACE" } });
                 return changed;
+            }}
+            onChatCloseRefused={(happyAgentId, groupId, chatId) => {
+                const changed = router.history.sessionRemember(happyAgentId, groupId, chatId);
+                if (changed && router.history.subscribers.size === 0)
+                    void router.load({ action: { type: "REPLACE" } });
             }}
             onFileClose={(happyAgentId, groupId, path) => {
                 // The route helper owns history repair; the surface owns the
@@ -1038,13 +1054,90 @@ export function happyAgentRouterSurfaceOpen(
             .catch(() => undefined);
 }
 
+/** How long a link from outside waits for the window to be able to act on it. */
+const EXTERNAL_LINK_WAIT_MS = 15_000;
+
+/** Resolves once `ready` holds, or after `waitMs` whether it does or not. */
+function happened(
+    ready: () => boolean,
+    subscribe: (listener: () => void) => () => void,
+    waitMs: number,
+): Promise<void> {
+    if (ready()) return Promise.resolve();
+    return new Promise((resolve) => {
+        const done = (): void => {
+            clearTimeout(timer);
+            unsubscribe();
+            resolve();
+        };
+        const unsubscribe = subscribe(() => {
+            if (ready()) done();
+        });
+        const timer = setTimeout(done, waitMs);
+    });
+}
+
+/**
+ * Opens a Happy link that reached the window from outside the app, on the
+ * Happy Agent whose instance it names.
+ *
+ * Such a link can be the reason the window exists, and it is handed over the
+ * moment its connection goes live: before the window has applied its own
+ * address to that connection, and before the connection has read what it
+ * holds. Opened right then it is lost. An artifact lands in a panel that the
+ * address about to be applied clears, and a chat, a project or a Surface is
+ * not yet known to exist. So the window's address is applied to the connection
+ * first, what the link names is waited for, and then the link opens exactly as
+ * `happyAgentRouterHappyLinkOpen` opens it in a window already in use.
+ */
+export async function happyAgentRouterExternalLinkOpen(
+    router: HappyAgentRouter,
+    url: string,
+    happyAgentId: string,
+    waitMs: number = EXTERNAL_LINK_WAIT_MS,
+): Promise<void> {
+    // RouterProvider supplies the context with its first render; until then
+    // the router has no directory to open anything on.
+    await happened(
+        () => router.options.context?.happyAgents !== undefined,
+        (listener) => router.subscribe("onResolved", listener),
+        waitMs,
+    );
+    const session = router.options.context?.happyAgents
+        ?.get()
+        .happyAgents.find((entry) => entry.id === happyAgentId)?.session;
+    if (session === undefined) return;
+    // The address on screen was loaded before this connection had stores, so
+    // it is loaded again: the conversation it names opens, and the panel
+    // beside it takes that conversation's scope, before anything is put in it.
+    await router.invalidate();
+    const link = happyAgentProviderAddPageOf(url) === undefined ? parseHappyUrl(url) : undefined;
+    const kind = link?.type === "reference" ? link.reference.kind : undefined;
+    if (kind === "agent" || kind === "workspace" || kind === "project")
+        await happened(
+            () => session.workspace.get().list.projects.type !== "loading",
+            session.workspace.subscribe,
+            waitMs,
+        );
+    const surfaces = kind === "surface" ? session.surfaces?.catalog() : undefined;
+    if (surfaces)
+        await happened(
+            () => surfaces.get().availability !== "checking",
+            surfaces.subscribe,
+            waitMs,
+        );
+    happyAgentRouterHappyLinkOpen(router, url, happyAgentId);
+}
+
 /**
  * Opens a Happy link the reader followed in a page the window shows — an
  * artifact or an HTML preview — on the Happy Agent on screen, exactly as the
  * same link in a message opens: an artifact beside the conversation, or in
  * the viewer when no conversation is on screen; an agent on its conversation,
  * a workspace or project where the reader left it, a Surface as its sidebar
- * row does, and a file read-only beside the conversation at the lines it named. A malformed link, one naming something
+ * row does, and a file read-only in the file viewer beside the conversation at
+ * the lines it named (a message opens its own over the conversation). A
+ * malformed link, one naming something
  * the reader's list does not hold, or a service or person does nothing.
  *
  * `happyAgentId` names the Happy Agent the link belongs to, as for a link from
@@ -1072,7 +1165,8 @@ export function happyAgentRouterHappyLinkOpen(
     if (link.instanceId !== undefined && link.instanceId !== target?.instanceId) return;
     if (link.type === "file") {
         const file = happyAgentFileLinkParse(url);
-        if (file !== undefined) session.workspace.fileLinkOpen(file, fileTabKind(file.path));
+        if (file !== undefined)
+            session.workspace.fileLinkOpen(file, fileTabKind(file.path), "viewer");
         return;
     }
     if (link.type === "settings") {
@@ -1149,8 +1243,13 @@ export function happyAgentRouterConversationOpen(
     happyAgentId: string,
     location: HappyAgentSessionLocation,
 ): void {
+    // A creation page that has just made its bot or task is spent: the reader
+    // is carried from it to what it made, and Back from there returns to where
+    // they were before the form rather than to an empty one.
+    const shown = happyAgentRoutePathParse(router.history.location.pathname);
     void router.navigate({
         params: { chatId: location.sessionId, groupId: location.groupId, happyAgentId },
+        replace: shown?.kind === "botCreate" || shown?.kind === "taskCreate",
         to: "/chats/$happyAgentId/$groupId/$chatId",
     });
 }
@@ -1185,6 +1284,48 @@ export function happyAgentRouterArtifactClose(
         replace: true,
         to: "/artifacts/$happyAgentId",
     });
+}
+
+/**
+ * Leaves the page in front — anything but the conversations' workspace — for
+ * where the reader was before it, which is what Command-W means on a page. An
+ * artifact closes as its own Back does and settings as its own Close does; any
+ * other page steps back to the place before it. The workspace's addresses do
+ * nothing here: there Command-W belongs to the tab or pane in front.
+ *
+ * Returns false only for a page the window opened straight onto: it has nowhere
+ * behind it and stays, and the caller may close the window instead.
+ */
+export function happyAgentRouterPageClose(router: HappyAgentRouter): boolean {
+    const shown = happyAgentRoutePathParse(router.history.location.pathname);
+    switch (shown?.kind) {
+        case undefined:
+        case "chat":
+        case "chats":
+        case "file":
+        case "group":
+        case "happyAgent":
+        case "home":
+            return true;
+        case "settings":
+        case "settingsSection":
+            happyAgentRouterSettingsClose(router);
+            return true;
+        case "artifact":
+            happyAgentRouterArtifactClose(router, shown.happyAgentId);
+            return true;
+        case "artifacts":
+        case "blueprint":
+        case "botCreate":
+        case "feed":
+        case "inbox":
+        case "surface":
+        case "taskCreate":
+        case "userProfile":
+            if (!router.history.canGoBack()) return false;
+            router.history.back();
+            return true;
+    }
 }
 
 /**
@@ -1239,19 +1380,25 @@ export function happyAgentRouterSubtasksForget(
         (shown?.kind === "chat" || shown?.kind === "file") &&
         shown.happyAgentId === happyAgentId &&
         removed.some((location) => location.sessionId === shown.chatId);
+    // The reader steps onto `open` first, so the repair below finds nobody
+    // standing in a removed conversation: it neither shows the emptied
+    // workspace on the way, nor leaves `open` twice in a row behind a replace.
+    // A push moves an earlier visit to `open` to the front, which together with
+    // the removal is the same as `open` taking the task's place.
+    if (open !== undefined && stoodInRemoved)
+        router.history.push(
+            happyAgentRoutePath({
+                chatId: open.sessionId,
+                groupId: open.groupId,
+                happyAgentId,
+                kind: "chat",
+            }),
+        );
     let changed = false;
     for (const location of removed)
         changed =
             router.history.sessionForget(happyAgentId, location.groupId, location.sessionId) ||
             changed;
-    if (open !== undefined && stoodInRemoved) {
-        void router.navigate({
-            params: { chatId: open.sessionId, groupId: open.groupId, happyAgentId },
-            replace: true,
-            to: "/chats/$happyAgentId/$groupId/$chatId",
-        });
-        return;
-    }
     if (changed && router.history.subscribers.size === 0)
         void router.load({ action: { type: "REPLACE" } });
 }
@@ -1278,6 +1425,21 @@ export function happyAgentRouterGroupForget(
     // notification above. One that is not — a window still starting up — has to
     // be told, the same way the router tells itself when it commits a location
     // with nothing listening.
+    if (changed && router.history.subscribers.size === 0)
+        void router.load({ action: { type: "REPLACE" } });
+}
+
+/**
+ * Takes groups archived while the window was closed out of the navigation it
+ * remembered from then, once the Happy Agent's first catalog read lists what
+ * still exists. Nobody is moved: only places behind or ahead of the reader go.
+ */
+export function happyAgentRouterGroupsUnlistedForget(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+    listed: ReadonlySet<string>,
+): void {
+    const changed = router.history.groupsUnlistedForget(happyAgentId, listed);
     if (changed && router.history.subscribers.size === 0)
         void router.load({ action: { type: "REPLACE" } });
 }

@@ -75,6 +75,7 @@ function workspace(): HappyAgentWorkspaceStore {
             bots: [],
             tasks: [],
             taskDirectory: [],
+            archivedSessions: [],
             projects: {
                 type: "ready" as const,
                 value: [
@@ -295,4 +296,38 @@ it("routes Command-W to the focused pane", () => {
         type: "main",
     });
     expect(workspaceCloseTargetFind("panel", pane, true)).toEqual({ type: "main" });
+});
+
+it("routes Command-W to a view that came forward beside the conversation after the last touch", () => {
+    const terminal = "tab_1" as HappyAgentPanelTabId;
+    const chat = "tab_2" as HappyAgentPanelTabId;
+    const page = "tab_3" as HappyAgentPanelTabId;
+    const live = "tab_4" as HappyAgentPanelTabId;
+    const pane = {
+        open: true,
+        filesViewOpen: true,
+        activeViewId: "artifact",
+        artifactView: { artifactId: "art_one" },
+        tabs: [
+            { id: terminal, kind: "terminal", label: "Terminal 1", placement: "panel" },
+            { id: chat, kind: "chat", label: "Side chat", placement: "panel" },
+            { id: page, kind: "browser", label: "Docs", placement: "panel" },
+            { id: live, kind: "browser", label: "Deck", placement: "panel", artifactId: "art_two" },
+        ],
+    } as unknown as HappyAgentPanelSnapshot;
+    const fronted = (activeViewId: HappyAgentPanelSnapshot["activeViewId"]) =>
+        workspaceCloseTargetFind("workspace", { ...pane, activeViewId }, false, true);
+
+    // What the conversation opened beside itself closes first.
+    expect(fronted("artifact")).toEqual({ type: "view", viewId: "artifact" });
+    expect(fronted(chat)).toEqual({ type: "view", viewId: chat });
+    expect(fronted(live)).toEqual({ type: "view", viewId: live });
+    // A terminal or a page the reader started is closed from inside the pane only.
+    expect(fronted(terminal)).toEqual({ type: "main" });
+    expect(fronted(page)).toEqual({ type: "main" });
+    // Files and Artifacts are the pane's own lists, not something to close.
+    expect(fronted("files")).toEqual({ type: "main" });
+    expect(fronted("artifacts")).toEqual({ type: "main" });
+    // Nothing new in front since the reader last touched the conversation.
+    expect(workspaceCloseTargetFind("workspace", pane, false, false)).toEqual({ type: "main" });
 });

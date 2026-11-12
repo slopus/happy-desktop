@@ -1,0 +1,63 @@
+/*
+ * C-342 FileModal — one file read over the conversation that named it.
+ *
+ * Hosted directly by ModalOverlay (no Modal card around it), so it bounds its
+ * own size: the whole 24px-gutter box up to 960 × 880. The overlay's content
+ * box is definite (fixed, inset 0), so the percentages resolve against it.
+ */
+
+.happy-file-modal {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    box-sizing: border-box;
+    font-family: var(--happy-font-ui);
+    width: 100%;
+    max-width: 960px;
+    height: 100%;
+    max-height: 880px;
+    overflow: hidden;
+    background: var(--surface-high);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-shell);
+    box-shadow: 0 24px 64px var(--shadow-elevated);
+}
+
+.happy-file-modal__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    box-sizing: border-box;
+    min-height: 48px;
+    padding: 10px 10px 10px 16px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-file-modal__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0 8px 0 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-file-modal .happy-file-modal__close {
+    flex: none;
+    /* The close control sits 11px inside the card's top-right corner. */
+    border-radius: max(0px, calc(var(--happy-radius-shell) - 11px));
+}
+
+/* The file's own surface fills what the header leaves and scrolls itself. */
+.happy-file-modal__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}

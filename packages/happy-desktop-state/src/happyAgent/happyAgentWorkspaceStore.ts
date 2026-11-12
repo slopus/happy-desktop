@@ -100,6 +100,7 @@ import {
 } from "./happyAgentChangeTiersStore.js";
 import {
     happyAgentPanelStoreCreate,
+    type HappyAgentFilePresentation,
     type HappyAgentPanelStore,
     type HappyAgentViewPlacement,
 } from "./happyAgentPanelStore.js";
@@ -823,6 +824,12 @@ export interface HappyAgentWorkspaceSnapshot {
     /** The conversation a tab close has asked to archive, if any. It goes when the address changes. */
     readonly conversationArchiveConfirm?: HappyAgentConversationArchiveConfirmSnapshot;
     /**
+     * The last tab close the host refused: the conversation is back in its
+     * strip, and this says why until it is put away, the conversation is
+     * closed again, or the reader leaves its workspace.
+     */
+    readonly conversationArchiveFailure?: HappyAgentConversationArchiveFailure;
+    /**
      * Where the project whose settings are open runs its sessions. Present only
      * while a project's settings are open — a worktree has no compute of its own
      * — and it goes when they close.
@@ -1105,6 +1112,13 @@ const FILE_COMMENTS_IDLE: HappyAgentFileComments = { comments: [] };
  * follows another reference, because a click that opens nothing and says
  * nothing reads as a click that did not register.
  */
+/** A conversation whose close the host refused, and the host's reason. */
+export interface HappyAgentConversationArchiveFailure {
+    readonly groupId: HappyAgentGroupId;
+    readonly conversationId: HappyAgentSessionId;
+    readonly message: string;
+}
+
 export interface HappyAgentFileOpenFailure {
     readonly path: string;
     readonly message: string;
@@ -1462,6 +1476,15 @@ export type HappyAgentWorkspaceOutput =
      */
     | { readonly type: "groupRemoved"; readonly groupId: HappyAgentGroupId }
     /**
+     * The first authoritative catalog read's whole list of groups. A group
+     * archived while this window was closed was never listed before it, so it is
+     * never reported removed; this lets the owner drop the places it remembered
+     * from an earlier run inside groups this list leaves out. A group still
+     * arriving is not listed either, so the place the reader stands on is not
+     * one to move them off.
+     */
+    | { readonly type: "groupsListed"; readonly groupIds: ReadonlySet<HappyAgentGroupId> }
+    /**
      * Bot subtasks the host's tree no longer lists — archived here, from another
      * window, or by the agent that made them. Archiving keeps a task's
      * workspace, so the group-removal report never covers them. `removed` names
@@ -1659,9 +1682,14 @@ export interface HappyAgentWorkspaceStore {
     /**
      * Closes a conversation: it leaves the list durably without ending the
      * session. The caller addresses somewhere else first when the closed
-     * conversation is the open one; this store does not navigate.
+     * conversation is the open one; this store does not navigate. It answers
+     * once the host has taken the close, and rejects when the host refuses it,
+     * which also brings the conversation back and puts up
+     * `conversationArchiveFailure`.
      */
     conversationArchive(conversationId: HappyAgentSessionId): Promise<void>;
+    /** Puts away the notice about a close the host refused. */
+    conversationArchiveFailureDismiss(): void;
     /** Returns an archived conversation to its workspace strip. Navigation remains the caller's. */
     conversationRestore(conversationId: HappyAgentSessionId): Promise<void>;
     /**
@@ -1817,7 +1845,8 @@ export interface HappyAgentWorkspaceStore {
         groupId: HappyAgentGroupId,
         path: string,
         kind: HappyAgentFileTabKind,
-        selection?: HappyAgentFileLineRange,
+        selection: HappyAgentFileLineRange | undefined,
+        presentation: HappyAgentFilePresentation,
     ): void;
     /**
      * Follows a `happy://` or `happy-file://` file link — a file in another agent's or workspace's
@@ -1830,7 +1859,18 @@ export interface HappyAgentWorkspaceStore {
      * into the checkout being read is an ordinary reference to it, and opens
      * exactly as `fileReferenceOpen` would.
      */
-    fileLinkOpen(link: HappyAgentFileLink, kind: HappyAgentFileTabKind): void;
+    fileLinkOpen(
+        link: HappyAgentFileLink,
+        kind: HappyAgentFileTabKind,
+        presentation: HappyAgentFilePresentation,
+    ): void;
+    /**
+     * Puts away what a message opened over the conversation. A file holding
+     * an unsaved edit is not dropped with it: it moves into the file viewer
+     * beside the conversation, where the edit stays until it is saved or
+     * reverted.
+     */
+    modalClose(): void;
     /**
      * Selects a file in the machine's file manager. `path` is relative to the
      * group's root, or absolute for a file anywhere on that machine. When the
@@ -2518,6 +2558,7 @@ export function happyAgentWorkspaceStoreCreate(
     /** Which submission owns the empty-group confirmation. */
     let groupArchiveSubmission = 0;
     let conversationArchiveConfirm: HappyAgentConversationArchiveConfirmSnapshot | undefined;
+    let conversationArchiveFailure: HappyAgentConversationArchiveFailure | undefined;
     /** Which submission the pending archive belongs to, so a superseded one's answer is dropped. */
     let projectArchiveSubmission = 0;
     let projectSettings: HappyAgentProjectSettingsSnapshot | undefined;
@@ -2563,6 +2604,8 @@ export function happyAgentWorkspaceStoreCreate(
      * worktrees, bots, tasks, and subtasks. A later read missing one is its removal.
      */
     let authoritativeGroupIds: ReadonlySet<string> = new Set();
+    /** Whether the first authoritative read's list has gone out as `groupsListed`. */
+    let groupsListedReported = false;
     /**
      * Tasks the reader archived from this window. Closing one is what they asked
      * for, so its archive takes them off it; a task archived anywhere else stays
@@ -3349,6 +3392,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.projectArchive === projectArchive &&
                 snapshot.groupArchive === groupArchive &&
                 snapshot.conversationArchiveConfirm === conversationArchiveConfirm &&
+                snapshot.conversationArchiveFailure === conversationArchiveFailure &&
                 snapshot.projectSettings === projectSettings &&
                 snapshot.fileViewMode === fileViewMode &&
                 snapshot.fileViewWrap === fileViewWrap &&
@@ -3408,6 +3452,7 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(projectArchive ? { projectArchive } : {}),
                           ...(groupArchive ? { groupArchive } : {}),
                           ...(conversationArchiveConfirm ? { conversationArchiveConfirm } : {}),
+                          ...(conversationArchiveFailure ? { conversationArchiveFailure } : {}),
                           ...(projectSettings ? { projectSettings } : {}),
                       },
             true,
@@ -5654,6 +5699,9 @@ export function happyAgentWorkspaceStoreCreate(
         if (address.groupId === groupId && address.conversationId === conversationId) return;
         // The question was about what was on screen; elsewhere it names nothing.
         conversationArchiveConfirm = undefined;
+        // A refused close is told in its own workspace, which a reader who
+        // has gone elsewhere is no longer reading.
+        if (conversationArchiveFailure?.groupId !== groupId) conversationArchiveFailure = undefined;
         address =
             groupId === undefined && conversationId === undefined
                 ? ADDRESS_NOWHERE
@@ -6875,6 +6923,13 @@ export function happyAgentWorkspaceStoreCreate(
         // surfaces below still describe where the reader was until that lands.
         const removedGroupIds = [...authoritativeGroupIds].filter((id) => !listedIds.has(id));
         authoritativeGroupIds = listedIds;
+        if (!groupsListedReported) {
+            groupsListedReported = true;
+            output({
+                type: "groupsListed",
+                groupIds: new Set([...listedIds].map((id) => id as HappyAgentGroupId)),
+            });
+        }
         for (const groupId of removedGroupIds)
             output({ type: "groupRemoved", groupId: groupId as HappyAgentGroupId });
         if (groupArchive && !groupArchive.submitting) {
@@ -7372,6 +7427,16 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
+     * Shows the file viewer's file: over the conversation for a file a message
+     * named, otherwise wherever the viewer already is, so a link followed in a
+     * file read over the conversation stays over it.
+     */
+    const fileViewerShow = (presentation: HappyAgentFilePresentation): void => {
+        if (presentation === "modal" || panel.get().modal?.kind === "file") panel.modalFileOpen();
+        else panel.fileViewOpen();
+    };
+
+    /**
      * Opens the file a reference named once the checkout says it is there.
      * `generation` is the ask this answers; a later reference supersedes it.
      */
@@ -7380,7 +7445,8 @@ export function happyAgentWorkspaceStoreCreate(
         groupId: HappyAgentGroupId,
         path: string,
         kind: HappyAgentFileTabKind,
-        selection?: HappyAgentFileLineRange,
+        selection: HappyAgentFileLineRange | undefined,
+        presentation: HappyAgentFilePresentation,
     ): void => {
         // The checkout is asked for the file before a tab is given to it.
         // The read is not kept: the tab reads for itself, the same way it
@@ -7395,7 +7461,7 @@ export function happyAgentWorkspaceStoreCreate(
                 if (disposed || generation !== fileReferenceGeneration) return;
                 fileOpenFailure = undefined;
                 fileTabOpen(groupId, path, kind, false, "panel", selection);
-                panel.fileViewOpen();
+                fileViewerShow(presentation);
                 recompute();
             },
             (error: unknown) => {
@@ -7854,12 +7920,36 @@ export function happyAgentWorkspaceStoreCreate(
             return list.sessionCreate(create).then(created);
         },
         conversationArchive: async (conversationId) => {
-            await list.sessionArchive(conversationId);
+            const groupId = address.groupId;
+            if (conversationArchiveFailure?.conversationId === conversationId) {
+                conversationArchiveFailure = undefined;
+                recompute();
+            }
+            const archived = list.sessionArchive(conversationId);
             client.chatArchive(conversationId);
             if (retained.has(conversationId)) {
                 retainedRelease(conversationId);
                 retainedPublish();
             }
+            const result = await archived;
+            if (result.type === "archived") return;
+            // The conversation is back in its strip, so it syncs again, and the
+            // reader is told why it did not close.
+            client.chatRestore(conversationId);
+            if (!disposed && groupId !== undefined) {
+                conversationArchiveFailure = {
+                    groupId,
+                    conversationId,
+                    message: result.error.message,
+                };
+                recompute();
+            }
+            throw result.error;
+        },
+        conversationArchiveFailureDismiss() {
+            if (disposed || conversationArchiveFailure === undefined) return;
+            conversationArchiveFailure = undefined;
+            recompute();
         },
         conversationRestore: async (conversationId) => {
             const result = await list.sessionRestore(conversationId);
@@ -8084,11 +8174,18 @@ export function happyAgentWorkspaceStoreCreate(
             fileTabOpen(groupId, path, kind, false, "panel", selection);
             panel.fileViewOpen();
         },
-        fileReferenceOpen(groupId, path, kind, selection) {
+        fileReferenceOpen(groupId, path, kind, selection, presentation) {
             if (disposed) return;
-            fileReferenceFollow(++fileReferenceGeneration, groupId, path, kind, selection);
+            fileReferenceFollow(
+                ++fileReferenceGeneration,
+                groupId,
+                path,
+                kind,
+                selection,
+                presentation,
+            );
         },
-        fileLinkOpen(link, kind) {
+        fileLinkOpen(link, kind, presentation) {
             if (disposed) return;
             const generation = ++fileReferenceGeneration;
             const current = (): boolean => !disposed && generation === fileReferenceGeneration;
@@ -8106,7 +8203,14 @@ export function happyAgentWorkspaceStoreCreate(
                 // files, which is a reference like any other: editable, and
                 // opened exactly the way a written `Store.ts:120` is.
                 if (workspaceId === addressedGroupId) {
-                    fileReferenceFollow(generation, workspaceId, link.path, kind, link.selection);
+                    fileReferenceFollow(
+                        generation,
+                        workspaceId,
+                        link.path,
+                        kind,
+                        link.selection,
+                        presentation,
+                    );
                     return;
                 }
                 const probe =
@@ -8117,10 +8221,28 @@ export function happyAgentWorkspaceStoreCreate(
                     if (!current()) return;
                     fileOpenFailure = undefined;
                     fileLinkTabOpen(workspaceId, link.path, kind, link.target, link.selection);
-                    panel.fileViewOpen();
+                    fileViewerShow(presentation);
                     recompute();
                 }, fail);
             }, fail);
+        },
+        modalClose() {
+            if (disposed) return;
+            const modal = panel.get().modal;
+            if (modal?.kind !== "file") {
+                panel.modalClose();
+                return;
+            }
+            const held = fileTabs.find((tab) => tab.placement === "panel");
+            if (held?.draft !== undefined) {
+                panel.modalBesideOpen();
+                return;
+            }
+            panel.modalClose();
+            if (!panel.get().fileViewOpen) {
+                panelFileTabClose();
+                recompute();
+            }
         },
         fileReveal(groupId, path) {
             if (disposed) return;

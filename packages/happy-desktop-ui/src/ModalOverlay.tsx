@@ -1,4 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
+import { CLOSE_SHORTCUT, commandShortcutMatches } from "./keyboardShortcut";
 import {
     createContext,
     use,
@@ -235,7 +236,18 @@ export function ModalOverlay(props: ModalOverlayProps) {
                     local.onDismiss();
             }}
             onKeyDown={(event) => {
-                if (event.key === "Escape") (local.onEscape ?? local.onDismiss)?.();
+                if (event.key === "Escape") {
+                    (local.onEscape ?? local.onDismiss)?.();
+                    return;
+                }
+                // The close chord means the innermost thing that is up, and
+                // while an overlay is up that is the overlay: it leaves as it
+                // does on Escape. Claiming the event keeps the same press from
+                // reaching the window, which would close what is behind it too.
+                const close = local.onEscape ?? local.onDismiss;
+                if (!close || !commandShortcutMatches(event.nativeEvent, CLOSE_SHORTCUT)) return;
+                event.preventDefault();
+                close();
             }}
             ref={overlayEl}
             style={local.style}

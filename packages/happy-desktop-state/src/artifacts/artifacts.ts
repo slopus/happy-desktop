@@ -7,6 +7,11 @@ import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import { UserError } from "../types.js";
 import type { HappyAgentArtifactId, HappyAgentArtifactLive } from "./artifactTypes.js";
 import {
+    happyAgentArtifactCreationCreate,
+    type HappyAgentArtifactCreation,
+    type HappyAgentArtifactCreationStore,
+} from "./artifactCreationStore.js";
+import {
     happyAgentArtifactCatalogStoreCreate,
     type HappyAgentArtifactCatalogStore,
 } from "./artifactCatalogStore.js";
@@ -64,9 +69,12 @@ export interface HappyAgentArtifacts {
     inline(): HappyAgentInlineArtifactsStore;
     /** The names of the people artifacts credit. */
     people(): HappyAgentArtifactPeopleStore;
+    /** What became of the last new artifact the reader asked for. */
+    creation(): HappyAgentArtifactCreationStore;
     /**
      * Creates an empty Markdown artifact made in `agentId`'s conversation and
-     * resolves with its id. Rejects with a displayable `UserError`.
+     * resolves with its id. Rejects with a displayable `UserError`, which
+     * `creation()` holds as well for the surface that asked.
      */
     artifactCreate(agentId: HappyAgentSessionId): Promise<HappyAgentArtifactId>;
     /**
@@ -116,6 +124,13 @@ export interface HappyAgentArtifactsDeps {
     readonly team?: () => HappyAgentTeamRoster;
 }
 
+/**
+ * An empty Markdown document. Happy Agent refuses a file with no text at all,
+ * so the document a new artifact starts as is one blank line: nothing to read,
+ * and nothing the reader did not write.
+ */
+const ARTIFACT_EMPTY_MARKDOWN = "\n";
+
 export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyAgentArtifacts {
     let catalog: HappyAgentArtifactCatalogStore | undefined;
     let panel: HappyAgentArtifactCatalogStore | undefined;
@@ -126,6 +141,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
     let titles: HappyAgentArtifactTitlesStore | undefined;
     let inline: HappyAgentInlineArtifactsStore | undefined;
     let people: HappyAgentArtifactPeople | undefined;
+    let creation: HappyAgentArtifactCreation | undefined;
     let disposed = false;
     /*
      * A window can render one last time from a session whose connection has
@@ -150,6 +166,8 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
         );
     const peopleOf = (): HappyAgentArtifactPeople =>
         (people ??= inert(happyAgentArtifactPeopleCreate(deps.client, deps.team)));
+    const creationOf = (): HappyAgentArtifactCreation =>
+        (creation ??= inert(happyAgentArtifactCreationCreate()));
     return {
         catalog() {
             return (catalog ??= inert(
@@ -228,11 +246,15 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 return undefined;
             }
         },
+        creation() {
+            return creationOf().store;
+        },
         async artifactCreate(agentId) {
             if (disposed) throw new UserError("This Happy Agent is no longer connected.");
+            creationOf().started();
             try {
                 const response = await deps.client.createArtifact({
-                    files: [{ path: "index.md", text: "" }],
+                    files: [{ path: "index.md", text: ARTIFACT_EMPTY_MARKDOWN }],
                     mutationId: globalThis.crypto.randomUUID(),
                     source: { kind: "agent", agentId },
                     title: "Untitled",
@@ -240,7 +262,9 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 });
                 return response.artifact.id as HappyAgentArtifactId;
             } catch (error) {
-                throw happyAgentUserError(error);
+                const failure = happyAgentUserError(error);
+                creationOf().failed(failure);
+                throw failure;
             }
         },
         [Symbol.dispose]() {
@@ -248,6 +272,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
             disposed = true;
             catalog?.[Symbol.dispose]();
             panel?.[Symbol.dispose]();
+            creation?.[Symbol.dispose]();
             search?.[Symbol.dispose]();
             viewer?.[Symbol.dispose]();
             panelViewer?.[Symbol.dispose]();

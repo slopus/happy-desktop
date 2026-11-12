@@ -171,3 +171,108 @@ it("opens no artifact tab without a conversation to hold it", () => {
     expect(store.artifactBrowserOpen("art_live" as HappyAgentArtifactId, live, "Page")).toBe(false);
     expect(store.get().tabs).toEqual([]);
 });
+
+it("closes the pane with a view that opened it, and leaves a pane the reader opened", () => {
+    const { store } = panelCreate();
+    const artifactId = "art_one" as HappyAgentArtifactId;
+    // The pane was shut; the artifact opened it, so closing the artifact shuts it.
+    store.artifactViewOpen(artifactId);
+    expect(store.get()).toMatchObject({ open: true, activeViewId: "artifact" });
+    store.artifactViewClose();
+    expect(store.get().open).toBe(false);
+
+    // A pane opened by hand outlives what is opened and closed inside it.
+    store.panelToggle();
+    expect(store.get()).toMatchObject({ open: true, activeViewId: "files" });
+    store.artifactViewOpen(artifactId);
+    store.artifactViewClose();
+    expect(store.get()).toMatchObject({ open: true, activeViewId: "files" });
+});
+
+it("returns to the view the pane showed before the one that closed", () => {
+    const { store } = panelCreate();
+    store.browserAdd("https://one.example/");
+    const browser = store.get().tabs[0]!;
+    store.usageSelect();
+    store.artifactViewOpen("art_one" as HappyAgentArtifactId);
+
+    // Each close lands on what was in front before it, not on Files.
+    store.artifactViewClose();
+    expect(store.get().activeViewId).toBe("usage");
+    store.usageClose();
+    expect(store.get().activeViewId).toBe(browser.id);
+
+    // A view that has gone is skipped on the way back.
+    store.usageSelect();
+    store.artifactViewOpen("art_one" as HappyAgentArtifactId);
+    store.usageClose();
+    expect(store.get().activeViewId).toBe("artifact");
+    store.artifactViewClose();
+    expect(store.get().activeViewId).toBe(browser.id);
+});
+
+it("leaves the view in front alone when a tab behind it closes", () => {
+    const { store } = panelCreate();
+    store.browserAdd("https://one.example/");
+    const behind = store.get().tabs[0]!;
+    store.artifactViewOpen("art_one" as HappyAgentArtifactId);
+    store.tabClose(behind.id);
+    expect(store.get()).toMatchObject({ open: true, activeViewId: "artifact" });
+});
+
+it("keeps each group's way back to itself", () => {
+    const { store } = panelCreate();
+    store.browserAdd("https://one.example/");
+    store.browserAdd("https://two.example/");
+    const [one, two] = store.get().tabs;
+    store.tabSelect(one!.id);
+    store.browserAdd("https://three.example/");
+    const three = store.get().tabs[2]!;
+
+    // Another group's comings and goings are its own.
+    store.scopeApply(GROUP_B, AGENT);
+    store.browserAdd("https://other.example/");
+    store.scopeApply(GROUP_A, AGENT);
+    expect(store.get().activeViewId).toBe(three.id);
+
+    // Back here, closing still walks this group's order: the tab that was in
+    // front before, not merely the one beside it in the strip.
+    store.tabClose(three.id);
+    expect(store.get().activeViewId).toBe(one!.id);
+    store.tabClose(one!.id);
+    expect(store.get().activeViewId).toBe(two!.id);
+});
+
+it("opens a message's file over the conversation, and moves it beside when asked", () => {
+    const { store } = panelCreate();
+    // A file the viewer was showing beside steps aside: there is one viewer.
+    store.fileViewOpen();
+    store.modalFileOpen();
+    expect(store.get()).toMatchObject({ modal: { kind: "file" }, fileViewOpen: false });
+    expect(store.get().activeViewId).not.toBe("file");
+    store.modalBesideOpen();
+    expect(store.get().modal).toBeUndefined();
+    expect(store.get()).toMatchObject({ open: true, activeViewId: "file", fileViewOpen: true });
+
+    store.modalMediaOpen("entry_1", 2);
+    expect(store.get().modal).toEqual({ kind: "media", entryId: "entry_1", mediaIndex: 2 });
+    store.modalBesideOpen();
+    expect(store.get()).toMatchObject({
+        activeViewId: "preview",
+        previewEntryId: "entry_1",
+        previewMediaIndex: 2,
+    });
+    expect(store.get().modal).toBeUndefined();
+});
+
+it("puts away what was over a conversation when another one is read", () => {
+    const { store } = panelCreate();
+    store.modalMediaOpen("entry_1", 0);
+    store.scopeApply(GROUP_A, AGENT);
+    expect(store.get().modal).toEqual({ kind: "media", entryId: "entry_1", mediaIndex: 0 });
+    store.scopeApply(GROUP_A, "ses_b" as HappyAgentSessionId);
+    expect(store.get().modal).toBeUndefined();
+    store.modalFileOpen();
+    store.modalClose();
+    expect(store.get().modal).toBeUndefined();
+});
