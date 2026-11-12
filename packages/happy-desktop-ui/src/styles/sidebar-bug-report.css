@@ -1,0 +1,129 @@
+/*
+ * The bug report card in the sidebar footer. It stands where a Happy Agent
+ * update's card stands — above the footer, as wide as its row, inside the
+ * sidebar column — and is drawn the same way: a 12px-radius bordered surface
+ * with the footer's popover shadow, its scene bare at 56px beside the title.
+ */
+.happy-sidebar-bug-report {
+    display: flex;
+    flex: none;
+}
+
+.happy-sidebar-bug-report[data-open] > .happy-button {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+/* `.happy-sidebar-footer` is the containing block; see
+   `.happy-sidebar-agent-update__panel` for the offset. */
+.happy-sidebar-bug-report__panel {
+    position: absolute;
+    right: 0;
+    bottom: calc((100% + var(--happy-surface-footer-height)) / 2 + 8px);
+    left: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid var(--modal-border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-sidebar-bug-report__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-sidebar-bug-report__scene {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+}
+
+/* The title, then the one action under it on the title's left edge. */
+.happy-sidebar-bug-report__copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-sidebar-bug-report__action {
+    display: flex;
+}
+
+/* Two lines in one voice; each wraps on its own, balanced, in a narrow card. */
+.happy-sidebar-bug-report__title {
+    display: flex;
+    flex-direction: column;
+    text-wrap: balance;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 22px;
+}
+
+.happy-sidebar-bug-report__note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* The public ways to write, on the card's content edge: the lead-in, then
+   both links in one row that wraps where the sidebar is narrow. */
+.happy-sidebar-bug-report__public {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.happy-sidebar-bug-report__links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 16px;
+}
+
+.happy-sidebar-bug-report__write {
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-sidebar-bug-report__link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    text-decoration: none;
+}
+
+.happy-sidebar-bug-report__link:hover {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.happy-sidebar-bug-report__link:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}

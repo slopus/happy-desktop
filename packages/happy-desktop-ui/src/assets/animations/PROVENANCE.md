@@ -22,6 +22,21 @@ keyframe, before the bug's departure begins at source frame 254.
 The existing worker renderer clips playback with a segment;
 replays and reduced-motion holds use the same end frame. The asset is unchanged.
 
+## Crow eating a worm
+
+`crow-eating-worm.json` was supplied by the project owner as
+`crow eating worm.tgs` on 11 November 2026. The JSON is the original TGS
+payload decompressed without editing or retiming. It is Lottie 5.6.3, 512×512,
+60fps, frames 0–180 (three seconds), 40 layers, and has no raster or external
+image assets. The TGS is 40,545 bytes with SHA-256
+`3af7040f0912cf393b8f964435ef7cac46451361b91d39da66946fb465d68c55`; the
+decompressed file is 298,275 bytes with SHA-256
+`552afcb2eb6c648a6ba5356acdea938c11fb9d21df521230fe7b868a72e4e322`.
+The supplied file records no author or upstream license metadata.
+
+The scene means **a bug is being reported, so it can be eaten**. It heads the
+sidebar's bug report card and plays once each time the card opens.
+
 ## Tickets
 
 `tickets.json` was supplied by the project owner on 7 November 2026. The JSON is

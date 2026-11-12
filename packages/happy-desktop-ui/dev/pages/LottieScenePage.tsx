@@ -66,6 +66,12 @@ export function LottieScenePage() {
                         size={128}
                     />
                     <LottieScene
+                        name="crow-eating-worm"
+                        play="on-demand"
+                        replayLabel="Play the crow eating a worm again"
+                        size={128}
+                    />
+                    <LottieScene
                         name="disguised-face"
                         play="on-demand"
                         replayLabel="Play the disguised face again"

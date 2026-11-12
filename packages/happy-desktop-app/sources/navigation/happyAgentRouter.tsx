@@ -64,6 +64,7 @@ import {
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentUpdate,
 } from "../AppHappyAgentView";
+import type { AppBugReportHost } from "../bugReport";
 import {
     AppHappyAgentSettingsView,
     type AppCloudWebSession,
@@ -122,6 +123,8 @@ export interface HappyAgentRouterContext {
     readonly happyAgents: AppHappyAgentDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
     readonly buildIdentity?: AppBuildIdentity;
+    /** What the host knows about this app, for a bug report's context line. */
+    readonly bugReportHost?: AppBugReportHost;
     readonly appearance: AppearanceStore;
     /** The window's own local preferences: default model, effort, and permissions. */
     readonly settings: HappyAgentSettingsStore;
@@ -652,6 +655,7 @@ function HappyAgentWorkspaceLayout() {
             appearance={context.appearance}
             browserContent={context.browserContent}
             buildIdentity={context.buildIdentity}
+            {...(context.bugReportHost ? { bugReportHost: context.bugReportHost } : {})}
             performance={context.performance}
             htmlPreview={context.htmlPreview}
             {...(context.artifactPage ? { artifactPage: context.artifactPage } : {})}

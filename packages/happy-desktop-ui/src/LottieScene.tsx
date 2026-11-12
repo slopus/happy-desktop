@@ -22,6 +22,7 @@ import cherryBlossomUrl from "./assets/animations/cherry-blossom.json?url";
 import clapperBoardUrl from "./assets/animations/clapper-board.json?url";
 import closedLockUrl from "./assets/animations/closed-lock.json?url";
 import cloudVariationUrl from "./assets/animations/cloud-variation.json?url";
+import crowEatingWormUrl from "./assets/animations/crow-eating-worm.json?url";
 import confettiBallUrl from "./assets/animations/confetti-ball.json?url";
 import disguisedFaceUrl from "./assets/animations/disguised-face.json?url";
 import frontFacingBabyChickUrl from "./assets/animations/front-facing-baby-chick.json?url";
@@ -53,6 +54,7 @@ import wandUrl from "./assets/animations/wand.json?url";
  * - `closed-lock` — access is secured.
  * - `cloud-variation` — work runs on hardware that is not this machine.
  * - `confetti-ball` — one milestone has just completed.
+ * - `crow-eating-worm` — a bug is being reported, so it can be eaten.
  * - `disguised-face` — this machine's identity is being defined.
  * - `front-facing-baby-chick` — a new social identity is ready to meet people.
  * - `hatching-chick` — something new has been created.
@@ -82,6 +84,7 @@ export type LottieSceneName =
     | "closed-lock"
     | "cloud-variation"
     | "confetti-ball"
+    | "crow-eating-worm"
     | "disguised-face"
     | "front-facing-baby-chick"
     | "hatching-chick"
@@ -117,6 +120,7 @@ const SOURCES: Record<LottieSceneName, string> = {
     "closed-lock": closedLockUrl,
     "cloud-variation": cloudVariationUrl,
     "confetti-ball": confettiBallUrl,
+    "crow-eating-worm": crowEatingWormUrl,
     "disguised-face": disguisedFaceUrl,
     "front-facing-baby-chick": frontFacingBabyChickUrl,
     "hatching-chick": hatchingChickUrl,

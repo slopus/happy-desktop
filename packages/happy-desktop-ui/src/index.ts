@@ -152,6 +152,7 @@ export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
 export {
     Composer,
+    composerTypingFocusAtEnd,
     type ComposerProps,
     ContextChips,
     type ContextChipsProps,
@@ -372,6 +373,7 @@ export {
     WorkCoordinationSummary,
     type WorkCoordinationSummaryProps,
 } from "./WorkCoordinationSummary";
+export { SidebarBugReport, type SidebarBugReportProps } from "./SidebarBugReport";
 export {
     SidebarFooter,
     type SidebarFooterConnection,

@@ -472,6 +472,32 @@ function dragCarriesFiles(transfer: DataTransfer | null): boolean {
  * that grows through eight lines, context chips, capability-driven file/mention/emoji actions,
  * a primary send control, and keyboard-accessible picker popovers.
  */
+/** How many frames `composerTypingFocusAtEnd` waits for the draft to arrive. */
+const DRAFT_ARRIVAL_FRAMES = 60;
+
+/**
+ * Puts the caret at the end of the draft in the composer that claims typing —
+ * the one the reader is writing into — once that draft ends with `tail`. For a
+ * control outside the conversation that has just added text to its draft: the
+ * store's write reaches the textarea a frame or more later, so this waits for
+ * it rather than placing the caret in the text it is about to replace.
+ */
+export function composerTypingFocusAtEnd(tail: string): void {
+    let frames = 0;
+    const settle = () => {
+        const control = document.querySelector<HTMLTextAreaElement>("textarea[data-claims-typing]");
+        // A draft that already held the text is left as it was, so the last
+        // frame takes the caret to the end whatever the draft ends with.
+        if (control && (control.value.endsWith(tail) || frames === DRAFT_ARRIVAL_FRAMES - 1)) {
+            control.focus();
+            control.setSelectionRange(control.value.length, control.value.length);
+            return;
+        }
+        if (++frames < DRAFT_ARRIVAL_FRAMES) requestAnimationFrame(settle);
+    };
+    settle();
+}
+
 export function Composer(props: ComposerProps) {
     const composerEl = useRef<HTMLDivElement>(null);
     const fileInputEl = useRef<HTMLInputElement>(null);
@@ -1186,6 +1212,7 @@ export function Composer(props: ComposerProps) {
     const draftTextarea = (
         <textarea
             className="happy-composer__textarea"
+            data-claims-typing={props.focusOnType === true && !busy ? "" : undefined}
             data-happy-desktop-ui="composer-textarea"
             disabled={props.disabled}
             readOnly={props.pending}

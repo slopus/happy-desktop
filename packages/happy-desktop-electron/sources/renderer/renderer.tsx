@@ -229,6 +229,23 @@ function desktopMediaWindowOpen(bridge: HappyDesktopBridge): MediaWindowOpener {
  * is a host process and cannot gain a door of its own in a renderer release.
  * Anything that is not HTTPS is refused rather than sent somewhere else.
  */
+declare const __HAPPY_RENDERER_VERSION__: string;
+
+const DESKTOP_OS_NAMES = { linux: "Linux", mac: "macOS", win: "Windows" } as const;
+
+/** What a bug report says about this window: the renderer's version and the OS it runs on. */
+function desktopBugReportHost(bridge: HappyDesktopBridge): {
+    readonly desktopVersion: string;
+    readonly os: string;
+} {
+    const os = DESKTOP_OS_NAMES[desktopOs()];
+    const osVersion = bridge.system?.osVersion;
+    return {
+        desktopVersion: __HAPPY_RENDERER_VERSION__,
+        os: osVersion ? `${os} ${osVersion}` : os,
+    };
+}
+
 function desktopExternalLinkOpen(bridge: HappyDesktopBridge): (url: string) => void {
     return (url) => {
         let parsed: URL;
@@ -488,6 +505,7 @@ function HappyAgentBoundary(props: {
                 // A development window says which checkout it came from; the
                 // packaged product supplies nothing and shows nothing.
                 buildIdentity: props.bridge.buildIdentity,
+                bugReportHost: desktopBugReportHost(props.bridge),
                 commandPalette: props.commandPalette,
                 connectionOnboarding: props.connectionOnboarding,
                 ...(props.daemon ? { daemon: props.daemon } : {}),

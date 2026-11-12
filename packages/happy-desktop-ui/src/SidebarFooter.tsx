@@ -45,6 +45,8 @@ export type SidebarFooterProps = {
     connection?: SidebarFooterConnection;
     /** Development-only branch and Blueprint control, pinned beside the footer actions. */
     devMenu?: ReactNode;
+    /** The bug report control, just before the theme menu. */
+    bugReport?: ReactNode;
     /** The theme menu; omit it to leave the control out of the status bar. */
     theme?: {
         readonly mode: SidebarThemeMode;
@@ -89,7 +91,7 @@ export type SidebarFooterConnection = {
 /**
  * SidebarFooter — the identity strip pinned to the bottom of a navigation
  * column: who the surface is rendered for, then the status bar in a fixed
- * order — update, call, theme, keep awake, Settings (always last).
+ * order — update, call, bug report, theme, keep awake, Settings (always last).
  *
  * Every affordance is optional, because the surfaces that use this differ in
  * what genuinely exists. A workspace with an account has a profile to open and may
@@ -191,6 +193,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
             ) : null}
             {props.actions}
             {props.voice}
+            {props.bugReport}
             {props.theme ? (
                 <span className="happy-sidebar-theme" data-happy-desktop-ui="sidebar-theme-menu">
                     <MenuButton

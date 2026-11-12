@@ -16,6 +16,7 @@
 @import "./styles/rail.css";
 @import "./styles/change-stats.css";
 @import "./styles/sidebar.css";
+@import "./styles/sidebar-bug-report.css";
 @import "./styles/sidebar-spaces.css";
 @import "./styles/app-shell.css";
 @import "./styles/channel-header.css";

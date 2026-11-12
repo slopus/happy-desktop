@@ -78,6 +78,7 @@ export type IconName =
     | "trash"
     | "archive"
     | "alert"
+    | "bug"
     | "unlink"
     | "plugin"
     | "package"
@@ -323,6 +324,8 @@ const glyphs: Record<IconName, IconGlyph> = {
     // Something went wrong with the thing this glyph sits on — as distinct from
     // `shield`, which is about what an agent was allowed to do.
     alert: { set: "ionicons", name: "alert-circle-outline" },
+    // Something wrong with Happy itself, being reported to the people who make it.
+    bug: { set: "ionicons", name: "bug-outline" },
     // The thing is still listed but what it pointed at is no longer there: a
     // checkout removed outside Happy, a link with nothing on the other end.
     unlink: { set: "ionicons", name: "unlink-outline" },
