@@ -134,6 +134,7 @@ import { dockUnreadPublish, happyAgentEntryUnreadCount } from "./dockUnread";
 import { happyAgentListedConversations } from "./happyAgentListed";
 import { completionChimePlay, completionChimeWanted } from "./completionChime";
 import { desktopAttentionPersistence } from "./desktopAttention";
+import { desktopWindowClose } from "./desktopWindowClose";
 import { happyAgentDirectoryAgentWorking, keepAwakePublish } from "./keepAwake";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
 import {
@@ -505,6 +506,7 @@ function HappyAgentBoundary(props: {
     windowState: HappyAgentWindowStore;
 }) {
     const update = props.update;
+    const windowClose = desktopWindowClose(props.bridge);
     return (
         <RouterProvider
             context={{
@@ -532,6 +534,9 @@ function HappyAgentBoundary(props: {
                 ...(props.platform === "desktop"
                     ? { externalLinkOpen: desktopExternalLinkOpen(props.bridge) }
                     : {}),
+                // Only a shell new enough to close its window offers to; under an
+                // older one Command-W with nothing left to close does nothing.
+                ...(windowClose ? { onWindowClose: windowClose } : {}),
                 ...(update
                     ? {
                           onUpdateApply: () => {
