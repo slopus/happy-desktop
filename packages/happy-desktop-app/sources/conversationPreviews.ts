@@ -75,13 +75,16 @@ export function conversationPreviewOpen(
         return;
     }
     if (target) target.opener = null;
-    void store.previewLaunch(input.previewId).then(
-        (url) => {
-            if (target) {
-                if (!target.closed) target.location.replace(url);
-            } else input.externalOpen(url);
-        },
-        // The owning store already exposes the failure beside Open preview.
-        () => target?.close(),
-    );
+    void store
+        .previewLaunch(input.previewId, {
+            open: target
+                ? (url) => {
+                      if (!target.closed) target.location.replace(url);
+                  }
+                : input.externalOpen,
+        })
+        .catch(
+            // The owning store already exposes the failure beside Open preview.
+            () => target?.close(),
+        );
 }
