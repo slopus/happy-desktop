@@ -1442,6 +1442,13 @@ function DesktopCloudConnect(props: {
             onTestLoginChange={props.store.testLoginUpdate}
             onTestPasswordChange={props.store.testPasswordUpdate}
             onTestSignIn={props.store.testSignIn}
+            onEmailOpen={props.store.emailOpen}
+            onEmailChange={props.store.emailUpdate}
+            onEmailCodeSend={props.store.emailCodeSend}
+            onEmailCodeChange={props.store.emailCodeUpdate}
+            onEmailCodeVerify={props.store.emailCodeVerify}
+            onEmailCodeResend={props.store.emailCodeResend}
+            onEmailChangeOpen={props.store.emailChangeOpen}
             onServerPick={props.store.serverPick}
             onServersContinue={props.store.serversContinue}
             view={view}

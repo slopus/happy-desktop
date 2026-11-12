@@ -83,6 +83,69 @@ const SPECIMENS: readonly {
         },
     },
     {
+        label: "Welcome with email",
+        detail: "the shell can sign in by emailed code · Continue with email under the deck",
+        view: { kind: "welcome", emailSignIn: true },
+    },
+    {
+        label: "Email",
+        detail: "Continue with email · the address a code goes to",
+        view: { kind: "email", email: "steve@example.com" },
+    },
+    {
+        label: "Email sending",
+        detail: "the code is being sent",
+        view: { kind: "email", email: "steve@example.com", busy: true },
+    },
+    {
+        label: "Email refused",
+        detail: "the accounts service said the address is not one",
+        view: {
+            kind: "email",
+            email: "steve@",
+            error: "That email address doesn't look right.",
+        },
+    },
+    {
+        label: "Email code",
+        detail: "the code step · Resend after its cooldown, Change email",
+        view: { kind: "emailCode", email: "steve@example.com", code: "", resendIn: 42 },
+    },
+    {
+        label: "Email code wrong",
+        detail: "the accounts service refused the code · Resend offered again",
+        view: {
+            kind: "emailCode",
+            email: "steve@example.com",
+            code: "123456",
+            resendIn: 0,
+            error: "That code is wrong or has expired.",
+        },
+    },
+    {
+        label: "Email code resent",
+        detail: "a fresh code went out · Resend counts down again",
+        view: {
+            kind: "emailCode",
+            email: "steve@example.com",
+            code: "",
+            resendIn: 60,
+            resent: true,
+        },
+    },
+    {
+        label: "Email rate limited",
+        detail: "too many tries · the wait counts down, Sign in and Resend wait with it",
+        view: {
+            kind: "emailCode",
+            email: "steve@example.com",
+            code: "123456",
+            resendIn: 0,
+            error: "Too many tries.",
+            wait: 42,
+        },
+    },
+    {
         label: "Signing in",
         detail: "the account sign-in is open in the browser",
         view: { kind: "signingIn" },
@@ -214,6 +277,13 @@ export function CloudConnectScreenPage() {
                                     onTestLoginChange={noop}
                                     onTestPasswordChange={noop}
                                     onTestSignIn={noop}
+                                    onEmailOpen={noop}
+                                    onEmailChange={noop}
+                                    onEmailCodeSend={noop}
+                                    onEmailCodeChange={noop}
+                                    onEmailCodeVerify={noop}
+                                    onEmailCodeResend={noop}
+                                    onEmailChangeOpen={noop}
                                     onServerPick={noop}
                                     onServersContinue={noop}
                                     view={specimen.view}

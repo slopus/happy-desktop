@@ -2083,6 +2083,24 @@ void app
                     return cloud.passwordSignIn(login, password);
                 },
             );
+            const email = (value: unknown): string => {
+                if (typeof value !== "string" || value.length < 3 || value.length > 320)
+                    throw new Error("Happy asked to sign in with an invalid email address.");
+                return value;
+            };
+            ipcMain.handle(desktopIpc.happyCloudEmailCodeStart, (event, value: unknown) => {
+                desktopDaemonSenderRequire(event.sender);
+                return cloud.emailCodeStart(email(value));
+            });
+            ipcMain.handle(
+                desktopIpc.happyCloudEmailCodeVerify,
+                (event, value: unknown, code: unknown) => {
+                    desktopDaemonSenderRequire(event.sender);
+                    if (typeof code !== "string" || code.length === 0 || code.length > 64)
+                        throw new Error("Happy asked to sign in with an invalid code.");
+                    return cloud.emailCodeVerify(email(value), code);
+                },
+            );
             ipcMain.handle(desktopIpc.happyCloudCredentialScan, (event, options: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
                 return credentialImport.scan({
