@@ -191,12 +191,6 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     };
     /** Attachment cards (runs, approvals, events) rendered below the body. */
     children?: ReactNode;
-    /**
-     * What the author did, after their name, such as "↩ Suggested reply".
-     * The face then joins the author line, and an own message, which has
-     * none, gains one naming "You".
-     */
-    authorNote?: string;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
     compact?: boolean;
     /** Delivery styling that never inserts or removes layout. */
@@ -419,7 +413,6 @@ export function Message(props: MessageProps) {
         "onReactionSelect",
         "own",
         "ownActions",
-        "authorNote",
         "reactions",
         "style",
         "time",
@@ -687,7 +680,6 @@ export function Message(props: MessageProps) {
         ) : null;
     const incomingMeta = showIncomingMeta() ? (
         <div className="happy-message__meta" data-happy-desktop-ui="message-meta">
-            {local.authorNote ? renderAvatar("xs") : null}
             {!showIncomingIdentity() ? null : local.onAuthorSelect ? (
                 <button
                     aria-label={authorActionLabel()}
@@ -703,9 +695,6 @@ export function Message(props: MessageProps) {
                     <span data-happy-desktop-ui="message-author-label">{local.author}</span>
                 </span>
             )}
-            {local.authorNote ? (
-                <span className="happy-message__author-note">{local.authorNote}</span>
-            ) : null}
             {local.automated && showIncomingIdentity() ? (
                 <>
                     <span
@@ -733,7 +722,6 @@ export function Message(props: MessageProps) {
             data-agent={local.agent ? "" : undefined}
             data-own={local.own ? "" : undefined}
             data-own-actions={ownActions ? "" : undefined}
-            data-author-note={local.authorNote ? "" : undefined}
             data-compact={grouped() ? "" : undefined}
             data-delivery-state={deliveryState()}
             data-generation-status={local.generationStatus}
@@ -753,8 +741,7 @@ export function Message(props: MessageProps) {
             style={local.style}
         >
             <div className="happy-message__gutter" data-happy-desktop-ui="message-gutter">
-                {/* A noted author line carries the face itself, at the name's size. */}
-                {showIncomingIdentity() && !local.authorNote ? renderDanglingAvatar() : null}
+                {showIncomingIdentity() ? renderDanglingAvatar() : null}
             </div>
             <div className="happy-message__content" data-happy-desktop-ui="message-content">
                 {/* Own messages carry no meta row — the accent bubble on the
@@ -771,13 +758,6 @@ export function Message(props: MessageProps) {
                     >
                         {local.contextNote}
                     </span>
-                ) : null}
-                {local.own && local.authorNote ? (
-                    <div className="happy-message__meta">
-                        {renderAvatar("xs")}
-                        <span className="happy-message__author">You</span>
-                        <span className="happy-message__author-note">{local.authorNote}</span>
-                    </div>
                 ) : null}
                 {ownBubbleLine ? (
                     <div

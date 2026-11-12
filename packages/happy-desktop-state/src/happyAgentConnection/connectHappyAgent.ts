@@ -49,7 +49,6 @@ import { MessageRefusedError, projectRegistrationError } from "./errors.js";
 import type { UserEnvironmentReport } from "./userEnvironment.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentDraftAppended } from "../happyAgent/happyAgentChatDraftAppend.js";
-import { chatUiOutcomeUnknown } from "../chatUi/chatUi.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
 import {
@@ -5447,7 +5446,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         delivery,
                         mode,
                         runId: null,
-                        ...(input.quickReply ? { quickReply: input.quickReply } : {}),
                     },
                     runId: null,
                     pendingSend: true,
@@ -5475,7 +5473,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                                           ...files,
                                       ] as unknown as typeof richContent,
                                   }),
-                            ...(input.quickReply ? { quickReply: input.quickReply } : {}),
                             delivery,
                             mode,
                             ...(environmentDeviceId !== undefined &&
@@ -5940,33 +5937,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 ...mode,
                 permissionMode: permissionMode as MessageMode["permissionMode"],
             }));
-        },
-        async sendUiAction(sessionId, request) {
-            if (config === undefined) throw new Error("The agent is not loaded.");
-            let retryMs = INITIAL_SEND_RETRY_MS;
-            for (let attempt = 1; ; attempt += 1) {
-                try {
-                    const response = await client.sendUiAction(sessionId, request, {
-                        signal: deadlineSignal(),
-                    });
-                    if (!closed) {
-                        // The stream places a record in its run; one that
-                        // arrived first keeps the place it already has.
-                        const held = sessions.get(sessionId)?.messages.get(response.record.id);
-                        updateMessage(sessionId, response.record, held?.runId ?? null);
-                    }
-                    return response;
-                } catch (error) {
-                    if (
-                        rootController.signal.aborted ||
-                        !chatUiOutcomeUnknown(error) ||
-                        attempt >= SEND_ATTEMPTS
-                    )
-                        throw error;
-                    await wait(retryMs, rootController.signal);
-                    retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
-                }
-            }
         },
         answerUserInput(sessionId, requestId, response) {
             const mutationId = nextId();
@@ -6629,17 +6599,6 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                 previous.startedAt === next.startedAt &&
                 previous.trigger === next.trigger
             );
-        case "ui":
-            return next.type === "ui" && previous.ui.id === next.ui.id;
-        case "quick_replies":
-            return next.type === "quick_replies";
-        case "action":
-            return (
-                next.type === "action" &&
-                previous.uiId === next.uiId &&
-                previous.componentId === next.componentId &&
-                previous.action.type === next.action.type
-            );
         case "configuration":
             return (
                 next.type === "configuration" &&
@@ -6647,6 +6606,8 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                 deepEqual(previous.before, next.before) &&
                 deepEqual(previous.after, next.after)
             );
+        default:
+            return deepEqual(previous, next);
     }
 }
 

@@ -1,6 +1,6 @@
 import { useContext, type CSSProperties, type ReactNode } from "react";
 import { MarkdownLayoutCacheContext } from "./MessageMarkdown";
-import { conversationMessageCompactLayout, messageContentMeasure } from "./conversationRowHeight";
+import { conversationMessageCompactLayout } from "./conversationRowHeight";
 import { useMessageListRowWidth } from "./messageListRowWidth";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
@@ -12,11 +12,9 @@ import type {
     ConversationAuthor,
     ConversationEntry,
     ConversationErrorAssistance,
-    ConversationQuickReplies,
     ConversationToolCall,
     UserError,
 } from "happy-desktop-state";
-import { quickRepliesKey } from "happy-desktop-state";
 import { messageBodyFormat } from "./messagePlainText";
 import {
     AgentActivityRow,
@@ -50,8 +48,6 @@ import {
 import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
-import { UiDocumentView, type UiDocumentSurface } from "./ui/UiDocumentView";
-import { UiQuickReplies, uiQuickRepliesLayout } from "./ui/UiQuickReplies";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
 export type ConversationEntryFailureProps = ConversationFailureActions & {
@@ -70,20 +66,6 @@ export type ConversationEntryFailureProps = ConversationFailureActions & {
 };
 
 type ConversationLinkedAttachment = Extract<ConversationAttachment, { kind: "linked" }>;
-
-/**
- * How a conversation draws and answers the chat UI in it: this window's
- * clicks, what the viewer may do, the live state its components draw from,
- * and the suggested replies sent from here.
- */
-export type ConversationChatUi = UiDocumentSurface & {
-    /** Opens one of a document's pictures: its message, and its index in the document's media. */
-    readonly onMediaOpen?: (messageId: string, index: number) => void;
-    /** The suggestions a reply was sent from here, by `quickRepliesKey`; they take no second tap. */
-    readonly quickRepliesSent?: ReadonlySet<string>;
-    /** Sends one suggested reply. Absent, the replies take no tap. */
-    readonly onQuickReply?: (replies: ConversationQuickReplies, index: number) => void;
-};
 
 export type ConversationEntryViewProps = {
     entry: ConversationEntry;
@@ -165,8 +147,6 @@ export type ConversationEntryViewProps = {
     references?: MessageReferences;
     /** The page this row's tool call shows inline, when its owner shows one. */
     inlinePage?: InlinePageProps;
-    /** How this row draws and answers the chat UI it carries. Absent, it is inert. */
-    chatUi?: ConversationChatUi;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -584,23 +564,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 />
             </div>
         );
-    if (entry.kind === "quickReplies") {
-        const replies = entry.replies;
-        const send = props.chatUi?.onQuickReply;
-        return (
-            <UiQuickReplies
-                {...(props.className === undefined ? {} : { className: props.className })}
-                {...(rowWidth === undefined
-                    ? {}
-                    : { layout: uiQuickRepliesLayout(replies.options, rowWidth, textCache) })}
-                {...(send ? { onSend: (index: number) => send(replies, index) } : {})}
-                replies={replies}
-                sent={props.chatUi?.quickRepliesSent?.has(quickRepliesKey(replies)) ?? false}
-                {...(props.style === undefined ? {} : { style: props.style })}
-            />
-        );
-    }
-
     const message = entry.message;
     const author = message.sender;
     const own = author !== undefined && author.id === props.viewerId;
@@ -693,7 +656,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     />
                 ) : undefined
             }
-            {...(own && entry.quickReply ? { authorNote: "↩ Suggested reply" } : {})}
             style={props.style}
             time={messageTime(message.createdAt)}
         >
@@ -720,38 +682,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     variant="chat"
                 />
             ))}
-            {entry.ui ? (
-                <UiDocumentView
-                    {...chatUiSurface(props.chatUi)}
-                    {...((open) =>
-                        open ? { onMediaOpen: (index: number) => open(message.id, index) } : {})(
-                        props.chatUi?.onMediaOpen,
-                    )}
-                    ui={entry.ui}
-                    {...(rowWidth === undefined
-                        ? {}
-                        : {
-                              width: messageContentMeasure(
-                                  rowWidth,
-                                  author?.kind === "agent" ? "agent" : own ? "own" : "incoming",
-                              ),
-                          })}
-                />
-            ) : null}
         </Message>
     );
-}
-
-/** What of a conversation's chat UI a document draws from. */
-function chatUiSurface(chatUi: ConversationChatUi | undefined): UiDocumentSurface {
-    if (chatUi === undefined) return {};
-    const {
-        onMediaOpen: _open,
-        quickRepliesSent: _sent,
-        onQuickReply: _reply,
-        ...surface
-    } = chatUi;
-    return surface;
 }
 
 /**

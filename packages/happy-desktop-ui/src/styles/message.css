@@ -1611,26 +1611,6 @@
     }
 }
 
-/* An author note follows the name, on the bubble's edge. */
-.happy-message__author-note {
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.happy-message[data-author-note]:not([data-own]) .happy-message__meta {
-    margin-left: 0;
-}
-.happy-message[data-author-note] .happy-message__meta {
-    align-items: center;
-}
-.happy-message[data-author-note] .happy-message__meta > .happy-avatar {
-    width: 16px;
-    height: 16px;
-}
-
 /*
  * A teammate a message names (MessageMention): a tag on the mention tint the
  * composer draws behind `@Name`, in the mention's own ink, stronger when it is

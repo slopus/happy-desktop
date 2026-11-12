@@ -1,14 +1,4 @@
-import type { ConversationUi } from "../chatUi/chatUi.js";
 import { happyAgentPreviewResultRead } from "../happyAgent/happyAgentPreviewsStore.js";
-import {
-    chatUiConversation,
-    chatUiMessage,
-    chatUiQuickReplies,
-    chatUiRecordOf,
-    chatUiTranscriptRead,
-    quickRepliesOf,
-    type ChatUiTranscript,
-} from "../chatUi/chatUiTranscript.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
@@ -45,7 +35,6 @@ import type {
     BotGroup,
     BotSubtaskGroup,
     ChatElement,
-    QuickRepliesElement,
     GroupSession,
     ProjectGroup,
     SessionState,
@@ -449,49 +438,18 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             questionAsked = true;
         elements.push(element);
     };
-    /* Chat UI reads the whole transcript, in order: a document shows the
-       records that answered it, and a suggestion the option a person's
-       message sent from it (one on its way from here too). */
-    const ordered: Message[] = [];
-    for (const run of input.runs) {
-        const messages = messagesByRun.get(run.id);
-        if (messages === undefined) continue;
-        // Messages arrive in order and a run holds a handful of them.
-        // Confirming that order costs one comparison each; entering the sort
-        // itself, once for every run in the transcript, cost more than
-        // everything else this loop does.
-        if (!messagesOrdered(messages)) messages.sort(compareMessages);
-        for (const entry of messages) ordered.push(entry.message);
-    }
     if (!messagesOrdered(pending)) pending.sort(compareMessages);
-    for (const entry of pending) ordered.push(entry.message);
-    const chatUi = chatUiTranscriptRead(ordered);
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         const before = elements.length;
-        /*
-         * A suggestion's row sits under everything the agent said in its
-         * turn, above how the turn ended, until a person's message in the
-         * turn (a steer) pins it where it stands: what follows goes under it,
-         * so from then on nothing moves it.
-         */
-        const suggested: QuickRepliesElement[] = [];
-        if (messages !== undefined)
+        if (messages !== undefined) {
+            // Messages usually arrive in order; avoid sorting each run again.
+            if (!messagesOrdered(messages)) messages.sort(compareMessages);
             for (const entry of messages) {
-                if (entry.message.role === "user") elements.push(...suggested.splice(0));
-                for (const element of projectMessage(entry, run.id, run.status, reader, chatUi))
+                for (const element of projectMessage(entry, run.id, run.status, reader))
                     push(element);
-                for (const replies of quickRepliesOf(entry.message))
-                    suggested.push({
-                        id: `quick-replies:${replies.messageId}:${replies.toolCallId ?? ""}`,
-                        groupId: run.id,
-                        runId: run.id,
-                        createdAt: entry.message.createdAt,
-                        kind: "quick_replies",
-                        replies: chatUiQuickReplies(chatUi, replies),
-                    });
             }
-        elements.push(...suggested);
+        }
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
         }
@@ -504,7 +462,6 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             `pending:${entry.message.id}`,
             "running",
             reader,
-            chatUi,
         ))
             push(element);
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
@@ -1657,12 +1614,7 @@ function projectMessage(
     runId: string,
     runStatus: Run["status"],
     reader: TranscriptReader,
-    chatUi: ChatUiTranscript,
 ): readonly ChatElement[] {
-    /* What a document shows depends on the rest of the transcript, so its
-       message is projected afresh; entries keep their identity by comparing it. */
-    if (chatUiMessage(entry.message))
-        return messageElementsProject(entry, runId, runStatus, reader, chatUi);
     const cached = messageElements.get(entry.message);
     const userId = entry.message.role === "user" ? entry.message.metadata.userId : undefined;
     const profile = userId === undefined ? undefined : reader.userProfiles?.get(userId);
@@ -1676,7 +1628,7 @@ function projectMessage(
         cached.reader.agentId === reader.agentId
     )
         return cached.elements;
-    const elements = messageElementsProject(entry, runId, runStatus, reader, chatUi);
+    const elements = messageElementsProject(entry, runId, runStatus, reader);
     messageElements.set(entry.message, {
         runId,
         runStatus,
@@ -1739,13 +1691,10 @@ function messageElementsProject(
     runId: string,
     runStatus: Run["status"],
     reader: TranscriptReader,
-    chatUi: ChatUiTranscript,
 ): readonly ChatElement[] {
     const { message } = entry;
     const elementId = message.id;
     const base = { groupId: runId, runId, createdAt: message.createdAt };
-    /* An attempt record is never drawn: what it says shows in its component. */
-    if (chatUiRecordOf(message) !== undefined) return [];
     if (message.role === "user") {
         const senderAgent = senderAgentOf(message, reader);
         const files = userMessageFiles(message);
@@ -1786,7 +1735,6 @@ function messageElementsProject(
                             block.type === "image",
                     )
                     .map((block) => ({ data: block.data, mediaType: block.mimeType })),
-                ...(message.quickReply === undefined ? {} : { quickReply: message.quickReply }),
             },
         ];
     }
@@ -1816,26 +1764,6 @@ function messageElementsProject(
     }
 
     const elements: ChatElement[] = [];
-    /*
-     * A document follows the words before it in the same message on their row,
-     * text first, so the reply reads as one answer; with no words just before
-     * it, it stands on its own row.
-     */
-    const uiPush = (id: string, ui: ConversationUi) => {
-        const previous = elements.at(-1);
-        if (previous?.kind === "agent_text" && previous.ui === undefined)
-            elements[elements.length - 1] = { ...previous, ui };
-        else
-            elements.push({
-                ...base,
-                id,
-                kind: "agent_text",
-                messageId: message.id,
-                text: "",
-                complete: true,
-                ui,
-            });
-    };
     for (let index = 0; index < message.content.length; index += 1) {
         const block = message.content[index];
         if (block === undefined) continue;
@@ -1869,11 +1797,6 @@ function messageElementsProject(
             } else {
                 elements.push({ ...base, id, kind: "system_notice", text: block.text });
             }
-        } else if (block.type === "ui") {
-            if (message.role === "agent")
-                uiPush(id, chatUiConversation(chatUi, message.id, block.ui, []));
-        } else if (block.type === "quick_replies") {
-            /* A suggestion is a row of its own under the turn, placed by `projectElements`. */
         } else if (block.type === "configuration") {
             if (block.before !== null)
                 elements.push({ ...base, id, kind: "configuration", configuration: block });
@@ -1885,29 +1808,17 @@ function messageElementsProject(
                 text: block.text,
                 complete: runStatus !== "running",
             });
-        } else if (block.type === "tool_call" && block.presentation?.type === "ui") {
-            /* What `show_ui` showed is part of the reply, not a step of the work. */
-            const presentation = block.presentation;
-            uiPush(
-                id,
-                chatUiConversation(
-                    chatUi,
-                    message.id,
-                    presentation.ui,
-                    // The array position is the item's index on the bytes route.
-                    presentation.items.map((item, at) =>
-                        mediaItemProject(item, reader.mediaUrl(reader.agentId, block.id, at)),
-                    ),
-                ),
-            );
-        } else if (block.type === "tool_call" && block.presentation?.type === "quick_replies") {
-            /* As for the message's own `quick_replies` block. */
         } else if (block.type === "tool_call") {
-            const presentation = block.presentation;
             const preview =
                 block.status === "completed"
                     ? happyAgentPreviewResultRead(block.name, block.result)
                     : undefined;
+            const presentation =
+                block.presentation === undefined
+                    ? undefined
+                    : projectToolPresentation(block.presentation, (index) =>
+                          reader.mediaUrl(reader.agentId, block.id, index),
+                      );
             elements.push({
                 ...base,
                 id,
@@ -1922,15 +1833,9 @@ function messageElementsProject(
                     : { result: stringify(block.result) }),
                 ...(preview
                     ? { presentation: { kind: "preview" as const, ...preview } }
-                    : presentation === undefined ||
-                        presentation.type === "ui" ||
-                        presentation.type === "quick_replies"
+                    : presentation === undefined
                       ? {}
-                      : {
-                            presentation: projectToolPresentation(presentation, (index) =>
-                                reader.mediaUrl(reader.agentId, block.id, index),
-                            ),
-                        }),
+                      : { presentation }),
                 // Only a reviewed call carries elevation, and only the granted
                 // one is worth carrying: "not elevated" is the ordinary case
                 // every unreviewed call is already in.
@@ -2064,9 +1969,9 @@ type ToolPresentationWire = NonNullable<
 >;
 
 function projectToolPresentation(
-    presentation: Exclude<ToolPresentationWire, { type: "ui" } | { type: "quick_replies" }>,
+    presentation: ToolPresentationWire,
     mediaUrl: (index: number) => string,
-): ToolPresentation {
+): ToolPresentation | undefined {
     switch (presentation.type) {
         case "agent_spawn":
             return {
@@ -2150,6 +2055,8 @@ function projectToolPresentation(
                 questions: presentation.questions,
                 answers: presentation.answers,
             };
+        default:
+            return undefined;
     }
 }
 

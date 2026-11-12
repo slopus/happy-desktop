@@ -6,6 +6,146 @@ import type {
 import { expect, it } from "vitest";
 import { entryEquivalent } from "../conversation/conversationEntries.js";
 import { happyAgentConversationProject } from "./happyAgentConversationProject.js";
+import type { MessageBlock } from "@slopus/happy-agent-client";
+import { projectElements } from "../happyAgentConnection/projection.js";
+import {
+    fakeAgentMessage,
+    fakeHappyAgentDaemonCreate,
+    fakeRun,
+} from "../testing/fakeHappyAgentDaemon.js";
+
+function historicalElements(content: MessageBlock[]) {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const project = daemon.projectSeed({ id: "project-history" });
+    const agent = daemon.agentSeed(project.id, { id: "agent-history" });
+    const run = fakeRun({ id: "run-history", status: "completed", endedAt: 2 });
+    return projectElements({
+        agent,
+        config: daemon.configGet(),
+        connection: "live",
+        endpoint: "http://fake.test",
+        mediaUrl: (agentId, toolCallId, index) =>
+            `http://fake.test/${agentId}/${toolCallId}/${String(index)}`,
+        hasMore: false,
+        messages: [
+            { message: fakeAgentMessage({ id: "message-history", content }), runId: run.id },
+        ],
+        runs: [run],
+        answeredQuestions: [],
+        slashCommands: [],
+    });
+}
+
+it("projects completed historical show_ui and suggest_replies calls as generic tool rows", () => {
+    const elements = historicalElements([
+        { type: "text", text: "Choose the next step." },
+        {
+            type: "tool_call",
+            id: "old-ui",
+            name: "show_ui",
+            status: "completed",
+            arguments: { title: "Old controls" },
+            result: { shown: true },
+            presentation: {
+                type: "ui",
+                ui: {
+                    id: "old-document",
+                    components: [
+                        { id: "choice", type: "unknown", fallback: "Old control", props: {} },
+                    ],
+                },
+                items: [],
+            },
+        },
+        {
+            type: "tool_call",
+            id: "old-replies",
+            name: "suggest_replies",
+            status: "completed",
+            arguments: { options: ["Continue", "Stop"] },
+            result: { suggested: true },
+            presentation: { type: "quick_replies", options: ["Continue", "Stop"] },
+        },
+    ]);
+    const tools = elements.filter((element) => element.kind === "tool_call");
+    expect(tools).toHaveLength(2);
+    expect(tools.map((tool) => [tool.toolCallId, tool.name, tool.status])).toEqual([
+        ["old-ui", "show_ui", "succeeded"],
+        ["old-replies", "suggest_replies", "succeeded"],
+    ]);
+    expect(tools.map((tool) => tool.arguments)).toEqual([
+        { title: "Old controls" },
+        { options: ["Continue", "Stop"] },
+    ]);
+    expect(tools.map((tool) => tool.result)).toEqual([
+        JSON.stringify({ shown: true }),
+        JSON.stringify({ suggested: true }),
+    ]);
+    expect(tools.every((tool) => !("presentation" in tool))).toBe(true);
+    expect(elements.map((element) => element.kind)).toEqual([
+        "agent_text",
+        "tool_call",
+        "tool_call",
+        "group_end",
+    ]);
+
+    const rows = happyAgentConversationProject({
+        elements,
+        sessionId: "agent-history",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [],
+        answeredUserInputs: [],
+        expandedGroupIds: new Set(["run-history"]),
+        subagents: [],
+    });
+    const activities = rows.filter((row) => row.kind === "agentActivity");
+    expect(activities).toHaveLength(2);
+    expect(activities.map((row) => row.activity)).toEqual([
+        expect.objectContaining({
+            kind: "tool",
+            tool: expect.objectContaining({ toolName: "show_ui" }),
+        }),
+        expect.objectContaining({
+            kind: "tool",
+            tool: expect.objectContaining({ toolName: "suggest_replies" }),
+        }),
+    ]);
+});
+
+it("preserves ordinary media presentations and byte routes in historical tool calls", () => {
+    const image = {
+        kind: "image" as const,
+        name: "capture.png",
+        mimeType: "image/png",
+        size: 512,
+        width: 800,
+        height: 600,
+        scale: 2,
+        thumbhash: "placeholder",
+        source: { path: "capture.png", absolutePath: "/tmp/capture.png" },
+    };
+    const elements = historicalElements([
+        {
+            type: "tool_call",
+            id: "media-call",
+            name: "present_files",
+            status: "completed",
+            arguments: { files: ["capture.png"] },
+            presentation: {
+                type: "media",
+                items: [image],
+                layout: { type: "columns", columns: 1 },
+            },
+        },
+    ]);
+    const tool = elements.find((element) => element.kind === "tool_call");
+    expect(tool?.presentation).toEqual({
+        kind: "media",
+        items: [{ ...image, url: "http://fake.test/agent-history/media-call/0" }],
+        layout: { type: "columns", columns: 1 },
+    });
+});
 
 const running: CompactionElement = {
     id: "compaction:c1",

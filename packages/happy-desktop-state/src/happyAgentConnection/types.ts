@@ -13,13 +13,9 @@ import type {
     MessageMode,
     MutationId,
     Project,
-    QuickReply,
     SlashCommand,
     Task,
-    UiActionRequest,
-    UiActionResponse,
 } from "@slopus/happy-agent-client";
-import type { ConversationQuickReplies, ConversationUi } from "../chatUi/chatUi.js";
 import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
@@ -170,8 +166,6 @@ export interface UserMessageElement extends BaseChatElement {
     profile?: UserProfile;
     delivery: "pending_steering" | "sent";
     text: string;
-    /** The suggested reply this message's text is, as the daemon recorded it. */
-    quickReply?: QuickReply;
     attachments?: readonly { data: string; mediaType: string }[];
     /** Files uploaded to Happy Cloud and named by this message, by attachment ID. */
     files?: readonly UserMessageFile[];
@@ -238,18 +232,6 @@ export interface AgentTextElement extends BaseChatElement {
     messageId: string;
     text: string;
     complete: boolean;
-    /**
-     * The chat UI document shown under this text: a `ui` block of the daemon's
-     * message, or a `show_ui` call's presentation. A document with no words
-     * before it stands on an element whose text is empty.
-     */
-    ui?: ConversationUi;
-}
-
-/** The replies an agent message suggests, on a row of their own under its turn. */
-export interface QuickRepliesElement extends BaseChatElement {
-    kind: "quick_replies";
-    replies: ConversationQuickReplies;
 }
 
 export interface AgentAttachmentsElement extends BaseChatElement {
@@ -425,7 +407,6 @@ export type ChatElement =
     | SystemNoticeElement
     | InferenceElement
     | AgentTextElement
-    | QuickRepliesElement
     | AgentAttachmentsElement
     | ThinkingElement
     | ToolCallElement
@@ -975,8 +956,6 @@ export interface SendMessageInput {
         | SendMessageFileBlock
     )[];
     text: string;
-    /** The suggested reply `text` is, which the daemon checks and records. */
-    quickReply?: QuickReply;
 }
 
 /**
@@ -1283,12 +1262,6 @@ export interface HappyAgentConnection {
     setServiceTier(sessionId: string, serviceTier?: HappyAgentServiceTier): MutationId;
     setPermissionMode(sessionId: string, permissionMode: string): MutationId;
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
-    /**
-     * Sends one click on a chat UI component (`POST /v0/agents/:id/actions`),
-     * retrying under the request's one `id`. The attempt's record joins the
-     * transcript; the response's `result` is the caller's alone.
-     */
-    sendUiAction(sessionId: string, request: UiActionRequest): Promise<UiActionResponse>;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
     /**

@@ -1,14 +1,3 @@
-import type {
-    ChatUiActionSend,
-    ChatUiGranted,
-    ConversationQuickReplies,
-    UiActionInput,
-} from "../chatUi/chatUi.js";
-import {
-    CHAT_UI_DEFAULT_MODEL_LOADING,
-    chatUiDefaultModelRead,
-    type ChatUiDefaultModel,
-} from "../chatUi/chatUiDefaultModel.js";
 import type { SidebarReadAheadRows } from "../happyAgentConnection/types.js";
 import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happyAgentPanelChat.js";
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
@@ -357,16 +346,6 @@ export interface HappyAgentConversationSnapshot {
     readonly modelLocked: boolean;
     /** Whether a failure card may offer switching to another account and model. */
     readonly failureSwitchSupported: boolean;
-    /** Chat UI clicks on their way; see `HappyAgentChatSnapshot.uiPending`. */
-    readonly uiPending: ReadonlyMap<string, UiActionInput>;
-    /** Chat UI clicks that left no record; see `HappyAgentChatSnapshot.uiErrors`. */
-    readonly uiErrors: ReadonlyMap<string, string>;
-    /** What the viewer may do with chat UI here, for drawing controls disabled. */
-    readonly uiGranted: ChatUiGranted;
-    /** The suggestions a reply was sent from here; see `HappyAgentChatSnapshot.quickRepliesSent`. */
-    readonly quickRepliesSent: ReadonlySet<string>;
-    /** The connection's default model, as a chat UI `default_model` component draws it. */
-    readonly uiDefaultModel: ChatUiDefaultModel;
     /**
      * Where this conversation was last being read, when it has been read before.
      * Absent opens at the newest message.
@@ -1999,13 +1978,6 @@ export interface HappyAgentWorkspaceStore {
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
     /**
-     * One click on a chat UI component in the open conversation; see
-     * `HappyAgentChatStore.uiAction`. The server decides who may.
-     */
-    uiAction: ChatUiActionSend;
-    /** Sends one suggested reply in the open conversation; see `HappyAgentChatStore.quickReplySend`. */
-    quickReplySend(replies: ConversationQuickReplies, index: number): Promise<void>;
-    /**
      * Records the options ticked into the open conversation's pending question
      * before it is submitted, so switching views preserves the card's choices.
      */
@@ -3132,11 +3104,6 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
             modelLocked: chat.modelLocked,
             failureSwitchSupported: chat.failureSwitchSupported,
-            uiPending: chat.uiPending,
-            uiErrors: chat.uiErrors,
-            uiGranted: chat.uiGranted,
-            quickRepliesSent: chat.quickRepliesSent,
-            uiDefaultModel: chatUiDefaultModelRead(client.models.get()),
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
                 : {}),
@@ -8653,12 +8620,6 @@ export function happyAgentWorkspaceStoreCreate(
             writeGuard(openGroupConversationRefusal(), () =>
                 withChat((store) => store.answerInput(input)),
             ),
-        uiAction: (offer, componentId, bundle, action, payload) =>
-            withChat((store) => store.uiAction(offer, componentId, bundle, action, payload)),
-        quickReplySend: (replies, index) =>
-            writeGuard(openGroupConversationRefusal(), () =>
-                withChat((store) => store.quickReplySend(replies, index)),
-            ),
         compact: () =>
             writeGuard(openGroupConversationRefusal(), () => withChat((store) => store.compact())),
         failureRetry: (entryId) =>
@@ -9345,16 +9306,8 @@ function conversationAcquiring(
         ...(menus ? { menus } : {}),
         modelLocked: false,
         failureSwitchSupported: false,
-        uiPending: NO_UI_PENDING,
-        uiErrors: NO_UI_ERRORS,
-        uiGranted: "all",
-        quickRepliesSent: NO_TURNS,
-        uiDefaultModel: CHAT_UI_DEFAULT_MODEL_LOADING,
     };
 }
-
-const NO_UI_PENDING: ReadonlyMap<string, UiActionInput> = new Map();
-const NO_UI_ERRORS: ReadonlyMap<string, string> = new Map();
 
 /** A cached stand-in must already have the shape of a new visit, even if acquisition is slow. */
 function conversationTracesFold(

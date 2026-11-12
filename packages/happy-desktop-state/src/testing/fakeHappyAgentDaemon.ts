@@ -33,9 +33,6 @@ import {
     type SaveUserSettingRequest,
     type SendMessageRequest,
     type ServiceMessage,
-    type UiActionOutcome,
-    type UiActionRequest,
-    redactUiAction,
     type StoredUserSetting,
     type Task,
     type TaskMembership,
@@ -207,15 +204,6 @@ export interface FakeHappyAgentDaemon {
             project: { done: boolean };
             providers: { done: boolean; signedIn: string[] };
         };
-    }): void;
-    /**
-     * What the next new chat UI click is answered with: how its attempt ended
-     * and the result it returns. Unset, every click is accepted with no result.
-     * A click repeated under a stored `id` replays that attempt with no result.
-     */
-    uiActionAnswerSet(answer: {
-        outcome?: UiActionOutcome;
-        result?: Record<string, unknown>;
     }): void;
     /** Authoritative Live resource state; control frames are supplied by the test's socket port. */
     liveSessionSet(session: LiveSession): void;
@@ -459,9 +447,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let daemonVersion = MINIMUM_HAPPY_AGENT_VERSION;
     let daemonGeneration = 1;
 
-    /** Every stored chat UI attempt, by its click's `id`. */
-    const uiAttempts = new Map<string, ServiceMessage>();
-    let uiActionAnswer: Parameters<FakeHappyAgentDaemon["uiActionAnswerSet"]>[0] = {};
     const historyOf = (agentId: string): { runs: HistoryRun[]; pending: UserMessage[] } => {
         let history = histories.get(agentId);
         if (history === undefined) {
@@ -1277,7 +1262,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 role: "user",
                 runId: null,
                 status: "pending",
-                ...(request.quickReply ? { quickReply: request.quickReply } : {}),
             };
             history.pending.push(message);
             const event = emit("message.created", {
@@ -1322,50 +1306,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (responseFailures?.length === 0) failures.delete("saveAgentDraft:respond");
             if (responseFailure !== undefined) throw responseFailure;
             return { draft };
-        },
-        async sendUiAction(agentId: string, request: UiActionRequest, ...rest: unknown[]) {
-            await record("sendUiAction", [agentId, request, ...rest]);
-            const stored = uiAttempts.get(request.id);
-            if (stored !== undefined) return { record: stored, result: null, cursor: latestCursor };
-            const answer = uiActionAnswer;
-            uiActionAnswer = {};
-            const cursor = latestCursor;
-            const message: ServiceMessage = {
-                content: [
-                    {
-                        type: "action",
-                        messageId: request.messageId,
-                        uiId: request.uiId,
-                        componentId: request.componentId,
-                        action: redactUiAction(request.action),
-                        outcome: answer.outcome ?? { status: "accepted" },
-                    },
-                ],
-                createdAt: 1,
-                id: request.id,
-                metadata: {},
-                role: "service",
-            };
-            uiAttempts.set(request.id, message);
-            // An attempt record stands in a standalone run: stored already
-            // finished, never started, and finished before its message.
-            const run: Run = {
-                costUsd: null,
-                endedAt: 1,
-                id: `action-${request.id}`,
-                kind: "standalone",
-                reason: null,
-                startedAt: 1,
-                status: "completed",
-                usage: {},
-            };
-            historyOf(agentId).runs.push({ ...run, messages: [message] });
-            emit("run.finished", { agentId, run });
-            emit("message.created", { agentId, message, runId: run.id });
-            // A held "sendUiAction:respond" gate delays only the HTTP response.
-            const respond = gates.get("sendUiAction:respond");
-            if (respond !== undefined) await respond;
-            return { record: message, result: answer.result ?? null, cursor };
         },
         async answerQuestion(agentId: string, questionId: string, ...rest: unknown[]) {
             await record("answerQuestion", [agentId, questionId, ...rest]);
@@ -1731,9 +1671,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (options.daemon !== undefined) daemonVersion = options.daemon;
             if (options.desktopLiveControl !== undefined)
                 desktopLiveControl = options.desktopLiveControl;
-        },
-        uiActionAnswerSet(answer) {
-            uiActionAnswer = answer;
         },
         liveSessionSet(session) {
             liveSessions.set(session.id, session);

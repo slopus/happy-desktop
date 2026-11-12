@@ -1,15 +1,4 @@
-import { redactUiAction, uiActionRequest, uiActionResult } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
-import {
-    chatUiComponentKey,
-    chatUiOutcomeUnknown,
-    quickRepliesKey,
-    type ChatUiActionSend,
-    type ChatUiGranted,
-    type ConversationQuickReplies,
-    type UiActionInput,
-} from "../chatUi/chatUi.js";
-import type { ChatUiGrantedFollow } from "../chatUi/chatUiGranted.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
 import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
@@ -481,24 +470,6 @@ function imageGalleryOf(entries: readonly ConversationEntry[]): readonly HappyAg
                         ...source,
                     });
             }
-            /* A chat UI document's pictures open by its entry and their index in its media. */
-            for (const [index, item] of (entry.ui?.media ?? []).entries()) {
-                if (item.kind === "image")
-                    gallery.push({
-                        ref: { kind: "toolMedia", entryId: entry.message.id, index },
-                        id: `${entry.message.id}:${String(index)}`,
-                        url: item.url,
-                        alt: item.name,
-                        name: item.name,
-                        thumbnail: {
-                            url: item.url,
-                            thumbhash: item.thumbhash,
-                            width: item.width,
-                            height: item.height,
-                            ...(item.scale === undefined ? {} : { scale: item.scale }),
-                        },
-                    });
-            }
             continue;
         }
         if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") continue;
@@ -719,25 +690,6 @@ export interface HappyAgentChatSnapshot {
      * offered Retry instead.
      */
     readonly failureSwitchSupported: boolean;
-    /**
-     * Chat UI clicks made here and not answered yet, by `chatUiComponentKey`,
-     * each with every secret left out of its payload: what a control shows
-     * meanwhile. The attempt's record takes over once the daemon answers.
-     */
-    readonly uiPending: ReadonlyMap<string, UiActionInput>;
-    /**
-     * Why the last click on a control left no record: the daemon refused it
-     * before storing anything, or it never arrived. By `chatUiComponentKey`,
-     * until the next click on that control.
-     */
-    readonly uiErrors: ReadonlyMap<string, string>;
-    /** What the viewer may do with chat UI here; only for drawing controls disabled. */
-    readonly uiGranted: ChatUiGranted;
-    /**
-     * The suggestions a reply was sent from here, by `quickRepliesKey`, from
-     * the tap itself: they take no second tap while the message is on its way.
-     */
-    readonly quickRepliesSent: ReadonlySet<string>;
 }
 
 export type HappyAgentChatOutput =
@@ -775,12 +727,6 @@ export interface HappyAgentChatStore {
         /** Files already uploaded to this Happy Cloud conversation. */
         files?: readonly HappyCloudFileBlock[],
     ): Promise<void>;
-    /**
-     * Sends one suggested reply as the person's message: its option, exactly,
-     * naming where it came from. The suggestion takes no second tap from the
-     * moment of the call, unless the send is refused.
-     */
-    quickReplySend(replies: ConversationQuickReplies, index: number): Promise<void>;
     /** Exact-text human confirmation from voice. Never routes text into a pending question. */
     voiceMessageSendConfirmed(
         text: string,
@@ -802,13 +748,6 @@ export interface HappyAgentChatStore {
      */
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
-    /**
-     * Sends one click on a chat UI component. A click whose outcome is not
-     * known (it never arrived, or the daemon failed while answering) keeps
-     * its attempt ID, and the same click made again is sent under it, so the
-     * daemon replays what it stored rather than doing the thing twice.
-     */
-    uiAction: ChatUiActionSend;
     requestSelectionUpdate(
         requestId: string,
         answers: Readonly<Record<string, readonly string[]>>,
@@ -877,7 +816,6 @@ export interface HappyAgentChatDeps {
     readonly connectActions: Pick<
         HappyAgentConnection,
         | "answerUserInput"
-        | "sendUiAction"
         | "compactSession"
         | "invokeSlashCommand"
         | "retryFailedTurn"
@@ -912,16 +850,7 @@ export interface HappyAgentChatDeps {
     readonly agentIdentities?: HappyAgentAgentIdentitySource;
     /** The protocol the connection's daemon last reported in its health, once heard. */
     readonly daemonProtocol?: () => number | undefined;
-    /**
-     * Owner-only authoritative input: what the viewer may do with chat UI on
-     * this connection, now and on every change. Absent, everything: a
-     * standalone daemon's one person holds every permission.
-     */
-    readonly uiGrantedFollow?: ChatUiGrantedFollow;
 }
-
-/** Nothing drawn as allowed, while the server hasn't said what the viewer may do. */
-const CHAT_UI_GRANTED_NONE: ChatUiGranted = new Set();
 
 /** Protocol 32 validates a failure switch against the live catalog, not a stored list. */
 export const HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION = 32;
@@ -986,10 +915,6 @@ export function happyAgentChatStoreCreate(
         usageLoading: false,
         activityPanelOpen: false,
         failureSwitchSupported: false,
-        uiPending: new Map(),
-        uiErrors: new Map(),
-        uiGranted: "all",
-        quickRepliesSent: new Set(),
     }));
 
     const listeners = new Set<() => void>();
@@ -1122,24 +1047,6 @@ export function happyAgentChatStoreCreate(
     let activityPanelOpen = false;
     let openImageRef: HappyAgentImageRef | undefined;
     const requestSubmissions = new Map<string, ConversationRequestSubmission>();
-    /* Chat UI clicks on their way and the ones that left no record. Each
-       replaces its map, so a reader sees a change by identity. */
-    let uiPending: ReadonlyMap<string, UiActionInput> = new Map();
-    let uiErrors: ReadonlyMap<string, string> = new Map();
-    let uiGranted: ChatUiGranted = "all";
-    /* Clicks whose outcome is not known, by `chatUiComponentKey`: the attempt
-       ID each was sent under, and the redacted action it was. */
-    const uiUnsettled = new Map<string, { readonly id: string; readonly action: string }>();
-    const uiActionIdNext = cuid2Create(Date.now);
-    let quickRepliesSent: ReadonlySet<string> = new Set();
-    /* The send each tapped suggestion went out as, to free it if that send is refused. */
-    const quickReplyMutations = new Map<string, string>();
-    const quickRepliesFree = (key: string): void => {
-        if (!quickRepliesSent.has(key)) return;
-        const sent = new Set(quickRepliesSent);
-        sent.delete(key);
-        quickRepliesSent = sent;
-    };
     const requestMutationIds = new Map<string, string>();
     const requestSelections = new Map<string, Readonly<Record<string, readonly string[]>>>();
     /* Sends made before the conversation's first full read, waiting for it.
@@ -1340,10 +1247,6 @@ export function happyAgentChatStoreCreate(
                   }),
             failureSwitchSupported:
                 (deps.daemonProtocol?.() ?? 0) >= HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION,
-            uiPending,
-            uiErrors,
-            uiGranted,
-            quickRepliesSent,
         };
         /* The transcript answers for itself: `entriesMerge` returns the very
            list it was given when nothing moved, so a new one is a change and
@@ -1352,14 +1255,7 @@ export function happyAgentChatStoreCreate(
            settles the transcript on one reference rather than walking it.
            Message choices are immutable sets, whose changed identity must
            publish too: the record comparison below does not inspect sets. */
-        if (
-            entries !== previous.entries ||
-            expandedMessageIds !== previous.expandedMessageIds ||
-            uiPending !== previous.uiPending ||
-            uiErrors !== previous.uiErrors ||
-            uiGranted !== previous.uiGranted ||
-            quickRepliesSent !== previous.quickRepliesSent
-        ) {
+        if (entries !== previous.entries || expandedMessageIds !== previous.expandedMessageIds) {
             store.setState(next, true);
             return;
         }
@@ -1486,63 +1382,8 @@ export function happyAgentChatStoreCreate(
         commit();
     });
 
-    const unsubscribeUiGranted = deps.uiGrantedFollow?.((answered) => {
-        const next = answered ?? CHAT_UI_GRANTED_NONE;
-        if (disposed || next === uiGranted) return;
-        uiGranted = next;
-        commit();
-    });
-
-    const uiActionRun: ChatUiActionSend = async (offer, componentId, bundle, action, payload) => {
-        const key = chatUiComponentKey(offer, componentId);
-        if (disposed) throw new UserError("This conversation is closed.");
-        if (uiPending.has(key)) throw new UserError("That is still on its way.");
-        const fresh = uiActionRequest(bundle, action, payload, {
-            id: uiActionIdNext(),
-            messageId: offer.messageId,
-            uiId: offer.uiId,
-            componentId,
-        });
-        const redacted = redactUiAction(fresh.action);
-        const signature = JSON.stringify(redacted);
-        const unsettled = uiUnsettled.get(key);
-        const request = unsettled?.action === signature ? { ...fresh, id: unsettled.id } : fresh;
-        uiPending = new Map(uiPending).set(key, redacted);
-        if (uiErrors.has(key)) {
-            const errors = new Map(uiErrors);
-            errors.delete(key);
-            uiErrors = errors;
-        }
-        commit();
-        const settle = (error?: string) => {
-            const pending = new Map(uiPending);
-            pending.delete(key);
-            uiPending = pending;
-            if (error !== undefined) uiErrors = new Map(uiErrors).set(key, error);
-            if (!disposed) commit();
-        };
-        try {
-            const response = await deps.connectActions.sendUiAction(sessionId, request);
-            uiUnsettled.delete(key);
-            settle();
-            return uiActionResult(bundle, action, response);
-        } catch (error) {
-            if (chatUiOutcomeUnknown(error))
-                uiUnsettled.set(key, { id: request.id, action: signature });
-            else uiUnsettled.delete(key);
-            const userError = happyAgentUserError(error);
-            settle(userError.message);
-            throw userError;
-        }
-    };
-
     const unsubscribeMutationRejections = deps.connectMutationSubscribe((rejection) => {
         if (!pendingMutationIds.delete(rejection.mutationId)) return;
-        const suggestion = quickReplyMutations.get(rejection.mutationId);
-        if (suggestion !== undefined) {
-            quickReplyMutations.delete(rejection.mutationId);
-            quickRepliesFree(suggestion);
-        }
         const requestId = requestMutationIds.get(rejection.mutationId);
         if (requestId !== undefined) {
             requestMutationIds.delete(rejection.mutationId);
@@ -1715,46 +1556,6 @@ export function happyAgentChatStoreCreate(
                 });
                 output({ type: "messageSent", sessionId, steered });
             }),
-        quickReplySend: (replies, index) => {
-            const key = quickRepliesKey(replies);
-            const text = replies.options[index];
-            if (text === undefined)
-                return Promise.reject(new UserError("That suggestion is gone."));
-            if (quickRepliesSent.has(key))
-                return Promise.reject(new UserError("That reply is already on its way."));
-            quickRepliesSent = new Set(quickRepliesSent).add(key);
-            commit();
-            return rejecting(async () => {
-                try {
-                    if (!arrived()) await arrivalWait();
-                    const steered = runStatus === "running";
-                    const mutationId = deps.connectActions.sendMessage(
-                        sessionId,
-                        {
-                            text,
-                            quickReply: {
-                                messageId: replies.messageId,
-                                ...(replies.toolCallId === undefined
-                                    ? {}
-                                    : { toolCallId: replies.toolCallId }),
-                                index,
-                            },
-                        },
-                        (id) => {
-                            if (steered) steeringSendId = id;
-                        },
-                    );
-                    quickReplyMutations.set(mutationId, key);
-                    sentMessageIds = new Set([...sentMessageIds, mutationId]);
-                    connectMutationTrack(mutationId);
-                    output({ type: "messageSent", sessionId, steered });
-                } catch (caught) {
-                    quickRepliesFree(key);
-                    if (!disposed) commit();
-                    throw caught;
-                }
-            });
-        },
         messageSend: (text, images, refused, files) =>
             rejecting(async () => {
                 if (!arrived()) await arrivalWait();
@@ -1886,7 +1687,6 @@ export function happyAgentChatStoreCreate(
                 output({ type: "subagentsAborted", sessionId });
             }),
         answerInput: answerInputRun,
-        uiAction: uiActionRun,
         requestSelectionUpdate(requestId, answers) {
             requestSelections.set(requestId, answers);
             commit();
@@ -2062,7 +1862,6 @@ export function happyAgentChatStoreCreate(
             stop();
             unsubscribeMutationRejections();
             unsubscribeCatalog?.();
-            unsubscribeUiGranted?.();
             unsubscribeSenders?.();
             storeUnsubscribe();
             listeners.clear();
