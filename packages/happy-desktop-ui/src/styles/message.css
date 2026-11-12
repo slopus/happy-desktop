@@ -926,18 +926,25 @@
     background: var(--surface-pressed);
 }
 
-/* Overlay the action on the frame so source geometry and scrolling stay native. */
+/* Overlay the action on the frame so source geometry and scrolling stay native.
+   The 20px button sits on the first 20px line at the code's own inset, so a
+   one-line block holds it centred, with the same gap above, below and right. */
 .happy-message__code-copy {
     position: absolute;
-    top: 6px;
-    right: 6px;
-    background: var(--surface-pressed);
+    top: var(--happy-chat-frame-text-inset);
+    right: var(--happy-chat-frame-text-inset);
 }
 
-/* Follow the code frame's 8px corner at the 6px inset. The compound selector
-   overrides the shared copy button's own radius. */
+/* The compound selector overrides the shared copy button's transparent fill.
+   The frame-coloured spread, as wide as the inset, masks the code around the
+   button out to the frame's edge. */
 .happy-message__code-block > .happy-message__code-copy {
-    border-top-right-radius: 2px;
+    background: var(--surface-pressed);
+    box-shadow: 0 0 0 var(--happy-chat-frame-text-inset) var(--surface-pressed);
+}
+
+.happy-message__code-block > .happy-message__code-copy:hover {
+    background-image: linear-gradient(var(--surface-ripple), var(--surface-ripple));
 }
 
 .happy-message__code-block:hover > .happy-message__code-copy,
