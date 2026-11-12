@@ -534,6 +534,28 @@ function groupMeta(project: HappyAgentProjectGroup, worktree?: HappyAgentWorktre
  * The window has the same lookup for its sidebar; this module keeps its own so
  * it stays a plain transform of its inputs and can be read on its own.
  */
+/**
+ * The chat most recently closed in one project or worktree: the one reopening
+ * brings back. A chat closed a moment ago, which the host has not dated yet,
+ * is the newest of all, and of two such the list's first, which is the later.
+ * A delegated chat is never the answer: it is opened by the session that runs
+ * it, never alone.
+ */
+export function closedChatLatestFind(
+    archivedSessions: readonly HappyAgentSessionSummary[],
+    groupId: string,
+): HappyAgentSessionSummary | undefined {
+    const closedAt = (session: HappyAgentSessionSummary) =>
+        session.archivedAt ?? Number.POSITIVE_INFINITY;
+    let latest: HappyAgentSessionSummary | undefined;
+    for (const session of archivedSessions) {
+        if (session.parentSessionId !== undefined) continue;
+        if (happyAgentSessionGroupIdOf(session) !== groupId) continue;
+        if (latest === undefined || closedAt(session) > closedAt(latest)) latest = session;
+    }
+    return latest;
+}
+
 function groupFind(
     projects: readonly HappyAgentProjectGroup[],
     groupId: string | undefined,
@@ -1365,6 +1387,31 @@ function actionOffers(
                 command: { kind: "sessionCreate" },
             },
             keywords: "session conversation start",
+        });
+    // The chat last closed where the reader is, offered by what it was called
+    // so the row says which one comes back.
+    const closed =
+        context.groupId === undefined || !groupFind(context.projects, context.groupId)
+            ? undefined
+            : closedChatLatestFind(context.archivedSessions, context.groupId);
+    if (context.groupId !== undefined && closed !== undefined)
+        offers.push({
+            row: {
+                kind: "command",
+                id: "action:chat-reopen",
+                title: "Reopen closed chat",
+                meta: closed.title?.trim() || HAPPY_AGENT_UNTITLED_SESSION_TITLE,
+                glyph: { kind: "icon", name: "history" },
+                shortcut: APP_SHORTCUTS.chatReopen,
+                command: {
+                    kind: "chatOpen",
+                    happyAgentId: context.happyAgentId,
+                    groupId: context.groupId,
+                    chatId: closed.id,
+                    archived: true,
+                },
+            },
+            keywords: "restore unarchive archived undo back history tab session conversation",
         });
     if (context.taskCreateAvailable)
         offers.push({

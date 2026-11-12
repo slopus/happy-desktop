@@ -464,6 +464,14 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onSectionCollapseToggle?: (sectionId: string) => void;
     onSectionTailToggle?: (sectionId: string) => void;
     activeItemId: string;
+    /**
+     * Other rows whose thing is in front as well as the place `activeItemId`
+     * names, such as a page kept at the top of the list while it is open
+     * beside the conversation the window is on. Each is marked as the active
+     * row is. Keyboard entry and a folded tail still follow `activeItemId`
+     * alone.
+     */
+    activeItemAliasIds?: readonly string[];
     /** Which end of a row reports work. Defaults to `trailing`. */
     activityPlacement?: SidebarActivityPlacement;
     /**
@@ -2654,6 +2662,7 @@ export function Sidebar(props: SidebarProps) {
     const [local, rest] = partitionComponentProps(props, [
         "actions",
         "actionsDivider",
+        "activeItemAliasIds",
         "activeItemId",
         "activityPlacement",
         "brand",
@@ -2706,6 +2715,9 @@ export function Sidebar(props: SidebarProps) {
         "title",
     ]);
     const interactionEnabled = props.interactionEnabled !== false;
+    /** The row the place on screen is, or another row listing that same place. */
+    const itemActive = (id: string): boolean =>
+        id === local.activeItemId || local.activeItemAliasIds?.includes(id) === true;
     const menuRoot = useRef<HTMLDivElement>(null);
     const createRowNode = useRef<HTMLElement | null>(null);
     // The item that last had focus, which stays the list's Tab stop until
@@ -4524,7 +4536,7 @@ export function Sidebar(props: SidebarProps) {
                                 const dragging = drag?.moved === true;
                                 return (
                                     <SidebarRow
-                                        active={local.activeItemId === action.id}
+                                        active={itemActive(action.id)}
                                         folded={folded}
                                         foldControlPlacement={local.foldControlPlacement}
                                         // A nested row is drawn as a section's is.
@@ -4985,7 +4997,7 @@ export function Sidebar(props: SidebarProps) {
                                                         local.onItemSecondaryAction !== undefined &&
                                                         item.secondaryAction !== undefined
                                                     }
-                                                    active={item.id === local.activeItemId}
+                                                    active={itemActive(item.id)}
                                                     activityPlacement={local.activityPlacement}
                                                     foldControlPlacement={
                                                         local.foldControlPlacement
@@ -5132,7 +5144,7 @@ export function Sidebar(props: SidebarProps) {
                                     <SidebarRow
                                         key={item.id}
                                         item={item}
-                                        active={local.activeItemId === item.id}
+                                        active={itemActive(item.id)}
                                         onContextMenu={openItemMenu}
                                         onSelect={local.onItemSelect}
                                     />

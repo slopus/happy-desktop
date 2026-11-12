@@ -119,7 +119,9 @@ import {
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
     HappyCloudWebSettings,
+    WindowShortcuts,
 } from "happy-desktop-ui";
+import { APP_SHORTCUTS } from "../appShortcuts";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppComputeSettings } from "./AppComputeSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
@@ -1729,6 +1731,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     return (
         <HappyAgentVersionProvider lastKnownVersion={host?.version}>
+            {/* Command-W closes settings as its own Close does. A dialog over
+                a settings page keeps the chord from reaching past it. */}
+            <WindowShortcuts actions={[{ run: props.onClose, shortcut: APP_SHORTCUTS.tabClose }]} />
             {content}
         </HappyAgentVersionProvider>
     );
