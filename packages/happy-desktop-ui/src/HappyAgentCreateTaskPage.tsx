@@ -1,52 +1,33 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
-import { Button } from "./Button";
 import { LottieScene } from "./LottieScene";
-import { TextField } from "./TextField";
 
 export type HappyAgentCreateTaskPageProps = {
-    /**
-     * The chosen name. Blank, the host names the task from its first message.
-     * Absent, there is no name to choose: the task names itself, as on Happy Cloud.
-     */
-    name?: string;
-    /** True while the task is being made: the surface stays up and inert. */
-    submitting?: boolean;
     /** A refused creation, stated here rather than thrown away. */
     error?: string;
     /** Why the task cannot currently be made on its Happy Agent. */
     submitDisabledReason?: string;
-    onNameChange?: (name: string) => void;
-    /** Makes the task without saying anything to it. */
-    onSubmit: () => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
 };
 
 /**
- * C-287 HappyAgentCreateTaskPage — what is decided about a task before it
- * exists, standing in the body of the conversation it is about to become.
+ * C-287 HappyAgentCreateTaskPage — what a task is, standing in the body of the
+ * conversation it is about to become.
  *
  * It is reached from the "+" on the sidebar's Tasks heading and rendered as
- * the empty content of a conversation view whose composer is the task's own,
- * exactly as a new bot is: the first message is written down there, and
- * sending it makes the task on the way. A task has no face, so this panel is
- * only the clapper board (a piece of work about to begin), the title, a
- * sentence about what a task is for, and the name — which may be left blank
- * for the host to give from the first message — with Create beside it for
- * making the task without saying anything to it yet.
+ * the empty content of a conversation view whose composer is the task's own:
+ * the first message is written down there, and sending it is the one way the
+ * task is made. Nothing is decided up here — the host names the task from that
+ * first message — so this panel is only the clapper board (a piece of work
+ * about to begin), the title, and a sentence about what a task is for. Under
+ * them, why the task cannot be made right now, or why it was not.
  *
- * Props only, and every state is directly renderable: fresh, filled in, a
- * creation in flight, one the machine refused, and one whose Happy Agent is
- * away. The draft belongs to the caller, so navigating away and back keeps it.
+ * Props only, and every state is directly renderable: fresh, one the machine
+ * refused, and one whose Happy Agent is away.
  */
 export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
-    const submitting = props.submitting === true;
-    const submittable = !submitting && props.submitDisabledReason === undefined;
-    const submit = () => {
-        if (submittable) props.onSubmit();
-    };
     return (
         <div
             className={["happy-agent-create-task", props.className].filter(Boolean).join(" ")}
@@ -82,51 +63,22 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     Everyone who joins it works in that same conversation.
                 </p>
             </header>
-            {/* The name, and Create beside it: the last thing decided up here.
-                The other way of making the task is the send below. Under them,
-                why the task cannot be made right now, or why it was not. */}
-            <div
-                className="happy-agent-create-task__below"
-                data-happy-desktop-ui="happy-agent-create-task-below"
-            >
+            {props.submitDisabledReason || props.error ? (
                 <div
-                    className="happy-agent-create-task__row"
-                    data-happy-desktop-ui="happy-agent-create-task-row"
-                    data-named={props.name === undefined ? "false" : undefined}
+                    className="happy-agent-create-task__status"
+                    data-happy-desktop-ui="happy-agent-create-task-status"
                 >
-                    {props.name === undefined ? null : (
-                        <TextField
-                            aria-label="Name"
-                            className="happy-agent-create-task__name"
-                            data-testid="happy-agent-create-task-name"
-                            disabled={submitting}
-                            fullWidth
-                            onSubmit={submit}
-                            onValueChange={props.onNameChange}
-                            placeholder="Name, generated if left blank"
-                            value={props.name}
-                        />
-                    )}
-                    <Button
-                        className="happy-agent-create-task__create"
-                        disabled={!submittable}
-                        onClick={submit}
-                        title={props.submitDisabledReason}
-                        variant="secondary"
-                    >
-                        {submitting ? "Creating…" : "Create"}
-                    </Button>
+                    {props.submitDisabledReason ? (
+                        <p
+                            className="happy-agent-create-task__reason"
+                            data-happy-desktop-ui="happy-agent-create-task-reason"
+                        >
+                            {props.submitDisabledReason}
+                        </p>
+                    ) : null}
+                    {props.error ? <Banner tone="danger">{props.error}</Banner> : null}
                 </div>
-                {props.submitDisabledReason ? (
-                    <p
-                        className="happy-agent-create-task__reason"
-                        data-happy-desktop-ui="happy-agent-create-task-reason"
-                    >
-                        {props.submitDisabledReason}
-                    </p>
-                ) : null}
-                {props.error ? <Banner tone="danger">{props.error}</Banner> : null}
-            </div>
+            ) : null}
         </div>
     );
 }

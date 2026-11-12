@@ -1,12 +1,11 @@
 /*
- * C-287 HappyAgentCreateTaskPage — what is decided about a task before it
- * exists, standing in the body of the conversation it is about to become.
+ * C-287 HappyAgentCreateTaskPage — what a task is, standing in the body of the
+ * conversation it is about to become.
  *
  * The panel is the empty content of a conversation view: one centred column,
- * the title and lede over the name, with Create beside the name. The column
- * is the vertical middle of the body. The well, radius and placeholder are
- * TextField's and Button's own; the name answers focus the way the composer
- * under it does, as on the bot page.
+ * the scene, title and lede, and under them any reason the task cannot be
+ * made. The column is the vertical middle of the body. Nothing here is an
+ * input: the task is made by sending from the composer below.
  */
 
 .happy-agent-create-task,
@@ -74,8 +73,9 @@
     letter-spacing: 0;
 }
 
-/* The name and Create, and what is said about them, 8px apart. */
-.happy-agent-create-task__below {
+/* Why the task cannot be made right now, or why it was not, under the lede,
+   8px apart, as wide as a short sentence. */
+.happy-agent-create-task__status {
     display: flex;
     flex: none;
     flex-direction: column;
@@ -83,35 +83,6 @@
     gap: 8px;
     width: 100%;
     max-width: 360px;
-}
-
-.happy-agent-create-task__row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* With no name to choose, Create stands alone under the lede. */
-.happy-agent-create-task__row[data-named="false"] {
-    justify-content: center;
-}
-
-.happy-agent-create-task__name {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.happy-agent-create-task__name .happy-text-field__control {
-    border-color: transparent;
-}
-
-.happy-agent-create-task__name .happy-text-field__control:focus-within {
-    border-color: var(--divider);
-    outline: none;
-}
-
-.happy-agent-create-task__create {
-    flex: none;
 }
 
 .happy-agent-create-task__reason {

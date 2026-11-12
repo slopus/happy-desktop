@@ -197,11 +197,7 @@ export function HeaderShortcutsFlowPage() {
                                                           "",
                                                       )
                                                     : taskCreationSpecimen(
-                                                          <HappyAgentCreateTaskPage
-                                                              name=""
-                                                              onNameChange={noop}
-                                                              onSubmit={noop}
-                                                          />,
+                                                          <HappyAgentCreateTaskPage />,
                                                           "",
                                                       )}
                                             </TabbedPane>

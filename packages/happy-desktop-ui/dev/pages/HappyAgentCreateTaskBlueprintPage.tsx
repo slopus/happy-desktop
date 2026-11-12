@@ -19,8 +19,6 @@ const MINIMUM_REGION = { height: "640px", width: "470px" };
 
 const noop = () => {};
 
-const HANDLERS = { onNameChange: noop, onSubmit: noop } as const;
-
 const WORK =
     "The invoice totals are off by a cent on multi-currency orders. Find where the rounding happens and fix it with a test.";
 
@@ -96,7 +94,7 @@ export function taskCreationSpecimen(
                                     onServiceTierChange={noop}
                                 />
                             }
-                            note="Sending also creates the task"
+                            note="Sending creates the task"
                         />
                     }
                     composerPlaceholder="What should it work on?"
@@ -118,91 +116,53 @@ export function HappyAgentCreateTaskBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="What is decided about a task before it exists — what a task is for, a name that may be left blank, Create — centred in the body, over the composer that will be the task's own."
+            summary="What a task is, centred in the body over the composer that will be the task's own. Sending from that composer is the one way the task is made; the host names it from the first message."
             title="HappyAgentCreateTaskPage"
         >
             <Specimen
-                detail="title, lede and the name centred in the empty body · Create beside the name · the composer is the conversation's own, pickers and all, and has the focus on arrival"
+                detail="clapper board, title and lede centred in the empty body · no name and no Create: sending from the composer is the one way the task is made, and the host names it from that first message · the composer is the conversation's own, pickers and all, and has the focus on arrival"
                 label="Opened, in place"
                 number="01"
                 stage="app"
             >
-                {region(
-                    taskCreationSpecimen(<HappyAgentCreateTaskPage {...HANDLERS} name="" />, ""),
-                )}
-                <DimensionRule label="column centred on both axes · 24px between header and name · clapper board scene 80px, 16px over the title · title 32px · lede measure 440px · name and Create 360px, 8px apart" />
+                {region(taskCreationSpecimen(<HappyAgentCreateTaskPage />, ""))}
+                <DimensionRule label="column centred on both axes · clapper board scene 80px, 16px over the title · title 32px · lede measure 440px · reason or error 24px under the lede, 360px" />
             </Specimen>
             <Specimen
-                detail="a name and the work written in the composer · Enter sends and makes the task, Create makes it and keeps the words as the draft"
+                detail="the work written in the composer · Enter sends and makes the task"
                 label="Filled in, in place"
                 number="02"
                 stage="app"
             >
-                {region(
-                    taskCreationSpecimen(
-                        <HappyAgentCreateTaskPage {...HANDLERS} name="Invoice rounding" />,
-                        WORK,
-                    ),
-                )}
+                {region(taskCreationSpecimen(<HappyAgentCreateTaskPage />, WORK))}
             </Specimen>
             <Specimen
-                detail="the task is being made · every control is inert · and beside it, a creation the machine refused"
-                label="Creating and refused"
+                detail="a creation the machine refused, said under the lede · the words stay in the composer to send again"
+                label="Refused"
                 number="03"
                 stage="app"
             >
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    {region(
-                        taskCreationSpecimen(
-                            <HappyAgentCreateTaskPage
-                                {...HANDLERS}
-                                name="Invoice rounding"
-                                submitting
-                            />,
-                            WORK,
-                            false,
-                            true,
-                        ),
-                        MINIMUM_REGION,
-                    )}
-                    {region(
-                        taskCreationSpecimen(
-                            <HappyAgentCreateTaskPage
-                                {...HANDLERS}
-                                error="The task's folder could not be created."
-                                name="Invoice rounding"
-                            />,
-                            WORK,
-                        ),
-                        MINIMUM_REGION,
-                    )}
-                </div>
+                {region(
+                    taskCreationSpecimen(
+                        <HappyAgentCreateTaskPage error="The task's folder could not be created." />,
+                        WORK,
+                    ),
+                    MINIMUM_REGION,
+                )}
             </Specimen>
             <Specimen
-                detail="known Happy Agent offline · name and the composer stay editable · only making the task is unavailable, and the panel says why"
+                detail="known Happy Agent offline · the composer stays editable · only sending is unavailable, and the panel says why under the lede"
                 label="Happy Agent offline"
                 number="04"
                 stage="app"
             >
                 {region(
                     taskCreationSpecimen(
-                        <HappyAgentCreateTaskPage
-                            {...HANDLERS}
-                            name=""
-                            submitDisabledReason="Happy Agent is offline. The draft is preserved."
-                        />,
+                        <HappyAgentCreateTaskPage submitDisabledReason="Happy Agent is offline. The draft is preserved." />,
                         WORK,
                         true,
                     ),
                 )}
-            </Specimen>
-            <Specimen
-                detail="on Happy Cloud · the task names itself from its first message, so no name is asked · Create makes it without saying anything yet"
-                label="Self-named"
-                number="05"
-                stage="app"
-            >
-                {region(taskCreationSpecimen(<HappyAgentCreateTaskPage {...HANDLERS} />, WORK))}
             </Specimen>
         </ComponentPage>
     );

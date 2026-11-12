@@ -4564,7 +4564,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         happyAgentOnline={activeHappyAgentOnline}
                         providerUsage={active.session.providerUsage}
                         workspace={active.session.workspace}
-                        {...(active.happyCloud ? { selfNamed: true } : {})}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
                             : { unavailable: activeAvailability.refusal })}
@@ -11051,17 +11050,15 @@ function HappyAgentCreateBotSurface(props: {
 }
 
 /**
- * Where a task is made, as a bot is: the conversation it is about to become,
- * with the name and Create in the body and the task's own composer under it.
- * Sending makes the task and says the first thing to it; Create makes it and
- * carries the words into the conversation as its draft. The composer is the
- * draft's own, for the reason the bot surface gives.
+ * Where a task is made: the conversation it is about to become, with what a
+ * task is in the body and the task's own composer under it. Sending is the one
+ * way the task is made: it makes the task and says the first thing to it, and
+ * the host names the task from that message. The composer is the draft's own,
+ * for the reason the bot surface gives.
  */
 function HappyAgentCreateTaskSurface(props: {
     happyAgentOnline: () => boolean;
     providerUsage?: HappyAgentProviderUsageStore;
-    /** On Happy Cloud a task names itself from its first message, so no name is asked. */
-    selfNamed?: true;
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
@@ -11123,7 +11120,7 @@ function HappyAgentCreateTaskSurface(props: {
                                     />
                                 ) : undefined
                             }
-                            note="Sending also creates the task"
+                            note="Sending creates the task"
                         />
                     }
                     composerPlaceholder="What should it work on?"
@@ -11142,22 +11139,6 @@ function HappyAgentCreateTaskSurface(props: {
             emptyContent={
                 <HappyAgentCreateTaskPage
                     {...(taskCreate.error === undefined ? {} : { error: taskCreate.error })}
-                    {...(props.selfNamed
-                        ? {}
-                        : {
-                              name: taskCreate.name,
-                              // Controlled, so the value reaches React inside its event,
-                              // as the bot's name does.
-                              onNameChange: (name: string) =>
-                                  reactFrameInputUpdate(store, () =>
-                                      store.taskCreateNameUpdate(name),
-                                  ),
-                          })}
-                    onSubmit={() => {
-                        if (props.happyAgentOnline())
-                            void store.taskCreateSubmit().catch(() => undefined);
-                    }}
-                    submitting={taskCreate.submitting}
                     {...(props.unavailable === undefined
                         ? {}
                         : { submitDisabledReason: props.unavailable })}
