@@ -23,6 +23,11 @@
  * A segment may hold its take's first frame (`freeze`) or last frame
  * (`tail`) still for some seconds: the take's own pixels, never repainted.
  *
+ * The first window segment may open with `opening` lines: they stand centred
+ * on the backdrop, each fading in at its own time, then rise as the window
+ * rises into the frame beneath them, and fade before the caption comes in.
+ * A card may show `pictures` under its words, side by side.
+ *
  * Segments hand over with a short dissolve. Words never overlap: a caption
  * or card fades out before the dissolve and the next fades in after it.
  */
@@ -127,6 +132,11 @@ async function wordsDraw(cut) {
             line-height: 1.25; font-weight: 500; letter-spacing: -0.02em; text-wrap: balance; }
         .card small { display: block; margin-top: ${type.gap}px; font-size: ${type.small}px; line-height: 1.25;
             font-weight: 500; letter-spacing: -0.01em; }
+        .card .pictures { display: flex; gap: ${type.gap * 2}px; margin-top: ${type.gap * 2}px; }
+        .card .pictures img { display: block; height: ${type.pictureHeight ?? 700}px; border-radius: ${Math.round((type.pictureHeight ?? 700) / 34)}px;
+            box-shadow: 0 18px 60px rgba(18, 0, 42, 0.55); }
+        .line { position: absolute; left: 0; right: 0; text-align: center; font-weight: 600;
+            font-size: ${type.opening ?? type.card}px; line-height: 1.15; letter-spacing: -0.03em; white-space: nowrap; }
     `;
     const draw = async (body) => {
         await page.setContent(`<style>${style}</style>${body}`);
@@ -135,8 +145,21 @@ async function wordsDraw(cut) {
     };
     const escape = (value) =>
         value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-    const words = { titles: new Map(), cards: new Map() };
+    const words = { titles: new Map(), cards: new Map(), lines: new Map() };
+    const picture = async (file) =>
+        `data:image/png;base64,${(await sharp(file).png().toBuffer()).toString("base64")}`;
     for (const segment of cut.segments) {
+        // Each opening line on its own layer, where it rests once the window is in.
+        if (segment.opening) {
+            const layers = [];
+            for (const line of segment.opening.lines)
+                layers.push(
+                    await draw(
+                        `<div class="line shade" style="top:${line.top}px">${escape(line.text)}</div>`,
+                    ),
+                );
+            words.lines.set(segment, layers);
+        }
         if (segment.kind === "window" && segment.title && !words.titles.has(segment.title)) {
             const band = cut.title;
             const text = await draw(
@@ -172,7 +195,15 @@ async function wordsDraw(cut) {
                             : ""
                     }${segment.text ? `<h1>${escape(segment.text)}</h1>` : ""}${
                         segment.line ? `<p>${escape(segment.line)}</p>` : ""
-                    }${segment.small ? `<small>${escape(segment.small)}</small>` : ""}</div>`,
+                    }${segment.small ? `<small>${escape(segment.small)}</small>` : ""}${
+                        segment.pictures
+                            ? `<div class="pictures">${(
+                                  await Promise.all(segment.pictures.map(picture))
+                              )
+                                  .map((src) => `<img src="${src}">`)
+                                  .join("")}</div>`
+                            : ""
+                    }</div>`,
                 ),
             );
     }
@@ -480,7 +511,12 @@ const backdrop = backdropOpen(options.backdrop, fps, { width, height });
  */
 function wordsShown(segment, t, first, last) {
     const handover = cut.dissolve ?? 0;
-    const into = first ? 1 : clamp01((t - handover) / 0.3);
+    const into =
+        segment.titleFrom !== undefined
+            ? clamp01((t - segment.titleFrom) / 0.3)
+            : first
+              ? 1
+              : clamp01((t - handover) / 0.3);
     const out = last ? 1 : clamp01((segment.seconds - 1 / fps - t) / 0.15);
     return { into, amount: Math.min(into, out) };
 }
@@ -532,10 +568,36 @@ async function* segmentFrames(segment, first, last, start) {
         }
         for (; shown < count && lastPicture; shown += 1) yield lastPicture;
     })();
+    const frame = { left: 0, top: 0, width, height };
+    /** The opening's lines at `t`: each fades in at its time, all rise with the window, then fade. */
+    const linesAt = async (t) => {
+        const opening = segment.opening;
+        if (!opening) return [];
+        const k = ease(clamp01((t - opening.rise[0]) / (opening.rise[1] - opening.rise[0])));
+        const out = clamp01((opening.out + 0.3 - t) / 0.3);
+        const layers = words.lines.get(segment);
+        const shown = [];
+        for (const [at, line] of opening.lines.entries()) {
+            const amount = Math.min(clamp01((t - line.at) / 0.3), out);
+            if (amount <= 0) continue;
+            shown.push({
+                input: await fade(layers[at], amount),
+                left: 0,
+                top: Math.round((1 - k) * opening.drop),
+            });
+        }
+        return shown;
+    };
     let index = 0;
     for await (const picture of pictures) {
         const t = index / fps;
         const rect = windowRect(cut, segment, t);
+        if (!intersect(rect, frame)) {
+            const back = await backdrop.next();
+            yield await sharp(back, raw).composite(await linesAt(t)).removeAlpha().raw().toBuffer();
+            index += 1;
+            continue;
+        }
         const made = await windowLayers(cut, rect, dimsAt(segment, t));
         const { shown } = made;
         const scaled = await sharp(picture, { raw: { ...size, channels: 3 } })
@@ -578,6 +640,7 @@ async function* segmentFrames(segment, first, last, start) {
         yield await sharp(back, raw)
             .composite([
                 ...windowOnly,
+                ...(await linesAt(t)),
                 ...(covered * caption > 0
                     ? [
                           {

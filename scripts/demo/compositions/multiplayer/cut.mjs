@@ -1,36 +1,44 @@
+import { join } from "node:path";
 import { chapters } from "./chapters.mjs";
 import { stage } from "./stage.mjs";
 
 /*
- * The landscape cut, 1920×1080, from 1133×700 takes. At `stage.push` (2.2)
- * the stage shows about 809×415 CSS pixels; a view with its own scale shows
- * 1780/scale × 912/scale.
- *
- * A close-up of the session pane starts at the sidebar's edge as the frame
- * draws it (344 plus the stage's 70-pixel margin over the scale), so no
- * sliver of the sidebar shows at the left; the window's right edge comes
- * into the frame instead.
+ * The landscape cut, 1920×1080, from 1133×800 takes. At rest the whole window
+ * is 1292 pixels wide; at `stage.push` (1.45) the stage shows the window's
+ * whole width by 629 rows, and Activity's view (1.3) its whole width by 701.
+ * A view's `x` centres the window across the frame.
  */
-export default (cues) =>
-    chapters(
+const centred = (scale) => (stage.stage.x - (stage.output.width - 1133 * scale) / 2) / scale;
+const phone = (name) => join(import.meta.dirname, "phone", name);
+
+export default (cues) => ({
+    ...chapters(
         stage,
         {
-            // Activity with its count, down to the two newest tasks under TASKS.
-            aware: { x: 0, y: 108, scale: 1.85 },
-            // The Activity page's two newest entries: the shared checklist and
-            // the benchmark's post, its summary and the top of its cover.
-            activity: { x: 376, y: 105 },
-            // Kirill's request and its answer, low in the pane; then the whole
-            // conversation, with Steve's message and its answer.
-            bots: { x: 376, y: 250 },
-            botsGrown: { x: 376, y: 105 },
-            // The Artifacts list; the opened page under the same view, then
-            // its lower half: the trace and the next step.
-            artifacts: { x: 376, y: 0 },
-            artifactPage: { x: 376, y: 0 },
-            artifactRead: { x: 376, y: 285 },
-            // The question, Kirill's answer and the agent's reply.
-            stepIn: { x: 377, y: 232, scale: 2.1 },
+            openingTop: 180,
+            // Activity and its badge, the bots, the task list, and the open conversation.
+            aware: { x: centred(1.45), y: 60 },
+            progress: { x: centred(1.45), y: 60 },
+            // The feed, one cover at a time, beside the sidebar.
+            activity: { scale: 1.3, x: centred(1.3), y: 60 },
+            activityUntil: ["step3-rest", 2.0],
         },
+        [
+            {
+                kind: "card",
+                text: "Also on iOS and Android",
+                pictures: [phone("build-together.jpg"), phone("computer-and-team-servers.jpg")],
+                seconds: 5.0,
+            },
+            {
+                kind: "card",
+                wordmark: "Happy",
+                line: "One place for you, your team, and your agents.",
+                small: "Free and open source. Runs on your own server.",
+                seconds: 4.0,
+            },
+        ],
         cues,
-    );
+    ),
+    id: "multiplayer",
+});
