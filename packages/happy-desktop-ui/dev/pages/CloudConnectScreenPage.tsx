@@ -157,7 +157,7 @@ const SPECIMENS: readonly {
     },
     {
         label: "Servers",
-        detail: "the account's servers to join, or create one; an invite's link adds its server",
+        detail: "the account's servers to join, or bootstrap a new one from its button; an invite's link adds its server",
         view: {
             kind: "servers",
             servers: { status: "ready", servers: [ACME, GUILD] },

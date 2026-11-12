@@ -754,7 +754,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                         <Button
                                             icon="plus"
                                             onClick={props.onCreateOpen}
-                                            variant="ghost"
+                                            variant="secondary"
                                         >
                                             Bootstrap a new one
                                         </Button>
