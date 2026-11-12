@@ -22,7 +22,10 @@ export interface HappyAgentPreviewMedia {
 export function HappyAgentToolMediaPreview(props: {
     media: HappyAgentPreviewMedia;
     documents: HappyAgentToolMediaDocumentStore;
-    onClose(): void;
+    /** Closes the preview from its header. Absent where the surface around it closes it. */
+    onClose?: () => void;
+    /** Leaves the name out of the header, where the surface around it already says it. */
+    pathHidden?: boolean;
 }) {
     const { agentId, toolCallId, index, item } = props.media;
     // The daemon types a file by a short list of extensions and calls the rest
@@ -87,15 +90,17 @@ export function HappyAgentToolMediaPreview(props: {
     return (
         <FilePreview
             key={item.url}
-            closeLabel="Close preview"
             content={content}
             {...(item.width !== undefined && item.height !== undefined
                 ? { dimensions: `${String(item.width)} × ${String(item.height)}` }
                 : {})}
             kind={kind}
-            onClose={props.onClose}
+            {...(props.onClose === undefined
+                ? {}
+                : { closeLabel: "Close preview", onClose: props.onClose })}
             onDownload={() => fileDownload(item.name, { type: "url", url: item.url })}
             path={item.name}
+            {...(props.pathHidden ? { pathHidden: true } : {})}
             size={fileSizeFormat(item.size)}
         />
     );
