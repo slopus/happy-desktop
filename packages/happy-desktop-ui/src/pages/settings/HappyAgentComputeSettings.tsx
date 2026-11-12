@@ -97,7 +97,7 @@ const MODES: Readonly<
         description:
             "Each agent works in its own isolated sandbox, with optional CPU and memory limits. Linux only.",
         install:
-            "Run this on a Linux machine. Sandbox mode is Linux only. It installs the Happy supervisor as root, joins the machine, and gives each agent its own sandbox.",
+            "Run this on a Linux computer. Sandbox mode is Linux only. It installs the Happy supervisor as root, joins the computer, and gives each agent its own sandbox.",
         systems: "linux",
     },
     shared: {
@@ -105,7 +105,7 @@ const MODES: Readonly<
         description:
             "Every agent works directly on the host. Only other agents' workspaces are hidden. Linux only.",
         install:
-            "Run this on a Linux machine. Shared mode is Linux only. It installs the Happy supervisor with sudo and joins the machine in shared mode.",
+            "Run this on a Linux computer. Shared mode is Linux only. It installs the Happy supervisor with sudo and joins the computer in shared mode.",
         systems: "linux",
     },
     exclusive: {
@@ -113,15 +113,15 @@ const MODES: Readonly<
         description:
             "One agent at a time works on the host. The rest see it as busy. Linux or macOS.",
         install:
-            "Run this on a Linux or macOS machine. It installs the Happy supervisor with sudo and joins the machine in exclusive mode.",
+            "Run this on a Linux or macOS computer. It installs the Happy supervisor with sudo and joins the computer in exclusive mode.",
         systems: "unix",
     },
     private: {
         label: "Private",
         description:
-            "Your own machine. Only your agents can join, and you approve each one. Linux, macOS or Windows.",
+            "Your own computer. Only your agents can join, and you approve each one. Linux, macOS or Windows.",
         install:
-            "Run this on your own Linux, macOS or Windows machine, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the machine joins as yours.",
+            "Run this on your own Linux, macOS or Windows computer, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the computer joins as yours.",
         systems: "any",
     },
 };
@@ -256,16 +256,16 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                         : {
                               action: {
                                   icon: "plus",
-                                  label: "Add machine",
+                                  label: "Add computer",
                                   onClick: props.onMachineAdd,
                               },
                           })}
                     description={
                         props.add === "any"
-                            ? "Add a machine so agents have somewhere to run."
+                            ? "Add a computer so agents have somewhere to run."
                             : props.add === "private"
-                              ? "No machine has joined this server yet. You can add a private one of your own."
-                              : "No machine has joined this server yet, and your role can't add one."
+                              ? "No computer has joined this server yet. You can add a private one of your own."
+                              : "No computer has joined this server yet, and your role can't add one."
                     }
                     icon="terminal"
                     title="No compute yet"
@@ -281,7 +281,7 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
             ) : null}
             {props.requests.length > 0 ? (
                 <HappyAgentSettingsSection
-                    description="Your agents are asking to join your private machines. An approved agent can use the machine until it leaves."
+                    description="Your agents are asking to join your private computers. An approved agent can use the computer until it leaves."
                     title="Join requests"
                 >
                     <Box
@@ -330,16 +330,16 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
             <HappyAgentSettingsSection
                 description={
                     props.add === "any"
-                        ? "Agents choose a machine and join it. Its mode decides who can join and how agents share it."
+                        ? "Agents choose a computer and join it. Its mode decides who can join and how agents share it."
                         : props.add === "private"
-                          ? "Agents choose a machine and join it. You can add a private machine of your own."
-                          : "Agents choose a machine and join it. Your role can see them but not add one."
+                          ? "Agents choose a computer and join it. You can add a private computer of your own."
+                          : "Agents choose a computer and join it. Your role can see them but not add one."
                 }
-                title="Machines"
+                title="Computers"
             >
                 <Box className="happy-agent-compute__list" data-happy-desktop-ui="compute-machines">
                     {props.machines.length === 0 ? (
-                        <Box className="happy-agent-compute__none">No machine has joined yet.</Box>
+                        <Box className="happy-agent-compute__none">No computer has joined yet.</Box>
                     ) : (
                         props.machines.map((machine) => (
                             <HappyAgentComputeMachineItem
@@ -359,7 +359,7 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                             size="small"
                             variant="secondary"
                         >
-                            Add machine
+                            Add computer
                         </Button>
                     </Box>
                 )}
@@ -503,7 +503,7 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                 icon="terminal"
                 onClose={busy ? undefined : props.onClose}
                 size="large"
-                title="Add a machine"
+                title="Add a computer"
             >
                 <Box
                     className="happy-agent-compute__form"
@@ -562,7 +562,7 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                             <TextField
                                 disabled={busy}
                                 fullWidth
-                                hint="Optional. Agents see this name; it starts as the machine's hostname."
+                                hint="Optional. Agents see this name; it starts as the computer's hostname."
                                 label="Name"
                                 onValueChange={props.onNameChange}
                                 placeholder="Its hostname"
@@ -571,11 +571,11 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                             <TextField
                                 disabled={busy}
                                 fullWidth
-                                hint="Optional. Agents read it when they choose a machine."
+                                hint="Optional. Agents read it when they choose a computer."
                                 label="Description"
                                 multiline
                                 onValueChange={props.onDescriptionChange}
-                                placeholder="What agents should know about this machine"
+                                placeholder="What agents should know about this computer"
                                 rows={3}
                                 value={stage.draft.description}
                             />
@@ -624,7 +624,7 @@ export function HappyAgentComputeMachineEditDialog(props: HappyAgentComputeMachi
                 icon="terminal"
                 onClose={props.saving ? undefined : props.onClose}
                 size="medium"
-                title="Edit machine"
+                title="Edit computer"
             >
                 <Box
                     className="happy-agent-compute__form"
@@ -646,11 +646,11 @@ export function HappyAgentComputeMachineEditDialog(props: HappyAgentComputeMachi
                     <TextField
                         disabled={props.saving}
                         fullWidth
-                        hint="Agents read it when they choose a machine."
+                        hint="Agents read it when they choose a computer."
                         label="Description"
                         multiline
                         onValueChange={props.onDescriptionChange}
-                        placeholder="What agents should know about this machine"
+                        placeholder="What agents should know about this computer"
                         rows={4}
                         value={props.description}
                     />

@@ -148,7 +148,7 @@ function requestRow(
     return {
         key: approval.key,
         agent: approval.agentTitle ?? "An agent",
-        machine: approval.machineName ?? "your machine",
+        machine: approval.machineName ?? "your computer",
         when: sinceText(approval.createdAt) ?? "just now",
         ...(answering ? { answering } : {}),
     };

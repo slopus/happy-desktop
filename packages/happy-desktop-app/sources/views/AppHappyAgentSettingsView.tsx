@@ -153,7 +153,7 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     // What agents on this machine are told, run on, and may use.
     { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
     { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
-    // The pools and machines agents run on, beside the models they run; Happy Cloud only.
+    // The computers agents run on, beside the models they run; Happy Cloud only.
     { group: "Agents", icon: "terminal", id: "compute", label: "Compute", tone: "blue" },
     // Usage follows Inference because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
@@ -423,7 +423,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     members: "Who is on this server and what they may do",
     usage: "What each provider account has spent",
     repositories: "The code your team works on",
-    compute: "The machines agents run on",
+    compute: "The computers agents run on",
 };
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */

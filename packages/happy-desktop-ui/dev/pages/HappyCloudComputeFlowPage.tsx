@@ -130,7 +130,7 @@ function Screen(props: { number: string; screen: string; detail: string; childre
                 <HappyAgentSettingsShell
                     activeCategoryId="compute"
                     categories={categories}
-                    description="The machines agents run on"
+                    description="The computers agents run on"
                     onCategorySelect={noop}
                     onClose={noop}
                     title="Compute"
@@ -205,7 +205,7 @@ export function HappyCloudComputeFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's compute: the machines agents join and their modes, the agents asking to join the reader's private machines, adding a machine with a one-time install command, and editing a machine's name and description."
+            summary="A Happy Cloud server's compute: the computers agents join and their modes, the agents asking to join the reader's private computers, adding a computer with a one-time install command, and editing a computer's name and description."
             title="Happy Cloud compute flow"
             width={WINDOWS[0].width + 96}
         >
