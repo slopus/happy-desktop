@@ -148,15 +148,11 @@ const SOURCES: Record<LottieSceneName, string> = {
  * Frames are relative to the animation's in-point. The spider's source starts
  * at 120: source frame 250 (relative 130) holds the spider down with the bug
  * still caught and both wing rotations at their folded 0° keyframe, before
- * the bug's departure beginning at source frame 254. The clapper board's
- * source starts at 0: by frame 80 it has clapped shut and "Action!" is fully
- * written, settled, before the board reopens and the lettering is wiped from
- * about frame 90.
+ * the bug's departure beginning at source frame 254.
  * Keep the original asset and end every play, replay, and reduced-motion hold
  * at this pose through the renderer's segment contract.
  */
 const PLAYBACK_SEGMENTS: Partial<Record<LottieSceneName, [number, number]>> = {
-    "clapper-board": [0, 80],
     "spider-catching-bug": [0, 130],
 };
 
@@ -180,6 +176,13 @@ export type LottieSceneProps = {
      */
     loop?: boolean;
     /**
+     * Which frame the scene holds whenever it is not moving. `end`, the
+     * default, is the frame the play finishes on. `start` holds the first
+     * frame: the scene opens on it, and every play runs to the end and then
+     * returns to it.
+     */
+    rest?: "start" | "end";
+    /**
      * The accessible name of the replay control. The artwork itself carries no
      * information — whatever it illustrates is already written beside it — so
      * the only thing assistive technology is told about is the one action:
@@ -199,8 +202,9 @@ export type LottieSceneProps = {
  *
  * It never loops unless its host passes `loop`. The scene plays once when the state it illustrates appears,
  * and then holds its playback range's last frame. Most scenes use the complete
- * animation; the spider ends on its selected caught-bug pose and the clapper
- * board on "Action!".
+ * animation; the spider ends on its selected caught-bug pose. A host that
+ * passes `rest="start"` gets its first frame instead, held before and after
+ * every play.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
  * entry (except under `on-click`), or Enter/Space while it has keyboard focus. A replay is refused while
  * one is already running, so a pointer resting inside cannot turn "again" into
@@ -253,6 +257,7 @@ export function LottieScene(props: LottieSceneProps) {
         () => true,
     );
     const play = props.play ?? "on-appear";
+    const restAt = props.rest ?? "end";
     /*
      * A control only once there is really something to replay. Before the first
      * frame is painted — and permanently in an engine where the worker renderer
@@ -313,8 +318,9 @@ export function LottieScene(props: LottieSceneProps) {
         // the renderer reports that play finished. It is what keeps a second
         // hover, or a pointer sitting still inside, from becoming a loop.
         let owed = false;
-        // The frame the animation ends on, and therefore the frame it holds
-        // whenever it is not moving. Known only once the animation has loaded.
+        // The frame it holds whenever it is not moving: the one the animation
+        // ends on, or its first under `rest="start"`. Known only once the
+        // animation has loaded.
         let rest = 0;
         /*
          * The two things the sources below do to a player, replaced with the
@@ -469,9 +475,11 @@ export function LottieScene(props: LottieSceneProps) {
                     if (disposed) return;
                     // The player already holds the final frame; this only
                     // records that the debt is paid, so the next hover, click,
-                    // or keypress is allowed to start another play.
+                    // or keypress is allowed to start another play. A scene
+                    // that rests at its start goes back there.
                     owed = false;
                     settle();
+                    if (restAt === "start") void instance.setFrame(rest);
                 });
 
                 instance.addEventListener("load", () => {
@@ -488,13 +496,16 @@ export function LottieScene(props: LottieSceneProps) {
                         void instance.destroy();
                         return;
                     }
-                    rest = Math.max(
-                        Math.min(
-                            segment?.[1] ?? instance.totalFrames - 1,
-                            instance.totalFrames - 1,
-                        ),
-                        0,
-                    );
+                    rest =
+                        restAt === "start"
+                            ? (segment?.[0] ?? 0)
+                            : Math.max(
+                                  Math.min(
+                                      segment?.[1] ?? instance.totalFrames - 1,
+                                      instance.totalFrames - 1,
+                                  ),
+                                  0,
+                              );
                     if (play === "on-appear" && !reduced) {
                         setPainted(true);
                         start();
@@ -536,7 +547,7 @@ export function LottieScene(props: LottieSceneProps) {
         // `loop` is read only when a player is built; a later change goes
         // through `loopApply` below, so it never rebuilds the player.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-    }, [play, props.name, props.size]);
+    }, [play, restAt, props.name, props.size]);
 
     // eslint-disable-next-line happy-react/no-layout-effect -- hands a changed `loop` to the worker player already running; rebuilding it would restart the scene, and there is nothing to clean up
     useLayoutEffect(() => {
@@ -574,7 +585,7 @@ export function LottieScene(props: LottieSceneProps) {
              * different box must each get a different element rather than a
              * re-used one that would be scaled up to fit.
              */
-            key={`${props.name}:${play}:${String(props.size)}`}
+            key={`${props.name}:${play}:${restAt}:${String(props.size)}`}
             onClick={interactive ? () => replay.current() : undefined}
             onKeyDown={interactive ? onKeyDown : undefined}
             // Entering fires once per entry, so a pointer that comes to rest

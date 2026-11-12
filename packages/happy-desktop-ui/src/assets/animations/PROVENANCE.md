@@ -65,10 +65,7 @@ external image assets. The supplied file records no author or upstream license
 metadata.
 
 The scene means **a piece of work is about to begin**. It stands over the title
-of the page a new task is made on. Every play ends at frame 80, through the
-renderer's segment (`PLAYBACK_SEGMENTS` in `LottieScene.tsx`): the board has
-clapped shut and "Action!" is fully written, before the board reopens and the
-lettering is wiped from about frame 90. The asset is unchanged.
+of the page a new task is made on.
 
 ## Where these came from
 
