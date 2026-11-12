@@ -582,6 +582,7 @@ export {
     SegmentedControl,
     type SegmentedControlProps,
     type SegmentedControlSegment,
+    type SegmentedControlTag,
     type SegmentedControlSize,
 } from "./SegmentedControl";
 export {

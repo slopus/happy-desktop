@@ -59,12 +59,14 @@ export function HappyAgentOnboardingBoundary(props: {
         methodStore.get,
     );
     const online = props.online;
+    // The relay offer leads to methods: the direct pairing opens with it,
+    // and the connector is read only while Direct is on screen.
+    const pairing =
+        snapshot.state?.completed === false &&
+        (mobile.status === "pairing" || mobile.status === "failed");
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
         method,
-        // Setup links a phone through the relay only for now; Direct stays in
-        // Settings › Mobile Access.
-        relayOnly: true,
         // Choosing Direct asks for a direct code.
         onMethodSelect: (next) => {
             if (next === "direct") props.store.mobile.direct.pairingOpen();
@@ -73,7 +75,10 @@ export function HappyAgentOnboardingBoundary(props: {
         relay: appMobileRelayFromOnboarding(mobile),
         relayStarting: mobile.status === "failed" && mobile.pending,
         onRelayRetry: props.store.mobile.happyMobileConnect,
-        direct: happyAgentMobileConnectorStoreNoop,
+        direct:
+            pairing && method === "direct"
+                ? props.store.mobile.direct
+                : happyAgentMobileConnectorStoreNoop,
         clock: props.clock,
         online: () => online,
         ...(online ? {} : { unavailable: "Happy can't reach this Happy Agent right now." }),

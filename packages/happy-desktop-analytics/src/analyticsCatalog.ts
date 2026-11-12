@@ -354,7 +354,7 @@ export interface AnalyticsEvents {
     /** A phone pairing page showed its Relay | Direct choice. */
     readonly mobile_pairing_options_shown: {
         readonly options: "relay_direct";
-        /** The method selected as it showed: the person's choice, else the rollout's default. */
+        /** The method selected as it showed: the person's choice, else Direct. */
         readonly default_method: AnalyticsMobilePairingMethod;
         readonly surface: AnalyticsMobilePairingSurface;
     };
@@ -605,14 +605,6 @@ export function analyticsRuleOf(
         ANALYTICS_EVENT_RULES[event as AnalyticsEventName];
     return Object.hasOwn(rules, property) ? rules[property] : undefined;
 }
-
-/**
- * The PostHog feature flags this desktop reads, by their exact keys. The phone
- * apps read the same keys, so a flag is renamed in all of them or none.
- */
-export type AnalyticsFlag =
-    /** On: pairing pages select Direct first for people who have not chosen. */
-    "direct-connection-migration-new-users";
 
 /** A provider's configured type on the catalog's list, else `other`; null when unknown. */
 export function analyticsProviderKind(

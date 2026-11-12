@@ -39,9 +39,14 @@ export interface DesktopMobilePairingOptions {
 export function desktopMobilePairingOptionsCopy(options: DesktopMobilePairingOptions): string {
     if (options.completed) return "Your phone can now reach this computer directly.";
     if (options.verifying) return "Check the emoji on this computer and on your phone.";
-    return options.method === undefined
-        ? "Open Happy on your phone and scan either code."
-        : "Open Happy on your phone and scan the code.";
+    switch (options.method) {
+        case undefined:
+            return "Open Happy on your phone and scan either code.";
+        case "direct":
+            return "Scan with Happy on your phone to connect straight to this computer.";
+        case "relay":
+            return "Scan with Happy on your phone to connect through the Happy server.";
+    }
 }
 
 export interface DesktopMobileSetupProps {

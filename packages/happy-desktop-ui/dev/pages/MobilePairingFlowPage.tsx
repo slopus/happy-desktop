@@ -43,8 +43,8 @@ const minimumWindow = { width: 720, height: 640 } as const;
 
 function settings(props: {
     readonly direct: MobileDirectConnectorState;
-    /** The direct connection's experiment is off: no direct section. */
-    readonly experimentOff?: boolean;
+    /** This Happy Agent has no direct connection: no direct section. */
+    readonly directSectionOff?: boolean;
     readonly pairing?: PairingVariant;
     readonly relay?: Partial<HappyAgentMobileSettingsProps>;
     readonly removal?: MobileDirectRemoval;
@@ -61,7 +61,7 @@ function settings(props: {
         >
             <HappyAgentMobileSettings
                 configured={false}
-                {...(props.experimentOff
+                {...(props.directSectionOff
                     ? {}
                     : {
                           direct: directSectionSpecimen(props.direct, {
@@ -144,17 +144,17 @@ const settingsScreens: readonly {
     },
     {
         id: "method-relay",
-        label: "Relay | Direct · Relay, the experiment off",
+        label: "Direct | Relay · Relay picked",
         render: () =>
             settings({
                 direct: direct.closed,
-                experimentOff: true,
+                directSectionOff: true,
                 pairing: { direct: direct.closed, relay: relayWaiting, method: "relay" },
             }),
     },
     {
         id: "method-direct",
-        label: "Relay | Direct · Direct, the experiment on",
+        label: "Direct | Relay · Direct, the default",
         render: () =>
             settings({
                 direct: direct.closed,
@@ -471,6 +471,9 @@ const setupScreens: readonly {
     },
 ];
 
+/** Settings screens also shown in the dark appearance, at the window Happy opens at. */
+const darkSettingsScreens = new Set(["link-relay", "link-direct"]);
+
 /** Settings screens also shown at the smallest window, where the codes stack. */
 const narrowSettingsScreens = new Set([
     "method-relay",
@@ -512,6 +515,23 @@ export function MobilePairingFlowPage() {
                     ];
                 }),
             )}
+            {settingsScreens.flatMap((screen, index) => {
+                if (!darkSettingsScreens.has(screen.id)) return [];
+                const number = String(index + 1).padStart(2, "0");
+                const size = `${String(defaultWindow.width)}x${String(defaultWindow.height)}`;
+                return [
+                    <FullScreenSpecimen
+                        detail={`${String(defaultWindow.width)} × ${String(defaultWindow.height)} · dark`}
+                        key={`${size}-${screen.id}-dark`}
+                        label={`${screen.label} · dark appearance`}
+                        number={number}
+                        screen={`${number}-${screen.id}-dark-${size}`}
+                        window={defaultWindow}
+                    >
+                        <ThemeScope mode="dark">{contained(screen.render())}</ThemeScope>
+                    </FullScreenSpecimen>,
+                ];
+            })}
             {[defaultWindow, minimumWindow].flatMap((window) =>
                 setupScreens.map((screen, index) => {
                     const number = String(settingsScreens.length + index + 1).padStart(2, "0");

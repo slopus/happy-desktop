@@ -3,7 +3,6 @@ import {
     analyticsRuleOf,
     analyticsValueAllowed,
     type AnalyticsEventName,
-    type AnalyticsFlag,
     type AnalyticsEventProperties,
 } from "./analyticsCatalog";
 
@@ -37,12 +36,6 @@ export interface AnalyticsClient {
         properties: AnalyticsEventProperties<E>,
         options?: AnalyticsTrackOptions,
     ): void;
-    /**
-     * Follows one feature flag for this installation: `listener` hears once
-     * whether it is on, and false when PostHog could not answer. With no key
-     * or analytics off it never hears anything, so the caller's default stands.
-     */
-    flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
 }
 
 export interface AnalyticsClientOptions {
@@ -137,26 +130,6 @@ export function analyticsEnvelope(
     return { event, timestamp: envelope.timestamp, properties: allowed };
 }
 
-/** The flags `/flags/?v=2` says are on; a v2 answer names each with `enabled`. */
-function flagsOf(answer: unknown): ReadonlySet<string> {
-    const flags =
-        typeof answer === "object" && answer !== null && "flags" in answer
-            ? answer.flags
-            : undefined;
-    if (typeof flags !== "object" || flags === null) return new Set();
-    return new Set(
-        Object.entries(flags)
-            .filter(
-                ([, flag]) =>
-                    typeof flag === "object" &&
-                    flag !== null &&
-                    "enabled" in flag &&
-                    flag.enabled === true,
-            )
-            .map(([key]) => key),
-    );
-}
-
 /**
  * Sends catalog events to PostHog from this renderer, one request per event,
  * without an SDK. A request that fails is dropped, never kept or sent again,
@@ -174,29 +147,6 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
             return undefined;
         if (!loopback && typeof navigator !== "undefined" && navigator.webdriver) return undefined;
         return apiKey;
-    };
-    /**
-     * This window's answer from `/flags`, asked once per installation id;
-     * undefined when PostHog gave none.
-     */
-    let flags:
-        | { readonly id: string; readonly answer: Promise<ReadonlySet<string> | undefined> }
-        | undefined;
-    const flagsLoad = (apiKey: string): Promise<ReadonlySet<string> | undefined> => {
-        const id = options.distinctId();
-        if (flags?.id !== id)
-            flags = {
-                id,
-                answer: fetch(`${host}/flags/?v=2`, {
-                    ...REQUEST,
-                    body: JSON.stringify({ api_key: apiKey, distinct_id: id }),
-                })
-                    .then(async (response) =>
-                        response.ok ? flagsOf(await response.json()) : undefined,
-                    )
-                    .catch(() => undefined),
-            };
-        return flags.answer;
     };
     return {
         track(event, properties, trackOptions) {
@@ -219,18 +169,6 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                 // Outlives the window it was sent from; best effort, like anything sent at close.
                 ...(trackOptions?.beacon ? { keepalive: true } : {}),
             }).catch(() => undefined);
-        },
-        flagFollow(flag, listener) {
-            const apiKey = sendable();
-            if (apiKey === undefined) return () => undefined;
-            let stopped = false;
-            void flagsLoad(apiKey).then((on) => {
-                if (stopped || sendable() === undefined) return;
-                listener(on?.has(flag) === true);
-            });
-            return () => {
-                stopped = true;
-            };
         },
     };
 }

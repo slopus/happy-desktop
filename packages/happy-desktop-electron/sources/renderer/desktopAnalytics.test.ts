@@ -70,7 +70,6 @@ function clientCreate(): AnalyticsClient & { readonly captured: Captured[] } {
     const captured: Captured[] = [];
     return {
         captured,
-        flagFollow: () => () => undefined,
         track(event, properties, options) {
             captured.push({
                 event,
@@ -355,16 +354,13 @@ it("keeps a DO_NOT_TRACK run silent from its first event, and leaves the Setting
     vi.useFakeTimers();
     localStorage.setItem("happy.analytics.install-id.v1", "kept");
     const client = clientCreate();
-    const flagFollow = vi.fn(client.flagFollow);
     const directory = directoryCreate([{ id: "local", status: "connecting", bots: [] }]);
     const analytics = desktopAnalyticsCreate({
         development: false,
         happyAgents: directory,
-        client: { ...client, flagFollow },
+        client,
         doNotTrack: true,
     });
-    const flag = vi.fn();
-    analytics.flagFollow("direct-connection-migration-new-users", flag);
     analytics.appOpened();
     const { store, welcome, publish } = onboardingCreate();
     // Nothing is wrapped, so nothing observes.
@@ -379,8 +375,6 @@ it("keeps a DO_NOT_TRACK run silent from its first event, and leaves the Setting
     unsubscribe();
 
     expect(client.captured).toEqual([]);
-    expect(flagFollow).not.toHaveBeenCalled();
-    expect(flag).not.toHaveBeenCalled();
     // The person's own choice still reads on, and nothing was written or deleted.
     expect(analytics.preference.get().usageAnalyticsEnabled).toBe(true);
     expect(localStorage.length).toBe(1);

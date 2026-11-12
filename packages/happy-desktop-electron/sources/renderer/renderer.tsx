@@ -44,7 +44,8 @@ import {
     type KeepAwakeStore,
     commandPaletteStoreCreate,
     experimentsStoreCreate,
-    mobilePairingMethodStoreOwnedCreate,
+    mobilePairingMethodDefault,
+    mobilePairingMethodStoreCreate,
     projectsVisibilityStoreOwnedCreate,
     statusBarStoreCreate,
     gptLiveStoreCreate,
@@ -179,7 +180,6 @@ import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopAgentReleaseNotesStoreCreate } from "./desktopAgentReleaseNotesStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
-import { desktopMobilePairingMethodPersistence } from "./desktopMobilePairingMethod";
 import {
     desktopProjectsVisibilityPersistence,
     desktopProjectsVisibilityLegacyConsume,
@@ -193,7 +193,7 @@ import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { DesktopBootGate, desktopBootSkip } from "./DesktopBootGate";
-import { desktopAnalyticsCreate } from "./desktopAnalytics";
+import { desktopAnalyticsCreate, desktopOs } from "./desktopAnalytics";
 import { desktopAgentUpdateStoreCreate } from "./desktopAgentUpdateStore";
 import {
     DesktopAgentBrokenGate,
@@ -586,12 +586,11 @@ function DesktopOnboardingGate(props: {
         view?.kind === "happy-mobile-desktop" && view.step.kind === "link"
             ? view.step.phase
             : undefined;
+    // Linking offers both methods; the direct connector is read only while Direct shows.
+    const linking = linkPhase !== undefined || view?.kind === "happy-mobile-pairing";
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
         method,
-        // Setup links a phone through the relay only for now; Direct stays in
-        // Settings › Mobile Access.
-        relayOnly: true,
         // Choosing Direct asks for a direct code.
         onMethodSelect: (next) => {
             if (next === "direct") props.store.happyMobileDirect().pairingOpen();
@@ -603,7 +602,10 @@ function DesktopOnboardingGate(props: {
               ? appMobileRelayFromOnboarding(snapshot.happyMobile)
               : { kind: "starting" },
         onRelayRetry: () => props.store.happyMobileConnect(),
-        direct: happyAgentMobileConnectorStoreNoop,
+        direct:
+            linking && method === "direct"
+                ? props.store.happyMobileDirect()
+                : happyAgentMobileConnectorStoreNoop,
         clock: props.clock,
         online: () => true,
     });
@@ -1666,13 +1668,12 @@ if (mediaPreviewBridge) {
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
         const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
-        // Which way a phone pairs first: the person's pick, else what the
-        // direct-connection rollout says once PostHog answers (Relay until then).
-        const { store: mobilePairingMethod, defaultMethodReceived: mobilePairingDefaultReceived } =
-            mobilePairingMethodStoreOwnedCreate({
-                persistence: desktopMobilePairingMethodPersistence(),
-                onOutput: (output) => analytics.mobilePairingMethodSelected(output),
-            });
+        // Which way the open pairing page shows: what the person picked on
+        // it, else this computer's default. Nothing is kept between pages.
+        const mobilePairingMethod = mobilePairingMethodStoreCreate({
+            defaultMethod: mobilePairingMethodDefault(desktopOs()),
+            onOutput: (output) => analytics.mobilePairingMethodSelected(output),
+        });
         // Each authenticated daemon owns project visibility, like bot attention.
         const { store: projectsVisibility, connectionFollow: projectsVisibilityFollow } =
             projectsVisibilityStoreOwnedCreate({
@@ -1901,11 +1902,6 @@ if (mediaPreviewBridge) {
             doNotTrack: desktopBridge.doNotTrack === true,
         });
         appDisposers.push(analytics.dispose);
-        appDisposers.push(
-            analytics.flagFollow("direct-connection-migration-new-users", (enabled) =>
-                mobilePairingDefaultReceived(enabled ? "direct" : "relay"),
-            ),
-        );
         analytics.appOpened();
         const windowState = windowStateStoreCreate(desktopBridge);
         const gptLive = gptLiveStoreCreate(

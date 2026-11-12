@@ -72,8 +72,7 @@ function observeCreate(method: AnalyticsMobilePairingMethod = "relay") {
     const reported: Reported[] = [];
     const report: MobilePairingReport = (event, properties) =>
         reported.push({ event, properties: { ...properties } });
-    const methods = mobilePairingMethodStoreCreate();
-    methods.methodSelect(method, "mobile_access");
+    const methods = mobilePairingMethodStoreCreate({ defaultMethod: method });
     const choose = (next: AnalyticsMobilePairingMethod) =>
         methods.methodSelect(next, "mobile_access");
     return { reported, choose, observe: mobilePairingObserveCreate(methods, report) };
@@ -357,7 +356,6 @@ it("reports a pairing page's choice of method", () => {
     const captured: { event: string; properties: Record<string, unknown> }[] = [];
     const client: AnalyticsClient = {
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
-        flagFollow: () => () => undefined,
     };
     const directory = {
         get: () => ({
@@ -372,6 +370,7 @@ it("reports a pairing page's choice of method", () => {
         client,
     });
     const methods = mobilePairingMethodStoreCreate({
+        defaultMethod: "relay",
         onOutput: analytics.mobilePairingMethodSelected,
     });
     methods.methodSelect("direct", "onboarding");
@@ -396,7 +395,6 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
     const captured: { event: string; properties: Record<string, unknown> }[] = [];
     const client: AnalyticsClient = {
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
-        flagFollow: () => () => undefined,
     };
     const directory = {
         get: () => ({
@@ -410,8 +408,7 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
         happyAgents: directory as never,
         client,
     });
-    const methods = mobilePairingMethodStoreCreate();
-    methods.methodSelect("direct", "mobile_access");
+    const methods = mobilePairingMethodStoreCreate({ defaultMethod: "direct" });
     const observe = analytics.mobilePairingObserve("remote", methods);
     const relay = fakeCreate(integration({}));
     const direct = fakeCreate(connector(null));

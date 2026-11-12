@@ -45,6 +45,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
     gap: 6px;
     min-width: 0;
     height: 100%;
@@ -109,6 +110,31 @@
 .happy-segmented-control__icon {
     display: flex;
     flex: none;
+}
+
+/*
+ * The tag is a badge that leaves the flow: pinned to its segment's top-right
+ * corner and overlapping it, so it takes no room and never moves a label.
+ */
+.happy-segmented-control__tag {
+    position: absolute;
+    top: -9px;
+    right: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 16px;
+    padding: 0 5px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-pill);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 14px;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
 }
 
 .happy-segmented-control__label {

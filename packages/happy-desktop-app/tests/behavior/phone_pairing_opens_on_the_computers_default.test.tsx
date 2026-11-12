@@ -2,13 +2,13 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import {
     EXPERIMENTAL_FEATURES,
+    mobilePairingMethodDefault,
     happyAgentMobileConnectorStoreCreate,
     happyAgentMobileConnectorStoreNoop,
-    mobilePairingMethodStoreOwnedCreate,
+    mobilePairingMethodStoreCreate,
     type HappyAgentClockStore,
     type HappyAgentMobileConnectorSnapshot,
     type HappyAgentMobileConnectorStoreDeps,
-    type MobilePairingMethodDocument,
     type MobilePairingMethodOutput,
 } from "happy-desktop-state";
 import {
@@ -19,13 +19,16 @@ import {
 import { appMobilePairingOptions } from "../../sources/components/AppMobilePairing";
 
 /*
- * Onboarding and Mobile Access show a Relay | Direct control at the top. Which
- * one is selected first is the person's own choice, else the direct-connection
- * rollout's default, which is Relay until it says Direct. Relay shows only the
+ * Onboarding and Mobile Access show a Direct | Relay control at the top. Every
+ * pairing page opens on this computer's default, Direct on macOS and Relay on
+ * Windows and Linux; a pick on the control lasts only while that page is open,
+ * and nothing is kept. A Happy Agent that does not offer Direct shows Relay
+ * alone. Relay shows only the
  * relay code and nothing asks the daemon for a direct pairing; Direct shows the
  * direct code and emoji step in the same place, with a way back to Relay for
  * older phone apps. A computer already linked through the Happy server offers
- * only the direct code. Setup offers only the relay code for now.
+ * only the direct code. Both name the methods in full, Direct first and
+ * tagged new, Relay tagged for older clients.
  */
 
 const clock: HappyAgentClockStore = {
@@ -78,8 +81,29 @@ function segment(container: HTMLElement, method: MobilePairingMethod): HTMLButto
     return found;
 }
 
+/** Each segment's label and tag, in the order the control shows them. */
+function segments(container: HTMLElement): { label: string; tag: string | undefined }[] {
+    return [
+        ...container.querySelectorAll<HTMLElement>(
+            '[data-testid="mobile-pairing-method"] [data-happy-desktop-ui="segmented-control-segment"]',
+        ),
+    ].map((button) => ({
+        label:
+            button.querySelector('[data-happy-desktop-ui="segmented-control-label"]')
+                ?.textContent ?? "",
+        tag:
+            button.querySelector('[data-happy-desktop-ui="segmented-control-tag"]')?.textContent ??
+            undefined,
+    }));
+}
+
+const copy = {
+    relay: "Scan with Happy on your phone to connect through the Happy server.",
+    direct: "Scan with Happy on your phone to connect straight to this computer.",
+} as const;
+
 function options(
-    layout: "setup" | "dialog",
+    layout: "setup" | "settings" | "dialog",
     method: MobilePairingMethod,
     onMethodSelect: (method: MobilePairingMethod) => void = () => undefined,
 ) {
@@ -96,61 +120,64 @@ function options(
     });
 }
 
-it("selects Relay until the rollout says Direct, and a choice the person made wins", () => {
+it.each([
+    ["mac", "direct"],
+    ["win", "relay"],
+    ["linux", "relay"],
+] as const)("opens pairing on %s's default, %s", (os, method) => {
     expect(EXPERIMENTAL_FEATURES.map((feature) => feature.id)).not.toContain("mobileDirect");
-    let saved: unknown;
-    const outputs: MobilePairingMethodOutput[] = [];
-    const persistence = {
-        read: () => saved,
-        write: (document: MobilePairingMethodDocument) => {
-            saved = document;
-        },
-    };
-    const fresh = mobilePairingMethodStoreOwnedCreate({
-        persistence,
-        onOutput: (output) => outputs.push(output),
-    });
-    expect(fresh.store.get().method).toBe("relay");
-    fresh.defaultMethodReceived("direct");
-    expect(fresh.store.get().method).toBe("direct");
-    fresh.defaultMethodReceived("relay");
-    expect(fresh.store.get().method).toBe("relay");
-    expect(saved).toBeUndefined();
-    fresh.store.methodSelect("relay", "onboarding");
-    expect(saved).toEqual({ chosen: "relay" });
-    // The choice matched what showed, so nothing changed for the page.
-    expect(outputs).toEqual([]);
-    fresh.defaultMethodReceived("direct");
-    expect(fresh.store.get().method).toBe("relay");
-
-    const later = mobilePairingMethodStoreOwnedCreate({
-        persistence,
-        onOutput: (output) => outputs.push(output),
-    });
-    later.defaultMethodReceived("direct");
-    expect(later.store.get().method).toBe("relay");
-    later.store.methodSelect("direct", "mobile_access");
-    expect(later.store.get().method).toBe("direct");
-    expect(outputs).toEqual([
-        { type: "methodSelected", from: "relay", to: "direct", surface: "mobile_access" },
-    ]);
+    expect(mobilePairingMethodDefault(os)).toBe(method);
+    const store = mobilePairingMethodStoreCreate({ defaultMethod: mobilePairingMethodDefault(os) });
+    for (const layout of ["setup", "settings", "dialog"] as const) {
+        const shown = options(layout, store.get().method);
+        expect(shown.method).toBe(method);
+        expect(desktopMobilePairingOptionsCopy(shown)).toBe(copy[method]);
+        const view = render(<>{shown.view}</>);
+        expect(slots(view.container)).toEqual([method]);
+        expect(segment(view.container, method).getAttribute("aria-pressed")).toBe("true");
+        view.unmount();
+    }
 });
 
-it.each(["setup", "dialog"] as const)(
-    "shows Relay with the relay code alone until Direct is chosen (%s)",
+it("keeps a pick only on the page it was made on, and remembers nothing", () => {
+    const outputs: MobilePairingMethodOutput[] = [];
+    const store = mobilePairingMethodStoreCreate({
+        defaultMethod: "direct",
+        onOutput: (output) => outputs.push(output),
+    });
+    store.methodSelect("relay", "onboarding");
+    expect(store.get().method).toBe("relay");
+    // Picking what already shows is no pick.
+    store.methodSelect("relay", "onboarding");
+    expect(outputs).toEqual([
+        { type: "methodSelected", from: "direct", to: "relay", surface: "onboarding" },
+    ]);
+    // The next pairing page opens on the default again.
+    store.methodReset();
+    expect(store.get().method).toBe("direct");
+    // A new window, as after a restart, starts from the default too.
+    expect(mobilePairingMethodStoreCreate({ defaultMethod: "direct" }).get().method).toBe("direct");
+});
+
+it.each(["setup", "settings", "dialog"] as const)(
+    "shows the relay code alone while Relay is picked (%s)",
     (layout) => {
         const selected: MobilePairingMethod[] = [];
         const shown = options(layout, "relay", (method) => selected.push(method));
         expect(shown.verifying).toBe(false);
         expect(shown.completed).toBe(false);
-        expect(desktopMobilePairingOptionsCopy(shown)).toBe(
-            "Open Happy on your phone and scan the code.",
-        );
+        expect(desktopMobilePairingOptionsCopy(shown)).toBe(copy.relay);
         const view = render(<>{shown.view}</>);
         expect(slots(view.container)).toEqual(["relay"]);
         expect(segment(view.container, "relay").getAttribute("aria-pressed")).toBe("true");
         expect(segment(view.container, "direct").getAttribute("aria-pressed")).toBe("false");
-        expect(segment(view.container, "direct").textContent).toBe("Direct");
+        // Setup and Mobile Access offer the same two methods, the same way.
+        expect(segments(view.container)).toEqual([
+            { label: "Direct connection", tag: "New" },
+            { label: "Relay connection", tag: "Older clients" },
+        ]);
+        // Relay is for older apps on any phone; the step names no platform.
+        expect(view.container.textContent).not.toMatch(/android/i);
         expect(view.queryByText("Older phone app?")).toBeNull();
         expect(view.getByLabelText("QR code to pair through Happy relay")).toBeTruthy();
         expect(view.queryByLabelText("QR code to connect a phone directly")).toBeNull();
@@ -162,8 +189,8 @@ it.each(["setup", "dialog"] as const)(
     },
 );
 
-it.each(["setup", "dialog"] as const)(
-    "shows the direct code in the relay code's place once Direct is chosen (%s)",
+it.each(["setup", "settings", "dialog"] as const)(
+    "shows the direct code in the relay code's place once Direct is picked (%s)",
     (layout) => {
         const selected: MobilePairingMethod[] = [];
         const select = (method: MobilePairingMethod) => selected.push(method);
@@ -171,9 +198,7 @@ it.each(["setup", "dialog"] as const)(
         const control = view.getByTestId("mobile-pairing-method");
         const slotsBox = view.container.querySelector(".happy-mobile-pairing-options__slots");
         const direct = options(layout, "direct", select);
-        expect(desktopMobilePairingOptionsCopy(direct)).toBe(
-            "Open Happy on your phone and scan the code.",
-        );
+        expect(desktopMobilePairingOptionsCopy(direct)).toBe(copy.direct);
         view.rerender(<>{direct.view}</>);
         expect(slots(view.container)).toEqual(["direct"]);
         expect(segment(view.container, "direct").getAttribute("aria-pressed")).toBe("true");
@@ -182,37 +207,20 @@ it.each(["setup", "dialog"] as const)(
         expect(view.getByTestId("mobile-pairing-method")).toBe(control);
         expect(view.container.querySelector(".happy-mobile-pairing-options__slots")).toBe(slotsBox);
         expect(view.queryByLabelText("QR code to pair through Happy relay")).toBeNull();
-        expect(view.getByText("Older phone app?")).toBeTruthy();
         fireEvent.click(segment(view.container, "relay"));
-        fireEvent.click(view.getByTestId("mobile-pairing-use-relay"));
-        expect(selected).toEqual(["relay", "relay"]);
+        // Setup's control already names Relay for older apps; elsewhere the
+        // direct code also says it under itself.
+        if (layout === "setup") {
+            expect(view.queryByText("Older phone app?")).toBeNull();
+            expect(selected).toEqual(["relay"]);
+        } else {
+            expect(view.getByText("Older phone app?")).toBeTruthy();
+            fireEvent.click(view.getByTestId("mobile-pairing-use-relay"));
+            expect(selected).toEqual(["relay", "relay"]);
+        }
         view.unmount();
     },
 );
-
-it("links a phone in setup through the relay only, whatever method is chosen", () => {
-    const pairing = appMobilePairingOptions({
-        layout: "setup",
-        method: "direct",
-        relayOnly: true,
-        onMethodSelect: () => undefined,
-        relay,
-        direct: happyAgentMobileConnectorStoreNoop,
-        snapshot: waiting,
-        clock,
-        online: () => true,
-    });
-    expect(pairing.method).toBe("relay");
-    expect(desktopMobilePairingOptionsCopy(pairing)).toBe(
-        "Open Happy on your phone and scan the code.",
-    );
-    const view = render(<>{pairing.view}</>);
-    expect(slots(view.container)).toEqual(["relay"]);
-    expect(view.queryByTestId("mobile-pairing-method")).toBeNull();
-    expect(view.getByLabelText("QR code to pair through Happy relay")).toBeTruthy();
-    expect(view.queryByLabelText("QR code to connect a phone directly")).toBeNull();
-    view.unmount();
-});
 
 it("offers a linked computer only the direct code, without touching its Happy server link", () => {
     const opened = vi.fn();

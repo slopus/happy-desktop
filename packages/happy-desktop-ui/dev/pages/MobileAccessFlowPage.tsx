@@ -67,20 +67,20 @@ const screens: readonly {
             status: "disconnected",
         },
     },
-    {
-        id: "pairing",
-        label: "Pairing · Relay | Direct dialog",
+    ...(["direct", "relay"] as const).map((method) => ({
+        id: `pairing-${method}`,
+        label: `Pairing · Direct | Relay dialog on ${method === "direct" ? "Direct" : "Relay"}`,
         props: {
             ...handlers,
             configured: false,
-            status: "pairing",
+            status: "pairing" as const,
             pairingOptions: pairingOptionsSpecimen("dialog", {
                 direct: direct.waiting,
                 relay: relayWaiting,
-                method: "relay",
+                method,
             }),
         },
-    },
+    })),
     { id: "ready", label: "Ready · linked through the Happy server", props: paired },
     {
         id: "direct",

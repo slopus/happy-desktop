@@ -5,11 +5,11 @@ import type { Page } from "playwright";
 import { gymElectronVideoRecord } from "./launch.js";
 
 /*
- * Mobile Access's pairing page shows a Relay | Direct control. A gym window
- * reads no rollout flag, so it opens on Relay: the relay's code alone.
- * Choosing Direct swaps in the direct code in the same place, the choice is
- * kept when the page opens again, and "Use Relay" under the direct code goes
- * back. The Direct connection section is on Mobile Access either way.
+ * Mobile Access's pairing page shows a Direct | Relay control. It opens on
+ * this computer's default, Direct on macOS and Relay elsewhere. Choosing the
+ * other method swaps its code in the same place, nothing is kept when the page
+ * opens again, and "Use Relay" under the direct code goes to Relay. The Direct
+ * connection section is on Mobile Access either way.
  */
 
 const ROWS = '[data-happy-desktop-ui="sidebar-item"]';
@@ -18,7 +18,7 @@ const CONTROL = '[data-testid="mobile-pairing-method"]';
 const SLOTS_BOX = ".happy-mobile-pairing-options__slots";
 
 export interface MobilePairingMethodState {
-    /** The method the Relay | Direct control shows as chosen. */
+    /** The method the Direct | Relay control shows as chosen. */
     readonly method: string;
     /** Pairing methods the page shows, in order. */
     readonly slots: readonly string[];
@@ -28,12 +28,12 @@ export interface MobilePairingMethodState {
 }
 
 export interface MobilePairingMethodResult {
-    /** Mobile Access before anything is chosen, then after choosing Direct on the page. */
-    readonly relay: MobilePairingMethodState;
-    readonly direct: MobilePairingMethodState;
+    /** Mobile Access before anything is chosen, then after choosing the other method. */
+    readonly initial: MobilePairingMethodState;
+    readonly switched: MobilePairingMethodState;
     /** Whether Mobile Access has its Direct connection section before anything is chosen. */
     readonly directSection: boolean;
-    /** The page's method when opened again after choosing Direct. */
+    /** The page's method when opened again after choosing the other one. */
     readonly methodAfterReopen: string;
     /** The page's method after "Use Relay". */
     readonly methodAfterUseRelay: string;
@@ -105,29 +105,36 @@ export async function mobilePairingMethodRun(
         const section = await directSection(page);
         if (!section) throw new Error("Mobile Access has no Direct connection section.");
         await pairingOpen(page);
-        const relay = await pageRead(page);
-        await page.screenshot({ path: join(artifacts, "mobile-pairing-relay.png") });
-        if (relay.method !== "relay" || relay.slots.join() !== "relay")
-            throw new Error(`Before choosing, Mobile Access showed ${JSON.stringify(relay)}.`);
+        const initial = await pageRead(page);
+        await page.screenshot({ path: join(artifacts, `mobile-pairing-${initial.method}.png`) });
+        if (initial.slots.join() !== initial.method)
+            throw new Error(`Before choosing, Mobile Access showed ${JSON.stringify(initial)}.`);
 
-        await page.locator(`${CONTROL} [data-value="direct"]`).click();
-        await page.locator(`${SLOTS}[data-method="direct"]`).waitFor({ timeout: 10_000 });
+        const other = initial.method === "direct" ? "relay" : "direct";
+        await page.locator(`${CONTROL} [data-value="${other}"]`).click();
+        await page.locator(`${SLOTS}[data-method="${other}"]`).waitFor({ timeout: 10_000 });
         await page.waitForTimeout(1_500);
-        const direct = await pageRead(page);
-        await page.screenshot({ path: join(artifacts, "mobile-pairing-direct.png") });
-        if (direct.method !== "direct" || direct.slots.join() !== "direct")
-            throw new Error(`After choosing Direct the page showed ${JSON.stringify(direct)}.`);
-        if (direct.controlTop !== relay.controlTop || direct.slotsTop !== relay.slotsTop)
+        const switched = await pageRead(page);
+        await page.screenshot({ path: join(artifacts, `mobile-pairing-${other}.png`) });
+        if (switched.method !== other || switched.slots.join() !== other)
+            throw new Error(`After choosing ${other} the page showed ${JSON.stringify(switched)}.`);
+        if (switched.controlTop !== initial.controlTop || switched.slotsTop !== initial.slotsTop)
             throw new Error(
-                `Switching moved the page: ${JSON.stringify(relay)} → ${JSON.stringify(direct)}.`,
+                `Switching moved the page: ${JSON.stringify(initial)} → ${JSON.stringify(switched)}.`,
             );
         await pairingLeave(page);
 
         await pairingOpen(page);
         const reopened = await pageRead(page);
-        if (reopened.method !== "direct")
-            throw new Error(`Reopened after choosing Direct, the page showed ${reopened.method}.`);
+        if (reopened.method !== initial.method)
+            throw new Error(
+                `Reopened after choosing ${other}, the page showed ${reopened.method}.`,
+            );
 
+        if (reopened.method !== "direct") {
+            await page.locator(`${CONTROL} [data-value="direct"]`).click();
+            await page.locator(`${SLOTS}[data-method="direct"]`).waitFor({ timeout: 10_000 });
+        }
         await page.getByTestId("mobile-pairing-use-relay").click();
         await page.locator(`${SLOTS}[data-method="relay"]`).waitFor({ timeout: 10_000 });
         const afterUseRelay = await pageRead(page);
@@ -136,8 +143,8 @@ export async function mobilePairingMethodRun(
             throw new Error(`After Use Relay the page showed ${JSON.stringify(afterUseRelay)}.`);
 
         const result: MobilePairingMethodResult = {
-            relay,
-            direct,
+            initial,
+            switched,
             directSection: section,
             methodAfterReopen: reopened.method,
             methodAfterUseRelay: afterUseRelay.method,

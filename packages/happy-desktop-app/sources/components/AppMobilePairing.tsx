@@ -105,15 +105,13 @@ export function appMobileRelayFromIntegration(
 export interface AppMobilePairingProps {
     readonly layout: MobilePairingOptionsLayout;
     /**
-     * The method shown under the Relay | Direct control: the person's choice,
-     * else the rollout's default. With Relay shown the direct connector is not
-     * followed. Phones already paired directly keep working either way.
+     * The method shown under the Direct | Relay control: the person's choice,
+     * else Direct. With Relay shown the direct connector is not followed.
+     * Phones already paired directly keep working either way.
      */
     readonly method: MobilePairingMethod;
     /** The computer is already linked through the Happy server: only the direct code is offered. */
     readonly directOnly?: boolean;
-    /** Only the relay code is offered, without the Relay | Direct control. */
-    readonly relayOnly?: boolean;
     onMethodSelect(method: MobilePairingMethod): void;
     readonly relay: MobileRelayPairingState;
     readonly relayStarting?: boolean;
@@ -133,7 +131,7 @@ export interface AppMobilePairingProps {
  * `snapshot` is the caller's one subscription to the direct connector.
  *
  * A method the Happy Agent reports off is never offered: the other one shows
- * alone, without the Relay | Direct control.
+ * alone, without the Direct | Relay control.
  */
 export function appMobilePairingOptions(
     props: AppMobilePairingProps & { readonly snapshot: HappyAgentMobileConnectorSnapshot },
@@ -141,17 +139,12 @@ export function appMobilePairingOptions(
     const { connector } = props.snapshot;
     const relayOff = props.relay.kind === "disabled";
     const directOff = appMobileDirectOff(connector);
-    const method: MobilePairingMethod = props.relayOnly
-        ? "relay"
-        : relayOff || props.directOnly
-          ? "direct"
-          : directOff
-            ? "relay"
-            : props.method;
+    const method: MobilePairingMethod =
+        relayOff || props.directOnly ? "direct" : directOff ? "relay" : props.method;
     const shown = {
         ...props,
         method,
-        methodFixed: props.relayOnly === true || relayOff || directOff || props.directOnly === true,
+        methodFixed: relayOff || directOff || props.directOnly === true,
     };
     if (method === "relay")
         return {

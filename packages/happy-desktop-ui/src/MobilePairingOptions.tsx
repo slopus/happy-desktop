@@ -40,7 +40,7 @@ export type MobilePairingMethod = "relay" | "direct";
 export interface MobilePairingOptionsProps {
     readonly layout: MobilePairingOptionsLayout;
     /**
-     * Shows one method at a time, chosen with a Relay | Direct control at the
+     * Shows one method at a time, chosen with a Direct | Relay control at the
      * top: its code stands alone, without a method heading, and its countdown
      * sits under it. Absent shows both side by side.
      */
@@ -48,7 +48,7 @@ export interface MobilePairingOptionsProps {
     onMethodSelect?(method: MobilePairingMethod): void;
     /**
      * `method` is the only one this Happy Agent offers, because it reports the
-     * other turned off, so the Relay | Direct control is left out.
+     * other turned off, so the Direct | Relay control is left out.
      */
     readonly methodFixed?: boolean;
     readonly now: number;
@@ -83,14 +83,25 @@ const DIRECT_DETAIL =
 
 /** The code's edge in px. Setup may shrink it to fit a short window (`--happy-qr-code-size`). */
 const CODE_SIZE: Record<MobilePairingOptionsLayout, number> = {
-    settings: 216,
-    setup: 168,
-    dialog: 240,
+    settings: 224,
+    setup: 224,
+    dialog: 224,
 };
 
+/** Direct leads, tagged new; Relay is tagged as the way for older apps. */
 const METHOD_SEGMENTS: SegmentedControlSegment[] = [
-    { value: "relay", label: "Relay", title: RELAY_DETAIL },
-    { value: "direct", label: "Direct", title: DIRECT_DETAIL },
+    {
+        value: "direct",
+        label: "Direct connection",
+        tag: { label: "New" },
+        title: DIRECT_DETAIL,
+    },
+    {
+        value: "relay",
+        label: "Relay connection",
+        tag: { label: "Older clients" },
+        title: RELAY_DETAIL,
+    },
 ];
 
 /**
@@ -98,7 +109,8 @@ const METHOD_SEGMENTS: SegmentedControlSegment[] = [
  * and the direct Tailcat code. Each slot shows its own state, so one method
  * being unavailable never blocks the other. Once a phone has connected
  * directly, its emoji step takes the whole surface. With `method` one slot
- * shows at a time, in the same place, under a Relay | Direct control.
+ * shows at a time, in the same place, under a Direct | Relay control, each
+ * with a tag on its corner.
  */
 export function MobilePairingOptions(props: MobilePairingOptionsProps) {
     const method = props.method;
@@ -132,7 +144,8 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
                                       On your phone, tap + and scan this code.
                                   </span>
                               ) : null}
-                              {switchable ? (
+                              {/* Setup has no height to spare; its control names Relay for older apps. */}
+                              {switchable && !setup ? (
                                   <Box
                                       className="happy-mobile-pairing-options__fallback"
                                       data-happy-desktop-ui="mobile-pairing-options-fallback"

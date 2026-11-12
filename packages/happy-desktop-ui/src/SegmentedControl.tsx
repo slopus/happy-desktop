@@ -3,12 +3,18 @@ import { type CSSProperties } from "react";
 import { Badge } from "./Badge";
 import { Icon, type IconName } from "./Icon";
 export type SegmentedControlSize = "compact" | "small" | "medium" | "large";
+/** A small badge on a segment's top-right corner, such as "New". */
+export type SegmentedControlTag = {
+    label: string;
+};
 export type SegmentedControlSegment = {
     value: string;
     label: string;
     icon?: IconName;
     /** A short tag after the label, such as "Experimental". */
     badge?: string;
+    /** A badge overlapping the segment's top-right corner. */
+    tag?: SegmentedControlTag;
     disabled?: boolean;
     title?: string;
 };
@@ -84,6 +90,14 @@ export function SegmentedControl(props: SegmentedControlProps) {
                         title={segment.title}
                         type="button"
                     >
+                        {segment.tag ? (
+                            <span
+                                className="happy-segmented-control__tag"
+                                data-happy-desktop-ui="segmented-control-tag"
+                            >
+                                {segment.tag.label}
+                            </span>
+                        ) : null}
                         {segment.icon
                             ? ((name) => (
                                   <span

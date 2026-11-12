@@ -421,6 +421,7 @@
     width: 100%;
 }
 
+/* One surface: each method's slot sits straight on this card, with no box of its own. */
 .happy-mobile-pairing-options[data-layout="settings"] {
     container: happy-mobile-pairing-options / inline-size;
     padding: 16px;
@@ -450,7 +451,7 @@
     width: 100%;
 }
 
-/* Relay | Direct: the one method shown sits under it, in the same place for either. */
+/* Direct | Relay: the one method shown sits under it, in the same place for either. */
 .happy-mobile-pairing-options__method {
     align-self: center;
 }
@@ -490,14 +491,6 @@
     align-items: center;
     gap: 16px;
     min-width: 0;
-}
-
-.happy-mobile-pairing-options[data-layout="settings"] .happy-mobile-pairing-options__slot {
-    padding: 16px;
-    background: var(--surface);
-    border: 1px solid var(--divider);
-    /* 10px card, 16px inset: the slot sits beyond the card's corner field. */
-    border-radius: 8px;
 }
 
 /* In a dialog the dialog is the only box: the methods sit straight on it. */
@@ -544,9 +537,10 @@
     line-height: 18px;
 }
 
-/* The dialog already floats; its scrolling body would clip a floating code's shadow. */
-.happy-mobile-pairing-options[data-layout="dialog"] .happy-qr-code {
-    box-shadow: 0 0 0 1px var(--divider);
+/* Pairing codes sit flat on their page, in setup, Settings and the dialog alike. */
+.happy-mobile-pairing-options .happy-qr-code,
+.happy-mobile-pairing-options .happy-mobile-pairing__placeholder {
+    box-shadow: none;
 }
 
 /* A narrow Settings column stacks the slots, so each code keeps its full size. */

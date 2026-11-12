@@ -85,7 +85,7 @@
     --happy-setup-pairing-qr-size: clamp(88px, var(--happy-setup-below) - 232px, 136px);
     /*
      * One method's code has its copy link and countdown beside it, and the
-     * Relay | Direct control in that link's place, so it also takes the room the
+     * Direct | Relay control in that link's place, so it also takes the room the
      * footer leaves free: 132px at the minimum window, without moving the footer.
      */
     --happy-setup-pairing-single-qr-size: clamp(112px, var(--happy-setup-below) - 188px, 184px);

@@ -23,7 +23,6 @@ import {
     type AnalyticsEventName,
     type AnalyticsEvents,
     type AnalyticsFailureAction,
-    type AnalyticsFlag,
     type AnalyticsMobilePairingMethod,
     type AnalyticsMobilePairingSurface,
     type AnalyticsModelProperties,
@@ -124,8 +123,6 @@ export interface DesktopAnalytics {
     agentBrokenObserve(store: DesktopAgentBrokenStore): DesktopAgentBrokenStore;
     /** Wraps the Happy Agent update card's store so a failed update it shows is counted. */
     agentUpdateObserve(store: AppHappyAgentUpdateStore): AppHappyAgentUpdateStore;
-    /** Follows one PostHog feature flag; silent while analytics is off or unavailable. */
-    flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
     /** Stops following the directory and the window's closing. */
     dispose(): void;
 }
@@ -220,7 +217,7 @@ function usageAnalyticsPersistence(): UsageAnalyticsPersistence {
  * no typed answer, so this boundary reads its platform string once. Electron
  * ships for these three only, and the rest of its builds are Linux ones.
  */
-function desktopOs(): AnalyticsDesktopOs {
+export function desktopOs(): AnalyticsDesktopOs {
     const platform = (
         (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
             ?.platform ?? navigator.platform
@@ -625,7 +622,7 @@ export function mobilePairingObserveCreate(
     };
 }
 
-/** The person picked a method on a pairing page's Relay | Direct choice. */
+/** The person picked a method on a pairing page's Direct | Relay choice. */
 function mobilePairingMethodReport(
     output: MobilePairingMethodOutput,
     report: MobilePairingReport,
@@ -814,7 +811,6 @@ function desktopAnalyticsDormant(preference: UsageAnalyticsStore): DesktopAnalyt
         mobilePairingMethodSelected: () => undefined,
         agentBrokenObserve: (store) => store,
         agentUpdateObserve: (store) => store,
-        flagFollow: () => () => undefined,
         dispose: () => undefined,
     };
 }
@@ -1118,7 +1114,6 @@ export function desktopAnalyticsCreate(options: {
         },
         mobilePairingObserve: (happyAgentId, methods) =>
             mobilePairingObserveCreate(methods, pairingReport(happyAgentId)),
-        flagFollow: (flag, listener) => client.flagFollow(flag, listener),
         mobilePairingMethodSelected: (output) =>
             mobilePairingMethodReport(
                 output,

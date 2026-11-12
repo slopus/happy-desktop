@@ -28,6 +28,11 @@ const SCOPE = [
     { value: "team", label: "Team" },
 ];
 
+const CONNECTION = [
+    { value: "direct", label: "Direct connection", tag: { label: "New" } },
+    { value: "relay", label: "Relay connection", tag: { label: "Older clients" } },
+];
+
 export function SegmentedControlPage() {
     return (
         <ComponentPage
@@ -148,6 +153,21 @@ export function SegmentedControlPage() {
                             <SegmentedControl fullWidth segments={RANGE} value="week" />
                         </div>
                         <SegmentedControl disabled fullWidth segments={SCOPE} value="everyone" />
+                    </div>
+                </Specimen>
+            </div>
+
+            <div className="specimen-grid">
+                <Specimen
+                    detail="16px badge overlapping the segment's top-right corner · height unchanged"
+                    label="Tags"
+                    number="SC-08"
+                    stage="surface"
+                >
+                    <div style={{ display: "grid", gap: "16px", padding: "28px" }}>
+                        <DimensionRule label="height 28" />
+                        <SegmentedControl segments={CONNECTION} size="small" value="direct" />
+                        <SegmentedControl segments={CONNECTION} size="small" value="relay" />
                     </div>
                 </Specimen>
             </div>

@@ -18,14 +18,14 @@ export const componentNumber = "P-014";
 const noop = () => undefined;
 
 /**
- * What setup actually shows a phone: the relay code alone, no Relay | Direct
- * choice (renderer.tsx passes `relayOnly`). `starting` while it is on its way.
+ * What setup shows a phone on macOS: the Direct | Relay choice on Direct.
+ * `starting` while the code is on its way.
  */
 function appPairingOptions(starting = false): DesktopMobilePairingOptions {
     return setupPairingOptions({
-        direct: direct.waiting,
-        method: "relay",
-        methodFixed: true,
+        direct: starting ? direct.loading : direct.waiting,
+        method: "direct",
+        onMethodSelect: noop,
         relay: starting ? { kind: "starting" } : relayWaiting,
     });
 }
@@ -528,9 +528,17 @@ const screens: readonly {
                 },
             }),
     },
-    {
-        id: "connect-phone-direct",
-        label: "Link Mobile App · Direct first (rollout flag on), Relay one tap away",
+    ...(
+        [
+            ["direct", "dark", "macOS default: Direct, Relay one tap away"],
+            ["relay", "dark", "Windows and Linux default: Relay"],
+            ["direct", "light", "macOS default · light appearance"],
+            ["relay", "light", "Windows and Linux default · light appearance"],
+        ] as const
+    ).map(([method, appearance, label]) => ({
+        ...(appearance === "light" ? { appearance } : {}),
+        id: `connect-phone-${method}${appearance === "light" ? "-light" : ""}`,
+        label: `Link Mobile App · ${label}`,
         render: () =>
             onboarding(
                 {
@@ -546,42 +554,15 @@ const screens: readonly {
                 },
                 undefined,
                 false,
-                "dark",
+                appearance,
                 setupPairingOptions({
                     direct: direct.waiting,
                     relay: relayWaiting,
-                    method: "direct",
+                    method,
                     onMethodSelect: noop,
                 }),
             ),
-    },
-    {
-        id: "connect-phone-relay",
-        label: "Link Mobile App · Relay first (rollout flag off)",
-        render: () =>
-            onboarding(
-                {
-                    kind: "happy-mobile-desktop",
-                    step: {
-                        kind: "link",
-                        phase: {
-                            data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                            expiresAt: 1924992000000,
-                            kind: "pairing",
-                        },
-                    },
-                },
-                undefined,
-                false,
-                "dark",
-                setupPairingOptions({
-                    direct: direct.waiting,
-                    relay: relayWaiting,
-                    method: "relay",
-                    onMethodSelect: noop,
-                }),
-            ),
-    },
+    })),
     {
         id: "phone-connected",
         label: "Link Mobile App · linked, the last page",

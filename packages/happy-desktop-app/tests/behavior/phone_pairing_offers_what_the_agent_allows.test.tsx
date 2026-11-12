@@ -13,7 +13,7 @@ import { appMobilePairingOptions } from "../../sources/components/AppMobilePairi
  * Mobile integration reports `disabled` when the relay is off, and its mobile
  * connector reports `disabled`, or answers 404 on an older daemon, when direct
  * pairing is. A way it turned off is never offered: the other one shows alone,
- * with no Relay | Direct control, and with neither left Mobile Access leaves
+ * with no Direct | Relay control, and with neither left Mobile Access leaves
  * Connect a phone out.
  */
 
@@ -58,9 +58,10 @@ function shown(
     method: MobilePairingMethod,
     relay: Parameters<typeof appMobilePairingOptions>[0]["relay"],
     snapshot: HappyAgentMobileConnectorSnapshot,
+    layout: "setup" | "settings" | "dialog" = "dialog",
 ) {
     const options = appMobilePairingOptions({
-        layout: "dialog",
+        layout,
         method,
         onMethodSelect: () => undefined,
         relay,
@@ -94,10 +95,15 @@ it("shows Direct alone when the relay is off", () => {
 });
 
 it.each([
-    ["disabled", directDisabled],
-    ["answered 404", directUnsupported],
-] as const)("shows Relay alone when the direct connector is %s", (_case, snapshot) => {
-    const relay = shown("direct", relayWaiting, snapshot);
+    ["disabled", directDisabled, "setup"],
+    ["disabled", directDisabled, "settings"],
+    ["disabled", directDisabled, "dialog"],
+    ["answered 404", directUnsupported, "setup"],
+    ["answered 404", directUnsupported, "settings"],
+    ["answered 404", directUnsupported, "dialog"],
+] as const)("shows Relay alone when the direct connector is %s (%s)", (_case, snapshot, layout) => {
+    // Direct is the default, and the person's own pick of it does not bring it back.
+    const relay = shown("direct", relayWaiting, snapshot, layout);
     expect(relay.method).toBe("relay");
     expect(relay.slots).toEqual(["relay"]);
     expect(relay.control).toBeNull();

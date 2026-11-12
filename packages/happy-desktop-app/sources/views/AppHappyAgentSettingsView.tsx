@@ -1207,6 +1207,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     pairingDirectOnly={directOnly}
                     onPairingOptionsOpen={() => {
                         if (!happyAgentOnline() || pairingOff) return;
+                        // Every pairing page opens on the default; a pick lasts only on it.
+                        methodStore.methodReset();
                         // A linked computer's relay link is left exactly as it is.
                         if (directOnly) mobileConnectorOwned?.pairingOpen();
                         // The local desktop walks through getting the app first.
@@ -1214,7 +1216,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         else happyIntegrationStore.happyIntegrationPairingOpen();
                     }}
                     // Pairing opens in a dialog over the rows: only the direct
-                    // code for a linked computer, else Relay | Direct.
+                    // code for a linked computer, else Direct | Relay.
                     {...(directOnlyOpen && sessionClock
                         ? {
                               pairingOptions: appMobilePairingOptions({
