@@ -3,6 +3,8 @@
  * does not end in `Page`, so the Blueprint does not list it.
  */
 import type {
+    HappyAgentDailyUsage,
+    HappyAgentDailyUsageDay,
     HappyAgentMenusSnapshot,
     HappyAgentModelOption,
     HappyAgentThinkingLevel,
@@ -160,7 +162,82 @@ export const usageAccounts: readonly HappyAgentUsageProviderRow[] = [
         checkedAt: 1_700_000_000_000,
         error: "The Grok account could not be read: the assistant is signed out.",
     },
+    {
+        // Reports no plan and has spent nothing: Settings leaves it and its service out.
+        providerId: "bedrock",
+        name: "Current CLI",
+        typeName: "Amazon Bedrock",
+        checkedAt: 1_700_000_000_000,
+        error: "The provider did not report account usage.",
+    },
 ];
+
+/** The Blueprint's fixed now, and the local day it falls on. */
+export const usageNow = 1_700_000_000_000;
+
+function usageDate(ms: number): string {
+    const date = new Date(ms);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * A believable history of `days` days ending on the fixed now: quiet weekends,
+ * busy weeks, a holiday gap, Opus doing most of the work and Codex picking up
+ * later. Seeded, so every capture draws the same grid.
+ */
+function usageHistory(days: number): HappyAgentDailyUsage {
+    let seed = 7;
+    const random = () => {
+        seed = (seed * 16_807) % 2_147_483_647;
+        return seed / 2_147_483_647;
+    };
+    const counts = (tokens: number) => ({
+        inputTokens: Math.round(tokens * 0.7),
+        outputTokens: Math.round(tokens * 0.22),
+        cacheReadTokens: Math.round(tokens * 9),
+        cacheWriteTokens: Math.round(tokens * 0.08),
+    });
+    const listed: HappyAgentDailyUsageDay[] = [];
+    const DAY = 86_400_000;
+    for (let back = days - 1; back >= 0; back -= 1) {
+        const at = usageNow - back * DAY;
+        const weekday = new Date(at).getDay();
+        const weekend = weekday === 0 || weekday === 6;
+        // Two weeks off in the middle of the year, and most weekends.
+        if (back > 150 && back < 165) continue;
+        if (weekend && random() < 0.7) continue;
+        if (random() < 0.08) continue;
+        // Busier the nearer it gets to now.
+        const scale = (0.35 + 0.65 * (1 - back / Math.max(days, 1))) * (weekend ? 0.3 : 1);
+        const providers = new Map([
+            [
+                "claude",
+                new Map([
+                    ["anthropic/opus-5", counts(scale * (2_000_000 + random() * 9_000_000))],
+                    ["anthropic/sonnet-5", counts(scale * random() * 600_000)],
+                ]),
+            ],
+        ]);
+        if (random() < 0.5)
+            providers.set(
+                "claude_extra",
+                new Map([["anthropic/opus-5", counts(scale * random() * 2_400_000)]]),
+            );
+        if (back < 120 && random() < 0.6)
+            providers.set(
+                "work_codex",
+                new Map([["openai/gpt-5.6-sol", counts(scale * random() * 5_000_000)]]),
+            );
+        listed.push({ date: usageDate(at), providers });
+    }
+    return { since: listed[0]?.date ?? usageDate(usageNow), days: listed };
+}
+
+/** A year and more of daily usage. */
+export const usageHistoryYear = usageHistory(400);
+/** A Happy Agent installed forty days ago: the grid shows only those days. */
+export const usageHistoryRecent = usageHistory(40);
 
 export const instructions = `# House rules
 

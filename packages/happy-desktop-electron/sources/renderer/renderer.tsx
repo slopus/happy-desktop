@@ -31,7 +31,6 @@ import {
     type AppHappyAgentUpdate,
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
-    type AppServers,
     type HappyAgentRouter,
 } from "happy-desktop-app";
 import {
@@ -61,7 +60,6 @@ import {
     happyAgentClockStoreCreate,
     happyLinkInboxStoreCreate,
     parseHappyUrl,
-    serverAddStoreCreate,
     serverSessionsStoreCreate,
     serverSourceHostCreate,
     UserError,
@@ -468,7 +466,6 @@ function HappyAgentBoundary(props: {
     platform: "desktop" | "web";
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
-    servers?: AppServers;
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -523,7 +520,6 @@ function HappyAgentBoundary(props: {
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
                 usageAnalytics: props.usageAnalytics,
-                ...(props.servers ? { servers: props.servers } : {}),
                 keepAwake: props.keepAwake,
                 navigationOrder: props.navigationOrder,
                 sidebarCollapse: props.sidebarCollapse,
@@ -748,8 +744,6 @@ interface DesktopRendererProps {
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
-    /** Adds team servers through the host Happy Agent; absent on a shell that cannot. */
-    servers?: AppServers;
     /** The sidebar's "+" to Happy Cloud; absent on a shell that cannot sign in to servers. */
     cloudConnect?: DesktopCloudConnectStore;
     keepAwake: KeepAwakeStore;
@@ -1018,7 +1012,6 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     statusBar={props.statusBar}
                                     gptLive={props.gptLive}
                                     usageAnalytics={props.usageAnalytics}
-                                    {...(props.servers ? { servers: props.servers } : {})}
                                     keepAwake={props.keepAwake}
                                     htmlPreview={props.htmlPreview}
                                     artifactPage={props.artifactPage}
@@ -1302,7 +1295,6 @@ function DesktopRuntimeContent(
             keepAwake={props.keepAwake}
             gptLive={props.gptLive}
             usageAnalytics={props.usageAnalytics}
-            {...(props.servers ? { servers: props.servers } : {})}
             navigationOrder={props.navigationOrder}
             sidebarCollapse={props.sidebarCollapse}
             sidebarVisibility={props.sidebarVisibility}
@@ -1428,32 +1420,14 @@ function DesktopCloudConnect(props: {
     );
 }
 /** Why a Happy link from outside was not opened, centered over everything else. */
-function DesktopHappyLinkNotice(props: {
-    store: HappyLinkInboxStore;
-    /** Opens Settings › Servers; absent where this window cannot add a server. */
-    onServersOpen?: () => void;
-}): ReactNode {
+function DesktopHappyLinkNotice(props: { store: HappyLinkInboxStore }): ReactNode {
     const { notice } = useSyncExternalStore(
         props.store.subscribe,
         props.store.get,
         props.store.get,
     );
     if (!notice) return null;
-    const serversOpen = props.onServersOpen;
-    return (
-        <HappyLinkNoticeDialog
-            onClose={props.store.noticeDismiss}
-            view={notice}
-            {...(serversOpen
-                ? {
-                      onServersOpen: () => {
-                          props.store.noticeDismiss();
-                          serversOpen();
-                      },
-                  }
-                : {})}
-        />
-    );
+    return <HappyLinkNoticeDialog onClose={props.store.noticeDismiss} view={notice} />;
 }
 
 /* The traffic lights do not zoom with the page, so the safe area reserved for
@@ -1862,18 +1836,6 @@ if (mediaPreviewBridge) {
             await workspace.chiefOfStaffDraftAppend(request);
             happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
         };
-        const serverSignIn = happyAgents.happyAgentSignIn;
-        const serverSignInStop = happyAgents.happyAgentSignInCancel;
-        const servers: AppServers | undefined =
-            serverHost && serverSignIn && serverSignInStop
-                ? {
-                      add: serverAddStoreCreate({ chiefOfStaffAsk }),
-                      directory: happyAgents,
-                      signIn: serverSignIn,
-                      signInCancel: serverSignInStop,
-                  }
-                : undefined;
-        if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());
         const cloudConnectAction = happyAgents.happyAgentCloudConnect;
         const cloudConnect =
             cloudConnectAction && desktopBridge.happyCloud
@@ -2158,20 +2120,7 @@ if (mediaPreviewBridge) {
             <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
-                <DesktopHappyLinkNotice
-                    store={happyLinkInbox}
-                    {...(servers
-                        ? {
-                              onServersOpen: () => {
-                                  const history = connectionUis.get(
-                                      happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID,
-                                  )?.router.history;
-                                  if (history && history.location.pathname !== "/settings/servers")
-                                      history.push("/settings/servers");
-                              },
-                          }
-                        : {})}
-                />
+                <DesktopHappyLinkNotice store={happyLinkInbox} />
                 <CodeHighlightWorkers>
                     <DesktopRenderer
                         browserPasswordsAvailable={browserPasswordsAvailable}
@@ -2196,7 +2145,6 @@ if (mediaPreviewBridge) {
                         statusBar={statusBar}
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}
-                        {...(servers ? { servers } : {})}
                         {...(cloudConnect ? { cloudConnect } : {})}
                         keepAwake={keepAwake}
                         navigationOrder={navigationOrder}

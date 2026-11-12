@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { ModalOverlay } from "./ModalOverlay";
@@ -15,8 +14,6 @@ export type HappyLinkNoticeView =
 export interface HappyLinkNoticeDialogProps {
     readonly view: HappyLinkNoticeView;
     onClose(): void;
-    /** Opens Settings › Servers; absent where this window cannot add a server. */
-    onServersOpen?(): void;
 }
 
 /**
@@ -31,16 +28,9 @@ export function HappyLinkNoticeDialog(props: HappyLinkNoticeDialogProps) {
             <Modal
                 data-testid="happy-link-notice"
                 footer={
-                    <>
-                        {presentation.servers && props.onServersOpen ? (
-                            <Button onClick={props.onServersOpen} variant="secondary">
-                                Servers
-                            </Button>
-                        ) : null}
-                        <Button onClick={props.onClose} variant="primary">
-                            OK
-                        </Button>
-                    </>
+                    <Button onClick={props.onClose} variant="primary">
+                        OK
+                    </Button>
                 }
                 icon="link"
                 onClose={props.onClose}
@@ -55,27 +45,23 @@ export function HappyLinkNoticeDialog(props: HappyLinkNoticeDialogProps) {
 
 function present(props: HappyLinkNoticeDialogProps): {
     readonly title: string;
-    readonly body: ReactNode;
-    readonly servers: boolean;
+    readonly body: string;
 } {
     switch (props.view.kind) {
         case "unknownServer":
             return {
                 title: "Server not connected",
                 body: "This link belongs to a Happy server you’re not connected to.",
-                servers: true,
             };
         case "unreachable":
             return {
                 title: "Couldn’t open the link",
                 body: `${props.view.label} isn’t reachable.`,
-                servers: false,
             };
         case "unsupported":
             return {
                 title: "Couldn’t open the link",
                 body: "This link can’t be opened in Happy for desktop.",
-                servers: false,
             };
     }
 }

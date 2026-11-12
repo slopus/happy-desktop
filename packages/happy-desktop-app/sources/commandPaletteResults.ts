@@ -418,11 +418,11 @@ const SETTINGS_JUMPS: readonly {
     },
     {
         id: "settings:sharing",
-        title: "Settings › Sharing",
+        title: "Settings › Notifications",
         section: "sharing",
-        sectionLabel: "Sharing",
-        icon: "files",
-        keywords: "join tasks shared docs todo lists calendars autojoin",
+        sectionLabel: "Notifications",
+        icon: "bell",
+        keywords: "notifications sharing join tasks shared docs todo lists calendars autojoin",
     },
     {
         id: "settings:account",
@@ -466,11 +466,11 @@ const SETTINGS_JUMPS: readonly {
     },
     {
         id: "settings:providers",
-        title: "Settings › Providers",
+        title: "Settings › Inference",
         section: "providers",
-        sectionLabel: "Providers",
+        sectionLabel: "Inference",
         icon: "globe",
-        keywords: "models accounts keys",
+        keywords: "providers ai models accounts keys subscriptions",
     },
     {
         id: "settings:usage",

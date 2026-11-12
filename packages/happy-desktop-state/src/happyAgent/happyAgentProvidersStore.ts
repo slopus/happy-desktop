@@ -64,7 +64,7 @@ export interface HappyAgentProvidersSnapshot {
 }
 
 /**
- * The Providers settings category: every provider this Happy Agent knows about
+ * The Inference settings category: every provider this Happy Agent knows about
  * and whether it may be used.
  *
  * Enablement is the daemon's own durable configuration rather than a preference

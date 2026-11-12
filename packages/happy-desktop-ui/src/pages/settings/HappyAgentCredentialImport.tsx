@@ -64,7 +64,7 @@ export interface HappyAgentCredentialImportProps {
 }
 
 /**
- * Settings › Providers › Import: a row that opens a dialog listing the model
+ * Settings › Inference › Import: a row that opens a dialog listing the model
  * provider keys and sign-ins already on this computer, and which of them to
  * copy to the account. A sign-in is never picked for the person: the server
  * takes it over, so signing in from Happy is the better way.

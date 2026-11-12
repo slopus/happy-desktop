@@ -323,8 +323,8 @@ const settings: CommandPaletteResultsSection[] = [
                 kind: "command",
                 id: "settings-providers",
                 icon: "globe",
-                meta: "Settings › Providers",
-                title: "Providers",
+                meta: "Settings › Inference",
+                title: "Inference",
             },
             {
                 kind: "command",

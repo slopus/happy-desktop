@@ -83,7 +83,7 @@ export interface HappyAgentCredentialImportSnapshot {
 }
 
 /**
- * Settings › Providers › Import: finds model provider credentials already on
+ * Settings › Inference › Import: finds model provider credentials already on
  * this computer and copies the ones the person picks to a Happy Cloud server.
  */
 export interface HappyAgentCredentialImportStore {

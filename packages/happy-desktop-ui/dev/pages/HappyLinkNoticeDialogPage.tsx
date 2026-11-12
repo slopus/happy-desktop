@@ -29,31 +29,21 @@ const SPECIMENS: readonly {
     readonly label: string;
     readonly detail: string;
     readonly view: HappyLinkNoticeView;
-    readonly servers: boolean;
 }[] = [
     {
         label: "Unknown server",
-        detail: "no connection is the server the link names · Servers to add it",
+        detail: "no connection is the server the link names",
         view: { kind: "unknownServer" },
-        servers: true,
-    },
-    {
-        label: "Unknown server · no Servers",
-        detail: "a window that cannot add servers offers only OK",
-        view: { kind: "unknownServer" },
-        servers: false,
     },
     {
         label: "Unreachable",
         detail: "the server is known but did not come online within a minute",
         view: { kind: "unreachable", label: "Example Engineering" },
-        servers: false,
     },
     {
         label: "Unsupported",
         detail: "a link with no server, or one Happy for desktop does not open",
         view: { kind: "unsupported" },
-        servers: false,
     },
 ];
 
@@ -80,13 +70,7 @@ export function HappyLinkNoticeDialogPage() {
                         screen={`${number}-${slug}`}
                         window={WINDOW}
                     >
-                        {frame(
-                            <HappyLinkNoticeDialog
-                                onClose={noop}
-                                view={specimen.view}
-                                {...(specimen.servers ? { onServersOpen: noop } : {})}
-                            />,
-                        )}
+                        {frame(<HappyLinkNoticeDialog onClose={noop} view={specimen.view} />)}
                     </FullScreenSpecimen>
                 );
             })}

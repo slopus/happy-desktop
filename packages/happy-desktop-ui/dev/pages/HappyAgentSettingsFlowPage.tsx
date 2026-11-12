@@ -31,6 +31,9 @@ import {
     settingsDefaultModel,
     settingsMenus,
     usageAccounts,
+    usageHistoryRecent,
+    usageHistoryYear,
+    usageNow,
     voiceController,
 } from "./happyAgentSettingsFixtures";
 import { direct } from "./mobilePairingFixtures";
@@ -43,13 +46,13 @@ export const componentNumber = "P-012f";
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
+    { icon: "bell", id: "sharing", label: "Notifications", tone: "red" },
     { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "green" },
     { icon: "call", id: "voice", label: "Voice", tone: "orange" },
     { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
-    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
     { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
-    { group: "Team", icon: "files", id: "sharing", label: "Sharing", tone: "teal" },
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
     { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
     { group: "Advanced", icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
@@ -61,13 +64,13 @@ const descriptions: Record<string, string> = {
     voice: "Voice calls, controller and prompt",
     debug: "Live state, debuggers and renderer profiles",
     general: "Appearance, behavior and new-session defaults",
-    sharing: "Joining other people’s tasks, docs, lists and calendars",
+    sharing: "Which of other people’s tasks, docs, lists and calendars come to you",
     "mobile-access": "Use Happy on your phone with this computer",
     account: "Your name, photo and Happy account",
     "file-tiers": "Which changed files are listed apart",
     instructions: "Agent guidance and permission review for this machine",
     secrets: "Environment variables for agents",
-    providers: "Model providers and the models they offer",
+    providers: "The models agents run on, and the accounts behind them",
     usage: "What each provider account has spent",
 };
 
@@ -283,9 +286,20 @@ export function HappyAgentSettingsFlowPage() {
             </Screen>
             <Screen id="usage" number="09" screen="09-usage">
                 <HappyAgentUsageSettings
+                    currentTime={usageNow}
+                    history={usageHistoryYear}
                     providers={usageAccounts}
-                    currentTime={1_700_000_000_000}
                 />
+            </Screen>
+            <Screen id="usage" number="09b" screen="09b-usage-recent">
+                <HappyAgentUsageSettings
+                    currentTime={usageNow}
+                    history={usageHistoryRecent}
+                    providers={usageAccounts}
+                />
+            </Screen>
+            <Screen id="usage" number="09c" screen="09c-usage-no-history">
+                <HappyAgentUsageSettings currentTime={usageNow} providers={usageAccounts} />
             </Screen>
             <Screen id="voice" number="10" screen="10-voice">
                 <GptLiveSettings

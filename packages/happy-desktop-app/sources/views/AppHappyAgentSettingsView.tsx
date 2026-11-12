@@ -24,7 +24,6 @@ import type {
     HappyAgentSidebarVisibilityStore,
     HappyAgentWindowStore,
     KeepAwakeStore,
-    ServerAddStore,
     StatusBarStore,
     TitleShimmerStore,
     UsageAnalyticsStore,
@@ -60,6 +59,7 @@ import {
     happyAgentCloudProvidersStoreNoop,
     happyAgentRepositoriesStoreNoop,
     happyAgentComputeStoreNoop,
+    happyAgentDailyUsageStoreNoop,
     happyAgentCloudProviderAddTeamOnly,
     happyAgentCloudConnectionName,
     happyAgentCloudConnectionEditable,
@@ -75,8 +75,6 @@ import {
     happyAgentAttentionConnection,
     happyAgentAttentionStoreNoop,
     keepAwakeStoreCreate,
-    serverPhoneLinkFormat,
-    serverUrlProblemMessage,
     statusBarStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -109,7 +107,6 @@ import {
     HappyAgentProfileSettings,
     HappyAgentPasswordSettings,
     HappyAgentSecretSettings,
-    HappyAgentServerSettings,
     HappyAgentSettingsShell,
     HappyAgentTaskSettings,
     HappyAgentSurfaceSettings,
@@ -121,8 +118,6 @@ import {
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
-    type HappyAgentServerRow,
-    type HappyAgentServerSignIn,
     HappyCloudWebSettings,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
@@ -150,26 +145,25 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     // Local author identity and the optional WorkOS account share one category.
     { icon: "users", id: "account", label: "Account", tone: "blue" },
+    // Which of other people's tasks, docs, lists and calendars come to you. Its
+    // address stays `sharing`, so links to it keep working.
+    { icon: "bell", id: "sharing", label: "Notifications", tone: "red" },
     { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "green" },
     { icon: "call", id: "voice", label: "Voice", tone: "orange" },
     // What agents on this machine are told, run on, and may use.
     { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
-    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
-    // Usage sits after Providers because it is the same accounts read the other
+    { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
+    // The pools and machines agents run on, beside the models they run; Happy Cloud only.
+    { group: "Agents", icon: "terminal", id: "compute", label: "Compute", tone: "blue" },
+    // Usage follows Inference because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
     { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
     { group: "Agents", icon: "lock", id: "passwords", label: "Passwords", tone: "red" },
-    // Joining other people's tasks and their shared docs, lists and calendars.
-    { group: "Team", icon: "files", id: "sharing", label: "Sharing", tone: "teal" },
-    // Team servers this window signs in to; offered only by a host that can add them.
-    { group: "Team", icon: "globe", id: "servers", label: "Servers", tone: "blue" },
     // Who is on a Happy Cloud server; offered only there.
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
     // The team's code on a Happy Cloud server; offered only there.
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
-    // The pools and machines agents run on, on a Happy Cloud server; offered only there.
-    { group: "Team", icon: "terminal", id: "compute", label: "Compute", tone: "indigo" },
     // How each project's changes are split into tiers in the Changes listing.
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
     { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
@@ -182,11 +176,13 @@ export const HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY = "general";
 export const HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES: Readonly<Record<string, string>> = {
     surfaces: "sharing",
     tasks: "sharing",
+    // Team servers are added and removed by asking the Chief of Staff now.
+    servers: "general",
 };
 
 /**
  * The category a `happy://settings/<page>` link opens here, or nothing when
- * this window has no such page. Import lives on the Providers page.
+ * this window has no such page. Import lives on the Inference page.
  */
 export function happyAgentSettingsSectionOf(page: string): string | undefined {
     const section =
@@ -416,98 +412,18 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     voice: "Voice calls, controller and prompt",
     debug: "Live state, debuggers and renderer profiles",
     general: "Appearance, behavior and new-session defaults",
-    sharing: "Joining other people’s tasks, docs, lists and calendars",
+    sharing: "Which of other people’s tasks, docs, lists and calendars come to you",
     "mobile-access": "Use Happy on your phone with this computer",
     account: "Your name, photo and Happy account",
-    servers: "Team servers you sign in to",
     "file-tiers": "Which changed files are listed apart",
     instructions: "Agent guidance and permission review for this machine",
     secrets: "Environment variables for agents",
     passwords: "Saved logins from your browsers",
-    providers: "Model providers and the models they offer",
+    providers: "The models agents run on, and the accounts behind them",
     members: "Who is on this server and what they may do",
     usage: "What each provider account has spent",
-};
-
-/**
- * The team servers the host Happy Agent connects to by address, each with its
- * sign-in and the code a phone scans to add it. Only a server reached over
- * HTTPS whose instance is known has a code.
- */
-function serverRows(
-    entries: AppHappyAgentDirectorySnapshot["happyAgents"],
-): readonly HappyAgentServerRow[] {
-    return entries.flatMap((entry) => {
-        if (entry.serverUrl === undefined || entry.remoteId === undefined) return [];
-        const phoneCode = serverPhoneLinkFormat({
-            url: entry.serverUrl,
-            ...(entry.instanceId === undefined ? {} : { instanceId: entry.instanceId }),
-        });
-        return [
-            {
-                id: entry.id,
-                name: entry.label,
-                address: entry.serverUrl,
-                signIn: serverSignInRead(entry),
-                ...(phoneCode === undefined ? {} : { phoneCode }),
-            },
-        ];
-    });
-}
-
-function serverSignInRead(entry: AppHappyAgentEntry): HappyAgentServerSignIn {
-    const signIn = entry.signIn;
-    if (signIn === undefined) return { kind: "signedIn" };
-    switch (signIn.phase) {
-        case "required":
-            return entry.message === undefined
-                ? { kind: "required" }
-                : { kind: "required", message: entry.message };
-        case "browser":
-            return signIn.host === undefined
-                ? { kind: "browser" }
-                : { kind: "browser", host: signIn.host };
-        case "failed":
-            return { kind: "failed", message: signIn.message };
-    }
-}
-
-/** The Chief of Staff's own name on the host Happy Agent, for the words that name it. */
-function chiefOfStaffNameRead(directory: AppHappyAgentDirectorySnapshot): string {
-    return (
-        hostHappyAgent(directory)?.bots.find((bot) => bot.systemKey === "chief_of_staff")?.name ??
-        "Chief of Staff"
-    );
-}
-
-/**
- * Team servers in Settings › Servers: adding one by address, and the window's
- * whole directory they are listed from. A connection's own directory names only
- * that connection, so the list cannot come from it.
- */
-export interface AppServers {
-    readonly add: ServerAddStore;
-    readonly directory: Pick<AppHappyAgentDirectoryStore, "get" | "subscribe">;
-    /** Signs in to one listed server, by its directory entry ID. */
-    signIn(id: string): void;
-    /** Stops a listed server's sign-in whose browser is open. */
-    signInCancel(id: string): void;
-}
-
-/** Stands in where the host cannot add servers, so the view subscribes unconditionally. */
-const serverAddAbsentSnapshot = { url: "", phase: { kind: "editing" } } as const;
-const serverAddStoreAbsent: ServerAddStore = {
-    get: () => serverAddAbsentSnapshot,
-    subscribe: () => () => undefined,
-    urlUpdate: () => undefined,
-    serverAddSubmit: () => undefined,
-    serverRemoveSubmit: () => undefined,
-    [Symbol.dispose]: () => undefined,
-};
-const serverDirectoryAbsentSnapshot: AppHappyAgentDirectorySnapshot = { happyAgents: [] };
-const serverDirectoryAbsent: AppServers["directory"] = {
-    get: () => serverDirectoryAbsentSnapshot,
-    subscribe: () => () => undefined,
+    repositories: "The code your team works on",
+    compute: "The machines agents run on",
 };
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
@@ -558,8 +474,6 @@ export interface AppHappyAgentSettingsViewProps {
     projectsVisibility?: ProjectsVisibilityStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     usageAnalytics?: UsageAnalyticsStore;
-    /** Adds team servers by address. Absent where the host cannot, which leaves Servers out. */
-    servers?: AppServers;
     gptLive?: GptLiveStore;
     /** Absent where the host cannot hold the machine awake. */
     keepAwake?: KeepAwakeStore;
@@ -629,18 +543,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         usageAnalyticsStore.get,
         usageAnalyticsStore.get,
     );
-    const serverAddStore = props.servers?.add ?? serverAddStoreAbsent;
-    const serverAdd = useSyncExternalStore(
-        serverAddStore.subscribe,
-        serverAddStore.get,
-        serverAddStore.get,
-    );
-    const serverDirectoryStore = props.servers?.directory ?? serverDirectoryAbsent;
-    const serverDirectory = useSyncExternalStore(
-        serverDirectoryStore.subscribe,
-        serverDirectoryStore.get,
-        serverDirectoryStore.get,
-    );
     const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
     const titleShimmer = useSyncExternalStore(
         titleShimmerStore.subscribe,
@@ -684,7 +586,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
         (category) =>
             happyAgentSettingsCategoryAvailable(category.id, happyCloud) &&
-            (category.id !== "servers" || props.servers !== undefined) &&
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined),
@@ -890,6 +791,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         usageOpen ? usageOpenSubscribe(usageStore) : usageStore.subscribe,
         usageStore.get,
         usageStore.get,
+    );
+    // The year of daily totals behind the activity grid, read only while Usage is on screen.
+    const dailyUsageStore =
+        (usageOpen ? host?.session?.dailyUsage?.() : undefined) ?? happyAgentDailyUsageStoreNoop;
+    const dailyUsage = useSyncExternalStore(
+        dailyUsageStore.subscribe,
+        dailyUsageStore.get,
+        dailyUsageStore.get,
     );
     // The clock is not part of raw state: nothing there counts down, and a
     // ticking second would republish every snapshot on the page for nothing.
@@ -1151,37 +1060,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     pairingOptions={mobileLink.pairingOptions}
                     onContinue={mobileLink.setup.continue}
                 />
-            ) : section === "servers" ? (
-                props.servers ? (
-                    <HappyAgentServerSettings
-                        url={serverAdd.url}
-                        phase={serverAdd.phase}
-                        chiefOfStaffName={chiefOfStaffNameRead(serverDirectory)}
-                        servers={serverRows(serverDirectory.happyAgents)}
-                        {...(serverAdd.urlProblem === undefined
-                            ? {}
-                            : { urlError: serverUrlProblemMessage(serverAdd.urlProblem) })}
-                        {...(serverAdd.error === undefined
-                            ? {}
-                            : { error: serverAdd.error.message })}
-                        onUrlChange={serverAddStore.urlUpdate}
-                        onAdd={serverAddStore.serverAddSubmit}
-                        onSignIn={(id) => props.servers?.signIn(id)}
-                        onSignInCancel={(id) => props.servers?.signInCancel(id)}
-                        onRemove={(id) => {
-                            const entry = serverDirectory.happyAgents.find(
-                                (candidate) => candidate.id === id,
-                            );
-                            if (entry?.remoteId === undefined || entry.serverUrl === undefined)
-                                return;
-                            serverAddStore.serverRemoveSubmit({
-                                connectionId: entry.remoteId,
-                                name: entry.label,
-                                url: entry.serverUrl,
-                            });
-                        }}
-                    />
-                ) : null
             ) : section === "mobile-access" ? (
                 <HappyAgentMobileSettings
                     configured={happyIntegration.configured}
@@ -1736,6 +1614,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     })}
                     {...(clockStore ? { currentTime } : {})}
                     {...(usage.error ? { error: usage.error } : {})}
+                    {...(dailyUsage.history ? { history: dailyUsage.history } : {})}
                     {...(usage.forbidden ? { forbidden: true } : {})}
                 />
             ) : (

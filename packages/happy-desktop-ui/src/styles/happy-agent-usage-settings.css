@@ -48,17 +48,6 @@
     padding: 0;
 }
 
-.happy-agent-usage-settings__note {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-.happy-agent-usage-settings__note[data-note="error"] {
-    color: var(--warning-critical);
-}
-
 /* Tokens by model: one quiet line each, the model at the start and its totals at the end. */
 .happy-agent-usage-settings__models {
     display: flex;
@@ -92,4 +81,10 @@
     flex: none;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* The year of daily totals above the accounts, as wide as its weeks. */
+.happy-agent-usage-settings__activity {
+    display: flex;
+    padding: 12px 0;
 }

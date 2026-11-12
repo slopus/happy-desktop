@@ -124,7 +124,7 @@ const STATUS_HINTS: Partial<Record<HappyAgentProviderStatus, string>> = {
 };
 
 /**
- * The Providers category: every provider the daemon knows about, whether it is
+ * The Inference category: every provider the daemon knows about, whether it is
  * usable, and which of its models the session pickers may offer. A provider that
  * is not signed in or switched off still lists its models — knowing what would be
  * available is the reason to go and connect it.
@@ -132,7 +132,7 @@ const STATUS_HINTS: Partial<Record<HappyAgentProviderStatus, string>> = {
 export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProps) {
     if (props.error)
         return (
-            <Banner tone="danger" title="Providers unavailable">
+            <Banner tone="danger" title="Inference unavailable">
                 {props.error}
             </Banner>
         );

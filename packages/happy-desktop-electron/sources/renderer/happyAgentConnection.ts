@@ -55,6 +55,7 @@ import {
     type HappyAgentCredentialImportHost,
     type ServerCompatibility,
     type TerminalColorScheme,
+    UserError,
 } from "happy-desktop-state";
 import { imageCropOpen } from "happy-desktop-ui";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
@@ -156,6 +157,7 @@ export interface HappyAgentSession {
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
     readonly compute: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
+    readonly dailyUsage: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
     readonly cloudProviders: () =>
         | import("happy-desktop-state").HappyAgentCloudProvidersStore
         | undefined;
@@ -538,6 +540,21 @@ export function happyAgentConnectionOpen(input: {
         profilePhotoCodec: { open: imageCropOpen },
         profileSource: profile.source,
         providerUsageSource: happyAgentUsageSourceCreate(directClient, agentConnection.sync),
+        // The same route on a Happy Agent and on Happy Cloud, both of which say in
+        // their health whether they serve it. One that says it does not is not asked;
+        // one that has not said yet is asked, and a 404 ends it the same way.
+        dailyUsageRead: async (days: number, tz: string) => {
+            const health = agentConnection.sync.health();
+            if (health !== undefined && health.capabilities?.dailyUsage !== true)
+                throw new UserError("This Happy Agent keeps no daily usage.", "not_found");
+            try {
+                return await directClient.getDailyUsage({ days, tz });
+            } catch (error) {
+                if (error instanceof HappyAgentApiError && error.status === 404)
+                    throw new UserError("This server keeps no daily usage.", "not_found", error);
+                throw error;
+            }
+        },
         transcriptConnect: happyAgentTranscriptConnectCreate(agentConnection),
         transcriptPrefetch: (sessionId) => agentConnection.prefetchSession(sessionId),
         connectMutationSubscribe: (listener) => {
@@ -674,6 +691,7 @@ export function happyAgentConnectionOpen(input: {
                     cloudProviders: () => client.cloudProviders(),
                     repositories: () => client.repositories(),
                     compute: () => client.compute(),
+                    dailyUsage: () => client.dailyUsage(),
                     members: () => client.members(),
                     userProfile: (userId) => client.userProfile(userId),
                     voiceSettings: client.voiceSettings(),

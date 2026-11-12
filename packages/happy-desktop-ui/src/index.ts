@@ -1028,17 +1028,6 @@ export {
     type HappyAgentProductAnalyticsSettingsProps,
 } from "./pages/settings/HappyAgentProductAnalyticsSettings";
 export {
-    HappyAgentServerSettings,
-    type HappyAgentServerAddPhase,
-    type HappyAgentServerRow,
-    type HappyAgentServerSettingsProps,
-    type HappyAgentServerSignIn,
-} from "./pages/settings/HappyAgentServerSettings";
-export {
-    HappyAgentServerPhoneDialog,
-    type HappyAgentServerPhoneDialogProps,
-} from "./pages/settings/HappyAgentServerPhoneDialog";
-export {
     HappyAgentAccountSettings,
     type HappyAgentAccountSettingsProps,
 } from "./pages/settings/HappyAgentAccountSettings";
@@ -1219,6 +1208,11 @@ export {
     type HappyAgentUsageSettingsProps,
     type HappyAgentUsageProviderRow,
 } from "./pages/settings/HappyAgentUsageSettings";
+export {
+    UsageActivityGrid,
+    type UsageActivityDay,
+    type UsageActivityGridProps,
+} from "./UsageActivityGrid";
 export { providerAccountName } from "./pages/settings/providerAccountName";
 export { ConnectionShell, type ConnectionShellItem } from "./ConnectionShell";
 export { ConnectionSurface } from "./ConnectionSurface";

@@ -46,7 +46,7 @@ const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "users", id: "account", label: "Account", tone: "blue" },
     { icon: "mobile", id: "mobile-access", label: "Mobile access", tone: "green" },
     { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
-    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
     { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
@@ -697,7 +697,7 @@ function AiProvidersSpecimen(props: {
                 description="Every model provider this server knows about"
                 onCategorySelect={noop}
                 onClose={noop}
-                title="Providers"
+                title="Inference"
             >
                 <HappyAgentAiProviders
                     connections={aiProviderConnections}
@@ -1401,7 +1401,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this Happy Agent daemon knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentProviderSettings
                         onModelEnabledChange={noop}
@@ -1422,7 +1422,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this server knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentProviderSettings
                         onKeyAdd={() => Promise.resolve()}
@@ -1446,7 +1446,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this server knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentProviderSettings
                         onCustomProviderCreate={noop}
@@ -1473,7 +1473,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         description="Every model provider this server knows about"
                         onCategorySelect={noop}
                         onClose={noop}
-                        title="Providers"
+                        title="Inference"
                     >
                         <HappyAgentProviderSettings
                             onCustomProviderCreate={noop}
@@ -1505,7 +1505,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         description="Every model provider this server knows about"
                         onCategorySelect={noop}
                         onClose={noop}
-                        title="Providers"
+                        title="Inference"
                     >
                         <HappyAgentProviderSettings
                             onCustomProviderCreate={noop}
@@ -1540,7 +1540,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this server knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentCredentialImport
                         onClose={noop}
@@ -1758,7 +1758,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this Happy Agent daemon knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentProviderSettings
                         onModelEnabledChange={noop}
@@ -1779,7 +1779,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this Happy Agent daemon knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentProviderSettings
                         loading
@@ -1800,7 +1800,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     description="Every model provider this Happy Agent daemon knows about"
                     onCategorySelect={noop}
                     onClose={noop}
-                    title="Providers"
+                    title="Inference"
                 >
                     <HappyAgentProviderSettings
                         error="The Happy Agent daemon could not read its model catalog."
@@ -1883,7 +1883,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Usage category: three accounts separated by a rule rather than boxed — one with room across three windows, one spent with credits behind it, one that could not be read"
+                detail="Usage category: three accounts separated by a rule rather than boxed — one with room across three windows, one spent with credits behind it; the one that could not be read is simply absent"
                 label="Happy Agent settings — usage"
                 number="08"
             >
@@ -1902,7 +1902,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Token counts with no plan share behind them: what each model spent per rolling window, two accounts of the same vendor kept apart by their own names, and one that has spent nothing"
+                detail="Token counts with no plan share behind them: what each model spent per rolling window, two accounts of the same vendor kept apart by their own names, and the one that has spent nothing left out"
                 label="Happy Agent settings — usage tokens only"
                 number="08a"
             >
@@ -1937,7 +1937,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="No assistant is signed in on this machine, so the category sends the reader where accounts are actually made"
+                detail="Nothing has reported a plan or spent a token yet"
                 label="Happy Agent settings — usage empty"
                 number="08c"
             >
@@ -1953,8 +1953,8 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="The reading failed; what was already read stays legible beneath the banner, and an account never read says so rather than reading as unspent"
-                label="Happy Agent settings — usage error and unread"
+                detail="The reading failed: nothing says so, what was already read stays, and an account never read is absent"
+                label="Happy Agent settings — usage after a failed read"
                 number="08d"
             >
                 <HappyAgentSettingsShell
@@ -1976,7 +1976,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Each account says when it was last read: one just now, one being read again, one whose refresh failed beside the reading it keeps, and one whose only read failed"
+                detail="Each account says when it was last read: one just now, one being read again, one whose refresh failed keeps its reading quietly, and one whose only read failed is absent"
                 label="Happy Agent settings — usage freshness"
                 number="08e"
             >

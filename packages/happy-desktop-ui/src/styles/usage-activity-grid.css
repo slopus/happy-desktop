@@ -1,0 +1,139 @@
+/*
+ * C-342 UsageActivityGrid: one 10px cell a day on a 12px pitch. The year grid
+ * keeps week columns and weekday rows; the strip is one row. Cells are placed
+ * absolutely inside a box sized to the grid, so hovering never reflows it.
+ *
+ * Shades are the link color mixed over nothing at 25/45/70/100%, so the same
+ * five levels read in light and dark alike; level 0 is the selected surface.
+ */
+
+.happy-usage-activity {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.happy-usage-activity__body {
+    display: flex;
+    flex: none;
+    gap: 6px;
+}
+
+.happy-usage-activity__weekdays {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    /* Under the month row: its 16px line and 4px gap. */
+    padding-top: 20px;
+}
+
+.happy-usage-activity__weekdays span {
+    height: 10px;
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 10px;
+}
+
+.happy-usage-activity__plot {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.happy-usage-activity__months {
+    position: relative;
+    height: 16px;
+}
+
+.happy-usage-activity__months span {
+    position: absolute;
+    top: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-usage-activity__cells {
+    position: relative;
+    flex: none;
+}
+
+.happy-usage-activity__cell {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background-color: var(--surface-selected);
+}
+
+.happy-usage-activity__cell[data-level="1"] {
+    background-color: color-mix(in srgb, var(--text-link) 25%, transparent);
+}
+
+.happy-usage-activity__cell[data-level="2"] {
+    background-color: color-mix(in srgb, var(--text-link) 45%, transparent);
+}
+
+.happy-usage-activity__cell[data-level="3"] {
+    background-color: color-mix(in srgb, var(--text-link) 70%, transparent);
+}
+
+.happy-usage-activity__cell[data-level="4"] {
+    background-color: var(--text-link);
+}
+
+.happy-usage-activity__cell:hover {
+    outline: 1px solid var(--text-secondary);
+    outline-offset: 0;
+}
+
+/* Fixed to the viewport so a grid that scrolls sideways never clips it; it
+   sits above the hovered cell, centered, or kept inside the window near an edge. */
+.happy-usage-activity__bubble {
+    position: fixed;
+    z-index: var(--happy-z-overlay);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: max-content;
+    max-width: 280px;
+    padding: 6px 8px;
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-sm);
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    transform: translate(-50%, calc(-100% - 6px));
+}
+
+.happy-usage-activity__bubble[data-side="start"] {
+    transform: translate(-8px, calc(-100% - 6px));
+}
+
+.happy-usage-activity__bubble[data-side="end"] {
+    transform: translate(calc(-100% + 8px), calc(-100% - 6px));
+}
+
+.happy-usage-activity__bubble strong {
+    font-weight: 600;
+}
+
+.happy-usage-activity__bubble-model {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-secondary);
+}
+
+.happy-usage-activity__bubble-model span:first-child {
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+}

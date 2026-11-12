@@ -25,7 +25,7 @@ export const componentNumber = "P-040";
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
-    { group: "Agents", icon: "globe", id: "providers", label: "Providers", tone: "indigo" },
+    { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
     { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },

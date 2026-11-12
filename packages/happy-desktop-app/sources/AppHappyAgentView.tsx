@@ -683,7 +683,7 @@ export interface AppHappyAgentSession {
     /** The identity this Happy Agent authors work as, as its profile settings edit it. */
     readonly profile?: () => HappyAgentProfileStore | undefined;
     /**
-     * Which model providers this machine will use, as the Providers settings
+     * Which model providers this machine will use, as the Inference settings
      * category reads and switches them. Absent on a host that cannot change the
      * machine's configuration, which leaves that category saying so.
      */
@@ -700,15 +700,17 @@ export interface AppHappyAgentSession {
         | undefined;
     /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
+    /** Settings › Usage's daily token history; absent or undefined where it cannot be read. */
+    readonly dailyUsage?: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
     /**
-     * Settings › AI providers, on a Happy Cloud server in the desktop or on
+     * Settings › Inference, on a Happy Cloud server in the desktop or on
      * the web; absent or undefined elsewhere.
      */
     readonly cloudProviders?: () =>
         | import("happy-desktop-state").HappyAgentCloudProvidersStore
         | undefined;
     /**
-     * Settings › Providers › Import, which copies credentials found on this
+     * Settings › Inference › Import, which copies credentials found on this
      * computer to the server. Absent, or answering undefined, where there is
      * no such import: anywhere but a Happy Cloud server reached from a desktop.
      */

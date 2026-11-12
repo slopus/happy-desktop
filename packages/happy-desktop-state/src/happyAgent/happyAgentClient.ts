@@ -134,6 +134,10 @@ import {
     type HappyAgentComputeStore,
 } from "./happyAgentComputeStore.js";
 import {
+    happyAgentDailyUsageStoreCreate,
+    type HappyAgentDailyUsageStore,
+} from "./happyAgentDailyUsageStore.js";
+import {
     happyAgentMembersStoreCreate,
     type HappyAgentMembersStore,
 } from "./happyAgentMembersStore.js";
@@ -239,14 +243,14 @@ export interface HappyAgentWorkspaceClient {
     /** The one host-owned identity work is authored as. */
     profile(): HappyAgentProfileStore | undefined;
     /**
-     * Which model providers this Happy Agent will use, as the Providers settings
+     * Which model providers this Happy Agent will use, as the Inference settings
      * category reads and changes them. Materialized on first access and shared;
      * every configuration the daemon confirms through it also replaces the
      * catalog `models` holds, so a provider switched off stops being offered.
      */
     providers(): HappyAgentProvidersStore;
     /**
-     * Settings › Providers › Import: copies credentials found on this computer
+     * Settings › Inference › Import: copies credentials found on this computer
      * to the server. Only a Happy Cloud server reached from a desktop shell
      * has one; elsewhere this is undefined.
      */
@@ -260,6 +264,8 @@ export interface HappyAgentWorkspaceClient {
     repositories(): HappyAgentRepositoriesStore | undefined;
     /** Settings › Compute on Happy Cloud: its pools and machines; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
+    /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
+    dailyUsage(): HappyAgentDailyUsageStore | undefined;
     /**
      * Settings › Members: who is on a Happy Cloud server, their roles and
      * invites. Undefined anywhere but a Happy Cloud server.
@@ -535,6 +541,8 @@ export interface HappyAgentWorkspaceClientDeps {
      * unavailable rather than empty.
      */
     readonly providerUsageSource?: HappyAgentProviderUsageSource;
+    /** Reads `GET /v0/usage/daily`; omitted, Usage has no activity grid. */
+    readonly dailyUsageRead?: (days: number, tz: string) => Promise<unknown>;
     /** Host-only profile read and mutation. Omitted on a node connection. */
     readonly profileSource?: HappyAgentProfileSource;
     readonly profileActions?: HappyAgentProfileActions;
@@ -722,6 +730,7 @@ export function happyAgentWorkspaceClientCreate(
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
+    let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
     const userProfileStores = new Map<string, HappyAgentUserProfileStore>();
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
@@ -1148,6 +1157,13 @@ export function happyAgentWorkspaceClientCreate(
             computeStore ??= happyAgentComputeStoreCreate({ request });
             return computeStore;
         },
+        dailyUsage() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const read = deps.dailyUsageRead;
+            if (!read) return undefined;
+            dailyUsageStore ??= happyAgentDailyUsageStoreCreate({ read });
+            return dailyUsageStore;
+        },
         members() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const cloud = deps.cloudServer;
@@ -1377,6 +1393,8 @@ export function happyAgentWorkspaceClientCreate(
             repositoriesStore = undefined;
             computeStore?.[Symbol.dispose]();
             computeStore = undefined;
+            dailyUsageStore?.[Symbol.dispose]();
+            dailyUsageStore = undefined;
             membersStore?.[Symbol.dispose]();
             membersStore = undefined;
             for (const store of userProfileStores.values()) store[Symbol.dispose]();

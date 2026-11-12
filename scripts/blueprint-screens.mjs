@@ -24,12 +24,13 @@ const { positionals, values } = parseArgs({
         out: { type: "string" },
         scale: { type: "string", default: "2" },
         settle: { type: "string", default: "1500" },
+        "color-scheme": { type: "string", default: "light" },
     },
 });
 const page = positionals[0];
 if (!page) {
     console.error(
-        "Usage: pnpm blueprint:screens <page-id> [--only text] [--scale 1|2] [--out dir]",
+        "Usage: pnpm blueprint:screens <page-id> [--only text] [--scale 1|2] [--color-scheme light|dark] [--out dir]",
     );
     process.exit(1);
 }
@@ -81,6 +82,7 @@ try {
     const context = await browser.newContext({
         deviceScaleFactor: Number(values.scale),
         viewport: { width: 1600, height: 1000 },
+        colorScheme: values["color-scheme"] === "dark" ? "dark" : "light",
     });
     const tab = await context.newPage();
     tab.on("pageerror", (error) => console.error(`page error: ${error.message}`));

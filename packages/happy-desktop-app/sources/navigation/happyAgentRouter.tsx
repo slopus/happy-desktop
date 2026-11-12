@@ -75,7 +75,6 @@ import {
     type AppHappyAgentDaemonStore,
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
-    type AppServers,
 } from "../views/AppHappyAgentSettingsView";
 import type { AppHappyAgentReleaseNotesStore, AppHappyAgentUpdateStore } from "../agentUpdate";
 
@@ -160,8 +159,6 @@ export interface HappyAgentRouterContext {
     readonly projectsVisibility?: ProjectsVisibilityStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     readonly usageAnalytics?: UsageAnalyticsStore;
-    /** Adds team servers by address. Absent where the host cannot add them. */
-    readonly servers?: AppServers;
     /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
     readonly gptLive?: GptLiveStore;
     /**
@@ -860,7 +857,6 @@ function HappyAgentSettingsRoute() {
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}
             {...(context.usageAnalytics ? { usageAnalytics: context.usageAnalytics } : {})}
-            {...(context.servers ? { servers: context.servers } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             {...(context.statusBar ? { statusBar: context.statusBar } : {})}
