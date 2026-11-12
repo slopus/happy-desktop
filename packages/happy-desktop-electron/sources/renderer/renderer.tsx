@@ -1434,9 +1434,8 @@ function DesktopCloudConnect(props: {
             onCreate={props.store.serverCreate}
             onCreateNameChange={props.store.createNameUpdate}
             onCreateOpen={props.store.createOpen}
-            onJoin={props.store.serverJoin}
-            onJoinCodeChange={props.store.joinCodeUpdate}
-            onJoinNameChange={props.store.joinNameUpdate}
+            onJoinLinkChange={props.store.joinLinkUpdate}
+            onJoinLinkOpen={props.store.joinLinkOpen}
             onJoinOpen={props.store.joinOpen}
             onLogoPress={props.store.logoPress}
             onTestLoginChange={props.store.testLoginUpdate}
@@ -1879,6 +1878,7 @@ if (mediaPreviewBridge) {
                       cloud: desktopBridge.happyCloud,
                       bridge: desktopBridge,
                       chiefOfStaffAsk,
+                      linkOpen: desktopExternalLinkOpen(desktopBridge),
                       // A start page left for Happy Cloud is acknowledged only
                       // once a team is connected; until then Back returns to it.
                       connect: async (connectionId) => {

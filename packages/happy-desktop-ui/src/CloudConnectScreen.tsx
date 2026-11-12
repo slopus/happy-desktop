@@ -125,11 +125,15 @@ export type CloudConnectView =
           readonly busy?: boolean;
           readonly error?: string;
       }
+    /**
+     * Joining by an invite link, which is accepted in the browser: the link
+     * pasted here only opens there.
+     */
     | {
           readonly kind: "join";
-          readonly name: string;
-          readonly code: string;
-          readonly busy?: boolean;
+          readonly link: string;
+          /** The link went to the browser; Back reads the servers again. */
+          readonly opened?: true;
           readonly error?: string;
       }
     /** Signing in to the chosen server; once in, the screen is gone. */
@@ -161,9 +165,9 @@ export interface CloudConnectScreenProps {
     onBack(): void;
     onCreateNameChange(name: string): void;
     onCreate(): void;
-    onJoinNameChange(name: string): void;
-    onJoinCodeChange(code: string): void;
-    onJoin(): void;
+    onJoinLinkChange(link: string): void;
+    /** Opens the invite link pasted in, in the browser. */
+    onJoinLinkOpen(): void;
     onLogoPress(): void;
     onTestLoginChange(login: string): void;
     onTestPasswordChange(password: string): void;
@@ -847,47 +851,36 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                             <SetupPage
                                 {...frame}
                                 action={{
-                                    busy: view.busy,
-                                    disabled: view.name === "" || view.code === "",
-                                    label: "Join server",
-                                    onSelect: props.onJoin,
+                                    disabled: view.link === "",
+                                    label: "Open invite",
+                                    onSelect: props.onJoinLinkOpen,
                                 }}
-                                copy="Enter the server’s name and the invite code you were sent."
+                                copy="Open the invite link you were sent, or paste it here. You accept it in your browser, then come back to pick the server."
                                 placement="centered"
-                                secondary={back(view.busy)}
+                                secondary={back()}
                                 title="Join with an invite"
                             >
                                 <div className="happy-cloud-connect__column">
                                     <TextField
-                                        aria-label="Server name"
+                                        aria-label="Invite link"
                                         autoFocus
                                         className="happy-cloud-connect__handle"
-                                        disabled={view.busy}
                                         fullWidth
-                                        leadingText="@"
-                                        onSubmit={props.onJoin}
-                                        onValueChange={props.onJoinNameChange}
-                                        placeholder="acme"
+                                        onSubmit={props.onJoinLinkOpen}
+                                        onValueChange={props.onJoinLinkChange}
+                                        placeholder="https://happy.engineering/join#…"
                                         size="large"
-                                        value={view.name}
-                                    />
-                                    <TextField
-                                        aria-label="Invite code"
-                                        className="happy-cloud-connect__handle"
-                                        disabled={view.busy}
-                                        fullWidth
-                                        onSubmit={props.onJoin}
-                                        onValueChange={props.onJoinCodeChange}
-                                        placeholder="Invite code"
-                                        size="large"
-                                        value={view.code}
+                                        value={view.link}
                                     />
                                     <p
                                         className="happy-cloud-connect__hint"
                                         data-tone={view.error ? "attention" : undefined}
                                         role="status"
                                     >
-                                        {view.error}
+                                        {view.error ??
+                                            (view.opened
+                                                ? "Opened in your browser. Accept it there, then go back."
+                                                : undefined)}
                                     </p>
                                 </div>
                             </SetupPage>
