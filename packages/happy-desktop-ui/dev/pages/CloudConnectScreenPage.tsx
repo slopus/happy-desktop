@@ -157,7 +157,7 @@ const SPECIMENS: readonly {
     },
     {
         label: "Servers",
-        detail: "the account's servers, then create or join",
+        detail: "the account's servers to join, or create one; an invite's link adds its server",
         view: {
             kind: "servers",
             servers: { status: "ready", servers: [ACME, GUILD] },
@@ -203,29 +203,6 @@ const SPECIMENS: readonly {
         },
     },
     {
-        label: "Join",
-        detail: "an invite link to paste, which opens in the browser",
-        view: { kind: "join", link: "" },
-    },
-    {
-        label: "Join opened",
-        detail: "the invite link went to the browser; Back reads the servers again",
-        view: {
-            kind: "join",
-            link: "https://happy.engineering/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
-            opened: true,
-        },
-    },
-    {
-        label: "Join not a link",
-        detail: "what was pasted is not an invite link",
-        view: {
-            kind: "join",
-            link: "K7QF-29XM",
-            error: "That isn’t a Happy invite link.",
-        },
-    },
-    {
         label: "Failed",
         detail: "the account sign-in did not finish",
         view: { kind: "failed", message: "Signing in didn’t finish. Try again." },
@@ -250,7 +227,7 @@ export function CloudConnectScreenPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The sidebar's + to Happy Cloud, full window on the onboarding sky: welcome, account sign-in, servers, create, join, connecting, connected."
+            summary="The sidebar's + to Happy Cloud, full window on the onboarding sky: welcome, account sign-in, servers, create, connecting, connected."
             title="CloudConnectScreen"
         >
             {specimens.map((specimen, index) => {
@@ -277,9 +254,6 @@ export function CloudConnectScreenPage() {
                                     onCreate={noop}
                                     onCreateNameChange={noop}
                                     onCreateOpen={noop}
-                                    onJoinLinkChange={noop}
-                                    onJoinLinkOpen={noop}
-                                    onJoinOpen={noop}
                                     onLogoPress={noop}
                                     onTestLoginChange={noop}
                                     onTestPasswordChange={noop}

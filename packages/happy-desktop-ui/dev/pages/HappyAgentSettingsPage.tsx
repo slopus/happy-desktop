@@ -1838,7 +1838,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 detail="Happy Cloud members, seen by an owner: roles to change, a link invite shown once, pending email and link invites, past invites folded, and leaving or deleting the server"
                 inviteCreated={{
                     type: "link",
-                    link: "https://happy.engineering/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    link: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
                     detail: "Member · Expires in 7 days",
                 }}
                 label="Happy Agent settings — members"
@@ -1901,7 +1901,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 detail="At the smallest window, 720×640: the invite row keeps every control whole"
                 inviteCreated={{
                     type: "link",
-                    link: "https://happy.engineering/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    link: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
                     detail: "Member · Expires in 7 days",
                 }}
                 label="Happy Agent settings — members, small window"

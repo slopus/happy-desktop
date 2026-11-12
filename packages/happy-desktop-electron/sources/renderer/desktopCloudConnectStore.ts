@@ -37,13 +37,14 @@ export interface DesktopCloudConnectStore {
     /** Into the app, once at least one server is joined. */
     serversContinue(): void;
     createOpen(): void;
-    joinOpen(): void;
     back(): void;
     createNameUpdate(name: string): void;
     serverCreate(): void;
-    joinLinkUpdate(link: string): void;
-    /** Opens the invite link pasted in, in the browser, where it is accepted. */
-    joinLinkOpen(): void;
+    /**
+     * Reads the account's servers again while they are on show, so one whose
+     * invite was accepted in the browser appears; the window calls it on focus.
+     */
+    serversRefresh(): void;
     /** A press on the welcome's logo; enough of them in a row reveal test sign-in. */
     logoPress(): void;
     testLoginUpdate(login: string): void;
@@ -76,22 +77,6 @@ const COUNTDOWN_TICK_MS = 250;
 /** How long typing pauses before a new server name is checked. */
 const AVAILABILITY_DELAY_MS = 300;
 
-/** An invite link, `https://happy.engineering/join#<token>`, or nothing. */
-function inviteLinkOf(link: string): URL | undefined {
-    let url: URL;
-    try {
-        url = new URL(link);
-    } catch {
-        return undefined;
-    }
-    return url.protocol === "https:" &&
-        url.hostname === "happy.engineering" &&
-        url.pathname === "/join" &&
-        url.hash.length > 1
-        ? url
-        : undefined;
-}
-
 /**
  * Connecting this window to Happy Cloud from the sidebar. The shell signs in
  * to the person's account and asks the accounts service on the window's
@@ -99,7 +84,7 @@ function inviteLinkOf(link: string): URL | undefined {
  * or creates, the shell has the accounts service issue server tokens,
  * lists it, and hands its connection ID to `connect`,
  * which selects it once the shell reports it signed in. An invite is
- * accepted in the browser from its link; its server is then picked here.
+ * accepted in the browser from its link; its server then appears here.
  */
 export function desktopCloudConnectStoreCreate(input: {
     readonly cloud: DesktopHappyCloud;
@@ -115,8 +100,6 @@ export function desktopCloudConnectStoreCreate(input: {
      * conversation; nothing is sent. Rejects with a displayable `UserError`.
      */
     readonly chiefOfStaffAsk: (request: HappyAgentChiefOfStaffRequest) => Promise<void>;
-    /** Opens a web page in the person's browser. */
-    readonly linkOpen: (url: string) => void;
     readonly now?: () => number;
 }): DesktopCloudConnectStore {
     const now = input.now ?? Date.now;
@@ -145,6 +128,8 @@ export function desktopCloudConnectStoreCreate(input: {
     let servers: readonly HappyCloudServer[] = [];
     // The account's servers joined from this opening, or being joined, by ID.
     let joins: ReadonlyMap<string, CloudConnectJoin> = new Map();
+    // A refresh of the servers on show is on its way.
+    let refreshing = false;
     const joinsSet = (id: string, join: CloudConnectJoin | undefined): void => {
         const next = new Map(joins);
         if (join === undefined) next.delete(id);
@@ -200,7 +185,7 @@ export function desktopCloudConnectStoreCreate(input: {
             });
         }
     };
-    /** Where create and join go back to, and where a first look lands. */
+    /** Where create goes back to, and where a first look lands. */
     const home = (): CloudConnectView =>
         servers.length > 0
             ? serversView()
@@ -502,14 +487,39 @@ export function desktopCloudConnectStoreCreate(input: {
             generation += 1;
             set(undefined);
         },
-        createOpen() {
-            if (view?.kind !== "servers" && view?.kind !== "join") return;
-            set({ kind: "create", name: "", availability: "idle", back: servers.length > 0 });
+        serversRefresh() {
+            // The servers, listed or failed, or a first server with none
+            // behind it: the screens a newly joined server belongs on.
+            const listed = view?.kind === "servers" && view.servers.status !== "loading";
+            const first = view?.kind === "create" && !view.back && !view.busy;
+            if (refreshing || (!listed && !first)) return;
+            refreshing = true;
+            const asked = generation;
+            void cloud
+                .serversList()
+                .then((answer) => {
+                    // A refusal leaves what is on show; this was never asked for.
+                    if (!current(asked) || !answer.ok) return;
+                    if (view?.kind === "servers") {
+                        servers = answer.value;
+                        set(serversView(view.error));
+                        imagesRead(asked);
+                    } else if (view?.kind === "create" && answer.value.length > 0) {
+                        // A name being typed for a first server gives way to
+                        // the server the account now has.
+                        servers = answer.value;
+                        set(serversView());
+                        imagesRead(asked);
+                    }
+                })
+                .catch(() => undefined)
+                .finally(() => {
+                    refreshing = false;
+                });
         },
-        joinOpen() {
-            if (view?.kind !== "servers" && view?.kind !== "create") return;
-            if (view.kind === "create" && view.busy) return;
-            set({ kind: "join", link: "" });
+        createOpen() {
+            if (view?.kind !== "servers") return;
+            set({ kind: "create", name: "", availability: "idle", back: servers.length > 0 });
         },
         back() {
             // Leaving the browser sign-in, an email step, or a failure lands
@@ -553,27 +563,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 set(welcome());
                 return;
             }
-            if (view?.kind === "join" && view.opened) {
-                // The invite may have been accepted in the browser since the
-                // servers were read, so they are read again.
-                generation += 1;
-                const asked = generation;
-                set({ kind: "servers", servers: { status: "loading" }, joins });
-                void list(asked)
-                    .then((listed) => {
-                        if (listed === "signInRequired") signInAgain();
-                    })
-                    .catch(() => {
-                        if (current(asked))
-                            set({
-                                kind: "failed",
-                                message: "Happy Cloud isn't reachable right now.",
-                            });
-                    });
-                return;
-            }
-            if (view?.kind !== "create" && view?.kind !== "join") return;
-            if (view.kind === "create" && view.busy) return;
+            if (view?.kind !== "create" || view.busy) return;
             if (availabilityTimer) clearTimeout(availabilityTimer);
             set(home());
         },
@@ -615,23 +605,6 @@ export function desktopCloudConnectStoreCreate(input: {
                 if (!answer.ok) refused(answer);
                 else void connect(answer.value);
             });
-        },
-        joinLinkUpdate(link) {
-            if (view?.kind !== "join") return;
-            set({ kind: "join", link: link.trim(), ...(view.opened ? { opened: true } : {}) });
-        },
-        joinLinkOpen() {
-            if (view?.kind !== "join" || view.link === "") return;
-            const url = inviteLinkOf(view.link);
-            if (!url) {
-                set({
-                    ...view,
-                    error: "That isn’t a Happy invite link.",
-                });
-                return;
-            }
-            input.linkOpen(url.href);
-            set({ kind: "join", link: view.link, opened: true });
         },
         logoPress() {
             if (view?.kind !== "welcome" || view.testSignIn) return;

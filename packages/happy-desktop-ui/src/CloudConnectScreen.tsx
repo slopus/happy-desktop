@@ -125,17 +125,6 @@ export type CloudConnectView =
           readonly busy?: boolean;
           readonly error?: string;
       }
-    /**
-     * Joining by an invite link, which is accepted in the browser: the link
-     * pasted here only opens there.
-     */
-    | {
-          readonly kind: "join";
-          readonly link: string;
-          /** The link went to the browser; Back reads the servers again. */
-          readonly opened?: true;
-          readonly error?: string;
-      }
     /** Signing in to the chosen server; once in, the screen is gone. */
     | { readonly kind: "connecting"; readonly server: CloudConnectServer }
     | { readonly kind: "failed"; readonly message: string };
@@ -156,18 +145,14 @@ export interface CloudConnectScreenProps {
     /** Continue, once a server is joined: into the app. */
     onServersContinue(): void;
     onCreateOpen(): void;
-    onJoinOpen(): void;
     /**
-     * From create or join back to the servers; from the servers or a first
+     * From create back to the servers; from the servers or a first
      * server back to the welcome, signed out so Continue can use another
      * account; and from signing in or a failure back to the welcome.
      */
     onBack(): void;
     onCreateNameChange(name: string): void;
     onCreate(): void;
-    onJoinLinkChange(link: string): void;
-    /** Opens the invite link pasted in, in the browser. */
-    onJoinLinkOpen(): void;
     onLogoPress(): void;
     onTestLoginChange(login: string): void;
     onTestPasswordChange(password: string): void;
@@ -368,7 +353,7 @@ const CLOUD_DRIFT = [
  * C-336 CloudConnectScreen — the sidebar's "+", full window on the onboarding
  * sky. It opens on what to add: a personal remote agent or a shared team agent,
  * which it hands to the Chief of Staff to set up, or Happy Cloud: welcome, account sign-in in the browser, the account's
- * servers, create or join one, then signing in to it, after which the app is
+ * servers, join or create one, then signing in to it, after which the app is
  * simply there with the new server open. Each state is one
  * `SetupPage`, so titles, content and actions keep their places as it moves,
  * except the welcome: that is a `WelcomeScreen` deck, like the first launch.
@@ -704,7 +689,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                           },
                                       }
                                     : {})}
-                                copy="Your account is already on these servers. Join as many as you like."
+                                copy="Your account is already on these servers. Join as many as you like. Got an invite? Open its link, and its server appears here."
                                 placement="centered"
                                 secondary={back(joins.includes("joining"))}
                                 {...(view.servers.status === "loading"
@@ -773,9 +758,6 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                         >
                                             Bootstrap a new one
                                         </Button>
-                                        <Button onClick={props.onJoinOpen} variant="ghost">
-                                            Join with an invite
-                                        </Button>
                                     </div>
                                 </div>
                             </SetupPage>
@@ -795,7 +777,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 copy={
                                     view.back
                                         ? "Name your team’s new server. You can change it later."
-                                        : "Your account has no servers yet. Name your team’s first one."
+                                        : "Your account has no servers yet. Name your team’s first one, or open an invite link you were sent."
                                 }
                                 placement="centered"
                                 secondary={back(view.busy)}
@@ -831,60 +813,10 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     >
                                         {hint}
                                     </p>
-                                    {view.back ? null : (
-                                        <div className="happy-cloud-connect__links">
-                                            <Button
-                                                disabled={view.busy}
-                                                onClick={props.onJoinOpen}
-                                                variant="ghost"
-                                            >
-                                                Have an invite? Join a server
-                                            </Button>
-                                        </div>
-                                    )}
                                 </div>
                             </SetupPage>
                         );
                     }
-                    case "join":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                action={{
-                                    disabled: view.link === "",
-                                    label: "Open invite",
-                                    onSelect: props.onJoinLinkOpen,
-                                }}
-                                copy="Open the invite link you were sent, or paste it here. You accept it in your browser, then come back to pick the server."
-                                placement="centered"
-                                secondary={back()}
-                                title="Join with an invite"
-                            >
-                                <div className="happy-cloud-connect__column">
-                                    <TextField
-                                        aria-label="Invite link"
-                                        autoFocus
-                                        className="happy-cloud-connect__handle"
-                                        fullWidth
-                                        onSubmit={props.onJoinLinkOpen}
-                                        onValueChange={props.onJoinLinkChange}
-                                        placeholder="https://happy.engineering/join#…"
-                                        size="large"
-                                        value={view.link}
-                                    />
-                                    <p
-                                        className="happy-cloud-connect__hint"
-                                        data-tone={view.error ? "attention" : undefined}
-                                        role="status"
-                                    >
-                                        {view.error ??
-                                            (view.opened
-                                                ? "Opened in your browser. Accept it there, then go back."
-                                                : undefined)}
-                                    </p>
-                                </div>
-                            </SetupPage>
-                        );
                     case "failed":
                         return (
                             <SetupPage
