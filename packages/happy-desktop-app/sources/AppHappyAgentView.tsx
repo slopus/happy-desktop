@@ -11840,9 +11840,9 @@ function HappyAgentPanelBody(props: {
                                         // checkout with nowhere to list from is
                                         // neither, and says why.
                                         props.workspaceFiles?.unavailable === "noCompute"
-                                          ? "No compute attached."
+                                          ? "No computer joined."
                                           : props.workspaceFiles?.unavailable === "computeOffline"
-                                            ? "Compute is offline."
+                                            ? "The computer is offline."
                                             : props.workspaceFiles?.unavailable === "unsupported"
                                               ? "Files aren't available on this server."
                                               : props.workspaceFiles?.directories.get("")?.error
