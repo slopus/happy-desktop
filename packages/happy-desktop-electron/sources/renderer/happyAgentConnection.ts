@@ -59,7 +59,7 @@ import {
     userEnvironmentReportRead,
 } from "happy-desktop-state";
 import { imageCropOpen } from "happy-desktop-ui";
-import { desktopDeviceId } from "./desktopDeviceId";
+import { desktopDeviceId, desktopEnvironmentWatch } from "./desktopEnvironment";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import {
@@ -471,6 +471,7 @@ export function happyAgentConnectionOpen(input: {
             if (!disposed) input.deps.sessionFinished?.(sessionId, stillCurrent);
         },
     });
+    const environmentUnwatch = desktopEnvironmentWatch(window, agentConnection.environmentCheck);
     const profile = happyAgentProfileSourceCreate(directClient, agentConnection.sync, () => {
         if (!session) agentConnection.retry();
     });
@@ -795,6 +796,7 @@ export function happyAgentConnectionOpen(input: {
             mobileConnector[Symbol.dispose]();
             clock[Symbol.dispose]();
             mutationListeners.clear();
+            environmentUnwatch();
             agentConnection.close();
         },
     };

@@ -29,6 +29,5 @@ export type { UserProfile } from "./userProfiles.js";
 export {
     userEnvironmentDeviceIdValid,
     userEnvironmentReportRead,
-    type UserDeviceKind,
     type UserEnvironmentReport,
 } from "./userEnvironment.js";

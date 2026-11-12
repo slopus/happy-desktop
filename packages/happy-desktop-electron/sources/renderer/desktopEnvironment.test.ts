@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { desktopDeviceIdRead } from "./desktopDeviceId";
+import { desktopDeviceIdRead, desktopEnvironmentWatch } from "./desktopEnvironment";
 
 function storageCreate(): Pick<Storage, "getItem" | "setItem"> {
     const values = new Map<string, string>();
@@ -27,4 +27,27 @@ it("replaces a stored ID the daemon would refuse", () => {
     storage.setItem("happy.device-id.v1", "not a device id!");
     expect(desktopDeviceIdRead(storage, () => "fresh-id")).toBe("fresh-id");
     expect(desktopDeviceIdRead(storage, () => "another-id")).toBe("fresh-id");
+});
+
+it("checks the environment when the window comes back to the front or its languages change", () => {
+    const document = Object.assign(new EventTarget(), {
+        visibilityState: "visible" as DocumentVisibilityState,
+    });
+    const target = Object.assign(new EventTarget(), { document }) as unknown as Window;
+    const check = vi.fn();
+    const unwatch = desktopEnvironmentWatch(target, check);
+    target.dispatchEvent(new Event("focus"));
+    target.dispatchEvent(new Event("languagechange"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(check).toHaveBeenCalledTimes(3);
+    // Going to the background is not coming back.
+    document.visibilityState = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(check).toHaveBeenCalledTimes(3);
+    unwatch();
+    document.visibilityState = "visible";
+    target.dispatchEvent(new Event("focus"));
+    target.dispatchEvent(new Event("languagechange"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(check).toHaveBeenCalledTimes(3);
 });

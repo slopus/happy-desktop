@@ -32,3 +32,22 @@ let current: string | undefined;
 export function desktopDeviceId(): string {
     return (current ??= desktopDeviceIdRead(localStorage, () => crypto.randomUUID()));
 }
+
+/**
+ * Calls `check` whenever the window may be somewhere new: it comes back to the front, becomes
+ * visible again, or its languages change. A time zone or locale changes with no event of its own,
+ * so coming back is when it is noticed. Returns the cleanup.
+ */
+export function desktopEnvironmentWatch(target: Window, check: () => void): () => void {
+    const visible = (): void => {
+        if (target.document.visibilityState === "visible") check();
+    };
+    target.addEventListener("focus", check);
+    target.addEventListener("languagechange", check);
+    target.document.addEventListener("visibilitychange", visible);
+    return () => {
+        target.removeEventListener("focus", check);
+        target.removeEventListener("languagechange", check);
+        target.document.removeEventListener("visibilitychange", visible);
+    };
+}

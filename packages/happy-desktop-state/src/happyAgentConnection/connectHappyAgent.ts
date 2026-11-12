@@ -46,7 +46,7 @@ import { happyAgentSyncRead } from "./happyAgentSyncRead.js";
 import { gitSnapshotStateUpdate, type GitSnapshotState } from "./gitSnapshotState.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { MessageRefusedError, projectRegistrationError } from "./errors.js";
-import { userEnvironmentReportSend, type UserEnvironmentReport } from "./userEnvironment.js";
+import type { UserEnvironmentReport } from "./userEnvironment.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentDraftAppended } from "../happyAgent/happyAgentChatDraftAppend.js";
 import { chatUiOutcomeUnknown } from "../chatUi/chatUi.js";
@@ -503,11 +503,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
-    // Whether this connection has reported the device's environment yet, and the device it
-    // named once the server stored it. Sends name that device only then: a server without the
-    // route refuses a send that names one.
-    let environmentReportStarted = false;
+    // The device's environment as this connection last had it stored, and the device it names.
+    // Sends name that device only once the server stored a report or says it takes them: a
+    // server without the route refuses a send that names one.
+    let environmentStored: string | undefined;
     let environmentDeviceId: string | undefined;
+    // A server that answered the route with 404 or 405 is asked again only once its health says
+    // it takes reports.
+    let environmentUnsupported = false;
+    // A report is on its way; a check that arrives meanwhile is made again once it lands.
+    let environmentSending = false;
+    let environmentRecheck = false;
     /** Everyone the latest bootstrap listed as signing in to the team. */
     let teammates: readonly HappyAgentTeammate[] = [];
     let viewerProfileLoading: Promise<void> | undefined;
@@ -4333,14 +4339,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
+    /** Whether the server's health says it takes environment reports and devices on sends. */
+    const environmentAccepted = (): boolean =>
+        sync.source.health()?.capabilities?.userEnvironment === true;
+
     /**
-     * Tells the server about this device's environment, once, when the connection first goes
-     * live. A server without the route is left alone, and no failure is retried or shown: the
+     * Tells the server about this device's environment when it differs from what the server last
+     * stored from this connection. Runs while the connection is live; a server without the route
+     * is left alone, and no failure is retried or shown, though a later check sends again: the
      * report only helps the agent and never holds anything up.
      */
     const environmentReport = (): void => {
-        if (environmentReportStarted || options.environment === undefined) return;
-        environmentReportStarted = true;
+        if (closed || options.environment === undefined) return;
+        if (groupsStore.getState().connection !== "live") return;
+        if (environmentUnsupported && !environmentAccepted()) return;
+        if (environmentSending) {
+            environmentRecheck = true;
+            return;
+        }
         let report: UserEnvironmentReport;
         try {
             report = options.environment();
@@ -4354,16 +4370,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             });
             return;
         }
-        void userEnvironmentReportSend({
-            endpoint,
-            token: options.token,
-            ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-            report,
-            mutationId: nextId(),
-            signal: deadlineSignal(),
-        }).then((result) => {
+        environmentDeviceId = report.deviceId;
+        const payload = JSON.stringify(report);
+        if (payload === environmentStored) return;
+        environmentSending = true;
+        void environmentReportSend(report).then((result) => {
+            environmentSending = false;
             if (rootController.signal.aborted) return;
-            if (result.outcome === "reported") environmentDeviceId = report.deviceId;
+            if (result.outcome === "reported") environmentStored = payload;
+            environmentUnsupported = result.outcome === "unsupported";
             reportDebug({
                 detail: debugDetail(result),
                 level: "info",
@@ -4375,13 +4390,49 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                           : "Device environment report failed",
                 source: "connection",
             });
+            if (environmentRecheck) {
+                environmentRecheck = false;
+                environmentReport();
+            }
         });
+    };
+
+    /**
+     * Sends one report; never throws. A server too old for the route, or one that does not serve
+     * it at all, answers 404 or 405 and is `unsupported`. A report counts as stored only when the
+     * answer names the device, so nothing in front of the server can be taken for it.
+     */
+    const environmentReportSend = async (
+        report: UserEnvironmentReport,
+    ): Promise<
+        | { readonly outcome: "reported" }
+        | { readonly outcome: "unsupported"; readonly status: number }
+        | { readonly outcome: "failed"; readonly detail: string }
+    > => {
+        try {
+            const response = await client.reportEnvironment(
+                { ...report, mutationId: nextId() },
+                { signal: deadlineSignal() },
+            );
+            return response.environment?.deviceId === report.deviceId
+                ? { outcome: "reported" }
+                : { outcome: "failed", detail: "The answer named no stored environment." };
+        } catch (error) {
+            if (
+                error instanceof HappyAgentApiError &&
+                (error.status === 404 || error.status === 405)
+            )
+                return { outcome: "unsupported", status: error.status };
+            return {
+                outcome: "failed",
+                detail: error instanceof Error ? error.message : String(error),
+            };
+        }
     };
 
     const sendMessageWithRetry = async (
         sessionId: string,
-        // `deviceId` is the unreleased client's; the client spreads the request into its body.
-        request: SendMessageRequest & { readonly deviceId?: string },
+        request: SendMessageRequest,
         confirmed: Promise<void>,
     ): Promise<SendMessageResponse | undefined> => {
         let retryMs = INITIAL_SEND_RETRY_MS;
@@ -4858,6 +4909,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         config: () => (configReloads === 0 ? config : undefined),
         sync: sync.source,
         retry: retryUpdates,
+        environmentCheck: environmentReport,
         connectGroups(subscription) {
             if (closed) throw new Error("This Happy Agent connection is closed.");
             // Whatever waits to be published reaches the subscribers already
@@ -5426,9 +5478,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             ...(input.quickReply ? { quickReply: input.quickReply } : {}),
                             delivery,
                             mode,
-                            ...(environmentDeviceId === undefined
-                                ? {}
-                                : { deviceId: environmentDeviceId }),
+                            ...(environmentDeviceId !== undefined &&
+                            (environmentStored !== undefined || environmentAccepted())
+                                ? { deviceId: environmentDeviceId }
+                                : {}),
                         },
                         confirmed,
                     );

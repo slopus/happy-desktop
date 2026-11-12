@@ -28,6 +28,7 @@ import {
     type ProviderUsageRefreshRequest,
     type Project,
     type Question,
+    type ReportEnvironmentRequest,
     type Run,
     type SaveUserSettingRequest,
     type SendMessageRequest,
@@ -184,6 +185,12 @@ export interface FakeHappyAgentDaemon {
      * would be.
      */
     feedSubjectFilterSet(supported: boolean): void;
+    /**
+     * Whether this daemon takes environment reports and a device on sends: health reports
+     * `capabilities.userEnvironment` and `reportEnvironment` stores the report. Off by default,
+     * when the route answers `404` as an older daemon's does.
+     */
+    userEnvironmentSupportedSet(supported: boolean): void;
 
     /** Toggle daemon health readiness, protocol number, and product version. */
     healthSet(options: {
@@ -432,6 +439,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let usage: DaemonUsageResponse = { hour: {}, day: {}, week: {}, month: {} };
     let feed: FeedItem[] | undefined;
     let feedSubjectFilter = false;
+    let userEnvironment = false;
     let usageRefreshSupported = true;
 
     const calls: FakeDaemonCall[] = [];
@@ -713,6 +721,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
             ...(feed === undefined ? {} : { feed: true }),
             ...(feedSubjectFilter ? { feedSubjectFilter: true } : {}),
+            ...(userEnvironment ? { userEnvironment: true } : {}),
         };
         return {
             healthy: true,
@@ -750,6 +759,13 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (!usageRefreshSupported)
                 throw new HappyAgentApiError(404, "Not found.", "not_found", null);
             return { started: request.providerIds ?? [] };
+        },
+        async reportEnvironment(request: ReportEnvironmentRequest, ...args: unknown[]) {
+            await record("reportEnvironment", [request, ...args]);
+            if (!userEnvironment)
+                throw new HappyAgentApiError(404, "Not found.", "not_found", null);
+            const { mutationId: _mutationId, utcOffsetMinutes: _offset, ...stored } = request;
+            return { environment: { ...stored, updatedAt: 1, reportedAt: 1 } };
         },
         async getHealth(...args: unknown[]) {
             await record("getHealth", args);
@@ -1705,6 +1721,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             [...(feed ?? [])].sort((left, right) => right.cursor.localeCompare(left.cursor)),
         feedSubjectFilterSet(supported) {
             feedSubjectFilter = supported;
+        },
+        userEnvironmentSupportedSet(supported) {
+            userEnvironment = supported;
         },
         healthSet(options) {
             if (options.ready !== undefined) healthReady = options.ready;

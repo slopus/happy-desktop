@@ -1107,9 +1107,10 @@ export interface ConnectHappyAgentOptions {
      */
     preloadedSessions?: number;
     /**
-     * This device's environment, read when the connection first goes live and reported to the
-     * server once. Once the server stores it, every send names its device. Unset, nothing is
-     * reported and no send names a device.
+     * This device's environment, read whenever the connection goes live and at each
+     * `environmentCheck`, and reported when it differs from what the server last stored. Once
+     * the server stores it, or its health says it takes reports, every send names the device.
+     * Unset, nothing is reported and no send names a device.
      */
     environment?: () => UserEnvironmentReport;
 }
@@ -1186,6 +1187,12 @@ export interface HappyAgentConnection {
     config: () => DaemonConfig | undefined;
     /** Interrupts the managed update feed or startup wait so reconnection starts immediately. */
     retry: () => void;
+    /**
+     * Reads the device's environment again and reports it when it differs from what this server
+     * last stored, as the window does whenever it comes back to the front or its languages change.
+     * Does nothing while the connection is not live; going live checks by itself.
+     */
+    environmentCheck: () => void;
     connectSession: (options: HappyAgentSessionSubscriptionOptions) => HappyAgentSessionConnection;
     /**
      * Loads one session ahead of a likely open, so connecting to it then shows its transcript at
