@@ -1,4 +1,4 @@
-import { onboardingGrainFragmentShader } from "./onboardingGrainShader";
+import { onboardingGrainFieldShader, onboardingGrainFragmentShader } from "./onboardingGrainShader";
 
 const vertexSource = `
 attribute vec2 a_position;
@@ -12,6 +12,19 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
     gl.compileShader(shader);
     if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader;
     gl.deleteShader(shader);
+    return null;
+}
+
+/** Both programs read the one triangle buffer from attribute 0. */
+function link(gl: WebGLRenderingContext, vertex: WebGLShader, fragment: WebGLShader) {
+    const program = gl.createProgram();
+    if (program === null) return null;
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.bindAttribLocation(program, 0, "a_position");
+    gl.linkProgram(program);
+    if (gl.getProgramParameter(program, gl.LINK_STATUS)) return program;
+    gl.deleteProgram(program);
     return null;
 }
 
@@ -73,31 +86,35 @@ export function onboardingGrainRenderer(
 
     const initialize = () => {
         const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource);
+        const fieldFragment = compile(gl, gl.FRAGMENT_SHADER, onboardingGrainFieldShader);
         const fragment = compile(gl, gl.FRAGMENT_SHADER, onboardingGrainFragmentShader);
-        const program = gl.createProgram();
+        const fieldProgram =
+            vertex === null || fieldFragment === null ? null : link(gl, vertex, fieldFragment);
+        const program = vertex === null || fragment === null ? null : link(gl, vertex, fragment);
         const buffer = gl.createBuffer();
+        const field = gl.createTexture();
+        const fieldTarget = gl.createFramebuffer();
         const release = () => {
             if (vertex !== null) gl.deleteShader(vertex);
+            if (fieldFragment !== null) gl.deleteShader(fieldFragment);
             if (fragment !== null) gl.deleteShader(fragment);
+            if (fieldProgram !== null) gl.deleteProgram(fieldProgram);
             if (program !== null) gl.deleteProgram(program);
             if (buffer !== null) gl.deleteBuffer(buffer);
+            if (field !== null) gl.deleteTexture(field);
+            if (fieldTarget !== null) gl.deleteFramebuffer(fieldTarget);
         };
-        if (vertex === null || fragment === null || program === null || buffer === null) {
+        if (
+            fieldProgram === null ||
+            program === null ||
+            buffer === null ||
+            field === null ||
+            fieldTarget === null
+        ) {
             release();
             return;
         }
-        gl.attachShader(program, vertex);
-        gl.attachShader(program, fragment);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            release();
-            return;
-        }
-        const position = gl.getAttribLocation(program, "a_position");
-        if (position < 0) {
-            release();
-            return;
-        }
+        const fieldResolution = gl.getUniformLocation(fieldProgram, "u_resolution");
         const resolution = gl.getUniformLocation(program, "u_resolution");
         const time = gl.getUniformLocation(program, "u_time");
         const colors = ["Back", "0", "1", "2", "3"].map((suffix) => ({
@@ -105,10 +122,19 @@ export function onboardingGrainRenderer(
             token: `--onboarding-grain-${suffix.toLowerCase()}`,
         }));
         gl.useProgram(program);
+        gl.uniform1i(gl.getUniformLocation(program, "u_field"), 0);
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-        gl.enableVertexAttribArray(position);
-        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        // Read pixel for pixel: nearest texels, and the only wrap mode WebGL 1
+        // allows on a texture whose sides are not powers of two.
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, field);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         releaseProgram = release;
         const paletteUpdate = () => {
             const style = view.getComputedStyle(canvas);
@@ -131,9 +157,42 @@ export function onboardingGrainRenderer(
             releaseProgram = undefined;
             return;
         }
+        // The grain is drawn once per drawing-buffer size; a new context starts empty.
+        let fieldWidth = 0;
+        let fieldHeight = 0;
         render = () => {
             if (gl.isContextLost()) return;
-            gl.uniform2f(resolution, canvas.width, canvas.height);
+            const { width, height } = canvas;
+            if (fieldWidth !== width || fieldHeight !== height) {
+                // An RGBA, UNSIGNED_BYTE texture is always a complete WebGL 1 attachment.
+                gl.texImage2D(
+                    gl.TEXTURE_2D,
+                    0,
+                    gl.RGBA,
+                    width,
+                    height,
+                    0,
+                    gl.RGBA,
+                    gl.UNSIGNED_BYTE,
+                    null,
+                );
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fieldTarget);
+                gl.framebufferTexture2D(
+                    gl.FRAMEBUFFER,
+                    gl.COLOR_ATTACHMENT0,
+                    gl.TEXTURE_2D,
+                    field,
+                    0,
+                );
+                gl.useProgram(fieldProgram);
+                gl.uniform2f(fieldResolution, width, height);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.useProgram(program);
+                fieldWidth = width;
+                fieldHeight = height;
+            }
+            gl.uniform2f(resolution, width, height);
             gl.uniform1f(time, clock.seconds);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
         };

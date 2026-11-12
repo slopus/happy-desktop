@@ -20,22 +20,33 @@
  * Desktop changes: AGSL/Metal types to GLSL ES 1.00, gl_FragColor output,
  * WebGL's already-upward fragment Y coordinate (no native Y inversion), and
  * corner fields compressed to 70% of their native reach around each corner.
+ *
+ * The grain and its anti-aliasing width depend only on the pixel and the
+ * canvas size, never on time. `onboardingGrainFieldShader` draws them once per
+ * canvas size into a texture that `onboardingGrainFragmentShader` reads pixel
+ * for pixel, so a frame draws only the moving corners. Each value is packed
+ * into two 8-bit channels: an RGBA8 target renders on every WebGL 1 context,
+ * and 16 bits is far finer than the 8-bit colour it feeds.
  */
-export const onboardingGrainFragmentShader = `
-precision highp float;
-uniform vec2 u_resolution;
-uniform float u_time;
-uniform vec3 u_colorBack;
-uniform vec3 u_color0;
-uniform vec3 u_color1;
-uniform vec3 u_color2;
-uniform vec3 u_color3;
-
+const constants = `
 const float COUNT = 4.;
 const float SOFTNESS = .5;
 const float INTENSITY = .5;
 const float NOISE = .25;
 const float CORNER_REACH = .7;
+`;
+
+/** Grain in [-1, 2] and its anti-aliasing width in [0, 4], 16 bits each. */
+const fieldRange = `
+const vec2 FIELD_MIN = vec2(-1., 0.);
+const vec2 FIELD_SPAN = vec2(3., 4.);
+`;
+
+export const onboardingGrainFieldShader = `
+precision highp float;
+uniform vec2 u_resolution;
+${constants}
+${fieldRange}
 
 vec3 permute(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
 
@@ -105,6 +116,43 @@ float grain(vec2 g, vec3 slow) {
   return INTENSITY * 2. / COUNT * (grainDist + .5) + NOISE * 10. / COUNT * noise;
 }
 
+vec2 pack16(float value) {
+  float level = floor(clamp(value, 0., 1.) * 65535. + .5);
+  float high = floor(level / 256.);
+  return vec2(high, level - high * 256.) / 255.;
+}
+
+void main() {
+  float box = min(u_resolution.x, u_resolution.y);
+  vec2 uv = gl_FragCoord.xy / u_resolution - .5;
+  vec2 shape_uv = uv * u_resolution / box;
+  vec2 grain_uv = shape_uv * box * .7;
+
+  vec3 slow = vec3(fbm(.002 * grain_uv + 10.), fbm(.003 * grain_uv), fbm(.001 * grain_uv));
+  float added = grain(grain_uv, slow);
+  float aa = abs(grain(grain_uv + vec2(.7, 0.), slow) - added) + abs(grain(grain_uv - vec2(0., .7), slow) - added);
+  vec2 field = (vec2(added, aa) - FIELD_MIN) / FIELD_SPAN;
+  gl_FragColor = vec4(pack16(field.x), pack16(field.y));
+}
+`;
+
+export const onboardingGrainFragmentShader = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform sampler2D u_field;
+uniform vec3 u_colorBack;
+uniform vec3 u_color0;
+uniform vec3 u_color1;
+uniform vec3 u_color2;
+uniform vec3 u_color3;
+${constants}
+${fieldRange}
+
+float unpack16(vec2 bytes) {
+  return dot(floor(bytes * 255. + .5), vec2(256., 1.)) / 65535.;
+}
+
 float band(float mixer, float aa) {
   return smoothstep(.5 - .5 * SOFTNESS - aa, .5 + .5 * SOFTNESS + aa, clamp(mixer, 0., 1.));
 }
@@ -114,7 +162,6 @@ void main() {
   float box = min(u_resolution.x, u_resolution.y);
   vec2 uv = gl_FragCoord.xy / u_resolution - .5;
   vec2 shape_uv = uv * u_resolution / box;
-  vec2 grain_uv = shape_uv * box * .7;
 
   shape_uv *= .6;
   // Compress each field toward its own corner without moving that anchor.
@@ -131,10 +178,11 @@ void main() {
   shape -= bl.x * bl.y * tr.x * tr.y;
   shape = 1. - smoothstep(0., 1., shape);
 
-  vec3 slow = vec3(fbm(.002 * grain_uv + 10.), fbm(.003 * grain_uv), fbm(.001 * grain_uv));
-  float added = grain(grain_uv, slow);
+  vec4 stored = texture2D(u_field, gl_FragCoord.xy / u_resolution);
+  vec2 field = FIELD_MIN + FIELD_SPAN * vec2(unpack16(stored.rg), unpack16(stored.ba));
+  float added = field.x;
+  float aa = field.y;
   shape += added;
-  float aa = abs(grain(grain_uv + vec2(.7, 0.), slow) - added) + abs(grain(grain_uv - vec2(0., .7), slow) - added);
   shape = clamp(shape - .5 / COUNT, 0., 1.);
   float totalShape = smoothstep(0., SOFTNESS + 2. * aa, clamp(shape * COUNT, 0., 1.));
   float mixer = shape * (COUNT - 1.);
