@@ -381,6 +381,7 @@ import {
     BUG_REPORT_DISCORD_URL,
     BUG_REPORT_X_URL,
     bugReportDraft,
+    bugReportPlaceLink,
     type AppBugReportHost,
 } from "./bugReport";
 import { changedFileRenderedDiffOffered } from "./changedFileRenderedDiff";
@@ -3792,11 +3793,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         happyAgentTaskCreateSupported(active)
             ? active
             : undefined;
-    // A bug is reported from the chat being read: the template goes below its
-    // draft, unsent. With no chat open it becomes a new task's unsent first
-    // message instead. Either way the caret waits at the end of it.
+    // A bug is reported in a new task: the template becomes its unsent first
+    // message, naming what was on screen by its `happy://` link so the agent
+    // can read it, and the caret waits at the end of it.
     const bugReportWorkspace = active?.session?.workspace;
-    const bugReportChatId = props.chatId;
     const bugReportTaskTarget =
         active &&
         bugReportWorkspace &&
@@ -3804,9 +3804,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         happyAgentTaskCreateSupported(active)
             ? active
             : undefined;
-    const bugReportReady =
-        bugReportWorkspace !== undefined &&
-        (bugReportChatId !== undefined || bugReportTaskTarget !== undefined);
     const sidebarFooter = (
         <SidebarFooter
             bugReport={
@@ -3814,37 +3811,39 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     discordUrl={BUG_REPORT_DISCORD_URL}
                     onLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
                     onReport={async () => {
-                        if (!bugReportWorkspace) return;
+                        if (!bugReportWorkspace || !bugReportTaskTarget) return;
+                        const bugReportStartedFrom = bugReportPlaceLink({
+                            ...(props.chatId === undefined ? {} : { chatId: props.chatId }),
+                            ...(props.surfaceId === undefined
+                                ? {}
+                                : { surfaceId: props.surfaceId }),
+                            ...(props.artifactId === undefined
+                                ? {}
+                                : { artifactId: props.artifactId }),
+                        });
                         const draft = bugReportDraft({
                             ...props.bugReportHost,
-                            ...(active
-                                ? {
-                                      agent: {
-                                          label: active.label,
-                                          ...(active.version ? { version: active.version } : {}),
-                                      },
-                                  }
-                                : {}),
-                            ...(bugReportChatId === undefined ? {} : { chatId: bugReportChatId }),
+                            agent: {
+                                label: bugReportTaskTarget.label,
+                                ...(bugReportTaskTarget.version
+                                    ? { version: bugReportTaskTarget.version }
+                                    : {}),
+                            },
+                            ...(bugReportStartedFrom === undefined
+                                ? {}
+                                : { startedFrom: bugReportStartedFrom }),
                         });
-                        if (bugReportChatId !== undefined) {
-                            await bugReportWorkspace.draftAppend(
-                                bugReportChatId as HappyAgentSessionId,
-                                draft,
-                            );
-                        } else if (bugReportTaskTarget) {
-                            bugReportWorkspace.taskCreateOpen();
-                            // A first message already written stays; the template goes below it.
-                            const written =
-                                bugReportWorkspace.get().taskCreate?.composer.get().text ?? "";
-                            bugReportWorkspace.taskCreateMessageUpdate(
-                                written.trim() === "" ? draft : `${written}\n\n${draft}`,
-                            );
-                            props.onTaskCreateOpen?.(bugReportTaskTarget.id);
-                        } else return;
+                        bugReportWorkspace.taskCreateOpen();
+                        // A first message already written stays; the template goes below it.
+                        const written =
+                            bugReportWorkspace.get().taskCreate?.composer.get().text ?? "";
+                        bugReportWorkspace.taskCreateMessageUpdate(
+                            written.trim() === "" ? draft : `${written}\n\n${draft}`,
+                        );
+                        props.onTaskCreateOpen?.(bugReportTaskTarget.id);
                         composerTypingFocusAtEnd(draft);
                     }}
-                    {...(bugReportReady
+                    {...(bugReportTaskTarget
                         ? {}
                         : { reportUnavailable: "Connect a Happy Agent to report from here." })}
                     xPostUrl={BUG_REPORT_X_URL}

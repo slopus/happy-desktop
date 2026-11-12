@@ -1,3 +1,5 @@
+import { formatHappyReferenceUrl } from "happy-desktop-state";
+
 /** The bug-report recipe, as the Happy Agent installs its docs beside the docs README. */
 export const BUG_REPORT_RECIPE_PATH = "~/.happy/docs/recipe/report-bug.md";
 
@@ -18,13 +20,13 @@ export interface AppBugReportHost {
 /** What a bug report says about where it was started; every field is optional. */
 export interface BugReportContext extends AppBugReportHost {
     readonly agent?: { readonly label: string; readonly version?: string };
-    /** The chat the report was started from. */
-    readonly chatId?: string;
+    /** The `happy://` link to what was on screen when the report was started. */
+    readonly startedFrom?: string;
 }
 
 /**
- * The template "Start a report" writes into a draft: the recipe, one line of
- * context, and the three questions. The caret waits at its end.
+ * The first message of a troubleshooting task: the recipe, a line of context,
+ * where it was started from, and the three questions. The caret waits at its end.
  */
 export function bugReportDraft(context: BugReportContext): string {
     const parts = [
@@ -33,14 +35,41 @@ export function bugReportDraft(context: BugReportContext): string {
         context.agent
             ? `Happy Agent ${context.agent.label}${context.agent.version ? ` ${context.agent.version}` : ""}`
             : undefined,
-        context.chatId ? `chat ${context.chatId}` : undefined,
     ].filter((part) => part !== undefined);
     return [
         `Report a Happy bug using ${BUG_REPORT_RECIPE_PATH}.`,
         "",
-        ...(parts.length > 0 ? [`Context: ${parts.join(" · ")}`, ""] : []),
+        ...(parts.length > 0 ? [`Context: ${parts.join(" · ")}`] : []),
+        ...(context.startedFrom ? [`Started from: ${context.startedFrom}`] : []),
+        ...(parts.length > 0 || context.startedFrom ? [""] : []),
         "What happened:",
         "Expected:",
         "Screenshot (attach if you have one):",
     ].join("\n");
+}
+
+/**
+ * The `happy://` link to what was on screen — the open chat, else the open
+ * Surface, else the open artifact — or nothing when none was open or its
+ * address is not one a link can name.
+ */
+export function bugReportPlaceLink(place: {
+    readonly chatId?: string;
+    readonly surfaceId?: string;
+    readonly artifactId?: string;
+}): string | undefined {
+    const reference =
+        place.chatId !== undefined
+            ? ({ kind: "agent", id: place.chatId } as const)
+            : place.surfaceId !== undefined
+              ? ({ kind: "surface", id: place.surfaceId } as const)
+              : place.artifactId !== undefined
+                ? ({ kind: "artifact", id: place.artifactId } as const)
+                : undefined;
+    if (reference === undefined) return undefined;
+    try {
+        return formatHappyReferenceUrl(reference);
+    } catch {
+        return undefined;
+    }
 }

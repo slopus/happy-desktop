@@ -5,12 +5,12 @@ import { Ionicon } from "./vectorIcons/VectorIcon";
 
 export type SidebarBugReportProps = {
     /**
-     * Puts the bug-report template in a draft — the current chat's, or a new
-     * task's — unsent. Resolves once it is there; a rejection's message is
-     * shown on the card.
+     * Starts a new task with the bug-report template as its unsent first
+     * message. Resolves once it is there; a rejection's message is shown on
+     * the card.
      */
     readonly onReport: () => Promise<void>;
-    /** Why there is nowhere to report from right now; the button is then disabled. */
+    /** Why no task can be started right now; the button is then disabled. */
     readonly reportUnavailable?: string;
     /** A post on X addressed to the Happy team. */
     readonly xPostUrl: string;
@@ -27,9 +27,9 @@ export type SidebarBugReportProps = {
  * and the card it opens above the footer the way a Happy Agent update's card
  * stands there: as wide as the footer row, inside the sidebar column.
  *
- * The card is short on purpose: the crow, one button that starts a report as
- * an unsent draft — where is the host's decision — and two links for
- * reporting in public. The crow plays each time the card opens.
+ * The card is short on purpose: the crow, one button that starts a
+ * troubleshooting task from the bug-report template — nothing is sent — and
+ * two links for reporting in public. The crow plays each time the card opens.
  */
 export function SidebarBugReport(props: SidebarBugReportProps) {
     const [open, setOpen] = useState(props.defaultOpen ?? false);
@@ -55,6 +55,8 @@ export function SidebarBugReport(props: SidebarBugReportProps) {
         };
     }, [open]);
 
+    // Each mark is sized by eye to the label: the X is a tall, solid glyph, so
+    // it is set smaller than Discord's rounded one to read at the same height.
     const link = (url: string, icon: "logo-x" | "logo-discord", text: string) => (
         <a
             className="happy-sidebar-bug-report__link"
@@ -64,7 +66,7 @@ export function SidebarBugReport(props: SidebarBugReportProps) {
                 props.onLinkOpen(url);
             }}
         >
-            <Ionicon name={icon} size={14} />
+            <Ionicon name={icon} size={icon === "logo-x" ? 10 : 12} />
             <span>{text}</span>
         </a>
     );
@@ -108,47 +110,46 @@ export function SidebarBugReport(props: SidebarBugReportProps) {
                         <span className="happy-sidebar-bug-report__copy">
                             <span className="happy-sidebar-bug-report__title">
                                 <span>Report a bug</span>
-                                <span>And eat it too?</span>
+                                <span>And eat it too!</span>
                             </span>
-                            <span className="happy-sidebar-bug-report__action">
-                                <Button
-                                    disabled={props.reportUnavailable !== undefined}
-                                    loading={pending}
-                                    onClick={() => {
-                                        setPending(true);
-                                        setError(undefined);
-                                        props.onReport().then(
-                                            () => {
-                                                setPending(false);
-                                                setOpen(false);
-                                            },
-                                            (reason: unknown) => {
-                                                setPending(false);
-                                                setError(
-                                                    reason instanceof Error
-                                                        ? reason.message
-                                                        : "The draft could not be written.",
-                                                );
-                                            },
-                                        );
-                                    }}
-                                    size="small"
-                                    variant="secondary"
-                                >
-                                    Troubleshoot
-                                </Button>
+                            <span className="happy-sidebar-bug-report__line">
+                                Thank you for your time (and optionally tokens)
                             </span>
-                            {note === undefined ? null : (
-                                <span className="happy-sidebar-bug-report__note">{note}</span>
-                            )}
                         </span>
                     </div>
-                    <span className="happy-sidebar-bug-report__public">
-                        <span className="happy-sidebar-bug-report__write">Or write us:</span>
-                        <span className="happy-sidebar-bug-report__links">
-                            {link(props.xPostUrl, "logo-x", "@happy__eng")}
-                            {link(props.discordUrl, "logo-discord", "Discord")}
-                        </span>
+                    <Button
+                        disabled={props.reportUnavailable !== undefined}
+                        fullWidth
+                        loading={pending}
+                        onClick={() => {
+                            setPending(true);
+                            setError(undefined);
+                            props.onReport().then(
+                                () => {
+                                    setPending(false);
+                                    setOpen(false);
+                                },
+                                (reason: unknown) => {
+                                    setPending(false);
+                                    setError(
+                                        reason instanceof Error
+                                            ? reason.message
+                                            : "The draft could not be written.",
+                                    );
+                                },
+                            );
+                        }}
+                        size="small"
+                        variant="secondary"
+                    >
+                        Troubleshoot
+                    </Button>
+                    {note === undefined ? null : (
+                        <span className="happy-sidebar-bug-report__note">{note}</span>
+                    )}
+                    <span className="happy-sidebar-bug-report__links">
+                        {link(props.xPostUrl, "logo-x", "@happy__eng")}
+                        {link(props.discordUrl, "logo-discord", "Discord")}
                     </span>
                 </div>
             ) : null}

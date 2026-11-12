@@ -26,7 +26,7 @@
     flex-direction: column;
     gap: 12px;
     box-sizing: border-box;
-    padding: 12px 14px;
+    padding: 14px;
     border: 1px solid var(--modal-border);
     border-radius: 12px;
     background: var(--surface);
@@ -52,63 +52,41 @@
     height: 56px;
 }
 
-/* The title, then the one action under it on the title's left edge. */
 .happy-sidebar-bug-report__copy {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
     min-width: 0;
 }
 
-.happy-sidebar-bug-report__action {
-    display: flex;
-}
-
-/* Two lines in one voice; each wraps on its own, balanced, in a narrow card. */
+/* Two lines in one voice; each wraps on its own in a very narrow card. */
 .happy-sidebar-bug-report__title {
     display: flex;
     flex-direction: column;
-    text-wrap: balance;
     font-size: 16px;
     font-weight: 700;
     line-height: 22px;
 }
 
+.happy-sidebar-bug-report__line,
 .happy-sidebar-bug-report__note {
     color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-/* The public ways to write, on the card's content edge: the lead-in, then
-   both links in one row that wraps where the sidebar is narrow. */
-.happy-sidebar-bug-report__public {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+    font-size: 13px;
+    line-height: 18px;
 }
 
 .happy-sidebar-bug-report__links {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 4px 16px;
-}
-
-.happy-sidebar-bug-report__write {
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 18px;
 }
 
 .happy-sidebar-bug-report__link {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;

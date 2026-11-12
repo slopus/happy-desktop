@@ -28,7 +28,7 @@ export function SidebarBugReportPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The bug glyph in the sidebar footer, just before the theme menu, and the card it opens above the footer where a Happy Agent update's card stands: the crow, one button that starts a report as an unsent draft — in the current chat, or a new task when none is open, and links to X and Discord."
+            summary="The bug glyph in the sidebar footer, just before the theme menu, and the card it opens above the footer where a Happy Agent update's card stands: the crow, one button that starts a new task with the bug-report template as its unsent first message, and links to X and Discord."
             title="Sidebar bug report"
         >
             <Specimen
