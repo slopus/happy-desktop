@@ -182,6 +182,15 @@ export type LottieSceneProps = {
      */
     rest?: "start" | "end";
     /**
+     * A picture of the rest frame, drawn under the canvas from the scene's first
+     * paint until the player has drawn that frame itself. The player has to
+     * fetch, parse, and render the animation first, so without one a scene's
+     * square stands empty for a moment as its page appears. Pass it inline
+     * (a `?inline` import) so nothing is fetched for it either; it must be the
+     * frame `rest` names, or the picture jumps when the player takes over.
+     */
+    still?: string;
+    /**
      * The accessible name of the replay control. The artwork itself carries no
      * information — whatever it illustrates is already written beside it — so
      * the only thing assistive technology is told about is the one action:
@@ -283,6 +292,13 @@ export function LottieScene(props: LottieSceneProps) {
     useLayoutEffect(() => {
         const element = canvas.current;
         if (element === null) return;
+        /*
+         * Set here rather than rendered, because only this effect knows when to
+         * take it down: it runs before the first paint, so the still is on
+         * screen with the page, and an engine that never brings the player up
+         * keeps it for good.
+         */
+        if (props.still !== undefined) element.dataset.still = "shown";
         const view = element.ownerDocument.defaultView;
         if (view === null) return;
         /*
@@ -333,6 +349,10 @@ export function LottieScene(props: LottieSceneProps) {
          * runtime is even asked for.
          */
         let settle = () => {};
+        // Takes the still down once the player draws the scene itself.
+        const stillHide = () => {
+            if (element.dataset.still === "shown") element.dataset.still = "hidden";
+        };
         let hold = () => {};
         // Whether the play repeats. Read when the player is built and kept
         // current by `loopApply`, so a change never rebuilds the player.
@@ -443,6 +463,7 @@ export function LottieScene(props: LottieSceneProps) {
                     void (running ? instance.play() : instance.pause());
                 };
                 const start = () => {
+                    stillHide();
                     owed = true;
                     element.dataset.plays = String(Number(element.dataset.plays ?? "0") + 1);
                     settle();
@@ -522,7 +543,17 @@ export function LottieScene(props: LottieSceneProps) {
                      */
                     settle();
                     void instance.setFrame(rest).then(() => {
-                        if (!disposed) setPainted(true);
+                        if (disposed) return;
+                        setPainted(true);
+                        // The worker's bitmap reaches the screen on a later
+                        // frame than the call that drew it returns on, so the
+                        // still stays two frames longer rather than leave one
+                        // frame with neither.
+                        view.requestAnimationFrame(() =>
+                            view.requestAnimationFrame(() => {
+                                if (!disposed) stillHide();
+                            }),
+                        );
                     });
                 });
             })
@@ -533,6 +564,7 @@ export function LottieScene(props: LottieSceneProps) {
 
         return () => {
             disposed = true;
+            delete element.dataset.still;
             replay.current = () => {};
             loopApply.current = () => {};
             setPainted(false);
@@ -548,7 +580,8 @@ export function LottieScene(props: LottieSceneProps) {
             void player?.destroy();
         };
         // `loop` is read only when a player is built; a later change goes
-        // through `loopApply` below, so it never rebuilds the player.
+        // through `loopApply` below, so it never rebuilds the player. `still`
+        // only covers the wait for the first one, so a later one is moot.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
     }, [play, restAt, props.name, props.size]);
 
@@ -597,7 +630,14 @@ export function LottieScene(props: LottieSceneProps) {
             onPointerEnter={interactive ? () => replay.current() : undefined}
             ref={canvas}
             role={control ? "button" : undefined}
-            style={{ ...props.style, height: box, width: box }}
+            style={{
+                ...props.style,
+                ...(props.still === undefined
+                    ? {}
+                    : { "--happy-lottie-scene-still": `url("${props.still}")` }),
+                height: box,
+                width: box,
+            }}
             tabIndex={control ? 0 : undefined}
         />
     );

@@ -67,6 +67,14 @@ metadata.
 The scene means **a piece of work is about to begin**. It stands over the title
 of the page a new task is made on.
 
+## Stills
+
+`stills/robot.webp` and `stills/clapper-board.webp` are 240×240 renders of
+`robot.json` at frame 179 and `clapper-board.json` at frame 0, the frames each
+scene rests on in the create pages. They were drawn by the same dotLottie
+player and encoded as WebP; `LottieScene` shows them under the canvas until the
+player has drawn its first frame, so the picture is there when the page is.
+
 ## Where these came from
 
 The original five files were copied from `happy-list` (the Happy Coder React

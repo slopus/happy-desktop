@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { LottieScene } from "./LottieScene";
+import clapperBoardStill from "./assets/animations/stills/clapper-board.webp?inline";
 
 export type HappyAgentCreateTaskPageProps = {
     /**
@@ -38,7 +39,7 @@ export type HappyAgentCreateTaskPageProps = {
 const PURPOSES = {
     task: {
         scene: "clapper-board",
-        motion: { play: "on-hover", rest: "start" },
+        motion: { play: "on-hover", rest: "start", still: clapperBoardStill },
         replayLabel: "Play the clapper board",
         title: "Create a new task",
         lede: "A task is one piece of work with a conversation and a folder of its own. Everyone who joins it works in that same conversation.",
