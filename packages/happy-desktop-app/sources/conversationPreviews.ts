@@ -70,6 +70,10 @@ export function conversationPreviewOpen(
     // A browser only allows a new tab during this click, before the API awaits.
     // The blank document has no remote content and loses its opener immediately.
     const target = input.platform === "desktop" ? undefined : window.open("about:blank", "_blank");
+    if (input.platform !== "desktop" && !target) {
+        store.previewOpenBlock(input.previewId);
+        return;
+    }
     if (target) target.opener = null;
     void store.previewLaunch(input.previewId).then(
         (url) => {

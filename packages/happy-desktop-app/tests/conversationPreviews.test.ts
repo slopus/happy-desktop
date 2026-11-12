@@ -77,6 +77,34 @@ it("closes the reserved blank tab when launch fails and leaves the failure in pr
     expect(store.get().get("preview")).toMatchObject({ type: "error", error: { code: "offline" } });
 });
 
+it("keeps the chat open and permits retry after a blocked popup without minting early", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
+    const request = vi.fn<HappyCloudRequest>(async (method) =>
+        method === "GET"
+            ? { previewId: "preview", status: "ready" }
+            : {
+                  id: "preview",
+                  url: "https://signed.happy.glass/",
+                  launchToken: "a".repeat(43),
+              },
+    );
+    const { store, workspace } = setup(request);
+    const externalOpen = vi.fn();
+    conversationPreviewOpen({ workspace, previewId: "preview", platform: "web", externalOpen });
+    expect(request).not.toHaveBeenCalled();
+    expect(externalOpen).not.toHaveBeenCalled();
+    expect(store.get().get("preview")).toMatchObject({
+        type: "error",
+        error: { code: "popup_blocked", message: "Allow pop-ups for Happy to open this preview." },
+    });
+    const { tab } = blankTab();
+    conversationPreviewOpen({ workspace, previewId: "preview", platform: "web", externalOpen });
+    await vi.waitFor(() => expect(tab.location.replace).toHaveBeenCalledOnce());
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(externalOpen).not.toHaveBeenCalled();
+    expect(store.get().get("preview")).toEqual({ type: "available", status: "ready" });
+});
+
 it("uses the existing desktop system-browser callback without reserving a renderer popup", async () => {
     const open = vi.spyOn(window, "open");
     const { workspace } = setup(async (method) =>
