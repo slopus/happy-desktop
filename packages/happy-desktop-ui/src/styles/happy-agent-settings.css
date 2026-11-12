@@ -1335,8 +1335,9 @@
 }
 
 .happy-agent-compute__meta,
+.happy-agent-compute__description,
+.happy-agent-compute__held,
 .happy-agent-compute__fault,
-.happy-agent-compute__load,
 .happy-agent-compute__status {
     overflow: hidden;
     color: var(--text-secondary);
@@ -1346,13 +1347,44 @@
     white-space: nowrap;
 }
 
+.happy-agent-compute__meta[data-wrap] {
+    white-space: normal;
+}
+
+.happy-agent-compute__description {
+    color: var(--text);
+}
+
+.happy-agent-compute__held {
+    color: var(--box-warning-text);
+}
+
 .happy-agent-compute__fault {
     color: var(--status-error);
 }
 
-.happy-agent-compute__load {
+/* A machine's mode, and whose it is: a word in a quiet pill, in sentence case. */
+.happy-agent-compute__tag {
     flex: none;
-    font-variant-numeric: tabular-nums;
+    padding: 0 6px;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-agent-compute__tag[data-owner="reader"] {
+    border-color: var(--radio-active);
+    color: var(--text-link);
+}
+
+.happy-agent-compute__row-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
 }
 
 .happy-agent-compute__status {
@@ -1379,6 +1411,14 @@
     background-color: var(--status-connected);
 }
 
+.happy-agent-compute__status[data-status="busy"] {
+    color: var(--box-warning-text);
+}
+
+.happy-agent-compute__status[data-status="busy"] .happy-agent-compute__dot {
+    background-color: var(--box-warning-border);
+}
+
 .happy-agent-compute__status[data-status="draining"] .happy-agent-compute__dot,
 .happy-agent-compute__status[data-status="enrolling"] .happy-agent-compute__dot {
     background-color: var(--status-connecting);
@@ -1403,6 +1443,109 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+.happy-agent-compute__modes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-agent-compute__mode {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-agent-compute__mode:hover:not(:disabled) {
+    background: var(--surface-ripple);
+}
+
+.happy-agent-compute__mode[aria-checked="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-agent-compute__mode:disabled {
+    cursor: default;
+}
+
+.happy-agent-compute__mode:disabled .happy-agent-compute__mode-label,
+.happy-agent-compute__mode:disabled .happy-agent-compute__mode-description,
+.happy-agent-compute__mode:disabled .happy-agent-compute__radio {
+    opacity: 0.45;
+}
+
+.happy-agent-compute__mode:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+/* The radio's ring is the same box chosen or not; only its dot is filled in. */
+.happy-agent-compute__radio {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+}
+
+.happy-agent-compute__radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: transparent;
+}
+
+.happy-agent-compute__mode[aria-checked="true"] .happy-agent-compute__radio {
+    border-color: var(--radio-active);
+}
+
+.happy-agent-compute__mode[aria-checked="true"] .happy-agent-compute__radio::after {
+    background: var(--radio-active);
+}
+
+.happy-agent-compute__mode-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-compute__mode-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-agent-compute__mode-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-agent-compute__mode-lock {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-compute__mode-description {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
 }
 
 .happy-agent-compute__note {

@@ -1,50 +1,89 @@
 import { createStore } from "zustand/vanilla";
+import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 
+/**
+ * How a machine takes agents, fixed by the config on the machine itself:
+ * isolated sandboxes, the host shared by every agent, the host held by one
+ * agent at a time, or a member's own machine for their own agents.
+ */
+export type HappyAgentComputeMode = "sandbox" | "shared" | "exclusive" | "private";
+
+export const HAPPY_AGENT_COMPUTE_MODES: readonly HappyAgentComputeMode[] = [
+    "sandbox",
+    "shared",
+    "exclusive",
+    "private",
+];
+
+/**
+ * What the reader may do with compute: add any machine and free a held one
+ * (`pools.manage`), use machines and add a private one of their own
+ * (`compute.use`), or nothing at all.
+ */
+export type HappyAgentComputeAccess = "manage" | "use" | "none";
+
 /** Where a machine stands; a revoked machine is no longer listed. */
 export type HappyAgentComputeMachineStatus = "online" | "offline" | "draining" | "enrolling";
 
-/** Sandboxes in use against what the machines reported they hold; `total` is null until all have. */
-export interface HappyAgentComputeCapacity {
-    readonly used: number;
-    readonly total: number | null;
+/** The agent holding an exclusive machine; its title is null when the reader may not see it. */
+export interface HappyAgentComputeHolder {
+    readonly agentId: string;
+    readonly title: string | null;
 }
 
-/** One machine that joined a pool: a runner work is placed on. */
+/** Who owns a private machine, as the reader sees them. */
+export type HappyAgentComputeOwner =
+    | { readonly kind: "reader" }
+    | { readonly kind: "member"; readonly userId: string; readonly name: string | null };
+
+/** A machine's mode, with what only that mode carries. */
+export type HappyAgentComputeMachineMode =
+    | { readonly mode: "sandbox" }
+    | { readonly mode: "shared" }
+    | { readonly mode: "exclusive"; readonly holder: HappyAgentComputeHolder | null }
+    /** `owner` is null for a machine that joined before owners were kept. */
+    | { readonly mode: "private"; readonly owner: HappyAgentComputeOwner | null };
+
+/** One machine agents can join. */
 export interface HappyAgentComputeMachine {
     readonly id: string;
+    /** Its hostname unless someone renamed it. */
     readonly name: string;
-    readonly poolId: string;
     readonly status: HappyAgentComputeMachineStatus;
     readonly hostname: string | null;
     /** `macos`, `linux` or `windows`, as the machine reported it. */
     readonly os: string | null;
     readonly arch: string | null;
-    /** The supervisor version it runs. */
-    readonly version: string | null;
-    readonly sandboxes: HappyAgentComputeCapacity;
-    /** The agents working on it now, by title where they have one. */
-    readonly agents: readonly { readonly agentId: string; readonly title: string | null }[];
-    /** Why its sandbox failed its self-test, while it does: then nothing is placed on it. */
+    readonly mode: HappyAgentComputeMachineMode;
+    /** What agents read about it in `list_compute`. */
+    readonly description: string | null;
+    /** Whether the reader may rename it and change its description. */
+    readonly editable: boolean;
+    /** Why its sandbox failed its self-test, while it does; shown only to managers. */
     readonly sandboxError: string | null;
     /** When the status last changed, in milliseconds. */
     readonly since: number;
 }
 
-/** A pool of machines work is placed on; the default pool takes work that names none. */
-export interface HappyAgentComputePool {
-    readonly id: string;
-    readonly name: string;
-    readonly default: boolean;
-    readonly machines: { readonly total: number; readonly online: number };
-    readonly sandboxes: HappyAgentComputeCapacity;
+/** An agent waiting for the reader to let it join one of their private machines. */
+export interface HappyAgentComputeApproval {
+    /** `machineId/agentId`, the one request it is. */
+    readonly key: string;
+    readonly machineId: string;
+    readonly machineName: string | null;
+    readonly agentId: string;
+    /** Null when the reader may not read that agent's conversation. */
+    readonly agentTitle: string | null;
+    /** In milliseconds. */
+    readonly createdAt: number;
 }
 
-/** The one-time install command a new machine joins a pool with. */
+/** The one-time install command a new machine joins with. */
 export interface HappyAgentComputeInstall {
-    readonly poolId: string;
+    readonly mode: HappyAgentComputeMode;
     /** Unix and Windows install commands; null where the server publishes no installer. */
     readonly commands: { readonly unix: string; readonly windows: string } | null;
     /** The join token itself, for an install without the commands. */
@@ -54,41 +93,87 @@ export interface HappyAgentComputeInstall {
     readonly expiresAt: number;
 }
 
-/** Adding a machine, while its dialog is open. */
-export interface HappyAgentComputeMachineAdd {
-    readonly poolId: string;
-    readonly creating: boolean;
-    /** Shown once; closing the dialog forgets it. */
-    readonly install?: HappyAgentComputeInstall;
-    readonly error?: UserError;
+/** What a new machine will be: its mode, and the name and description it joins with. */
+export interface HappyAgentComputeMachineDraft {
+    readonly mode: HappyAgentComputeMode;
+    readonly name: string;
+    readonly description: string;
 }
+
+/** Adding a machine, while its dialog is open. */
+export type HappyAgentComputeMachineAdd =
+    | { readonly step: "choosing"; readonly draft: HappyAgentComputeMachineDraft }
+    | { readonly step: "creating"; readonly draft: HappyAgentComputeMachineDraft }
+    | {
+          readonly step: "failed";
+          readonly draft: HappyAgentComputeMachineDraft;
+          readonly error: UserError;
+      }
+    /** Shown once; closing the dialog forgets it. */
+    | { readonly step: "shown"; readonly install: HappyAgentComputeInstall };
+
+/** A machine's name and description as the edit dialog holds them. */
+export interface HappyAgentComputeMachineEditDraft {
+    readonly machineId: string;
+    readonly name: string;
+    readonly description: string;
+}
+
+/** Renaming or describing a machine, while its dialog is open. */
+export type HappyAgentComputeMachineEdit =
+    | { readonly step: "editing"; readonly draft: HappyAgentComputeMachineEditDraft }
+    | { readonly step: "saving"; readonly draft: HappyAgentComputeMachineEditDraft }
+    | {
+          readonly step: "failed";
+          readonly draft: HappyAgentComputeMachineEditDraft;
+          readonly error: UserError;
+      };
+
+export type HappyAgentComputeApprovalAnswer = "approve" | "deny";
 
 export interface HappyAgentComputeSnapshot {
     /** True until the first answer, so "no machines" is never claimed early. */
     readonly loading: boolean;
-    /** Whether the reader may see pools and add machines (`pools.manage`). */
-    readonly manage: boolean;
-    /** Empty for a reader who may not manage pools. */
-    readonly pools: readonly HappyAgentComputePool[];
+    readonly access: HappyAgentComputeAccess;
     readonly machines: readonly HappyAgentComputeMachine[];
+    /** Requests waiting for the reader's answer, oldest first. */
+    readonly approvals: readonly HappyAgentComputeApproval[];
+    /** Answers sent and not yet settled, by approval key. */
+    readonly approvalAnswers: ReadonlyMap<string, HappyAgentComputeApprovalAnswer>;
+    /** Exclusive machines whose lock is being freed. */
+    readonly lockReleases: ReadonlySet<string>;
     readonly machineAdd?: HappyAgentComputeMachineAdd;
+    readonly machineEdit?: HappyAgentComputeMachineEdit;
+    /** Why the last answer or release did not go through. */
+    readonly actionError?: UserError;
     readonly error?: UserError;
 }
 
 /**
- * Settings › Compute on Happy Cloud: the pools work runs on and the machines
- * in them, and adding a machine. Compute events are not typed by this client
- * yet, so the lists are read again every few seconds while they are on screen.
+ * Settings › Compute on Happy Cloud: the machines agents join, the requests to
+ * join the reader's private machines, adding a machine, and editing one. The
+ * lists are read again on `runners.updated` and `compute.approvals.updated`,
+ * and every few seconds while on screen, since a machine going offline is
+ * announced by nothing.
  */
 export interface HappyAgentComputeStore {
     get(): HappyAgentComputeSnapshot;
     subscribe(listener: () => void): () => void;
-    /** Opens adding a machine, to `poolId` or else the default pool. */
-    machineAddOpen(poolId?: string): void;
+    machineAddOpen(): void;
     machineAddClose(): void;
-    machineAddPoolUpdate(poolId: string): void;
-    /** Mints the pool's one-time join token and its install commands. */
+    machineAddModeUpdate(mode: HappyAgentComputeMode): void;
+    machineAddNameUpdate(name: string): void;
+    machineAddDescriptionUpdate(description: string): void;
+    /** Mints the machine's one-time join token and its install commands. */
     machineAddCreate(): void;
+    machineEditOpen(machineId: string): void;
+    machineEditClose(): void;
+    machineEditNameUpdate(name: string): void;
+    machineEditDescriptionUpdate(description: string): void;
+    machineEditSave(): void;
+    /** Frees an exclusive machine from the agent holding it. */
+    machineLockRelease(machineId: string): void;
+    approvalAnswer(key: string, answer: HappyAgentComputeApprovalAnswer): void;
     [Symbol.dispose](): void;
 }
 
@@ -108,93 +193,85 @@ function numberOr(value: unknown, fallback: number): number {
     return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function capacityRead(value: unknown): HappyAgentComputeCapacity {
-    const capacity = recordOf(value);
-    return {
-        used: numberOr(capacity?.used, 0),
-        total: typeof capacity?.total === "number" ? capacity.total : null,
-    };
-}
-
-function poolRead(value: unknown): HappyAgentComputePool | undefined {
-    const pool = recordOf(value);
-    if (!pool || typeof pool.id !== "string") return undefined;
-    const counts = recordOf(pool.nodeCounts);
-    return {
-        id: pool.id,
-        name: typeof pool.name === "string" ? pool.name : pool.id,
-        default: pool.default === true,
-        // A revoked machine is gone from the list, so it is not counted either.
-        machines: {
-            total: numberOr(counts?.total, 0) - numberOr(counts?.revoked, 0),
-            online: numberOr(counts?.online, 0),
-        },
-        sandboxes: capacityRead(pool.sandboxCapacity),
-    };
-}
-
-const MACHINE_STATUSES: readonly HappyAgentComputeMachineStatus[] = [
-    "online",
-    "offline",
-    "draining",
-    "enrolling",
-];
-
 function machineStatusOf(value: unknown): HappyAgentComputeMachineStatus | undefined {
-    return MACHINE_STATUSES.find((status) => status === value);
+    return (["online", "offline", "draining", "enrolling"] as const).find(
+        (status) => status === value,
+    );
+}
+
+function modeOf(value: unknown): HappyAgentComputeMode | undefined {
+    return HAPPY_AGENT_COMPUTE_MODES.find((mode) => mode === value);
+}
+
+/** Who the reader is and what they may do, for reading the machines they see. */
+interface Reader {
+    readonly userId: string | undefined;
+    readonly access: HappyAgentComputeAccess;
+    readonly names: ReadonlyMap<string, string | null>;
+}
+
+function machineModeRead(node: Record<string, unknown>, reader: Reader) {
+    const mode = modeOf(node.mode);
+    if (mode === "exclusive") {
+        const held = recordOf(node.exclusiveAgent);
+        return {
+            mode,
+            holder:
+                held && typeof held.id === "string"
+                    ? { agentId: held.id, title: textOrNull(held.title) }
+                    : null,
+        } satisfies HappyAgentComputeMachineMode;
+    }
+    if (mode === "private") {
+        const owner = textOrNull(node.owner);
+        return {
+            mode,
+            owner:
+                owner === null
+                    ? null
+                    : owner === reader.userId
+                      ? { kind: "reader" }
+                      : { kind: "member", userId: owner, name: reader.names.get(owner) ?? null },
+        } satisfies HappyAgentComputeMachineMode;
+    }
+    return mode === undefined ? undefined : { mode };
 }
 
 /** A node from `/v0/compute/nodes`; a revoked one is left out. */
-function nodeRead(value: unknown): HappyAgentComputeMachine | undefined {
+function machineRead(value: unknown, reader: Reader): HappyAgentComputeMachine | undefined {
     const node = recordOf(value);
     const status = machineStatusOf(node?.status);
     if (!node || typeof node.id !== "string" || !status) return undefined;
-    const active = Array.isArray(node.activeSandboxes) ? node.activeSandboxes : [];
+    const mode = machineModeRead(node, reader);
+    if (!mode) return undefined;
     return {
         id: node.id,
         name: textOrNull(node.name) ?? textOrNull(node.hostname) ?? node.id.slice(0, 8),
-        poolId: typeof node.pool === "string" ? node.pool : "",
         status,
         hostname: textOrNull(node.hostname),
         os: textOrNull(node.os),
         arch: textOrNull(node.arch),
-        version: textOrNull(node.version),
-        sandboxes: capacityRead(node.sandboxCapacity),
-        agents: active.flatMap((item: unknown) => {
-            const sandbox = recordOf(item);
-            return sandbox && typeof sandbox.agentId === "string"
-                ? [{ agentId: sandbox.agentId, title: textOrNull(sandbox.agentTitle) }]
-                : [];
-        }),
+        mode,
+        description: textOrNull(node.description),
+        editable:
+            reader.access === "manage" ||
+            (mode.mode === "private" && mode.owner?.kind === "reader"),
         sandboxError: textOrNull(node.sandboxError),
         since: numberOr(node.since, 0),
     };
 }
 
-/**
- * A runner from `/v0/runners`, which every member may read: the same machines
- * with less detail, for a reader who may not manage pools.
- */
-function runnerRead(value: unknown): HappyAgentComputeMachine | undefined {
-    const runner = recordOf(value);
-    if (!runner || typeof runner.id !== "string") return undefined;
-    const machine = recordOf(runner.machine);
-    const status: HappyAgentComputeMachineStatus =
-        runner.status === "connected" ? "online" : (machineStatusOf(runner.reason) ?? "offline");
-    const platform = textOrNull(machine?.platform);
+function approvalRead(value: unknown): HappyAgentComputeApproval | undefined {
+    const approval = recordOf(value);
+    if (!approval || typeof approval.nodeId !== "string" || typeof approval.agentId !== "string")
+        return undefined;
     return {
-        id: runner.id,
-        name: textOrNull(runner.name) ?? runner.id.slice(0, 8),
-        poolId: typeof runner.pool === "string" ? runner.pool : "",
-        status,
-        hostname: textOrNull(machine?.hostname),
-        os: platform === "darwin" ? "macos" : platform === "win32" ? "windows" : platform,
-        arch: textOrNull(machine?.arch),
-        version: textOrNull(machine?.version),
-        sandboxes: { used: 0, total: null },
-        agents: [],
-        sandboxError: null,
-        since: numberOr(runner.since, 0),
+        key: `${approval.nodeId}/${approval.agentId}`,
+        machineId: approval.nodeId,
+        machineName: textOrNull(approval.nodeName),
+        agentId: approval.agentId,
+        agentTitle: textOrNull(approval.agentTitle),
+        createdAt: numberOr(approval.createdAt, 0),
     };
 }
 
@@ -207,12 +284,13 @@ function listRead<T>(value: unknown, key: string, read: (item: unknown) => T | u
     });
 }
 
-function installRead(value: unknown, poolId: string): HappyAgentComputeInstall | undefined {
+function installRead(value: unknown): HappyAgentComputeInstall | undefined {
     const answer = recordOf(value);
-    if (!answer || typeof answer.token !== "string") return undefined;
+    const mode = modeOf(answer?.mode);
+    if (!answer || !mode || typeof answer.token !== "string") return undefined;
     const commands = recordOf(answer.commands);
     return {
-        poolId,
+        mode,
         commands:
             commands && typeof commands.unix === "string" && typeof commands.windows === "string"
                 ? { unix: commands.unix, windows: commands.windows }
@@ -230,19 +308,42 @@ function machineCompare(left: HappyAgentComputeMachine, right: HappyAgentCompute
     return online !== 0 ? online : left.name.localeCompare(right.name);
 }
 
+/** The fields' trimmed text, or null where it is empty. */
+function draftText(value: string): string | null {
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+}
+
 export function happyAgentComputeStoreCreate(deps: {
     readonly request: HappyCloudRequest;
+    readonly sync?: HappyAgentSync;
 }): HappyAgentComputeStore {
     const store = createStore<HappyAgentComputeSnapshot>()(() => ({
         loading: true,
-        manage: false,
-        pools: [],
+        access: "none",
         machines: [],
+        approvals: [],
+        approvalAnswers: new Map(),
+        lockReleases: new Set(),
     }));
     const listeners = new Set<() => void>();
     let disposed = false;
     let reading = false;
+    /** A hint arrived during a read, which may have been answered before it. */
+    let readAgain = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let follow: AbortController | undefined;
+    /** The reader's own user ID, which never changes for this store. */
+    let userId: string | undefined;
+    /**
+     * Member names by user ID, for the private machines of others a manager
+     * sees; null for a member who has saved no name, so they are not asked again.
+     */
+    let names: ReadonlyMap<string, string | null> = new Map();
+
+    const set = (change: Partial<HappyAgentComputeSnapshot>): void => {
+        store.setState(change, false);
+    };
 
     const schedule = (): void => {
         if (disposed || listeners.size === 0 || timer !== undefined) return;
@@ -252,77 +353,153 @@ export function happyAgentComputeStoreCreate(deps: {
         }, POLL_INTERVAL_MS);
     };
 
-    const accept = (
-        manage: boolean,
-        pools: readonly HappyAgentComputePool[],
-        machines: readonly HappyAgentComputeMachine[],
-    ): void => {
+    const failed = (error: unknown): void => {
+        if (store.getState().loading) set({ loading: false, error: happyAgentUserError(error) });
+    };
+
+    const accessRead = (permissions: unknown): HappyAgentComputeAccess => {
+        const granted = recordOf(permissions)?.granted;
+        const has = (id: string) => Array.isArray(granted) && granted.includes(id);
+        // Every compute read and write needs `compute.use`, managing included.
+        if (!has("compute.use")) return "none";
+        return has("pools.manage") ? "manage" : "use";
+    };
+
+    /** Reads member names only while a machine names an owner it does not know. */
+    const namesRead = async (nodes: unknown): Promise<void> => {
+        const owners = listRead(
+            nodes,
+            "nodes",
+            (node) => textOrNull(recordOf(node)?.owner) ?? undefined,
+        );
+        if (owners.every((owner) => owner === userId || names.has(owner))) return;
+        const members = listRead(await deps.request("GET", "v0/members"), "members", (item) => {
+            const member = recordOf(item);
+            const id = textOrNull(member?.userId);
+            return id ? ([id, textOrNull(member?.name)] as const) : undefined;
+        });
+        names = new Map([...owners.map((owner) => [owner, null] as const), ...members]);
+    };
+
+    const read = async (): Promise<void> => {
+        const [permissions, profile] = await Promise.all([
+            deps.request("GET", "v0/permissions"),
+            userId === undefined ? deps.request("GET", "v0/profile") : undefined,
+        ]);
+        if (profile !== undefined)
+            userId = textOrNull(recordOf(recordOf(profile)?.profile)?.userId) ?? undefined;
+        const access = accessRead(permissions);
+        const [nodes, approvals] =
+            access === "none"
+                ? [undefined, undefined]
+                : await Promise.all([
+                      deps.request("GET", "v0/compute/nodes"),
+                      deps.request("GET", "v0/compute/approvals"),
+                  ]);
+        if (access === "manage") await namesRead(nodes);
+        if (disposed) return;
+        const reader: Reader = { userId, access, names };
         const current = store.getState();
         const { error: _cleared, ...rest } = current;
         store.setState(
             {
                 ...rest,
                 loading: false,
-                manage,
-                pools: referencesPreserve(current.pools, pools),
-                machines: referencesPreserve(current.machines, [...machines].sort(machineCompare)),
+                access,
+                machines: referencesPreserve(
+                    current.machines,
+                    listRead(nodes, "nodes", (node) => machineRead(node, reader)).sort(
+                        machineCompare,
+                    ),
+                ),
+                approvals: referencesPreserve(
+                    current.approvals,
+                    listRead(approvals, "approvals", approvalRead),
+                ),
             },
             true,
         );
     };
 
-    const failed = (error: unknown): void => {
-        if (store.getState().loading)
-            store.setState({ loading: false, error: happyAgentUserError(error) }, false);
-    };
-
     function load(): void {
-        if (disposed || listeners.size === 0 || reading) return;
+        if (disposed || listeners.size === 0) return;
+        if (reading) {
+            readAgain = true;
+            return;
+        }
         if (timer !== undefined) clearTimeout(timer);
         timer = undefined;
         reading = true;
-        const settle = (): void => {
-            reading = false;
-            schedule();
-        };
-        void deps.request("GET", "v0/permissions").then(
-            (permissions) => {
-                if (disposed) return settle();
-                const granted = recordOf(permissions)?.granted;
-                const manage = Array.isArray(granted) && granted.includes("pools.manage");
-                // Pools and their nodes are for `pools.manage`; every member
-                // may read the same machines as runners.
-                const lists = manage
-                    ? Promise.all([
-                          deps.request("GET", "v0/compute/pools"),
-                          deps.request("GET", "v0/compute/nodes"),
-                      ]).then(([pools, nodes]) =>
-                          accept(
-                              true,
-                              listRead(pools, "pools", poolRead),
-                              listRead(nodes, "nodes", nodeRead),
-                          ),
-                      )
-                    : deps
-                          .request("GET", "v0/runners")
-                          .then((runners) =>
-                              accept(false, [], listRead(runners, "runners", runnerRead)),
-                          );
-                void lists.then(settle, (error: unknown) => {
-                    if (!disposed) failed(error);
-                    settle();
-                });
-            },
-            (error: unknown) => {
+        readAgain = false;
+        void read()
+            .catch((error: unknown) => {
                 if (!disposed) failed(error);
-                settle();
-            },
-        );
+            })
+            .finally(() => {
+                reading = false;
+                if (readAgain) load();
+                else schedule();
+            });
     }
 
-    const machineAddUpdate = (change: Partial<HappyAgentComputeMachineAdd>): void => {
+    const followStart = (): void => {
+        const sync = deps.sync;
+        if (!sync || follow || disposed) return;
+        const active = new AbortController();
+        follow = active;
+        void (async () => {
+            let greeted = false;
+            for await (const input of sync.follow({
+                signal: active.signal,
+                events: ["runners.updated", "compute.approvals.updated"],
+            })) {
+                const greeting = !greeted;
+                greeted = true;
+                // The first read was sent after this subscription was installed.
+                if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
+                load();
+            }
+        })().catch(() => undefined);
+    };
+
+    const followStop = (): void => {
+        follow?.abort();
+        follow = undefined;
+    };
+
+    const machineAddSet = (machineAdd: HappyAgentComputeMachineAdd): void => {
+        set({ machineAdd });
+    };
+
+    /** Changes the draft, which takes back a refusal the earlier draft got. */
+    const machineAddDraftUpdate = (change: Partial<HappyAgentComputeMachineDraft>): void => {
         const add = store.getState().machineAdd;
-        if (add) store.setState({ machineAdd: { ...add, ...change } }, false);
+        if (disposed || !add || (add.step !== "choosing" && add.step !== "failed")) return;
+        machineAddSet({ step: "choosing", draft: { ...add.draft, ...change } });
+    };
+
+    const machineEditDraftUpdate = (change: Partial<HappyAgentComputeMachineEditDraft>): void => {
+        const edit = store.getState().machineEdit;
+        if (disposed || !edit || edit.step === "saving") return;
+        set({ machineEdit: { step: "editing", draft: { ...edit.draft, ...change } } });
+    };
+
+    /** Runs a release or an answer, keeping its mark until it settles. */
+    const act = (
+        request: () => Promise<unknown>,
+        settle: (snapshot: HappyAgentComputeSnapshot) => Partial<HappyAgentComputeSnapshot>,
+    ): void => {
+        void request().then(
+            () => {
+                if (disposed) return;
+                set(settle(store.getState()));
+                load();
+            },
+            (error: unknown) => {
+                if (disposed) return;
+                set({ ...settle(store.getState()), actionError: happyAgentUserError(error) });
+            },
+        );
     };
 
     return {
@@ -330,57 +507,73 @@ export function happyAgentComputeStoreCreate(deps: {
         subscribe(listener) {
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) load();
+            if (listeners.size === 1) {
+                followStart();
+                load();
+            }
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 unsubscribe();
                 listeners.delete(listener);
-                if (listeners.size === 0 && timer !== undefined) {
-                    clearTimeout(timer);
-                    timer = undefined;
-                }
+                if (listeners.size > 0) return;
+                followStop();
+                if (timer !== undefined) clearTimeout(timer);
+                timer = undefined;
             };
         },
-        machineAddOpen(poolId) {
-            const snapshot = store.getState();
-            if (disposed || !snapshot.manage) return;
-            const pool =
-                snapshot.pools.find((entry) => entry.id === poolId) ??
-                snapshot.pools.find((entry) => entry.default) ??
-                snapshot.pools[0];
-            if (!pool) return;
-            store.setState({ machineAdd: { poolId: pool.id, creating: false } }, false);
+        machineAddOpen() {
+            const access = store.getState().access;
+            if (disposed || access === "none") return;
+            machineAddSet({
+                step: "choosing",
+                draft: {
+                    // A member may add only a private machine of their own.
+                    mode: access === "manage" ? "sandbox" : "private",
+                    name: "",
+                    description: "",
+                },
+            });
         },
         machineAddClose() {
             const { machineAdd, ...rest } = store.getState();
-            if (disposed || !machineAdd || machineAdd.creating) return;
+            if (disposed || !machineAdd || machineAdd.step === "creating") return;
             store.setState(rest, true);
         },
-        machineAddPoolUpdate(poolId) {
-            const add = store.getState().machineAdd;
-            if (!add || add.creating || !store.getState().pools.some((pool) => pool.id === poolId))
-                return;
-            // A command already shown joins the pool it was made for, so it goes.
-            store.setState({ machineAdd: { poolId, creating: false } }, false);
+        machineAddModeUpdate(mode) {
+            if (mode !== "private" && store.getState().access !== "manage") return;
+            machineAddDraftUpdate({ mode });
+        },
+        machineAddNameUpdate(name) {
+            machineAddDraftUpdate({ name });
+        },
+        machineAddDescriptionUpdate(description) {
+            machineAddDraftUpdate({ description });
         },
         machineAddCreate() {
             const add = store.getState().machineAdd;
-            if (disposed || !add || add.creating) return;
-            const poolId = add.poolId;
-            store.setState({ machineAdd: { poolId, creating: true } }, false);
+            if (disposed || !add || (add.step !== "choosing" && add.step !== "failed")) return;
+            const creating: HappyAgentComputeMachineAdd = { step: "creating", draft: add.draft };
+            machineAddSet(creating);
+            const name = draftText(add.draft.name);
+            const description = draftText(add.draft.description);
             void deps
-                .request("POST", `v0/compute/pools/${encodeURIComponent(poolId)}/join-tokens`, {})
+                .request("POST", "v0/compute/join-tokens", {
+                    mode: add.draft.mode,
+                    ...(name === null ? {} : { name }),
+                    ...(description === null ? {} : { description }),
+                })
                 .then(
                     (answer) => {
-                        if (disposed || store.getState().machineAdd?.poolId !== poolId) return;
-                        const install = installRead(answer, poolId);
-                        machineAddUpdate(
+                        if (disposed || store.getState().machineAdd !== creating) return;
+                        const install = installRead(answer);
+                        machineAddSet(
                             install
-                                ? { creating: false, install }
+                                ? { step: "shown", install }
                                 : {
-                                      creating: false,
+                                      step: "failed",
+                                      draft: add.draft,
                                       error: new UserError(
                                           "Happy Cloud didn't send an install command.",
                                       ),
@@ -388,13 +581,128 @@ export function happyAgentComputeStoreCreate(deps: {
                         );
                     },
                     (error: unknown) => {
-                        if (disposed || store.getState().machineAdd?.poolId !== poolId) return;
-                        machineAddUpdate({ creating: false, error: happyAgentUserError(error) });
+                        if (disposed || store.getState().machineAdd !== creating) return;
+                        machineAddSet({
+                            step: "failed",
+                            draft: add.draft,
+                            error: happyAgentUserError(error),
+                        });
                     },
                 );
         },
+        machineEditOpen(machineId) {
+            const machine = store.getState().machines.find((entry) => entry.id === machineId);
+            if (disposed || !machine?.editable) return;
+            set({
+                machineEdit: {
+                    step: "editing",
+                    draft: {
+                        machineId,
+                        name: machine.name,
+                        description: machine.description ?? "",
+                    },
+                },
+            });
+        },
+        machineEditClose() {
+            const { machineEdit, ...rest } = store.getState();
+            if (disposed || !machineEdit || machineEdit.step === "saving") return;
+            store.setState(rest, true);
+        },
+        machineEditNameUpdate(name) {
+            machineEditDraftUpdate({ name });
+        },
+        machineEditDescriptionUpdate(description) {
+            machineEditDraftUpdate({ description });
+        },
+        machineEditSave() {
+            const { machineEdit: edit, machines } = store.getState();
+            if (disposed || !edit || edit.step === "saving") return;
+            const draft = edit.draft;
+            const machine = machines.find((entry) => entry.id === draft.machineId);
+            const name = draftText(draft.name);
+            const description = draftText(draft.description);
+            if (!machine || name === null) return;
+            const body = {
+                ...(name === machine.name ? {} : { name }),
+                // `null` clears the description.
+                ...(description === machine.description ? {} : { description }),
+            };
+            if (Object.keys(body).length === 0) {
+                const { machineEdit: _closed, ...rest } = store.getState();
+                store.setState(rest, true);
+                return;
+            }
+            const saving: HappyAgentComputeMachineEdit = { step: "saving", draft };
+            set({ machineEdit: saving });
+            void deps
+                .request("PATCH", `v0/compute/nodes/${encodeURIComponent(draft.machineId)}`, body)
+                .then(
+                    () => {
+                        if (disposed || store.getState().machineEdit !== saving) return;
+                        const { machineEdit: _closed, ...rest } = store.getState();
+                        store.setState(rest, true);
+                        load();
+                    },
+                    (error: unknown) => {
+                        if (disposed || store.getState().machineEdit !== saving) return;
+                        set({
+                            machineEdit: {
+                                step: "failed",
+                                draft,
+                                error: happyAgentUserError(error),
+                            },
+                        });
+                    },
+                );
+        },
+        machineLockRelease(machineId) {
+            const snapshot = store.getState();
+            if (disposed || snapshot.access !== "manage" || snapshot.lockReleases.has(machineId))
+                return;
+            set({
+                lockReleases: new Set([...snapshot.lockReleases, machineId]),
+                actionError: undefined,
+            });
+            act(
+                () =>
+                    deps.request(
+                        "POST",
+                        `v0/compute/nodes/${encodeURIComponent(machineId)}/release-lock`,
+                        {},
+                    ),
+                (current) => ({
+                    lockReleases: new Set(
+                        [...current.lockReleases].filter((entry) => entry !== machineId),
+                    ),
+                }),
+            );
+        },
+        approvalAnswer(key, answer) {
+            const snapshot = store.getState();
+            const approval = snapshot.approvals.find((entry) => entry.key === key);
+            if (disposed || !approval || snapshot.approvalAnswers.has(key)) return;
+            set({
+                approvalAnswers: new Map([...snapshot.approvalAnswers, [key, answer]]),
+                actionError: undefined,
+            });
+            act(
+                () =>
+                    deps.request(
+                        "POST",
+                        `v0/compute/approvals/${encodeURIComponent(approval.machineId)}/${encodeURIComponent(approval.agentId)}`,
+                        { approve: answer === "approve" },
+                    ),
+                (current) => ({
+                    approvalAnswers: new Map(
+                        [...current.approvalAnswers].filter(([entry]) => entry !== key),
+                    ),
+                }),
+            );
+        },
         [Symbol.dispose]() {
             disposed = true;
+            followStop();
             if (timer !== undefined) clearTimeout(timer);
             timer = undefined;
         },
@@ -403,9 +711,11 @@ export function happyAgentComputeStoreCreate(deps: {
 
 const INERT_SNAPSHOT: HappyAgentComputeSnapshot = {
     loading: false,
-    manage: false,
-    pools: [],
+    access: "none",
     machines: [],
+    approvals: [],
+    approvalAnswers: new Map(),
+    lockReleases: new Set(),
 };
 
 /** Where there is no Happy Cloud compute: it lists nothing and never changes. */
@@ -414,7 +724,16 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     subscribe: () => () => undefined,
     machineAddOpen: () => undefined,
     machineAddClose: () => undefined,
-    machineAddPoolUpdate: () => undefined,
+    machineAddModeUpdate: () => undefined,
+    machineAddNameUpdate: () => undefined,
+    machineAddDescriptionUpdate: () => undefined,
     machineAddCreate: () => undefined,
+    machineEditOpen: () => undefined,
+    machineEditClose: () => undefined,
+    machineEditNameUpdate: () => undefined,
+    machineEditDescriptionUpdate: () => undefined,
+    machineEditSave: () => undefined,
+    machineLockRelease: () => undefined,
+    approvalAnswer: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

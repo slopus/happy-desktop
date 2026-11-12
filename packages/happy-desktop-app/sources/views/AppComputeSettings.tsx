@@ -1,11 +1,16 @@
 import type {
+    HappyAgentComputeApproval,
     HappyAgentComputeMachine,
+    HappyAgentComputeMachineAdd,
     HappyAgentComputeSnapshot,
     HappyAgentComputeStore,
 } from "happy-desktop-state";
 import {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineEditDialog,
     HappyAgentComputeSettings,
+    type HappyAgentComputeJoinRequestRow,
+    type HappyAgentComputeMachineAddStage,
     type HappyAgentComputeMachineRow,
 } from "happy-desktop-ui";
 
@@ -16,40 +21,69 @@ export function AppComputeSettings(props: {
 }) {
     const { snapshot, store } = props;
     const add = snapshot.machineAdd;
-    const poolNames = new Map(snapshot.pools.map((pool) => [pool.id, pool.name]));
+    const edit = snapshot.machineEdit;
     return (
         <>
             <HappyAgentComputeSettings
                 {...(snapshot.error ? { error: snapshot.error.message } : {})}
+                {...(snapshot.actionError ? { actionError: snapshot.actionError.message } : {})}
+                add={
+                    snapshot.access === "manage"
+                        ? "any"
+                        : snapshot.access === "use"
+                          ? "private"
+                          : "none"
+                }
                 loading={snapshot.loading}
-                machines={snapshot.machines.map((machine) => machineRow(machine, poolNames))}
-                manage={snapshot.manage}
-                onMachineAdd={(poolId) => store.machineAddOpen(poolId)}
-                pools={snapshot.pools}
+                machines={snapshot.machines.map((machine) => machineRow(machine, snapshot))}
+                onMachineAdd={() => store.machineAddOpen()}
+                onMachineEdit={(machineId) => store.machineEditOpen(machineId)}
+                onMachineRelease={(machineId) => store.machineLockRelease(machineId)}
+                onRequestAnswer={(key, approve) =>
+                    store.approvalAnswer(key, approve ? "approve" : "deny")
+                }
+                requests={snapshot.approvals.map((approval) => requestRow(approval, snapshot))}
             />
             {add ? (
                 <HappyAgentComputeMachineAddDialog
-                    creating={add.creating}
-                    {...(add.error ? { error: add.error.message } : {})}
-                    {...(add.install
-                        ? {
-                              install: {
-                                  commands: add.install.commands,
-                                  token: add.install.token,
-                                  clusterUrl: add.install.clusterUrl,
-                                  expires: expiresText(add.install.expiresAt),
-                              },
-                          }
-                        : {})}
+                    modes={snapshot.access === "manage" ? "any" : "private"}
                     onClose={() => store.machineAddClose()}
                     onCreate={() => store.machineAddCreate()}
-                    onPoolChange={(poolId) => store.machineAddPoolUpdate(poolId)}
-                    poolId={add.poolId}
-                    pools={snapshot.pools}
+                    onDescriptionChange={(text) => store.machineAddDescriptionUpdate(text)}
+                    onModeChange={(mode) => store.machineAddModeUpdate(mode)}
+                    onNameChange={(name) => store.machineAddNameUpdate(name)}
+                    stage={addStage(add)}
+                />
+            ) : null}
+            {edit ? (
+                <HappyAgentComputeMachineEditDialog
+                    description={edit.draft.description}
+                    {...(edit.step === "failed" ? { error: edit.error.message } : {})}
+                    name={edit.draft.name}
+                    onClose={() => store.machineEditClose()}
+                    onDescriptionChange={(text) => store.machineEditDescriptionUpdate(text)}
+                    onNameChange={(name) => store.machineEditNameUpdate(name)}
+                    onSave={() => store.machineEditSave()}
+                    saving={edit.step === "saving"}
                 />
             ) : null}
         </>
     );
+}
+
+function addStage(add: HappyAgentComputeMachineAdd): HappyAgentComputeMachineAddStage {
+    switch (add.step) {
+        case "shown":
+            return {
+                step: "install",
+                install: { ...add.install, expires: expiresText(add.install.expiresAt) },
+            };
+        case "failed":
+            return { step: "form", draft: add.draft, creating: false, error: add.error.message };
+        case "choosing":
+        case "creating":
+            return { step: "form", draft: add.draft, creating: add.step === "creating" };
+    }
 }
 
 const OS_NAMES: Readonly<Record<string, string>> = {
@@ -60,7 +94,7 @@ const OS_NAMES: Readonly<Record<string, string>> = {
 
 function machineRow(
     machine: HappyAgentComputeMachine,
-    poolNames: ReadonlyMap<string, string>,
+    snapshot: HappyAgentComputeSnapshot,
 ): HappyAgentComputeMachineRow {
     const platform = [machine.os ? (OS_NAMES[machine.os] ?? machine.os) : undefined, machine.arch]
         .filter(Boolean)
@@ -68,23 +102,55 @@ function machineRow(
     const detail = [
         machine.hostname !== machine.name ? machine.hostname : undefined,
         platform || undefined,
-        poolNames.get(machine.poolId),
         machine.status === "online" ? undefined : sinceText(machine.since),
     ]
         .filter(Boolean)
         .join(" · ");
+    const mode = machine.mode;
+    const holder = mode.mode === "exclusive" ? mode.holder : null;
+    const owner = mode.mode === "private" ? mode.owner : null;
     return {
         id: machine.id,
         name: machine.name,
-        status: machine.status,
+        status: holder && machine.status === "online" ? "busy" : machine.status,
         os:
             machine.os === "macos" || machine.os === "linux" || machine.os === "windows"
                 ? machine.os
                 : "other",
+        mode: mode.mode,
         detail: detail || "No details yet",
-        sandboxes: machine.sandboxes,
-        agents: machine.agents.length,
+        ...(machine.description ? { description: machine.description } : {}),
+        ...(owner
+            ? {
+                  owner:
+                      owner.kind === "reader"
+                          ? { kind: "reader" }
+                          : { kind: "member", name: owner.name },
+              }
+            : {}),
+        ...(holder ? { heldBy: holder.title ?? "an agent" } : {}),
         ...(machine.sandboxError ? { sandboxError: machine.sandboxError } : {}),
+        edit: machine.editable,
+        release:
+            holder && snapshot.access === "manage"
+                ? snapshot.lockReleases.has(machine.id)
+                    ? "releasing"
+                    : "offered"
+                : "none",
+    };
+}
+
+function requestRow(
+    approval: HappyAgentComputeApproval,
+    snapshot: HappyAgentComputeSnapshot,
+): HappyAgentComputeJoinRequestRow {
+    const answering = snapshot.approvalAnswers.get(approval.key);
+    return {
+        key: approval.key,
+        agent: approval.agentTitle ?? "An agent",
+        machine: approval.machineName ?? "your machine",
+        when: sinceText(approval.createdAt) ?? "just now",
+        ...(answering ? { answering } : {}),
     };
 }
 

@@ -262,7 +262,7 @@ export interface HappyAgentWorkspaceClient {
     cloudProviders(): HappyAgentCloudProvidersStore | undefined;
     /** Settings › Repositories on Happy Cloud; undefined anywhere else. */
     repositories(): HappyAgentRepositoriesStore | undefined;
-    /** Settings › Compute on Happy Cloud: its pools and machines; undefined anywhere else. */
+    /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
     dailyUsage(): HappyAgentDailyUsageStore | undefined;
@@ -1154,7 +1154,7 @@ export function happyAgentWorkspaceClientCreate(
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
             if (!request) return undefined;
-            computeStore ??= happyAgentComputeStoreCreate({ request });
+            computeStore ??= happyAgentComputeStoreCreate({ request, sync: deps.connection.sync });
             return computeStore;
         },
         dailyUsage() {
