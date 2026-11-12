@@ -204,17 +204,25 @@ const SPECIMENS: readonly {
     },
     {
         label: "Join",
-        detail: "a server's name and the invite code",
-        view: { kind: "join", name: "", code: "" },
+        detail: "an invite link to paste, which opens in the browser",
+        view: { kind: "join", link: "" },
     },
     {
-        label: "Join failed",
-        detail: "the accounts service refused the code",
+        label: "Join opened",
+        detail: "the invite link went to the browser; Back reads the servers again",
         view: {
             kind: "join",
-            name: "design-guild",
-            code: "WRONG123",
-            error: "No server has that name and invite code.",
+            link: "https://happy.engineering/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+            opened: true,
+        },
+    },
+    {
+        label: "Join not a link",
+        detail: "what was pasted is not an invite link",
+        view: {
+            kind: "join",
+            link: "K7QF-29XM",
+            error: "That isn’t a Happy invite link.",
         },
     },
     {
@@ -269,9 +277,8 @@ export function CloudConnectScreenPage() {
                                     onCreate={noop}
                                     onCreateNameChange={noop}
                                     onCreateOpen={noop}
-                                    onJoin={noop}
-                                    onJoinCodeChange={noop}
-                                    onJoinNameChange={noop}
+                                    onJoinLinkChange={noop}
+                                    onJoinLinkOpen={noop}
                                     onJoinOpen={noop}
                                     onLogoPress={noop}
                                     onTestLoginChange={noop}

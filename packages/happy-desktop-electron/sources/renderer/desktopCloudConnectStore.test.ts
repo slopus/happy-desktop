@@ -34,6 +34,7 @@ function storeCreate(cloud: DesktopHappyCloud) {
         bridge: {},
         chiefOfStaffAsk: async () => undefined,
         connect: async () => ({ ok: true }),
+        linkOpen: () => undefined,
         now: () => clock,
     });
     store.connectOpen();
@@ -132,6 +133,7 @@ function emailStoreCreate(cloud: DesktopHappyCloud) {
         bridge: {},
         chiefOfStaffAsk: async () => undefined,
         connect: async () => ({ ok: true }),
+        linkOpen: () => undefined,
         now: () => Date.now(),
     });
     store.connectOpen();
