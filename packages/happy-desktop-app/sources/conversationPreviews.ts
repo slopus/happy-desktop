@@ -12,7 +12,7 @@ const EMPTY: HappyAgentPreviewsSnapshot = new Map();
 const emptyGet = () => EMPTY;
 
 export interface ConversationPreviewContext {
-    readonly workspace: HappyAgentWorkspaceStore;
+    readonly workspace: Pick<HappyAgentWorkspaceStore, "previews">;
     readonly platform: "desktop" | "web" | undefined;
     readonly externalOpen: (url: string) => void;
 }
@@ -24,7 +24,7 @@ interface ConversationPreviews {
 
 /** One subscription for the conversation, fanned out to its preview rows as props. */
 export function useConversationPreviews(input: {
-    readonly workspace: HappyAgentWorkspaceStore;
+    readonly workspace: Pick<HappyAgentWorkspaceStore, "previews">;
     readonly entries: readonly ConversationEntry[];
     readonly onOpen: (previewId: string) => void;
 }): ConversationPreviews {
