@@ -1434,9 +1434,6 @@ function DesktopCloudConnect(props: {
             onCreate={props.store.serverCreate}
             onCreateNameChange={props.store.createNameUpdate}
             onCreateOpen={props.store.createOpen}
-            onJoinLinkChange={props.store.joinLinkUpdate}
-            onJoinLinkOpen={props.store.joinLinkOpen}
-            onJoinOpen={props.store.joinOpen}
             onLogoPress={props.store.logoPress}
             onTestLoginChange={props.store.testLoginUpdate}
             onTestPasswordChange={props.store.testPasswordUpdate}
@@ -1878,7 +1875,6 @@ if (mediaPreviewBridge) {
                       cloud: desktopBridge.happyCloud,
                       bridge: desktopBridge,
                       chiefOfStaffAsk,
-                      linkOpen: desktopExternalLinkOpen(desktopBridge),
                       // A start page left for Happy Cloud is acknowledged only
                       // once a team is connected; until then Back returns to it.
                       connect: async (connectionId) => {
@@ -1891,6 +1887,13 @@ if (mediaPreviewBridge) {
                       },
                   })
                 : undefined;
+        if (cloudConnect) {
+            // An invite is accepted in the browser; coming back to the window
+            // brings its server into the list on show.
+            const serversRefresh = () => cloudConnect.serversRefresh();
+            window.addEventListener("focus", serversRefresh);
+            appDisposers.push(() => window.removeEventListener("focus", serversRefresh));
+        }
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.
         const analytics = desktopAnalyticsCreate({
