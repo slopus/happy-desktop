@@ -38,6 +38,20 @@ belongs to the settled empty artifacts list, on the page and in the side panel.
 While the catalog is still loading, and when filters match nothing, the list
 keeps its plain glyph.
 
+## Clapper board
+
+`clapper-board.json` was supplied by the project owner on 11 November 2026 as
+`action for tasks.tgs` (36,870 bytes, SHA-256
+`764ae6522784fb6ed9dcc7a40674216b79f11756046e2fc625f3df03c84868ad`). The JSON
+is that file gunzipped and nothing else: no editing, retiming, or
+re-exporting, and it keeps its `tgs` key, which the renderer ignores. It is
+Lottie 5.5.2, 512×512, 60fps, frames 0–151, 36 layers, and has no raster or
+external image assets. The supplied file records no author or upstream license
+metadata.
+
+The scene means **a piece of work is about to begin**. It stands over the title
+of the page a new task is made on.
+
 ## Where these came from
 
 The original five files were copied from `happy-list` (the Happy Coder React
@@ -62,6 +76,7 @@ not recorded in the files.
 | `alien-monster.json`           | `e0875ef4ae4aa214a3d9de567ea39e9429465addabc91d177ea883302146ae89` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 66 KB / 5 KB gz   |
 | `cat-face.json`                | `21d629ce58ad92bf140bfb7f5534e553232376a56c6bdddd0e527523a89c4d90` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 367 KB / 66 KB gz |
 | `cherry-blossom.json`          | `4b6c31349911d268c4509e184aac61d877269d7e57745a32c750c851d8a25153` | Lottie 5.5.2, 512×512, 60fps, 180f, 30 layers | 309 KB / 42 KB gz |
+| `clapper-board.json`           | `321f9dfe9e03985a6da6168300fcea7f1d9f886bc111c38fd78043f4fc2244ae` | Lottie 5.5.2, 512×512, 60fps, 151f, 36 layers | 263 KB / 38 KB gz |
 | `closed-lock.json`             | `f6087f51de1ccc7dea5cfb9853292bc14271e86e9390a8fbc9514b31b32a0ad8` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 146 KB / 14 KB gz |
 | `cloud-variation.json`         | `4833ea8c714e353818667d8c8e39ce807273e86c79c2d473f2331a00526600aa` | Lottie 5.5.2, 512×512, 60fps, 180f, 39 layers | 143 KB / 12 KB gz |
 | `confetti-ball.json`           | `65e82eafe12ac295ce747336f8453e3c500d3c130f77db97581431bf1c7d9fc5` | Lottie 5.5.2, 512×512, 60fps, 180f, 41 layers | 193 KB / 20 KB gz |
@@ -138,6 +153,8 @@ actually needs, and each is used for that one meaning and nothing else:
   connection, not a request that still needs an answer.
 - 🔒 **closed lock** — _access is secured._ It is the settled state after a
   private boundary has been established, not a warning or an access error.
+- 🎬 **clapper board** — _a piece of work is about to begin._ It stands over
+  the page a new task is made on, before the first message is sent.
 - ☁️ **cloud** — _work runs on hardware that is not this machine._ An agent
   hosted for you, or one on a machine of your own that others can reach. It is
   about where the work happens, never about a sync or an upload.
@@ -167,7 +184,8 @@ actually needs, and each is used for that one meaning and nothing else:
 - 🎉 **party** — _a group is celebrating a shared completion._ It is the social
   counterpart to the confetti ball's single milestone.
 - 🤖 **robot** — _an agent is ready, and waiting to be told what to do._ The
-  screen with no session open, and a conversation with nothing in it yet.
+  screen with no session open, a conversation with nothing in it yet, and the
+  page a new bot is made on.
 - 🐌 **snail** — _something is being read right now, and it is taking a moment._
   Every panel-wide wait, with no exceptions worth explaining: a session, a file,
   the documents list, the shared files, the inbox, the

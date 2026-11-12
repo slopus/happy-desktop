@@ -42,6 +42,12 @@ export function LottieScenePage() {
                         size={128}
                     />
                     <LottieScene
+                        name="clapper-board"
+                        play="on-demand"
+                        replayLabel="Play the clapper board again"
+                        size={128}
+                    />
+                    <LottieScene
                         name="closed-lock"
                         play="on-demand"
                         replayLabel="Play the closed lock again"

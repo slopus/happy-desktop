@@ -40,6 +40,20 @@
     text-align: center;
 }
 
+/* The scene over the title, at the size and spacing a setup page gives its
+   own. The square is reserved whether the art arrives or not: the scene draws
+   nothing until its worker runtime loads, and never in an engine that cannot
+   have one, so the box is what keeps the title from moving when it appears. */
+.happy-agent-create-bot__stage {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    margin-bottom: 8px;
+}
+
 .happy-agent-create-bot__title {
     margin: 0;
     color: var(--text);

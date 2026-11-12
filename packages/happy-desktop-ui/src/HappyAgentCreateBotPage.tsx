@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
+import { LottieScene } from "./LottieScene";
 import { TextField } from "./TextField";
 
 export type HappyAgentCreateBotPageProps = {
@@ -29,10 +30,10 @@ export type HappyAgentCreateBotPageProps = {
  * first message is written down there, where every later one will be, and
  * sending it makes the bot on the way. A bot is given no picture here: it
  * wears the placeholder its id picks, as the phone draws it. So this panel is
- * the title, a sentence about what a bot is for, and the name — which may be
- * left blank for the host to give from the first message — with Create beside
- * it for making the bot without saying anything to it yet. Nothing here is
- * required.
+ * the robot (an agent ready to be told what to do), the title, a sentence
+ * about what a bot is for, and the name — which may be left blank for the host
+ * to give from the first message — with Create beside it for making the bot
+ * without saying anything to it yet. Nothing here is required.
  *
  * Props only, and every state is directly renderable: fresh, filled in, a
  * creation in flight, one the machine refused, and one whose Happy Agent is
@@ -55,6 +56,12 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                 className="happy-agent-create-bot__header"
                 data-happy-desktop-ui="happy-agent-create-bot-header"
             >
+                <span
+                    className="happy-agent-create-bot__stage"
+                    data-happy-desktop-ui="happy-agent-create-bot-stage"
+                >
+                    <LottieScene name="robot" replayLabel="Play the robot again" size={80} />
+                </span>
                 <h1
                     className="happy-agent-create-bot__title"
                     data-happy-desktop-ui="happy-agent-create-bot-title"

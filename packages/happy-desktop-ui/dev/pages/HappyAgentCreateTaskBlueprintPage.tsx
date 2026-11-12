@@ -130,7 +130,7 @@ export function HappyAgentCreateTaskBlueprintPage() {
                 {region(
                     taskCreationSpecimen(<HappyAgentCreateTaskPage {...HANDLERS} name="" />, ""),
                 )}
-                <DimensionRule label="column centred on both axes · 24px between header and name · title 32px · lede measure 440px · name and Create 360px, 8px apart" />
+                <DimensionRule label="column centred on both axes · 24px between header and name · clapper board scene 80px, 16px over the title · title 32px · lede measure 440px · name and Create 360px, 8px apart" />
             </Specimen>
             <Specimen
                 detail="a name and the work written in the composer · Enter sends and makes the task, Create makes it and keeps the words as the draft"

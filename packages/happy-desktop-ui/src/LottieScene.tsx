@@ -19,6 +19,7 @@ import {
 } from "./lottie/dotLottieRuntime";
 import alienMonsterUrl from "./assets/animations/alien-monster.json?url";
 import cherryBlossomUrl from "./assets/animations/cherry-blossom.json?url";
+import clapperBoardUrl from "./assets/animations/clapper-board.json?url";
 import closedLockUrl from "./assets/animations/closed-lock.json?url";
 import cloudVariationUrl from "./assets/animations/cloud-variation.json?url";
 import confettiBallUrl from "./assets/animations/confetti-ball.json?url";
@@ -48,6 +49,7 @@ import wandUrl from "./assets/animations/wand.json?url";
  *
  * - `alien-monster` — people and agents are together in one live session.
  * - `cherry-blossom` — a new friendship has begun.
+ * - `clapper-board` — a piece of work is about to begin.
  * - `closed-lock` — access is secured.
  * - `cloud-variation` — work runs on hardware that is not this machine.
  * - `confetti-ball` — one milestone has just completed.
@@ -76,6 +78,7 @@ import wandUrl from "./assets/animations/wand.json?url";
 export type LottieSceneName =
     | "alien-monster"
     | "cherry-blossom"
+    | "clapper-board"
     | "closed-lock"
     | "cloud-variation"
     | "confetti-ball"
@@ -110,6 +113,7 @@ export type LottieScenePlay = "on-appear" | "on-demand";
 const SOURCES: Record<LottieSceneName, string> = {
     "alien-monster": alienMonsterUrl,
     "cherry-blossom": cherryBlossomUrl,
+    "clapper-board": clapperBoardUrl,
     "closed-lock": closedLockUrl,
     "cloud-variation": cloudVariationUrl,
     "confetti-ball": confettiBallUrl,

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
+import { LottieScene } from "./LottieScene";
 import { TextField } from "./TextField";
 
 export type HappyAgentCreateTaskPageProps = {
@@ -31,9 +32,10 @@ export type HappyAgentCreateTaskPageProps = {
  * the empty content of a conversation view whose composer is the task's own,
  * exactly as a new bot is: the first message is written down there, and
  * sending it makes the task on the way. A task has no face, so this panel is
- * only the title, a sentence about what a task is for, and the name — which
- * may be left blank for the host to give from the first message — with Create
- * beside it for making the task without saying anything to it yet.
+ * only the clapper board (a piece of work about to begin), the title, a
+ * sentence about what a task is for, and the name — which may be left blank
+ * for the host to give from the first message — with Create beside it for
+ * making the task without saying anything to it yet.
  *
  * Props only, and every state is directly renderable: fresh, filled in, a
  * creation in flight, one the machine refused, and one whose Happy Agent is
@@ -56,6 +58,16 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                 className="happy-agent-create-task__header"
                 data-happy-desktop-ui="happy-agent-create-task-header"
             >
+                <span
+                    className="happy-agent-create-task__stage"
+                    data-happy-desktop-ui="happy-agent-create-task-stage"
+                >
+                    <LottieScene
+                        name="clapper-board"
+                        replayLabel="Play the clapper board again"
+                        size={80}
+                    />
+                </span>
                 <h1
                     className="happy-agent-create-task__title"
                     data-happy-desktop-ui="happy-agent-create-task-title"

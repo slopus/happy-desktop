@@ -165,7 +165,7 @@ export function HappyAgentCreateBotBlueprintPage() {
                 stage="app"
             >
                 {region(botCreationSpecimen(<HappyAgentCreateBotPage {...HANDLERS} name="" />, ""))}
-                <DimensionRule label="column gap 24px · title 32px · lede measure 440px · name row 360px max, Create 8px right" />
+                <DimensionRule label="column gap 24px · robot scene 80px, 16px over the title · title 32px · lede measure 440px · name row 360px max, Create 8px right" />
             </Specimen>
             <Specimen
                 detail="a name three or four words long · a task written in the composer with a screenshot and a file attached, as any conversation's can be · Enter sends and makes the bot, Create makes it and keeps the words and the files as the draft"
