@@ -24,6 +24,11 @@ export type HappyAgentPreviewState =
 
 export type HappyAgentPreviewsSnapshot = ReadonlyMap<string, HappyAgentPreviewState>;
 
+/** A caller-provided host navigation capability; launch credentials stay ephemeral. */
+export interface HappyAgentPreviewTarget {
+    open(url: string): void;
+}
+
 export interface HappyAgentPreviewsStore {
     get(): HappyAgentPreviewsSnapshot;
     subscribe(listener: () => void): () => void;
@@ -31,8 +36,8 @@ export interface HappyAgentPreviewsStore {
     previewVisibilityUpdate(viewer: HappyAgentTraceViewer, previewIds: readonly string[]): void;
     /** Report a browser popup block before requesting any launch credentials. */
     previewOpenBlock(previewId: string): void;
-    /** Checks availability and mints a new, single-use URL. Never caches launch credentials. */
-    previewLaunch(previewId: string): Promise<string>;
+    /** Checks, mints and hands a fresh launch directly to the host. Never returns credentials. */
+    previewLaunch(previewId: string, target: HappyAgentPreviewTarget): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -216,7 +221,7 @@ export function happyAgentPreviewsStoreCreate(input: {
                 ),
             });
         },
-        async previewLaunch(previewId) {
+        async previewLaunch(previewId, target) {
             if (disposed) throw new UserError("This Happy Cloud connection is closed.");
             if (snapshot.get(previewId)?.type === "opening")
                 throw new UserError("This preview is already opening.");
@@ -249,8 +254,14 @@ export function happyAgentPreviewsStoreCreate(input: {
                 )
                     throw new UserError("The preview launch response was invalid.");
                 if (disposed) throw new UserError("This Happy Cloud connection is closed.");
+                try {
+                    target.open(`${url}_happy/launch#${encodeURIComponent(result.launchToken)}`);
+                } catch {
+                    // A host error may contain its destination. Never retain it or
+                    // return a bearer URL through the rejection or error snapshot.
+                    throw new UserError("The preview could not be opened in the browser.");
+                }
                 publish(previewId, { type: "available", status: "ready" });
-                return `${url}_happy/launch#${encodeURIComponent(result.launchToken)}`;
             } catch (error) {
                 if (snapshot.get(previewId)?.type === "opening") throw failure(previewId, error);
                 throw error;
