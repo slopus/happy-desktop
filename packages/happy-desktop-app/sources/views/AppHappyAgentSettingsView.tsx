@@ -66,7 +66,10 @@ import {
     happyAgentCloudCredentialReplaceable,
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
+    HAPPY_AGENT_INVITE_RESEND_COOLDOWN_MS,
     happyAgentMembersStoreNoop,
+    type HappyAgentInvite,
+    type HappyAgentInviteCreated,
     type HappyAgentMembersSnapshot,
     type HappyAgentCredentialImportSnapshot,
     happyAgentSecretsStoreNoop,
@@ -101,6 +104,8 @@ import {
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderEditDialogProps,
     HappyAgentMembersSettings,
+    type HappyAgentInviteCreatedView,
+    type HappyAgentInviteRow,
     Banner,
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
@@ -1520,31 +1525,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 membersShown ? (
                     <HappyAgentMembersSettings
                         {...(members.error ? { error: members.error.message } : {})}
-                        inviteCreating={members.inviteCreating}
-                        {...(members.inviteCreated
-                            ? {
-                                  inviteCreated: {
-                                      code: members.inviteCreated.code,
-                                      roleName: roleNameOf(members, members.inviteCreated.roleId),
-                                      expires: expiresText(members.inviteCreated.expiresAt),
-                                  },
-                              }
+                        inviteEmail={members.inviteEmail}
+                        {...(members.inviteCreating
+                            ? { inviteCreating: members.inviteCreating }
                             : {})}
-                        invites={members.invites.map((invite) => ({
-                            id: invite.id,
-                            roleName: roleNameOf(members, invite.roleId),
-                            expires: [
-                                ...(invite.uses === 0
-                                    ? []
-                                    : [
-                                          invite.uses === 1
-                                              ? "Used once"
-                                              : `Used ${String(invite.uses)} times`,
-                                      ]),
-                                expiresText(invite.expiresAt),
-                            ].join(" · "),
-                            saving: invite.saving,
-                        }))}
+                        {...(members.inviteCreated
+                            ? { inviteCreated: inviteCreatedView(members, members.inviteCreated) }
+                            : {})}
+                        invites={members.invites.map((invite) => inviteRow(members, invite))}
                         loading={members.loading}
                         manage={members.manage}
                         members={members.members.map((member) => ({
@@ -1560,8 +1548,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             saving: member.saving,
                         }))}
                         onDelete={(confirm) => membersShown.serverDelete(confirm)}
-                        onInviteCreate={(roleId) => membersShown.inviteCreate(roleId)}
                         onInviteCreatedDismiss={() => membersShown.inviteCreatedDismiss()}
+                        onInviteEmailChange={(value) => membersShown.inviteEmailUpdate(value)}
+                        onInviteEmailCreate={(roleId) => membersShown.inviteEmailCreate(roleId)}
+                        onInviteLinkCreate={(roleId) => membersShown.inviteLinkCreate(roleId)}
+                        onInviteResend={(inviteId) => membersShown.inviteResend(inviteId)}
                         onInviteRevoke={(inviteId) => membersShown.inviteRevoke(inviteId)}
                         onLeave={() => membersShown.serverLeave()}
                         {...(host?.happyCloud &&
@@ -2410,4 +2401,115 @@ function expiresText(expiresAt: number): string {
     if (hours >= 48) return `Expires in ${String(Math.floor(hours / 24))} days`;
     if (hours >= 2) return `Expires in ${String(hours)} hours`;
     return "Expires soon";
+}
+
+/** "Nov 8". */
+function dayText(at: number): string {
+    return new Date(at).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+/** "just now", "12 min ago", "5 hours ago", or the day for anything older. */
+function agoText(at: number): string {
+    const minutes = Math.floor((Date.now() - at) / 60_000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${String(minutes)} min ago`;
+    if (minutes < 120) return "an hour ago";
+    if (minutes < 24 * 60) return `${String(Math.floor(minutes / 60))} hours ago`;
+    return `on ${dayText(at)}`;
+}
+
+/** A member's name by account, or a neutral word for someone no longer listed. */
+function memberNameOf(members: HappyAgentMembersSnapshot, accountId: string): string {
+    return members.members.find((member) => member.id === accountId)?.name ?? "Someone";
+}
+
+/** Whether an email went out too recently for the server to send it again. */
+function inviteResendWaiting(invite: HappyAgentInvite): boolean {
+    // The members store re-reads every few seconds while this is on screen,
+    // and each read renders again, so the wait ends without a timer here.
+    return (
+        invite.lastSentAt !== null &&
+        Date.now() - invite.lastSentAt < HAPPY_AGENT_INVITE_RESEND_COOLDOWN_MS
+    );
+}
+
+function inviteRow(
+    members: HappyAgentMembersSnapshot,
+    invite: HappyAgentInvite,
+): HappyAgentInviteRow {
+    const pending = invite.status === "pending";
+    const waiting = pending && invite.type === "email" && inviteResendWaiting(invite);
+    const uses =
+        invite.type === "email"
+            ? undefined
+            : invite.maxUses !== null
+              ? `Used ${String(invite.uses)} of ${String(invite.maxUses)}`
+              : invite.uses === 0
+                ? undefined
+                : invite.uses === 1
+                  ? "Used once"
+                  : `Used ${String(invite.uses)} times`;
+    const joined =
+        invite.type === "link" && invite.usedBy.length > 0
+            ? `Joined: ${invite.usedBy.map((id) => memberNameOf(members, id)).join(", ")}`
+            : undefined;
+    const progress = ((): readonly (string | undefined)[] => {
+        switch (invite.status) {
+            case "pending":
+                return [
+                    invite.lastSentAt !== null && invite.delivery === "sent"
+                        ? `Sent ${agoText(invite.lastSentAt)}`
+                        : undefined,
+                    waiting ? "Resend in a minute" : undefined,
+                    uses,
+                    joined,
+                    expiresText(invite.expiresAt),
+                ];
+            case "accepted":
+                return [
+                    invite.acceptedBy !== null
+                        ? `Accepted by ${memberNameOf(members, invite.acceptedBy)}`
+                        : "Accepted",
+                    invite.acceptedAt !== null ? dayText(invite.acceptedAt) : undefined,
+                ];
+            case "revoked":
+                return [
+                    invite.revokedAt !== null ? `Revoked ${dayText(invite.revokedAt)}` : undefined,
+                    uses,
+                    joined,
+                ];
+            case "expired":
+                return [`Expired ${dayText(invite.expiresAt)}`, uses, joined];
+            case "exhausted":
+                return [uses, joined];
+        }
+    })();
+    return {
+        id: invite.id,
+        ...(invite.email === null ? {} : { email: invite.email }),
+        status: invite.status,
+        ...(invite.delivery === null ? {} : { delivery: invite.delivery }),
+        detail: [roleNameOf(members, invite.roleId), ...progress]
+            .filter((part) => part !== undefined)
+            .join(" · "),
+        resendWaiting: waiting,
+        saving: invite.saving,
+    };
+}
+
+function inviteCreatedView(
+    members: HappyAgentMembersSnapshot,
+    created: HappyAgentInviteCreated,
+): HappyAgentInviteCreatedView {
+    const detail = `${roleNameOf(members, created.roleId)} · ${expiresText(created.expiresAt)}`;
+    return created.type === "link"
+        ? { type: "link", link: created.link, detail }
+        : {
+              type: "email",
+              id: created.id,
+              email: created.email,
+              delivery: created.delivery,
+              detail,
+              saving: created.saving,
+          };
 }

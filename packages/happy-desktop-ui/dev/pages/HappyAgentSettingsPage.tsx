@@ -15,6 +15,8 @@ import {
     type HappyAgentAiProviderConnectionRow,
     type HappyAgentProviderAddDialogProps,
     HappyAgentMembersSettings,
+    type HappyAgentInviteCreatedView,
+    type HappyAgentInviteRow,
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
@@ -732,6 +734,175 @@ function AiProvidersSpecimen(props: {
                 />
             </HappyAgentSettingsShell>
         </div>
+    );
+}
+
+const membersRoles = [
+    { id: "owner", name: "Owner" },
+    { id: "admin", name: "Admin" },
+    { id: "member", name: "Member" },
+    { id: "viewer", name: "Viewer" },
+];
+
+const membersInvites: readonly HappyAgentInviteRow[] = [
+    {
+        id: "i1",
+        email: "grace@example.com",
+        status: "pending",
+        delivery: "sent",
+        detail: "Admin · Sent just now · Resend in a minute · Expires in 7 days",
+        resendWaiting: true,
+        saving: false,
+    },
+    {
+        id: "i2",
+        email: "edsger@example.com",
+        status: "pending",
+        delivery: "failed",
+        detail: "Member · Expires in 6 days",
+        resendWaiting: false,
+        saving: false,
+    },
+    {
+        id: "i3",
+        email: "barbara@example.com",
+        status: "pending",
+        delivery: "sent",
+        detail: "Member · Sent 2 hours ago · Expires in 5 days",
+        resendWaiting: false,
+        saving: false,
+    },
+    {
+        id: "i4",
+        status: "pending",
+        detail: "Viewer · Used 1 of 5 · Joined: Alan Turing · Expires in 3 days",
+        resendWaiting: false,
+        saving: false,
+    },
+    {
+        id: "i5",
+        email: "alan@example.com",
+        status: "accepted",
+        delivery: "sent",
+        detail: "Member · Accepted by Alan Turing · Nov 8",
+        resendWaiting: false,
+        saving: false,
+    },
+    {
+        id: "i6",
+        email: "ken@example.com",
+        status: "revoked",
+        delivery: "sent",
+        detail: "Member · Revoked Nov 6",
+        resendWaiting: false,
+        saving: false,
+    },
+    {
+        id: "i7",
+        status: "expired",
+        detail: "Member · Expired Nov 4 · Used once · Joined: Someone",
+        resendWaiting: false,
+        saving: false,
+    },
+    {
+        id: "i8",
+        status: "exhausted",
+        detail: "Viewer · Used 2 of 2 · Joined: Grace Hopper, Alan Turing",
+        resendWaiting: false,
+        saving: false,
+    },
+];
+
+/** Settings › Members as an owner sees it, with one invite state varied. */
+function MembersSpecimen(props: {
+    detail: string;
+    label: string;
+    number: string;
+    screen: string;
+    defaultHistoryOpen?: boolean;
+    inviteCreated?: HappyAgentInviteCreatedView;
+    inviteCreating?: "link" | "email";
+    inviteEmail?: string;
+    saveError?: string;
+    window?: { readonly width: number; readonly height: number };
+}) {
+    const [inviteEmail, inviteEmailSet] = useState(props.inviteEmail ?? "");
+    return (
+        <FullScreenSpecimen
+            detail={props.detail}
+            label={props.label}
+            number={props.number}
+            screen={props.screen}
+            {...(props.window ? { window: props.window } : {})}
+        >
+            <HappyAgentSettingsShell
+                activeCategoryId="members"
+                categories={[
+                    ...categories,
+                    {
+                        group: "Team",
+                        icon: "users",
+                        id: "members",
+                        label: "Members",
+                        tone: "orange",
+                    },
+                ]}
+                description="Who is on this server and what they may do"
+                onCategorySelect={noop}
+                onClose={noop}
+                title="Members"
+            >
+                <HappyAgentMembersSettings
+                    {...(props.defaultHistoryOpen ? { defaultHistoryOpen: true } : {})}
+                    {...(props.inviteCreated ? { inviteCreated: props.inviteCreated } : {})}
+                    {...(props.inviteCreating ? { inviteCreating: props.inviteCreating } : {})}
+                    inviteEmail={inviteEmail}
+                    invites={membersInvites}
+                    loading={false}
+                    manage
+                    members={[
+                        {
+                            id: "a1",
+                            name: "Ada Lovelace",
+                            roleId: "owner",
+                            joined: "Joined Nov 7",
+                            self: true,
+                            saving: false,
+                        },
+                        {
+                            id: "a2",
+                            name: "Grace Hopper",
+                            roleId: "admin",
+                            joined: "Joined Nov 7",
+                            self: false,
+                            saving: false,
+                        },
+                        {
+                            id: "a3",
+                            name: "Alan Turing",
+                            roleId: "member",
+                            joined: "Joined Nov 8",
+                            self: false,
+                            saving: true,
+                        },
+                    ]}
+                    onDelete={() => Promise.resolve()}
+                    onInviteCreatedDismiss={noop}
+                    onInviteEmailChange={inviteEmailSet}
+                    onInviteEmailCreate={noop}
+                    onInviteLinkCreate={noop}
+                    onInviteResend={noop}
+                    onInviteRevoke={noop}
+                    onLeave={() => Promise.resolve()}
+                    onRemove={noop}
+                    onRoleChange={noop}
+                    owner
+                    roles={membersRoles}
+                    {...(props.saveError ? { saveError: props.saveError } : {})}
+                    serverName="acme"
+                />
+            </HappyAgentSettingsShell>
+        </FullScreenSpecimen>
     );
 }
 
@@ -1663,90 +1834,81 @@ export function HappyAgentSettingsBlueprintPage() {
                     add={{ flow: { kind: "chatgpt" }, phase: "done", done: "ChatGPT connected" }}
                 />
             </FullScreenSpecimen>
-            <FullScreenSpecimen
-                detail="Happy Cloud members, seen by an owner: roles to change, an invite code shown once, a pending invite, and leaving or deleting the server"
+            <MembersSpecimen
+                detail="Happy Cloud members, seen by an owner: roles to change, a link invite shown once, pending email and link invites, past invites folded, and leaving or deleting the server"
+                inviteCreated={{
+                    type: "link",
+                    link: "https://happy.engineering/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    detail: "Member · Expires in 7 days",
+                }}
                 label="Happy Agent settings — members"
                 number="03e"
                 screen="members"
-            >
-                <HappyAgentSettingsShell
-                    activeCategoryId="members"
-                    categories={[
-                        ...categories,
-                        {
-                            group: "Team",
-                            icon: "users",
-                            id: "members",
-                            label: "Members",
-                            tone: "orange",
-                        },
-                    ]}
-                    description="Who is on this server and what they may do"
-                    onCategorySelect={noop}
-                    onClose={noop}
-                    title="Members"
-                >
-                    <HappyAgentMembersSettings
-                        inviteCreated={{
-                            code: "K7QF-29XM",
-                            roleName: "Member",
-                            expires: "Expires in 7 days",
-                        }}
-                        inviteCreating={false}
-                        invites={[
-                            {
-                                id: "i1",
-                                roleName: "Admin",
-                                expires: "Expires in 3 days",
-                                saving: false,
-                            },
-                        ]}
-                        loading={false}
-                        manage
-                        members={[
-                            {
-                                id: "a1",
-                                name: "Ada Lovelace",
-                                roleId: "owner",
-                                joined: "Joined Nov 7",
-                                self: true,
-                                saving: false,
-                            },
-                            {
-                                id: "a2",
-                                name: "Grace Hopper",
-                                roleId: "admin",
-                                joined: "Joined Nov 7",
-                                self: false,
-                                saving: false,
-                            },
-                            {
-                                id: "a3",
-                                name: "Alan Turing",
-                                roleId: "member",
-                                joined: "Joined Nov 8",
-                                self: false,
-                                saving: true,
-                            },
-                        ]}
-                        onDelete={() => Promise.resolve()}
-                        onInviteCreate={noop}
-                        onInviteCreatedDismiss={noop}
-                        onInviteRevoke={noop}
-                        onLeave={() => Promise.resolve()}
-                        onRemove={noop}
-                        onRoleChange={noop}
-                        owner
-                        roles={[
-                            { id: "owner", name: "Owner" },
-                            { id: "admin", name: "Admin" },
-                            { id: "member", name: "Member" },
-                            { id: "viewer", name: "Viewer" },
-                        ]}
-                        serverName="acme"
-                    />
-                </HappyAgentSettingsShell>
-            </FullScreenSpecimen>
+            />
+            <MembersSpecimen
+                detail="An email invite just sent, with the address cleared for the next one"
+                inviteCreated={{
+                    type: "email",
+                    id: "i9",
+                    email: "linus@example.com",
+                    delivery: "sent",
+                    detail: "Member · Expires in 7 days",
+                    saving: false,
+                }}
+                label="Happy Agent settings — members, email sent"
+                number="03e1"
+                screen="members-email-sent"
+            />
+            <MembersSpecimen
+                detail="An email invite whose email didn't go out: the invite is made and can be resent"
+                inviteCreated={{
+                    type: "email",
+                    id: "i9",
+                    email: "linus@example.com",
+                    delivery: "failed",
+                    detail: "Member · Expires in 7 days",
+                    saving: false,
+                }}
+                label="Happy Agent settings — members, email failed"
+                number="03e2"
+                screen="members-email-failed"
+            />
+            <MembersSpecimen
+                detail="An email invite on its way: the address stays while the server answers"
+                inviteCreating="email"
+                inviteEmail="linus@example.com"
+                label="Happy Agent settings — members, sending"
+                number="03e3"
+                screen="members-sending"
+            />
+            <MembersSpecimen
+                detail="A server that can't send email yet refuses an email invite; a link still works"
+                inviteEmail="linus@example.com"
+                label="Happy Agent settings — members, no email"
+                number="03e4"
+                saveError="This server can't send email yet. Create a link instead."
+                screen="members-no-email"
+            />
+            <MembersSpecimen
+                defaultHistoryOpen
+                detail="Past invites unfolded: accepted by whom and when, revoked, expired and used up"
+                label="Happy Agent settings — members, past invites"
+                number="03e5"
+                screen="members-history"
+                window={{ width: 1100, height: 980 }}
+            />
+            <MembersSpecimen
+                detail="At the smallest window, 720×640: the invite row keeps every control whole"
+                inviteCreated={{
+                    type: "link",
+                    link: "https://happy.engineering/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    detail: "Member · Expires in 7 days",
+                }}
+                label="Happy Agent settings — members, small window"
+                number="03e6"
+                screen="members-small"
+                window={{ width: 720, height: 640 }}
+            />
             <FullScreenSpecimen
                 detail="A refused provider change: the list still shows what the daemon holds, with the refusal above it"
                 label="Happy Agent settings — providers refused"
