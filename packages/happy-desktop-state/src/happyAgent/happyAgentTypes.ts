@@ -116,8 +116,6 @@ export interface HappyAgentBotCreating {
     readonly workspaceId: HappyAgentWorktreeId;
     /** The chosen name, or what the host will call an unnamed bot until its first message. */
     readonly name: string;
-    /** The face painted for it, as a URL the row can draw without the host. */
-    readonly avatar?: { readonly url: string };
 }
 
 /**

@@ -17,15 +17,9 @@ const REGION = { height: "640px", width: "1000px" };
 /** The same region in the 720×640 Electron minimum window, sidebar deducted. */
 const MINIMUM_REGION = { height: "640px", width: "470px" };
 
-/** Fixed seeds, so the four faces on the blueprint are the same four every time. */
-const FACES = ["blueprint1", "blueprint2", "blueprint3", "blueprint4"] as const;
-
 const noop = () => {};
 
 const HANDLERS = {
-    onCreditOpen: noop,
-    onFacePick: noop,
-    onFacesRoll: noop,
     onNameChange: noop,
     onSubmit: noop,
 } as const;
@@ -161,42 +155,27 @@ export function HappyAgentCreateBotBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="What is decided about a bot before it exists — what a bot is for, a face already picked, a name that may be left blank, Create — placed around the faces at the middle of the body, over the composer that will be the bot's own."
+            summary="What is decided about a bot before it exists — what a bot is for, a name that may be left blank, Create — one centred column in the middle of the body, over the composer that will be the bot's own. A bot wears the placeholder its id picks, so there is no face to choose."
             title="HappyAgentCreateBotPage"
         >
             <Specimen
-                detail="the four faces are the middle of the empty body on both axes · the title and the sentence about bots hold to the top · the credit sits on the faces, flush with the leftmost · the die and Create stand in the margin to the right, outside what is centred · the name is as wide as the faces · the first face is picked · the composer is the conversation's own, pickers and all, and has the focus on arrival"
+                detail="one centred column at the vertical middle of the empty body · the title and the sentence about bots over the name · Create beside the name · no face to pick: the bot wears the placeholder its id picks · the composer is the conversation's own, pickers and all, and has the focus on arrival"
                 label="Opened, in place"
                 number="01"
                 stage="app"
             >
-                {region(
-                    botCreationSpecimen(
-                        <HappyAgentCreateBotPage
-                            {...HANDLERS}
-                            faceSlot={0}
-                            faces={FACES}
-                            name=""
-                        />,
-                        "",
-                    ),
-                )}
-                <DimensionRule label="grid 1fr · 248px · 1fr on both axes · title 32px · lede measure 440px · credit 8px over the faces · faces 56px, 8px apart · die 12px right · name 248px, Create 8px right" />
+                {region(botCreationSpecimen(<HappyAgentCreateBotPage {...HANDLERS} name="" />, ""))}
+                <DimensionRule label="column gap 24px · title 32px · lede measure 440px · name row 360px max, Create 8px right" />
             </Specimen>
             <Specimen
-                detail="another face picked · a name three or four words long · a task written in the composer with a screenshot and a file attached, as any conversation's can be · Enter sends and makes the bot, Create makes it and keeps the words and the files as the draft"
+                detail="a name three or four words long · a task written in the composer with a screenshot and a file attached, as any conversation's can be · Enter sends and makes the bot, Create makes it and keeps the words and the files as the draft"
                 label="Filled in, in place"
                 number="02"
                 stage="app"
             >
                 {region(
                     botCreationSpecimen(
-                        <HappyAgentCreateBotPage
-                            {...HANDLERS}
-                            faceSlot={2}
-                            faces={FACES}
-                            name="Release helper"
-                        />,
+                        <HappyAgentCreateBotPage {...HANDLERS} name="Release helper" />,
                         TASK,
                         false,
                         false,
@@ -215,8 +194,6 @@ export function HappyAgentCreateBotBlueprintPage() {
                         botCreationSpecimen(
                             <HappyAgentCreateBotPage
                                 {...HANDLERS}
-                                faceSlot={2}
-                                faces={FACES}
                                 name="Release helper"
                                 submitting
                             />,
@@ -231,8 +208,6 @@ export function HappyAgentCreateBotBlueprintPage() {
                             <HappyAgentCreateBotPage
                                 {...HANDLERS}
                                 error="The bot's folder could not be created."
-                                faceSlot={2}
-                                faces={FACES}
                                 name="Release helper"
                             />,
                             TASK,
@@ -242,7 +217,7 @@ export function HappyAgentCreateBotBlueprintPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="known Happy Agent offline · faces, name and the composer stay editable · only making the bot is unavailable, and the panel says why"
+                detail="known Happy Agent offline · the name and the composer stay editable · only making the bot is unavailable, and the panel says why"
                 label="Happy Agent offline"
                 number="04"
                 stage="app"
@@ -251,8 +226,6 @@ export function HappyAgentCreateBotBlueprintPage() {
                     botCreationSpecimen(
                         <HappyAgentCreateBotPage
                             {...HANDLERS}
-                            faceSlot={0}
-                            faces={FACES}
                             name=""
                             submitDisabledReason="Happy Agent is offline. The draft is preserved."
                         />,

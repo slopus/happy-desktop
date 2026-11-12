@@ -1095,7 +1095,7 @@ const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
  * in words instead, which left a bot saying "working" beside a column of
  * projects that spin.
  */
-function botSidebarItem(
+export function botSidebarItem(
     bot: HappyAgentBot,
     titleShimmerEnabled: boolean,
     muted: boolean,
@@ -1133,7 +1133,7 @@ function sidebarUnread(
  * the way a worktree does while its checkout is prepared. Nothing is running
  * in it and nothing is unread, because there is nothing yet for either to be.
  */
-function botCreatingSidebarItem(
+export function botCreatingSidebarItem(
     bot: HappyAgentBotCreating,
     titleShimmerEnabled: boolean,
 ): SidebarItem {
@@ -1143,7 +1143,7 @@ function botCreatingSidebarItem(
         label: bot.name,
         labelShimmer: titleShimmerEnabled,
         initials: ownerInitials(bot.name),
-        ...(bot.avatar ? { imageUrl: bot.avatar.url } : { placeholderSeed: bot.id }),
+        placeholderSeed: bot.id,
         lifecycle: "creating",
         lifecycleLabel: "creating",
     };
@@ -4548,11 +4548,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     <HappyAgentCreateBotSurface
                         happyAgentOnline={activeHappyAgentOnline}
                         providerUsage={active.session.providerUsage}
-                        // The artist's page is on the web, and this window has
-                        // no workspace behind it for an embedded tab to run in,
-                        // so it goes to the machine's own browser where the
-                        // host can send it there.
-                        onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
                         workspace={active.session.workspace}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
@@ -10929,11 +10924,11 @@ function CreationTabbedPane(props: { children: ReactNode; label: string }) {
 
 /**
  * Where a bot is made: the conversation it is about to become, with nothing in
- * it yet. The body holds what is decided beforehand — the face, the name, and
- * Create — and the composer underneath is already the bot's own, standing
- * where it will stand once the bot exists, with the same model, access, and
- * speed pickers every composer carries and one sentence about what sending
- * does where the context meter will stand. Sending from it makes the bot and
+ * it yet. The body holds what is decided beforehand — the name and Create —
+ * and the composer underneath is already the bot's own, standing where it
+ * will stand once the bot exists, with the same model, access, and speed
+ * pickers every composer carries and one sentence about what sending does
+ * where the context meter will stand. Sending from it makes the bot and
  * says the first thing to it; Create makes the bot and carries the words into
  * the conversation as its draft, so making the bot moves nothing.
  *
@@ -10944,7 +10939,6 @@ function CreationTabbedPane(props: { children: ReactNode; label: string }) {
  */
 function HappyAgentCreateBotSurface(props: {
     happyAgentOnline: () => boolean;
-    onExternalLinkOpen: (url: string) => void;
     providerUsage?: HappyAgentProviderUsageStore;
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
@@ -11033,12 +11027,7 @@ function HappyAgentCreateBotSurface(props: {
             emptyContent={
                 <HappyAgentCreateBotPage
                     {...(botCreate.error === undefined ? {} : { error: botCreate.error })}
-                    faceSlot={botCreate.faceSlot}
-                    faces={botCreate.faces}
                     name={botCreate.name}
-                    onCreditOpen={props.onExternalLinkOpen}
-                    onFacePick={(slot) => store.botCreateFacePick(slot)}
-                    onFacesRoll={() => store.botCreateFacesRoll()}
                     // The name is a controlled field, so its new value has to
                     // reach React inside the event that produced it; left in
                     // the frame queue, React restores the old value and takes

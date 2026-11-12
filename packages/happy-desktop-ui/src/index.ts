@@ -125,15 +125,6 @@ export {
     type AvatarShaderRendererStats,
 } from "./avatarShader/avatarShaderRenderer";
 export { type ImageMark } from "./imageMark";
-export {
-    BotFace,
-    botFaceCredit,
-    botFaceDataUri,
-    botFacePaint,
-    botFaceSvg,
-    type BotFacePainting,
-    type BotFaceProps,
-} from "./BotFace";
 export { AutomatedTag, type AutomatedTagProps } from "./AutomatedTag";
 export {
     Badge,
@@ -506,7 +497,6 @@ export {
 } from "./HappyAgentProjectSettingsDialog";
 export {
     HappyAgentCreateBotPage,
-    type HappyAgentCreateBotFaceSlot,
     type HappyAgentCreateBotPageProps,
 } from "./HappyAgentCreateBotPage";
 export {

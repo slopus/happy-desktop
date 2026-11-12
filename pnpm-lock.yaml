@@ -350,12 +350,6 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.7
         version: 6.43.7
-      '@dicebear/core':
-        specifier: 10.7.0
-        version: 10.7.0
-      '@dicebear/styles':
-        specifier: 10.6.0
-        version: 10.6.0
       '@fontsource-variable/figtree':
         specifier: ^5.2.10
         version: 5.2.10
@@ -810,13 +804,6 @@ packages:
   '@csstools/css-tokenizer@4.0.0':
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
-
-  '@dicebear/core@10.7.0':
-    resolution: {integrity: sha512-JUOzKOd8RUByJJo8ZL+C7YE/pvEsWewfpbWUmR8OIQZWv/PvUQHnohdevySC3icyyxe6EIU/8B/rQgA42us1QA==}
-    engines: {node: '>=22.0.0'}
-
-  '@dicebear/styles@10.6.0':
-    resolution: {integrity: sha512-KhxbEVI+z8TaenX58+ZhIRFBt7adggu/F+8g6ZYLu43H2/lgLuWA3Kg8vHBrCVWdfTTTt1p2wUhQomIkkypTuQ==}
 
   '@electron-internal/extract-zip@1.0.4':
     resolution: {integrity: sha512-Zr1Vs7E9tpCNhZHDAbFVXc2gEVCG9RqPDjrno5+bdgB6LRAuvgyMHJut4NCVyYwtAieapMzc3fiQ3CSTi75ARg==}
@@ -6379,10 +6366,6 @@ snapshots:
       css-tree: 3.2.1
 
   '@csstools/css-tokenizer@4.0.0': {}
-
-  '@dicebear/core@10.7.0': {}
-
-  '@dicebear/styles@10.6.0': {}
 
   '@electron-internal/extract-zip@1.0.4': {}
 

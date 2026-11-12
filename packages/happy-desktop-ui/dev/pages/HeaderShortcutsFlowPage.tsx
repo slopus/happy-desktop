@@ -191,18 +191,8 @@ export function HeaderShortcutsFlowPage() {
                                                     ? botCreationSpecimen(
                                                           <HappyAgentCreateBotPage
                                                               name=""
-                                                              faceSlot={0}
-                                                              faces={[
-                                                                  "blueprint1",
-                                                                  "blueprint2",
-                                                                  "blueprint3",
-                                                                  "blueprint4",
-                                                              ]}
                                                               onNameChange={noop}
                                                               onSubmit={noop}
-                                                              onCreditOpen={noop}
-                                                              onFacePick={noop}
-                                                              onFacesRoll={noop}
                                                           />,
                                                           "",
                                                       )

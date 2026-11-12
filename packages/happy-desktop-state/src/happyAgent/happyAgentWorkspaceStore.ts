@@ -137,7 +137,6 @@ import type {
     HappyAgentTaskCreation,
 } from "./happyAgentSessionListStore.js";
 import type {
-    HappyAgentAvatarImage,
     HappyAgentBackgroundProcess,
     HappyAgentBot,
     HappyAgentBotSubtask,
@@ -932,32 +931,19 @@ export interface HappyAgentProjectCloneSnapshot {
  */
 export const HAPPY_AGENT_PANEL_FILE_VIEW_ID = "file";
 
-/** One of the four faces offered for a new bot, by position. */
-export type HappyAgentBotFaceSlot = 0 | 1 | 2 | 3;
-
-/**
- * The four faces rolled together for a new bot. Each is a seed: the picture is
- * a pure function of it, drawn wherever it is shown, so the draft carries no
- * pixels and a face survives a reload as eight characters.
- */
-export type HappyAgentBotFaceSeeds = readonly [string, string, string, string];
-
 /**
  * A bot being made.
  *
  * A bot is a colleague that does not end: one permanent conversation with a
- * folder of its own. Nothing here is required. A face is always chosen, because
- * four are rolled and one is picked from the start; a name left blank is given
- * by the host from the first message; and the first message is what most of a
- * bot's making is, so it is written here and sent the moment the bot exists.
+ * folder of its own. Nothing here is required. A bot is given no picture: it
+ * wears the placeholder its id picks, as the phone draws it; a name left blank
+ * is given by the host from the first message; and the first message is what
+ * most of a bot's making is, so it is written here and sent the moment the bot
+ * exists.
  */
 export interface HappyAgentBotCreateSnapshot {
     /** The chosen display name. Blank, the host names the bot from its first message. */
     readonly name: string;
-    /** The four faces on offer; `faceSlot` says which one the bot gets. */
-    readonly faces: HappyAgentBotFaceSeeds;
-    /** The picked position. It is the position that is kept when the four are re-rolled. */
-    readonly faceSlot: HappyAgentBotFaceSlot;
     /**
      * The composer the first message is written in. It is the same composer the
      * bot's conversation will have, standing where that one will stand: sending
@@ -984,8 +970,7 @@ export interface HappyAgentBotCreateSnapshot {
 /**
  * A task being made. It is made the way a bot is — a name that may be left
  * blank for the host to give from the first message, and the first message
- * written in the composer its conversation will have — but a task has no face
- * of its own, so there is nothing to pick.
+ * written in the composer its conversation will have.
  */
 export interface HappyAgentTaskCreateSnapshot {
     /** The chosen name. Blank, the host names the task from its first message. */
@@ -999,14 +984,6 @@ export interface HappyAgentTaskCreateSnapshot {
     /** A refused creation, said on the surface rather than thrown away. */
     readonly error?: string;
 }
-
-/**
- * Paints the chosen face as the raster the host stores. The seed is product
- * state and the drawing is a pure function of it, but the drawing needs a
- * canvas, which the store does not have; the caller that does lends it here,
- * and the store decides when it is used.
- */
-export type HappyAgentBotFacePaint = (seed: string) => Promise<HappyAgentAvatarImage>;
 
 /** Which files the panel lists. */
 export type HappyAgentFileScope = "changed" | "all";
@@ -2066,22 +2043,13 @@ export interface HappyAgentWorkspaceStore {
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     /**
-     * Materializes the surface for a new bot, with four faces rolled and the
-     * first of them picked. A draft from a previous visit is offered back:
-     * leaving the surface is how a draft is put down, not how it is thrown
-     * away, and only the bot actually being made clears it.
-     *
-     * The painter turns the picked seed into the raster the host stores. It is
-     * lent here because a canvas lives with the caller, and kept for the whole
-     * visit because both ways of making the bot need it.
+     * Materializes the surface for a new bot. A draft from a previous visit is
+     * offered back: leaving the surface is how a draft is put down, not how it
+     * is thrown away, and only the bot actually being made clears it.
      */
-    botCreateOpen(paint: HappyAgentBotFacePaint): void;
+    botCreateOpen(): void;
     /** Edits the name of the bot being made. */
     botCreateNameUpdate(name: string): void;
-    /** Picks one of the four faces by position. */
-    botCreateFacePick(slot: HappyAgentBotFaceSlot): void;
-    /** Rolls four new faces. The picked position stays picked, now wearing its new face. */
-    botCreateFacesRoll(): void;
     /** Edits the first message, in the composer that will become the conversation's. */
     botCreateTaskUpdate(text: string): void;
     /** Whether that composer's text control owns focus. */
@@ -2119,9 +2087,9 @@ export interface HappyAgentWorkspaceStore {
     botCreateSubmit(): Promise<void>;
     /**
      * Opens the surface a task is made on, or comes back to the one already
-     * open. It is the bot's surface without a face: a name, and the first
-     * message in the composer the task's conversation will have. Opening it
-     * puts down a bot being made, since one surface is made on at a time.
+     * open. It is made the way a bot's is: a name, and the first message in
+     * the composer the task's conversation will have. Opening it puts down a
+     * bot being made, since one surface is made on at a time.
      */
     taskCreateOpen(): void;
     /** Edits the name of the task being made. */
@@ -2342,18 +2310,8 @@ function selectionCreateFields(
  * is owned by the host (the desktop connection loader) and read separately, so
  * this framework-free product store depends only on the injected `HappyAgentWorkspaceClient`.
  */
-/**
- * Four fresh face seeds. A seed is any short string; eight base-36 characters
- * is far more faces than there are bots, and short enough to read in a debug
- * snapshot.
- */
 /** The composer scope of a bot being made; one per workspace, so one id. */
 const BOT_CREATE_COMPOSER_SCOPE = "bot-create";
-
-function botFaceSeedsRoll(): HappyAgentBotFaceSeeds {
-    const one = () => Math.random().toString(36).slice(2, 10).padEnd(8, "0");
-    return [one(), one(), one(), one()];
-}
 
 /**
  * What a conversation being left holds. `empty`: its whole transcript is
@@ -2684,16 +2642,14 @@ export function happyAgentWorkspaceStoreCreate(
     /** The parts of a new bot the store holds itself; the composer is a store of its own. */
     interface BotCreateDraft {
         readonly name: string;
-        readonly faces: HappyAgentBotFaceSeeds;
-        readonly faceSlot: HappyAgentBotFaceSlot;
         readonly submitting: boolean;
         readonly error?: string;
     }
     let botCreateDraft: BotCreateDraft | undefined;
     /**
      * What the draft is making. A task is made on the bot's own machinery —
-     * the same name, composer, and pickers — less the face, so one draft
-     * serves both and this says which surface it is published as.
+     * the same name, composer, and pickers — so one draft serves both and
+     * this says which surface it is published as.
      */
     let createKind: "bot" | "task" = "bot";
     let botCreateComposer: ComposerStore | undefined;
@@ -2708,7 +2664,6 @@ export function happyAgentWorkspaceStoreCreate(
     let unsubscribeBotCreateSessionDraft: (() => void) | undefined;
     /** Invalidates a catalog read still in flight once the draft it was for is put down. */
     let botCreateSessionDraftGeneration = 0;
-    let botCreatePaint: HappyAgentBotFacePaint | undefined;
     /** The parts composed for the snapshot, rebuilt only when one has changed. */
     let botCreate: HappyAgentBotCreateSnapshot | undefined;
     let taskCreate: HappyAgentTaskCreateSnapshot | undefined;
@@ -6049,7 +6004,7 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
-     * Puts the whole draft down: the next arrival meets four new faces and an
+     * Puts the whole draft down: the next arrival meets an empty name and an
      * empty composer. The composer's attachments go on living where the bot
      * was made — in its first message or its conversation's draft — so their
      * previews are let go of only when the draft is dropped unsent.
@@ -6109,37 +6064,19 @@ export function happyAgentWorkspaceStoreCreate(
      */
     const botCreateRun = async (message: BotCreateMessage | undefined): Promise<void> => {
         const pending = botCreateDraft;
-        const paint = botCreatePaint;
         const kind = createKind;
         // Thrown rather than returned: a send that resolved here would be
         // taken by its composer as confirmed, and clear the words it holds.
-        if (!pending || (kind === "bot" && paint === undefined))
-            throw new Error(`No ${kind} is being made.`);
+        if (!pending) throw new Error(`No ${kind} is being made.`);
         if (pending.submitting) throw new Error(`The ${kind} is already being made.`);
         // Judged before anything is made, as a group's first message is: a
         // file too large to carry, found out once the bot exists, would leave
         // a bot behind that nobody asked for.
         if (message !== undefined) happyAgentComposerAttachmentsValidate(message.attachments);
         const name = pending.name.trim();
-        const seed = pending.faces[pending.faceSlot];
         const selection = botCreateSessionDraft?.get().selection;
         botCreateDraft = { ...pending, submitting: true, error: undefined };
         recompute();
-        // The face is painted before anything is asked of the host. It is a
-        // few milliseconds of local work, and having the bytes in hand is
-        // what lets the new row wear its face from its first frame. A face
-        // that cannot be painted is the one thing here allowed to fail
-        // quietly: it leaves a working bot.
-        // A task has no face, so there is nothing to paint.
-        let avatar: HappyAgentAvatarImage | undefined;
-        if (kind === "bot" && paint !== undefined) {
-            try {
-                avatar = await paint(seed);
-            } catch {
-                avatar = undefined;
-            }
-        }
-        if (disposed) return;
         let created: { readonly location: HappyAgentSessionLocation };
         try {
             // Blank is left out, not sent: an absent name is what asks the
@@ -6152,7 +6089,6 @@ export function happyAgentWorkspaceStoreCreate(
                       })
                     : await list.botCreate({
                           ...(name.length === 0 ? {} : { name }),
-                          ...(avatar === undefined ? {} : { avatar }),
                           ...(selection === undefined ? {} : { selection }),
                       });
         } catch (error) {
@@ -6185,8 +6121,8 @@ export function happyAgentWorkspaceStoreCreate(
         // thing on the screen that moved.
         const turn = (): void => {
             // Put down rather than kept. The window follows the bot that was
-            // just made, and the next arrival here should meet four new faces
-            // rather than the ones already given away.
+            // just made, and the next arrival here should meet a fresh draft
+            // rather than the one already given away.
             botCreateRelease(false);
             recompute();
             output({ type: "conversationOpenRequested", location });
@@ -6269,12 +6205,7 @@ export function happyAgentWorkspaceStoreCreate(
             botCreateRelease(true);
         }
         createKind = kind;
-        botCreateDraft = {
-            name: "",
-            faces: botFaceSeedsRoll(),
-            faceSlot: 0,
-            submitting: false,
-        };
+        botCreateDraft = { name: "", submitting: false };
         const created: ComposerStore = composerStoreCreate(BOT_CREATE_COMPOSER_SCOPE, {
             capabilities: { shellMode: false, commands: [], mentions: false },
             output: (event) => {
@@ -8695,8 +8626,7 @@ export function happyAgentWorkspaceStoreCreate(
             }
             return client.openIn(groupId, target);
         },
-        botCreateOpen(paint) {
-            botCreatePaint = paint;
+        botCreateOpen() {
             createDraftOpen("bot");
         },
         taskCreateOpen() {
@@ -8763,17 +8693,6 @@ export function happyAgentWorkspaceStoreCreate(
         botCreateServiceTierUpdate: (tier) => botCreateSessionDraft?.serviceTierUpdate(tier),
         botCreateNameUpdate(name) {
             if (createKind === "bot") createDraftNameUpdate(name);
-        },
-        botCreateFacePick(slot) {
-            if (!botCreateDraft || botCreateDraft.submitting || botCreateDraft.faceSlot === slot)
-                return;
-            botCreateDraft = { ...botCreateDraft, faceSlot: slot };
-            recompute();
-        },
-        botCreateFacesRoll() {
-            if (!botCreateDraft || botCreateDraft.submitting) return;
-            botCreateDraft = { ...botCreateDraft, faces: botFaceSeedsRoll() };
-            recompute();
         },
         botCreateTaskUpdate: (text) => botCreateComposer?.getState().textUpdate(text),
         botCreateTaskFocusUpdate: (focused) => botCreateComposer?.getState().focusUpdate(focused),

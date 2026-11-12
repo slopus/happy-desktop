@@ -238,14 +238,12 @@ export interface HappyAgentBotCreation {
 /**
  * Everything decided about a bot before the host is asked for it. Nothing is
  * required: an absent name has the host call the bot "New Bot" until its first
- * message says what it is for; an absent face leaves the row with its
- * generated mark; an absent selection leaves the conversation on the host's
- * own defaults.
+ * message says what it is for; an absent selection leaves the conversation on
+ * the host's own defaults. A bot is made with no picture: its row wears the
+ * placeholder its id picks.
  */
 export interface HappyAgentBotCreateInput {
     readonly name?: string;
-    /** The face, already painted. It goes on the row at once and up to the host once the bot exists. */
-    readonly avatar?: HappyAgentAvatarImage;
     /**
      * The model, effort, access mode, and speed the bot's conversation starts
      * with — what the composer showed while the first message was written, so
@@ -2946,34 +2944,23 @@ export function happyAgentSessionListStoreCreate(
             const name = input.name?.trim();
             // The connection names the bot, its workspace, and its agent in
             // this call stack, so the row stands under the Bots heading before
-            // the request has left — wearing the name and the face it was
-            // given — and the reader is not made to wait on the host to see
-            // that anything happened.
+            // the request has left — wearing the name it was given — and the
+            // reader is not made to wait on the host to see that anything
+            // happened.
             const request = deps.connectActions.createBot(
                 name === undefined || name.length === 0 ? undefined : name,
             );
             const botId = request.botId as HappyAgentBotId;
-            const avatar =
-                input.avatar === undefined
-                    ? undefined
-                    : { url: happyAgentAvatarImageDataUrl(input.avatar) };
-            if (avatar !== undefined) botAvatarIntents.set(botId, { avatar, replaced: undefined });
             botCreations.set(botId, {
                 id: botId,
                 workspaceId: request.workspaceId as HappyAgentWorktreeId,
                 // What the host will call it too, so the row does not change
                 // its name when the host's own listing takes over.
                 name: name === undefined || name.length === 0 ? "New Bot" : name,
-                ...(avatar === undefined ? {} : { avatar }),
             });
             publish();
             try {
                 const bot = await request.bot;
-                // The face is on its way up the moment the host holds a bot to
-                // put it on. The row already wears the local copy; this is what
-                // eventually replaces it with the host's, and what withdraws it
-                // if the host refuses.
-                if (input.avatar !== undefined) botAvatarSend(botId, input.avatar);
                 // What the composer showed while the first message was written
                 // is what the conversation runs with. The daemon knows the
                 // agent by now, so each setting lands as an ordinary session

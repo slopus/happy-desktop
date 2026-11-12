@@ -46,7 +46,6 @@ import type {
     HappyAgentWorkspaceStore,
 } from "happy-desktop-state";
 import {
-    botFacePaint,
     EmptyState,
     SplashScreen,
     WindowDragRegion,
@@ -436,9 +435,7 @@ const chatFileRoute = createRoute({
 const botCreateRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
-        // The store owns the seeds and the order of what happens; the painter
-        // is lent to it because a canvas lives here, not there.
-        happyAgentWorkspace(context, params.happyAgentId)?.botCreateOpen(botFacePaint);
+        happyAgentWorkspace(context, params.happyAgentId)?.botCreateOpen();
     },
     path: "/bots/new/$happyAgentId",
 });

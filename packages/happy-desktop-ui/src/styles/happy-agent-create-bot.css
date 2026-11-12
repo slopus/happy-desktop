@@ -2,19 +2,12 @@
  * C-238 HappyAgentCreateBotPage — what is decided about a bot before it exists,
  * standing in the body of the conversation it is about to become.
  *
- * The panel is the empty content of a conversation view. The four faces are
- * its centre, on both axes, and everything else is placed against them: a
- * 3×3 grid whose middle cell is the faces and whose outer tracks share the
- * spare room equally, so the middle cell is the middle of the body whatever
- * stands in the others. The die and Create sit in the right-hand track, in
- * the margin, and do not shift what is centred. The title and lede hold to
- * the top of the upper track; the credit holds to its bottom, flush with the
- * leftmost face. The name is as wide as the faces.
- *
- * The well, radius and placeholder are TextField's and Button's own; the
- * name's focus follows the composer's rather than TextField's, so the two
- * inputs on the page answer focus the same way. Otherwise this file only
- * decides where each thing stands.
+ * The panel is the empty content of a conversation view: one centred column,
+ * the title and lede over the name, with Create beside the name. The column
+ * is the vertical middle of the body. The well, radius and placeholder are
+ * TextField's and Button's own; the name's focus follows the composer's
+ * rather than TextField's, so the two inputs on the page answer focus the
+ * same way. It is the task page's layout, because a bot is made the same way.
  */
 
 .happy-agent-create-bot,
@@ -23,20 +16,12 @@
 }
 
 .happy-agent-create-bot {
-    /* Four faces and the three gaps between them: the width of the centred
-       column, and of the credit and the name that share its edges. */
-    --happy-create-bot-column: 248px;
-    /* eslint-disable-next-line happy-layout/use-flex-layout -- A three-by-three grid centers the faces on both axes while side controls occupy independent outer tracks. */
-    display: grid;
-    /* The outer columns split the leftover width equally, so the middle
-       column is centred whatever the die and Create beside it measure. */
-    grid-template-columns: 1fr var(--happy-create-bot-column) 1fr;
-    /* The same on the other axis: the face row is the vertical middle. */
-    grid-template-rows: 1fr auto 1fr;
-    /* Fills the body it is the empty content of, and grows past it when the
-       body is too short to hold the column, so the body scrolls rather than
-       clips. The padding is equal top and bottom so the middle stays true. */
+    display: flex;
     flex: 1 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
     margin: 0 auto;
     padding: 32px 24px;
     width: 100%;
@@ -46,27 +31,12 @@
     font-synthesis: none;
 }
 
-/* ---- Above the faces ------------------------------------------------------ */
-
-/* The whole upper track: the header held to its top, the credit to its
-   bottom, with the spare height between them. */
-.happy-agent-create-bot__above {
-    grid-area: 1 / 1 / 2 / -1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 0;
-}
-
 .happy-agent-create-bot__header {
     display: flex;
     flex: none;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    /* 48px from the body's top edge, with the panel's own 32px. */
-    margin-top: 16px;
     text-align: center;
 }
 
@@ -93,104 +63,25 @@
     letter-spacing: 0;
 }
 
-/* The credit is the faces' caption, so it takes their width and their left
-   edge, reads from the left, and stands 8px over them — closer than
-   anything else on the page, because it belongs to them. */
-.happy-agent-create-bot__credit {
-    flex: none;
-    width: var(--happy-create-bot-column);
-    margin: 16px 0 8px;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-ui);
-    font-size: 12px;
-    font-weight: 400;
-    line-height: 18px;
-    letter-spacing: 0;
-    text-align: left;
-}
-
-.happy-agent-create-bot__artist {
-    color: var(--text-link);
-    text-decoration: none;
-}
-
-.happy-agent-create-bot__artist:hover {
-    text-decoration: underline;
-}
-
-/* ---- The faces, and the die beside them --------------------------------- */
-
-.happy-agent-create-bot__face-row {
-    grid-area: 2 / 2;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/*
- * A face is a 56px square of picture with nothing of its own — no well, no
- * hairline — so that four of them read as four faces rather than four
- * controls. The picked one wears the selection ring, offset so the ring sits
- * outside the picture instead of over its edge.
- */
-.happy-agent-create-bot__face {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    padding: 0;
-    width: 56px;
-    height: 56px;
-    border: 0;
-    border-radius: var(--happy-radius-md);
-    background: none;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-}
-
-.happy-agent-create-bot__face:disabled {
-    cursor: default;
-}
-
-.happy-agent-create-bot__face[data-picked] {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 2px;
-}
-
-.happy-agent-create-bot__face:focus-visible {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 2px;
-}
-
-.happy-bot-face {
-    display: block;
-    border-radius: var(--happy-radius-md);
-    user-select: none;
-    -webkit-user-drag: none;
-}
-
-/* In the right-hand track, hugging the faces: a little further from them
-   than they are from each other, because it acts on all four and is not a
-   fifth choice. */
-.happy-agent-create-bot__die {
-    grid-area: 2 / 3;
-    align-self: center;
-    justify-self: start;
-    margin-left: 12px;
-}
-
-/* ---- Below the faces: the name, and making the bot without a word --------- */
-
+/* The name and Create, and what is said about them, 8px apart. */
 .happy-agent-create-bot__below {
-    grid-area: 3 / 2;
     display: flex;
+    flex: none;
     flex-direction: column;
     align-items: stretch;
-    align-self: start;
     gap: 8px;
-    margin-top: 16px;
+    width: 100%;
+    max-width: 360px;
+}
+
+.happy-agent-create-bot__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-agent-create-bot__name {
+    flex: 1 1 auto;
     min-width: 0;
 }
 
@@ -209,6 +100,10 @@
     outline: none;
 }
 
+.happy-agent-create-bot__create {
+    flex: none;
+}
+
 /* Why the bot cannot be made right now, in the quiet size, directly under the
    control it disables. */
 .happy-agent-create-bot__reason {
@@ -219,12 +114,4 @@
     font-weight: 400;
     line-height: 18px;
     text-align: center;
-}
-
-/* Beside the name, in the same track as the die and level with the field. */
-.happy-agent-create-bot__create {
-    grid-area: 3 / 3;
-    align-self: start;
-    justify-self: start;
-    margin: 16px 0 0 8px;
 }
