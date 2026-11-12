@@ -12,3 +12,8 @@ export const todoBackdropDarkUrl = new URL(
     "./assets/backdrops/todo-ginkgo-dark.jpg",
     import.meta.url,
 ).href;
+export const cloudMarkUrl = new URL("./assets/brand/cloud.svg", import.meta.url).href;
+export const cloudLiquidMetalFieldUrl = new URL(
+    "./assets/brand/cloud-liquid-metal.png",
+    import.meta.url,
+).href;

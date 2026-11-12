@@ -770,6 +770,7 @@ export {
     type WelcomeScreenBackdrop,
     type WelcomeScreenProps,
 } from "./WelcomeScreen";
+export { LiquidMetalMark, type LiquidMetalMarkProps } from "./LiquidMetalMark";
 export {
     WelcomeDeck,
     type WelcomeDeckProps,

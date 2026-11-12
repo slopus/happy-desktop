@@ -1,11 +1,13 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { happyLogoBlackUrl } from "./assets";
+import { LiquidMetalMark } from "./LiquidMetalMark";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
 
 /** What one slide shows above its words. */
 export type WelcomeSlideArt =
     | { readonly kind: "logo" }
+    | { readonly kind: "cloud" }
     | { readonly kind: "scene"; readonly name: LottieSceneName };
 
 export interface WelcomeSlide {
@@ -54,6 +56,14 @@ const ADVANCE_MS = 15000;
  * two different heights, so the two values must not be able to disagree.
  */
 const ART_SIZE = 160;
+
+/**
+ * The liquid metal cloud's square: 1.3 times the stage, centred on it, as the
+ * phone apps draw it. The cloud is wider than tall, so it spills past the
+ * stage only sideways, where it is clear; its ink stays inside the stage's
+ * height and the words do not move.
+ */
+const CLOUD_SIZE = Math.round(ART_SIZE * 1.3);
 
 /**
  * C-276 WelcomeDeck — big art, a title, a slogan, and a row of dots. It is what
@@ -254,9 +264,18 @@ export function WelcomeDeck(props: WelcomeDeckProps) {
  * one means "still waking up". A scene keeps its `on-appear` default so it plays
  * once as its slide arrives — the deck remounts it by key on every visit, which
  * is what makes coming back to a slide show the animation again instead of a
- * held final frame.
+ * held final frame. The cloud is the Happy Cloud mark in liquid metal, in a
+ * square 1.3 times the stage, on its centre (`CLOUD_SIZE`).
  */
 function welcomeArt(slide: WelcomeSlide) {
+    if (slide.art.kind === "cloud")
+        return (
+            <LiquidMetalMark
+                className="happy-welcome-deck__cloud"
+                data-testid="welcome-cloud"
+                size={CLOUD_SIZE}
+            />
+        );
     if (slide.art.kind === "logo")
         return (
             <img

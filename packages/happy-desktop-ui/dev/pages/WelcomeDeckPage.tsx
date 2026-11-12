@@ -17,6 +17,12 @@ const brand: WelcomeSlide = {
     title: "Happy",
     copy: "The desktop where your agents work beside you.",
 };
+const cloud: WelcomeSlide = {
+    id: "cloud",
+    art: { kind: "cloud" },
+    title: "Happy Cloud",
+    copy: "A hardened, high-performance control plane for your agents, hosted by Happy.",
+};
 const agents: WelcomeSlide = {
     id: "agents",
     art: { kind: "scene", name: "robot" },
@@ -147,6 +153,23 @@ export function WelcomeDeckPage() {
                         <WelcomeDeck
                             label="Welcome slides"
                             slides={[agents, build, clear]}
+                            tint="sky"
+                        />
+                    </SkyFrame>
+                </ThemeScope>
+            </Specimen>
+
+            <Specimen
+                detail={`the Happy Cloud welcome's first slide · the liquid metal cloud (C-340) in a 208px square, 1.3× the 160px stage on its centre; it spills only sideways, so its title sits where every other slide's does`}
+                label="Cloud slide"
+                number="06"
+                stage="surface"
+            >
+                <ThemeScope mode="dark">
+                    <SkyFrame>
+                        <WelcomeDeck
+                            label="Happy Cloud"
+                            slides={[cloud, agents, clear]}
                             tint="sky"
                         />
                     </SkyFrame>

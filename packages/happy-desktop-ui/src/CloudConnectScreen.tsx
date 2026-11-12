@@ -270,7 +270,7 @@ const PLANS: readonly {
  */
 const CLOUD_SLIDES: readonly WelcomeSlide[] = [
     {
-        art: { kind: "logo" },
+        art: { kind: "cloud" },
         copy: "A hardened, high-performance control plane for your agents, hosted by Happy.",
         id: "cloud",
         title: "Happy Cloud",

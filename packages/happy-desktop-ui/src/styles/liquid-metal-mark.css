@@ -1,0 +1,32 @@
+/*
+ * C-340 LiquidMetalMark. The canvas and the still mark share one square; the
+ * still mark is the cloud's own outline in the text colour, and it goes once
+ * the canvas has drawn, so there is never a moment with neither.
+ */
+.happy-liquid-metal-mark {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    position: relative;
+}
+
+.happy-liquid-metal-mark__still,
+.happy-liquid-metal-mark__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.happy-liquid-metal-mark__still {
+    background-color: currentColor;
+    mask: var(--happy-liquid-metal-mark-shape) center / contain no-repeat;
+}
+
+.happy-liquid-metal-mark[data-ready] .happy-liquid-metal-mark__still {
+    visibility: hidden;
+}
+
+.happy-liquid-metal-mark__canvas {
+    display: block;
+}
