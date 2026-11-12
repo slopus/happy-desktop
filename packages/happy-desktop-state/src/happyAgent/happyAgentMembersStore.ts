@@ -26,23 +26,67 @@ export interface HappyAgentRole {
     readonly name: string;
 }
 
-/** An invite that hasn't expired or been revoked. Its code is never shown again. */
+/** Where an invite stands; only a pending one can still be used, resent or revoked. */
+export type HappyAgentInviteStatus = "pending" | "accepted" | "expired" | "revoked" | "exhausted";
+
+/** How an email invite's last email went. */
+export type HappyAgentInviteDelivery = "sending" | "sent" | "failed";
+
+/**
+ * An invite this server has made, pending or done. Its link is never shown
+ * again: the server keeps none.
+ */
 export interface HappyAgentInvite {
     readonly id: string;
     readonly roleId: string;
-    /** In milliseconds since the epoch. */
+    /** A link anyone holding it can use, or an email bound to one address. */
+    readonly type: "link" | "email";
+    /** The address an email invite went to; `null` for a link. */
+    readonly email: string | null;
+    readonly status: HappyAgentInviteStatus;
+    /** How its last email went; `null` for a link. */
+    readonly delivery: HappyAgentInviteDelivery | null;
+    /** Times in milliseconds since the epoch. */
+    readonly createdAt: number;
     readonly expiresAt: number;
-    /** How many people have joined with it. */
+    /** When its email last went out; `null` for a link. */
+    readonly lastSentAt: number | null;
+    /** When and by which account an email invite was accepted. */
+    readonly acceptedAt: number | null;
+    readonly acceptedBy: string | null;
+    readonly revokedAt: number | null;
+    /** How many people have joined with it, of at most `maxUses` when it has a limit. */
     readonly uses: number;
+    readonly maxUses: number | null;
+    /** The accounts that joined with it. */
+    readonly usedBy: readonly string[];
+    /** A resend or revoke this window asked for and the server hasn't answered. */
     readonly saving: boolean;
 }
 
-/** An invite just made: its code is shown this once. */
-export interface HappyAgentInviteCreated {
-    readonly code: string;
-    readonly roleId: string;
-    readonly expiresAt: number;
-}
+/** An invite just made. A link is shown this once; an email says whether it went. */
+export type HappyAgentInviteCreated =
+    | {
+          readonly type: "link";
+          readonly id: string;
+          readonly link: string;
+          readonly roleId: string;
+          readonly expiresAt: number;
+      }
+    | {
+          readonly type: "email";
+          readonly id: string;
+          readonly email: string;
+          /** Its email failing still made the invite, which can be resent. */
+          readonly delivery: "sent" | "failed";
+          readonly roleId: string;
+          readonly expiresAt: number;
+          /** A resend this window asked for and the server hasn't answered. */
+          readonly saving: boolean;
+      };
+
+/** How long after an email goes out before the server sends it again. */
+export const HAPPY_AGENT_INVITE_RESEND_COOLDOWN_MS = 60_000;
 
 export interface HappyAgentMembersSnapshot {
     /** The server's name, which deleting it asks to be typed. */
@@ -51,13 +95,19 @@ export interface HappyAgentMembersSnapshot {
     readonly loading: boolean;
     readonly members: readonly HappyAgentMember[];
     readonly roles: readonly HappyAgentRole[];
-    /** Pending invites; empty for someone who may not manage members. */
+    /**
+     * Every invite, pending and done, newest first; empty for someone who
+     * may not manage members.
+     */
     readonly invites: readonly HappyAgentInvite[];
     /** The reader's own role ID. */
     readonly roleId?: string;
     /** Whether the reader may invite, remove and change roles. */
     readonly manage: boolean;
-    readonly inviteCreating: boolean;
+    /** The address typed for the next email invite. */
+    readonly inviteEmail: string;
+    /** Which kind of invite is being made. */
+    readonly inviteCreating?: "link" | "email";
     readonly inviteCreated?: HappyAgentInviteCreated;
     /** Why the list could not be read. */
     readonly error?: UserError;
@@ -76,9 +126,15 @@ export interface HappyAgentMembersStore {
     subscribe(listener: () => void): () => void;
     memberRoleUpdate(memberId: string, roleId: string): void;
     memberRemove(memberId: string): void;
-    inviteCreate(roleId: string): void;
-    /** Forgets the code shown after an invite was made. */
+    inviteEmailUpdate(value: string): void;
+    /** Emails an invite with `roleId` to the address typed in. */
+    inviteEmailCreate(roleId: string): void;
+    /** Makes a link anyone holding it can join with as `roleId`. */
+    inviteLinkCreate(roleId: string): void;
+    /** Forgets the link or delivery shown after an invite was made. */
     inviteCreatedDismiss(): void;
+    /** Sends a pending email invite's email again. */
+    inviteResend(inviteId: string): void;
     inviteRevoke(inviteId: string): void;
     /** Leaves the server; rejects with the reason, such as being its last owner. */
     serverLeave(): Promise<void>;
@@ -109,12 +165,7 @@ interface MembersRead {
         readonly joinedAt: number;
     }[];
     readonly roles: readonly HappyAgentRole[];
-    readonly invites: readonly {
-        readonly id: string;
-        readonly roleId: string;
-        readonly expiresAt: number;
-        readonly uses: number;
-    }[];
+    readonly invites: readonly Omit<HappyAgentInvite, "saving">[];
     readonly roleId: string;
     readonly manage: boolean;
     readonly selfUserId: string | null;
@@ -138,6 +189,84 @@ function timeOf(value: unknown): number {
     return Number.isFinite(time) ? time : 0;
 }
 
+function timeOrNullOf(value: unknown): number | null {
+    return value === null || value === undefined ? null : timeOf(value);
+}
+
+function stringOrNullOf(value: unknown): string | null {
+    return typeof value === "string" ? value : null;
+}
+
+const INVITE_STATUSES: readonly HappyAgentInviteStatus[] = [
+    "pending",
+    "accepted",
+    "expired",
+    "revoked",
+    "exhausted",
+];
+const INVITE_DELIVERIES: readonly HappyAgentInviteDelivery[] = ["sending", "sent", "failed"];
+
+function inviteStatusOf(value: unknown): HappyAgentInviteStatus | undefined {
+    return INVITE_STATUSES.find((status) => status === value);
+}
+
+function inviteDeliveryOf(value: unknown): HappyAgentInviteDelivery | null {
+    return INVITE_DELIVERIES.find((delivery) => delivery === value) ?? null;
+}
+
+function inviteOf(invite: Record<string, unknown>): Omit<HappyAgentInvite, "saving">[] {
+    const status = inviteStatusOf(invite.status);
+    if (status === undefined) return [];
+    const type = invite.type === "email" ? "email" : "link";
+    return [
+        {
+            id: String(invite.id),
+            roleId: String(invite.role ?? "member"),
+            type,
+            email: type === "email" ? stringOrNullOf(invite.email) : null,
+            status,
+            delivery: type === "email" ? inviteDeliveryOf(invite.deliveryStatus) : null,
+            createdAt: timeOf(invite.createdAt),
+            expiresAt: timeOf(invite.expiresAt),
+            lastSentAt: timeOrNullOf(invite.lastSentAt),
+            acceptedAt: timeOrNullOf(invite.acceptedAt),
+            acceptedBy: stringOrNullOf(invite.acceptedBy),
+            revokedAt: timeOrNullOf(invite.revokedAt),
+            uses: typeof invite.uses === "number" ? invite.uses : 0,
+            maxUses: typeof invite.maxUses === "number" ? invite.maxUses : null,
+            usedBy: Array.isArray(invite.usedBy)
+                ? invite.usedBy.filter((id): id is string => typeof id === "string")
+                : [],
+        },
+    ];
+}
+
+/**
+ * A refused invite change, in words about invites rather than the route's.
+ * `rateLimited` says what a refusal for going too fast means for this action.
+ */
+function inviteUserError(error: unknown, rateLimited: string): UserError {
+    const refused = happyAgentUserError(error);
+    switch (refused.code) {
+        case "email_not_configured":
+            return new UserError(
+                "This server can't send email yet. Create a link instead.",
+                refused.code,
+                error,
+            );
+        case "rate_limited":
+            return new UserError(rateLimited, refused.code, error);
+        case "not_pending":
+            return new UserError(
+                "That invite was already accepted, revoked or expired.",
+                refused.code,
+                error,
+            );
+        default:
+            return refused;
+    }
+}
+
 export function happyAgentMembersStoreCreate(
     deps: HappyAgentMembersStoreDeps,
 ): HappyAgentMembersStore {
@@ -148,7 +277,7 @@ export function happyAgentMembersStoreCreate(
         roles: [],
         invites: NO_INVITES,
         manage: false,
-        inviteCreating: false,
+        inviteEmail: "",
     }));
     const listeners = new Set<() => void>();
     /** Members and invites whose change the server hasn't answered. */
@@ -183,7 +312,7 @@ export function happyAgentMembersStoreCreate(
                 (invite): HappyAgentInvite => ({ ...invite, saving: saving.has(invite.id) }),
             ),
         );
-        const { error: _cleared, ...rest } = current;
+        const { error: _cleared, inviteCreated, ...rest } = current;
         store.setState(
             {
                 ...rest,
@@ -193,6 +322,15 @@ export function happyAgentMembersStoreCreate(
                 invites: invites.length === 0 ? NO_INVITES : invites,
                 roleId: read.roleId,
                 manage: read.manage,
+                ...(inviteCreated === undefined
+                    ? {}
+                    : {
+                          inviteCreated:
+                              inviteCreated.type === "email" &&
+                              inviteCreated.saving !== saving.has(inviteCreated.id)
+                                  ? { ...inviteCreated, saving: saving.has(inviteCreated.id) }
+                                  : inviteCreated,
+                      }),
             },
             true,
         );
@@ -228,13 +366,8 @@ export function happyAgentMembersStoreCreate(
                 name: typeof role.name === "string" ? role.name : String(role.id),
             })),
             invites: listOf(invites, "invites")
-                .map((invite) => ({
-                    id: String(invite.id),
-                    roleId: String(invite.role ?? "member"),
-                    expiresAt: timeOf(invite.expiresAt),
-                    uses: typeof invite.uses === "number" ? invite.uses : 0,
-                }))
-                .filter((invite) => invite.expiresAt > Date.now()),
+                .flatMap(inviteOf)
+                .sort((left, right) => right.createdAt - left.createdAt),
         };
     };
 
@@ -281,7 +414,11 @@ export function happyAgentMembersStoreCreate(
     };
 
     /** Marks one member or invite as changing until the server answers. */
-    const change = (id: string, send: () => Promise<unknown>): void => {
+    const change = (
+        id: string,
+        send: () => Promise<unknown>,
+        refusal: (error: unknown) => UserError = happyAgentUserError,
+    ): void => {
         if (disposed || saving.has(id)) return;
         saving.add(id);
         const { saveError: _cleared, ...rest } = store.getState();
@@ -298,9 +435,77 @@ export function happyAgentMembersStoreCreate(
                 saving.delete(id);
                 if (disposed) return;
                 publish();
-                store.setState({ saveError: happyAgentUserError(error) }, false);
+                store.setState({ saveError: refusal(error) }, false);
             },
         );
+    };
+
+    const inviteCreate = (roleId: string, email: string | undefined): void => {
+        if (disposed || store.getState().inviteCreating !== undefined) return;
+        const { saveError: _cleared, inviteCreated: _previous, ...rest } = store.getState();
+        store.setState({ ...rest, inviteCreating: email === undefined ? "link" : "email" }, true);
+        void deps
+            .request("POST", "v0/invites", {
+                role: roleId,
+                ...(email === undefined ? {} : { email }),
+                mutationId: crypto.randomUUID(),
+            })
+            .then(
+                (answer) => {
+                    if (disposed) return;
+                    const invite = recordOf(recordOf(answer)?.invite);
+                    const created = ((): HappyAgentInviteCreated | undefined => {
+                        if (typeof invite?.id !== "string") return undefined;
+                        const common = {
+                            id: invite.id,
+                            roleId: String(invite.role ?? roleId),
+                            expiresAt: timeOf(invite.expiresAt),
+                        };
+                        if (email !== undefined)
+                            return {
+                                ...common,
+                                type: "email",
+                                email,
+                                delivery: invite.deliveryStatus === "failed" ? "failed" : "sent",
+                                saving: false,
+                            };
+                        return typeof invite.link === "string"
+                            ? { ...common, type: "link", link: invite.link }
+                            : undefined;
+                    })();
+                    const { inviteCreating: _done, ...current } = store.getState();
+                    store.setState(
+                        created === undefined
+                            ? {
+                                  ...current,
+                                  saveError: new UserError("The server answered with no invite."),
+                              }
+                            : {
+                                  ...current,
+                                  // The address now has its invite, which a failed
+                                  // email resends rather than making another.
+                                  ...(created.type === "email" ? { inviteEmail: "" } : {}),
+                                  inviteCreated: created,
+                              },
+                        true,
+                    );
+                    reread();
+                },
+                (error: unknown) => {
+                    if (disposed) return;
+                    const { inviteCreating: _done, ...current } = store.getState();
+                    store.setState(
+                        {
+                            ...current,
+                            saveError: inviteUserError(
+                                error,
+                                "Too many invites were made just now. Try again in a minute.",
+                            ),
+                        },
+                        true,
+                    );
+                },
+            );
     };
 
     return {
@@ -332,57 +537,53 @@ export function happyAgentMembersStoreCreate(
                 deps.request("DELETE", `v0/members/${encodeURIComponent(memberId)}`),
             );
         },
-        inviteCreate(roleId) {
-            if (disposed || store.getState().inviteCreating) return;
-            const { saveError: _cleared, inviteCreated: _previous, ...rest } = store.getState();
-            store.setState({ ...rest, inviteCreating: true }, true);
-            void deps
-                .request("POST", "v0/invites", { role: roleId, mutationId: crypto.randomUUID() })
-                .then(
-                    (answer) => {
-                        if (disposed) return;
-                        const invite = recordOf(recordOf(answer)?.invite);
-                        if (typeof invite?.code !== "string") {
-                            store.setState(
-                                {
-                                    inviteCreating: false,
-                                    saveError: new UserError(
-                                        "The server answered with no invite code.",
-                                    ),
-                                },
-                                false,
-                            );
-                            return;
-                        }
-                        store.setState(
-                            {
-                                inviteCreating: false,
-                                inviteCreated: {
-                                    code: invite.code,
-                                    roleId: String(invite.role ?? roleId),
-                                    expiresAt: timeOf(invite.expiresAt),
-                                },
-                            },
-                            false,
-                        );
-                        reread();
-                    },
-                    (error: unknown) => {
-                        if (disposed) return;
-                        store.setState(
-                            { inviteCreating: false, saveError: happyAgentUserError(error) },
-                            false,
-                        );
-                    },
-                );
+        inviteEmailUpdate(value) {
+            if (disposed) return;
+            store.setState({ inviteEmail: value }, false);
+        },
+        inviteEmailCreate(roleId) {
+            const email = store.getState().inviteEmail.trim();
+            if (email !== "") inviteCreate(roleId, email);
+        },
+        inviteLinkCreate(roleId) {
+            inviteCreate(roleId, undefined);
         },
         inviteCreatedDismiss() {
             const { inviteCreated: _dropped, ...rest } = store.getState();
             store.setState(rest, true);
         },
+        inviteResend(inviteId) {
+            change(
+                inviteId,
+                async () => {
+                    const answer = await deps.request(
+                        "POST",
+                        `v0/invites/${encodeURIComponent(inviteId)}/resend`,
+                    );
+                    const delivery = recordOf(recordOf(answer)?.invite)?.deliveryStatus;
+                    const created = store.getState().inviteCreated;
+                    if (
+                        disposed ||
+                        created?.type !== "email" ||
+                        created.id !== inviteId ||
+                        (delivery !== "sent" && delivery !== "failed")
+                    )
+                        return;
+                    store.setState({ inviteCreated: { ...created, delivery } }, false);
+                },
+                (error) =>
+                    inviteUserError(
+                        error,
+                        "Its email went out less than a minute ago. Resend it in a minute.",
+                    ),
+            );
+        },
         inviteRevoke(inviteId) {
-            change(inviteId, () =>
-                deps.request("DELETE", `v0/invites/${encodeURIComponent(inviteId)}`),
+            change(
+                inviteId,
+                () => deps.request("DELETE", `v0/invites/${encodeURIComponent(inviteId)}`),
+                (error) =>
+                    inviteUserError(error, "Too many changes just now. Try again in a minute."),
             );
         },
         async serverLeave() {
@@ -416,7 +617,7 @@ const INERT_SNAPSHOT: HappyAgentMembersSnapshot = {
     roles: [],
     invites: NO_INVITES,
     manage: false,
-    inviteCreating: false,
+    inviteEmail: "",
 };
 
 /** Where there are no members to show: it never reads and never changes. */
@@ -425,8 +626,11 @@ export const happyAgentMembersStoreNoop: HappyAgentMembersStore = {
     subscribe: () => () => undefined,
     memberRoleUpdate: () => undefined,
     memberRemove: () => undefined,
-    inviteCreate: () => undefined,
+    inviteEmailUpdate: () => undefined,
+    inviteEmailCreate: () => undefined,
+    inviteLinkCreate: () => undefined,
     inviteCreatedDismiss: () => undefined,
+    inviteResend: () => undefined,
     inviteRevoke: () => undefined,
     serverLeave: () => Promise.reject(new Error("Not available here.")),
     serverDelete: () => Promise.reject(new Error("Not available here.")),
