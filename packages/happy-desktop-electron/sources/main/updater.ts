@@ -10,6 +10,8 @@ export interface DesktopUpdater {
     check(): Promise<void>;
     /** Returns whether a ready update took ownership of quitting. */
     install(runAfterInstall?: boolean): boolean;
+    /** Whether an update has been downloaded and waits to be installed. */
+    ready(): boolean;
     previewUpdate(enabled: boolean): void;
 }
 
@@ -137,6 +139,9 @@ export function desktopUpdaterCreate(input: {
             // ignores the silent flag.
             autoUpdater.quitAndInstall(!runAfterInstall, runAfterInstall);
             return true;
+        },
+        ready() {
+            return updateReady;
         },
     };
 }

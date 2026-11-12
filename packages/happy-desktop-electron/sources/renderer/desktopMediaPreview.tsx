@@ -1,5 +1,11 @@
 import { useSyncExternalStore } from "react";
-import { filePreviewKind, ImageViewer, VideoViewer } from "happy-desktop-ui";
+import {
+    CLOSE_SHORTCUT,
+    commandShortcutMatches,
+    filePreviewKind,
+    ImageViewer,
+    VideoViewer,
+} from "happy-desktop-ui";
 import type { DesktopMediaPreview, HappyMediaPreviewBridge } from "../shared/desktopContract";
 
 /** The file this window is on, as a store the shell can subscribe to. */
@@ -74,16 +80,17 @@ export function DesktopMediaPreviewWindow(props: { store: DesktopMediaPreviewSto
 }
 
 /**
- * Closes the preview window on Escape, from anywhere in it.
+ * Closes the preview window on Escape or the close chord, from anywhere in it.
  *
  * The listener is on the document rather than on a React subtree because the
  * window is one file: wherever focus happens to be — the frame, a control, or
- * nothing at all — Escape means the same thing. It lives as long as the window
+ * nothing at all — either key means the same thing. It lives as long as the window
  * does, which is why nothing here removes it.
  */
 export function desktopMediaPreviewEscapeBind(bridge: HappyMediaPreviewBridge): void {
     document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || event.defaultPrevented) return;
+        if (event.defaultPrevented) return;
+        if (event.key !== "Escape" && !commandShortcutMatches(event, CLOSE_SHORTCUT)) return;
         event.preventDefault();
         void bridge.mediaPreviewClose().catch(() => undefined);
     });
