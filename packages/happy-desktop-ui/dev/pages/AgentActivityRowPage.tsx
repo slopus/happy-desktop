@@ -63,10 +63,10 @@ export function AgentActivityRowPage() {
                         { status: "Machine needs an update", disabled: false },
                         { status: "No compute attached", disabled: false },
                         { status: "Preview no longer available", disabled: true },
-                        { status: "Happy couldn't reach the server.", disabled: false },
+                        { status: "Could not open preview", disabled: false },
                     ].map((state, index) => (
                         <InlinePage
-                            geometry={{ placement: "title", collapsed: true }}
+                            geometry={{ placement: "title", collapsed: true, statusLine: true }}
                             glyph={<Icon name="globe" size={16} />}
                             key={index}
                             onHeightChange={() => undefined}

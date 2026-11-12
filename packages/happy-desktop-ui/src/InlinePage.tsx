@@ -26,6 +26,8 @@ export interface InlinePageProps {
     readonly background?: string;
     /** A note after the controls: that it was deleted, or which version it shows. */
     readonly status?: string;
+    /** Full detail for a compact status, available on hover and to assistive technology. */
+    readonly statusDescription?: string;
     /** Present where the page can be expanded inline: the reader toggled it. */
     onCollapsedChange?(collapsed: boolean): void;
     /** Opens the page beside the conversation; the title opens it too. */
@@ -173,10 +175,19 @@ export function InlinePage(props: InlinePageProps) {
                 ) : null}
                 {/* After the controls, so a status that changes with the
                     content under it never moves them. */}
-                {props.status ? (
+                {props.status && !geometry.statusLine ? (
                     <span className="happy-inline-page__status">{props.status}</span>
                 ) : null}
             </div>
+            {geometry.statusLine ? (
+                <div
+                    aria-live="polite"
+                    className="happy-inline-page__status-line"
+                    title={props.statusDescription}
+                >
+                    {props.status}
+                </div>
+            ) : null}
             {open ? (
                 <div
                     className="happy-inline-page__content"

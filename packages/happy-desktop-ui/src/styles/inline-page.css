@@ -82,6 +82,16 @@ button.happy-inline-page__opener:focus-visible {
     color: var(--text-secondary);
 }
 
+.happy-inline-page__status-line {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 24px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
 .happy-inline-page__title-line > .happy-button {
     flex: none;
     color: var(--text-secondary);

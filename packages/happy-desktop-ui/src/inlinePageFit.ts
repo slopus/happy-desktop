@@ -31,10 +31,13 @@ export interface InlinePageGeometry {
     readonly collapsed: boolean;
     /** The last height its page reported, or absent before the first. */
     readonly height?: number;
+    /** Reserves a separate status line so live messages never shift the open controls. */
+    readonly statusLine?: boolean;
 }
 
 /** The title line an inline page sits under: one control row. */
 export const INLINE_PAGE_TITLE_HEIGHT = 28;
+export const INLINE_PAGE_STATUS_HEIGHT = 24;
 /** Between the title line and the page under it. */
 export const INLINE_PAGE_CONTENT_GAP = 8;
 /** What any page may report, so a runaway page cannot make the transcript unusable. */
@@ -42,7 +45,7 @@ export const INLINE_PAGE_MAX_HEIGHT = 24_000;
 
 /** The height an inline page adds beneath its call's line, excluding the gap above it. */
 export function inlinePageHeight(geometry: InlinePageGeometry): number {
-    if (geometry.placement === "title" || geometry.collapsed || !geometry.height)
-        return INLINE_PAGE_TITLE_HEIGHT;
-    return INLINE_PAGE_TITLE_HEIGHT + INLINE_PAGE_CONTENT_GAP + geometry.height;
+    const header = INLINE_PAGE_TITLE_HEIGHT + (geometry.statusLine ? INLINE_PAGE_STATUS_HEIGHT : 0);
+    if (geometry.placement === "title" || geometry.collapsed || !geometry.height) return header;
+    return header + INLINE_PAGE_CONTENT_GAP + geometry.height;
 }

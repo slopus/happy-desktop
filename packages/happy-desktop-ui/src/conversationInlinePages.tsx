@@ -134,7 +134,7 @@ export function conversationInlinePage(
                 : state?.type === "missing"
                   ? "Preview no longer available"
                   : state?.type === "error"
-                    ? state.error.message
+                    ? "Could not open preview"
                     : state?.type === "available"
                       ? state.status === "node_offline"
                           ? "Machine offline"
@@ -144,7 +144,11 @@ export function conversationInlinePage(
                               ? "No compute attached"
                               : undefined
                       : undefined;
-        const geometry: InlinePageGeometry = { placement: "title", collapsed: true };
+        const geometry: InlinePageGeometry = {
+            placement: "title",
+            collapsed: true,
+            statusLine: true,
+        };
         return {
             geometry,
             props: {
@@ -158,6 +162,7 @@ export function conversationInlinePage(
                     ? { onOpenSide: () => pages.previews?.previewOpen(presentation.previewId) }
                     : {}),
                 ...(status === undefined ? {} : { status }),
+                ...(state?.type === "error" ? { statusDescription: state.error.message } : {}),
                 onHeightChange: (next) => local.heightSet(rowKey, next),
                 "data-testid": "conversation-preview",
             },
