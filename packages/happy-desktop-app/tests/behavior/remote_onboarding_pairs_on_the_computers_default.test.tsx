@@ -2,6 +2,7 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
     appearanceStoreCreate,
+    experimentsStoreCreate,
     mobilePairingMethodDefault,
     mobilePairingMethodStoreCreate,
     type HappyAgentClockStore,
@@ -18,7 +19,7 @@ import { HappyAgentOnboardingBoundary } from "../../sources/components/HappyAgen
  * Onboarding against a remote Happy Agent links a phone on the same pairing
  * page as this computer's own setup, opening on the same default: Direct on
  * macOS, Relay on Windows and Linux. A pick on the page lasts until the next
- * pairing page opens from the offer.
+ * pairing page opens from the offer. Direct is offered with its experiment on.
  */
 
 const clock = {
@@ -106,10 +107,13 @@ function boundary(
         get: () => profiled,
         subscribe: () => () => undefined,
     } as unknown as HappyAgentProfileStore;
+    const experiments = experimentsStoreCreate();
+    experiments.featureUpdate("directConnection", true, "experiments");
     const view = render(
         <HappyAgentOnboardingBoundary
             appearance={appearanceStoreCreate()}
             clock={clock}
+            experiments={experiments}
             mobilePairingMethod={methods}
             online
             onRetry={() => undefined}

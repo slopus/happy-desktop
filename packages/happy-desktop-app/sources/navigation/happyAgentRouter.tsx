@@ -263,6 +263,7 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             online={entry?.status === "connected"}
             onRetry={setup.retry}
             mobilePairingMethod={context.mobilePairingMethod}
+            {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.externalLinkOpen ? { onExternalOpen: context.externalLinkOpen } : {})}
         >
             {content}

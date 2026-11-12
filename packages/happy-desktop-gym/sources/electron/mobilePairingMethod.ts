@@ -9,7 +9,8 @@ import { gymElectronVideoRecord } from "./launch.js";
  * this computer's default, Direct on macOS and Relay elsewhere. Choosing the
  * other method swaps its code in the same place, nothing is kept when the page
  * opens again, and "Use Relay" under the direct code goes to Relay. The Direct
- * connection section is on Mobile Access either way.
+ * connection section is on Mobile Access either way. Direct is offered only
+ * with its experiment on, so the run turns it on first.
  */
 
 const ROWS = '[data-happy-desktop-ui="sidebar-item"]';
@@ -101,6 +102,8 @@ export async function mobilePairingMethodRun(
             timeout: 30_000,
         });
 
+        await categoryOpen(page, "experimental");
+        await page.getByRole("switch", { name: "Direct phone connection" }).click();
         await categoryOpen(page, "mobile-access");
         const section = await directSection(page);
         if (!section) throw new Error("Mobile Access has no Direct connection section.");

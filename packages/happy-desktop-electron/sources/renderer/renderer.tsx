@@ -551,6 +551,7 @@ function DesktopOnboardingGate(props: {
     bridge: HappyDesktopBridge;
     children: ReactNode;
     clock: HappyAgentClockStore;
+    experiments: ExperimentsStore;
     happyAgents: HappyAgentDirectoryStore;
     mobilePairingMethod: MobilePairingMethodStore;
     platform: "desktop" | "web";
@@ -572,11 +573,19 @@ function DesktopOnboardingGate(props: {
         props.appearance.get,
         props.appearance.get,
     );
-    const { method } = useSyncExternalStore(
+    const methodSnapshot = useSyncExternalStore(
         props.mobilePairingMethod.subscribe,
         props.mobilePairingMethod.get,
         props.mobilePairingMethod.get,
     );
+    const experiments = useSyncExternalStore(
+        props.experiments.subscribe,
+        props.experiments.get,
+        props.experiments.get,
+    );
+    // Until Direct is turned on in Experiments, pairing is Relay alone.
+    const relayOnly = !experiments.directConnection;
+    const method = relayOnly ? "relay" : methodSnapshot.method;
     const view = snapshot.onboarding ? localOnboardingView(snapshot) : undefined;
     const linkPhase =
         view?.kind === "happy-mobile-desktop" && view.step.kind === "link"
@@ -587,6 +596,7 @@ function DesktopOnboardingGate(props: {
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
         method,
+        relayOnly,
         // Choosing Direct asks for a direct code.
         onMethodSelect: (next) => {
             if (next === "direct") props.store.happyMobileDirect().pairingOpen();
@@ -1065,6 +1075,7 @@ function DesktopLocalScreens(props: DesktopRendererProps) {
                 appearance={props.appearance}
                 bridge={props.bridge}
                 clock={onboardingClock}
+                experiments={props.experiments}
                 happyAgents={props.happyAgents}
                 mobilePairingMethod={props.mobilePairingMethod}
                 platform={props.platform}

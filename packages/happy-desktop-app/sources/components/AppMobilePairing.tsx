@@ -112,6 +112,8 @@ export interface AppMobilePairingProps {
     readonly method: MobilePairingMethod;
     /** The computer is already linked through the Happy server: only the direct code is offered. */
     readonly directOnly?: boolean;
+    /** Direct is not offered yet: only the relay code, without the Direct | Relay control. */
+    readonly relayOnly?: boolean;
     onMethodSelect(method: MobilePairingMethod): void;
     readonly relay: MobileRelayPairingState;
     readonly relayStarting?: boolean;
@@ -140,11 +142,15 @@ export function appMobilePairingOptions(
     const relayOff = props.relay.kind === "disabled";
     const directOff = appMobileDirectOff(connector);
     const method: MobilePairingMethod =
-        relayOff || props.directOnly ? "direct" : directOff ? "relay" : props.method;
+        relayOff || props.directOnly
+            ? "direct"
+            : directOff || props.relayOnly
+              ? "relay"
+              : props.method;
     const shown = {
         ...props,
         method,
-        methodFixed: relayOff || directOff || props.directOnly === true,
+        methodFixed: relayOff || directOff || props.directOnly === true || props.relayOnly === true,
     };
     if (method === "relay")
         return {
