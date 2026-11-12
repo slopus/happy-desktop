@@ -297,8 +297,7 @@ function installRead(value: unknown): HappyAgentComputeInstall | undefined {
                 : null,
         token: answer.token,
         clusterUrl: typeof answer.clusterUrl === "string" ? answer.clusterUrl : "",
-        // The token's expiry is a JWT `exp`, in seconds.
-        expiresAt: numberOr(answer.expiresAt, 0) * 1000,
+        expiresAt: numberOr(answer.expiresAt, 0),
     };
 }
 
