@@ -104,10 +104,12 @@ import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 const INITIAL_RECONNECT_MS = 250;
 const MAXIMUM_RECONNECT_MS = 5_000;
 /**
- * How long after a daemon announces it is draining a replacement is expected. Reconnection keeps
- * its first interval meanwhile, so the window is back within moments of the new process.
+ * How long after a daemon announces it is draining a replacement is expected. Reconnection still
+ * backs off meanwhile, but no further than `REPLACEMENT_MAXIMUM_RECONNECT_MS`, so the window is
+ * back within a second of the new process without asking a stopped one many times a second.
  */
 const REPLACEMENT_RECONNECT_WINDOW_MS = 2 * 60_000;
+const REPLACEMENT_MAXIMUM_RECONNECT_MS = 1_000;
 const DEFAULT_HISTORY_LIMIT = 100;
 /** Sessions loaded ahead of an open and never opened that stay cached; older ones are dropped. */
 const PREFETCHED_SESSION_LIMIT = 6;
@@ -165,6 +167,11 @@ const INITIAL_SEND_RETRY_MS = 250;
 const DRAFT_SAVE_DEBOUNCE_MS = 300;
 /** How long after a delta skips text the session is read again, so one read covers a burst. */
 const DELTA_GAP_REREAD_MS = 300;
+/**
+ * How long an idle agent may stand beside a turn its session still holds running before the
+ * session is read again: long enough for a `run.finished` already on its way to land first.
+ */
+const RUN_SETTLE_REREAD_MS = 1_000;
 /** How long typing pauses before a row's draft preview follows the composer. */
 const DRAFT_PREVIEW_PUBLISH_MS = 1_000;
 
@@ -275,6 +282,12 @@ interface SessionEntry {
     activityRevision: number;
     /** A journal gap made this cached session incomplete; reconcile when it is next observed. */
     reconcileRequired: boolean;
+    /**
+     * The agent version last seen idle while this session still held a running turn. The
+     * session is read again once per such version, so a host that keeps answering with the
+     * same contradiction is not read in a loop.
+     */
+    runSettleVersion?: string;
     /** Deltas ignored until a complete message snapshot repairs their message. */
     corruptedMessageIds: Set<string>;
     /**
@@ -1401,10 +1414,44 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         ownerUpdate("project", workspaceId, (project) => ({ ...project, git: facts }));
     };
 
+    /**
+     * The chat's turn comes from its runs, which only `run.*` events and a session read move;
+     * the sidebar's comes from the agent. When the agent is idle and the session still holds a
+     * running turn, that turn's `run.finished` never reached this connection, and nothing else
+     * would ever end it: the chat would say "Working" and offer a Stop that stops nothing. After
+     * a moment, so a `run.finished` still in flight lands first, the session is read again.
+     */
+    const runSettleReconcile = (entry: SessionEntry): void => {
+        const agent = entry.agent;
+        if (agent === undefined || agent.status !== "idle") return;
+        // A load lays its own snapshot and the events behind it down together, and checks again
+        // when it is done.
+        if (entry.hydrating || entry.loading !== undefined || !entry.historyLoaded) return;
+        if (!runsOrderedOf(entry).some((run) => run.status === "running")) return;
+        if (entry.runSettleVersion === agent.version) return;
+        entry.runSettleVersion = agent.version;
+        background(
+            wait(RUN_SETTLE_REREAD_MS, rootController.signal)
+                .then(() => {
+                    if (closed || rootController.signal.aborted || sessions.get(entry.id) !== entry)
+                        return;
+                    if (entry.agent?.version !== agent.version || entry.agent.status !== "idle")
+                        return;
+                    if (!runsOrderedOf(entry).some((run) => run.status === "running")) return;
+                    if (entry.subscribers.size === 0) entry.reconcileRequired = true;
+                    else background(requestSessionLoad(entry));
+                })
+                .catch(() => undefined),
+        );
+    };
+
     /** Publishes the stored agent to its own session and to every parent that lists it. */
     const announceAgent = (agent: Agent): void => {
         const entry = sessions.get(agent.id);
-        if (entry !== undefined) publishSession(entry);
+        if (entry !== undefined) {
+            publishSession(entry);
+            runSettleReconcile(entry);
+        }
         // Activity is a one-time snapshot followed by the same versioned agent
         // events as the catalog. Keep parent views current from that stream
         // instead of re-reading the entire activity endpoint after child work.
@@ -2008,6 +2055,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     }
                 }
                 settleSessionIfIdle(entry);
+                if (!closed && sessions.get(entry.id) === entry) runSettleReconcile(entry);
             });
         entry.loading = loading;
         return loading;
@@ -3974,6 +4022,19 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             else taskQueue.post(resolve);
         });
 
+    /**
+     * The interval after `previous`: doubled, up to a second while a drained daemon's replacement
+     * is expected and up to `MAXIMUM_RECONNECT_MS` otherwise. Every way back to the daemon waits
+     * on it, so an outage is asked about a bounded number of times however it ended.
+     */
+    const reconnectMsNext = (previous: number): number =>
+        Math.min(
+            previous * 2,
+            now() < replacementExpectedUntil
+                ? REPLACEMENT_MAXIMUM_RECONNECT_MS
+                : MAXIMUM_RECONNECT_MS,
+        );
+
     const runUpdates = async (): Promise<void> => {
         let reconnectMs = INITIAL_RECONNECT_MS;
         // Startup reads the bootstrap beside the feed until the daemon turns out to need the
@@ -4029,14 +4090,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             source: "connection",
                         });
                         // The replacement of a daemon that just drained answers while it is
-                        // still starting and is ready in moments, so it is asked again at the
-                        // first interval, but only within that window.
-                        const starting =
-                            compatibility.status === "compatible" &&
-                            now() < replacementExpectedUntil;
-                        await reconnectPause(starting ? INITIAL_RECONNECT_MS : reconnectMs);
-                        if (!starting)
-                            reconnectMs = Math.min(reconnectMs * 2, MAXIMUM_RECONNECT_MS);
+                        // still starting and is ready in moments; the interval stays short
+                        // within that window.
+                        await reconnectPause(reconnectMs);
+                        reconnectMs = reconnectMsNext(reconnectMs);
                         continue;
                     }
                 }
@@ -4210,6 +4267,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // longer admits writes, so routine ones are held.
                         admittingSet(false, update.drain, update.daemonId);
                         replacementExpectedUntil = now() + REPLACEMENT_RECONNECT_WINDOW_MS;
+                        // Its replacement answers soon, however far this had backed off.
+                        reconnectMs = INITIAL_RECONNECT_MS;
                         reportDebug({
                             detail: debugDetail({
                                 cursor: update.cursor,
@@ -4223,10 +4282,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         reportDebug({
                             detail: debugDetail({ cursor: update.cursor ?? null }),
                             level: "warning",
-                            message: "Managed update feed disconnected; client reconnecting",
+                            message: "Managed update feed disconnected; reconnecting",
                             source: "sse",
                         });
                         publishConnection("reconnecting");
+                        // The feed would reconnect on its own, every 100 ms for as long as
+                        // a drained daemon's replacement is expected — hundreds of requests
+                        // to a daemon that stopped. This attempt ends instead, and the
+                        // connection's own backoff reopens it from the same cursor.
+                        break;
                     } else if (update.kind === "document") {
                         // A live document frame carries someone's typing to
                         // the document stores following it; it has no cursor
@@ -4325,10 +4389,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     });
                 }
                 await reconnectPause(immediate ? 0 : reconnectMs);
-                reconnectMs =
-                    immediate || now() < replacementExpectedUntil
-                        ? INITIAL_RECONNECT_MS
-                        : Math.min(reconnectMs * 2, MAXIMUM_RECONNECT_MS);
+                reconnectMs = immediate ? INITIAL_RECONNECT_MS : reconnectMsNext(reconnectMs);
             }
         }
     };

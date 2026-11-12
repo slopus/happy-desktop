@@ -319,6 +319,7 @@ import {
     SegmentedControl,
     Sidebar,
     SidebarFooter,
+    MenuButton,
     SidebarAgentUpdate,
     SidebarUpdateAction,
     Switch,
@@ -399,6 +400,7 @@ import {
     happyAgentSettingsSectionOf,
 } from "./views/AppHappyAgentSettingsView";
 import type {
+    AppHappyAgentOutageStore,
     AppHappyAgentReleaseNotesStore,
     AppHappyAgentUpdateSnapshot,
     AppHappyAgentUpdateStore,
@@ -453,6 +455,13 @@ const agentUpdateStoreNoop: AppHappyAgentUpdateStore = {
 
 const agentReleaseNotesStoreNoop: AppHappyAgentReleaseNotesStore = {
     get: () => undefined,
+    subscribe: () => () => undefined,
+};
+
+const agentOutageStoreNoop: AppHappyAgentOutageStore = {
+    detailsCopy: () => undefined,
+    get: () => undefined,
+    restart: () => undefined,
     subscribe: () => () => undefined,
 };
 
@@ -902,6 +911,11 @@ export interface AppHappyAgentViewProps {
     agentUpdate?: AppHappyAgentUpdateStore;
     /** Compact notes for the local Happy Agent update on offer. */
     agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
+    /**
+     * The local Happy Agent out of reach, supplied with `daemon`. The footer
+     * says so beside its work while everything else keeps working.
+     */
+    agentOutage?: AppHappyAgentOutageStore;
     /** Native page renderer supplied only by the packaged Electron host. */
     browserContent?: BrowserContentRenderer;
     /**
@@ -3713,6 +3727,47 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         updateStore.get,
     );
     const updateHost = hostHappyAgent(directory);
+    const outageStore = props.agentOutage ?? agentOutageStoreNoop;
+    const outage = useSyncExternalStore(outageStore.subscribe, outageStore.get, outageStore.get);
+    // The local Happy Agent out of reach is told in the footer's connection
+    // slot, beside its work, rather than over the whole window: everything
+    // else, and every other Happy Agent, keeps working. What can be done about
+    // it is a menu where the update offer stands, which an outage outranks.
+    const outageName = updateHost?.label ?? "The local Happy Agent";
+    const sidebarOutageConnection = outage
+        ? {
+              message:
+                  outage.restarting ??
+                  outage.restartFailure ??
+                  `${outageName} is not responding. Its work is paused until it is back.`,
+              // The connection keeps trying on its own; a failed restart is settled.
+              retrying: outage.restartFailure === undefined,
+          }
+        : undefined;
+    const sidebarOutage = outage ? (
+        <MenuButton
+            align="start"
+            data-testid="local-agent-outage"
+            icon="alert"
+            items={[
+                ...(outage.restartable && outage.restarting === undefined
+                    ? [{ kind: "item" as const, id: "restart", label: "Restart Happy Agent" }]
+                    : []),
+                { kind: "item" as const, id: "copy", label: "Copy details" },
+            ]}
+            label={`${outageName} is not responding`}
+            menuLabel={`${outageName} is not responding`}
+            menuWidth={220}
+            onSelect={(id) => {
+                if (id === "restart") outageStore.restart();
+                else outageStore.detailsCopy();
+            }}
+            overlay
+            placement="above"
+            size="small"
+            variant="ghost"
+        />
+    ) : undefined;
     // Local machines share the host's tier preferences; Cloud files stay ungrouped.
     const changeTiersStore = active?.happyCloud
         ? undefined
@@ -3789,7 +3844,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     <AppGptLivePhone store={props.gptLive} experiments={props.experiments} />
                 ) : undefined
             }
-            actions={sidebarUpdate}
+            actions={sidebarOutage ?? sidebarUpdate}
+            {...(sidebarOutageConnection ? { connection: sidebarOutageConnection } : {})}
             devMenu={
                 props.buildIdentity ? (
                     <DevBuildMenu

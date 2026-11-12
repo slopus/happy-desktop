@@ -76,7 +76,11 @@ import {
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
 } from "../views/AppHappyAgentSettingsView";
-import type { AppHappyAgentReleaseNotesStore, AppHappyAgentUpdateStore } from "../agentUpdate";
+import type {
+    AppHappyAgentOutageStore,
+    AppHappyAgentReleaseNotesStore,
+    AppHappyAgentUpdateStore,
+} from "../agentUpdate";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
@@ -118,6 +122,8 @@ export interface HappyAgentRouterContext {
     /** The local Happy Agent update card, beside `daemon` and only with it. */
     readonly agentUpdate?: AppHappyAgentUpdateStore;
     readonly agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
+    /** The local Happy Agent's outage, beside `daemon` and only with it. */
+    readonly agentOutage?: AppHappyAgentOutageStore;
     readonly profiler?: AppHappyAgentProfilerStore;
     readonly happyAgents: AppHappyAgentDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
@@ -660,6 +666,7 @@ function HappyAgentWorkspaceLayout() {
             groupId={params.groupId}
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.agentUpdate ? { agentUpdate: context.agentUpdate } : {})}
+            {...(context.agentOutage ? { agentOutage: context.agentOutage } : {})}
             {...(context.agentReleaseNotes ? { agentReleaseNotes: context.agentReleaseNotes } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.projectsVisibility
