@@ -14,6 +14,7 @@ import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happy
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
 import type { HappyAgentToolMediaDocumentStore } from "./happyAgentToolMediaDocumentStore.js";
+import type { HappyAgentPreviewsStore } from "./happyAgentPreviewsStore.js";
 import type { HappyAgentGlobalSkill } from "./happyAgentGlobalSkillsStore.js";
 import { createStore } from "zustand/vanilla";
 import {
@@ -1528,6 +1529,8 @@ export interface HappyAgentVoiceSession {
 export interface HappyAgentWorkspaceStore {
     get(): HappyAgentWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
+    /** The connection's cloud preview surface, when supported. */
+    previews(): HappyAgentPreviewsStore | undefined;
 
     /**
      * The workspace's right-hand tool panel. It is a store of its own, not part of
@@ -7408,6 +7411,7 @@ export function happyAgentWorkspaceStoreCreate(
 
     return {
         get: () => snapshotStore.getState(),
+        previews: () => client.previews(),
         panel,
         changeTiers,
         toolMediaDocument: () => client.toolMediaDocument(),
