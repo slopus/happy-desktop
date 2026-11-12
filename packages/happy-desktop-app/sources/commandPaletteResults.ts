@@ -89,6 +89,14 @@ export type CommandPaletteCommand =
           /** A closed session has to be restored before it can be addressed. */
           readonly archived: boolean;
       }
+    /** A bot the reader hid: put back in the sidebar, and then opened on its conversation. */
+    | {
+          readonly kind: "hiddenBotOpen";
+          readonly happyAgentId: string;
+          readonly botId: HappyAgentBot["id"];
+          readonly groupId: string;
+          readonly chatId: string;
+      }
     | { readonly kind: "workspaceOpen"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "surfaceOpen"; readonly happyAgentId: string; readonly surfaceId: string }
     | { readonly kind: "artifactOpen"; readonly happyAgentId: string; readonly artifactId: string }
@@ -826,7 +834,15 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
                 title: bot.name,
                 meta: listed ? "Bot" : "Hidden bot",
                 glyph: botGlyph(bot),
-                command: chatOpen(bot.workspaceId, bot.conversation.id),
+                command: listed
+                    ? chatOpen(bot.workspaceId, bot.conversation.id)
+                    : {
+                          kind: "hiddenBotOpen",
+                          happyAgentId,
+                          botId: bot.id,
+                          groupId: bot.workspaceId,
+                          chatId: bot.conversation.id,
+                      },
             },
         });
     }

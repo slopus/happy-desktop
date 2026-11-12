@@ -15,6 +15,7 @@ import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
 import {
+    happyAgentBotAttention,
     happyAgentFileLinkParse,
     happyAgentProviderAddPageOf,
     parseHappyUrl,
@@ -1122,6 +1123,17 @@ export function happyAgentRouterHappyLinkOpen(
                       : entities.projects
             ).get(reference.id);
             if (entity === undefined) return;
+            // A bot the reader hid is put back in the sidebar when it is opened.
+            const bot = workspace.list.bots.find(
+                (entry) => entry.conversation.id === entity.agentId,
+            );
+            const attention = context.attention;
+            if (
+                bot !== undefined &&
+                attention !== undefined &&
+                happyAgentBotAttention(attention.get(), happyAgentId, bot.id) === "hidden"
+            )
+                attention.botHiddenUpdate(happyAgentId, bot.id, false);
             // A workspace or project opens where the reader left it, the way
             // its sidebar row does; an agent opens on its own conversation.
             const chatId = entity.agentId ?? workspace.groupResume.get(entity.groupId);

@@ -4569,6 +4569,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     };
     const paletteActions: HappyAgentPaletteActions = {
         appearance: props.appearance,
+        attention: attentionStore,
         experiments: experimentsStore,
         happyAgentOnline: activeHappyAgentOnline,
         onChatSelect: props.onChatSelect,
@@ -4738,12 +4739,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                 return;
                             case "bot": {
                                 const bot = active.bots.find((entry) => entry.id === subject.id);
-                                if (bot)
-                                    props.onChatSelect(
-                                        active.id,
-                                        bot.workspaceId,
-                                        bot.conversation.id,
-                                    );
+                                if (!bot) return;
+                                // A bot the reader hid is put back in the sidebar.
+                                if (
+                                    happyAgentBotAttention(attention, active.id, bot.id) ===
+                                    "hidden"
+                                )
+                                    attentionStore.botHiddenUpdate(active.id, bot.id, false);
+                                props.onChatSelect(active.id, bot.workspaceId, bot.conversation.id);
                                 return;
                             }
                             case "task":
@@ -5153,6 +5156,7 @@ interface HappyAgentPaletteSubject {
 /** The window acts the palette can commit to. */
 interface HappyAgentPaletteActions {
     appearance: AppearanceStore;
+    attention: HappyAgentAttentionStore;
     experiments: ExperimentsStore;
     settings: HappyAgentSettingsStore;
     sidebarVisibility: HappyAgentSidebarVisibilityStore;
@@ -5437,7 +5441,8 @@ function HappyAgentCommandPalette(
             const row = highlighted.current;
             if (card?.isConnected !== true || row?.kind === "setting") return;
             const command = row?.command;
-            if (command?.kind !== "chatOpen" || command.archived) return;
+            if (command?.kind !== "chatOpen" && command?.kind !== "hiddenBotOpen") return;
+            if (command.kind === "chatOpen" && command.archived) return;
             if (command.happyAgentId !== props.happyAgentId) return;
             props.workspace?.conversationPrefetch(command.chatId as HappyAgentSessionId);
         }, PALETTE_INTENT_DWELL_MS);
@@ -5685,6 +5690,12 @@ function paletteCommandRun(
                 .catch(() => undefined);
             return;
         }
+        case "hiddenBotOpen":
+            // Opening a bot the reader hid puts it back in the sidebar, as
+            // the Bots heading's Show does.
+            props.attention.botHiddenUpdate(command.happyAgentId, command.botId, false);
+            props.onChatSelect(command.happyAgentId, command.groupId, command.chatId);
+            return;
         case "workspaceOpen": {
             // A workspace opens where the reader left it, exactly as its
             // sidebar row does; one never visited falls back to its first chat.
