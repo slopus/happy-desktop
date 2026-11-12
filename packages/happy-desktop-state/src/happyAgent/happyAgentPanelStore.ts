@@ -35,6 +35,13 @@ export type HappyAgentPanelTabKind = "terminal" | "browser" | "artifact" | "chat
  */
 export type HappyAgentViewPlacement = "panel" | "main";
 
+/**
+ * Where a followed file is read: `modal` over the conversation, for a file a
+ * message named; `viewer` in the file viewer wherever it already is, for a
+ * file a document links to.
+ */
+export type HappyAgentFilePresentation = "modal" | "viewer";
+
 interface HappyAgentPanelTabSnapshotBase {
     readonly id: HappyAgentPanelTabId;
     /** Tab strip label. A terminal's is its ordinal, not its shell's window title. */
@@ -167,6 +174,11 @@ export interface HappyAgentPanelSnapshot {
      */
     readonly fileViewOpen: boolean;
     /**
+     * What a message opened over its conversation rather than beside it: the
+     * file viewer's file, or one file a tool call presented. Absent, nothing is.
+     */
+    readonly modal?: HappyAgentPanelModal;
+    /**
      * The conversations whose work floaty the reader opened by hand. The
      * floaty never opens on its own: it stays shut until opened here.
      */
@@ -186,6 +198,15 @@ export interface HappyAgentPanelSnapshot {
      */
     readonly terminalRefusal?: string;
 }
+
+/**
+ * What is open over the conversation. A file is the one the file viewer
+ * holds, shown here instead of beside the conversation; media is one file a
+ * tool call presented, by its entry and position.
+ */
+export type HappyAgentPanelModal =
+    | { readonly kind: "file" }
+    | { readonly kind: "media"; readonly entryId: string; readonly mediaIndex: number };
 
 /** What the transient artifact tab is showing. */
 export interface HappyAgentPanelArtifactView {
@@ -252,6 +273,19 @@ export interface HappyAgentPanelStore {
     fileViewOpen(): void;
     /** Closes the file-viewer tab, back to what the pane showed before it. */
     fileViewClose(): void;
+    /**
+     * Shows the file viewer's file over the conversation instead of beside
+     * it. The workspace store calls this as it starts reading a file a message
+     * named; a file viewer tab that was showing steps aside, since there is
+     * one file viewer and it is now over the conversation.
+     */
+    modalFileOpen(): void;
+    /** Shows one file a conversation tool entry presented over the conversation. */
+    modalMediaOpen(entryId: string, mediaIndex: number): void;
+    /** Puts away what is open over the conversation. */
+    modalClose(): void;
+    /** Moves what is open over the conversation into its tab beside it. */
+    modalBesideOpen(): void;
     /**
      * Shows one other conversation in a panel tab of its own and opens the
      * panel, selecting the tab already reading it rather than adding another.
@@ -494,6 +528,8 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     let changeViewPath: string | undefined;
     let changeConversationId: HappyAgentSessionId | undefined;
     let fileViewShown = false;
+    let modal: HappyAgentPanelModal | undefined;
+    let modalConversationId: HappyAgentSessionId | undefined;
     let filesViewShown = true;
     let floatyOpened: ReadonlySet<string> = new Set(deps.floatyMemoryRead?.() ?? []);
     let floatyHistoryExpanded = false;
@@ -537,6 +573,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             usageViewOpen: usageViewShown,
             devicesViewOpen: devicesViewShown,
             fileViewOpen: fileViewShown,
+            ...(modal === undefined ? {} : { modal }),
             filesViewOpen: filesViewShown,
             browserRecent: (groupId && recentByGroup.get(groupId)) || NO_RECENT,
             floatyOpened,
@@ -626,6 +663,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             next.previewMediaIndex === snapshot.previewMediaIndex &&
             next.changeViewPath === snapshot.changeViewPath &&
             next.fileViewOpen === snapshot.fileViewOpen &&
+            next.modal === snapshot.modal &&
             next.filesViewOpen === snapshot.filesViewOpen &&
             next.browserRecent === snapshot.browserRecent &&
             next.floatyOpened === snapshot.floatyOpened &&
@@ -651,6 +689,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             usageViewOpen: next.usageViewOpen,
             devicesViewOpen: next.devicesViewOpen,
             fileViewOpen: next.fileViewOpen,
+            ...(next.modal === undefined ? {} : { modal: next.modal }),
             filesViewOpen: next.filesViewOpen,
             browserRecent: next.browserRecent,
             floatyOpened: next.floatyOpened,
@@ -1100,6 +1139,8 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         fileViewOpen() {
             if (disposed) return;
             fileViewShown = true;
+            // The one file viewer is beside the conversation now, not over it.
+            if (modal?.kind === "file") modal = undefined;
             activeViewId = "file";
             open = true;
             remember();
@@ -1111,6 +1152,37 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             if (activeViewId === "file") landing();
             remember();
             recompute();
+        },
+        modalFileOpen() {
+            if (disposed || !conversationId) return;
+            if (fileViewShown) {
+                fileViewShown = false;
+                if (activeViewId === "file") landing();
+                remember();
+            }
+            modal = { kind: "file" };
+            modalConversationId = conversationId;
+            recompute();
+        },
+        modalMediaOpen(entryId, mediaIndex) {
+            if (disposed || !conversationId) return;
+            modal = { kind: "media", entryId, mediaIndex };
+            modalConversationId = conversationId;
+            recompute();
+        },
+        modalClose() {
+            if (disposed || modal === undefined) return;
+            modal = undefined;
+            modalConversationId = undefined;
+            recompute();
+        },
+        modalBesideOpen() {
+            if (disposed || modal === undefined) return;
+            const shown = modal;
+            modal = undefined;
+            modalConversationId = undefined;
+            if (shown.kind === "file") store.fileViewOpen();
+            else store.previewOpen(shown.entryId, shown.mediaIndex);
         },
         floatyOpenedUpdate(key, opened) {
             if (disposed || floatyOpened.has(key) === opened) return;
@@ -1363,6 +1435,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                 usageViewShown = false;
                 if (activeViewId === "activity" || activeViewId === "usage") activeViewId = "files";
             }
+            // What a message opened over its conversation is put away with it.
+            if (modalConversationId !== nextConversationId) {
+                modal = undefined;
+                modalConversationId = undefined;
+            }
             if (previewConversationId !== nextConversationId) {
                 previewEntryId = undefined;
                 previewMediaIndex = undefined;
@@ -1438,6 +1515,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         previewOpen: fronting(store.previewOpen),
         changeViewOpen: fronting(store.changeViewOpen),
         fileViewOpen: fronting(store.fileViewOpen),
+        modalBesideOpen: fronting(store.modalBesideOpen),
         artifactViewOpen: fronting(store.artifactViewOpen),
         artifactTabAttach: fronting(store.artifactTabAttach),
         terminalAdd: fronting(store.terminalAdd),

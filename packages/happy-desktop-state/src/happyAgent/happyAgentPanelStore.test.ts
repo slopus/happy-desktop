@@ -242,3 +242,37 @@ it("keeps each group's way back to itself", () => {
     store.tabClose(one!.id);
     expect(store.get().activeViewId).toBe(two!.id);
 });
+
+it("opens a message's file over the conversation, and moves it beside when asked", () => {
+    const { store } = panelCreate();
+    // A file the viewer was showing beside steps aside: there is one viewer.
+    store.fileViewOpen();
+    store.modalFileOpen();
+    expect(store.get()).toMatchObject({ modal: { kind: "file" }, fileViewOpen: false });
+    expect(store.get().activeViewId).not.toBe("file");
+    store.modalBesideOpen();
+    expect(store.get().modal).toBeUndefined();
+    expect(store.get()).toMatchObject({ open: true, activeViewId: "file", fileViewOpen: true });
+
+    store.modalMediaOpen("entry_1", 2);
+    expect(store.get().modal).toEqual({ kind: "media", entryId: "entry_1", mediaIndex: 2 });
+    store.modalBesideOpen();
+    expect(store.get()).toMatchObject({
+        activeViewId: "preview",
+        previewEntryId: "entry_1",
+        previewMediaIndex: 2,
+    });
+    expect(store.get().modal).toBeUndefined();
+});
+
+it("puts away what was over a conversation when another one is read", () => {
+    const { store } = panelCreate();
+    store.modalMediaOpen("entry_1", 0);
+    store.scopeApply(GROUP_A, AGENT);
+    expect(store.get().modal).toEqual({ kind: "media", entryId: "entry_1", mediaIndex: 0 });
+    store.scopeApply(GROUP_A, "ses_b" as HappyAgentSessionId);
+    expect(store.get().modal).toBeUndefined();
+    store.modalFileOpen();
+    store.modalClose();
+    expect(store.get().modal).toBeUndefined();
+});

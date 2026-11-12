@@ -100,6 +100,7 @@ import {
 } from "./happyAgentChangeTiersStore.js";
 import {
     happyAgentPanelStoreCreate,
+    type HappyAgentFilePresentation,
     type HappyAgentPanelStore,
     type HappyAgentViewPlacement,
 } from "./happyAgentPanelStore.js";
@@ -1835,7 +1836,8 @@ export interface HappyAgentWorkspaceStore {
         groupId: HappyAgentGroupId,
         path: string,
         kind: HappyAgentFileTabKind,
-        selection?: HappyAgentFileLineRange,
+        selection: HappyAgentFileLineRange | undefined,
+        presentation: HappyAgentFilePresentation,
     ): void;
     /**
      * Follows a `happy://` or `happy-file://` file link — a file in another agent's or workspace's
@@ -1848,7 +1850,18 @@ export interface HappyAgentWorkspaceStore {
      * into the checkout being read is an ordinary reference to it, and opens
      * exactly as `fileReferenceOpen` would.
      */
-    fileLinkOpen(link: HappyAgentFileLink, kind: HappyAgentFileTabKind): void;
+    fileLinkOpen(
+        link: HappyAgentFileLink,
+        kind: HappyAgentFileTabKind,
+        presentation: HappyAgentFilePresentation,
+    ): void;
+    /**
+     * Puts away what a message opened over the conversation. A file holding
+     * an unsaved edit is not dropped with it: it moves into the file viewer
+     * beside the conversation, where the edit stays until it is saved or
+     * reverted.
+     */
+    modalClose(): void;
     /**
      * Selects a file in the machine's file manager. `path` is relative to the
      * group's root, or absolute for a file anywhere on that machine. When the
@@ -7344,6 +7357,16 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
+     * Shows the file viewer's file: over the conversation for a file a message
+     * named, otherwise wherever the viewer already is, so a link followed in a
+     * file read over the conversation stays over it.
+     */
+    const fileViewerShow = (presentation: HappyAgentFilePresentation): void => {
+        if (presentation === "modal" || panel.get().modal?.kind === "file") panel.modalFileOpen();
+        else panel.fileViewOpen();
+    };
+
+    /**
      * Opens the file a reference named once the checkout says it is there.
      * `generation` is the ask this answers; a later reference supersedes it.
      */
@@ -7352,7 +7375,8 @@ export function happyAgentWorkspaceStoreCreate(
         groupId: HappyAgentGroupId,
         path: string,
         kind: HappyAgentFileTabKind,
-        selection?: HappyAgentFileLineRange,
+        selection: HappyAgentFileLineRange | undefined,
+        presentation: HappyAgentFilePresentation,
     ): void => {
         // The checkout is asked for the file before a tab is given to it.
         // The read is not kept: the tab reads for itself, the same way it
@@ -7367,7 +7391,7 @@ export function happyAgentWorkspaceStoreCreate(
                 if (disposed || generation !== fileReferenceGeneration) return;
                 fileOpenFailure = undefined;
                 fileTabOpen(groupId, path, kind, false, "panel", selection);
-                panel.fileViewOpen();
+                fileViewerShow(presentation);
                 recompute();
             },
             (error: unknown) => {
@@ -8080,11 +8104,18 @@ export function happyAgentWorkspaceStoreCreate(
             fileTabOpen(groupId, path, kind, false, "panel", selection);
             panel.fileViewOpen();
         },
-        fileReferenceOpen(groupId, path, kind, selection) {
+        fileReferenceOpen(groupId, path, kind, selection, presentation) {
             if (disposed) return;
-            fileReferenceFollow(++fileReferenceGeneration, groupId, path, kind, selection);
+            fileReferenceFollow(
+                ++fileReferenceGeneration,
+                groupId,
+                path,
+                kind,
+                selection,
+                presentation,
+            );
         },
-        fileLinkOpen(link, kind) {
+        fileLinkOpen(link, kind, presentation) {
             if (disposed) return;
             const generation = ++fileReferenceGeneration;
             const current = (): boolean => !disposed && generation === fileReferenceGeneration;
@@ -8102,7 +8133,14 @@ export function happyAgentWorkspaceStoreCreate(
                 // files, which is a reference like any other: editable, and
                 // opened exactly the way a written `Store.ts:120` is.
                 if (workspaceId === addressedGroupId) {
-                    fileReferenceFollow(generation, workspaceId, link.path, kind, link.selection);
+                    fileReferenceFollow(
+                        generation,
+                        workspaceId,
+                        link.path,
+                        kind,
+                        link.selection,
+                        presentation,
+                    );
                     return;
                 }
                 const probe =
@@ -8113,10 +8151,28 @@ export function happyAgentWorkspaceStoreCreate(
                     if (!current()) return;
                     fileOpenFailure = undefined;
                     fileLinkTabOpen(workspaceId, link.path, kind, link.target, link.selection);
-                    panel.fileViewOpen();
+                    fileViewerShow(presentation);
                     recompute();
                 }, fail);
             }, fail);
+        },
+        modalClose() {
+            if (disposed) return;
+            const modal = panel.get().modal;
+            if (modal?.kind !== "file") {
+                panel.modalClose();
+                return;
+            }
+            const held = fileTabs.find((tab) => tab.placement === "panel");
+            if (held?.draft !== undefined) {
+                panel.modalBesideOpen();
+                return;
+            }
+            panel.modalClose();
+            if (!panel.get().fileViewOpen) {
+                panelFileTabClose();
+                recompute();
+            }
         },
         fileReveal(groupId, path) {
             if (disposed) return;

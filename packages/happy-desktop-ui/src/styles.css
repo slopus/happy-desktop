@@ -71,6 +71,7 @@
 @import "./styles/menu-button.css";
 @import "./styles/confirm-popover.css";
 @import "./styles/modal.css";
+@import "./styles/file-modal.css";
 @import "./styles/photo-crop-dialog.css";
 @import "./styles/modal-overlay.css";
 @import "./styles/compose-modal.css";

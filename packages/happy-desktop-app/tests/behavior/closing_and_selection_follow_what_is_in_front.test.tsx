@@ -17,6 +17,8 @@ import type {
 } from "happy-desktop-state";
 import {
     appearanceStoreCreate,
+    composerSourceOf,
+    composerStoreCreate,
     experimentsStoreCreate,
     happyAgentArtifactCatalogStoreNoop,
     happyAgentGroupAccessRefused,
@@ -227,6 +229,8 @@ function workspace(
     projects: typeof PROJECTS,
     // Fields a test keeps live, read on every render: given as getters.
     live: object = {},
+    // Actions a test watches, in place of the ones that do nothing here.
+    actions: object = {},
 ): HappyAgentWorkspaceStore {
     const snapshot = {
         list: {
@@ -273,7 +277,18 @@ function workspace(
         conversationsRetained: HAPPY_AGENT_RETAINED_CONVERSATIONS_NONE,
         panel,
         subscribe: () => () => undefined,
+        ...actions,
     }) as unknown as HappyAgentWorkspaceStore;
+}
+
+/** What a test puts on the machine besides its projects. */
+interface MachineExtras {
+    readonly workspaceLive?: object;
+    readonly workspaceActions?: object;
+    // Actions on the Surfaces catalog a test watches.
+    readonly surfaceActions?: object;
+    // The artifact the viewer holds; loading when absent.
+    readonly artifactViewer?: object;
 }
 
 function directory(
@@ -281,7 +296,7 @@ function directory(
     live: boolean,
     catalog: HappyAgentSurfaceCatalogSnapshot,
     projects: typeof PROJECTS,
-    workspaceLive: object = {},
+    extras: MachineExtras = {},
 ): AppHappyAgentDirectoryStore {
     const titles = new Map([
         [
@@ -303,7 +318,9 @@ function directory(
     const catalogStore = { ...happyAgentArtifactCatalogStoreNoop, get: () => catalogSnapshot };
     const titlesStore = quiet(titles);
     const peopleStore = quiet(new Map());
-    const viewerStore = quiet({ artifactId: undefined, artifact: { type: "loading" } });
+    const viewerStore = quiet(
+        extras.artifactViewer ?? { artifactId: undefined, artifact: { type: "loading" } },
+    );
     const creationStore = quiet({});
     const artifacts = lenient({
         catalog: () => catalogStore,
@@ -318,7 +335,11 @@ function directory(
         inline: () => quiet(new Map()),
         liveRead: () => Promise.resolve(undefined),
     }) as unknown as HappyAgentArtifacts;
-    const surfaceCatalogStore = quiet(catalog) as unknown as HappyAgentSurfaceCatalogStore;
+    const surfaceCatalogStore = lenient({
+        get: () => catalog,
+        subscribe: () => () => undefined,
+        ...extras.surfaceActions,
+    }) as unknown as HappyAgentSurfaceCatalogStore;
     const surfaces = {
         catalog: () => surfaceCatalogStore,
         support: () => happyAgentSurfaceSupportStoreNone,
@@ -336,7 +357,12 @@ function directory(
                     connection: quiet(CONNECTED) as unknown as HappyAgentConnectionStore,
                     host: happyAgentHostNoop as HappyAgentHost,
                     models: quiet(MODELS_LOADING) as unknown as HappyAgentModelStore,
-                    workspace: workspace(address, projects, workspaceLive),
+                    workspace: workspace(
+                        address,
+                        projects,
+                        extras.workspaceLive,
+                        extras.workspaceActions,
+                    ),
                     surfaces,
                     artifacts,
                 },
@@ -357,23 +383,16 @@ async function windowOpen(
     live = false,
     catalog: HappyAgentSurfaceCatalogSnapshot = CATALOG,
     // What the shell around the window supplies, and the machine's projects.
-    host: {
+    host: MachineExtras & {
         readonly onWindowClose?: () => void;
         readonly projects?: typeof PROJECTS;
-        readonly workspaceLive?: object;
     } = {},
 ) {
     const router = happyAgentRouterCreate(happyAgentMemoryHistoryCreate(address));
     onTestFinished(() => router.history.destroy());
     const context: HappyAgentRouterContext = {
         appearance: appearanceStoreCreate({ mode: "light" }),
-        happyAgents: directory(
-            wsAddress,
-            live,
-            catalog,
-            host.projects ?? PROJECTS,
-            host.workspaceLive,
-        ),
+        happyAgents: directory(wsAddress, live, catalog, host.projects ?? PROJECTS, host),
         settings: happyAgentSettingsStoreCreate(),
         experiments: experimentsStoreCreate(),
         mobilePairingMethod: mobilePairingMethodStoreCreate({ defaultMethod: "direct" }),
@@ -452,15 +471,19 @@ describe("the sidebar marks the row for what is in front", () => {
         expect(opened.active()).toEqual(["local/grp_bot"]);
     });
 
-    it("marks an added artifact's row, not the Artifacts row, on the artifact's page", async () => {
+    it("opens an added artifact on its Surface, drawn as the artifact itself, and marks its row", async () => {
         const opened = await windowOpen(CHAT, CHAT_ADDRESS);
         await waitFor(() => expect(opened.row("local/prj_one")).not.toBeNull());
 
         fireEvent.click(opened.row("local/surface:srf_art")!);
         await settle();
 
-        expect(opened.router.state.location.pathname).toBe("/artifacts/local/art_one");
+        expect(opened.router.state.location.pathname).toBe("/surfaces/local/srf_art");
         expect(opened.active()).toEqual(["local/surface:srf_art"]);
+        // The Surface's page is the artifact's own viewer, not a page offering to open it.
+        expect(
+            document.querySelector('[data-happy-desktop-ui="happy-agent-artifact-viewer"]'),
+        ).not.toBeNull();
     });
 
     it("marks an added live artifact's row while it is in front beside the chat", async () => {
@@ -928,5 +951,249 @@ describe("archiving a project or workspace from its sidebar row", () => {
         await archiveChosen(opened, "local/wt_one", "Archive workspace");
 
         expect(calls).toEqual(['groupArchiveOpen(["wt_one"])']);
+    });
+});
+
+describe("a pinned artifact's chat", () => {
+    const ENTRY = { path: "index.md", mimeType: "text/markdown", size: 7, sha256: "0" };
+    const UNKNOWN = { kind: "unknown" } as const;
+    // The viewer holding the artifact, as it does once it has been read.
+    const DECK_READ = {
+        artifactId: "art_one",
+        artifact: {
+            type: "ready",
+            value: {
+                id: "art_one",
+                type: "markdown",
+                title: "Deck",
+                status: "active",
+                latestVersion: 1,
+                cover: null,
+                background: null,
+                thumbnail: null,
+                entry: ENTRY,
+                fileCount: 1,
+                size: 7,
+                source: null,
+                createdBy: UNKNOWN,
+                createdAt: NOW,
+                updatedBy: UNKNOWN,
+                updatedSource: null,
+                updatedAt: NOW,
+                deletedBy: null,
+                deletedSource: null,
+                deletedAt: null,
+                version: "1",
+            },
+        },
+        versions: [],
+        versionsLoading: false,
+        versionsHasMore: false,
+        files: [],
+        content: { type: "loading" },
+        markdownView: "document",
+        deletion: { phase: "idle" },
+    };
+
+    it("opens the chat everyone on it shares beside it from its Chat button", async () => {
+        // The catalog finds the Surface's chat as the real one does: it is the
+        // Surface's own, and found once asked for.
+        const art = { ...ART, chatAgentId: "ses_art" } as HappyAgentSurface;
+        const chats = new Map<string, object>();
+        const catalog = {
+            ...CATALOG,
+            surfaces: [art, BOTPIN],
+            joined: [art, BOTPIN],
+            chats,
+        } as unknown as HappyAgentSurfaceCatalogSnapshot;
+        const asked: string[] = [];
+        const opened = await windowOpen(CHAT, CHAT_ADDRESS, false, catalog, {
+            artifactViewer: DECK_READ,
+            workspaceActions: {
+                conversationOpen: (sessionId: string, groupId: string) =>
+                    asked.push(`conversationOpen(${sessionId}, ${groupId})`),
+            },
+            surfaceActions: {
+                chatOpen: (surfaceId: string) => {
+                    asked.push(surfaceId);
+                    const location = { groupId: "grp_art", sessionId: "ses_art" };
+                    chats.set(surfaceId, location);
+                    return Promise.resolve(location);
+                },
+            },
+        });
+        await waitFor(() => expect(opened.row("local/prj_one")).not.toBeNull());
+        fireEvent.click(opened.row("local/surface:srf_art")!);
+        await settle();
+        expect(opened.router.state.location.pathname).toBe("/surfaces/local/srf_art");
+
+        const toggle = opened.view.container.querySelector<HTMLElement>(
+            '[data-happy-desktop-ui="happy-agent-artifact-viewer"] [data-testid="happy-agent-surface-chat-toggle"]',
+        );
+        expect(toggle).not.toBeNull();
+        expect(toggle!.getAttribute("aria-pressed")).toBe("false");
+
+        asked.length = 0;
+        fireEvent.click(toggle!);
+        await settle();
+
+        // The Surface is asked for its chat, which opens, and the address
+        // shows it beside the artifact without a step to go back through.
+        expect(asked).toContain("srf_art");
+        expect(asked.filter((ask) => ask !== "srf_art")).toEqual([
+            "conversationOpen(ses_art, grp_art)",
+        ]);
+        expect(opened.router.state.location.pathname).toBe(
+            "/surfaces/local/srf_art/chat/grp_art/ses_art",
+        );
+        expect(toggle!.getAttribute("aria-pressed")).toBe("true");
+        await act(() => opened.router.history.back());
+        await settle();
+        expect(opened.router.state.location.pathname).toBe(CHAT);
+    });
+});
+
+describe("a file a message names opens over the conversation", () => {
+    const LINK = "happy://agents/ses_one/files/notes.md";
+    const AGENT = { id: "agt_happy", displayName: "Happy", username: "happy", kind: "agent" };
+    const composer = composerSourceOf(composerStoreCreate("ses_one"));
+    // A conversation with one of the agent's messages, which links a file.
+    const CONVERSATION = {
+        type: "ready",
+        value: {
+            conversationId: "ses_one",
+            ready: true,
+            session: { type: "loading" },
+            title: "Fix",
+            entries: [
+                {
+                    kind: "message",
+                    source: "server",
+                    delivery: "sent",
+                    message: {
+                        id: "msg_one",
+                        chatId: "ses_one",
+                        sequence: "1",
+                        changePts: "1",
+                        sender: AGENT,
+                        text: `Wrote the [notes](${LINK}).`,
+                        generationStatus: "complete",
+                        reactions: [],
+                        attachments: [],
+                        createdAt: new Date(NOW).toISOString(),
+                    },
+                },
+            ],
+            errorAssistance: [],
+            composer,
+            running: false,
+            subagentsRunning: false,
+            workingPhase: "waiting",
+            transcriptComplete: true,
+            loadingMore: false,
+            queuedMessages: [],
+            requestSubmissions: new Map(),
+            requestSelections: new Map(),
+            tasks: [],
+            subagents: [],
+            backgroundProcesses: [],
+            detachedBackgroundProcessIds: new Set(),
+            activityAvailable: false,
+            showReasoning: false,
+            expandedTurnIds: new Set(),
+            expandedMessageIds: new Set(),
+            usageLoading: false,
+            activityPanelOpen: false,
+            modelLocked: false,
+            failureSwitchSupported: false,
+            uiPending: new Map(),
+            uiErrors: new Map(),
+            uiGranted: "all",
+            quickRepliesSent: new Set(),
+            uiDefaultModel: { loading: true, choices: [] },
+        },
+    };
+    // The file as the workspace holds it once asked for, still being read.
+    const NOTES = {
+        id: "panel-file",
+        groupId: "prj_one",
+        path: "notes.md",
+        kind: "file",
+        placement: "panel",
+        preview: true,
+        revision: "0",
+        document: { type: "loading" },
+        presentationId: "0",
+        loading: true,
+        revalidating: false,
+        saving: false,
+    };
+
+    it("opens the file in a modal from the message's link, and puts it away on Escape", async () => {
+        // jsdom draws no text; the message lays its words out by measuring them.
+        vi.stubGlobal(
+            "OffscreenCanvas",
+            class {
+                getContext() {
+                    return { measureText: (text: string) => ({ width: text.length * 7 }) };
+                }
+            },
+        );
+        onTestFinished(() => {
+            vi.unstubAllGlobals();
+        });
+        const held: { file?: typeof NOTES } = {};
+        const asked: string[] = [];
+        const workspaceLive = {
+            conversation: CONVERSATION,
+            get panelFile() {
+                return held.file;
+            },
+        };
+        const opened = await windowOpen(CHAT, CHAT_ADDRESS, false, CATALOG, {
+            workspaceLive,
+            workspaceActions: {
+                fileLinkOpen: (link: { path: string }, _kind: string, presentation: string) => {
+                    asked.push(`${link.path} ${presentation}`);
+                    held.file = NOTES;
+                    panels.at(-1)!.modalFileOpen();
+                },
+                modalClose: () => {
+                    asked.push("modalClose");
+                    panels.at(-1)!.modalClose();
+                },
+            },
+        });
+        await waitFor(() => expect(opened.row("local/prj_one")).not.toBeNull());
+        const modal = () =>
+            opened.view.baseElement.querySelector('[data-testid="happy-agent-file-modal"]');
+        const link = await waitFor(() => {
+            const found = [...opened.view.container.querySelectorAll("a")].find(
+                (anchor) => anchor.textContent === "notes",
+            );
+            expect(found).toBeDefined();
+            return found!;
+        });
+        expect(modal()).toBeNull();
+
+        fireEvent.click(link);
+        await settle();
+
+        // Asked for over the conversation, not in the pane beside it.
+        expect(asked).toEqual(["notes.md modal"]);
+        expect(modal()).not.toBeNull();
+        expect(modal()!.textContent).toContain("notes.md");
+        expect(panels.at(-1)!.get().open).toBe(false);
+
+        fireEvent.keyDown(document.activeElement ?? document.body, {
+            key: "Escape",
+            code: "Escape",
+        });
+        await settle();
+
+        // Put away through the workspace, which keeps an unsaved edit beside.
+        expect(asked).toEqual(["notes.md modal", "modalClose"]);
+        expect(modal()).toBeNull();
+        expect(opened.router.state.location.pathname).toBe(CHAT);
     });
 });

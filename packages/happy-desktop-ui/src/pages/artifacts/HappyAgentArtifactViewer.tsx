@@ -43,6 +43,7 @@ import { ArtifactHeader } from "./ArtifactHeader";
 import { ArtifactLivePage, type ArtifactLiveRenderer } from "./ArtifactLivePage";
 import { HappyAgentArtifactHtmlFrame } from "./HappyAgentArtifactHtmlFrame";
 import type { MessageReferences } from "../../messageReferences";
+import type { HappyAgentSurfaceChatToggle } from "../surfaces/HappyAgentSurfaceHeader";
 
 export interface HappyAgentArtifactViewerProps {
     /** The open artifact, its history, and the version on screen, as the viewer store holds them. */
@@ -83,6 +84,11 @@ export interface HappyAgentArtifactViewerProps {
      * where the Happy Agent has no Surfaces.
      */
     surface?: { readonly added: boolean; readonly onToggle: () => void };
+    /**
+     * The shared chat of the Surface that keeps this artifact, toggled from the
+     * header's edge as every Surface's is. Absent while it is kept nowhere.
+     */
+    chat?: HappyAgentSurfaceChatToggle;
     /**
      * The host's isolated guest for an HTML version served as a site. Absent
      * where the host has none, in which case the viewer never holds a site.
@@ -308,6 +314,25 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                         variant="ghost"
                                     >
                                         Delete
+                                    </Button>
+                                ) : null}
+                                {/* At the edge the chat opens from, as on a Surface. */}
+                                {artifact.status === "active" && props.chat ? (
+                                    <Button
+                                        aria-pressed={props.chat.open}
+                                        data-testid="happy-agent-surface-chat-toggle"
+                                        icon="chat"
+                                        onClick={props.chat.onToggle}
+                                        size="small"
+                                        title={
+                                            props.chat.open
+                                                ? "Close the chat"
+                                                : "Open the chat everyone here shares"
+                                        }
+                                        variant="ghost"
+                                        working={props.chat.working === true}
+                                    >
+                                        Chat
                                     </Button>
                                 ) : null}
                             </>

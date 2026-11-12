@@ -32,12 +32,20 @@
     min-height: 0;
 }
 
-/* Outputs, then work, a half row apart. */
+/*
+ * Outputs, then work, parted by the card's own hairline rather than a gap, so
+ * the card reads as one list and not as two cards side by side.
+ */
 .happy-work-floaty__content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 4px;
     padding: 4px;
+}
+
+.happy-work-floaty__group + .happy-work-floaty__group {
+    padding-top: 4px;
+    border-top: 1px solid var(--divider);
 }
 
 .happy-work-floaty__group {

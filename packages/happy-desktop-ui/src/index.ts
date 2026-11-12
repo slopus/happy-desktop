@@ -343,6 +343,7 @@ export {
 } from "./MessageMarkdown";
 export { type MessageReferences, type MessageReferenceView } from "./messageReferences";
 export { Lightbox, type LightboxProps } from "./Lightbox";
+export { FileModal, type FileModalProps } from "./FileModal";
 export { Rail, type RailItem, type RailProps } from "./Rail";
 export {
     ThemeScope,

@@ -1108,7 +1108,9 @@ export async function happyAgentRouterExternalLinkOpen(
  * same link in a message opens: an artifact beside the conversation, or in
  * the viewer when no conversation is on screen; an agent on its conversation,
  * a workspace or project where the reader left it, a Surface as its sidebar
- * row does, and a file read-only beside the conversation at the lines it named. A malformed link, one naming something
+ * row does, and a file read-only in the file viewer beside the conversation at
+ * the lines it named (a message opens its own over the conversation). A
+ * malformed link, one naming something
  * the reader's list does not hold, or a service or person does nothing.
  *
  * `happyAgentId` names the Happy Agent the link belongs to, as for a link from
@@ -1136,7 +1138,8 @@ export function happyAgentRouterHappyLinkOpen(
     if (link.instanceId !== undefined && link.instanceId !== target?.instanceId) return;
     if (link.type === "file") {
         const file = happyAgentFileLinkParse(url);
-        if (file !== undefined) session.workspace.fileLinkOpen(file, fileTabKind(file.path));
+        if (file !== undefined)
+            session.workspace.fileLinkOpen(file, fileTabKind(file.path), "viewer");
         return;
     }
     if (link.type === "settings") {
