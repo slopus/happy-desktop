@@ -813,11 +813,13 @@ export function SetupPagePage() {
                         <ProfileSetupScreen
                             appearance="dark"
                             busy={false}
-                            email=""
                             name=""
                             onCreate={noop}
-                            onEmailChange={noop}
                             onNameChange={noop}
+                            onPhotoChoose={noop}
+                            onPhotoCropCancel={noop}
+                            onPhotoCropConfirm={noop}
+                            placeholderSeed="work"
                         />
                     </ThemeScope>
                 </div>

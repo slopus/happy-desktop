@@ -421,11 +421,13 @@ export function ConnectionShellPage() {
                             <ProfileSetupScreen
                                 appearance="light"
                                 busy={false}
-                                email=""
                                 name=""
                                 onCreate={() => undefined}
-                                onEmailChange={() => undefined}
                                 onNameChange={() => undefined}
+                                onPhotoChoose={() => undefined}
+                                onPhotoCropCancel={() => undefined}
+                                onPhotoCropConfirm={() => undefined}
+                                placeholderSeed="work"
                             />
                         </ConnectionSurface>
                     </ConnectionShell>

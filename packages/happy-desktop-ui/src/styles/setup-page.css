@@ -49,15 +49,6 @@
     background: var(--surface);
 }
 
-.happy-local-onboarding__profile-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    width: 100%;
-    max-width: 400px;
-    align-self: center;
-}
-
 .happy-setup-page {
     position: relative;
     display: flex;

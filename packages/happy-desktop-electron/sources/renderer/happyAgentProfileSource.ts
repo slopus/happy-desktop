@@ -268,7 +268,9 @@ export function happyAgentProfileSourceCreate(
                 const current = latest ?? (await client.getProfile()).profile;
                 const updated = await client.updateProfile(
                     {
-                        email: input.email,
+                        // A team member's first save may know no email; one
+                        // is never invented for them.
+                        ...(input.email ? { email: input.email } : {}),
                         mutationId: crypto.randomUUID(),
                         name: input.name,
                     },

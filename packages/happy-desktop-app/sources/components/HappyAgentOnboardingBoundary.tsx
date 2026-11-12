@@ -26,6 +26,10 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly profile: HappyAgentProfileStore;
     readonly clock: HappyAgentClockStore;
     readonly online: boolean;
+    /** The server this window is joining, as its rail tile names it. */
+    readonly serverLabel?: string;
+    /** What a new member's placeholder is picked by until they choose a photo. */
+    readonly placeholderSeed: string;
     /** Which pairing method shows: this computer's default until the person picks on the page. */
     readonly mobilePairingMethod: MobilePairingMethodStore;
     /** Whether Direct is offered beside Relay; absent, only Relay. */
@@ -116,25 +120,29 @@ export function HappyAgentOnboardingBoundary(props: {
     // A remote Happy Agent admits a new team member only once their profile
     // exists. Local setup never asks for one.
     if (!snapshot.state.steps.profile.done) {
-        const message = profile.saveError || snapshot.error;
         return (
             <ProfileSetupScreen
                 appearance={appearance.mode}
                 // A Happy Cloud server is not online until this profile exists,
                 // and its profile route answers regardless, so the button
                 // waits only on the profile itself; a save that can't reach
-                // the server says so in the step's message.
-                busy={profile.loading || profile.saving}
-                email={profile.email}
-                {...(message ? { message } : {})}
+                // the server says so under the field.
+                busy={profile.saving}
+                loading={profile.loading}
                 name={profile.name}
-                onCreate={() => {
-                    if (!profile.loading && profile.name.trim() && profile.email.trim())
-                        void props.profile.profileSave().catch(() => undefined);
-                }}
-                onEmailChange={props.profile.emailUpdate}
+                {...(profile.saveError ? { message: profile.saveError } : {})}
+                {...(profile.photoError ? { photoError: profile.photoError } : {})}
+                {...(profile.photoCrop ? { photoCrop: profile.photoCrop } : {})}
+                {...(profile.photoStaged ? { photoUrl: profile.photoStaged.imageUrl } : {})}
+                photoOpening={profile.photoActivity === "opening"}
+                placeholderSeed={props.placeholderSeed}
+                {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
+                onCreate={() => void props.profile.profileCreate()}
                 onExternalOpen={props.onExternalOpen}
                 onNameChange={props.profile.displayNameUpdate}
+                onPhotoChoose={(file) => void props.profile.photoStageChoose(file)}
+                onPhotoCropCancel={props.profile.photoCropCancel}
+                onPhotoCropConfirm={(region) => void props.profile.photoCropConfirm(region)}
             />
         );
     }

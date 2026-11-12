@@ -117,6 +117,7 @@ function boundary(
             mobilePairingMethod={methods}
             online
             onRetry={() => undefined}
+            placeholderSeed="work"
             profile={profile}
             store={store}
             welcome={welcome}

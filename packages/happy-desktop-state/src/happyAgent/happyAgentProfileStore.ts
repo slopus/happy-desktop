@@ -81,6 +81,12 @@ export interface HappyAgentProfileSnapshot {
     readonly photoCrop?: HappyAgentProfilePhotoCropView;
     /** Why the last photo change was refused or failed. */
     readonly photoError?: string;
+    /**
+     * A cropped photo held on this device for a profile not yet created: a team
+     * member exists only once their name is saved, so `profileCreate` sends it
+     * after the name.
+     */
+    readonly photoStaged?: { readonly imageUrl: string };
 }
 
 /** The picture being cropped, as a surface draws it. */
@@ -106,6 +112,17 @@ export interface HappyAgentProfileStore {
     /** Closes the crop without sending anything. */
     photoCropCancel(): void;
     photoRemove(): Promise<void>;
+    /**
+     * Opens a picked file for cropping into the photo a profile being created
+     * will wear; confirming the crop holds it in `photoStaged` instead of sending it.
+     */
+    photoStageChoose(file: Blob): Promise<void>;
+    /**
+     * A team member's first save: the name, with the email only if one is
+     * known, then the staged photo. A photo that does not arrive never undoes
+     * the name; it says so in `photoError`.
+     */
+    profileCreate(): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -123,6 +140,9 @@ const EMPTY: HappyAgentProfileSnapshot = {
     saved: false,
     saving: false,
 };
+
+const NAME_SAVE_FAILED = "Couldn't save your name. Check your connection and try again.";
+const PHOTO_UPLOAD_FAILED = "Your photo didn't upload. You can add it later in Settings.";
 
 const photoEqual = (
     left: HappyAgentProfilePhoto | undefined,
@@ -147,10 +167,19 @@ export function happyAgentProfileStoreCreate(
     let disposed = false;
     /** The decoded picture behind `photoCrop`, owned here until the crop closes. */
     let cropSource: HappyAgentProfilePhotoCropSource | undefined;
+    /** What confirming the open crop does: send it now, or hold it for `profileCreate`. */
+    let cropPurpose: "upload" | "stage" = "upload";
+    /** The encoded crop behind `photoStaged`, and the local address it is shown from. */
+    let staged: { readonly image: Blob; readonly imageUrl: string } | undefined;
 
     const cropClose = (): void => {
         cropSource?.close();
         cropSource = undefined;
+    };
+
+    const stagedClear = (): void => {
+        if (staged) URL.revokeObjectURL(staged.imageUrl);
+        staged = undefined;
     };
 
     const dirtyAgainst = (
@@ -236,6 +265,67 @@ export function happyAgentProfileStoreCreate(
             ...next,
             dirty: dirtyAgainst(stored, next),
             saveError: undefined,
+        });
+    };
+
+    /** Opens a picked file for cropping, refusing first what cannot be opened. */
+    const photoOpen = async (file: Blob, purpose: "upload" | "stage"): Promise<void> => {
+        store.setState({ ...store.getState(), photoActivity: "opening", photoError: undefined });
+        let opened: HappyAgentProfilePhotoCropSource;
+        try {
+            await happyAgentProfilePhotoSourceCheck(file);
+            opened = await deps.photoCodec.open(file);
+        } catch (error) {
+            if (disposed) return;
+            store.setState({
+                ...store.getState(),
+                photoActivity: undefined,
+                photoError: happyAgentProfilePhotoSourceError(error).message,
+            });
+            return;
+        }
+        if (disposed) {
+            opened.close();
+            return;
+        }
+        cropSource = opened;
+        cropPurpose = purpose;
+        store.setState({
+            ...store.getState(),
+            photoActivity: undefined,
+            photoCrop: {
+                imageUrl: opened.imageUrl,
+                width: opened.width,
+                height: opened.height,
+            },
+        });
+    };
+
+    /** Draws the chosen square and holds it on this device, in place of any held before. */
+    const photoStage = async (
+        source: HappyAgentProfilePhotoCropSource,
+        region: HappyAgentProfilePhotoCropRegion,
+    ): Promise<void> => {
+        let image: Blob;
+        try {
+            image = await source.crop(region, HAPPY_AGENT_PROFILE_PHOTO_SIZE);
+        } catch (error) {
+            if (disposed) return;
+            store.setState({
+                ...store.getState(),
+                photoError: happyAgentProfilePhotoSourceError(error).message,
+            });
+            return;
+        }
+        if (disposed) return;
+        stagedClear();
+        staged = { image, imageUrl: URL.createObjectURL(image) };
+        if (cropSource === source) cropClose();
+        store.setState({
+            ...store.getState(),
+            photoCrop: undefined,
+            photoError: undefined,
+            photoStaged: { imageUrl: staged.imageUrl },
         });
     };
 
@@ -333,39 +423,23 @@ export function happyAgentProfileStoreCreate(
                 });
                 return;
             }
-            store.setState({ ...current, photoActivity: "opening", photoError: undefined });
-            let opened: HappyAgentProfilePhotoCropSource;
-            try {
-                await happyAgentProfilePhotoSourceCheck(file);
-                opened = await deps.photoCodec.open(file);
-            } catch (error) {
-                if (disposed) return;
-                store.setState({
-                    ...store.getState(),
-                    photoActivity: undefined,
-                    photoError: happyAgentProfilePhotoSourceError(error).message,
-                });
+            await photoOpen(file, "upload");
+        },
+        async photoStageChoose(file) {
+            const current = store.getState();
+            if (
+                current.photoActivity !== undefined ||
+                current.photoCrop !== undefined ||
+                current.saving
+            )
                 return;
-            }
-            if (disposed) {
-                opened.close();
-                return;
-            }
-            cropSource = opened;
-            store.setState({
-                ...store.getState(),
-                photoActivity: undefined,
-                photoCrop: {
-                    imageUrl: opened.imageUrl,
-                    width: opened.width,
-                    height: opened.height,
-                },
-            });
+            await photoOpen(file, "stage");
         },
         photoCropConfirm(region) {
             const source = cropSource;
             if (source === undefined || store.getState().photoActivity !== undefined)
                 return Promise.resolve();
+            if (cropPurpose === "stage") return photoStage(source, region);
             return photoSend(
                 "uploading",
                 async () => {
@@ -389,10 +463,60 @@ export function happyAgentProfileStoreCreate(
                 return Promise.resolve();
             return photoSend("removing", () => deps.actions.photoRemove());
         },
+        async profileCreate() {
+            const current = store.getState();
+            if (current.saving || current.photoCrop !== undefined) return;
+            const name = current.name.trim();
+            if (!name) {
+                store.setState({ ...current, saveError: "Enter your name." });
+                return;
+            }
+            const email = current.email.trim();
+            store.setState({
+                ...current,
+                name,
+                saving: true,
+                saveError: undefined,
+                photoError: undefined,
+            });
+            let profile: HappyAgentProfile;
+            try {
+                profile = await deps.actions.profileSave({
+                    email: email.includes("@") ? email : "",
+                    name,
+                });
+            } catch {
+                if (disposed) return;
+                // Whatever the server said, the reader can only check their
+                // connection and try again, so that is all this says.
+                store.setState({ ...store.getState(), saving: false, saveError: NAME_SAVE_FAILED });
+                return;
+            }
+            if (disposed) return;
+            profileInput(profile);
+            const photo = staged;
+            let photoError: string | undefined;
+            if (photo) {
+                try {
+                    await deps.actions.photoUpload(await happyAgentProfilePhotoRead(photo.image));
+                } catch {
+                    photoError = PHOTO_UPLOAD_FAILED;
+                }
+                if (disposed) return;
+                if (staged === photo) stagedClear();
+            }
+            store.setState({
+                ...store.getState(),
+                saving: false,
+                photoStaged: undefined,
+                ...(photoError ? { photoError } : {}),
+            });
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
             cropClose();
+            stagedClear();
             stop();
             listeners.clear();
         },
@@ -412,5 +536,7 @@ export const happyAgentProfileStoreNoop: HappyAgentProfileStore = {
     photoCropConfirm: () => Promise.resolve(),
     photoCropCancel: () => undefined,
     photoRemove: () => Promise.resolve(),
+    photoStageChoose: () => Promise.resolve(),
+    profileCreate: () => Promise.resolve(),
     [Symbol.dispose]: () => undefined,
 };

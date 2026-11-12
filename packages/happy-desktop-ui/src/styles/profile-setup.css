@@ -1,0 +1,102 @@
+/* A new team member's profile: the avatar that picks their photo, the one
+   field it is about, and a line under it kept whether or not it says anything. */
+.happy-profile-setup__form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+    align-self: center;
+}
+
+.happy-profile-setup__avatar {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    width: 120px;
+    height: 120px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
+    cursor: pointer;
+}
+
+.happy-profile-setup__avatar:disabled {
+    cursor: default;
+}
+
+.happy-profile-setup__avatar:focus-visible {
+    outline: 2px solid var(--onboarding-foreground);
+    outline-offset: 3px;
+}
+
+.happy-profile-setup__photo {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 18%, transparent);
+}
+
+/* Inside the circle's lower-right, ringed in the surface so it reads as a
+   control sitting on the picture rather than part of it. */
+.happy-profile-setup__badge {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--onboarding-foreground) 22%, transparent),
+        0 2px 6px var(--shadow-subtle);
+    color: var(--text);
+}
+
+.happy-profile-setup__avatar:not(:disabled):hover .happy-profile-setup__badge {
+    background: var(--surface-high);
+}
+
+.happy-setup-page[data-backdrop="sky"]
+    .happy-profile-setup__photo-action.happy-button[data-variant="ghost"] {
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+}
+
+.happy-profile-setup__name {
+    align-self: stretch;
+    margin-top: 12px;
+}
+
+.happy-profile-setup__name .happy-text-field__control[data-size="large"] {
+    height: 56px;
+    border-radius: 12px;
+    padding: 0 18px;
+}
+
+.happy-profile-setup__name
+    .happy-text-field__control[data-size="large"]
+    input.happy-text-field__input {
+    font-size: 20px;
+}
+
+.happy-profile-setup__hint {
+    align-self: stretch;
+    min-height: 32px;
+    margin: 4px 0 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-profile-setup__hint[data-tone="attention"] {
+    color: var(--onboarding-foreground);
+    font-weight: 600;
+}

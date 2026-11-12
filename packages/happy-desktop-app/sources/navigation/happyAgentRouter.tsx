@@ -264,6 +264,10 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             profile={setup.profile}
             clock={setup.clock}
             online={entry?.status === "connected"}
+            {...(entry ? { serverLabel: entry.label } : {})}
+            // The new member has no ID of their own yet, so the server's picks
+            // their placeholder, and it holds still while they type.
+            placeholderSeed={entry?.remoteId ?? entry?.id ?? "happy-agent"}
             onRetry={setup.retry}
             mobilePairingMethod={context.mobilePairingMethod}
             {...(context.experiments ? { experiments: context.experiments } : {})}
