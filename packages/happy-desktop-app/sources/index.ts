@@ -63,6 +63,7 @@ export {
     happyAgentRouterWorkspaceVisible,
     happyAgentRouterConnectionForget,
     happyAgentRouterGroupForget,
+    happyAgentRouterGroupsUnlistedForget,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
     happyAgentRouterConnectionChanged,

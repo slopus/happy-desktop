@@ -1103,6 +1103,8 @@ export interface AppHappyAgentViewProps {
         chatId: string,
         fallbackChatId?: string,
     ): boolean;
+    /** Puts back the history `onChatClose` removed when the host refused that archive. */
+    onChatCloseRefused?(happyAgentId: string, groupId: string, chatId: string): void;
     /** Removes every history visit to a file tab that the reader closed. */
     onFileClose(happyAgentId: string, groupId: string, path: string): void;
     /**
@@ -3610,6 +3612,15 @@ function rowDestination(
     };
 }
 
+/** A conversation whose close was refused, by its title once it is back in the strip. */
+function conversationArchiveFailureName(
+    group: OpenGroup | undefined,
+    conversationId: string,
+): string {
+    const title = group?.conversations.find((summary) => summary.id === conversationId)?.title;
+    return title ? `“${title}”` : "this chat";
+}
+
 /**
  * The one sidebar act the host refused that the footer's error notice states:
  * a task's leave, move, archive, unarchive, or rename, a subtask's archive or
@@ -5195,16 +5206,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (actionId !== ROW_MENU_ARCHIVE) return;
-                // Deliberately no navigation here. A worktree's row goes at
-                // once and the workspace reports its closing, so the reader
-                // leaves with it; a project stays until the host's catalog no
-                // longer holds it, which is reported the same way as an
+                // Archiving a project or workspace removes its worktree folders,
+                // so the row asks first, in the same dialog Command-W raises.
+                // Deliberately no navigation here. Once confirmed, a worktree's
+                // row goes at once and the workspace reports its closing, so the
+                // reader leaves with it; a project stays until the host's catalog
+                // no longer holds it, which is reported the same way as an
                 // archive performed from another window or machine.
-                void (
-                    owner.worktreeId
-                        ? workspace.worktreeArchive(owner.project.id, owner.worktreeId)
-                        : workspace.projectArchive(owner.project.id)
-                ).catch(() => undefined);
+                workspace.groupArchiveOpen(
+                    (owner.worktreeId ?? owner.project.id) as HappyAgentGroupId,
+                );
             }}
             // The Bots heading's menu of hidden bots puts one, or all, back.
             onSectionMenuSelect={(sectionId, _source, actionId) => {
@@ -5916,6 +5927,33 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 </>
             );
 
+        // An address for a page this Happy Agent has no way to show — artifacts
+        // on one that keeps none, a profile off Happy Cloud, an inbox while the
+        // experiment is off, a Surface where there are none — says so, rather
+        // than falling through to the workspace and its "No project open" under
+        // an address that names something else.
+        const unavailablePage = props.artifactsOpen
+            ? { icon: "package" as const, title: "Artifacts aren't available here" }
+            : props.userProfileId !== undefined
+              ? { icon: "agents" as const, title: "Profiles aren't available here" }
+              : props.inboxOpen
+                ? { icon: "feed" as const, title: "The inbox isn't available here" }
+                : props.surfaceId !== undefined
+                  ? { icon: "doc" as const, title: "This Surface isn't available here" }
+                  : undefined;
+        if (unavailablePage && active?.session)
+            return (
+                <>
+                    {desktop ? <WindowDragRegion /> : null}
+                    <EmptyState
+                        description={`${active.label} has no page for this address.`}
+                        icon={unavailablePage.icon}
+                        size="panel"
+                        title={unavailablePage.title}
+                    />
+                </>
+            );
+
         return undefined;
     };
 
@@ -5967,6 +6005,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             props.onChatClose?.(active.id, groupId, chatId, fallbackChatId) ?? false
                         );
                     }}
+                    onChatCloseRefused={(groupId, chatId) =>
+                        props.onChatCloseRefused?.(active.id, groupId, chatId)
+                    }
                     onFileClose={(groupId, path) => props.onFileClose(active.id, groupId, path)}
                     onFileSelect={(groupId, chatId, path, kind, replace) =>
                         props.onFileSelect(active.id, groupId, chatId, path, kind, replace)
@@ -7500,17 +7541,38 @@ function HappyAgentSurfaceContent(props: {
     // in the catalog the moment it is asked for, and one opened on launch
     // appears as the catalog arrives, so there is no loader or error to show.
     // One the reader made here and the Happy Agent turned down says why
-    // instead.
+    // instead. Once the Happy Agent has answered with its catalog, one it does
+    // not name — deleted, out of the reader's sight, or never there — is not
+    // coming, and the page says so rather than staying empty.
     if (surface === undefined) {
         const refusal = catalog.createsRefused.get(props.surfaceId);
-        return refusal === undefined ? (
-            <WindowDragRegion />
-        ) : (
-            <HappyAgentSurfaceNotMadePage
-                name={refusal.name}
-                reason={refusal.error.message}
-                type={refusal.type}
-            />
+        if (refusal !== undefined)
+            return (
+                <HappyAgentSurfaceNotMadePage
+                    name={refusal.name}
+                    reason={refusal.error.message}
+                    type={refusal.type}
+                />
+            );
+        if (
+            catalog.availability === "checking" ||
+            catalog.membershipPending.has(props.surfaceId as HappyAgentSurfaceId)
+        )
+            return <WindowDragRegion />;
+        return (
+            <>
+                <WindowDragRegion />
+                <EmptyState
+                    description={
+                        catalog.availability === "available"
+                            ? "It may have been deleted, or it isn't shared with you."
+                            : "This Happy Agent has no Surfaces."
+                    }
+                    icon="doc"
+                    size="panel"
+                    title="This Surface isn't available"
+                />
+            </>
         );
     }
     const presented = surfaceViewOf(catalog, surface);
@@ -8399,6 +8461,7 @@ interface HappyAgentWorkspaceSurfaceProps {
     onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
     /** Selects a chat of this Happy Agent and brings its row into view in the sidebar. */
     onSidebarReveal(groupId: string, chatId: string): void;
+    onChatCloseRefused(groupId: string, chatId: string): void;
     /** Closes the window, once Command-W has nothing in the workspace left to close. */
     onWindowClose?(): void;
     onFileClose(groupId: string, path: string): void;
@@ -9016,9 +9079,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             }
             const repaired = props.onChatClose(currentGroup.id, tabId, fallbackSessionId);
             if (tabId === current.address.conversationId) selectedHistoryRepaired = repaired;
+            // The tab goes now; a refusal brings it back with the reason on
+            // the workspace, and Back can reach it again.
+            const groupId = currentGroup.id;
             void props.workspace
                 .conversationArchive(tabId as HappyAgentSessionId)
-                .catch(() => undefined);
+                .catch(() => props.onChatCloseRefused(groupId, tabId));
         }
         // A router-backed window repairs and lands through its navigation stack,
         // which preserves the most recently visited survivor. Standalone
@@ -9569,33 +9635,51 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 onReferenceGroupOpen={referenceGroupOpen}
                 activitySelected={panel.open && panel.activeViewId === "activity"}
                 conversation={conversation}
-                {...(workspace.fileOpenFailure !== undefined
-                    ? {
+                {...(workspace.fileOpenFailure === undefined &&
+                workspace.conversationArchiveFailure === undefined &&
+                artifactCreation.failure === undefined
+                    ? {}
+                    : {
                           notice: (
-                              <Banner
-                                  data-testid="file-reference-failure"
-                                  onDismiss={() => props.workspace.fileOpenFailureDismiss()}
-                                  title={`Could not open ${workspace.fileOpenFailure.path}`}
-                                  tone="warning"
-                              >
-                                  {workspace.fileOpenFailure.message}
-                              </Banner>
+                              <>
+                                  {workspace.conversationArchiveFailure === undefined ? null : (
+                                      <Banner
+                                          data-testid="conversation-archive-failure"
+                                          onDismiss={() =>
+                                              props.workspace.conversationArchiveFailureDismiss()
+                                          }
+                                          title={`Could not close ${conversationArchiveFailureName(
+                                              openGroup,
+                                              workspace.conversationArchiveFailure.conversationId,
+                                          )}`}
+                                          tone="danger"
+                                      >
+                                          {workspace.conversationArchiveFailure.message}
+                                      </Banner>
+                                  )}
+                                  {workspace.fileOpenFailure === undefined ? null : (
+                                      <Banner
+                                          data-testid="file-reference-failure"
+                                          onDismiss={() => props.workspace.fileOpenFailureDismiss()}
+                                          title={`Could not open ${workspace.fileOpenFailure.path}`}
+                                          tone="warning"
+                                      >
+                                          {workspace.fileOpenFailure.message}
+                                      </Banner>
+                                  )}
+                                  {artifactCreation.failure === undefined ? null : (
+                                      <Banner
+                                          data-testid="artifact-create-failure"
+                                          onDismiss={() => artifactCreationStore.failureDismiss()}
+                                          title="Could not create the artifact"
+                                          tone="warning"
+                                      >
+                                          {artifactCreation.failure.message}
+                                      </Banner>
+                                  )}
+                              </>
                           ),
-                      }
-                    : artifactCreation.failure !== undefined
-                      ? {
-                            notice: (
-                                <Banner
-                                    data-testid="artifact-create-failure"
-                                    onDismiss={() => artifactCreationStore.failureDismiss()}
-                                    title="Could not create the artifact"
-                                    tone="warning"
-                                >
-                                    {artifactCreation.failure.message}
-                                </Banner>
-                            ),
-                        }
-                      : {})}
+                      })}
                 emptyContent={
                     openBot?.systemKey === "chief_of_staff" &&
                     conversation.type === "ready" &&
