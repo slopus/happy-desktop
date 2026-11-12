@@ -470,8 +470,6 @@ function HappyAgentBoundary(props: {
     profiler?: AppHappyAgentProfilerStore;
     connectionOnboarding?: boolean;
     bridge: HappyDesktopBridge;
-    /** Whether this desktop fills logins saved in the person's browsers. */
-    browserPasswordsAvailable: boolean;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     artifactPage?: HtmlPreviewRenderer;
@@ -500,7 +498,6 @@ function HappyAgentBoundary(props: {
         <RouterProvider
             context={{
                 appearance: props.appearance,
-                browserPasswordsAvailable: props.browserPasswordsAvailable,
                 ...(cloudWebSession ? { cloudWebSession } : {}),
                 browserContent: props.browserContent,
                 // A development window says which checkout it came from; the
@@ -752,8 +749,6 @@ function desktopLocalSetupShown(snapshot: LocalOnboardingViewSnapshot): boolean 
 }
 
 interface DesktopRendererProps {
-    /** Whether this desktop fills logins saved in the person's browsers. */
-    browserPasswordsAvailable: boolean;
     connectionUis: ReadonlyMap<string, DesktopConnectionUi>;
     appearance: AppearanceStore;
     commandPalette: CommandPaletteStore;
@@ -1030,7 +1025,6 @@ function DesktopScreens(props: DesktopRendererProps) {
                             <ConnectionSurface key={entry.id} active={activeId === entry.id}>
                                 <HappyAgentBoundary
                                     appearance={props.appearance}
-                                    browserPasswordsAvailable={props.browserPasswordsAvailable}
                                     bridge={props.bridge}
                                     browserContent={props.browserContent}
                                     commandPalette={ui.commandPalette}
@@ -1298,7 +1292,6 @@ function DesktopRuntimeContent(
     return (
         <HappyAgentBoundary
             appearance={props.appearance}
-            browserPasswordsAvailable={props.browserPasswordsAvailable}
             bridge={props.bridge}
             commandPalette={props.commandPalette}
             // The web app's one connection is a Happy Cloud server, which
@@ -1556,8 +1549,6 @@ if (mediaPreviewBridge) {
     if (configUnsubscribe) appDisposers.push(configUnsubscribe);
     const start = (initial: DesktopConfig): void => {
         const config = latestConfig ?? initial;
-        // Saved logins belong to this machine, shared by every connection UI.
-        const browserPasswordsAvailable = desktopBridge.browserPasswordPickerOpen !== undefined;
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
         // Whether this machine's owner has been welcomed. Acknowledging this
         // deck enters machine setup; it does not wait for machine work to finish.
@@ -2168,7 +2159,6 @@ if (mediaPreviewBridge) {
                 <DesktopHappyLinkNotice store={happyLinkInbox} />
                 <CodeHighlightWorkers>
                     <DesktopRenderer
-                        browserPasswordsAvailable={browserPasswordsAvailable}
                         connectionUis={connectionUis}
                         appearance={appearance}
                         commandPalette={commandPalette}

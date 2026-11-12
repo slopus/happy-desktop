@@ -31,7 +31,7 @@ export default defineConfig({
                 "ws",
                 // node-usb is native: loaded from node_modules at first use.
                 "usb",
-                // Native FFI binds the macOS Keychain from /System frameworks.
+                // Native FFI reads Low Power Mode and battery saver from system libraries.
                 // Keep its prebuilt N-API modules in node_modules.
                 "koffi",
                 // Kept out of the bundle and shipped as a runtime dependency.
