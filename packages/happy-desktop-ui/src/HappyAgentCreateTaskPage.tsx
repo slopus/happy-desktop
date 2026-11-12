@@ -38,7 +38,7 @@ export type HappyAgentCreateTaskPageProps = {
 const PURPOSES = {
     task: {
         scene: "clapper-board",
-        motion: { play: "on-click", rest: "start" },
+        motion: { play: "on-hover", rest: "start" },
         replayLabel: "Play the clapper board",
         title: "Create a new task",
         lede: "A task is one piece of work with a conversation and a folder of its own. Everyone who joins it works in that same conversation.",
@@ -69,9 +69,10 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     className="happy-agent-create-task__stage"
                     data-happy-desktop-ui="happy-agent-create-task-stage"
                 >
-                    {/* The clapper board is still on its first frame until
-                        clicked, as on the phone; the crow plays once as the bug
-                        report opens, then replays on click. */}
+                    {/* The clapper board is still on its first frame until a
+                        pointer enters it: one whole play each time, then back
+                        to that frame. The crow plays once as the bug report
+                        opens, then replays on click. */}
                     <LottieScene
                         name={purpose.scene}
                         {...purpose.motion}

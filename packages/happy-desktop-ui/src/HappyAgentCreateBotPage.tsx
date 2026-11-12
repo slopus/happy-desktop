@@ -60,11 +60,11 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                     className="happy-agent-create-bot__stage"
                     data-happy-desktop-ui="happy-agent-create-bot-stage"
                 >
-                    {/* Still until clicked, as on the phone: one play, then
-                        back to the resting robot. */}
+                    {/* Still until a pointer enters it: one play each time,
+                        then back to the resting robot. */}
                     <LottieScene
                         name="robot"
-                        play="on-click"
+                        play="on-hover"
                         replayLabel="Play the robot"
                         size={80}
                     />

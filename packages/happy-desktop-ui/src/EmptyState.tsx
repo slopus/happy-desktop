@@ -50,9 +50,9 @@ export type EmptyStateProps = {
      * When the animated scene takes its one play. Defaults to `on-appear`.
      * Fixtures that must photograph identically every time pass `on-demand`,
      * which holds a still frame from the start (the poster for MP4 scenes).
-     * The video scene has no click-only form, so neither does an empty state.
+     * The video scene has no hover-only form, so neither does an empty state.
      */
-    animationPlay?: Exclude<LottieScenePlay, "on-click">;
+    animationPlay?: Exclude<LottieScenePlay, "on-hover">;
 };
 /* Icon size for the medallion, per empty-state size. Both land the glyph box on
  * an integer inset inside the medallion (48→14, 40→11) so the composed icon

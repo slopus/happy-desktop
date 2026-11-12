@@ -109,12 +109,11 @@ export type LottieSceneName =
  * plays once as the state it belongs to appears, and afterwards holds its last
  * frame. `on-demand` skips that first play and shows the same held frame from
  * the start — the deterministic form the blueprint is drawn with, and the right
- * choice for any surface that should not move on its own. `on-click` is
- * `on-demand` that a passing pointer does not wake: it plays only when it is
- * clicked, tapped, or pressed with Enter or Space, as the phone's create pages
- * do.
+ * choice for any surface that should not move on its own. `on-hover` is
+ * `on-demand` that is only a picture, not a control: it plays once each time
+ * a pointer enters it, and a click, a tap, or a key does nothing.
  */
-export type LottieScenePlay = "on-appear" | "on-demand" | "on-click";
+export type LottieScenePlay = "on-appear" | "on-demand" | "on-hover";
 
 const SOURCES: Record<LottieSceneName, string> = {
     "alien-monster": alienMonsterUrl,
@@ -206,7 +205,8 @@ export type LottieSceneProps = {
  * passes `rest="start"` gets its first frame instead, held before and after
  * every play.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
- * entry (except under `on-click`), or Enter/Space while it has keyboard focus. A replay is refused while
+ * entry, or Enter/Space while it has keyboard focus — under `on-hover`, only
+ * the hover entry. A replay is refused while
  * one is already running, so a pointer resting inside cannot turn "again" into
  * a loop.
  *
@@ -266,6 +266,9 @@ export function LottieScene(props: LottieSceneProps) {
      * nothing.
      */
     const interactive = !reducedMotion && painted;
+    // Under `on-hover` the scene answers a pointer entering and nothing else:
+    // it stays decorative, with no role, tab stop, label, or pointer cursor.
+    const control = interactive && play !== "on-hover";
     const loop = props.loop === true;
 
     /*
@@ -568,8 +571,8 @@ export function LottieScene(props: LottieSceneProps) {
             // The artwork repeats what the empty state already says in words, so
             // there is nothing here for a screen reader until it becomes a
             // control — and under reduced motion it never does.
-            aria-hidden={interactive ? undefined : "true"}
-            aria-label={interactive ? props.replayLabel : undefined}
+            aria-hidden={control ? undefined : "true"}
+            aria-label={control ? props.replayLabel : undefined}
             className={["happy-lottie-scene", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="lottie-scene"
             data-motion={reducedMotion ? "reduced" : "full"}
@@ -586,16 +589,16 @@ export function LottieScene(props: LottieSceneProps) {
              * re-used one that would be scaled up to fit.
              */
             key={`${props.name}:${play}:${restAt}:${String(props.size)}`}
-            onClick={interactive ? () => replay.current() : undefined}
-            onKeyDown={interactive ? onKeyDown : undefined}
+            onClick={control ? () => replay.current() : undefined}
+            onKeyDown={control ? onKeyDown : undefined}
             // Entering fires once per entry, so a pointer that comes to rest
-            // inside asks for exactly one replay and then nothing. A scene that
-            // plays only on click is not woken by a pointer passing over it.
-            onPointerEnter={interactive && play !== "on-click" ? () => replay.current() : undefined}
+            // inside asks for exactly one replay and then nothing; leaving
+            // mid-play lets that play finish.
+            onPointerEnter={interactive ? () => replay.current() : undefined}
             ref={canvas}
-            role={interactive ? "button" : undefined}
+            role={control ? "button" : undefined}
             style={{ ...props.style, height: box, width: box }}
-            tabIndex={interactive ? 0 : undefined}
+            tabIndex={control ? 0 : undefined}
         />
     );
 }
