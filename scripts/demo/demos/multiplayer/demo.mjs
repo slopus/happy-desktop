@@ -493,7 +493,8 @@ function arrivalStart(clients, arrival) {
         client.sendMessage(task.agent.id, {
             id: cuid(),
             text: arrival.message,
-            mode: world.seedMode,
+            // One Kirill opens shows its mode under the composer.
+            mode: arrival.plan ? world.agentMode : world.seedMode,
         }),
     );
 }
@@ -708,7 +709,7 @@ export default {
         const rest = { x: Math.round(viewport.width * 0.62), y: Math.round(viewport.height * 0.2) };
         // Where the hand goes once it is done: the empty top-left corner of the
         // title bar, where it hovers nothing, out of every pushed-in view.
-        const away = { x: 40, y: 14 };
+        const away = { x: 220, y: 14 };
         /** The hand glides to a target, dwells a quarter second, and clicks it. */
         const choose = async (target, name) => {
             await demo.moveTo(target);
@@ -748,7 +749,8 @@ export default {
                 "Offline Drafts' plan",
             );
             cue("visit-open", demo);
-            await demo.hold(3200);
+            await demo.moveTo(rest);
+            await demo.hold(2600);
             await choose(sidebarRow(page, world.openTask), "back");
             const opened = world.doneTasks.find((task) => task.name === world.openTask);
             await until(

@@ -287,7 +287,7 @@ function qa() {
 /** Entry 8: real crops of this build's sidebar rows, read and unread. */
 function screenshot() {
     const frames = [
-        { label: "Read", image: shot("rows-read") },
+        { label: "Working", image: shot("rows-read") },
         { label: "Unread", image: shot("rows-unread") },
     ];
     return page({
