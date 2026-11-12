@@ -1,5 +1,6 @@
 import { UserError } from "../types.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import type { HappyAgentTraceViewer } from "./happyAgentChatStore.js";
 
 /** The durable destination returned by the named `open_preview` tool. */
 export interface HappyAgentPreview {
@@ -25,8 +26,9 @@ export type HappyAgentPreviewsSnapshot = ReadonlyMap<string, HappyAgentPreviewSt
 
 export interface HappyAgentPreviewsStore {
     get(): HappyAgentPreviewsSnapshot;
-    /** One surface subscription watches only the previews that surface renders. */
-    subscribe(listener: () => void, previewIds: readonly string[]): () => void;
+    subscribe(listener: () => void): () => void;
+    /** The transcript reports only preview actions currently on screen. */
+    previewVisibilityUpdate(viewer: HappyAgentTraceViewer, previewIds: readonly string[]): void;
     /** Checks availability and mints a new, single-use URL. Never caches launch credentials. */
     previewLaunch(previewId: string): Promise<string>;
     [Symbol.dispose](): void;
@@ -90,7 +92,8 @@ export function happyAgentPreviewsStoreCreate(input: {
     readonly request: HappyCloudRequest;
 }): HappyAgentPreviewsStore {
     let snapshot: HappyAgentPreviewsSnapshot = new Map();
-    const observers = new Set<{ readonly listener: () => void; readonly ids: readonly string[] }>();
+    const observers = new Set<() => void>();
+    const viewers = new Map<HappyAgentTraceViewer, readonly string[]>();
     const checkedAt = new Map<string, number>();
     const checking = new Map<string, Promise<HappyAgentPreviewStatus>>();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -109,7 +112,7 @@ export function happyAgentPreviewsStoreCreate(input: {
         )
             return;
         snapshot = new Map(snapshot).set(id, state);
-        for (const observer of observers) observer.listener();
+        for (const observer of observers) observer();
     };
     const failure = (id: string, error: unknown) => {
         const displayable =
@@ -151,8 +154,11 @@ export function happyAgentPreviewsStoreCreate(input: {
         return request;
     };
     const poll = () => {
+        timer = undefined;
         if (disposed || observers.size === 0) return;
-        const ids = new Set([...observers].flatMap((observer) => observer.ids));
+        for (const viewer of viewers.keys()) if (!viewer.live()) viewers.delete(viewer);
+        const ids = new Set([...viewers.values()].flat());
+        if (ids.size === 0) return;
         for (const id of ids) {
             if (
                 snapshot.get(id)?.type === "opening" ||
@@ -173,20 +179,27 @@ export function happyAgentPreviewsStoreCreate(input: {
     };
     return {
         get: () => snapshot,
-        subscribe(listener, previewIds) {
+        subscribe(listener) {
             if (disposed) return () => undefined;
-            const observer = { listener, ids: [...previewIds] };
-            observers.add(observer);
+            observers.add(listener);
             if (timer !== undefined) clearTimeout(timer);
             // Subscribing during React's commit never publishes synchronously.
             timer = setTimeout(poll, 0);
             return () => {
-                observers.delete(observer);
+                observers.delete(listener);
                 if (observers.size === 0 && timer !== undefined) {
                     clearTimeout(timer);
                     timer = undefined;
                 }
             };
+        },
+        previewVisibilityUpdate(viewer, previewIds) {
+            if (disposed) return;
+            if (viewer.live() && previewIds.length > 0) viewers.set(viewer, [...previewIds]);
+            else viewers.delete(viewer);
+            if (timer !== undefined) clearTimeout(timer);
+            timer = undefined;
+            if (observers.size > 0 && viewers.size > 0) timer = setTimeout(poll, 0);
         },
         async previewLaunch(previewId) {
             if (disposed) throw new UserError("This Happy Cloud connection is closed.");
@@ -229,6 +242,7 @@ export function happyAgentPreviewsStoreCreate(input: {
             disposed = true;
             if (timer !== undefined) clearTimeout(timer);
             observers.clear();
+            viewers.clear();
         },
     };
 }
