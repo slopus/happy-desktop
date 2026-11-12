@@ -748,7 +748,7 @@ export async function reply(payload) {
         if (job.waits) {
             if (turn.answered === publishCount(job.artifacts)) {
                 reached.add(`publish:${job.bot}`);
-                return quick([text(job.reply), tool("wait", { duration: "20m" })]);
+                return quick([text(job.reply), tool("wait", { duration: "3h" })]);
             }
             await gate("bots:after");
             return quick([text("Stopped.")]);

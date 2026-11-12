@@ -41,6 +41,11 @@ export async function gatewayCreate(options) {
     });
 
     async function respond(request, response) {
+        // A screenplay may hold a reply for many minutes; the daemon gives up
+        // on a response with no headers or bytes for five. Past 20 s the
+        // answer's headers go out, then a space every 20 s, which JSON allows
+        // before the reply it ends with.
+        let keepAlive;
         try {
             if (request.method !== "POST" || request.url !== "/inference") {
                 response.writeHead(404).end("Unknown route.");
@@ -51,6 +56,12 @@ export async function gatewayCreate(options) {
                 return;
             }
             const payload = JSON.parse(await bodyRead(request));
+            keepAlive = setInterval(() => {
+                if (response.destroyed || response.writableEnded) return;
+                if (!response.headersSent)
+                    response.writeHead(200, { "content-type": "application/json" });
+                response.write(" ");
+            }, 20_000);
             const sessionId =
                 typeof payload.options?.sessionId === "string" ? payload.options.sessionId : "";
             const latestMessage = payload.context?.messages?.at(-1);
@@ -74,16 +85,20 @@ export async function gatewayCreate(options) {
                 `${JSON.stringify({ at: new Date().toISOString(), mode, request: payload, response: reply })}\n`,
                 "utf8",
             );
-            response.writeHead(200, { "content-type": "application/json" });
+            clearInterval(keepAlive);
+            if (!response.headersSent)
+                response.writeHead(200, { "content-type": "application/json" });
             response.end(JSON.stringify(reply));
         } catch (error) {
+            clearInterval(keepAlive);
             const message = error instanceof Error ? error.message : String(error);
             await appendFile(
                 options.ioPath,
                 `${JSON.stringify({ at: new Date().toISOString(), mode, error: message })}\n`,
                 "utf8",
             ).catch(() => undefined);
-            response.writeHead(500).end(message);
+            if (response.headersSent) response.destroy(error instanceof Error ? error : undefined);
+            else response.writeHead(500).end(message);
         }
     }
 

@@ -627,6 +627,14 @@ export default {
                 .first()
                 .waitFor({ timeout: 30000 });
         }
+        // The sidebar rests at its top, Activity and the bots in view.
+        await page
+            .locator('[data-happy-desktop-ui="sidebar-item"]:visible')
+            .first()
+            .evaluate((item) => {
+                for (let port = item.parentElement; port; port = port.parentElement)
+                    if (port.scrollHeight > port.clientHeight + 1) port.scrollTop = 0;
+            });
         // His hand is off the window and off the keyboard: no caret blinks in the composer.
         await page.mouse.move(viewport.width - 2, viewport.height - 2);
         await page.evaluate(() => document.activeElement?.blur?.());
