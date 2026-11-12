@@ -147,6 +147,20 @@
     margin-left: 8px;
 }
 
+/* A fixed word beside unbounded text: it stays whole and the label ends in an
+   ellipsis before it (DESIGN.md, "Text that does not fit"). Figures share one
+   width so a column of times lines up on its right edge. */
+.happy-menu__item-detail {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
 /* ---- Section label --------------------------------------------------- */
 
 /* Sentence case, and wraps rather than truncates (DESIGN.md). A 22px line

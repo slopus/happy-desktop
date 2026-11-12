@@ -235,6 +235,7 @@ export {
 export { VideoViewer, type VideoViewerContent, type VideoViewerProps } from "./VideoViewer";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
 export {
+    CLOSE_SHORTCUT,
     commandShortcut,
     commandShortcutMatches,
     windowShortcutBlocked,
