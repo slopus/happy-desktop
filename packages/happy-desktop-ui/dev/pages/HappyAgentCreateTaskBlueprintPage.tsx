@@ -22,6 +22,15 @@ const noop = () => {};
 const WORK =
     "The invoice totals are off by a cent on multi-currency orders. Find where the rounding happens and fix it with a test.";
 
+const BUG_REPORT_DRAFT = `Report a Happy bug using ~/.happy/docs/recipe/report-bug.md.
+
+Context: Happy Desktop 2026.11.2 · macOS 15.6.0 · Happy Agent Studio Mac 0.4.12
+Started from: happy://agents/u2tp3p56k2z8jnnvebn25mm2
+
+What happened:
+Expected:
+Screenshot (attach if you have one):`;
+
 function composerWith(text: string): ComposerSnapshot {
     return {
         agentUserIds: [],
@@ -161,6 +170,19 @@ export function HappyAgentCreateTaskBlueprintPage() {
                         <HappyAgentCreateTaskPage submitDisabledReason="Happy Agent is offline. The draft is preserved." />,
                         WORK,
                         true,
+                    ),
+                )}
+            </Specimen>
+            <Specimen
+                detail="a bug report: the same task with its own draft · the crow in place of the clapper board · the bug-report template in the composer, the caret at its end"
+                label="Bug report"
+                number="05"
+                stage="app"
+            >
+                {region(
+                    taskCreationSpecimen(
+                        <HappyAgentCreateTaskPage purpose="bugReport" />,
+                        BUG_REPORT_DRAFT,
                     ),
                 )}
             </Specimen>

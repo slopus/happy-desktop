@@ -3,6 +3,11 @@ import { Banner } from "./Banner";
 import { LottieScene } from "./LottieScene";
 
 export type HappyAgentCreateTaskPageProps = {
+    /**
+     * What the task is for. A bug report is the same task, headed by the crow
+     * and a word about why reports matter. Defaults to an ordinary task.
+     */
+    purpose?: "task" | "bugReport";
     /** A refused creation, stated here rather than thrown away. */
     error?: string;
     /** Why the task cannot currently be made on its Happy Agent. */
@@ -24,10 +29,31 @@ export type HappyAgentCreateTaskPageProps = {
  * about to begin), the title, and a sentence about what a task is for. Under
  * them, why the task cannot be made right now, or why it was not.
  *
+ * A bug report is a task with its own draft, so the same panel heads it: the
+ * crow in place of the clapper board, and a word on why reports matter.
+ *
  * Props only, and every state is directly renderable: fresh, one the machine
- * refused, and one whose Happy Agent is away.
+ * refused, one whose Happy Agent is away, and a bug report.
  */
+const PURPOSES = {
+    task: {
+        scene: "clapper-board",
+        motion: { play: "on-click", rest: "start" },
+        replayLabel: "Play the clapper board",
+        title: "Create a new task",
+        lede: "A task is one piece of work with a conversation and a folder of its own. Everyone who joins it works in that same conversation.",
+    },
+    bugReport: {
+        scene: "crow-eating-worm",
+        motion: {},
+        replayLabel: "Play the crow again",
+        title: "Create a bug report",
+        lede: "Your report helps us reproduce what is different about your setup. Happy is young and changing fast, so bugs come before features.",
+    },
+} as const;
+
 export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
+    const purpose = PURPOSES[props.purpose ?? "task"];
     return (
         <div
             className={["happy-agent-create-task", props.className].filter(Boolean).join(" ")}
@@ -43,13 +69,13 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     className="happy-agent-create-task__stage"
                     data-happy-desktop-ui="happy-agent-create-task-stage"
                 >
-                    {/* Still on its first frame until clicked, as on the
-                        phone: one whole play, then back to that frame. */}
+                    {/* The clapper board is still on its first frame until
+                        clicked, as on the phone; the crow plays once as the bug
+                        report opens, then replays on click. */}
                     <LottieScene
-                        name="clapper-board"
-                        play="on-click"
-                        rest="start"
-                        replayLabel="Play the clapper board"
+                        name={purpose.scene}
+                        {...purpose.motion}
+                        replayLabel={purpose.replayLabel}
                         size={80}
                     />
                 </span>
@@ -57,14 +83,13 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     className="happy-agent-create-task__title"
                     data-happy-desktop-ui="happy-agent-create-task-title"
                 >
-                    Create a new task
+                    {purpose.title}
                 </h1>
                 <p
                     className="happy-agent-create-task__lede"
                     data-happy-desktop-ui="happy-agent-create-task-lede"
                 >
-                    A task is one piece of work with a conversation and a folder of its own.
-                    Everyone who joins it works in that same conversation.
+                    {purpose.lede}
                 </p>
             </header>
             {props.submitDisabledReason || props.error ? (

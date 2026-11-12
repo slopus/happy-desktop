@@ -32,6 +32,11 @@ export type HappyAgentRoute =
           readonly chatId: string;
       }
     | { readonly kind: "chats" }
+    /**
+     * Where a bug report is made: a task on the addressed machine, with a
+     * draft of its own beside the ordinary new task's.
+     */
+    | { readonly kind: "bugReportCreate"; readonly happyAgentId: string }
     /** One machine's feed for the reader: what happened there, newest change first. */
     | { readonly kind: "feed"; readonly happyAgentId: string }
     | {
@@ -87,6 +92,8 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}/${part(route.chatId)}`;
         case "chats":
             return "/chats";
+        case "bugReportCreate":
+            return `/bug-reports/new/${part(route.happyAgentId)}`;
         case "feed":
             return `/feed/${part(route.happyAgentId)}`;
         case "file": {
@@ -157,6 +164,10 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
                 : { artifactId: second, kind: "artifact", happyAgentId: first };
         case "blueprint":
             return segments.length === 1 ? { kind: "blueprint" } : undefined;
+        case "bug-reports":
+            return first === "new" && second !== undefined && segments.length === 3
+                ? { kind: "bugReportCreate", happyAgentId: second }
+                : undefined;
         case "bots":
             return first === "new" && second !== undefined && segments.length === 3
                 ? { kind: "botCreate", happyAgentId: second }
@@ -271,6 +282,10 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         }
         case "chats":
             return { kind: "chats" };
+        case "bugReportCreate": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "bugReportCreate", happyAgentId } : undefined;
+        }
         case "feed": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             return happyAgentId ? { kind: "feed", happyAgentId } : undefined;

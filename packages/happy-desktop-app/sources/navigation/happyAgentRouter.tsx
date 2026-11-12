@@ -459,6 +459,18 @@ const taskCreateRoute = createRoute({
 });
 
 /**
+ * Where a bug report is made on one machine: the task route's surface with
+ * the bug report's own draft, so the ordinary new-task draft is left as it was.
+ */
+const bugReportCreateRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    loader: ({ context, params }) => {
+        happyAgentWorkspace(context, params.happyAgentId)?.bugReportCreateOpen();
+    },
+    path: "/bug-reports/new/$happyAgentId",
+});
+
+/**
  * One machine's inbox of agent questions. The Happy Agent is in the address because the
  * queue is that machine's — its agents are the ones waiting — so the window's
  * back and forward move between machines' inboxes rather than between two views
@@ -621,6 +633,7 @@ const routeTree = rootRoute.addChildren([
         surfaceRoute.addChildren([surfaceChatRoute]),
         botCreateRoute,
         taskCreateRoute,
+        bugReportCreateRoute,
         ...(import.meta.env.DEV ? [blueprintRoute] : []),
     ]),
     settingsIndexRoute,
@@ -648,6 +661,7 @@ function HappyAgentWorkspaceLayout() {
         inbox: matched.has(inboxRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
+        bugReportCreate: matched.has(bugReportCreateRoute.id),
         userProfile: matched.has(userProfileRoute.id),
     };
     // The router is constructed before RouterProvider supplies the real context,
@@ -686,6 +700,7 @@ function HappyAgentWorkspaceLayout() {
             settings={context.settings}
             botCreateOpen={shows.botCreate}
             taskCreateOpen={shows.taskCreate}
+            bugReportCreateOpen={shows.bugReportCreate}
             inboxOpen={shows.inbox}
             artifactsOpen={shows.artifacts}
             feedOpen={shows.feed}
@@ -736,6 +751,9 @@ function HappyAgentWorkspaceLayout() {
             }
             onTaskCreateOpen={(happyAgentId) =>
                 void navigate({ params: { happyAgentId }, to: "/tasks/new/$happyAgentId" })
+            }
+            onBugReportCreateOpen={(happyAgentId) =>
+                void navigate({ params: { happyAgentId }, to: "/bug-reports/new/$happyAgentId" })
             }
             onInboxOpen={() =>
                 void navigate({

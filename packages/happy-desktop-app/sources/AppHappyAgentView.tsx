@@ -144,6 +144,7 @@ import type {
     HappyAgentServiceTier,
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
+    HappyAgentTaskCreatePurpose,
     HappyAgentSessionSummary,
     ScrollbarVisibility,
     ThemeMode,
@@ -992,6 +993,10 @@ export interface AppHappyAgentViewProps {
     taskCreateOpen?: boolean;
     /** Addresses that surface on one machine. Absent in a host with nowhere to put it. */
     onTaskCreateOpen?(happyAgentId: string): void;
+    /** Whether the URL addresses the surface a bug report is made on. */
+    bugReportCreateOpen?: boolean;
+    /** Addresses that surface on one machine. Absent in a host with nowhere to put it. */
+    onBugReportCreateOpen?(happyAgentId: string): void;
     /** Whether the URL addresses the addressed Happy Agent's inbox of agent questions. */
     inboxOpen?: boolean;
     /** Addresses that inbox. */
@@ -3793,14 +3798,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         happyAgentTaskCreateSupported(active)
             ? active
             : undefined;
-    // A bug is reported in a new task: the template becomes its unsent first
-    // message, naming what was on screen by its `happy://` link so the agent
-    // can read it, and the caret waits at the end of it.
+    // A bug is reported in a task of its own, with a draft of its own: the
+    // template becomes its unsent first message, naming what was on screen by
+    // its `happy://` link so the agent can read it, and the caret waits at the
+    // end of it. The ordinary new-task draft is not touched.
     const bugReportWorkspace = active?.session?.workspace;
     const bugReportTaskTarget =
         active &&
         bugReportWorkspace &&
-        props.onTaskCreateOpen &&
+        props.onBugReportCreateOpen &&
         happyAgentTaskCreateSupported(active)
             ? active
             : undefined;
@@ -3833,15 +3839,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                 ? {}
                                 : { startedFrom: bugReportStartedFrom }),
                         });
-                        bugReportWorkspace.taskCreateOpen();
-                        // A first message already written stays; the template goes below it.
+                        bugReportWorkspace.bugReportCreateOpen();
+                        // A bug report already being written is come back to as it was;
+                        // only a fresh one is given the template.
                         const written =
                             bugReportWorkspace.get().taskCreate?.composer.get().text ?? "";
-                        bugReportWorkspace.taskCreateMessageUpdate(
-                            written.trim() === "" ? draft : `${written}\n\n${draft}`,
-                        );
-                        props.onTaskCreateOpen?.(bugReportTaskTarget.id);
-                        composerTypingFocusAtEnd(draft);
+                        if (written.trim() === "")
+                            bugReportWorkspace.taskCreateMessageUpdate(draft);
+                        props.onBugReportCreateOpen?.(bugReportTaskTarget.id);
+                        const focused = bugReportWorkspace.get().taskCreate?.composer.get().text;
+                        composerTypingFocusAtEnd(focused ?? draft);
                     }}
                     {...(bugReportTaskTarget
                         ? {}
@@ -4623,11 +4630,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 </CreationTabbedPane>
             );
 
-        // A task is made on the addressed machine, as a bot is.
-        if (props.taskCreateOpen && active?.session?.workspace)
+        // A task is made on the addressed machine, as a bot is. A bug report is
+        // a task with its own draft, on the same surface.
+        if ((props.taskCreateOpen || props.bugReportCreateOpen) && active?.session?.workspace)
             return (
-                <CreationTabbedPane label="New task">
+                <CreationTabbedPane label={props.bugReportCreateOpen ? "Bug report" : "New task"}>
                     <HappyAgentCreateTaskSurface
+                        purpose={props.bugReportCreateOpen ? "bugReport" : "task"}
                         happyAgentOnline={activeHappyAgentOnline}
                         providerUsage={active.session.providerUsage}
                         workspace={active.session.workspace}
@@ -11124,6 +11133,8 @@ function HappyAgentCreateBotSurface(props: {
  * for the reason the bot surface gives.
  */
 function HappyAgentCreateTaskSurface(props: {
+    /** Which draft the route addresses; the other purpose's is never shown here. */
+    purpose: HappyAgentTaskCreatePurpose;
     happyAgentOnline: () => boolean;
     providerUsage?: HappyAgentProviderUsageStore;
     unavailable?: string;
@@ -11136,7 +11147,7 @@ function HappyAgentCreateTaskSurface(props: {
     );
     const taskCreate = snapshot.taskCreate;
     const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
-    if (!taskCreate) return null;
+    if (!taskCreate || taskCreate.purpose !== props.purpose) return null;
     const store = props.workspace;
     const menus = taskCreate.menus;
     return (
@@ -11205,6 +11216,7 @@ function HappyAgentCreateTaskSurface(props: {
             }
             emptyContent={
                 <HappyAgentCreateTaskPage
+                    purpose={taskCreate.purpose}
                     {...(taskCreate.error === undefined ? {} : { error: taskCreate.error })}
                     {...(props.unavailable === undefined
                         ? {}
