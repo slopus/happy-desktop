@@ -4,12 +4,10 @@
 // second, standalone Happy Agent (personal.mjs) that reaches Happy Core
 // through a real server connection by URL, and the window runs on it.
 //
-// Kirill and Steve wear the pictures the team demo gave them, and every
-// exchange on camera is between the two of them. Emma, Maya and Sam are
-// fictional teammates wearing stock photographs (credited in SCRIPT.md);
-// Scoteezy, one of Happy's open-source contributors, wears his public GitHub
-// picture at Kirill's request. The others only own tasks that arrive and show
-// as faces in Activity; their work is the screenplay's. The job bots wear the
+// The cast is three real people wearing their public GitHub pictures at
+// Kirill's request: Kirill (bra1ndump), Steve (ex3ndr) and Scoteezy. Every
+// exchange on camera is between Kirill and Steve; Scoteezy owns tasks that
+// arrive and show as faces in Activity. Their work is the screenplay's. The job bots wear the
 // app's placeholder pictures. Nothing here is read from the real Happy Core
 // server, a real session, or anyone's `~/.happy`; the bots' jobs are named
 // after the kind of standing work a team gives a bot, and every word they
@@ -57,27 +55,6 @@ export const team = {
             email: "steve@happy.example",
             role: "Founder",
             photo: "steve.jpg",
-        },
-        {
-            key: "sam",
-            name: "Sam",
-            email: "sam@happy.example",
-            role: "Engineer",
-            photo: "sam.jpg",
-        },
-        {
-            key: "maya",
-            name: "Maya",
-            email: "maya@happy.example",
-            role: "Engineer",
-            photo: "maya.jpg",
-        },
-        {
-            key: "emma",
-            name: "Emma",
-            email: "emma@happy.example",
-            role: "Growth",
-            photo: "emma.jpg",
         },
         {
             key: "scoteezy",
@@ -340,7 +317,7 @@ export const doneTasks = [
         reply: "Entries group by day in inset cards, each with its subject's face and up to three people.",
     },
     {
-        owner: "emma",
+        owner: "steve",
         name: "Onboarding Emails",
         message: "Draft the three onboarding emails for new teams.",
         reply: "Three drafts are in: welcome, your first shared task, and invite your team.",
@@ -352,11 +329,11 @@ export const doneTasks = [
         reply: "Tokens now refresh on every launch and after a reinstall.",
     },
     {
-        owner: "maya",
+        owner: "scoteezy",
         name: "Sync Benchmarks",
         message: "Benchmark a cold sync on a team server with ten thousand tasks.",
         reply: "A cold sync of 10k tasks takes 1.8 s; most of it is the task list query.",
-        // Steve writes in Maya's task through his own sign-in, so the
+        // Steve writes in Scoteezy's task through his own sign-in, so the
         // task's Activity entry carries both their faces.
         more: [
             {
@@ -367,19 +344,19 @@ export const doneTasks = [
         ],
     },
     {
-        owner: "sam",
+        owner: "kirill",
         name: "Changelog Template",
         message: "Make a changelog template for the 2026.11 release.",
         reply: "The template has three sections, new, changed and fixed, with one line per change.",
     },
     {
-        owner: "emma",
+        owner: "steve",
         name: "Pricing Page Copy",
         message: "Write the pricing page copy for team servers.",
         reply: "Three tiers are drafted, each with one line on who it's for.",
     },
     {
-        owner: "sam",
+        owner: "scoteezy",
         name: "Windows Installer Signing",
         message: "The Windows installer's certificate expired. Sign it with the renewed one.",
         reply: "Signed with the renewed certificate; the installer passes SmartScreen.",
@@ -398,9 +375,7 @@ export const checklist = {
     owner: "steve",
     todos: [
         { from: "steve", text: "Cut the 2026.11 preview" },
-        { from: "maya", text: "Index the task list query" },
-        { from: "sam", text: "Post the changelog" },
-        { from: "emma", text: "Send the launch email" },
+        { from: "kirill", text: "Post the changelog" },
         { from: "scoteezy", text: "Fix Android push before launch" },
     ],
 };
@@ -430,14 +405,9 @@ export const arrivals = [
         message: "Pushes stop on Android after the app sits in the background. Find out why.",
     },
     {
-        owner: "maya",
-        name: "Docs Search",
-        message: "Add search to the docs site.",
-    },
-    {
-        owner: "emma",
-        name: "Launch Email",
-        message: "Draft the launch email for team servers.",
+        owner: "steve",
+        name: "Offline Drafts",
+        message: "Keep composer drafts when the app goes offline, on desktop and on phones.",
     },
 ];
 

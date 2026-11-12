@@ -52,7 +52,7 @@ export function chapters(stage, views, cues) {
     // Held still for `hook` seconds, the window is pushed in on Activity and the
     // task list before the first arrival, which lands close up at about 1 s.
     const hook = Math.max(0.8, 1.0 - aware["arrival:Android Push Fixes"]);
-    const awareUntil = aware["arrival-settled:Launch Email"] + 2.4;
+    const awareUntil = aware["arrival-settled:Offline Drafts"] + 2.4;
 
     const activity = cues.activity;
     const activityFrom = activity["activity-click"] - 1.0;

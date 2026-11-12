@@ -148,7 +148,7 @@ async function botFacts(clients) {
     }
     if (process.env.MULTIPLAYER_BOT_PROBE !== "1") return facts;
     try {
-        const { bot } = await clients.sam.createBot({
+        const { bot } = await clients.scoteezy.createBot({
             name: "Probe",
             username: "probe_bot",
             isAdmin: false,
@@ -156,7 +156,7 @@ async function botFacts(clients) {
         facts.memberCreate = { allowed: true };
         const seenByOwner = Boolean(await botFind(clients[world.owner], "probe_bot"));
         facts.memberCreate.listedForOwner = seenByOwner;
-        await clients.sam.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
+        await clients.scoteezy.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
     } catch (error) {
         facts.memberCreate = { allowed: false, error: String(error?.message ?? error) };
     }
@@ -279,7 +279,7 @@ async function turnSend(clients, task, entry, more) {
 
 /**
  * Teammates writing in each other's earlier tasks, through their own sign-ins:
- * Steve asks Maya's benchmark about the 50k run.
+ * Steve asks Scoteezy's benchmark about the 50k run.
  */
 async function followUpsPrepare(clients) {
     for (const entry of world.doneTasks)
@@ -666,7 +666,7 @@ export default {
 
         if (shot === "aware") {
             // Chapter 1, "See who's working on what": Kirill is in his own task
-            // and touches nothing. Scoteezy, Maya and Emma start tasks from their
+            // and touches nothing. Scoteezy and Steve start tasks from their
             // own sign-ins, and each one is in Kirill's sidebar as it starts;
             // his Activity counts them.
             await demo.pointerVisible(false);
