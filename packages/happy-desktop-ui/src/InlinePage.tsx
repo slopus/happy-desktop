@@ -35,6 +35,10 @@ export interface InlinePageProps {
      * thing to do with the row: an app, which is never laid into the reply.
      */
     readonly openLabel?: string;
+    /** Keeps the open controls mounted while an asynchronous action is unavailable. */
+    readonly openDisabled?: boolean;
+    /** Overrides the default destination description for a host-owned open action. */
+    readonly openAriaLabel?: string;
     /** Every height the page on screen settles on, for the transcript's row model. */
     onHeightChange(height: number): void;
     readonly "data-testid"?: string;
@@ -116,10 +120,11 @@ export function InlinePage(props: InlinePageProps) {
                     <button
                         aria-label={
                             props.onOpenSide
-                                ? `Open ${props.title} beside the chat`
+                                ? (props.openAriaLabel ?? `Open ${props.title} beside the chat`)
                                 : `${geometry.collapsed ? "Expand" : "Collapse"} ${props.title}`
                         }
                         className="happy-inline-page__opener"
+                        disabled={props.openDisabled}
                         data-happy-desktop-ui="inline-page-opener"
                         onClick={(event) => {
                             disclosureAnchor?.(event.currentTarget);
@@ -151,8 +156,9 @@ export function InlinePage(props: InlinePageProps) {
                 ) : null}
                 {props.onOpenSide ? (
                     <Button
-                        aria-label={`Open ${props.title} beside the chat`}
+                        aria-label={props.openAriaLabel ?? `Open ${props.title} beside the chat`}
                         data-happy-desktop-ui="inline-page-open"
+                        disabled={props.openDisabled}
                         icon="open-external"
                         {...(props.openLabel === undefined ? { iconOnly: true } : {})}
                         onClick={(event) => {

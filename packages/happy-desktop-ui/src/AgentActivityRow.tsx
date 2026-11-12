@@ -242,6 +242,7 @@ function toolVerb(
         return status === "failed" ? "Failed" : active ? "Compacting" : "Compacted";
     }
     if (presentation?.type === "search") return active ? "Searching" : "Searched";
+    if (presentation?.type === "preview") return active ? "Preparing" : "Prepared";
     /* A read that turned out to be a picture still says it read it; every
        other call that presents files is named by what it presented. */
     if (presentation?.type === "media")
@@ -344,6 +345,7 @@ function toolGlyph(
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
     if (presentation?.type === "artifact") return { set: "house", name: "package" };
     if (presentation?.type === "page") return { set: "house", name: "globe" };
+    if (presentation?.type === "preview") return { set: "house", name: "globe" };
     if (presentation?.type === "media")
         return presentation.items.some((item) => item.kind === "image")
             ? { set: "house", name: "image" }
@@ -950,6 +952,9 @@ function AgentToolActivity(props: {
     } else if (presentation?.type === "artifact") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.shows === "latest" ? presentation.title : "artifact";
+    } else if (presentation?.type === "preview") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = `preview on port ${String(presentation.port)}`;
     } else if (presentation?.type === "page") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.url;
