@@ -1590,14 +1590,25 @@
     right: -3px;
 }
 
+/*
+ * What the controls cover is hidden exactly while they show, on the same two
+ * conditions that reveal them: the pointer on the row, or a control focused from
+ * the keyboard. A control focused by a click is not shown once the pointer
+ * leaves, so it must not keep the row's report hidden either. A row with no
+ * hover controls never carries `data-swaps` and hides nothing on hover.
+ */
 .happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-activity,
-.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-activity,
+.happy-sidebar__item-trailing[data-swaps]:has(:focus-visible) .happy-sidebar__item-activity,
 .happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-count,
-.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-count,
+.happy-sidebar__item-trailing[data-swaps]:has(:focus-visible) .happy-sidebar__item-count,
+.happy-sidebar__item:hover
+    .happy-sidebar__item-trailing[data-swaps]
+    .happy-sidebar__item-change-stats,
+.happy-sidebar__item-trailing[data-swaps]:has(:focus-visible) .happy-sidebar__item-change-stats,
 .happy-sidebar__item:hover
     .happy-sidebar__item-trailing[data-swaps]
     .happy-sidebar__item-unread-cell,
-.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread-cell {
+.happy-sidebar__item-trailing[data-swaps]:has(:focus-visible) .happy-sidebar__item-unread-cell {
     visibility: hidden;
 }
 
