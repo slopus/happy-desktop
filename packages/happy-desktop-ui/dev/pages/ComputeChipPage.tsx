@@ -9,11 +9,11 @@ export function ComputeChipPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Where a cloud conversation's shell, file and git tools run, in the composer's control row. Every cloud conversation starts with no machine; the agent attaches a pool or one machine when the work needs it. The chip is read-only text: the agent, not the chip, changes it."
+            summary="Where a cloud conversation's shell, file and git tools run, in the composer's control row. Every cloud conversation starts with no computer; the agent joins one when the work needs it. The chip is read-only text: the agent, not the chip, changes it."
             title="Compute chip"
         >
             <Specimen
-                detail="no machine yet · a pool, online · one machine, online · one machine, offline · a computer, online · a computer, offline"
+                detail="no computer yet · a computer, online · a computer, offline · a long name"
                 label="States"
                 number="01"
                 stage="surface"
@@ -27,13 +27,15 @@ export function ComputeChipPage() {
                     }}
                 >
                     <ComputeChip compute={{ kind: "none" }} />
-                    <ComputeChip compute={{ kind: "pool", label: "Lab machines", online: true }} />
-                    <ComputeChip compute={{ kind: "runner", label: "build-1", online: true }} />
-                    <ComputeChip compute={{ kind: "runner", label: "build-2", online: false }} />
+                    <ComputeChip compute={{ kind: "computer", label: "build-01", online: true }} />
+                    <ComputeChip compute={{ kind: "computer", label: "a100-box", online: false }} />
                     <ComputeChip
-                        compute={{ kind: "computer", label: "Build farm", online: true }}
+                        compute={{
+                            kind: "computer",
+                            label: "steve-macbook-pro-with-the-ios-simulators",
+                            online: true,
+                        }}
                     />
-                    <ComputeChip compute={{ kind: "computer", label: "laptop", online: false }} />
                 </div>
             </Specimen>
             <Specimen
@@ -48,7 +50,7 @@ export function ComputeChipPage() {
                         trailing={
                             <>
                                 <ComputeChip
-                                    compute={{ kind: "pool", label: "Lab machines", online: true }}
+                                    compute={{ kind: "computer", label: "build-01", online: true }}
                                 />
                                 <ContextMeter totalTokens={500_000} usedTokens={1_300} />
                             </>

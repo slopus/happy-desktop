@@ -175,50 +175,38 @@ function repositoryProject(agent: object): HappyAgentRepositoryBinding | undefin
 }
 
 /**
- * An agent's compute as Happy Cloud sends it. The client package does not
- * state the `computer` binding yet, so it is stated here.
+ * The computer binding Happy Cloud sends now, which the protocol package does
+ * not name yet: it still types the pool and runner bindings that came before.
  */
-type CloudCompute =
-    | AgentCompute
-    | {
-          type: "computer";
-          computerId: string;
-          label?: string;
-          status?: "online" | "offline";
-      };
+interface HappyCloudComputerCompute {
+    readonly type: "computer";
+    readonly computerId: string;
+    readonly label?: string;
+    readonly status?: "online" | "offline";
+}
 
 /**
  * The cloud's compute binding, as the conversation shows it. A binding this
  * client does not know yet shows nothing rather than failing the session.
  */
-export function computeProject(compute: CloudCompute): HappyAgentCompute | undefined {
-    const status =
-        compute.type === "none" || compute.status === undefined
-            ? {}
-            : { online: compute.status === "online" };
+export function computeProject(
+    compute: AgentCompute | HappyCloudComputerCompute,
+): HappyAgentCompute | undefined {
     switch (compute.type) {
         case "none":
             return { kind: "none" };
         case "pool":
-            return {
-                kind: "pool",
-                poolId: compute.poolId,
-                ...(compute.label === undefined ? {} : { label: compute.label }),
-                ...status,
-            };
-        case "runner":
-            return {
-                kind: "runner",
-                runnerId: compute.runnerId,
-                ...(compute.label === undefined ? {} : { label: compute.label }),
-                ...status,
-            };
+            // Happy Cloud moved every pool binding onto its computer or to none.
+            // A pool can only come from a server older than that, and names no computer.
+            return { kind: "none" };
         case "computer":
+        case "runner":
+            // A runner from before computers is that computer, by the same ID.
             return {
                 kind: "computer",
-                computerId: compute.computerId,
+                computerId: compute.type === "computer" ? compute.computerId : compute.runnerId,
                 ...(compute.label === undefined ? {} : { label: compute.label }),
-                ...status,
+                ...(compute.status === undefined ? {} : { online: compute.status === "online" }),
             };
         default:
             return undefined;

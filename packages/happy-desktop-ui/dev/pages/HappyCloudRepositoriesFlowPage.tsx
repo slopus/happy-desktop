@@ -293,8 +293,8 @@ export function HappyCloudRepositoriesFlowPage() {
                                         <RepositoryChip repository={chip.repository} />
                                         <ComputeChip
                                             compute={{
-                                                kind: "pool",
-                                                label: "Default",
+                                                kind: "computer",
+                                                label: "build-01",
                                                 online: true,
                                             }}
                                         />
