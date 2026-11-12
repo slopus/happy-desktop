@@ -1,6 +1,7 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { RouterProvider } from "@tanstack/react-router";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { ConnectionShell, ConnectionSurface } from "happy-desktop-ui";
 import type {
     HappyAgentArtifacts,
     HappyAgentClockStore,
@@ -386,6 +387,7 @@ async function windowOpen(
     host: MachineExtras & {
         readonly onWindowClose?: () => void;
         readonly projects?: typeof PROJECTS;
+        readonly connectionShell?: boolean;
     } = {},
 ) {
     const router = happyAgentRouterCreate(happyAgentMemoryHistoryCreate(address));
@@ -400,7 +402,20 @@ async function windowOpen(
     };
     router.update({ context });
     await router.load();
-    const view = render(<RouterProvider context={context} router={router} />);
+    const content = <RouterProvider context={context} router={router} />;
+    const view = render(
+        host.connectionShell ? (
+            <ConnectionShell
+                items={[{ id: "local", label: "This computer", local: true, status: "connected" }]}
+                onSelect={() => {}}
+                selectedId="local"
+            >
+                <ConnectionSurface active>{content}</ConnectionSurface>
+            </ConnectionShell>
+        ) : (
+            content
+        ),
+    );
     const row = (id: string) =>
         view.container.querySelector<HTMLElement>(
             `[data-happy-desktop-ui="sidebar-item"][data-item-id="${id}"]`,
@@ -1151,6 +1166,7 @@ describe("a file a message names opens over the conversation", () => {
             },
         };
         const opened = await windowOpen(CHAT, CHAT_ADDRESS, false, CATALOG, {
+            connectionShell: true,
             workspaceLive,
             workspaceActions: {
                 fileLinkOpen: (link: { path: string }, _kind: string, presentation: string) => {
@@ -1183,6 +1199,10 @@ describe("a file a message names opens over the conversation", () => {
         expect(asked).toEqual(["notes.md modal"]);
         expect(modal()).not.toBeNull();
         expect(modal()!.textContent).toContain("notes.md");
+        // The conversation still owns the file, but its scrim covers the
+        // connection rail too, outside the connection's fixed containing block.
+        expect(modal()!.closest('[data-happy-desktop-ui="window-cover"]')).not.toBeNull();
+        expect(modal()!.closest('[data-happy-desktop-ui="connection-surface"]')).toBeNull();
         expect(panels.at(-1)!.get().open).toBe(false);
 
         fireEvent.keyDown(document.activeElement ?? document.body, {

@@ -1962,36 +1962,40 @@ function conversationModal(input: {
         );
         if (media === undefined) return undefined;
         return (
-            <ModalOverlay onDismiss={close}>
-                <FileModal
-                    data-testid="happy-agent-file-modal"
-                    onBesideOpen={beside}
-                    onClose={close}
-                    path={media.item.name}
-                >
-                    <HappyAgentToolMediaPreview
-                        documents={input.workspace.toolMediaDocument()}
-                        media={media}
-                        pathHidden
-                    />
-                </FileModal>
-            </ModalOverlay>
+            <WindowCover>
+                <ModalOverlay onDismiss={close}>
+                    <FileModal
+                        data-testid="happy-agent-file-modal"
+                        onBesideOpen={beside}
+                        onClose={close}
+                        path={media.item.name}
+                    >
+                        <HappyAgentToolMediaPreview
+                            documents={input.workspace.toolMediaDocument()}
+                            media={media}
+                            pathHidden
+                        />
+                    </FileModal>
+                </ModalOverlay>
+            </WindowCover>
         );
     }
     const file = input.panelFile;
     if (file === undefined || input.fileBody === undefined) return undefined;
     return (
-        <ModalOverlay onDismiss={close}>
-            <FileModal
-                data-testid="happy-agent-file-modal"
-                onBesideOpen={beside}
-                onClose={close}
-                {...(input.onFileReveal === undefined ? {} : { onReveal: input.onFileReveal })}
-                path={file.path}
-            >
-                {input.fileBody(file)}
-            </FileModal>
-        </ModalOverlay>
+        <WindowCover>
+            <ModalOverlay onDismiss={close}>
+                <FileModal
+                    data-testid="happy-agent-file-modal"
+                    onBesideOpen={beside}
+                    onClose={close}
+                    {...(input.onFileReveal === undefined ? {} : { onReveal: input.onFileReveal })}
+                    path={file.path}
+                >
+                    {input.fileBody(file)}
+                </FileModal>
+            </ModalOverlay>
+        </WindowCover>
     );
 }
 
