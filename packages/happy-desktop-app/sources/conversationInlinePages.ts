@@ -87,10 +87,12 @@ export function conversationInlinePagesCreate(input: {
     readonly artifactOpen: (artifactId: HappyAgentArtifactId, version?: number) => void;
     readonly pageOpen: (url: string) => void;
     readonly entities?: ConversationInlinePages["entities"];
+    readonly previews?: ConversationInlinePages["previews"];
 }): ConversationInlinePages {
     const artifactPage = input.artifactPage;
     const browserContent = input.browserContent;
     return {
+        ...(input.previews ? { previews: input.previews } : {}),
         artifacts: input.artifacts,
         artifactsRequest: (artifactIds) => input.store.request(artifactIds),
         artifactsContentRequest: (artifactIds) => input.store.contentRequest(artifactIds),

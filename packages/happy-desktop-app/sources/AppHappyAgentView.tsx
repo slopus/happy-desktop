@@ -35,6 +35,7 @@ import {
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { artifactBesideOpen } from "./artifactOpen";
+import { conversationPreviewOpen, useConversationPreviews } from "./conversationPreviews";
 import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
@@ -4779,6 +4780,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     chatConversation={(chat, surfaceName) => (
                         <HappyAgentSurfaceChat
                             instanceId={active.instanceId}
+                            platform={props.platform}
                             {...(referenceSurfaces ? { referenceSurfaces } : {})}
                             {...(artifactsAvailable && session.artifacts
                                 ? { artifacts: session.artifacts }
@@ -6353,6 +6355,7 @@ function HappyAgentSurfaceChat(props: {
     unavailable?: string;
     onChatSelect: (groupId: string | undefined, chatId?: string) => void;
     onExternalLinkOpen: (url: string) => void;
+    platform?: "desktop" | "web";
     /** The Surfaces the chat's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
 }) {
@@ -6398,6 +6401,14 @@ function HappyAgentSurfaceChat(props: {
             onFileOpen={() => undefined}
             onFileLinkOpen={() => undefined}
             onLinkOpen={(url) => props.onExternalLinkOpen(url)}
+            onPreviewOpen={(previewId) =>
+                conversationPreviewOpen({
+                    workspace: props.workspace,
+                    previewId,
+                    platform: props.platform,
+                    externalOpen: props.onExternalLinkOpen,
+                })
+            }
             linkOpenDefault="browser"
             canAbort
             readOnly={false}
@@ -7980,6 +7991,14 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     if (placement === "browser") props.onExternalLinkOpen(url);
                     else props.workspace.panel.browserAdd(url);
                 }}
+                onPreviewOpen={(previewId) =>
+                    conversationPreviewOpen({
+                        workspace: props.workspace,
+                        previewId,
+                        platform: props.platform,
+                        externalOpen: props.onExternalLinkOpen,
+                    })
+                }
                 linkOpenDefault={props.linkOpenDefault}
                 canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
@@ -9588,6 +9607,7 @@ function HappyAgentConversationBody(props: {
     onFileLinkOpen: FileLinkOpenHandler;
     /** Opens a web link a message carries where its context menu asked for it. */
     onLinkOpen: LinkOpenHandler;
+    onPreviewOpen: (previewId: string) => void;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault: LinkOpenPlacement;
     readOnly: boolean;
@@ -9643,6 +9663,7 @@ function HappyAgentConversationBody(props: {
                 onFileOpen={props.onFileOpen}
                 onFileLinkOpen={props.onFileLinkOpen}
                 onLinkOpen={props.onLinkOpen}
+                onPreviewOpen={props.onPreviewOpen}
                 linkOpenDefault={props.linkOpenDefault}
                 canAbort={props.canAbort}
                 readOnly={props.readOnly}
@@ -10051,6 +10072,7 @@ function HappyAgentConversationSurface(props: {
     onFileLinkOpen: FileLinkOpenHandler;
     /** Opens a web link a message carries where its context menu asked for it. */
     onLinkOpen: LinkOpenHandler;
+    onPreviewOpen: (previewId: string) => void;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault: LinkOpenPlacement;
     readOnly: boolean;
@@ -10079,6 +10101,11 @@ function HappyAgentConversationSurface(props: {
     workspace: HappyAgentWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
+    const previews = useConversationPreviews({
+        workspace,
+        entries: conversation.entries,
+        onOpen: props.onPreviewOpen,
+    });
     // The one subscription the transcript's references read through: every
     // reference row fans out from this snapshot rather than subscribing itself.
     const titlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
@@ -10204,32 +10231,34 @@ function HappyAgentConversationSurface(props: {
             : {}),
     });
     const inlineEngines = props.inlineEngines;
-    const inlinePages = inlineEngines
-        ? conversationInlinePagesCreate({
-              artifacts: inlineArtifacts,
-              store: inlineStore,
-              ...(props.artifacts && inlineEngines.artifactPage
-                  ? { artifactPage: inlineEngines.artifactPage }
-                  : {}),
-              ...(inlineEngines.browserContent
-                  ? { browserContent: inlineEngines.browserContent }
-                  : {}),
-              browserConnectionId: inlineEngines.browserConnectionId,
-              workspaceId: props.groupId,
-              agentId: conversation.conversationId,
-              artifactOpen: (artifactId, version) =>
-                  props.artifacts
-                      ? artifactBesideOpen({
-                            artifacts: props.artifacts,
-                            panel: workspace.panel,
-                            artifactId,
-                            ...(version === undefined ? {} : { version }),
-                        })
-                      : workspace.panel.artifactViewOpen(artifactId, version),
-              pageOpen: (url) => workspace.panel.browserAdd(url),
-              entities: references,
-          })
-        : undefined;
+    const inlinePages =
+        inlineEngines || previews
+            ? conversationInlinePagesCreate({
+                  artifacts: inlineArtifacts,
+                  store: inlineStore,
+                  ...(props.artifacts && inlineEngines?.artifactPage
+                      ? { artifactPage: inlineEngines.artifactPage }
+                      : {}),
+                  ...(inlineEngines?.browserContent
+                      ? { browserContent: inlineEngines.browserContent }
+                      : {}),
+                  browserConnectionId: inlineEngines?.browserConnectionId ?? null,
+                  ...(previews ? { previews } : {}),
+                  workspaceId: props.groupId,
+                  agentId: conversation.conversationId,
+                  artifactOpen: (artifactId, version) =>
+                      props.artifacts
+                          ? artifactBesideOpen({
+                                artifacts: props.artifacts,
+                                panel: workspace.panel,
+                                artifactId,
+                                ...(version === undefined ? {} : { version }),
+                            })
+                          : workspace.panel.artifactViewOpen(artifactId, version),
+                  pageOpen: (url) => workspace.panel.browserAdd(url),
+                  entities: references,
+              })
+            : undefined;
     return (
         <ConversationView
             references={references}
