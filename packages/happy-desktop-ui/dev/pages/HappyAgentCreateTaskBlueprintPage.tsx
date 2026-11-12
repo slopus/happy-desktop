@@ -129,13 +129,13 @@ export function HappyAgentCreateTaskBlueprintPage() {
             title="HappyAgentCreateTaskPage"
         >
             <Specimen
-                detail="clapper board, title and lede centred in the empty body · no name and no Create: sending from the composer is the one way the task is made, and the host names it from that first message · the composer is the conversation's own, pickers and all, and has the focus on arrival"
+                detail="magic wand, title and lede centred in the empty body · no name and no Create: sending from the composer is the one way the task is made, and the host names it from that first message · the composer is the conversation's own, pickers and all, and has the focus on arrival"
                 label="Opened, in place"
                 number="01"
                 stage="app"
             >
                 {region(taskCreationSpecimen(<HappyAgentCreateTaskPage />, ""))}
-                <DimensionRule label="column centred on both axes · clapper board scene 80px, 16px over the title · title 32px · lede measure 440px · reason or error 24px under the lede, 360px" />
+                <DimensionRule label="column centred on both axes · magic wand scene 80px, 16px over the title · title 32px · lede measure 440px · reason or error 24px under the lede, 360px" />
             </Specimen>
             <Specimen
                 detail="the work written in the composer · Enter sends and makes the task"
@@ -174,7 +174,7 @@ export function HappyAgentCreateTaskBlueprintPage() {
                 )}
             </Specimen>
             <Specimen
-                detail="a bug report: the same task with its own draft · the crow in place of the clapper board · the bug-report template in the composer, the caret at its end"
+                detail="a bug report: the same task with its own draft · the crow in place of the magic wand · the bug-report template in the composer, the caret at its end"
                 label="Bug report"
                 number="05"
                 stage="app"

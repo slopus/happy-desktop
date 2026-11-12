@@ -82,7 +82,7 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                     data-happy-desktop-ui="happy-agent-create-bot-lede"
                 >
                     A bot is like a colleague: one lasting conversation with a folder of its own.
-                    Give it a name, then tell it what to do.
+                    Tell it what to do in your first message.
                 </p>
             </header>
             {/* The name, and Create beside it: the last thing decided up here.

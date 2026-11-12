@@ -19,7 +19,6 @@ import {
 } from "./lottie/dotLottieRuntime";
 import alienMonsterUrl from "./assets/animations/alien-monster.json?url";
 import cherryBlossomUrl from "./assets/animations/cherry-blossom.json?url";
-import clapperBoardUrl from "./assets/animations/clapper-board.json?url";
 import closedLockUrl from "./assets/animations/closed-lock.json?url";
 import cloudVariationUrl from "./assets/animations/cloud-variation.json?url";
 import crowEatingWormUrl from "./assets/animations/crow-eating-worm.json?url";
@@ -28,6 +27,7 @@ import disguisedFaceUrl from "./assets/animations/disguised-face.json?url";
 import frontFacingBabyChickUrl from "./assets/animations/front-facing-baby-chick.json?url";
 import hatchingChickUrl from "./assets/animations/hatching-chick.json?url";
 import llamaUrl from "./assets/animations/llama.json?url";
+import magicWandUrl from "./assets/animations/magic-wand.json?url";
 import mirrorBallUrl from "./assets/animations/mirror-ball.json?url";
 import monkeyHearNoEvilUrl from "./assets/animations/monkey-hear-no-evil.json?url";
 import openHandsUrl from "./assets/animations/open-hands.json?url";
@@ -50,7 +50,6 @@ import wandUrl from "./assets/animations/wand.json?url";
  *
  * - `alien-monster` — people and agents are together in one live session.
  * - `cherry-blossom` — a new friendship has begun.
- * - `clapper-board` — a piece of work is about to begin.
  * - `closed-lock` — access is secured.
  * - `cloud-variation` — work runs on hardware that is not this machine.
  * - `confetti-ball` — one milestone has just completed.
@@ -59,6 +58,7 @@ import wandUrl from "./assets/animations/wand.json?url";
  * - `front-facing-baby-chick` — a new social identity is ready to meet people.
  * - `hatching-chick` — something new has been created.
  * - `llama` — several models are being combined on one job.
+ * - `magic-wand` — a piece of work is about to begin.
  * - `mirror-ball` — one session, channel, or moment a whole circle is in at once.
  * - `monkey-hear-no-evil` — nobody outside can listen to this.
  * - `open-hands` — a social invitation is waiting for a response.
@@ -80,7 +80,6 @@ import wandUrl from "./assets/animations/wand.json?url";
 export type LottieSceneName =
     | "alien-monster"
     | "cherry-blossom"
-    | "clapper-board"
     | "closed-lock"
     | "cloud-variation"
     | "confetti-ball"
@@ -89,6 +88,7 @@ export type LottieSceneName =
     | "front-facing-baby-chick"
     | "hatching-chick"
     | "llama"
+    | "magic-wand"
     | "mirror-ball"
     | "monkey-hear-no-evil"
     | "open-hands"
@@ -118,7 +118,6 @@ export type LottieScenePlay = "on-appear" | "on-demand" | "on-hover";
 const SOURCES: Record<LottieSceneName, string> = {
     "alien-monster": alienMonsterUrl,
     "cherry-blossom": cherryBlossomUrl,
-    "clapper-board": clapperBoardUrl,
     "closed-lock": closedLockUrl,
     "cloud-variation": cloudVariationUrl,
     "confetti-ball": confettiBallUrl,
@@ -127,6 +126,7 @@ const SOURCES: Record<LottieSceneName, string> = {
     "front-facing-baby-chick": frontFacingBabyChickUrl,
     "hatching-chick": hatchingChickUrl,
     llama: llamaUrl,
+    "magic-wand": magicWandUrl,
     "mirror-ball": mirrorBallUrl,
     "monkey-hear-no-evil": monkeyHearNoEvilUrl,
     "open-hands": openHandsUrl,

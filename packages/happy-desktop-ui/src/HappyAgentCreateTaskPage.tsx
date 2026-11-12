@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { LottieScene } from "./LottieScene";
-import clapperBoardStill from "./assets/animations/stills/clapper-board.webp?inline";
+import magicWandStill from "./assets/animations/stills/magic-wand.webp?inline";
 
 export type HappyAgentCreateTaskPageProps = {
     /**
@@ -26,23 +26,23 @@ export type HappyAgentCreateTaskPageProps = {
  * the empty content of a conversation view whose composer is the task's own:
  * the first message is written down there, and sending it is the one way the
  * task is made. Nothing is decided up here — the host names the task from that
- * first message — so this panel is only the clapper board (a piece of work
+ * first message — so this panel is only the magic wand (a piece of work
  * about to begin), the title, and a sentence about what a task is for. Under
  * them, why the task cannot be made right now, or why it was not.
  *
  * A bug report is a task with its own draft, so the same panel heads it: the
- * crow in place of the clapper board, and a word on why reports matter.
+ * crow in place of the magic wand, and a word on why reports matter.
  *
  * Props only, and every state is directly renderable: fresh, one the machine
  * refused, one whose Happy Agent is away, and a bug report.
  */
 const PURPOSES = {
     task: {
-        scene: "clapper-board",
-        motion: { play: "on-hover", rest: "start", still: clapperBoardStill },
-        replayLabel: "Play the clapper board",
+        scene: "magic-wand",
+        motion: { play: "on-hover", rest: "start", still: magicWandStill },
+        replayLabel: "Play the magic wand",
         title: "Create a new task",
-        lede: "A task is for one-off work. It can work across several projects and start subtasks of its own.",
+        lede: "A task is one piece of work, big or small. It can reach across several projects and hand parts off to subtasks.",
     },
     bugReport: {
         scene: "crow-eating-worm",
@@ -70,7 +70,7 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     className="happy-agent-create-task__stage"
                     data-happy-desktop-ui="happy-agent-create-task-stage"
                 >
-                    {/* The clapper board is still on its first frame until a
+                    {/* The magic wand is still on its first frame until a
                         pointer enters it: one whole play each time, then back
                         to that frame. The crow plays once as the bug report
                         opens, then replays on click. */}

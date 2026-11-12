@@ -53,24 +53,25 @@ belongs to the settled empty artifacts list, on the page and in the side panel.
 While the catalog is still loading, and when filters match nothing, the list
 keeps its plain glyph.
 
-## Clapper board
+## Magic wand
 
-`clapper-board.json` was supplied by the project owner on 11 November 2026 as
-`action for tasks.tgs` (36,870 bytes, SHA-256
-`764ae6522784fb6ed9dcc7a40674216b79f11756046e2fc625f3df03c84868ad`). The JSON
+`magic-wand.json` was supplied by the project owner on 12 November 2026 as
+`magic wand.tgs` (21,825 bytes, SHA-256
+`26dee01119a276010898ec6f1d6040c9c7330e9cdae172a39277c1869e832ba2`). The JSON
 is that file gunzipped and nothing else: no editing, retiming, or
 re-exporting, and it keeps its `tgs` key, which the renderer ignores. It is
-Lottie 5.5.2, 512×512, 60fps, frames 0–151, 36 layers, and has no raster or
-external image assets. The supplied file records no author or upstream license
-metadata.
+Lottie 5.5.2, 512×512, 60fps, frames 0–180, 41 layers, and has no raster or
+external image assets; its one `assets` entry is a precomposition. The
+supplied file records no author or upstream license metadata. It is a
+different drawing from `wand.json`, which keeps its own meaning.
 
 The scene means **a piece of work is about to begin**. It stands over the title
-of the page a new task is made on.
+of the page a new task is made on, where the clapper board stood before it.
 
 ## Stills
 
-`stills/robot.webp` and `stills/clapper-board.webp` are 240×240 renders of
-`robot.json` at frame 179 and `clapper-board.json` at frame 0, the frames each
+`stills/robot.webp` and `stills/magic-wand.webp` are 240×240 renders of
+`robot.json` at frame 179 and `magic-wand.json` at frame 0, the frames each
 scene rests on in the create pages. They were drawn by the same dotLottie
 player and encoded as WebP; `LottieScene` shows them under the canvas until the
 player has drawn its first frame, so the picture is there when the page is.
@@ -99,7 +100,6 @@ not recorded in the files.
 | `alien-monster.json`           | `e0875ef4ae4aa214a3d9de567ea39e9429465addabc91d177ea883302146ae89` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 66 KB / 5 KB gz   |
 | `cat-face.json`                | `21d629ce58ad92bf140bfb7f5534e553232376a56c6bdddd0e527523a89c4d90` | Lottie 5.5.2, 512×512, 60fps, 180f, 17 layers | 367 KB / 66 KB gz |
 | `cherry-blossom.json`          | `4b6c31349911d268c4509e184aac61d877269d7e57745a32c750c851d8a25153` | Lottie 5.5.2, 512×512, 60fps, 180f, 30 layers | 309 KB / 42 KB gz |
-| `clapper-board.json`           | `321f9dfe9e03985a6da6168300fcea7f1d9f886bc111c38fd78043f4fc2244ae` | Lottie 5.5.2, 512×512, 60fps, 151f, 36 layers | 263 KB / 38 KB gz |
 | `closed-lock.json`             | `f6087f51de1ccc7dea5cfb9853292bc14271e86e9390a8fbc9514b31b32a0ad8` | Lottie 5.5.2, 512×512, 60fps, 180f, 14 layers | 146 KB / 14 KB gz |
 | `cloud-variation.json`         | `4833ea8c714e353818667d8c8e39ce807273e86c79c2d473f2331a00526600aa` | Lottie 5.5.2, 512×512, 60fps, 180f, 39 layers | 143 KB / 12 KB gz |
 | `confetti-ball.json`           | `65e82eafe12ac295ce747336f8453e3c500d3c130f77db97581431bf1c7d9fc5` | Lottie 5.5.2, 512×512, 60fps, 180f, 41 layers | 193 KB / 20 KB gz |
@@ -108,6 +108,7 @@ not recorded in the files.
 | `front-facing-baby-chick.json` | `27eaed25a9691b7f2e882e41ed2db6972b17d0a612089ac958da4af400eb9f45` | Lottie 5.5.2, 512×512, 60fps, 180f, 20 layers | 182 KB / 15 KB gz |
 | `hatching-chick.json`          | `1a693cca609409e3bf79c3c997801346bc083fd9ef2e6fa90689a1288be901dd` | Lottie 5.5.2, 512×512, 60fps, 180f, 3 layers  | 309 KB / 25 KB gz |
 | `llama.json`                   | `ff16ee4b8a19a782b5e5b12dbe103d145410f16b8801af5723b6636c56a0a0ff` | Lottie 5.5.2, 512×512, 60fps, 180f, 27 layers | 462 KB / 60 KB gz |
+| `magic-wand.json`              | `6d23637e2b8e7d8374afdd646633965ae03928b2b113033c2b2dd83da23d32d9` | Lottie 5.5.2, 512×512, 60fps, 180f, 41 layers | 271 KB / 22 KB gz |
 | `mirror-ball.json`             | `58f32f20c8ac9d81f1cc403f6a473e1ff4480cd6aff986d1327efcc95d060a81` | Lottie 5.5.2, 512×512, 60fps, 180f, 36 layers | 836 KB / 41 KB gz |
 | `monkey-hear-no-evil.json`     | `ac6eb10983eba058156d8ec1b34e5a1239a6378fb83a8ad11f7a5d61cb61634b` | Lottie 5.5.2, 512×512, 60fps, 137f, 15 layers | 143 KB / 17 KB gz |
 | `open-hands.json`              | `7b5b9d98156057d2fb4cb895f0a462e943942be190dd0a302935e2ef306420b4` | Lottie 5.5.2, 512×512, 60fps, 179f, 3 layers  | 331 KB / 36 KB gz |
@@ -124,8 +125,8 @@ not recorded in the files.
 | `wand.json`                    | `8de70508fe1ebdeb08fc7005820329696f28ec84adc94f3cc4362cf7d3e72870` | Lottie 5.5.2, 512×512, 60fps, 176f, 30 layers | 193 KB / 16 KB gz |
 
 None embeds a raster asset and none references an external image, so a scene is
-one JSON fetch and nothing else. `monkey-hear-no-evil.json` is the only one with
-an `assets` entry at all, and it is a precomposition — vector layers inside the
+one JSON fetch and nothing else. `monkey-hear-no-evil.json` and `magic-wand.json` are the only ones with
+an `assets` entry at all, and each is a precomposition — vector layers inside the
 same file, not a picture fetched from somewhere. Each is imported by URL, so a screen only
 downloads the animation it actually shows.
 
@@ -176,8 +177,6 @@ actually needs, and each is used for that one meaning and nothing else:
   connection, not a request that still needs an answer.
 - 🔒 **closed lock** — _access is secured._ It is the settled state after a
   private boundary has been established, not a warning or an access error.
-- 🎬 **clapper board** — _a piece of work is about to begin._ It stands over
-  the page a new task is made on, before the first message is sent.
 - ☁️ **cloud** — _work runs on hardware that is not this machine._ An agent
   hosted for you, or one on a machine of your own that others can reach. It is
   about where the work happens, never about a sync or an upload.
@@ -194,6 +193,8 @@ actually needs, and each is used for that one meaning and nothing else:
 - 🦙 **llama** — _several models are being combined on one job._ One harness
   turns an unusual mix of Claude, Codex, Grok, or anything else into one
   coherent workflow.
+- 🪄 **magic wand** — _a piece of work is about to begin._ It stands over
+  the page a new task is made on, before the first message is sent.
 - 🪩 **mirror ball** — _one thing shared across a whole circle at once._ A ball
   of many mirrors throwing the same light everywhere in the room: one session,
   one channel, one moment that a circle of people is in together rather than
