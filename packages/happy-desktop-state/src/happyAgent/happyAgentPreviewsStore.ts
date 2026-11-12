@@ -60,7 +60,11 @@ function previewUrl(value: unknown): string | undefined {
 }
 
 /** Validate only the explicitly named tool's contract, before its result becomes text. */
-export function happyAgentPreviewResultRead(value: unknown): HappyAgentPreview | undefined {
+export function happyAgentPreviewResultRead(
+    toolName: string,
+    value: unknown,
+): HappyAgentPreview | undefined {
+    if (toolName !== "open_preview") return undefined;
     const result = object(value);
     if (
         result?.type !== "preview" ||

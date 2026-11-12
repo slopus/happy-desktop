@@ -1905,8 +1905,8 @@ function messageElementsProject(
         } else if (block.type === "tool_call") {
             const presentation = block.presentation;
             const preview =
-                block.name === "open_preview" && block.status === "completed"
-                    ? happyAgentPreviewResultRead(block.result)
+                block.status === "completed"
+                    ? happyAgentPreviewResultRead(block.name, block.result)
                     : undefined;
             elements.push({
                 ...base,
