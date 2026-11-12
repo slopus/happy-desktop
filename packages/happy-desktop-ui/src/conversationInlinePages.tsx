@@ -131,8 +131,8 @@ export function conversationInlinePage(
         const status =
             state?.type === "opening"
                 ? "Opening…"
-                : state?.type === "deleted"
-                  ? "Preview deleted"
+                : state?.type === "missing"
+                  ? "Preview no longer available"
                   : state?.type === "error"
                     ? state.error.message
                     : state?.type === "available"
@@ -153,7 +153,7 @@ export function conversationInlinePage(
                 geometry,
                 openLabel: "Open preview",
                 openAriaLabel: `Open preview on port ${String(presentation.port)}`,
-                openDisabled: state?.type === "opening" || state?.type === "deleted",
+                openDisabled: state?.type === "opening" || state?.type === "missing",
                 ...(pages.previews
                     ? { onOpenSide: () => pages.previews?.previewOpen(presentation.previewId) }
                     : {}),

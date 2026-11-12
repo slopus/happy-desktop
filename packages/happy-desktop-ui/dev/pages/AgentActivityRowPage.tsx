@@ -62,7 +62,7 @@ export function AgentActivityRowPage() {
                         { status: "Machine offline", disabled: false },
                         { status: "Machine needs an update", disabled: false },
                         { status: "No compute attached", disabled: false },
-                        { status: "Preview deleted", disabled: true },
+                        { status: "Preview no longer available", disabled: true },
                         { status: "Happy couldn't reach the server.", disabled: false },
                     ].map((state, index) => (
                         <InlinePage
