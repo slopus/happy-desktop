@@ -17,6 +17,12 @@ export type MenuItem =
           disabled?: boolean;
           checked?: boolean;
           shortcut?: string;
+          /**
+           * A quiet word after the label that says something about the row
+           * without being part of its name, such as when it was last used. It
+           * keeps its whole width; a long label gives way to it.
+           */
+          detail?: string;
       }
     | {
           kind: "separator";
@@ -134,6 +140,14 @@ export function Menu(props: MenuProps) {
                                 >
                                     {item.label}
                                 </span>
+                                {item.detail ? (
+                                    <span
+                                        className="happy-menu__item-detail"
+                                        data-happy-desktop-ui="menu-item-detail"
+                                    >
+                                        {item.detail}
+                                    </span>
+                                ) : null}
                                 {item.shortcut ? (
                                     <KeyCap
                                         className="happy-menu__item-shortcut"

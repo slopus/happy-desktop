@@ -69,6 +69,7 @@ function workspace(): HappyAgentWorkspaceStore {
             bots: [],
             tasks: [],
             taskDirectory: [],
+            archivedSessions: [],
             projects: { type: "ready" as const, value: PROJECTS },
         },
         conversation: { type: "unloaded" as const },

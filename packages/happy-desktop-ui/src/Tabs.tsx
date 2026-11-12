@@ -10,6 +10,7 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { CountBadge } from "./Badge";
+import { fixedBlockMeasure } from "./fixedBlock";
 import { haptic } from "./haptics";
 import { FileKindIcon } from "./FileKindIcon";
 import { Icon, type IconName } from "./Icon";
@@ -261,6 +262,13 @@ interface TabDrag {
     readonly pointerY: number;
     /** True once the pointer has left the strip: the tab is being carried. */
     readonly carried: boolean;
+    /**
+     * Where the carried label's fixed offsets are counted from, measured as the
+     * tab is picked up out of the strip. The pointer is reported against the
+     * window; the label is laid out against whatever contains the strip.
+     */
+    readonly carriedOriginX?: number;
+    readonly carriedOriginY?: number;
     /** The transfer zone under the pointer, if the drop would land in one. */
     readonly zone?: string;
     /**
@@ -371,6 +379,13 @@ export function Tabs(props: TabsProps) {
         items: MenuItem[];
         x: number;
         y: number;
+        /**
+         * The fixed offsets that put the menu at `x`, `y` in the window, once
+         * measured: inside a connection the menu is laid out against the
+         * connection's surface, not the window the pointer was reported in.
+         */
+        left?: number;
+        top?: number;
     }>();
     // eslint-disable-next-line happy-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
     useLayoutEffect(() => {
@@ -379,8 +394,16 @@ export function Tabs(props: TabsProps) {
         if (bounds) {
             const x = Math.max(8, Math.min(tabMenu.x, window.innerWidth - bounds.width - 8));
             const y = Math.max(8, Math.min(tabMenu.y, window.innerHeight - bounds.height - 8));
-            if (x !== tabMenu.x || y !== tabMenu.y) {
-                setTabMenu({ ...tabMenu, x, y });
+            const block = fixedBlockMeasure(menuRoot.current?.parentElement ?? document.body);
+            const left = x - block.left;
+            const top = y - block.top;
+            if (
+                x !== tabMenu.x ||
+                y !== tabMenu.y ||
+                left !== tabMenu.left ||
+                top !== tabMenu.top
+            ) {
+                setTabMenu({ ...tabMenu, x, y, left, top });
                 return;
             }
         }
@@ -595,6 +618,10 @@ export function Tabs(props: TabsProps) {
               )
             : undefined;
         if (!carried && current.carried) transferZonesArm(targets().map((target) => target.zone));
+        const carriedOrigin =
+            carried && !current.carried && list.current
+                ? fixedBlockMeasure(list.current)
+                : undefined;
         // A tick when the tab crosses into a new slot, and one when it crosses
         // into a zone: both are the moment the drop's meaning changes.
         if (zone !== current.zone) haptic("selection");
@@ -610,6 +637,9 @@ export function Tabs(props: TabsProps) {
             pointerX: event.clientX,
             pointerY: event.clientY,
             to,
+            ...(carriedOrigin === undefined
+                ? {}
+                : { carriedOriginX: carriedOrigin.left, carriedOriginY: carriedOrigin.top }),
             ...(zone === undefined ? { zone: undefined } : { zone }),
         });
     };
@@ -835,7 +865,10 @@ export function Tabs(props: TabsProps) {
                     className="happy-tabs__carried"
                     data-happy-desktop-ui="tab-carried"
                     data-over={drag.zone === undefined ? undefined : ""}
-                    style={{ left: drag.pointerX, top: drag.pointerY }}
+                    style={{
+                        left: drag.pointerX - (drag.carriedOriginX ?? 0),
+                        top: drag.pointerY - (drag.carriedOriginY ?? 0),
+                    }}
                 >
                     {tabLeadingMark(local.tabs[drag.from]!, iconSizes[size()])}
                     <span className="happy-tabs__tab-label">{local.tabs[drag.from]!.label}</span>
@@ -860,7 +893,7 @@ export function Tabs(props: TabsProps) {
                     className="happy-tabs__menu"
                     data-happy-desktop-ui="tabs-menu"
                     ref={menuRoot}
-                    style={{ left: tabMenu.x, top: tabMenu.y }}
+                    style={{ left: tabMenu.left ?? tabMenu.x, top: tabMenu.top ?? tabMenu.y }}
                 >
                     <Menu
                         items={tabMenu.items}
