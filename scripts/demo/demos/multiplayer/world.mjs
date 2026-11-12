@@ -1,5 +1,5 @@
 // The multiplayer video's world: the team demo's Happy Core, restaged for
-// three short chapters. Happy Core is a team-mode Happy Agent with four
+// two short chapters. Happy Core is a team-mode Happy Agent with three
 // members. Kirill, its owner, sits at the desktop: his own computer is a
 // second, standalone Happy Agent (personal.mjs) that reaches Happy Core
 // through a real server connection by URL, and the window runs on it.
@@ -7,8 +7,13 @@
 // The cast is three real people wearing their public GitHub pictures at
 // Kirill's request: Kirill (bra1ndump), Steve (ex3ndr) and Scoteezy. Every
 // exchange on camera is between Kirill and Steve; Scoteezy owns tasks that
-// arrive and show as faces in Activity. Their work is the screenplay's. The job bots wear the
-// app's placeholder pictures. Nothing here is read from the real Happy Core
+// arrive and show as faces in Activity. Their work is the screenplay's. The
+// job bots wear the app's placeholder pictures.
+//
+// What teammates' agents publish is the daemon's own `create_artifact` and
+// `update_artifact`, each agent on its own artifacts, in full access inside
+// this isolated gym (Kirill's authorization, 2026-11-12); the pages and
+// covers are `artifacts/covers.mjs`'s look-alikes. Nothing here is read from the real Happy Core
 // server, a real session, or anyone's `~/.happy`; the bots' jobs are named
 // after the kind of standing work a team gives a bot, and every word they
 // say is this screenplay's.
@@ -22,6 +27,7 @@ import { existsSync } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { coverFile, covers, coverPage } from "./artifacts/covers.mjs";
 
 const execFile = promisify(execFileCallback);
 
@@ -282,11 +288,22 @@ export const releaseBot = {
 
 /**
  * Earlier tasks, oldest first, in the order they are made: Activity lists
- * them newest first. Each owner made it and asked for it, and where it names a
- * subtask its agent put the work there, in the named repository. Steve's live
- * task (`liveTask`) is made after `liveTaskAfter`.
+ * them newest first, below everything published after them. Each owner made
+ * it and asked for it, and where it names a subtask its agent put the work
+ * there, in the named repository. The two working tasks, Task List Speed and
+ * Team Servers (`speedTask`, `liveTask`), are made after them.
  */
 export const doneTasks = [
+    {
+        owner: "kirill",
+        name: "iOS Overlay Layout",
+        message: "The composer overlay jumps on send on iOS. Fix the layout.",
+        subtask: "iOS Send Fixes",
+        project: "happy",
+        workspace: "ios-send-fixes",
+        change: changes.sendFixes,
+        reply: "iOS Send Fixes keeps the composer's frame through the send and the keyboard's return.",
+    },
     {
         owner: "kirill",
         name: "Voice waveform",
@@ -301,86 +318,121 @@ export const doneTasks = [
         ],
     },
     {
-        owner: "kirill",
-        name: "iOS Overlay Layout",
-        message: "The composer overlay jumps on send on iOS. Fix the layout.",
-        subtask: "iOS Send Fixes",
-        project: "happy",
-        workspace: "ios-send-fixes",
-        change: changes.sendFixes,
-        reply: "iOS Send Fixes keeps the composer's frame through the send and the keyboard's return.",
+        owner: "scoteezy",
+        name: "Sidebar Unread Dots",
+        message: "A row's unread dot pushes long task names around. Keep the name still.",
+        reply: "The dot sits on the row's picture now, so the name never moves.",
     },
     {
         owner: "steve",
-        name: "Activity Feed Design",
-        message: "Design the activity feed: what changed, who did it, grouped by day.",
-        reply: "Entries group by day in inset cards, each with its subject's face and up to three people.",
+        name: "Bot Permissions",
+        message: "Draft who can read, write to and change a team bot.",
+        reply: "Members read and write by default; settings sit behind an owner's switch.",
     },
     {
         owner: "steve",
-        name: "Onboarding Emails",
-        message: "Draft the three onboarding emails for new teams.",
-        reply: "Three drafts are in: welcome, your first shared task, and invite your team.",
-    },
-    {
-        owner: "scoteezy",
-        name: "Push Token Refresh",
-        message: "Push tokens go stale after a reinstall. Refresh them on launch.",
-        reply: "Tokens now refresh on every launch and after a reinstall.",
-    },
-    {
-        owner: "scoteezy",
-        name: "Sync Benchmarks",
-        message: "Benchmark a cold sync on a team server with ten thousand tasks.",
-        reply: "A cold sync of 10k tasks takes 1.8 s; most of it is the task list query.",
-        // Steve writes in Scoteezy's task through his own sign-in, so the
-        // task's Activity entry carries both their faces.
-        more: [
-            {
-                from: "steve",
-                message: "How does it hold up at 50k tasks?",
-                reply: "The 50k run is next. I'll put it beside the 10k one when it's done.",
-            },
-        ],
-    },
-    {
-        owner: "kirill",
-        name: "Changelog Template",
-        message: "Make a changelog template for the 2026.11 release.",
-        reply: "The template has three sections, new, changed and fixed, with one line per change.",
-    },
-    {
-        owner: "steve",
-        name: "Pricing Page Copy",
-        message: "Write the pricing page copy for team servers.",
-        reply: "Three tiers are drafted, each with one line on who it's for.",
-    },
-    {
-        owner: "scoteezy",
-        name: "Windows Installer Signing",
-        message: "The Windows installer's certificate expired. Sign it with the renewed one.",
-        reply: "Signed with the renewed certificate; the installer passes SmartScreen.",
+        name: "Message Retry Queue",
+        message: "Review the message retry queue before it merges.",
+        reply: "It passes with one medium finding: a send cut off mid-upload can be retried twice.",
     },
 ];
 
-/** The earlier task Steve's live task is made after. */
-export const liveTaskAfter = "Sync Benchmarks";
+/**
+ * Scoteezy's task that is working when the take opens: its subtask, List
+ * cache, writes the cache and holds its report until chapter 2 releases it;
+ * the parent then publishes its report and ends.
+ */
+export const speedTask = {
+    owner: "scoteezy",
+    name: "Task List Speed",
+    message: "Make the sidebar's task list paint faster with 10,000 tasks.",
+    plan: "The list query runs on every paint. Caching it in a subtask.",
+    subtask: { title: "List cache", project: "happy", workspace: "list-cache" },
+    cachePath: "sources/components/taskListCache.ts",
+    report: "List cache is in: first paint drops from 420 ms to 140 ms.",
+    published: "Published: Task list, 3× faster.",
+};
 
 /**
- * The team's shared todo list: Steve makes it, and each teammate adds a todo
- * through their own sign-in, so its Activity entry carries all their faces.
+ * What teammates' agents publish, oldest first, between the earlier work and
+ * chapter 1's arrivals: each an agent's own artifacts, published from the task
+ * or bot named, each followed by its later versions. `from` is who asks.
+ */
+export const publications = [
+    {
+        bot: "mobile_releases",
+        from: "steve",
+        text: "Track the mobile preview and post where it stands.",
+        artifacts: [{ cover: "mobile", versions: 14 }],
+        reply: "iOS is in TestFlight review and Android is on the internal track. I'll look again in 20 minutes.",
+        waits: true,
+    },
+    {
+        task: "Bot Permissions",
+        from: "steve",
+        text: "Post the draft for the team.",
+        artifacts: [{ cover: "design", versions: 5 }],
+        reply: "The draft is posted.",
+    },
+    { checklist: true },
+    {
+        task: "Sidebar Unread Dots",
+        from: "scoteezy",
+        text: "Post a screenshot of the rows.",
+        artifacts: [{ cover: "screenshot", versions: 1 }],
+        reply: "Posted, with the rows read and unread.",
+    },
+    {
+        bot: "desktop_releases",
+        from: "kirill",
+        text: "Run QA on the desktop preview and post the receipt.",
+        artifacts: [
+            { utility: "qaSteps", versions: 1 },
+            { cover: "qa", versions: 0 },
+        ],
+        reply: "Preview QA passes on macOS, Windows and Linux.",
+    },
+    { live: true, artifacts: [{ cover: "progress", versions: 8 }] },
+    {
+        task: "Message Retry Queue",
+        from: "steve",
+        text: "Post the review.",
+        artifacts: [{ cover: "review", versions: 2 }],
+        reply: "The review is posted.",
+    },
+];
+
+/** A utility artifact: a Markdown page and its summary, with no cover. */
+export const utilities = {
+    qaSteps: {
+        title: "Utility: preview QA steps",
+        summary: "The steps the QA receipt runs, one per line, for the next preview.",
+        page: "# Preview QA steps\n\n1. Install the preview over the last stable.\n2. Sign in to a team server.\n3. Open a teammate's task and read it.\n4. Update to the next preview from the menu.\n",
+    },
+};
+
+/**
+ * The team's shared todo list: Steve makes it, and he and Scoteezy add todos
+ * through their own sign-ins, so its Activity entry carries both their faces.
  */
 export const checklist = {
     name: "Launch checklist",
     owner: "steve",
     todos: [
         { from: "steve", text: "Cut the 2026.11 preview" },
-        { from: "kirill", text: "Post the changelog" },
-        { from: "scoteezy", text: "Fix Android push before launch" },
+        { from: "scoteezy", text: "Ship the task list cache" },
+        { from: "steve", text: "Review the retry queue fix" },
+        { from: "scoteezy", text: "Re-run QA on Windows" },
+        { from: "steve", text: "Update the team server docs" },
+        { from: "scoteezy", text: "Post the preview changelog" },
     ],
 };
 
-/** Steve's task that is working when the take opens, and stays working. */
+/**
+ * Steve's task that is working when the take opens, and stays working: its
+ * agent starts one subtask, then publishes its progress report when the take
+ * asks it to, and keeps working.
+ */
 export const liveTask = {
     owner: "steve",
     name: "Team Servers",
@@ -396,7 +448,8 @@ export const liveTask = {
 
 /**
  * What teammates start on camera, through their own sign-ins, in this order.
- * Each stays working for as long as the take runs.
+ * Each stays working for as long as the take runs. `plan` is the agent's first
+ * word, where Kirill opens the task to read it.
  */
 export const arrivals = [
     {
@@ -408,6 +461,7 @@ export const arrivals = [
         owner: "steve",
         name: "Offline Drafts",
         message: "Keep composer drafts when the app goes offline, on desktop and on phones.",
+        plan: "Drafts will save on the device first and sync when the server is back. I'm reading the composer's state and the sync queue before I change anything.",
     },
 ];
 
@@ -432,16 +486,13 @@ export const stepIn = {
 
 /** Kirill's sidebar on Happy Core, top to bottom, before anyone starts anything. */
 export const sidebarOrder = [
+    "Task List Speed",
     "Voice waveform",
     "Team Servers",
-    "Windows Installer Signing",
-    "Pricing Page Copy",
-    "Changelog Template",
-    "Onboarding Emails",
-    "Sync Benchmarks",
-    "Push Token Refresh",
+    "Message Retry Queue",
+    "Bot Permissions",
+    "Sidebar Unread Dots",
     "iOS Overlay Layout",
-    "Activity Feed Design",
 ];
 /** The task Kirill has open. */
 export const openTask = "Voice waveform";
@@ -591,6 +642,71 @@ async function staged(name, content) {
 const copyCall = (from, to) =>
     tool("Bash", { command: `cp '${from}' '${to}'`, description: `Update ${to}` });
 
+/** An artifact's ID, as the daemon's answer to `create_artifact` names it. */
+function artifactIdOf(result) {
+    const found = result.match(
+        /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id="|happy:\/\/artifacts\/)([a-z0-9]{20,32})\b/u,
+    );
+    if (!found) throw new Error(`create_artifact named no artifact: ${result}`);
+    return found[1];
+}
+
+/**
+ * The calls one agent makes to publish its artifacts: each one's
+ * `create_artifact`, then one `update_artifact` per later version, each a new
+ * copy of its page. `results` are the daemon's answers to the calls so far.
+ */
+async function publishCall(artifacts, index, results) {
+    const calls = artifacts.flatMap((artifact, at) => [
+        { artifact, at, version: 0 },
+        ...Array.from({ length: artifact.versions }, (_, step) => ({
+            artifact,
+            at,
+            version: step + 1,
+        })),
+    ]);
+    const call = calls[index];
+    if (!call) return undefined;
+    const { artifact, version } = call;
+    const utility = artifact.utility ? utilities[artifact.utility] : undefined;
+    const name = artifact.cover ?? artifact.utility;
+    const entry = utility ? "index.md" : "index.html";
+    const body = utility ? utility.page : coverPage(artifact.cover);
+    const page = await staged(
+        `artifacts/${name}-${version}.${utility ? "md" : "html"}`,
+        version === 0 ? body : `${body}\n${utility ? "" : `<!-- ${version} -->`}\n`,
+    );
+    if (version > 0) {
+        const created = calls.findIndex((entry) => entry.at === call.at && entry.version === 0);
+        return tool("update_artifact", {
+            artifactId: artifactIdOf(results[created]),
+            files: [{ fromPath: page, path: entry }],
+        });
+    }
+    if (utility)
+        return tool("create_artifact", {
+            type: "markdown",
+            title: utility.title,
+            summary: utility.summary,
+            files: [{ fromPath: page, path: entry }],
+        });
+    const cover = await staged(`artifacts/${name}.webp`, await readFile(coverFile(name)));
+    return tool("create_artifact", {
+        type: "html",
+        title: covers[name].title,
+        summary: covers[name].summary,
+        files: [
+            { fromPath: page, path: entry },
+            { fromPath: cover, path: "cover.webp" },
+        ],
+        cover: "cover.webp",
+    });
+}
+
+/** The daemon's answers to an agent's calls in this turn, in order. */
+const resultsOf = (turn) =>
+    turn.after.filter((message) => message.role !== "assistant").map(textOf);
+
 function subtaskCall({ title, project, workspace, text: brief }) {
     return tool("create_subtask", {
         title,
@@ -601,6 +717,9 @@ function subtaskCall({ title, project, workspace, text: brief }) {
         workspace: { projectId: projectIds.get(project), name: workspace },
     });
 }
+
+const publishCount = (artifacts) =>
+    artifacts.reduce((count, artifact) => count + 1 + artifact.versions, 0);
 
 export async function reply(payload) {
     if (payload.options?.intent === "compaction") return undefined;
@@ -619,6 +738,54 @@ export async function reply(payload) {
     if (avatar) {
         if (turn.answered === 0) return quick([tool("set_node_avatar", { path: avatar[1] })]);
         return quick([text("Done.")]);
+    }
+
+    // Teammates' agents publish when asked: each artifact, then its versions.
+    for (const job of publications) {
+        if (!job.text || turn.text !== job.text) continue;
+        const call = await publishCall(job.artifacts, turn.answered, resultsOf(turn));
+        if (call) return quick([call]);
+        if (job.waits) {
+            if (turn.answered === publishCount(job.artifacts)) {
+                reached.add(`publish:${job.bot}`);
+                return quick([text(job.reply), tool("wait", { duration: "20m" })]);
+            }
+            await gate("bots:after");
+            return quick([text("Stopped.")]);
+        }
+        return quick([text(job.reply)]);
+    }
+
+    // Scoteezy's Task List Speed: one subtask, held until chapter 2 releases it.
+    if (turn.text === speedTask.message) {
+        if (turn.answered === 0)
+            return quick([
+                text(speedTask.plan),
+                subtaskCall({
+                    ...speedTask.subtask,
+                    text: `SPEED ${speedTask.subtask.title} for: ${speedTask.message}`,
+                }),
+            ]);
+        reached.add("speed:parent");
+        await gate("speed:parent");
+        return quick([text("Reading List cache's numbers.")]);
+    }
+    if (turn.text.startsWith("SPEED ")) {
+        if (turn.answered === 0) {
+            const from = await staged("list-cache.ts", codeLines("list-cache", 290).join("\n"));
+            return quick([copyCall(from, speedTask.cachePath)]);
+        }
+        reached.add("speed:subtask");
+        await gate("speed:subtask");
+        return quick([text(speedTask.report)]);
+    }
+    // List cache's report reaches the parent, which publishes and ends.
+    if (textOf(messages.find((message) => message.role === "user")) === speedTask.message) {
+        const artifacts = [{ cover: "perf", versions: 0 }];
+        const call = await publishCall(artifacts, turn.answered, resultsOf(turn));
+        if (call) return quick([call]);
+        reached.add("speed:published");
+        return quick([text(speedTask.published)]);
     }
 
     // Earlier tasks: at most one subtask each, which writes its change and reports.
@@ -686,6 +853,14 @@ export async function reply(payload) {
             reached.add("live:coordinator");
             return quick([text(stepIn.waiting)]);
         }
+        // Its progress report is published when the world's order reaches it.
+        if (turn.answered === 1) {
+            reached.add("live:publish");
+            await gate("live:publish");
+        }
+        const job = publications.find((entry) => entry.live);
+        const call = await publishCall(job.artifacts, turn.answered - 1, resultsOf(turn).slice(1));
+        if (call) return quick([call]);
         await gate("live:coordinator");
         return quick([text("The agent's sign-in is in; the desktop is next.")]);
     }
@@ -696,10 +871,9 @@ export async function reply(payload) {
         }
         // In chapter 5 the subtask finishes on camera, and its report brings
         // the agent to Kirill (below).
-        if (shot === "step-in") {
-            reached.add("live:subtask");
-            await gate("step:ask");
-        } else await gate("live:subtask");
+        reached.add("live:subtask");
+        if (shot === "step-in") await gate("step:ask");
+        else await gate("live:subtask");
         return quick([text("Done.")]);
     }
     // A finished part's report reaching the coordinator keeps it working.
@@ -717,6 +891,11 @@ export async function reply(payload) {
     // What teammates start on camera: each is seen working until the take ends.
     for (const arrival of arrivals) {
         if (turn.text === arrival.message) {
+            if (arrival.plan && turn.answered === 0)
+                return quick([
+                    text(arrival.plan),
+                    tool("Bash", { command: "ls", description: "Read the composer's state" }),
+                ]);
             await gate(`arrival:${arrival.name}`);
             return quick([text("Stopped.")]);
         }

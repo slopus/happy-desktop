@@ -413,6 +413,9 @@ export const covers = {
     },
 };
 
+/** An artifact's page: its cover, drawn as the page. */
+export const coverPage = (key) => covers[key].html();
+
 /** The cover published with an artifact. */
 export const coverFile = (key) => join(import.meta.dirname, "covers", `${key}.webp`);
 

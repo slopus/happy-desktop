@@ -1,4 +1,5 @@
 import * as world from "./world.mjs";
+import { covers } from "./artifacts/covers.mjs";
 import { cuid, nodeAvatarSet, personalOpen, photoSet } from "./personal.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -218,20 +219,23 @@ async function settled(client, agentId, { subtask = false } = {}) {
  * (MULTIPLAYER_SPREAD_SECONDS, about 2100). Other takes make them at once.
  */
 const spreadSeconds = Number(process.env.MULTIPLAYER_SPREAD_SECONDS ?? 0);
-/** One step of the spread: earlier tasks, the live task, then the checklist. */
+/** One step of the spread: earlier tasks, the two working ones, then each publication. */
 const spreadStep = () =>
     spreadSeconds > 0
         ? new Promise((settle) =>
-              setTimeout(settle, (spreadSeconds * 1000) / (world.doneTasks.length + 1)),
+              setTimeout(
+                  settle,
+                  (spreadSeconds * 1000) /
+                      (world.doneTasks.length + 2 + world.publications.length),
+              ),
           )
         : undefined;
 
 /**
  * Earlier work, made once and in order: each owner's task, its subtask, and the
- * subtask's change, with Steve's live task among them. Returns the live task.
+ * subtask's change.
  */
 async function doneTasksPrepare(clients) {
-    let live;
     for (const [index, entry] of world.doneTasks.entries()) {
         const client = clients[entry.owner];
         if (await taskFind(client, entry.name)) continue;
@@ -251,13 +255,66 @@ async function doneTasksPrepare(clients) {
         // The owner's own follow-ups; a teammate's come later (`followUpsPrepare`).
         for (const more of entry.more ?? []) if (!more.from) await turnSend(clients, task, entry, more);
         process.stdout.write(`    task      ${entry.name}\n`);
-        if (entry.name === world.liveTaskAfter) {
-            await spreadStep();
-            live = await liveTaskPrepare(clients[world.liveTask.owner]);
-            process.stdout.write(`    task      ${world.liveTask.name}\n`);
-        }
     }
-    return live;
+}
+
+/**
+ * Scoteezy's Task List Speed: its agent hands the cache to a subtask, which
+ * writes it and holds its report; both are working when the take opens.
+ */
+async function speedTaskPrepare(client) {
+    const entry = world.speedTask;
+    const { task } = await client.createTask({ name: entry.name, mutationId: randomUUID() });
+    await client.sendMessage(task.agent.id, {
+        id: cuid(),
+        text: entry.message,
+        mode: world.seedMode,
+    });
+    await wait(
+        () => world.hasReached("speed:parent") && world.hasReached("speed:subtask"),
+        "Task List Speed to be working",
+        180000,
+    );
+    process.stdout.write(`    task      ${entry.name}\n`);
+    return task;
+}
+
+/**
+ * What teammates' agents publish, in order, each asked through its asker's own
+ * sign-in: a task's agent or a bot's, its artifacts and their later versions.
+ * Steve's live task publishes its progress when released; the checklist is
+ * made in its place among them.
+ */
+async function publicationsPrepare(clients) {
+    for (const job of world.publications) {
+        await spreadStep();
+        if (job.checklist) {
+            await checklistPrepare(clients);
+            continue;
+        }
+        if (job.live) {
+            world.release("live:publish");
+            await wait(() => world.hasReached("live:coordinator"), "Team Servers' report", 180000);
+            process.stdout.write(`    publish   ${world.liveTask.name}\n`);
+            continue;
+        }
+        const client = clients[job.from];
+        const agentId = job.bot
+            ? (await botFind(client, job.bot)).agent.id
+            : (await taskFind(clients[world.doneTasks.find((task) => task.name === job.task).owner], job.task)).agent.id;
+        const before = (await client.getMessages(agentId, { limit: 16 })).runs.length;
+        await client.sendMessage(agentId, { id: cuid(), text: job.text, mode: world.seedMode });
+        await wait(
+            async () =>
+                job.waits
+                    ? world.hasReached(`publish:${job.bot}`)
+                    : (await client.getMessages(agentId, { limit: 16 })).runs.length > before &&
+                      (await settled(client, agentId)),
+            `${job.task ?? job.bot}'s publication`,
+            240000,
+        );
+        process.stdout.write(`    publish   ${job.task ?? job.bot}\n`);
+    }
 }
 
 /** One more message in an earlier task, and its agent's whole answer. */
@@ -339,7 +396,7 @@ async function liveTaskPrepare(client) {
     });
     await wait(
         () =>
-            world.hasReached("live:coordinator") &&
+            world.hasReached(shot === "step-in" ? "live:coordinator" : "live:publish") &&
             world.hasReached("live:subtask") &&
             (shot !== "step-in" || world.hasReached("step:ask")),
         "Steve's live task to be working",
@@ -504,18 +561,20 @@ export default {
         // The bots are made first, then the earlier tasks, then the checklist:
         // Activity lists them newest first, so the bots' entries sort last.
         await rehearsalsArchive(kirill);
-        const live = await doneTasksPrepare(clients);
-        filmed.liveTaskId = live.id;
+        await doneTasksPrepare(clients);
         await followUpsPrepare(clients);
         await spreadStep();
-        await checklistPrepare(clients);
+        filmed.speedTaskId = (await speedTaskPrepare(clients[world.speedTask.owner])).id;
+        await spreadStep();
+        const live = await liveTaskPrepare(clients[world.liveTask.owner]);
+        process.stdout.write(`    task      ${world.liveTask.name}\n`);
+        filmed.liveTaskId = live.id;
+        await publicationsPrepare(clients);
         await sidebarArrange(kirill);
-        if (shot !== "aware") {
-            // Chapter 2's three new tasks arrive after Kirill last read Activity.
-            if (shot !== "activity") await arrivalsSettle();
-            const bot = await botJobPrepare(clients);
-            filmed.botAgentId = bot.agent.id;
-        }
+        // From chapter 2 on, chapter 1's tasks have started, and Kirill has
+        // since read everything: chapter 2 opens with Activity read.
+        if (shot !== "aware") await arrivalsSettle();
+        if (shot === "bots") filmed.botAgentId = (await botJobPrepare(clients)).agent.id;
         for (const client of [...Object.values(clients), personal.client]) await readAll(client);
 
         const page = demo.page;
@@ -572,12 +631,6 @@ export default {
         await page.evaluate(() => document.activeElement?.blur?.());
         await page.waitForTimeout(1500);
         for (const client of [...Object.values(clients), personal.client]) await readAll(client);
-        // Chapter 2: chapter 1's three tasks start after Kirill last read
-        // Activity, so they are its unread entries, on top.
-        if (shot === "activity") {
-            await arrivalsSettle();
-            await sidebarRow(page, world.arrivals.at(-1).name).waitFor({ timeout: 30000 });
-        }
         await page.waitForTimeout(1500);
 
         const still = async (name) => {
@@ -669,10 +722,10 @@ export default {
             // and touches nothing. Scoteezy and Steve start tasks from their
             // own sign-ins, and each one is in Kirill's sidebar as it starts;
             // his Activity counts them.
-            await demo.pointerVisible(false);
+            await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo);
-            const beats = [1900, 1900, 2600];
+            const beats = [1300, 900];
             await demo.hold(Number(process.env.MULTIPLAYER_LEAD_MS ?? 300));
             for (const [index, arrival] of world.arrivals.entries()) {
                 await arrivalFilm(
@@ -685,28 +738,91 @@ export default {
                 });
                 await demo.hold(beats[index]);
             }
+            // Kirill opens Steve's new task, reads its agent's plan, and goes
+            // back to his own.
+            const theirs = world.arrivals.at(-1);
+            await choose(sidebarRow(page, theirs.name), "visit");
+            await until(
+                demo,
+                () => page.getByText(theirs.plan).first().isVisible(),
+                "Offline Drafts' plan",
+            );
+            cue("visit-open", demo);
+            await demo.hold(3200);
+            await choose(sidebarRow(page, world.openTask), "back");
+            const opened = world.doneTasks.find((task) => task.name === world.openTask);
+            await until(
+                demo,
+                () => page.getByText(opened.more.at(-1).reply).first().isVisible(),
+                "Voice waveform again",
+            );
+            cue("back-open", demo);
+            await demo.moveTo(rest);
+            await demo.hold(2200);
         }
 
         if (shot === "activity") {
-            // Chapter 2, "Catch up on what shipped": Kirill opens Activity. On top
-            // are chapter 1's three tasks, unread, then the checklist his
-            // teammates filled in and the team's earlier tasks.
+            // Chapter 2, "See the most important updates from the team": Kirill
+            // is in his own task with Activity read. Scoteezy's List cache
+            // reports, its parent publishes, and Activity's badge appears.
+            // Kirill opens Activity and reads down it, one cover at a time.
             const row = sidebarRow(page, "Activity");
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo, await place(row));
-            await demo.hold(700);
-            await choose(row, "activity");
+            await demo.hold(Number(process.env.MULTIPLAYER_REPORT_AT_MS ?? 1600));
+            world.release("speed:subtask");
+            cue("subtask-released", demo);
+            await demo.hold(500);
+            world.release("speed:parent");
+            cue("parent-released", demo);
+            await until(demo, () => world.hasReached("speed:published"), "the published report", 60000);
+            cue("published", demo);
             await until(
                 demo,
-                () => page.getByText(world.checklist.name).nth(1).isVisible(),
-                "the Activity page",
+                async () => /\b1\b/u.test(await row.innerText()),
+                "Activity's badge",
+                30000,
+                16,
             );
-            cue("activity-open", demo, await place(page.getByText(world.checklist.name).nth(1)));
-            await demo.hold(500);
+            cue("badge", demo, await place(row));
+            await demo.hold(900);
+            await choose(row, "activity");
+            const first = page.getByText(covers.perf.summary).first();
+            await until(demo, () => first.isVisible(), "the Activity page");
+            cue("activity-open", demo, await place(first));
             await demo.moveTo(away);
-            cue("pointer-away", demo);
-            await demo.hold(4400);
+            await demo.hold(2500);
+            // Each step brings one entry to the top of the feed in 0.8 s, eased.
+            const steps = [
+                { title: covers.review.title, above: 24, rest: 1000 },
+                { title: covers.progress.title, above: 24, rest: 1000 },
+                { title: covers.screenshot.title, above: 120, rest: 2000 },
+            ];
+            for (const [index, step] of steps.entries()) {
+                cue(`step${index + 1}`, demo);
+                await page.getByText(step.title).first().evaluate(
+                    (title, { above, ms }) => {
+                        let port = title.parentElement;
+                        while (port && !(port.scrollHeight > port.clientHeight + 4 && /auto|scroll/u.test(getComputedStyle(port).overflowY)))
+                            port = port.parentElement;
+                        const from = port.scrollTop;
+                        const to = from + title.getBoundingClientRect().top - port.getBoundingClientRect().top - above;
+                        const start = performance.now();
+                        const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+                        const frame = (now) => {
+                            const k = Math.min(1, (now - start) / ms);
+                            port.scrollTop = from + (to - from) * ease(k);
+                            if (k < 1) requestAnimationFrame(frame);
+                        };
+                        requestAnimationFrame(frame);
+                    },
+                    { above: step.above, ms: 800 },
+                );
+                await demo.hold(800);
+                cue(`step${index + 1}-rest`, demo);
+                await demo.hold(step.rest);
+            }
         }
 
         if (shot === "bots") {
