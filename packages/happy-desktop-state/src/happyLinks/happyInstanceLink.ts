@@ -17,16 +17,26 @@ export type HappyExternalLink =
           readonly url: string;
           readonly link: HappyLink;
       }
+    /**
+     * `happy://cloud/servers`: the Happy Cloud account's servers, read afresh.
+     * Accepting an invite in the browser hands back to the app with it; it
+     * only shows the list, and joining is still the person's press.
+     */
+    | { readonly kind: "cloudServers" }
     /** No instance, or anything Happy for desktop does not open from outside. */
     | { readonly kind: "unsupported" };
+
+/** The one link to the Happy Cloud servers; nothing else under `happy://cloud` is. */
+export const HAPPY_CLOUD_SERVERS_URL = "happy://cloud/servers";
 
 /**
  * Reads a `happy://` URL, or a link.happy.page share link that carries one,
  * that reached the window from the system or a page. Only an instance link
- * can be opened; a link with no instance never is, so it can never be opened
- * on the wrong server.
+ * can be opened on a server; a link with no instance never is, so it can never
+ * be opened on the wrong server. The Cloud servers link names no server.
  */
 export function happyExternalLinkParse(url: string): HappyExternalLink {
+    if (url === HAPPY_CLOUD_SERVERS_URL) return { kind: "cloudServers" };
     const parsed = parseHappyUrl(happyShareLinkParse(url)?.url ?? url);
     if (parsed?.instanceId === undefined) return { kind: "unsupported" };
     const { instanceId, ...link } = parsed;

@@ -18,6 +18,8 @@ export interface HappyAgentMember {
     readonly self: boolean;
     /** A role change or removal this window asked for and the server hasn't answered. */
     readonly saving: boolean;
+    /** Why the last role change or removal was refused; cleared by the next attempt. */
+    readonly refusal?: UserError;
 }
 
 /** A role the team may give, built in or its own. */
@@ -116,8 +118,6 @@ export interface HappyAgentMembersSnapshot {
     readonly inviteNotice?: HappyAgentInviteNotice;
     /** Why the list could not be read. */
     readonly error?: UserError;
-    /** Why the last change was refused; cleared by the next attempt. */
-    readonly saveError?: UserError;
 }
 
 /**
@@ -287,6 +287,8 @@ export function happyAgentMembersStoreCreate(
     const listeners = new Set<() => void>();
     /** Members and invites whose change the server hasn't answered. */
     const saving = new Set<string>();
+    /** Why each member's last change was refused. */
+    const refusals = new Map<string, UserError>();
     let last: MembersRead | undefined;
     let selfUserId: Promise<string | null> | undefined;
     let disposed = false;
@@ -308,6 +310,7 @@ export function happyAgentMembersStoreCreate(
                     joinedAt: member.joinedAt,
                     self: read.selfUserId !== null && member.userId === read.selfUserId,
                     saving: saving.has(member.id),
+                    ...(refusals.has(member.id) ? { refusal: refusals.get(member.id)! } : {}),
                 }),
             ),
         );
@@ -425,23 +428,21 @@ export function happyAgentMembersStoreCreate(
 
     /**
      * Marks one member or invite as changing until the server answers. A
-     * member's refusal shows above the page; an invite's in the invite area.
+     * member's refusal shows on its row; an invite's in the invite area.
      */
     const change = (
         id: string,
         send: () => Promise<unknown>,
-        refused: (error: unknown) => void = (error) =>
-            store.setState({ saveError: happyAgentUserError(error) }, false),
+        refused: (error: unknown) => void = (error) => {
+            refusals.set(id, happyAgentUserError(error));
+            publish();
+        },
     ): void => {
         if (disposed || saving.has(id)) return;
         saving.add(id);
-        const { saveError: _cleared, inviteNotice, ...rest } = store.getState();
-        store.setState(
-            inviteNotice === undefined || inviteNotice.type === "refused"
-                ? rest
-                : { ...rest, inviteNotice },
-            true,
-        );
+        refusals.delete(id);
+        const { inviteNotice, ...rest } = store.getState();
+        if (inviteNotice?.type === "refused") store.setState(rest, true);
         publish();
         void send().then(
             () => {

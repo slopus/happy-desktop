@@ -457,6 +457,13 @@
 
 /* ---- Members ------------------------------------------------------------- */
 
+/* The page's sections, spaced as the settings column spaces any page's. */
+.happy-agent-members {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
 .happy-agent-members__list {
     display: flex;
     flex-direction: column;
@@ -538,6 +545,7 @@
     -webkit-line-clamp: 2;
 }
 
+.happy-agent-members__meta[data-tone="danger"],
 .happy-agent-members__name[data-tone="danger"],
 .happy-agent-members__role[data-tone="danger"],
 .happy-agent-members__refused[data-tone="danger"] {
