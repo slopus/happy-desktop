@@ -909,6 +909,7 @@ export {
     type HappyAgentFeedPageProps,
     type HappyAgentFeedView,
 } from "./pages/feed/HappyAgentFeedPage";
+export type { FeedScrollPosition } from "./pages/feed/FeedVirtualList";
 export { REORDERING_LIST_STATIC, ReorderingList, type ReorderingListProps } from "./ReorderingList";
 export {
     SurfaceAvatar,

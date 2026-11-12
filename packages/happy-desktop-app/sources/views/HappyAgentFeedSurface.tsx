@@ -489,6 +489,10 @@ export function HappyAgentFeedSurface(props: {
                 props.onSubjectOpen(item.subject);
             }}
             onLoadMore={pageStore.pageNextLoad}
+            // Where the reader left the list is kept with it, so going back from
+            // what they opened finds that entry where it was.
+            scrollPosition={page.scrollPosition}
+            onScrollPositionChange={pageStore.scrollPositionUpdate}
             onPeekClose={clustersStoreLive.peekClose}
             onPeekEntryOpen={(entryId) => {
                 const entry = peek?.entries.find((candidate) => peekEntryId(candidate) === entryId);

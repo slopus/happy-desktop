@@ -124,3 +124,24 @@ it("reopens the entries and says why when the daemon refuses", async () => {
     feed.page.readAll();
     expect(feed.client.markFeedReadAll).toHaveBeenCalledTimes(2);
 });
+
+it("keeps where the reader left the list, and starts another list at its top", async () => {
+    const feed = open([item("b", "0003"), item("a", "0002")], 0);
+    await until(() => feed.page.get().items.length === 2);
+    expect(feed.page.get().scrollPosition).toBeNull();
+    let notified = 0;
+    feed.page.subscribe(() => (notified += 1));
+
+    feed.page.scrollPositionUpdate({ rowId: "a", offset: 12 });
+    const left = feed.page.get();
+    expect(left.scrollPosition).toEqual({ rowId: "a", offset: 12 });
+    expect(notified).toBe(1);
+    // The same place again is not a change, and nothing else moved with it.
+    feed.page.scrollPositionUpdate({ rowId: "a", offset: 12 });
+    expect(notified).toBe(1);
+    expect(feed.page.get().items).toBe(left.items);
+    expect(feed.client.getFeed).toHaveBeenCalledTimes(1);
+
+    feed.page.filterUpdate("highlights");
+    expect(feed.page.get().scrollPosition).toBeNull();
+});

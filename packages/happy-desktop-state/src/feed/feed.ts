@@ -154,6 +154,17 @@ export interface HappyAgentFeedFilterPersistence {
 const feedFilterParse = (value: unknown): HappyAgentFeedFilter | undefined =>
     value === "all" || value === "highlights" ? value : undefined;
 
+/**
+ * Where the reader left the Activity list: the first row at the top of the
+ * screen, by its id, and how far into it they had scrolled. Kept by row
+ * rather than by pixels, so rows arriving above it while they were away do
+ * not move what they come back to.
+ */
+export interface HappyAgentFeedScrollPosition {
+    readonly rowId: string;
+    readonly offset: number;
+}
+
 /** The reader's feed as the Feed page shows it. */
 export interface HappyAgentFeedPageSnapshot {
     readonly availability: HappyAgentFeedAvailability;
@@ -185,6 +196,12 @@ export interface HappyAgentFeedPageSnapshot {
      * not confirmed yet. They read as seen; the confirmed copy replaces them.
      */
     readonly seenPending: ReadonlySet<string>;
+    /**
+     * Where the reader left the Activity list under this filter, so coming
+     * back to the page finds the row they opened where it was. `null` until
+     * they scroll, and again whenever the filter changes.
+     */
+    readonly scrollPosition: HappyAgentFeedScrollPosition | null;
 }
 
 /** One cluster looked into without following it. */
@@ -218,6 +235,8 @@ export interface HappyAgentFeedPageStore {
     viewUpdate(view: HappyAgentFeedView): void;
     /** Shows every entry, or only the highlights; the choice is kept. */
     filterUpdate(filter: HappyAgentFeedFilter): void;
+    /** Records where the reader is in the Activity list, for coming back to it. */
+    scrollPositionUpdate(position: HappyAgentFeedScrollPosition | null): void;
     /** Reads the next page of older entries. */
     pageNextLoad(): void;
     /**
@@ -471,6 +490,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             loadingMore: false,
             error: null,
             seenPending: SEEN_PENDING_NONE,
+            scrollPosition: null,
         };
         /**
          * Every entry read, newest first, whether or not what it names has
@@ -823,10 +843,26 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                         // A choice that cannot be kept still holds for this run.
                     }
                     const restarted = availability() === "available" && queryAdopt(filter);
-                    publish({ filter, ...seenPendingNow() });
+                    // Another list starts at its top.
+                    publish({ filter, scrollPosition: null, ...seenPendingNow() });
                     const signal = following?.signal;
                     if (restarted && signal) void firstRead(signal).catch(noop);
                     else fill();
+                },
+                scrollPositionUpdate(position: HappyAgentFeedScrollPosition | null) {
+                    const was = snapshot.scrollPosition;
+                    if (
+                        disposed ||
+                        was === position ||
+                        (was !== null &&
+                            position !== null &&
+                            was.rowId === position.rowId &&
+                            was.offset === position.offset)
+                    )
+                        return;
+                    // Only where the list is moves; nothing else is read again.
+                    snapshot = { ...snapshot, scrollPosition: position };
+                    for (const listener of listeners) listener();
                 },
                 pageNextLoad,
                 entryOpen(itemId: string) {

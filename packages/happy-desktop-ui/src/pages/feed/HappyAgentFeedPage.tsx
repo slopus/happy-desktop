@@ -5,7 +5,7 @@ import { EmptyState } from "../../EmptyState";
 import type { LocalTimeZone } from "../../localTime";
 import { SegmentedControl } from "../../SegmentedControl";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
-import { FeedVirtualList } from "./FeedVirtualList";
+import { FeedVirtualList, type FeedScrollPosition } from "./FeedVirtualList";
 import {
     HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT,
     HappyAgentFeedClusterRow,
@@ -62,6 +62,12 @@ export interface HappyAgentFeedPageProps {
     onEntryOpen: (entryId: string) => void;
     /** Reads older entries of the feed. */
     onLoadMore: () => void;
+    /**
+     * Where the reader left the Activity list, which it opens at, so going
+     * back to it finds the entry they opened where it was.
+     */
+    scrollPosition?: FeedScrollPosition | null;
+    onScrollPositionChange?: (position: FeedScrollPosition | null) => void;
     /** Marks every entry seen. */
     onReadAll: () => void;
     onClusterFollowChange: (clusterId: string, following: boolean) => void;
@@ -200,6 +206,8 @@ function FeedEntryCards(props: {
     defaultExpanded?: readonly string[];
     onOpen: (entryId: string) => void;
     onLoadMore: () => void;
+    scrollPosition?: FeedScrollPosition | null;
+    onScrollPositionChange?: (position: FeedScrollPosition | null) => void;
 }) {
     const list = props.list;
     const [expanded, expandedSet] = useState<ReadonlySet<string>>(
@@ -228,6 +236,12 @@ function FeedEntryCards(props: {
             hasMore={list.loading ? false : list.hasMore}
             loadingMore={list.loading ? false : list.loadingMore}
             onLoadMore={props.onLoadMore}
+            {...(props.scrollPosition === undefined
+                ? {}
+                : { scrollPosition: props.scrollPosition })}
+            {...(props.onScrollPositionChange
+                ? { onScrollPositionChange: props.onScrollPositionChange }
+                : {})}
             renderSlot={(slot, width) =>
                 slot.kind === "heading" ? (
                     <HappyAgentFeedHeading label={slot.label} />
@@ -279,6 +293,12 @@ function FeedActivity(props: HappyAgentFeedPageProps) {
                 now={props.now}
                 onLoadMore={props.onLoadMore}
                 onOpen={props.onEntryOpen}
+                {...(props.scrollPosition === undefined
+                    ? {}
+                    : { scrollPosition: props.scrollPosition })}
+                {...(props.onScrollPositionChange
+                    ? { onScrollPositionChange: props.onScrollPositionChange }
+                    : {})}
                 {...(props.zone ? { zone: props.zone } : {})}
             />
         </>
