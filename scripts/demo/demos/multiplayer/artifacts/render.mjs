@@ -1,7 +1,8 @@
 /*
- * Draws the pages' icons, then renders each artifact page to the cover its
- * agent publishes with it: 1600×900 WebP, the page itself at 1152×648 CSS
- * pixels, wide enough that the whole page fits.
+ * Draws the pages' and covers' icons, then renders each artifact page to the
+ * cover its agent publishes with it: 1600×900 WebP, the page itself at
+ * 1152×648 CSS pixels, wide enough that the whole page fits. The covers in
+ * `covers.mjs` are drawn at 800×450 CSS pixels, twice over, into `covers/`.
  *
  * Each icon is the app's own Ionicons glyph (the font `happy-desktop-ui`
  * vendors, at the codepoint its generated name map gives), white on clear,
@@ -25,11 +26,12 @@ const glyphMap = resolve(workspace, "packages/happy-desktop-ui/src/vectorIcons/i
 const browser = await chromium.launch({ headless: true, args: ["--force-color-profile=srgb"] });
 
 const { icons, iconPath } = await import(pathToFileURL(resolve(import.meta.dirname, "pages.mjs")));
+const { coverIcons } = await import(pathToFileURL(resolve(import.meta.dirname, "covers.mjs")));
 const map = await readFile(glyphMap, "utf8");
 const font = (await readFile(resolve(fonts, "Ionicons.ttf"))).toString("base64");
 const glyphs = await browser.newPage({ viewport: { width: 24, height: 24 }, deviceScaleFactor: 3 });
 await mkdir(dirname(iconPath(icons[0])), { recursive: true });
-for (const name of icons) {
+for (const name of new Set([...icons, ...coverIcons])) {
     const found = new RegExp(`^\\s+"?${name}"?: (0x[0-9a-f]+),$`, "mu").exec(map);
     if (!found) throw new Error(`No Ionicons glyph is named ${name}.`);
     await glyphs.setContent(
@@ -53,5 +55,17 @@ for (const [key, html] of Object.entries(pages)) {
     const png = await page.screenshot({ type: "png" });
     await sharp(png).webp({ quality: 90 }).toFile(coverPath(key));
     process.stdout.write(`  ${coverPath(key)}\n`);
+}
+const { coverFile, covers } = await import(
+    `${pathToFileURL(resolve(import.meta.dirname, "covers.mjs"))}?icons`
+);
+const cover = await browser.newPage({ viewport: { width: 800, height: 450 }, deviceScaleFactor: 2 });
+await mkdir(dirname(coverFile("perf")), { recursive: true });
+for (const [key, entry] of Object.entries(covers)) {
+    await cover.setContent(entry.html());
+    await cover.evaluate(() => document.fonts.ready);
+    const png = await cover.screenshot({ type: "png" });
+    await sharp(png).webp({ quality: 92 }).toFile(coverFile(key));
+    process.stdout.write(`  ${coverFile(key)}\n`);
 }
 await browser.close();
