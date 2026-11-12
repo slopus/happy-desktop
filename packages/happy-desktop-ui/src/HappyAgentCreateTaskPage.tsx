@@ -42,7 +42,7 @@ const PURPOSES = {
         motion: { play: "on-hover", rest: "start", still: clapperBoardStill },
         replayLabel: "Play the clapper board",
         title: "Create a new task",
-        lede: "A task is one piece of work with a conversation and a folder of its own. Everyone who joins it works in that same conversation.",
+        lede: "A task is for one-off work. It can work across several projects and start subtasks of its own.",
     },
     bugReport: {
         scene: "crow-eating-worm",

@@ -81,9 +81,8 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                     className="happy-agent-create-bot__lede"
                     data-happy-desktop-ui="happy-agent-create-bot-lede"
                 >
-                    A bot is a colleague that does not end: one permanent conversation with a folder
-                    of its own. Give it a standing job, come back to it whenever you like, and let
-                    it delegate work into your projects.
+                    A bot is like a colleague: one lasting conversation with a folder of its own.
+                    Give it a name, then tell it what to do.
                 </p>
             </header>
             {/* The name, and Create beside it: the last thing decided up here.
