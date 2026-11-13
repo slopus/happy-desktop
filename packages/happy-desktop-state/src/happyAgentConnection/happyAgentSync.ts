@@ -33,7 +33,9 @@ type QueuedSyncInput =
 export type HappyCloudEventType =
     | "compute.nodes.updated"
     | "compute.approvals.updated"
-    | "plugins.changed";
+    | "plugins.changed"
+    | "onboarding.updated"
+    | "invite.created";
 
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {

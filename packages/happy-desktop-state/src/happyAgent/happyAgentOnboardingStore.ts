@@ -6,6 +6,14 @@ import {
     happyMobileOnboardingStoreCreate,
     type HappyMobileOnboardingStore,
 } from "../onboarding/happyMobileOnboardingStore.js";
+import {
+    happyAgentOnboardingFlowDerive,
+    happyAgentOnboardingGatesRead,
+    type HappyAgentOnboardingFlow,
+    type HappyAgentOnboardingGate,
+} from "./happyAgentOnboardingGates.js";
+import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
 
 /**
  * What the setup screens say about a failed read. A Happy Cloud server that
@@ -72,6 +80,12 @@ export interface HappyAgentOnboardingState {
 
 export interface HappyAgentOnboardingSnapshot {
     readonly state?: HappyAgentOnboardingState;
+    /**
+     * A Happy Cloud server's onboarding gates and where the reader is in them.
+     * Absent where the server has no gates; the reader is let in once it has no
+     * `current` gate.
+     */
+    readonly flow?: HappyAgentOnboardingFlow;
     readonly pending: boolean;
     /** Authenticated setup endpoints are ready even before protected sync starts. */
     readonly available: boolean;
@@ -83,8 +97,24 @@ export interface HappyAgentOnboardingStore {
     get(): HappyAgentOnboardingSnapshot;
     subscribe(listener: () => void): () => void;
     onboardingBegin(): void;
+    /**
+     * Leaves the gate on screen: it is done, or it is optional and is skipped
+     * for the reader (a member gate) or the team (a server gate). A gate that
+     * still blocks is read again and left only if the server now says it is done.
+     */
+    gateContinue(gateId: string): void;
+    /** Names the server's admin bot, then leaves its gate. */
+    adminBotNameSubmit(name: string): void;
     [Symbol.dispose](): void;
 }
+
+/** Gates the server completes on its own, from another device or service. */
+const GATE_POLL_KINDS: ReadonlySet<HappyAgentOnboardingGate["kind"]> = new Set([
+    "mobileApp",
+    "paymentMethod",
+    "payment",
+]);
+const GATE_POLL_INTERVAL_MS = 4_000;
 
 function chiefOfStaffEqual(
     left: HappyAgentOnboardingChiefOfStaff | undefined,
@@ -113,6 +143,7 @@ function onboardingStatesEqual(
 ): boolean {
     if (left === right) return true;
     if (!left || !right) return false;
+    if (!deepEqual(gatesOf(left), gatesOf(right))) return false;
     if (!chiefOfStaffEqual(left.steps.chiefOfStaff, right.steps.chiefOfStaff)) return false;
     if (left.server !== right.server) {
         if (!left.server || !right.server) return false;
@@ -144,6 +175,11 @@ function onboardingStatesEqual(
     );
 }
 
+/** The server's gates, which the daemon's protocol package does not name. */
+function gatesOf(state: HappyAgentOnboardingState): unknown {
+    return (state as { readonly gates?: unknown }).gates;
+}
+
 /** Remote onboarding follows the daemon's state without scanning providers or requiring a project. */
 export function happyAgentOnboardingStoreCreate(
     client: HappyAgentClient,
@@ -156,6 +192,13 @@ export function happyAgentOnboardingStoreCreate(
         readonly guidedMobileSetup?: boolean;
         /** The connection's direct connector, offered beside the relay code. */
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
+        /** Happy Cloud's own routes, which skip gates and name the admin bot. */
+        readonly cloudRequest?: HappyCloudRequest;
+        /**
+         * The reader finished a flow that showed them at least one gate, and the
+         * server took the completion; the Chief of Staff opens its first conversation.
+         */
+        readonly onFinished?: () => void;
     } = {},
 ): HappyAgentOnboardingStore {
     let snapshot: HappyAgentOnboardingSnapshot = {
@@ -179,18 +222,51 @@ export function happyAgentOnboardingStoreCreate(
         onOutput: options.onMobileSkip,
         ...(options.mobileConnector ? { mobileConnector: options.mobileConnector } : {}),
     });
-    const publish = (next: HappyAgentOnboardingSnapshot): void => {
+    /** The gate on screen, held until the reader leaves it. */
+    let pinned: string | undefined;
+    /** Gates the reader left in this flow; the server may still show a blocking one again. */
+    const passed = new Set<string>();
+    let sequence: readonly string[] = [];
+    let gatePending: string | undefined;
+    let gateError: { readonly gate: string; readonly message: string } | undefined;
+    let gateAction: AbortController | undefined;
+    let gatesCompleted = false;
+    let gatesCompletion: AbortController | undefined;
+    let gatesRetry: ReturnType<typeof setTimeout> | undefined;
+    let gatePoll: ReturnType<typeof setTimeout> | undefined;
+    const flowOf = (
+        state: HappyAgentOnboardingState | undefined,
+    ): HappyAgentOnboardingFlow | undefined => {
+        const gates = state ? happyAgentOnboardingGatesRead(state, client.endpoint) : undefined;
+        if (!gates) return undefined;
+        const flow = happyAgentOnboardingFlowDerive({
+            gates,
+            pinned,
+            passed,
+            sequence,
+            ...(gatePending === undefined ? {} : { pending: gatePending }),
+            ...(gateError ? { error: gateError } : {}),
+        });
+        pinned = flow.current?.id;
+        sequence = flow.sequence;
+        return flow;
+    };
+    /** `local` says the flow's own position changed, whatever the server said. */
+    const publish = (next: HappyAgentOnboardingSnapshot, local = false): void => {
         const state = onboardingStatesEqual(snapshot.state, next.state)
             ? snapshot.state
             : next.state;
         if (
+            !local &&
             state === snapshot.state &&
             next.available === snapshot.available &&
             next.pending === snapshot.pending &&
             next.error === snapshot.error
         )
             return;
-        snapshot = { ...next, state };
+        const flow = local || state !== snapshot.state ? flowOf(state) : snapshot.flow;
+        const { flow: _previous, ...rest } = next;
+        snapshot = { ...rest, state, ...(flow ? { flow } : {}) };
         for (const listener of listeners) listener();
     };
     const reconcile = async (signal: AbortSignal): Promise<void> => {
@@ -213,6 +289,10 @@ export function happyAgentOnboardingStoreCreate(
         }
     };
     function setupSynchronize(): void {
+        if (snapshot.flow) {
+            gatesSynchronize();
+            return;
+        }
         if (
             !setupActive ||
             disposed ||
@@ -232,6 +312,94 @@ export function happyAgentOnboardingStoreCreate(
         if (status === "configured" || status === "disabled" || status === "skipped")
             onboardingComplete();
     }
+    /**
+     * Once no gate is left to show, the server is told the reader finished.
+     * The call is idempotent, so a reader who had nothing to do sends it too;
+     * only one who walked through gates is taken to the Chief of Staff after.
+     */
+    function gatesSynchronize(): void {
+        const flow = snapshot.flow;
+        if (disposed || !listeners.size || !flow) return;
+        gatePollSchedule(flow);
+        if (flow.current || gatesCompleted || gatesCompletion || gatesRetry) return;
+        const active = new AbortController();
+        gatesCompletion = active;
+        void client
+            .completeOnboarding({ signal: active.signal })
+            .then(() => {
+                gatesCompleted = true;
+                if (passed.size) options.onFinished?.();
+            })
+            .catch(() => {
+                // Nothing blocks the reader any more, so they are already in;
+                // the completion only has to reach the server eventually.
+                if (!active.signal.aborted && !disposed)
+                    gatesRetry = setTimeout(() => {
+                        gatesRetry = undefined;
+                        setupSynchronize();
+                    }, 2_000);
+            })
+            .finally(() => {
+                if (gatesCompletion === active) gatesCompletion = undefined;
+            });
+    }
+    /**
+     * A gate another device or service completes, or only an admin can, has no
+     * event this client is sure to hear, so it is read again while on screen.
+     */
+    function gatePollSchedule(flow: HappyAgentOnboardingFlow): void {
+        const current = flow.current;
+        if (
+            gatePoll ||
+            !current ||
+            !controller ||
+            (!GATE_POLL_KINDS.has(current.kind) && flow.stance === "act")
+        )
+            return;
+        gatePoll = setTimeout(() => {
+            gatePoll = undefined;
+            const active = controller;
+            if (active && !disposed) void reconcile(active.signal).catch(() => undefined);
+        }, GATE_POLL_INTERVAL_MS);
+    }
+    function gateLeave(gateId: string): void {
+        passed.add(gateId);
+        if (pinned === gateId) pinned = undefined;
+        gateError = undefined;
+        publish(snapshot, true);
+        setupSynchronize();
+    }
+    /** Runs one action on the gate on screen, with its refusal said on that gate. */
+    function gateRun(gateId: string, work: (signal: AbortSignal) => Promise<void>): void {
+        if (gatePending !== undefined || disposed) return;
+        const active = new AbortController();
+        gateAction = active;
+        gatePending = gateId;
+        gateError = undefined;
+        publish(snapshot, true);
+        void work(active.signal)
+            .catch((error: unknown) => {
+                if (!active.signal.aborted)
+                    gateError = { gate: gateId, message: happyAgentUserError(error).message };
+            })
+            .finally(() => {
+                if (gateAction !== active) return;
+                gateAction = undefined;
+                gatePending = undefined;
+                if (disposed) return;
+                publish(snapshot, true);
+                setupSynchronize();
+            });
+    }
+    const cloud = (): HappyCloudRequest => {
+        if (!options.cloudRequest) throw new Error("This server has no onboarding gates.");
+        return options.cloudRequest;
+    };
+    /** Reads the gates once now, for an action that must see the server's answer. */
+    const gatesRead = async (signal: AbortSignal): Promise<void> => {
+        const state = await client.getOnboarding({ signal });
+        if (!signal.aborted && !disposed) publish({ ...snapshot, state, available: true });
+    };
     function onboardingComplete(): void {
         if (
             completion ||
@@ -276,7 +444,16 @@ export function happyAgentOnboardingStoreCreate(
         void (async () => {
             for await (const input of sync.follow({
                 signal: active.signal,
-                events: ["config.updated", "profile.updated", "project.created", "project.updated"],
+                events: [
+                    "config.updated",
+                    "profile.updated",
+                    "project.created",
+                    "project.updated",
+                    "bot.updated",
+                    "plugins.changed",
+                    "invite.created",
+                    "onboarding.updated",
+                ],
                 onOnboarding: (input) => {
                     ++readRequest;
                     if (!input) {
@@ -350,6 +527,15 @@ export function happyAgentOnboardingStoreCreate(
         completion = undefined;
         if (completionRetry) clearTimeout(completionRetry);
         completionRetry = undefined;
+        gateAction?.abort();
+        gateAction = undefined;
+        gatePending = undefined;
+        gatesCompletion?.abort();
+        gatesCompletion = undefined;
+        if (gatesRetry) clearTimeout(gatesRetry);
+        gatesRetry = undefined;
+        if (gatePoll) clearTimeout(gatePoll);
+        gatePoll = undefined;
         snapshot = { ...snapshot, available: false, pending: false };
         mobileUnsubscribe?.();
         mobileUnsubscribe = undefined;
@@ -362,6 +548,50 @@ export function happyAgentOnboardingStoreCreate(
         onboardingBegin() {
             setupActive = true;
             setupSynchronize();
+        },
+        gateContinue(gateId) {
+            const flow = snapshot.flow;
+            const gate = flow?.current;
+            if (!gate || gate.id !== gateId || gatePending !== undefined) return;
+            if (gate.status === "done" || gate.status === "skipped") {
+                gateLeave(gateId);
+                return;
+            }
+            if (!gate.blocking) {
+                gateRun(gateId, async (signal) => {
+                    const state = await cloud()(
+                        "POST",
+                        `v0/onboarding/gates/${encodeURIComponent(gateId)}/skip`,
+                        {},
+                    );
+                    if (signal.aborted) return;
+                    publish({
+                        ...snapshot,
+                        state: state as HappyAgentOnboardingState,
+                        available: true,
+                    });
+                    gateLeave(gateId);
+                });
+                return;
+            }
+            // A step finished elsewhere may not have been heard about yet.
+            gateRun(gateId, async (signal) => {
+                await gatesRead(signal);
+                const after = snapshot.flow?.current;
+                if (!signal.aborted && after?.id === gateId && !after.blocking) gateLeave(gateId);
+            });
+        },
+        adminBotNameSubmit(name) {
+            const gate = snapshot.flow?.current;
+            const trimmed = name.trim();
+            if (gate?.kind !== "adminBot" || trimmed === "" || gate.botId === "") return;
+            gateRun(gate.id, async (signal) => {
+                await cloud()("PATCH", `v0/bots/${encodeURIComponent(gate.botId)}`, {
+                    name: trimmed,
+                });
+                await gatesRead(signal);
+                if (!signal.aborted) gateLeave(gate.id);
+            });
         },
         subscribe(listener) {
             listeners.add(listener);
