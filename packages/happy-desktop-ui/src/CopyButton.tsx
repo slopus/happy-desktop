@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
 export interface CopyButtonProps {
@@ -23,6 +23,8 @@ export interface CopyButtonProps {
     readonly text: string | (() => string | Promise<string>);
     /** Told once the clipboard has taken the text; never told what the text was. */
     readonly onCopy?: () => void;
+    /** Draws the glyph instead of the house copy and check icons, for a surface with its own set. */
+    readonly glyph?: (copied: boolean) => ReactNode;
 }
 
 /** How long the copied check stays before the button offers the copy again. */
@@ -71,7 +73,11 @@ export function CopyButton(props: CopyButtonProps) {
             title={copied ? "Copied" : props.label}
             type="button"
         >
-            <Icon name={copied ? "check" : "copy"} size={14} />
+            {props.glyph ? (
+                props.glyph(copied)
+            ) : (
+                <Icon name={copied ? "check" : "copy"} size={14} />
+            )}
             {props.caption === undefined ? null : (
                 <span aria-atomic="true" aria-live="polite" className="happy-copy-button__caption">
                     {copied ? (props.copiedCaption ?? props.caption) : props.caption}

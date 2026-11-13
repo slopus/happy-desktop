@@ -3,15 +3,22 @@
  *
  *   pnpm blueprint:screens onboarding-flow
  *   pnpm blueprint:screens onboarding-flow --only 1100x760 --scale 1
+ *   pnpm blueprint:screens gen-ui --documents ./docs --out ./shots
  *
  * A screen is any element carrying `data-screen="<name>"`; `FullScreenSpecimen`
  * sets it from its `screen` prop. One Chromium, no assertions: this is for
  * looking at the UI quickly, not for proving it. Output goes to
  * `.context/screens/<page>/<timestamp>/`, one folder per window size, with an
  * `index.html` contact sheet.
+ *
+ * `--documents <dir>` serves a directory of documents to the page at runtime,
+ * with no rebuild: its files are answered at `/blueprint-documents/<path>`,
+ * `/blueprint-documents/index.json` lists its `*.json` files, and the page is
+ * opened with `?documents=blueprint-documents`. A page that reads documents
+ * (the Gen UI page does) renders those instead of its built-in fixtures.
  */
 import { spawnSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer as createNetServer } from "node:net";
 import { join, relative, resolve } from "node:path";
@@ -25,6 +32,7 @@ const { positionals, values } = parseArgs({
         scale: { type: "string", default: "2" },
         settle: { type: "string", default: "1500" },
         "color-scheme": { type: "string", default: "light" },
+        documents: { type: "string" },
     },
 });
 const page = positionals[0];
@@ -86,7 +94,30 @@ try {
     });
     const tab = await context.newPage();
     tab.on("pageerror", (error) => console.error(`page error: ${error.message}`));
-    await tab.goto(`http://127.0.0.1:${String(port)}/#${page}`);
+    let query = "";
+    if (values.documents) {
+        const documents = resolve(values.documents);
+        const names = (await readdir(documents)).filter((name) => name.endsWith(".json")).sort();
+        await tab.route("**/blueprint-documents/**", async (route) => {
+            const path = decodeURIComponent(new URL(route.request().url()).pathname).replace(
+                /^\/blueprint-documents\//u,
+                "",
+            );
+            if (path === "index.json") return route.fulfill({ json: names });
+            const file = resolve(documents, path);
+            if (!file.startsWith(`${documents}/`)) return route.fulfill({ status: 403 });
+            try {
+                await readFile(file);
+                return await route.fulfill({ path: file });
+            } catch {
+                return route.fulfill({ status: 404 });
+            }
+        });
+        // Vite refuses a query holding a path, so the page gets the bare name and
+        // resolves it against its own address.
+        query = "?documents=blueprint-documents";
+    }
+    await tab.goto(`http://127.0.0.1:${String(port)}/${query}#${page}`);
     // Vite may optimise dependencies on first load and reload the page once.
     await tab.waitForLoadState("networkidle");
     await tab.waitForSelector("[data-screen]", { timeout: 60_000 });
@@ -98,6 +129,13 @@ try {
     );
     const selected = names.filter((name) => !values.only || name.includes(values.only));
     if (selected.length === 0) throw new Error(`No [data-screen] on #${page} matches.`);
+    // A screen taller than the window would be captured under the workbench's
+    // sticky header; grow the window so the tallest one fits with room to spare.
+    const tallest = await tab.$$eval("[data-screen]", (elements) =>
+        Math.max(...elements.map((element) => element.getBoundingClientRect().height)),
+    );
+    if (tallest + 200 > 1000)
+        await tab.setViewportSize({ width: 1600, height: Math.ceil(tallest) + 200 });
     // A name ending in a window size (`09-scan-1100x760`) goes in that size's
     // folder as `09-scan.png`, so one size reads top to bottom as one flow.
     const captures = selected.map((name) => {
@@ -109,7 +147,16 @@ try {
     for (const capture of captures) {
         const file = join(out, capture.file);
         await mkdir(join(file, ".."), { recursive: true });
-        await tab.locator(`[data-screen="${capture.name}"]`).screenshot({ path: file });
+        // A screen whose edge lands between pixels would round outward and pick
+        // up a sliver of the stage around it: snap its box to whole pixels first.
+        const screen = tab.locator(`[data-screen="${capture.name}"]`);
+        await screen.evaluate((element) => {
+            const box = element.getBoundingClientRect();
+            element.style.marginTop = `${Math.ceil(box.top) - box.top}px`;
+            element.style.boxSizing = "border-box";
+            element.style.height = `${Math.ceil(box.height)}px`;
+        });
+        await screen.screenshot({ path: file });
         console.log(relative(workspace, file));
     }
     const groups = [...new Set(captures.map((capture) => capture.group))];

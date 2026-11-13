@@ -187,6 +187,11 @@ product-owner decision, not an implementation detail, and swapping it silently
 red-lined 50 test files for five days once already. See `DESIGN.md` → "Icon
 systems".
 
+Exception (authorized by Steve, 2026-11-12): the Gen UI renderer in
+`packages/happy-desktop-ui/src/genUi` draws its glyphs from the shared Gen UI
+icon set bundled in `src/genUi/shared/icons`; the rest of the app stays on
+Ionicons and Octicons.
+
 ## Generated images
 
 Whenever a feature needs a new raster image, generate an original image for

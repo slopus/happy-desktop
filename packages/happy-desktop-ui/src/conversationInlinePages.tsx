@@ -13,7 +13,10 @@ import { Icon } from "./Icon";
 import type { InlinePageProps } from "./InlinePage";
 import type { InlinePageFit, InlinePageGeometry } from "./inlinePageFit";
 import type { MessageReferences } from "./messageReferences";
-import { ArtifactInlineContent } from "./pages/artifacts/ArtifactInlineContent";
+import {
+    ArtifactInlineContent,
+    type GenUiInlineHost,
+} from "./pages/artifacts/ArtifactInlineContent";
 import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
 
 /**
@@ -60,6 +63,11 @@ export interface ConversationInlinePages {
      * artifact carries, as the transcript's own messages do.
      */
     readonly entities?: MessageReferences;
+    /**
+     * Runs what a Gen UI artifact's controls ask for in this conversation.
+     * Absent, its controls report nowhere.
+     */
+    readonly genUi?: GenUiInlineHost;
 }
 
 /** One row's artifact: its geometry for the row model and the props that draw it. */
@@ -106,7 +114,13 @@ function artifactStartsExpanded(
     type: HappyAgentArtifactType,
 ): boolean {
     if (display !== null) return display === "inline_expanded";
-    return type === "html" || type === "image" || type === "image_series" || type === "video";
+    return (
+        type === "html" ||
+        type === "image" ||
+        type === "image_series" ||
+        type === "video" ||
+        type === "gen_ui"
+    );
 }
 
 /**
@@ -199,7 +213,8 @@ export function conversationInlinePage(
                 : type === "markdown" ||
                   type === "image" ||
                   type === "image_series" ||
-                  type === "video");
+                  type === "video" ||
+                  type === "gen_ui");
         const placement = expandable ? "inline" : "title";
         if (placement === "inline" && !collapsed && type !== "html" && artifact)
             pages.artifactsContentRequest([artifactId]);
@@ -269,6 +284,7 @@ export function conversationInlinePage(
                                     {...(pages.entities ? { entities: pages.entities } : {})}
                                     fit={fit}
                                     {...(openSide ? { onOpen: openSide } : {})}
+                                    {...(pages.genUi ? { genUi: pages.genUi } : {})}
                                 />
                             ),
                         }

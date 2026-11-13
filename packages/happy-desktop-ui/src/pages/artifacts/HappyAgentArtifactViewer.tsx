@@ -19,6 +19,7 @@ import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
+import { GenUiArtifact } from "../../genUi/GenUiArtifact";
 import { HtmlPreviewFrame } from "../../HtmlPreviewFrame";
 import type { HtmlPreviewRenderer } from "../../htmlPreview";
 import { ImageViewer } from "../../ImageViewer";
@@ -41,6 +42,7 @@ import {
 } from "./artifactPresentation";
 import { ArtifactHeader } from "./ArtifactHeader";
 import { ArtifactLivePage, type ArtifactLiveRenderer } from "./ArtifactLivePage";
+import type { GenUiInlineHost } from "./ArtifactInlineContent";
 import { HappyAgentArtifactHtmlFrame } from "./HappyAgentArtifactHtmlFrame";
 import type { MessageReferences } from "../../messageReferences";
 
@@ -105,6 +107,11 @@ export interface HappyAgentArtifactViewerProps {
      * version carries, as a message's do. Absent, each reads as its label.
      */
     entities?: MessageReferences;
+    /**
+     * Runs what a Gen UI version's controls ask for. Absent, they report
+     * nowhere: the viewer has no conversation of its own to send to.
+     */
+    genUi?: GenUiInlineHost;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -359,6 +366,7 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                     {...(app ? { closeRequested: appClose } : {})}
                                     {...(props.renderPage ? { renderPage: props.renderPage } : {})}
                                     {...(props.renderLive ? { renderLive: props.renderLive } : {})}
+                                    {...(props.genUi ? { genUi: props.genUi } : {})}
                                     title={artifact.title}
                                 />
                             )}
@@ -522,6 +530,7 @@ function ArtifactContent(props: {
     closeRequested?: () => void;
     renderPage?: HtmlPreviewRenderer;
     renderLive?: ArtifactLiveRenderer;
+    genUi?: GenUiInlineHost;
     title: string;
 }): ReactNode {
     const content = props.content;
@@ -672,6 +681,27 @@ function ArtifactContent(props: {
                         onFileDownload={props.onFileDownload}
                     />
                 </div>
+            );
+        case "gen_ui":
+            return (
+                <ScrollArea
+                    className="happy-agent-artifact-viewer__gen-ui"
+                    data-testid="happy-agent-artifact-gen-ui"
+                    viewportClassName="happy-agent-artifact-viewer__gen-ui-viewport"
+                >
+                    <div className="happy-agent-artifact-viewer__gen-ui-column">
+                        <GenUiArtifact
+                            files={content.files}
+                            render={content.render}
+                            {...(props.genUi
+                                ? {
+                                      actionsSupported: props.genUi.actionsSupported,
+                                      onAction: props.genUi.onAction,
+                                  }
+                                : {})}
+                        />
+                    </div>
+                </ScrollArea>
             );
         case "files":
             return (

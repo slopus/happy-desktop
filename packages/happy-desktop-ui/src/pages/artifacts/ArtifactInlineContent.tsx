@@ -4,6 +4,8 @@ import {
     type HappyAgentInlineArtifactContent,
 } from "happy-desktop-state";
 import { ConversationMedia } from "../../ConversationMedia";
+import { GenUiArtifact } from "../../genUi/GenUiArtifact";
+import type { GenUiActionHandler } from "../../genUi/GenUiRenderView";
 import type { InlinePageFit } from "../../inlinePageFit";
 import { MarkdownDocument, type MarkdownDocumentReferences } from "../../MarkdownDocument";
 import type { MessageReferences } from "../../messageReferences";
@@ -17,6 +19,14 @@ export interface ArtifactInlineContentProps {
     readonly fit: InlinePageFit;
     /** Opens the artifact beside the conversation, from one of its pictures. */
     onOpen?(): void;
+    /** Runs what a Gen UI artifact's controls ask for, in this conversation. */
+    readonly genUi?: GenUiInlineHost;
+}
+
+/** What a Gen UI artifact in a reply may ask its conversation to do. */
+export interface GenUiInlineHost {
+    readonly onAction: GenUiActionHandler;
+    readonly actionsSupported: ReadonlySet<"message" | "open" | "copy" | "tool">;
 }
 
 /**
@@ -51,6 +61,17 @@ export function ArtifactInlineContent(props: ArtifactInlineContentProps) {
                         flow="inline"
                         references={markdownReferences(content)}
                         text={content.text}
+                    />
+                ) : content.type === "gen_ui" ? (
+                    <GenUiArtifact
+                        files={content.files}
+                        render={content.render}
+                        {...(props.genUi
+                            ? {
+                                  actionsSupported: props.genUi.actionsSupported,
+                                  onAction: props.genUi.onAction,
+                              }
+                            : {})}
                     />
                 ) : content.type === "files" ? (
                     <ConversationMedia

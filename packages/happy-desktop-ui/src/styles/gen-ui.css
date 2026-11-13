@@ -1,0 +1,1170 @@
+/*
+ * Gen UI — a render document drawn as part of an agent's reply.
+ *
+ * The document says what each thing is (a box's role and gap, a text's role,
+ * an image's shape, a tone); every number is decided here, from the app's own
+ * tokens. Laid on the chat: no tint of its own, hierarchy from type, spacing,
+ * and hairlines. A card's frame stands out from the reply's text column by the
+ * chat frame outset and everything it holds starts on that column, so its ink
+ * sits one outset from the frame on every side (master-plans/11-design.md).
+ *
+ *   gaps        inline 8 · tight 0 · related 2 · labeled 8 · heading 12 · items 16 · blocks 16
+ *   card        1px hairline, 10px radius
+ *   type        title 15/20 600, body 14/20, secondary 13/18, value 26/34
+ *   rows        divided lists and tables: 10px above and below, hairlines between
+ *   plots       SVG at the measured width; 2:1 at 560px and wider, 16:10 below
+ *
+ * "Compact" is the spec's narrow column, under 560px of the document's own
+ * width, read from the `gen-ui` container the root sets up.
+ */
+
+.gen-ui,
+.gen-ui * {
+    box-sizing: border-box;
+}
+
+.gen-ui {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    container: gen-ui / inline-size;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
+    font-synthesis: none;
+    line-height: 20px;
+}
+
+.gen-ui :is(p, figure) {
+    margin: 0;
+    padding: 0;
+}
+
+.gen-ui-fallback {
+    font-size: 16px;
+    line-height: 24px;
+    overflow-wrap: break-word;
+}
+
+/* ---- Shared glyphs -------------------------------------------------------------- */
+
+/* Tones and colours are painted inline from the shared theme (genUiTheme.ts).
+   A shared glyph is a mask painted with the current colour, so it takes the
+   ink of its tone like the text beside it. */
+.gen-ui-glyph {
+    display: block;
+    flex: none;
+    background-color: currentColor;
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+}
+
+/* ---- Box --------------------------------------------------------------------- */
+
+.gen-ui-box {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.gen-ui-box[data-direction="row"] {
+    flex-direction: row;
+}
+
+.gen-ui-box[data-wrap] {
+    flex-wrap: wrap;
+}
+
+.gen-ui-box[data-grow] {
+    flex: 1 1 auto;
+}
+
+.gen-ui-box[data-gap="inline"] {
+    gap: 8px;
+}
+
+/* A title and its subtitle: two lines of one heading. */
+.gen-ui-box[data-gap="tight"] {
+    gap: 0;
+}
+
+.gen-ui-box[data-gap="related"] {
+    gap: 2px;
+}
+
+/* A caption line above its control: the control reads as the line under the caption. */
+.gen-ui-box[data-gap="labeled"] {
+    gap: 8px;
+}
+
+/* A heading or question above the blocks it introduces. */
+.gen-ui-box[data-gap="heading"] {
+    gap: 12px;
+}
+
+.gen-ui-box[data-gap="items"],
+.gen-ui-box[data-gap="blocks"] {
+    gap: 16px;
+}
+
+.gen-ui-box[data-align="start"] {
+    align-items: flex-start;
+}
+
+.gen-ui-box[data-align="center"] {
+    align-items: center;
+}
+
+.gen-ui-box[data-align="end"] {
+    align-items: flex-end;
+}
+
+.gen-ui-box[data-align="baseline"] {
+    align-items: baseline;
+}
+
+.gen-ui-box[data-justify="between"] {
+    justify-content: space-between;
+}
+
+.gen-ui-box[data-justify="end"] {
+    justify-content: flex-end;
+}
+
+/* Equal shares. A row that may wrap puts at most four to a line, none under
+   104px; a row that must fit keeps them all on one line and they shrink. */
+.gen-ui-box__share {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.gen-ui-box[data-wrap] > .gen-ui-box__share {
+    min-width: max(104px, calc((100% - 3 * 16px) / 4));
+}
+
+/* A stat without a sparkline keeps the sparkline's space beside one that has it. */
+.gen-ui-box[data-equal]:has(.gen-ui-spark)
+    > .gen-ui-box__share
+    > .gen-ui-box:not(:has(.gen-ui-spark))::after {
+    height: 32px;
+    content: "";
+}
+
+/* ---- Divided boxes: lists ----------------------------------------------------- */
+
+.gen-ui-box:not([data-divide="none"]) {
+    gap: 0;
+}
+
+.gen-ui-box__divided {
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    min-width: 0;
+    padding-block: 10px;
+}
+
+/* The hairline belongs to the row below and stops at the column, so a hovered
+   row's fill can reach past the column without moving it. */
+.gen-ui-box__divided + .gen-ui-box__divided::before {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: var(--divider);
+    content: "";
+}
+
+/* `inset` starts at the title edge, past the list's shared leading column. */
+.gen-ui-box[data-divide="inset"][data-leading="icon"] > .gen-ui-box__divided::before {
+    left: 24px;
+}
+
+.gen-ui-box[data-divide="inset"][data-leading="number"] > .gen-ui-box__divided::before {
+    left: 28px;
+}
+
+.gen-ui-box[data-divide="inset"][data-leading="thumb"] > .gen-ui-box__divided::before {
+    left: 48px;
+}
+
+/* ---- Box roles ----------------------------------------------------------------- */
+
+.gen-ui-box[data-role="card"] {
+    margin-inline: calc(-1 * var(--happy-chat-frame-outset));
+    /* Ink one outset from the frame: the border, then the rest of the outset.
+       The top gives back the 3px a 15/20 title's caps sit into their line. */
+    padding: calc(var(--happy-chat-frame-outset) - 4px) calc(var(--happy-chat-frame-outset) - 1px)
+        calc(var(--happy-chat-frame-outset) - 1px);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+}
+
+/* A card inside a card keeps its content but not its frame. */
+.gen-ui-box[data-role="card"][data-nested] {
+    margin-inline: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+}
+
+.gen-ui-box[data-role="header"] > .gen-ui-pill {
+    max-width: 50%;
+}
+
+.gen-ui-box[data-role="actions"] {
+    padding-top: 4px;
+}
+
+.gen-ui-box[data-role="actions"] > .gen-ui-button {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* Where three buttons would not fit side by side they stack, each full width,
+   in document order. */
+@container gen-ui (max-width: 459px) {
+    .gen-ui-box[data-role="actions"] {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* A faintly tinted block in the tone's colour, never a stripe on one edge. */
+.gen-ui-box[data-role="notice"] {
+    padding: 10px 12px;
+    border-radius: var(--happy-radius-sm);
+    background: var(--surface-highest);
+    color: var(--text);
+}
+
+/* A hairline, then the heading, then the group; no hairline above the first
+   thing in its parent, nor inside another section. */
+.gen-ui-box[data-role="section"] {
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
+}
+
+.gen-ui-box[data-role="section"]:first-child,
+.gen-ui-box[data-role="section"] .gen-ui-box[data-role="section"] {
+    padding-top: 0;
+    border-top: 0;
+}
+
+/* An item row's first child is its lead, or an empty box where it has none;
+   either holds the list's leading column, so titles share one edge. */
+.gen-ui-box[data-role="item"][data-leading="icon"] > :first-child {
+    flex: none;
+    min-width: 16px;
+}
+
+.gen-ui-box[data-role="item"][data-leading="thumb"] > :first-child {
+    flex: none;
+    min-width: 40px;
+}
+
+.gen-ui-text[data-role="ordinal"] {
+    flex: none;
+    width: 20px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* A carousel card: picture, then its lines. */
+.gen-ui-box[data-role="tile"] {
+    gap: 2px;
+}
+
+.gen-ui-box[data-role="tile"] > :first-child {
+    margin-bottom: 8px;
+}
+
+/* ---- Text --------------------------------------------------------------------- */
+
+.gen-ui-text {
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.gen-ui-text[data-align="end"] {
+    text-align: end;
+}
+
+.gen-ui-text[data-overflow="truncate"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gen-ui-text[data-overflow="clamp"] {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+.gen-ui-text[data-role="title"] {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.gen-ui-text:is(
+    [data-role="subtitle"],
+    [data-role="note"],
+    [data-role="label"],
+    [data-role="detail"],
+    [data-role="trailing"],
+    [data-role="column"],
+    [data-role="heading"]
+) {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.gen-ui-text[data-role="heading"] {
+    font-weight: 600;
+}
+
+.gen-ui-text[data-role="column"] {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.gen-ui-text[data-role="prompt"] {
+    font-weight: 600;
+}
+
+.gen-ui-text:is([data-role="item"], [data-role="rowhead"]) {
+    font-weight: 500;
+}
+
+.gen-ui-text[data-role="value"] {
+    font-size: 26px;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 34px;
+    white-space: nowrap;
+}
+
+.gen-ui-text[data-role="delta"] {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.gen-ui-text:is([data-role="trailing"], [data-role="number"], [data-role="cell"]) {
+    font-variant-numeric: tabular-nums;
+}
+
+.gen-ui-text[data-role="trailing"] {
+    white-space: nowrap;
+}
+
+/* Fixed text keeps its natural width in a row; its siblings give way. */
+.gen-ui-text[data-fixed] {
+    flex: none;
+}
+
+/* Text laid straight on the reply reads as the reply: the chat's paragraph type. */
+.gen-ui > .gen-ui-text[data-role="body"],
+.gen-ui > .gen-ui-box:not([data-role="card"]) > .gen-ui-text[data-role="body"] {
+    font-size: 16px;
+    line-height: 24px;
+}
+
+.gen-ui-inline-code {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--input-background);
+    font-family: var(--happy-font-mono);
+    font-size: 0.86em;
+}
+
+.gen-ui-link {
+    color: inherit;
+    text-decoration: underline;
+}
+
+/* ---- Icon --------------------------------------------------------------------- */
+
+.gen-ui-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.gen-ui-icon[data-role="leading"] {
+    width: 16px;
+    height: 20px;
+}
+
+.gen-ui-icon[data-role="inline"] {
+    align-self: center;
+}
+
+/* ---- Pill --------------------------------------------------------------------- */
+
+/* One compact pill wherever a status label appears: tinted, text as written. */
+.gen-ui-pill {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 4px;
+    /* A label's own width, also on a line of its own in a stretched column. */
+    width: fit-content;
+    max-width: 100%;
+    height: 22px;
+    min-width: 0;
+    padding: 0 8px;
+    border-radius: var(--happy-radius-pill);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.gen-ui-pill > :first-child:not(.gen-ui-pill__text) {
+    flex: none;
+    margin-inline-start: -2px;
+}
+
+.gen-ui-pill__text {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+
+/* ---- Spark and bar ---------------------------------------------------------------- */
+
+.gen-ui-spark {
+    display: block;
+    height: 28px;
+    margin-top: 4px;
+    overflow: visible;
+}
+
+.gen-ui-spark__line {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5px;
+}
+
+.gen-ui-spark__area {
+    fill: currentColor;
+    opacity: 0.08;
+}
+
+.gen-ui-bar {
+    display: flex;
+    height: 6px;
+    overflow: hidden;
+    border-radius: var(--happy-radius-pill);
+    background: var(--surface-highest);
+}
+
+.gen-ui-bar__fill {
+    flex: none;
+    border-radius: var(--happy-radius-pill);
+}
+
+/* ---- Marker ------------------------------------------------------------------- */
+
+/* The marker spans its row, and its rail runs on through the gap to the next
+   marker, 4px clear of each. */
+.gen-ui-marker {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    align-self: stretch;
+    width: 20px;
+}
+
+.gen-ui-marker__dot {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+}
+
+/* Every marker is one circle in its status tone's ink, as every platform
+   draws it: done and failed are filled discs carrying their glyph in the
+   surface colour; active is a ring with a centred dot half the diameter;
+   pending is an empty ring of the same stroke. */
+.gen-ui-marker:is([data-status="done"], [data-status="failed"]) .gen-ui-marker__dot {
+    background: currentColor;
+}
+
+.gen-ui-marker__dot .gen-ui-glyph {
+    background-color: var(--surface);
+}
+
+.gen-ui-marker:is([data-status="pending"], [data-status="active"]) .gen-ui-marker__dot {
+    border: 1.5px solid currentColor;
+}
+
+.gen-ui-marker__pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: gen-ui-marker-pulse 1.4s ease-in-out infinite;
+}
+
+.gen-ui-marker__dot[data-still] .gen-ui-marker__pulse {
+    animation: none;
+}
+
+@keyframes gen-ui-marker-pulse {
+    50% {
+        opacity: 0.35;
+        transform: scale(0.75);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gen-ui-marker__pulse {
+        animation: none;
+    }
+}
+
+/* The rail is always the hairline colour, never a status's. */
+.gen-ui-marker__rail {
+    flex: 1 1 auto;
+    width: 1.5px;
+    min-height: 8px;
+    margin-top: 4px;
+    margin-bottom: -12px;
+    border-radius: 1px;
+    background: var(--divider);
+}
+
+/* ---- Grid --------------------------------------------------------------------- */
+
+/* A genuine two-dimensional table: columns sized together across rows. */
+.gen-ui-grid {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- a table's columns are sized together across rows, which one-dimensional flex rows cannot do */
+    display: grid;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+/* Table columns are spaced by their cells' own padding, so a row's hairline
+   runs unbroken across the gutters. */
+.gen-ui-grid[data-density="table"] > .gen-ui-grid__cell {
+    padding-inline: 12px;
+}
+
+.gen-ui-grid[data-density="table"] > .gen-ui-grid__cell[data-edge="start"] {
+    padding-inline-start: 0;
+}
+
+.gen-ui-grid[data-density="table"] > .gen-ui-grid__cell[data-edge="end"] {
+    padding-inline-end: 0;
+}
+
+.gen-ui-grid[data-density="pairs"] {
+    gap: 6px 16px;
+}
+
+.gen-ui-grid__cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+.gen-ui-grid__cell[data-align="end"] {
+    align-items: flex-end;
+}
+
+.gen-ui-grid[data-density="table"] > .gen-ui-grid__cell {
+    padding-block: 10px;
+}
+
+.gen-ui-grid[data-density="table"] > .gen-ui-grid__cell[data-head] {
+    justify-content: flex-end;
+    padding-top: 0;
+    padding-bottom: 8px;
+}
+
+.gen-ui-grid[data-divide] > .gen-ui-grid__cell:not([data-first-row]) {
+    border-top: 1px solid var(--divider);
+}
+
+.gen-ui-grid[data-divide] > .gen-ui-grid__cell[data-head] {
+    border-bottom: 1px solid var(--divider);
+}
+
+/* Under a header row, the first body row's hairline is the header's own. */
+.gen-ui-grid[data-divide]:has(> [data-head]) > .gen-ui-grid__cell:not([data-first-row]) {
+    margin-top: -1px;
+}
+
+/* ---- Images ----------------------------------------------------------------------- */
+
+.gen-ui-image {
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--surface-highest);
+    background-position: center;
+    background-size: cover;
+}
+
+.gen-ui-image[data-shape="landscape"] {
+    aspect-ratio: 3 / 2;
+}
+
+.gen-ui-image[data-shape="square"] {
+    aspect-ratio: 1;
+}
+
+.gen-ui-image[data-shape="portrait"] {
+    aspect-ratio: 3 / 4;
+}
+
+/* The picture covers the box its shape sets; in flow its own pixel size would
+   stretch that box instead, so it is laid over it. */
+.gen-ui-image img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gen-ui-image img[data-failed] {
+    visibility: hidden;
+}
+
+/* A picture that failed keeps its tinted box and shows what was meant to be there. */
+.gen-ui-image__glyph {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.gen-ui-image:has(img[data-failed]) .gen-ui-image__glyph {
+    display: flex;
+}
+
+.gen-ui-image__overlay {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    background: var(--overlay-panel);
+    color: var(--text-inverse);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 28px;
+}
+
+.gen-ui-image-open {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+}
+
+.gen-ui-image-open > .gen-ui-image {
+    flex: 1 1 auto;
+}
+
+.gen-ui-image:is([data-role="figure"], [data-role="cover"]) {
+    border-radius: 8px;
+}
+
+/* A figure is never taller than 360px: on a wide column it narrows to keep
+   the cap and stays on the leading edge. */
+:is(.gen-ui-image, .gen-ui-image-open)[data-role="figure"][data-shape="landscape"] {
+    width: 100%;
+    max-width: 540px;
+}
+
+:is(.gen-ui-image, .gen-ui-image-open)[data-role="figure"][data-shape="square"] {
+    width: 100%;
+    max-width: 360px;
+}
+
+:is(.gen-ui-image, .gen-ui-image-open)[data-role="figure"][data-shape="portrait"] {
+    width: 100%;
+    max-width: 270px;
+}
+
+.gen-ui-image-open[data-role="figure"] > .gen-ui-image {
+    max-width: none;
+}
+
+.gen-ui-image[data-role="thumb"] {
+    flex: none;
+    width: 40px;
+    border-radius: 6px;
+}
+
+/* ---- Mosaic --------------------------------------------------------------------- */
+
+/* One mosaic clipped to one rounded shape; tiles meet on 2px seams. */
+.gen-ui-mosaic {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.gen-ui-mosaic__row {
+    display: flex;
+    gap: 2px;
+}
+
+.gen-ui-mosaic__column {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.gen-ui-mosaic__cell {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.gen-ui-mosaic__cell > * {
+    flex: 1 1 auto;
+}
+
+.gen-ui-mosaic__cell[data-span="2"] {
+    flex-grow: 2;
+}
+
+/* The large tile of three sets the row's height; the two beside it share it. */
+.gen-ui-mosaic__cell[data-span="2"] .gen-ui-image {
+    aspect-ratio: 4 / 3;
+}
+
+.gen-ui-mosaic__column .gen-ui-image {
+    height: 100%;
+    aspect-ratio: auto;
+}
+
+.gen-ui-mosaic[data-count="1"] .gen-ui-image[data-shape="landscape"] {
+    aspect-ratio: 16 / 9;
+}
+
+/* ---- Scroll: carousel ------------------------------------------------------------- */
+
+.gen-ui-scroll {
+    display: flex;
+    position: relative;
+    min-width: 0;
+    /* The arrows sit on the pictures' middle, which follows the width. */
+    container-type: inline-size;
+}
+
+.gen-ui-scroll__scroller {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+}
+
+/* About three cards and the edge of a fourth: the peek says there is more. */
+.gen-ui-scroll__track {
+    display: flex;
+    gap: 12px;
+}
+
+.gen-ui-scroll__item {
+    display: flex;
+    flex: none;
+    width: calc((100% - 3 * 12px) / 3.25);
+    scroll-snap-align: start;
+}
+
+/* In a compact column fewer, larger cards show, by the pictures' shape. */
+.gen-ui[data-compact] .gen-ui-scroll[data-shape="landscape"] .gen-ui-scroll__item {
+    width: 72%;
+}
+
+.gen-ui[data-compact] .gen-ui-scroll[data-shape="square"] .gen-ui-scroll__item {
+    width: 60%;
+}
+
+.gen-ui[data-compact] .gen-ui-scroll[data-shape="portrait"] .gen-ui-scroll__item {
+    width: 48%;
+}
+
+.gen-ui-scroll__item > * {
+    flex: 1 1 auto;
+}
+
+/* The arrows float over the pictures' middle, just inside the column. A
+   landscape picture is 3:2 of a card's width, so its middle is a third of it. */
+.gen-ui-scroll__arrow {
+    --gen-ui-scroll-card: calc((100cqw - 3 * 12px) / 3.25);
+    display: flex;
+    position: absolute;
+    top: calc(var(--gen-ui-scroll-card) / 3 - 14px);
+    z-index: 1;
+    border-radius: var(--happy-radius-pill);
+    box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.gen-ui-scroll[data-shape="square"] .gen-ui-scroll__arrow {
+    top: calc(var(--gen-ui-scroll-card) / 2 - 14px);
+}
+
+.gen-ui-scroll[data-shape="portrait"] .gen-ui-scroll__arrow {
+    top: calc(var(--gen-ui-scroll-card) * 2 / 3 - 14px);
+}
+
+.gen-ui-scroll__arrow[data-side="start"] {
+    left: 8px;
+}
+
+.gen-ui-scroll__arrow[data-side="end"] {
+    right: 8px;
+}
+
+.gen-ui-scroll__arrow .happy-button[data-variant="secondary"] {
+    background-color: var(--surface);
+}
+
+/* On a narrow card the status label drops under its title line's text. */
+.gen-ui-scroll__item .gen-ui-box[data-direction="row"][data-justify="between"] {
+    flex-wrap: wrap;
+}
+
+/* ---- Press and buttons -------------------------------------------------------------- */
+
+.gen-ui-press {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+}
+
+button.gen-ui-press {
+    cursor: pointer;
+}
+
+/* A tappable row lights up a little past its column, without moving it: in a
+   divided list the row itself carries the list's padding. */
+.gen-ui-press[data-role="item"] {
+    margin-inline: -8px;
+    padding-inline: 8px;
+    border-radius: var(--happy-hover-radius);
+}
+
+.gen-ui-box__divided[data-press="item"] {
+    padding-block: 0;
+}
+
+.gen-ui-box__divided > .gen-ui-press[data-role="item"] {
+    padding-block: 10px;
+}
+
+button.gen-ui-press[data-role="item"]:hover:not(:disabled) {
+    background: var(--happy-hover-fill);
+}
+
+/* A carousel card answers the pointer across its whole picture. */
+button.gen-ui-press[data-role="tile"]:hover:not(:disabled) .gen-ui-image {
+    filter: brightness(0.94);
+}
+
+.gen-ui-press:disabled {
+    cursor: default;
+    opacity: 0.48;
+}
+
+.gen-ui-press[data-picked] .gen-ui-icon[data-role="inline"]:last-child {
+    color: var(--text);
+}
+
+.gen-ui-button {
+    max-width: 100%;
+}
+
+.gen-ui-button__label {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A pressed button is busy or done, not unavailable: it keeps its full face. */
+.gen-ui-button.happy-button:disabled:not([data-press="idle"]) {
+    cursor: default;
+    opacity: 1;
+}
+
+/* Chips are outlined pills; the picked one fills in and keeps its mark. */
+.gen-ui-button[data-chip].happy-button[data-variant="secondary"] {
+    background-color: transparent;
+}
+
+.gen-ui-button[data-chip][data-picked].happy-button {
+    border-color: var(--text);
+    background-color: var(--surface-high);
+    opacity: 1;
+}
+
+.gen-ui-button .happy-button__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gen-ui-scroll__arrow[data-side="start"] .gen-ui-scroll__glyph {
+    transform: scaleX(-1);
+}
+
+/* ---- Code ----------------------------------------------------------------------- */
+
+.gen-ui-code {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+}
+
+.gen-ui-code__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    /* The code below starts 8px inside the frame; its title starts with it. */
+    padding-inline: 7px 6px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* Long lines scroll sideways; past about twenty lines the block scrolls too. */
+.gen-ui-code__body {
+    max-height: 408px;
+    overflow: auto;
+}
+
+/* ---- Plot ----------------------------------------------------------------------- */
+
+.gen-ui-plot {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    container-type: inline-size;
+}
+
+.gen-ui-plot__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.gen-ui-plot__legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gen-ui-plot__swatch {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.gen-ui-plot__swatch[data-mark="line"] {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.gen-ui-plot__frame {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    aspect-ratio: 16 / 10;
+}
+
+@container (min-width: 560px) {
+    .gen-ui-plot__frame {
+        aspect-ratio: 2 / 1;
+    }
+}
+
+.gen-ui-plot__svg {
+    display: block;
+    flex: none;
+    overflow: visible;
+}
+
+.gen-ui-plot__grid {
+    stroke-width: 1px;
+    shape-rendering: crispEdges;
+}
+
+.gen-ui-plot__tick {
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.gen-ui-plot__line {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2px;
+}
+
+.gen-ui-plot__point {
+    stroke: var(--surface);
+    stroke-width: 2px;
+}
+
+.gen-ui-plot__area[data-stacked] {
+    opacity: 0.28;
+}
+
+.gen-ui-plot__donut {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+}
+
+/* Below 560px the legend moves under the ring. */
+@container (max-width: 559px) {
+    .gen-ui-plot__donut {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    .gen-ui-plot__donut-figure {
+        align-self: center;
+    }
+
+    .gen-ui-plot__donut-legend {
+        max-width: none;
+    }
+}
+
+.gen-ui-plot__donut-figure {
+    display: flex;
+    position: relative;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.gen-ui-plot__donut-figure > svg {
+    position: absolute;
+    inset: 0;
+}
+
+.gen-ui-plot__donut-track {
+    fill: none;
+    stroke: var(--surface-highest);
+}
+
+.gen-ui-plot__donut-total {
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    align-items: center;
+}
+
+.gen-ui-plot__donut-value {
+    font-size: 24px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 30px;
+}
+
+.gen-ui-plot__donut-label {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.gen-ui-plot__donut-legend {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    max-width: 360px;
+}
+
+.gen-ui-plot__donut-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.gen-ui-plot__donut-row + .gen-ui-plot__donut-row {
+    border-top: 1px solid var(--divider);
+}
+
+.gen-ui-plot__donut-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.gen-ui-plot__donut-amount {
+    flex: none;
+    font-weight: 500;
+    text-align: end;
+}
+
+.gen-ui-plot__donut-share {
+    flex: none;
+    width: 40px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: end;
+}

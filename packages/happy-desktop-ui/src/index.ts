@@ -1263,3 +1263,16 @@ export {
 export { localAgoTime, localAgoTimeChangedAt, localListTime } from "./localTime";
 
 export { CloudWebSignInScreen, type CloudWebSignInScreenProps } from "./CloudWebSignInScreen";
+export { GenUiArtifact } from "./genUi/GenUiArtifact";
+export type { GenUiInlineHost } from "./pages/artifacts/ArtifactInlineContent";
+export {
+    GenUiRenderView,
+    type GenUiActionHandler,
+    type GenUiRenderViewProps,
+} from "./genUi/GenUiRenderView";
+export {
+    genUiRenderParse,
+    genUiRenderParseText,
+    type GenUiAction,
+    type GenUiRenderDocument,
+} from "./genUi/genUiRender";
