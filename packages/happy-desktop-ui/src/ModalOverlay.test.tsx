@@ -8,6 +8,7 @@ import "./styles/modal.css";
 import "./styles/button.css";
 import "./styles/icon.css";
 import { Modal } from "./Modal";
+import { CLOSE_SHORTCUT } from "./keyboardShortcut";
 import { ModalOverlay } from "./ModalOverlay";
 import { createRenderer } from "./testing";
 /*
@@ -425,6 +426,45 @@ it("moves focus into the dialog on open, closes on Escape without a click, and r
     expect(dismissed).toBe(1);
     expect(view.container.querySelector('[data-happy-desktop-ui="modal-overlay"]')).toBeNull();
     // Closing hands focus back to the control that opened the dialog.
+    expect(document.activeElement).toBe(opener);
+});
+
+it("closes on the close chord as on Escape, and keeps that press from the window behind it", async () => {
+    let dismissed = 0;
+    const view = createRenderer().render(
+        () => <FocusHarness onDismiss={() => (dismissed += 1)} />,
+        { width: 760, height: 500, padding: 20 },
+    );
+    await view.ready();
+    const opener = view.$('[data-testid="opener"]').element as HTMLButtonElement;
+    opener.focus();
+    await userEvent.keyboard("{Enter}");
+    await view.ready();
+    const overlay = view.container.querySelector('[data-happy-desktop-ui="modal-overlay"]')!;
+    expect(overlay.contains(document.activeElement)).toBe(true);
+
+    // The window's own close command listens where this one does; it must
+    // find the press already claimed, or one press would close two things.
+    const reached: boolean[] = [];
+    const windowListener = (event: KeyboardEvent) => reached.push(event.defaultPrevented);
+    window.addEventListener("keydown", windowListener);
+    const meta = CLOSE_SHORTCUT.modifier === "Meta";
+    document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            code: "KeyW",
+            ctrlKey: !meta,
+            key: "w",
+            metaKey: meta,
+        }),
+    );
+    window.removeEventListener("keydown", windowListener);
+    await view.ready();
+
+    expect(dismissed).toBe(1);
+    expect(reached).toEqual([true]);
+    expect(view.container.querySelector('[data-happy-desktop-ui="modal-overlay"]')).toBeNull();
     expect(document.activeElement).toBe(opener);
 });
 

@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
 import type { MessageReferenceView } from "./messageReferences";
-import { WindowOverlay } from "./WindowOverlay";
+import { fixedBlockMeasure } from "./fixedBlock";
+import { WindowOverlay, WindowOverlayHostContext } from "./WindowOverlay";
 
 /** How long the pointer rests on a tag before the card behind it opens. */
 const CARD_DELAY = 350;
@@ -28,15 +29,19 @@ export function MessageMention(props: {
 }) {
     const [card, setCard] = useState<{ x: number; y: number; below: boolean } | undefined>();
     const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const overlayHost = useContext(WindowOverlayHostContext);
     const cardSoon = (element: HTMLElement) => {
         clearTimeout(timer.current);
         timer.current = setTimeout(() => {
             // A tag wrapped across lines opens its card at its first line.
             const line = element.getClientRects()[0] ?? element.getBoundingClientRect();
             const below = line.top < CARD_ROOM;
+            // The line is measured against the window; the card is laid out
+            // against whatever contains the place it is drawn in.
+            const block = fixedBlockMeasure(overlayHost ?? element);
             setCard({
-                x: line.left,
-                y: below ? line.bottom + CARD_GAP : line.top - CARD_GAP,
+                x: line.left - block.left,
+                y: (below ? line.bottom + CARD_GAP : line.top - CARD_GAP) - block.top,
                 below,
             });
         }, CARD_DELAY);

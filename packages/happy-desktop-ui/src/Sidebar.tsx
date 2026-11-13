@@ -17,6 +17,7 @@ import {
 } from "react";
 import { Avatar, type AvatarTint, type ToneName } from "./Avatar";
 import { ChangeStats } from "./ChangeStats";
+import { fixedBlockMeasure } from "./fixedBlock";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
 import { Button } from "./Button";
@@ -2800,6 +2801,13 @@ export function Sidebar(props: SidebarProps) {
         y: number;
         /** Where the menu's bottom edge goes instead when it does not fit under `y`. */
         above?: number;
+        /**
+         * The fixed offsets that put the menu at `x`, `y` in the window, once
+         * measured: inside a connection the menu is laid out against the
+         * connection's surface, not the window the pointer was reported in.
+         */
+        left?: number;
+        top?: number;
     };
     const [itemMenu, itemMenuSet] = useState<OpenMenu>();
     const setItemMenu = useCallback(
@@ -2862,8 +2870,16 @@ export function Sidebar(props: SidebarProps) {
                     ? Math.min(itemMenu.y, window.innerHeight - bounds.height - 8)
                     : itemMenu.above - bounds.height,
             );
-            if (x !== itemMenu.x || y !== itemMenu.y) {
-                setItemMenu({ ...itemMenu, x, y });
+            const block = fixedBlockMeasure(menuRoot.current?.parentElement ?? document.body);
+            const left = x - block.left;
+            const top = y - block.top;
+            if (
+                x !== itemMenu.x ||
+                y !== itemMenu.y ||
+                left !== itemMenu.left ||
+                top !== itemMenu.top
+            ) {
+                setItemMenu({ ...itemMenu, x, y, left, top });
                 return;
             }
         }
@@ -5204,7 +5220,7 @@ export function Sidebar(props: SidebarProps) {
                     className="happy-sidebar__item-menu"
                     data-happy-desktop-ui="sidebar-item-menu"
                     ref={menuRoot}
-                    style={{ left: itemMenu.x, top: itemMenu.y }}
+                    style={{ left: itemMenu.left ?? itemMenu.x, top: itemMenu.top ?? itemMenu.y }}
                 >
                     <Menu
                         // The create row's entries are read live, so one that
