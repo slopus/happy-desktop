@@ -133,13 +133,6 @@ const bridge: HappyDesktopBridge = {
     browserNetworkResolve: (target) => ipcRenderer.invoke(desktopIpc.browserNetworkResolve, target),
     browserNetworkProfileOpen: (network) =>
         ipcRenderer.invoke(desktopIpc.browserNetworkProfileOpen, network),
-    // Saved logins are read from other browsers on macOS and Windows only.
-    ...(process.platform === "darwin" || process.platform === "win32"
-        ? {
-              browserPasswordPickerOpen: (guestId: number) =>
-                  ipcRenderer.invoke(desktopIpc.browserPasswordPickerOpen, guestId),
-          }
-        : {}),
     guestFitMeasure: (guestId, previous) =>
         ipcRenderer.invoke(desktopIpc.guestFitMeasure, guestId, previous),
     browserNetworkCommand: (partition, guestId, command) =>

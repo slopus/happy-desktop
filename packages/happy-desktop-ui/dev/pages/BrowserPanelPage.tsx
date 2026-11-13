@@ -99,7 +99,7 @@ export function BrowserPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="a live artifact's page · developer tools for the page alone, beside saved passwords"
+                detail="a live artifact's page · developer tools for the page alone"
                 label="Live artifact page"
                 number="07"
                 stage="app"

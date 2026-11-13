@@ -167,9 +167,6 @@ importers:
       smol-toml:
         specifier: ^1.9.1
         version: 1.9.1
-      tldts:
-        specifier: 7.4.19
-        version: 7.4.19
       usb:
         specifier: ^2.19.1
         version: 2.19.1

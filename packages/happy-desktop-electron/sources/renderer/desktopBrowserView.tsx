@@ -147,18 +147,6 @@ export class DesktopBrowserGuest extends Component<
                   },
               }
             : {}),
-        ...(window.happyDesktop?.browserPasswordPickerOpen
-            ? {
-                  browserPasswordPick: () => {
-                      const view = this.element;
-                      if (!view || !this.initialized) return;
-                      // Main opens its native menu. Only a native choice can fill.
-                      void window.happyDesktop
-                          ?.browserPasswordPickerOpen?.(view.getWebContentsId())
-                          .catch(() => undefined);
-                  },
-              }
-            : {}),
     };
 
     private navigationStart(): void {

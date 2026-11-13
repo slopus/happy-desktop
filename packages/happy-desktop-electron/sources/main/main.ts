@@ -33,8 +33,6 @@ import { happyCloudCreate } from "./happyCloud";
 import { happyCloudVaultCreate } from "./happyCloudVault";
 import { happyCloudServerNameOf } from "../shared/happyCloud";
 import { browserPermissionsInstall } from "./browserPermissions";
-import { BrowserPasswords } from "./browserPasswords";
-import { browserPasswordGuestAttach } from "./browserPasswordGuest";
 import { desktopInstanceMenuTargets } from "./applicationMenu";
 import {
     desktopWindowTarget,
@@ -450,8 +448,6 @@ let quitting = false;
 let desktopUpdater: DesktopUpdater | undefined;
 /** Each workspace keeps its own network profile, including while its tabs are hidden. */
 const browserProxies = new Map<string, HappyAgentBrowser>();
-/** Workspace-browser profiles opened this launch; never a live artifact profile. */
-const browserNetworkPartitions = new Set<string>();
 /** The isolated world inline guests are measured in, apart from the page's own. */
 const guestFitWorld = 1_000;
 let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
@@ -468,11 +464,6 @@ let browserProxyConnectionId: number | undefined;
 let browserProxyOperation = Promise.resolve();
 // In a hidden-window run, showing a window leaves it hidden (hiddenWindows.ts).
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
-let browserPasswords: BrowserPasswords | undefined;
-const browserPasswordGuests = new Map<
-    number,
-    { readonly owner: WebContents; readonly pickerOpen: () => void }
->();
 const cloudAuthConfiguration: DesktopCloudAuthConfiguration = {
     environment: "production",
     redirectUri: cloudAuthProductionRedirectUri,
@@ -816,7 +807,6 @@ function browserProxyApply(network: DesktopBrowserNetwork): Promise<string> {
                 } satisfies DesktopBrowserNetworkMissing);
             });
             browserProxies.set(partition, candidate);
-            if (network.artifactId === undefined) browserNetworkPartitions.add(partition);
             return partition;
         } catch (error) {
             candidate?.close();
@@ -1012,15 +1002,8 @@ function browserGuestAttach(window: BrowserWindow): void {
             event.preventDefault();
             return;
         }
-        // Guest pages never inherit the app's privileged bridge. Only admitted
-        // network browser tabs receive the separate isolated password observer.
+        // Guest pages never inherit a preload or Node privilege from the app.
         delete webPreferences.preload;
-        if (
-            !previewGuest &&
-            browserNetworkPartitions.has(params.partition) &&
-            (process.platform === "darwin" || process.platform === "win32")
-        )
-            webPreferences.preload = join(dirname, "browserPasswordGuestPreload.cjs");
         webPreferences.contextIsolation = true;
         webPreferences.nodeIntegration = false;
         webPreferences.nodeIntegrationInSubFrames = false;
@@ -1085,28 +1068,6 @@ function browserGuestAttach(window: BrowserWindow): void {
             return;
         }
         browser.register(guest);
-        if (
-            browserPasswords &&
-            [...browserNetworkPartitions].some(
-                (partition) =>
-                    electronSession.fromPartition(partition, { cache: true }) === guest.session,
-            ) &&
-            (process.platform === "darwin" || process.platform === "win32")
-        ) {
-            const passwords = browserPasswordGuestAttach({
-                guest,
-                window,
-                logins: browserPasswords.logins,
-            });
-            browserPasswordGuests.set(guest.id, {
-                owner: window.webContents,
-                pickerOpen: passwords.pickerOpen,
-            });
-            guest.once("destroyed", () => {
-                browserPasswordGuests.delete(guest.id);
-                passwords.dispose();
-            });
-        }
         guest.setUserAgent(guest.session.getUserAgent());
         guest.setWindowOpenHandler(({ url }) => {
             if (browser.popupAllowed(guest, url)) browserPopupPublish(window, url, guest.id);
@@ -1810,27 +1771,6 @@ void app
             desktopDebugError("HTML artifacts will be shown as static previews", error),
         );
         const desktopRoot = join(app.getPath("userData"), "desktop");
-        browserPasswords = new BrowserPasswords({
-            windowRequire: (event) => {
-                const window = windowLifecycle.get();
-                if (
-                    !window ||
-                    window.isDestroyed() ||
-                    window.webContents !== event.sender ||
-                    event.senderFrame !== event.sender.mainFrame
-                )
-                    throw new Error("Only Happy's current window can use saved logins.");
-                return window;
-            },
-            pickerOpen: (owner, guestId) => {
-                const passwords = browserPasswordGuests.get(guestId);
-                if (!passwords || passwords.owner !== owner)
-                    throw new Error("This browser tab is unavailable.");
-                passwords.pickerOpen();
-            },
-        });
-        browserPasswords.install();
-        app.once("will-quit", () => browserPasswords?.dispose());
         desktopWindowStateStore = await DesktopWindowStateStore.create(
             join(desktopRoot, "window-state.json"),
         );
@@ -2560,7 +2500,6 @@ app.on("before-quit", (event) => {
     ]).finally(() => {
         for (const proxy of browserProxies.values()) proxy.close();
         browserProxies.clear();
-        browserNetworkPartitions.clear();
         htmlPreviewProxy?.close();
         htmlPreviewProxy = undefined;
         artifactNetworkProxy?.close();

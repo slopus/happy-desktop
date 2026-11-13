@@ -111,7 +111,6 @@ import {
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
-    HappyAgentPasswordSettings,
     HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentTaskSettings,
@@ -166,7 +165,6 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     // way round: which of them exist, then what each has spent.
     { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
-    { group: "Agents", icon: "lock", id: "passwords", label: "Passwords", tone: "red" },
     // Who is on a Happy Cloud server; offered only there.
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
     // The team's code on a Happy Cloud server; offered only there.
@@ -425,7 +423,6 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "file-tiers": "Which changed files are listed apart",
     instructions: "Agent guidance and permission review for this machine",
     secrets: "Environment variables for agents",
-    passwords: "Saved logins from your browsers",
     providers: "The models agents run on, and the accounts behind them",
     members: "Who is on this server and what they may do",
     usage: "What each provider account has spent",
@@ -460,8 +457,6 @@ export interface AppHappyAgentSettingsViewProps {
     externalLinkOpen?: (url: string) => void;
     /** Present only in the cloud web app. */
     cloudWebSession?: AppCloudWebSession;
-    /** Whether this desktop fills logins saved in the person's browsers (macOS and Windows). */
-    browserPasswordsAvailable?: boolean;
     /** Application update status remains visible here while the footer waits for a download. */
     update?: AppHappyAgentUpdate;
     onUpdateApply?: () => void;
@@ -1593,8 +1588,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         Members belong to a Happy Cloud server. Open one to see who is on it.
                     </Banner>
                 )
-            ) : section === "passwords" ? (
-                <HappyAgentPasswordSettings available={props.browserPasswordsAvailable ?? false} />
             ) : section === "secrets" && happyCloud ? (
                 <AppClusterSecretSettings
                     snapshot={clusterSecrets}

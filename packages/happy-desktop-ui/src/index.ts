@@ -1206,10 +1206,6 @@ export {
     type HappyAgentClusterSecretValueDraft,
 } from "./pages/settings/happyAgentClusterSecretDraft";
 export {
-    HappyAgentPasswordSettings,
-    type HappyAgentPasswordSettingsProps,
-} from "./pages/settings/HappyAgentPasswordSettings";
-export {
     HappyCloudWebSettings,
     type HappyCloudWebSettingsProps,
 } from "./pages/settings/HappyCloudWebSettings";
