@@ -1,5 +1,6 @@
 import {
     useCallback,
+    useEffectEvent,
     useLayoutEffect,
     useRef,
     useState,
@@ -32,10 +33,17 @@ import {
     composerTagsCovered,
     type ComposerDraft,
 } from "./composerDraft";
+import {
+    composerEditKindOf,
+    composerHistoryCreate,
+    type ComposerEditKind,
+    type ComposerHistoryState,
+} from "./composerHistory";
 import { ComposerMentionLayer } from "./ComposerMentionLayer";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
+import { commandModifier, commandModifierHeld } from "./keyboardShortcut";
 import { focusUnlessWritingElsewhere, useFocusOnType } from "./useFocusOnType";
 /* ---- ContextChips ----------------------------------------------------- */
 export type ContextKind = "file" | "run";
@@ -308,13 +316,10 @@ export type ComposerProps = {
      */
     focusKey?: string;
     /**
-     * Which draft the text control is editing. The browser keeps one undo
-     * history for the whole window and replays it into whatever element its
-     * steps were typed in, so a control left mounted while the draft under it
-     * changes would undo one conversation's typing into the next one's draft.
-     * Each draft therefore gets an element of its own, and the browser drops
-     * an element's undo steps with it. Absent, one control serves the
-     * composer's whole lifetime.
+     * Which draft the text control is editing. Undo and Redo only ever step
+     * through the draft being edited: when this changes, the history of the
+     * draft before it is gone. Absent, the composer's whole lifetime is one
+     * draft, until its text is replaced from outside.
      */
     draftId?: string;
     /** e.g. "Enter to send · @ to hand off to an agent" */
@@ -404,8 +409,9 @@ const MIN_LINES = 1;
 const NO_TAGS: ComposerDraft["tags"] = [];
 
 /**
- * How many deleted mentions undo can still bring back as mentions. Past this
- * the oldest come back as their words.
+ * How many deleted mentions a paste or drop can still bring back as mentions.
+ * Past this the oldest come back as their words. Undo needs none of it: its
+ * steps are whole drafts, mentions included.
  */
 const TAG_MEMORY = 32;
 
@@ -413,12 +419,22 @@ const TAG_MEMORY = 32;
  * The edits that put back words the draft held before, rather than typing new
  * ones: an `@Name` they bring back is the mention it was, not text.
  */
-const RECALLING_INPUT = new Set([
-    "historyUndo",
-    "historyRedo",
-    "insertFromPaste",
-    "insertFromDrop",
-]);
+const RECALLING_INPUT = new Set(["insertFromPaste", "insertFromDrop"]);
+
+/**
+ * Undo or Redo, if the key pressed is one of their chords: Command-Z and
+ * Shift-Command-Z on macOS, Ctrl+Z, Ctrl+Shift+Z, and Ctrl+Y elsewhere. A layout
+ * without Latin letters still means its Z key, as the menu's own chords do.
+ */
+function historyChordOf(event: KeyboardEvent): "undo" | "redo" | undefined {
+    if (event.isComposing || event.altKey || !commandModifierHeld(event)) return undefined;
+    const key = event.key.toLowerCase();
+    const latin = /^[a-z]$/.test(key);
+    if (key === "z" || (!latin && event.code === "KeyZ")) return event.shiftKey ? "redo" : "undo";
+    const y = key === "y" || (!latin && event.code === "KeyY");
+    if (y && !event.shiftKey && commandModifier === "Control") return "redo";
+    return undefined;
+}
 
 /**
  * How far an edge fade may reach into the draft. It is a ceiling, never a fixed
@@ -591,8 +607,8 @@ export function Composer(props: ComposerProps) {
         : draftHeld.markdown === props.value
           ? draftHeld.draft
           : composerDraftParse(props.value);
-    /* The mentions deleted lately, by the words they read as, so undo can
-       bring each back as the mention it was. Newest last. */
+    /* The mentions deleted lately, by the words they read as, so pasting
+       those words back brings each back as the mention it was. Newest last. */
     const tagMemory = useRef(new Map<string, string>());
     /* The draft the composer is writing itself through the native editing
        commands, so the input event they raise takes it as it is. */
@@ -613,6 +629,40 @@ export function Composer(props: ComposerProps) {
         if (mentionsSupported()) setDraftHeld({ markdown, draft: next });
         props.onValueChange(markdown);
     };
+    /*
+     * Undo and Redo belong to the composer, not to the browser. The browser's
+     * history is one per window: it replays a step into whichever element the
+     * step was typed in, a draft hidden in another conversation included, and
+     * loses its steps whenever a draft is written from script. This one holds
+     * whole drafts of the one being edited, so a step brings back the words,
+     * their mentions, and the caret where it was.
+     */
+    const [history] = useState(composerHistoryCreate);
+    const historyDraftId = useRef(props.draftId);
+    /* Set while the composer edits through a native command it has already recorded. */
+    const historyHeld = useRef(false);
+    /* Whether the edit now raising `input` was recorded by its `beforeinput`. */
+    const historyRecorded = useRef(false);
+    const historyOf = () => {
+        if (historyDraftId.current !== props.draftId) {
+            history.reset();
+            historyDraftId.current = props.draftId;
+        }
+        return history;
+    };
+    const historyStateOf = (
+        el: HTMLTextAreaElement,
+        start = el.selectionStart,
+        end = el.selectionEnd,
+    ): ComposerHistoryState => ({
+        draft: draft.text === el.value ? draft : { text: el.value, tags: NO_TAGS },
+        start,
+        end,
+    });
+    const historyEdit = (kind: ComposerEditKind, before: ComposerHistoryState) =>
+        historyOf().edit(kind, before, performance.now());
+    const historySettle = (next: ComposerDraft, start: number, end = start) =>
+        historyOf().settle({ draft: next, start, end }, performance.now());
     const mentionQuery = () => props.mentionQuery ?? typedMentionQuery;
     const filtered = () =>
         props.mentionQuery === undefined
@@ -775,14 +825,16 @@ export function Composer(props: ComposerProps) {
     };
     const replaceSelection = (text: string) => {
         const current = selection;
-        draftCommit(composerDraftReplace(draft, current.start, current.end, text));
+        const next = composerDraftReplace(draft, current.start, current.end, text);
+        historyEdit("single", { draft, start: current.start, end: current.end });
+        draftCommit(next);
+        historySettle(next, current.start + text.length);
         focusAt(current.start + text.length);
     };
     /*
-     * Writes `next` through the textarea's own editing command, so the edit
-     * joins the undo history like typing does; replacing the value from here
-     * would wipe that history. Where the command is unavailable the value is
-     * replaced after all.
+     * Writes `next` through the textarea's own editing command, the way typing
+     * reaches it, as one undo step of its own. Where the command is unavailable
+     * the value is replaced after all.
      */
     const draftEditNatively = (
         el: HTMLTextAreaElement,
@@ -791,16 +843,20 @@ export function Composer(props: ComposerProps) {
         range: { readonly start: number; readonly end: number },
         insert = "",
     ) => {
+        historyEdit("single", historyStateOf(el));
         el.focus();
         el.setSelectionRange(range.start, range.end);
         pendingDraft.current = next;
+        historyHeld.current = true;
         const applied =
             command === "insertText"
                 ? el.ownerDocument.execCommand("insertText", false, insert)
                 : el.ownerDocument.execCommand("delete");
+        historyHeld.current = false;
         pendingDraft.current = null;
         if (applied && el.value === next.text) return;
         draftCommit(next);
+        historySettle(next, range.start + insert.length);
         focusAt(range.start + insert.length);
     };
     /*
@@ -856,6 +912,62 @@ export function Composer(props: ComposerProps) {
         setMentionStart(start);
         setTypedMentionQuery(query);
     };
+    const historyStep = (direction: "undo" | "redo") => {
+        const el = textareaEl.current;
+        if (!el || el.disabled || el.readOnly) return;
+        const current = historyStateOf(el);
+        const target = direction === "undo" ? historyOf().undo(current) : historyOf().redo(current);
+        if (!target) return;
+        // Written before the draft is committed, so the controlled value
+        // already matches and the selection set here is the one that stays.
+        el.value = target.draft.text;
+        el.setSelectionRange(target.start, target.end);
+        draftCommit(target.draft);
+        rememberSelection();
+        detectMention(el, target.draft);
+    };
+    /*
+     * Every edit the browser makes is recorded before it happens, from
+     * `beforeinput`; one it makes without announcing it is recorded as a step
+     * of its own once it has happened. Its own Undo — the Edit menu's — is
+     * turned into this history's, and so is its Redo, although the browser
+     * offers that only while it has a step of its own to redo, which it never
+     * does once its Undo is this history's. One aimed at a draft not being
+     * edited, hidden in another conversation, does nothing at all. An IME
+     * composition is recorded once, as it starts.
+     */
+    const historyBeforeInput = useEffectEvent((event: InputEvent) => {
+        const el = textareaEl.current;
+        if (!el || event.target !== el) return;
+        if (event.inputType === "historyUndo" || event.inputType === "historyRedo") {
+            event.preventDefault();
+            if (el.ownerDocument.activeElement === el)
+                historyStep(event.inputType === "historyUndo" ? "undo" : "redo");
+            return;
+        }
+        if (historyHeld.current || event.isComposing) return;
+        const kind = composerEditKindOf(event.inputType);
+        if (!kind) return;
+        historyEdit(kind, historyStateOf(el));
+        historyRecorded.current = true;
+    });
+    const historyCompositionStart = useEffectEvent((event: CompositionEvent) => {
+        const el = textareaEl.current;
+        if (el && event.target === el) historyEdit("compose", historyStateOf(el));
+    });
+    // eslint-disable-next-line happy-react/no-layout-effect -- the browser announces its edits, its own Undo and Redo included, only through native `beforeinput`, which React does not expose; the listeners live exactly as long as the composer and are removed with it
+    useLayoutEffect(() => {
+        const root = composerEl.current;
+        if (!root) return;
+        const beforeInput = (event: InputEvent) => historyBeforeInput(event);
+        const compositionStart = (event: CompositionEvent) => historyCompositionStart(event);
+        root.addEventListener("beforeinput", beforeInput);
+        root.addEventListener("compositionstart", compositionStart);
+        return () => {
+            root.removeEventListener("beforeinput", beforeInput);
+            root.removeEventListener("compositionstart", compositionStart);
+        };
+    }, []);
     const selectMention = (mention: Mentionable) => {
         const el = textareaEl.current;
         const start = mentionStart;
@@ -890,11 +1002,14 @@ export function Composer(props: ComposerProps) {
         const before = draft.text.slice(0, caret);
         const needsSpace = before.length > 0 && !/[\s([{]$/.test(before);
         const insertion = `${needsSpace ? " " : ""}@`;
-        draftCommit(composerDraftReplace(draft, caret, el.selectionEnd ?? caret, insertion));
+        const next = composerDraftReplace(draft, caret, el.selectionEnd ?? caret, insertion);
+        historyEdit("single", historyStateOf(el));
+        draftCommit(next);
         setMentionStart(caret + insertion.length - 1);
         setTypedMentionQuery("");
         setActiveIndex(0);
         const nextCaret = caret + insertion.length;
+        historySettle(next, nextCaret);
         focusAt(nextCaret);
     };
     const triggerEmoji = () => {
@@ -935,6 +1050,8 @@ export function Composer(props: ComposerProps) {
         if (!canSend()) return;
         closePopovers();
         restoreFocusAfterSend.current = true;
+        // What was sent is not the draft's to take back.
+        historyOf().reset();
         void props.onSend();
         queueMicrotask(() => {
             const textarea = textareaEl.current;
@@ -944,6 +1061,14 @@ export function Composer(props: ComposerProps) {
         });
     };
     const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        const historyDirection = historyChordOf(event.nativeEvent);
+        if (historyDirection) {
+            // Prevented here, the browser runs neither its own Undo nor the
+            // Edit menu's.
+            event.preventDefault();
+            historyStep(historyDirection);
+            return;
+        }
         if (
             event.key === "Tab" &&
             event.shiftKey &&
@@ -1068,7 +1193,13 @@ export function Composer(props: ComposerProps) {
                 tagRemember(draft.text.slice(tag.start, tag.end), tag.source);
             next = edit.draft;
         }
+        const native = event.nativeEvent;
+        const kind = native instanceof InputEvent ? composerEditKindOf(native.inputType) : "single";
+        if (!historyRecorded.current && !historyHeld.current && kind && pending === null)
+            historyEdit("single", { draft, start: selection.start, end: selection.end });
+        historyRecorded.current = false;
         draftCommit(next);
+        historySettle(next, el.selectionStart, el.selectionEnd);
         rememberSelection();
         detectMention(el, next);
     };
@@ -1224,7 +1355,6 @@ export function Composer(props: ComposerProps) {
             className="happy-composer__textarea"
             data-claims-typing={props.focusOnType === true && !busy ? "" : undefined}
             data-happy-desktop-ui="composer-textarea"
-            key={props.draftId}
             disabled={props.disabled}
             readOnly={props.pending}
             onBlur={() => {
