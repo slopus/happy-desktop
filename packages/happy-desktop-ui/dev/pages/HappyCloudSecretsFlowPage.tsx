@@ -217,11 +217,25 @@ export function HappyCloudSecretsFlowPage() {
             <Screen detail="a new git credential with a token" number="05" screen="05-create-git">
                 <Catalog dialog={{ kind: "create", draft: gitDraft }} />
             </Screen>
-            <Screen detail="a new SSH key of your own" number="06" screen="06-create-ssh">
+            <Screen detail="a new SSH key of your own, hidden" number="06" screen="06-create-ssh">
                 <Catalog dialog={{ kind: "create", draft: sshDraft }} />
             </Screen>
-            <Screen detail="a new environment bundle" number="07" screen="07-create-environment">
+            <Screen detail="a new SSH key, shown" number="06b" screen="06b-create-ssh-shown">
+                <Catalog dialog={{ kind: "create", draft: sshDraft, valuesShown: true }} />
+            </Screen>
+            <Screen
+                detail="a new environment bundle, hidden"
+                number="07"
+                screen="07-create-environment"
+            >
                 <Catalog dialog={{ kind: "create", draft: environmentDraft }} />
+            </Screen>
+            <Screen
+                detail="a new environment bundle, shown"
+                number="07b"
+                screen="07b-create-environment-shown"
+            >
+                <Catalog dialog={{ kind: "create", draft: environmentDraft, valuesShown: true }} />
             </Screen>
             <Screen detail="a form with problems" number="08" screen="08-create-invalid">
                 <Catalog

@@ -43,6 +43,7 @@ export type HappyAgentClusterSecretDialog =
           readonly kind: "create";
           readonly draft?: HappyAgentClusterSecretCreateDraft;
           readonly attempted?: boolean;
+          readonly valuesShown?: boolean;
       }
     | { readonly kind: "edit"; readonly secretId: string; readonly replacing?: boolean }
     | { readonly kind: "delete"; readonly secretId: string; readonly version: string };
@@ -183,6 +184,7 @@ export function HappyAgentClusterSecretSettings(props: HappyAgentClusterSecretSe
                 <HappyAgentClusterSecretCreateDialog
                     {...(dialog.draft ? { initialDraft: dialog.draft } : {})}
                     {...(dialog.attempted ? { initialAttempted: true } : {})}
+                    {...(dialog.valuesShown ? { initialValuesShown: true } : {})}
                     onClose={close}
                     onSubmit={props.onSecretCreate}
                     owners={props.owners}

@@ -1178,6 +1178,7 @@ export {
     type HappyAgentSecretRow,
     type HappyAgentSecretSettingsProps,
 } from "./pages/settings/HappyAgentSecretSettings";
+export { SecretValueField, type SecretValueFieldProps } from "./SecretValueField";
 export {
     HappyAgentClusterSecretSettings,
     type HappyAgentClusterSecretDialog,

@@ -5,6 +5,7 @@ import { Button } from "../../Button";
 import { Checkbox } from "../../Checkbox";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
+import { SecretValueField } from "../../SecretValueField";
 import { SegmentedControl } from "../../SegmentedControl";
 import { TextField } from "../../TextField";
 import {
@@ -49,6 +50,8 @@ export interface HappyAgentClusterSecretCreateDialogProps {
     readonly owners: readonly HappyAgentClusterSecretOwner[];
     /** Opens on a filled form instead of the type picker, for restored and fixture state. */
     readonly initialDraft?: HappyAgentClusterSecretCreateDraft;
+    /** Opens with the values shown, for fixtures. */
+    readonly initialValuesShown?: boolean;
     readonly initialAttempted?: boolean;
     readonly unavailable?: string;
     onClose(): void;
@@ -141,11 +144,7 @@ export function HappyAgentClusterSecretCreateDialog(
                 icon={draft ? HAPPY_AGENT_CLUSTER_SECRET_TYPE_TEXT[draft.shape.type].icon : "lock"}
                 onClose={submitting ? undefined : props.onClose}
                 size="medium"
-                title={
-                    draft
-                        ? `New ${HAPPY_AGENT_CLUSTER_SECRET_TYPE_TEXT[draft.shape.type].label.toLowerCase()}`
-                        : "New secret"
-                }
+                title={draft ? NEW_TITLE[draft.shape.type] : "New secret"}
             >
                 <Box
                     className="happy-agent-cluster-secret-form"
@@ -249,6 +248,7 @@ export function HappyAgentClusterSecretCreateDialog(
                                 value={draft.description}
                             />
                             <ShapeFields
+                                {...(props.initialValuesShown ? { initialShown: true } : {})}
                                 attempted={attempted}
                                 disabled={disabled}
                                 draft={draft}
@@ -267,6 +267,13 @@ export function HappyAgentClusterSecretCreateDialog(
     );
 }
 
+const NEW_TITLE: Record<HappyAgentClusterSecretType, string> = {
+    endpoint: "New endpoint",
+    git_credential: "New git credential",
+    ssh_key: "New SSH key",
+    environment: "New environment",
+};
+
 const NAME_PLACEHOLDER: Record<HappyAgentClusterSecretType, string> = {
     endpoint: "Stripe API",
     git_credential: "GitLab deploy token",
@@ -275,6 +282,7 @@ const NAME_PLACEHOLDER: Record<HappyAgentClusterSecretType, string> = {
 };
 
 interface ShapeFieldsProps {
+    readonly initialShown?: boolean;
     readonly attempted: boolean;
     readonly disabled: boolean;
     readonly draft: HappyAgentClusterSecretCreateDraft;
@@ -292,6 +300,7 @@ function ShapeFields(props: ShapeFieldsProps) {
         props.onChange({ ...draft, value: next, nextId });
     const valueFields = (
         <ValueFields
+            {...(props.initialShown ? { initialShown: true } : {})}
             attempted={props.attempted}
             disabled={disabled}
             errors={props.errors}
@@ -639,6 +648,7 @@ function AddButton(props: { readonly disabled: boolean; readonly label: string; 
 }
 
 interface ValueFieldsProps {
+    readonly initialShown?: boolean;
     readonly attempted: boolean;
     readonly disabled: boolean;
     readonly errors: HappyAgentClusterSecretErrors;
@@ -667,7 +677,8 @@ function ValueFields(props: ValueFieldsProps) {
                                 ),
                             });
                         return props.fixedHeaders ? (
-                            <TextField
+                            <SecretValueField
+                                initialShown={props.initialShown}
                                 autoComplete="new-password"
                                 disabled={disabled}
                                 error={error(`header.${String(header.id)}.value`)}
@@ -678,7 +689,6 @@ function ValueFields(props: ValueFieldsProps) {
                                 onSubmit={props.onSubmit}
                                 onValueChange={(next) => update({ value: next })}
                                 placeholder="Enter the new value"
-                                type="password"
                                 value={header.value}
                             />
                         ) : (
@@ -705,7 +715,8 @@ function ValueFields(props: ValueFieldsProps) {
                                     placeholder="None"
                                     value={header.prefix}
                                 />
-                                <TextField
+                                <SecretValueField
+                                    initialShown={props.initialShown}
                                     autoComplete="new-password"
                                     disabled={disabled}
                                     error={error(`header.${String(header.id)}.value`)}
@@ -714,7 +725,6 @@ function ValueFields(props: ValueFieldsProps) {
                                     onSubmit={props.onSubmit}
                                     onValueChange={(next) => update({ value: next })}
                                     placeholder="Enter value"
-                                    type="password"
                                     value={header.value}
                                 />
                                 <RemoveButton
@@ -755,7 +765,8 @@ function ValueFields(props: ValueFieldsProps) {
         case "key":
             return (
                 <>
-                    <TextField
+                    <SecretValueField
+                        initialShown={props.initialShown}
                         autoComplete="off"
                         disabled={disabled}
                         error={error("privateKey")}
@@ -767,7 +778,8 @@ function ValueFields(props: ValueFieldsProps) {
                         rows={5}
                         value={value.privateKey}
                     />
-                    <TextField
+                    <SecretValueField
+                        initialShown={props.initialShown}
                         autoComplete="new-password"
                         disabled={disabled}
                         fullWidth
@@ -776,14 +788,14 @@ function ValueFields(props: ValueFieldsProps) {
                         onSubmit={props.onSubmit}
                         onValueChange={(passphrase) => props.onChange({ ...value, passphrase })}
                         placeholder="Optional"
-                        type="password"
                         value={value.passphrase}
                     />
                 </>
             );
         case "password":
             return (
-                <TextField
+                <SecretValueField
+                    initialShown={props.initialShown}
                     autoComplete="new-password"
                     disabled={disabled}
                     error={error("password")}
@@ -792,13 +804,13 @@ function ValueFields(props: ValueFieldsProps) {
                     onSubmit={props.onSubmit}
                     onValueChange={(password) => props.onChange({ ...value, password })}
                     placeholder="Enter password"
-                    type="password"
                     value={value.password}
                 />
             );
         case "token":
             return (
-                <TextField
+                <SecretValueField
+                    initialShown={props.initialShown}
                     autoComplete="new-password"
                     disabled={disabled}
                     error={error("token")}
@@ -807,7 +819,6 @@ function ValueFields(props: ValueFieldsProps) {
                     onSubmit={props.onSubmit}
                     onValueChange={(token) => props.onChange({ ...value, token })}
                     placeholder="Enter token"
-                    type="password"
                     value={value.token}
                 />
             );
@@ -835,8 +846,8 @@ function ValueFields(props: ValueFieldsProps) {
                                     placeholder="SENTRY_DSN"
                                     value={variable.name}
                                 />
-                                {/* Multi-line: a password field drops the line breaks of a pasted certificate. */}
-                                <TextField
+                                <SecretValueField
+                                    initialShown={props.initialShown}
                                     autoComplete="off"
                                     disabled={disabled}
                                     error={error(`variable.${String(variable.id)}.value`)}
