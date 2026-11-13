@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Badge } from "../../Badge";
 import { Button } from "../../Button";
 import { PanelHeader } from "../../PanelHeader";
 import { SurfaceMemberStack, type HappyAgentSurfaceView } from "./surfacePresentation";
@@ -11,6 +12,8 @@ export interface HappyAgentSurfaceHeaderProps {
     chat?: HappyAgentSurfaceChatToggle;
     /** Whether the page is centred or across the whole pane; absent for a type that is neither. */
     width?: HappyAgentSurfaceWidthToggle;
+    /** A word after the name for what is special about this Surface, such as the team's default vault. */
+    marker?: string;
 }
 
 /**
@@ -61,6 +64,13 @@ export function HappyAgentSurfaceHeader(props: HappyAgentSurfaceHeaderProps) {
         <PanelHeader className="happy-agent-surface-header">
             <div className="happy-agent-surface-header__lead">
                 <h1 className="happy-agent-surface-header__title">{props.surface.name}</h1>
+                {props.marker ? (
+                    <Badge
+                        className="happy-agent-surface-header__marker"
+                        label={props.marker}
+                        variant="outline"
+                    />
+                ) : null}
                 {creator ? (
                     <>
                         <span aria-hidden="true" className="happy-agent-surface-header__dot" />

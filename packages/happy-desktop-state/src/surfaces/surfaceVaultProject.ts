@@ -78,7 +78,12 @@ function happyAgentVaultItemFields(item: VaultItem) {
 }
 
 export function happyAgentVaultFolderProject(folder: VaultFolder): HappyAgentVaultFolder {
-    return { ...happyAgentVaultItemFields(folder), kind: "folder" };
+    return {
+        ...happyAgentVaultItemFields(folder),
+        kind: "folder",
+        // The client's vault protocol carries a folder's role from 0.0.169.
+        role: null,
+    };
 }
 
 export function happyAgentVaultFileProject(file: VaultFile): HappyAgentVaultFile {

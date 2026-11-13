@@ -28,6 +28,7 @@ import { VaultPreviewPane } from "./VaultPreviewPane";
 import { VaultUploads } from "./VaultUploads";
 import {
     VAULT_ENTRY_DRAG_TYPE,
+    VAULT_SKILLS_NOTE,
     vaultDragKind,
     vaultDroppedFiles,
     type VaultNames,
@@ -39,6 +40,8 @@ export interface HappyAgentVaultSurfacePageProps {
     vault: HappyAgentVaultSnapshot;
     /** The Surface's shared chat, toggled from the header. */
     chat?: HappyAgentSurfaceChatToggle;
+    /** The team's default vault, the one every member starts with; marked in the header. */
+    defaultVault?: boolean;
     /** Who is reading, so their own changes say "You". */
     viewer?: { readonly userId: string | null };
     /** Now, in epoch milliseconds, for "Today" and "Yesterday". */
@@ -136,6 +139,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
     };
     const inTrash = vault.location.kind === "trash";
     const folderId = vault.location.kind === "folder" ? vault.location.folderId : null;
+    const folder = folderId === null ? undefined : vault.items.get(folderId);
     const preview = vault.preview;
 
     const download = (itemId: HappyAgentVaultItemId) => {
@@ -373,7 +377,16 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                 }
                 items={vault.listing}
                 label={vault.crumbs.at(-1)?.name ?? props.surface.name}
-                lead={notices}
+                lead={
+                    folder?.kind === "folder" && folder.role === "skills" ? (
+                        <>
+                            {notices}
+                            <p className="happy-vault__folder-note">{VAULT_SKILLS_NOTE}</p>
+                        </>
+                    ) : (
+                        notices
+                    )
+                }
                 mode={{ kind: "folder" }}
                 now={props.now}
                 onDelete={props.onItemDelete}
@@ -484,6 +497,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     )
                 }
                 {...(props.chat ? { chat: props.chat } : {})}
+                {...(props.defaultVault ? { marker: "Default" } : {})}
                 surface={props.surface}
             />
             {vault.status === "missing" ? (

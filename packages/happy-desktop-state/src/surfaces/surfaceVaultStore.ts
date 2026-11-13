@@ -456,6 +456,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     parentId: op.parentId,
                     name: op.name,
                     kind: "folder",
+                    role: null,
                     createdAt: op.at,
                     createdBy: actor,
                     updatedAt: op.at,

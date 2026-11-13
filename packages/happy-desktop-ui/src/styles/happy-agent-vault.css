@@ -167,7 +167,8 @@
     gap: 8px;
 }
 
-.happy-vault__trash-note {
+.happy-vault__trash-note,
+.happy-vault__folder-note {
     flex: none;
     margin: 0;
     padding: 0 16px;
@@ -382,6 +383,18 @@
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+}
+
+/* The name, then a role badge when the folder has one; the line stays one row tall. */
+.happy-vault-card-row__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-vault-card-row__badge {
+    flex: none;
 }
 
 .happy-vault-card-row__name {

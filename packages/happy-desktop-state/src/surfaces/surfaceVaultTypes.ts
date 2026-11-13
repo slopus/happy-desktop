@@ -50,8 +50,17 @@ interface HappyAgentVaultItemFields {
     readonly version: string;
 }
 
+/**
+ * What a folder is for, where the server gives it a part: `skills` holds agent
+ * skills, one folder with a SKILL.md for each.
+ */
+export type HappyAgentVaultFolderRole = "skills";
+
 /** A folder: it holds other items, may be empty, and has no versions. */
-export type HappyAgentVaultFolder = HappyAgentVaultItemFields & { readonly kind: "folder" };
+export type HappyAgentVaultFolder = HappyAgentVaultItemFields & {
+    readonly kind: "folder";
+    readonly role: HappyAgentVaultFolderRole | null;
+};
 
 /** One node of the tree, a folder or a file. Its ID is its identity; its path follows its names. */
 export type HappyAgentVaultItem =

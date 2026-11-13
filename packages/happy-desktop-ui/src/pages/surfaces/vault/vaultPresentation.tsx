@@ -73,6 +73,17 @@ export function vaultItemFamily(entry: HappyAgentVaultItem): FileTreeFamily {
 export const VAULT_APP_GLYPH: IoniconName = "globe-outline";
 
 /**
+ * A Skills folder's glyph: what it holds teaches agents, so it does not wear
+ * the plain folder's. Its row also carries a "Skills" badge and, open, a line
+ * saying what goes in it.
+ */
+export const VAULT_SKILLS_GLYPH: IoniconName = "sparkles-sharp";
+
+/** What a Skills folder is for, said once over its listing. */
+export const VAULT_SKILLS_NOTE =
+    "Agents learn from this folder: each folder in it with a SKILL.md teaches them one task.";
+
+/**
  * The hue of an item's tile, the phone vault's: blue folders, teal apps,
  * purple prose, red PDFs, and so on by family; anything else is neutral.
  */
@@ -87,7 +98,7 @@ export type VaultTileTint =
     | "neutral";
 
 export function vaultItemTint(entry: HappyAgentVaultItem): VaultTileTint {
-    if (entry.kind === "folder") return "blue";
+    if (entry.kind === "folder") return entry.role === "skills" ? "indigo" : "blue";
     if (entry.kind === "artifact") return "teal";
     if (entry.mediaType === "application/pdf") return "red";
     switch (vaultItemFamily(entry)) {
@@ -132,7 +143,10 @@ export function VaultItemTile(props: { item: HappyAgentVaultItem; thumbnail?: st
                     src={props.thumbnail}
                 />
             ) : props.item.kind === "folder" ? (
-                <Ionicon name="folder-sharp" size={20} />
+                <Ionicon
+                    name={props.item.role === "skills" ? VAULT_SKILLS_GLYPH : "folder-sharp"}
+                    size={20}
+                />
             ) : props.item.kind === "artifact" ? (
                 <Ionicon name={VAULT_APP_GLYPH} size={20} />
             ) : (

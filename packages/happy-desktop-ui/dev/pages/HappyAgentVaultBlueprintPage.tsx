@@ -81,9 +81,11 @@ function folder(
     name: string,
     parentId: string | null,
     updatedAt: number,
+    role: "skills" | null = null,
 ): HappyAgentVaultItem {
     return {
         kind: "folder",
+        role,
         id: id(itemId),
         surfaceId: SURFACE_ID,
         parentId: parentId === null ? null : id(parentId),
@@ -160,6 +162,10 @@ const ITEMS: readonly HappyAgentVaultItem[] = [
     folder("photos", "Photos", null, earlier(3 * HOUR)),
     folder("reports", "Reports", null, earlier(DAY)),
     folder("sites", "Sites", null, earlier(2 * DAY)),
+    folder("skills", "Skills", null, earlier(3 * DAY), "skills"),
+    folder("release-notes", "release-notes", "skills", earlier(DAY)),
+    folder("brand-voice", "brand-voice", "skills", earlier(2 * DAY)),
+    file("skills-readme", "README.md", "skills", 1_120, "text/markdown", earlier(DAY)),
     file("readme", "README.md", null, 2_310, "text/markdown", NOW - 25 * 60_000, ADA, 6),
     file("roadmap", "roadmap.txt", null, 1_204, "text/plain", earlier(HOUR), YOU, 4),
     file("budget", "budget.csv", null, 18_402, "text/csv", earlier(5 * DAY)),
@@ -508,14 +514,26 @@ const handlers: Omit<HappyAgentVaultSurfacePageProps, "surface" | "vault" | "now
     onFailureDismiss: noop,
 };
 
+/** The team's default vault, which the server names Files. */
+const FILES: HappyAgentSurfaceView = {
+    name: "Files",
+    type: { kind: "vault" },
+    members: STUDIO.members,
+};
+
 /** The page in a frame that holds its dialogs' fixed overlay, so each specimen keeps its own. */
-function Page(props: { vault: HappyAgentVaultSnapshot }) {
+function Page(props: {
+    vault: HappyAgentVaultSnapshot;
+    surface?: HappyAgentSurfaceView;
+    defaultVault?: boolean;
+}) {
     return (
         <div style={FRAME}>
             <HappyAgentVaultSurfacePage
                 {...handlers}
+                {...(props.defaultVault ? { defaultVault: true } : {})}
                 now={NOW}
-                surface={STUDIO}
+                surface={props.surface ?? STUDIO}
                 vault={props.vault}
             />
         </div>
@@ -915,6 +933,26 @@ export function HappyAgentVaultBlueprintPage() {
                     <HappyAgentSurfaceCreateDialog kind="vault" onClose={noop} onSubmit={noop} />
                 </div>
             </Specimen>
+
+            <FullScreenSpecimen
+                detail="The team's default vault, Files, marked Default beside its name. Its Skills folder wears its own glyph and a Skills badge: agents learn from what is in it."
+                label="Default vault"
+                number="23"
+                screen="23-default-vault-1100x760"
+                window={WINDOW}
+            >
+                <Page defaultVault surface={FILES} vault={vaultOf(null)} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Inside the Skills folder, one line says what goes in it: a folder with a SKILL.md for each task."
+                label="Skills folder"
+                number="24"
+                screen="24-skills-folder-1100x760"
+                window={WINDOW}
+            >
+                <Page defaultVault surface={FILES} vault={vaultOf("skills")} />
+            </FullScreenSpecimen>
         </ComponentPage>
     );
 }

@@ -88,6 +88,10 @@
     min-width: 0;
 }
 
+.happy-agent-surface-header__marker {
+    flex: none;
+}
+
 .happy-agent-surface-header__title {
     flex: 0 1 auto;
     min-width: 0;

@@ -6,6 +6,7 @@ import {
     type HappyAgentVaultItem,
     type HappyAgentVaultItemId,
 } from "happy-desktop-state";
+import { Badge } from "../../../Badge";
 import { Button } from "../../../Button";
 import type { LocalTimeZone } from "../../../localTime";
 import { ScrollArea } from "../../../Scrollbar";
@@ -171,8 +172,17 @@ export function VaultItemList(props: VaultItemListProps) {
             >
                 <VaultItemTile item={entry} {...(thumbnail ? { thumbnail } : {})} />
                 <span className="happy-vault-card-row__text">
-                    <span className="happy-vault-card-row__name" title={name}>
-                        {name}
+                    <span className="happy-vault-card-row__title">
+                        <span className="happy-vault-card-row__name" title={name}>
+                            {name}
+                        </span>
+                        {entry.kind === "folder" && entry.role === "skills" ? (
+                            <Badge
+                                className="happy-vault-card-row__badge"
+                                label="Skills"
+                                variant="accent"
+                            />
+                        ) : null}
                     </span>
                     <span className="happy-vault-card-row__detail">{rowDetail(props, entry)}</span>
                 </span>
