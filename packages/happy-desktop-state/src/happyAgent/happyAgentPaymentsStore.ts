@@ -16,7 +16,7 @@ export interface HappyAgentMoney {
 
 /** What the team pays with, as Stripe last reported it: display fields only. */
 export interface HappyAgentPaymentMethod {
-    readonly kind: "card" | "link";
+    readonly type: "card" | "link";
     readonly brand: string | null;
     readonly last4: string | null;
     readonly expMonth: number | null;
@@ -25,7 +25,7 @@ export interface HappyAgentPaymentMethod {
 
 /** The team's account: what it pays with, its credit, and its spending cap. */
 export interface HappyAgentPaymentsAccount {
-    /** Stripe's test or live mode; null before the team has a Stripe customer. */
+    /** Stripe's test or live mode, from the server's key; null without Stripe. */
     readonly mode: "test" | "live" | null;
     readonly currency: string;
     readonly paymentMethod: HappyAgentPaymentMethod | null;
@@ -35,14 +35,21 @@ export interface HappyAgentPaymentsAccount {
     /** What can be spent now: the balance less what is held. */
     readonly available: HappyAgentMoney;
     readonly spentThisPeriod: HappyAgentMoney;
+    /** The UTC month `spentThisPeriod` counts, in milliseconds. */
+    readonly period: { readonly startsAt: number; readonly endsAt: number };
     /** The most the team spends in a month; null is no cap. */
-    readonly cap: HappyAgentMoney | null;
+    readonly cap: {
+        readonly limit: HappyAgentMoney;
+        /** The limit less what is spent and held this month, never below zero. */
+        readonly remaining: HappyAgentMoney;
+        readonly resetsAt: number;
+    } | null;
     readonly standing: {
         readonly hasPaymentMethod: boolean;
         readonly paidUp: boolean;
         readonly hasCredit: boolean;
     };
-    /** Top-ups paid for at Stripe that have not reached the balance yet. */
+    /** Top-ups opened in the last day that Stripe has not reported paid. */
     readonly pendingTopUps: readonly {
         readonly id: string;
         readonly amount: HappyAgentMoney;
@@ -52,9 +59,11 @@ export interface HappyAgentPaymentsAccount {
 }
 
 /** Who made a ledger entry. */
-export type HappyAgentPaymentsActor =
-    | { readonly kind: "user" | "agent"; readonly id: string | null; readonly name: string | null }
-    | { readonly kind: "stripe" | "operator" };
+export interface HappyAgentPaymentsActor {
+    readonly kind: "user" | "agent" | "stripe" | "operator";
+    /** The member or agent; null for Stripe and the operator. */
+    readonly id: string | null;
+}
 
 /** One line of the credit ledger. `other` is a kind this build does not know. */
 export interface HappyAgentPaymentsEntry {
@@ -163,9 +172,9 @@ function moneyOf(value: unknown, currency: string): HappyAgentMoney {
 
 function methodOf(value: unknown): HappyAgentPaymentMethod | null {
     const method = recordOf(value);
-    if (!method || (method.kind !== "card" && method.kind !== "link")) return null;
+    if (!method || (method.type !== "card" && method.type !== "link")) return null;
     return {
-        kind: method.kind,
+        type: method.type,
         brand: textOrNull(method.brand),
         last4: textOrNull(method.last4),
         expMonth: numberOrNull(method.expMonth),
@@ -176,6 +185,8 @@ function methodOf(value: unknown): HappyAgentPaymentMethod | null {
 function accountOf(value: Record<string, unknown>): HappyAgentPaymentsAccount {
     const currency = textOrNull(value.currency) ?? "usd";
     const standing = recordOf(value.standing);
+    const period = recordOf(value.period);
+    const cap = recordOf(value.cap);
     return {
         mode: value.mode === "test" || value.mode === "live" ? value.mode : null,
         currency,
@@ -184,7 +195,17 @@ function accountOf(value: Record<string, unknown>): HappyAgentPaymentsAccount {
         held: moneyOf(value.held, currency),
         available: moneyOf(value.available, currency),
         spentThisPeriod: moneyOf(value.spentThisPeriod, currency),
-        cap: recordOf(value.cap) ? moneyOf(value.cap, currency) : null,
+        period: {
+            startsAt: numberOrNull(period?.startsAt) ?? 0,
+            endsAt: numberOrNull(period?.endsAt) ?? 0,
+        },
+        cap: recordOf(cap?.limit)
+            ? {
+                  limit: moneyOf(cap?.limit, currency),
+                  remaining: moneyOf(cap?.remaining, currency),
+                  resetsAt: numberOrNull(cap?.resetsAt) ?? 0,
+              }
+            : null,
         standing: {
             hasPaymentMethod: standing?.hasPaymentMethod === true,
             paidUp: standing?.paidUp === true,
@@ -214,10 +235,9 @@ function actorOf(value: unknown): HappyAgentPaymentsActor | null {
     switch (actor?.kind) {
         case "user":
         case "agent":
-            return { kind: actor.kind, id: textOrNull(actor.id), name: textOrNull(actor.name) };
         case "stripe":
         case "operator":
-            return { kind: actor.kind };
+            return { kind: actor.kind, id: textOrNull(actor.id) };
         default:
             return null;
     }
