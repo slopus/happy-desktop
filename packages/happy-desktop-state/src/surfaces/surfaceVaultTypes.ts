@@ -280,7 +280,8 @@ export interface HappyAgentVaultPreview {
 
 /** The form open over the vault, if any; what is typed into it is the form's own. */
 export type HappyAgentVaultDialog =
-    | { readonly kind: "folderCreate" }
+    /** A new folder; `skills` makes it a Skills folder. */
+    | { readonly kind: "folderCreate"; readonly role: HappyAgentVaultFolderRole | null }
     /** `name` is the one the field starts from, as the reader sees it: an artifact's without `.artifact`. */
     | { readonly kind: "rename"; readonly itemId: HappyAgentVaultItemId; readonly name: string }
     /** Picks the folder an item moves into. */
@@ -340,6 +341,13 @@ export interface HappyAgentVaultSnapshot {
     /** Newest first; finished ones stay until dismissed. */
     readonly uploads: readonly HappyAgentVaultUpload[];
     readonly settings: HappyAgentVaultSettings;
+    /**
+     * Whether the server says what a folder is for, so a folder can be made a
+     * Skills folder or stop being one. No capability names it, so it is
+     * learned from the vault itself: true once its settings name the default
+     * vault or a folder carries its role, and it stays true.
+     */
+    readonly folderRoles: boolean;
     readonly dialog?: HappyAgentVaultDialog;
     /** The people the vault's history names, by user ID, as they are learned. */
     readonly people: ReadonlyMap<string, HappyAgentSurfacePerson>;

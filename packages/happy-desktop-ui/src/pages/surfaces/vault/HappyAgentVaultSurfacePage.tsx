@@ -2,6 +2,7 @@ import { useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
     happyAgentVaultNameShown,
     type HappyAgentVaultDialog,
+    type HappyAgentVaultFolderRole,
     type HappyAgentVaultItem,
     type HappyAgentVaultItemId,
     type HappyAgentVaultRetention,
@@ -66,7 +67,13 @@ export interface HappyAgentVaultSurfacePageProps {
     onVersionPinnedChange: (number: number, pinned: boolean) => void;
     onDialogOpen: (dialog: HappyAgentVaultDialog) => void;
     onDialogClose: () => void;
-    onFolderCreate: (name: string) => void;
+    /** Makes a folder in the folder shown; `skills` makes it a Skills folder. */
+    onFolderCreate: (name: string, role?: HappyAgentVaultFolderRole) => void;
+    /** Makes a folder a Skills folder, or an ordinary one again; offered where `vault.folderRoles`. */
+    onFolderRoleChange: (
+        itemId: HappyAgentVaultItemId,
+        role: HappyAgentVaultFolderRole | null,
+    ) => void;
     onItemRename: (itemId: HappyAgentVaultItemId, name: string) => void;
     onItemMove: (itemId: HappyAgentVaultItemId, folderId: HappyAgentVaultItemId | null) => void;
     onItemDelete: (itemId: HappyAgentVaultItemId) => void;
@@ -205,6 +212,19 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                   { kind: "item", id: "rename", label: "Rename…", icon: "edit" },
                   { kind: "item", id: "move", label: "Move to…", icon: "arrow-right" },
                   { kind: "item", id: "download", label: "Download", icon: "arrow-down" },
+                  ...(entry.kind === "folder" && vault.folderRoles
+                      ? [
+                            {
+                                kind: "item" as const,
+                                id: "role",
+                                label:
+                                    entry.role === "skills"
+                                        ? "Make an ordinary folder"
+                                        : "Make a Skills folder",
+                                icon: "spark" as const,
+                            },
+                        ]
+                      : []),
                   ...(entry.kind === "folder"
                       ? []
                       : [
@@ -244,6 +264,10 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                 return;
             case "download":
                 download(entry.id);
+                return;
+            case "role":
+                if (entry.kind === "folder")
+                    props.onFolderRoleChange(entry.id, entry.role === "skills" ? null : "skills");
                 return;
             case "history":
                 props.onItemOpen(entry.id);
@@ -437,12 +461,27 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                             <Button
                                 disabled={inTrash}
                                 icon="plus"
-                                onClick={() => props.onDialogOpen({ kind: "folderCreate" })}
+                                onClick={() =>
+                                    props.onDialogOpen({ kind: "folderCreate", role: null })
+                                }
                                 size="small"
                                 variant="ghost"
                             >
                                 New folder
                             </Button>
+                            {vault.folderRoles ? (
+                                <Button
+                                    disabled={inTrash}
+                                    icon="spark"
+                                    onClick={() =>
+                                        props.onDialogOpen({ kind: "folderCreate", role: "skills" })
+                                    }
+                                    size="small"
+                                    variant="ghost"
+                                >
+                                    New Skills folder
+                                </Button>
+                            ) : null}
                             <Button
                                 disabled={inTrash}
                                 icon="arrow-up"
@@ -649,8 +688,13 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     initialName=""
                     kind="folder"
                     onClose={props.onDialogClose}
-                    onSubmit={props.onFolderCreate}
-                    title="New folder"
+                    onSubmit={(name) =>
+                        dialog.role === null
+                            ? props.onFolderCreate(name)
+                            : props.onFolderCreate(name, dialog.role)
+                    }
+                    title={dialog.role === "skills" ? "New Skills folder" : "New folder"}
+                    {...(dialog.role === "skills" ? { note: VAULT_SKILLS_NOTE } : {})}
                 />
             ) : dialog?.kind === "rename" ? (
                 <VaultNameDialog

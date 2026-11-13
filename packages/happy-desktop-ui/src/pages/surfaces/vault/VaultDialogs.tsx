@@ -31,6 +31,8 @@ export function VaultNameDialog(props: {
     action: string;
     initialName: string;
     kind: HappyAgentVaultItem["kind"];
+    /** One line under the field about what is being made. */
+    note?: string;
     onSubmit: (name: string) => void;
     onClose: () => void;
 }) {
@@ -69,6 +71,7 @@ export function VaultNameDialog(props: {
                         onValueChange={setName}
                         value={name}
                     />
+                    {props.note ? <p className="happy-vault-dialog__note">{props.note}</p> : null}
                 </div>
             </Modal>
         </ModalOverlay>

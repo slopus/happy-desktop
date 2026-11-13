@@ -48,6 +48,7 @@ import {
 } from "./surfaceVaultTree.js";
 import { happyAgentVaultUploadSend } from "./happyAgentVaultUploadSend.js";
 import type {
+    HappyAgentVaultFolderRole,
     HappyAgentVaultActivity,
     HappyAgentVaultFile,
     HappyAgentVaultDialog,
@@ -87,8 +88,10 @@ export interface HappyAgentVaultStore {
     versionPinnedUpdate(number: number, pinned: boolean): void;
     dialogOpen(dialog: HappyAgentVaultDialog): void;
     dialogClose(): void;
-    /** Makes a folder in the folder shown. */
-    folderCreate(name: string): void;
+    /** Makes a folder in the folder shown; `skills` makes it a Skills folder. */
+    folderCreate(name: string, role?: HappyAgentVaultFolderRole): void;
+    /** Makes a folder a Skills folder, or, with `null`, an ordinary one again. */
+    folderRoleUpdate(itemId: HappyAgentVaultItemId, role: HappyAgentVaultFolderRole | null): void;
     itemRename(itemId: HappyAgentVaultItemId, name: string): void;
     /** Moves an item into a folder; `null` is the root. A folder never goes inside itself. */
     itemMove(itemId: HappyAgentVaultItemId, folderId: HappyAgentVaultItemId | null): void;
@@ -197,7 +200,12 @@ type VaultOp =
           readonly parentId: HappyAgentVaultItemId | null;
           readonly name: string;
       }
-    | { readonly kind: "delete"; readonly itemId: HappyAgentVaultItemId; readonly at: number };
+    | { readonly kind: "delete"; readonly itemId: HappyAgentVaultItemId; readonly at: number }
+    | {
+          readonly kind: "role";
+          readonly itemId: HappyAgentVaultItemId;
+          readonly role: HappyAgentVaultFolderRole | null;
+      };
 
 interface QueuedOp {
     op: VaultOp;
@@ -240,6 +248,10 @@ function opApply(
             : { ...entry, name: op.name, parentId: op.parentId };
     if (op.kind === "delete")
         return entry.deletedAt === null ? { ...entry, deletedAt: op.at } : entry;
+    if (op.kind === "role")
+        return entry.kind === "folder" && entry.role !== op.role
+            ? { ...entry, role: op.role }
+            : entry;
     return entry;
 }
 
@@ -400,12 +412,20 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         trash: { status: "loading" },
         uploads: [],
         settings: { status: "loading" },
+        folderRoles: false,
         people: NO_PEOPLE,
         agents: NO_AGENTS,
     };
 
     const notify = (): void => {
         for (const listener of listeners) listener();
+    };
+
+    /** The server says what its folders are for; once learned, it stays known. */
+    const rolesServed = (): void => {
+        if (snapshot.folderRoles) return;
+        snapshot = { ...snapshot, folderRoles: true };
+        notify();
     };
 
     const people = happyAgentSurfacePeopleReaderCreate({
@@ -817,6 +837,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             (response) => {
                 if (signal.aborted) return;
                 settingsVersion = response.settings.version;
+                if (response.settings.defaultVault !== undefined) rolesServed();
                 if (settingsPending !== undefined) return;
                 snapshot = {
                     ...snapshot,
@@ -882,6 +903,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
     const eventApply = (event: HappyAgentVaultEvent): boolean => {
         switch (event.type) {
             case "vault.folder.created":
+                if (event.payload.folder.role !== undefined) rolesServed();
                 return entryAdopt(happyAgentVaultFolderProject(event.payload.folder));
             case "vault.file.created":
                 return entryAdopt(happyAgentVaultFileProject(event.payload.file));
@@ -893,6 +915,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     entryReread("folder", folderId);
                     return false;
                 }
+                if (payload.changes.role !== undefined) rolesServed();
                 if (!happyAgentVersionNewer(payload.version, current.version)) return false;
                 if (current.version !== payload.previousVersion) {
                     entryReread("folder", folderId);
@@ -1074,6 +1097,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 }
                 const read = new Map<HappyAgentVaultItemId, HappyAgentVaultItem>();
                 for (const wire of items) {
+                    if (wire.kind === "folder" && wire.role !== undefined) rolesServed();
                     const entry = happyAgentVaultItemProject(wire);
                     const held = authoritative.get(entry.id);
                     // An unchanged item keeps its identity, so its row does not redraw.
@@ -1163,6 +1187,8 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         if (op.kind === "create") return entry === undefined;
         if (entry === undefined) return false;
         if (op.kind === "move") return entry.name !== op.name || entry.parentId !== op.parentId;
+        if (op.kind === "role")
+            return entry.kind === "folder" && entry.deletedAt === null && entry.role !== op.role;
         return entry.deletedAt === null;
     };
 
@@ -1186,6 +1212,17 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             );
         const held = authoritative.get(op.itemId)!;
         const ifMatch = held.version;
+        if (op.kind === "role")
+            return happyAgentVaultFolderProject(
+                (
+                    await client.updateVaultFolder(
+                        surfaceId,
+                        op.itemId,
+                        { role: op.role, mutationId: entry.mutationId },
+                        { ifMatch, signal },
+                    )
+                ).folder,
+            );
         if (op.kind === "move") {
             const request = { name: op.name, parentId: op.parentId, mutationId: entry.mutationId };
             return held.kind === "folder"
@@ -1218,9 +1255,20 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
 
     /** Why a change was refused, in words for the reader. */
     const refusalOf = (op: VaultOp, error: unknown): UserError => {
+        // A server that reported a role but takes no change to it refuses the request itself.
+        if (op.kind === "role" && error instanceof HappyAgentApiError && error.status === 400)
+            return new UserError(
+                op.role === null
+                    ? "This server can’t turn a Skills folder back into an ordinary one yet."
+                    : "This server can’t make a folder a Skills folder yet.",
+                "unsupported",
+                error,
+            );
         if (apiCode(error) === "name_taken") {
             const name =
-                op.kind === "delete" ? "That name" : `“${happyAgentVaultNameShown(op.name)}”`;
+                op.kind === "delete" || op.kind === "role"
+                    ? "That name"
+                    : `“${happyAgentVaultNameShown(op.name)}”`;
             return new UserError(`${name} is already used in that folder.`, "name_taken", error);
         }
         return happyAgentUserError(error);
@@ -1664,7 +1712,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             snapshot = rest;
             notify();
         },
-        folderCreate(name) {
+        folderCreate(name, role) {
             const location = snapshot.location;
             if (disposed || snapshot.status === "missing" || location.kind !== "folder") return;
             const clean = nameClean(name, "folder");
@@ -1683,6 +1731,15 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 name: clean,
                 at: now(),
             });
+            // A folder is made ordinary and then given its role, as the server takes them.
+            if (role !== undefined && snapshot.folderRoles)
+                void enqueue({ kind: "role", itemId, role });
+        },
+        folderRoleUpdate(itemId, role) {
+            const entry = snapshot.items.get(itemId);
+            if (disposed || !snapshot.folderRoles || entry?.kind !== "folder") return;
+            if (entry.role === role) return;
+            void enqueue({ kind: "role", itemId, role });
         },
         itemRename(itemId, name) {
             const entry = snapshot.items.get(itemId);

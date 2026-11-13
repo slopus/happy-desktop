@@ -779,6 +779,13 @@
     gap: 16px;
 }
 
+.happy-vault-dialog__note {
+    margin: 0;
+    color: var(--groupped-section-title);
+    font-size: 13px;
+    line-height: 18px;
+}
+
 /* The folder picker: the vault's folders as one indented column, the picked
    one filled the way a selected sidebar row is. */
 .happy-vault-move {

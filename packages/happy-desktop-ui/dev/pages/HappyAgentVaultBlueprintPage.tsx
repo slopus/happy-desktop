@@ -269,6 +269,7 @@ function vaultOf(
             retention: { ...HAPPY_AGENT_VAULT_RETENTION_PRESETS.timeMachine, trashDays: 30 },
             defaultVault: false,
         },
+        folderRoles: false,
         people: new Map([
             ["u1", { name: "Steve Korshakov", photo: null }],
             ["u2", { name: "Ada Park", photo: null }],
@@ -505,6 +506,7 @@ const handlers: Omit<HappyAgentVaultSurfacePageProps, "surface" | "vault" | "now
     onDialogOpen: noop,
     onDialogClose: noop,
     onFolderCreate: noop,
+    onFolderRoleChange: noop,
     onItemRename: noop,
     onItemMove: noop,
     onItemDelete: noop,
@@ -780,7 +782,9 @@ export function HappyAgentVaultBlueprintPage() {
                 screen="14-folder-dialog-1100x760"
                 window={WINDOW}
             >
-                <Page vault={vaultOf("reports", { dialog: { kind: "folderCreate" } })} />
+                <Page
+                    vault={vaultOf("reports", { dialog: { kind: "folderCreate", role: null } })}
+                />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
@@ -946,7 +950,10 @@ export function HappyAgentVaultBlueprintPage() {
                 screen="23-default-vault-1100x760"
                 window={WINDOW}
             >
-                <Page surface={FILES} vault={vaultOf(null, { settings: DEFAULT_VAULT_SETTINGS })} />
+                <Page
+                    surface={FILES}
+                    vault={vaultOf(null, { settings: DEFAULT_VAULT_SETTINGS, folderRoles: true })}
+                />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
@@ -958,7 +965,27 @@ export function HappyAgentVaultBlueprintPage() {
             >
                 <Page
                     surface={FILES}
-                    vault={vaultOf("skills", { settings: DEFAULT_VAULT_SETTINGS })}
+                    vault={vaultOf("skills", {
+                        settings: DEFAULT_VAULT_SETTINGS,
+                        folderRoles: true,
+                    })}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="New Skills folder, offered where the server says what folders are for; the line under the name says what the folder does."
+                label="New Skills folder"
+                number="25"
+                screen="25-skills-folder-dialog-1100x760"
+                window={WINDOW}
+            >
+                <Page
+                    surface={FILES}
+                    vault={vaultOf(null, {
+                        settings: DEFAULT_VAULT_SETTINGS,
+                        folderRoles: true,
+                        dialog: { kind: "folderCreate", role: "skills" },
+                    })}
                 />
             </FullScreenSpecimen>
         </ComponentPage>

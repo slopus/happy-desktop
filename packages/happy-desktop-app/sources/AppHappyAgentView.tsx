@@ -6744,6 +6744,7 @@ function HappyAgentVaultSurface(props: {
             onFilesUpload={store.filesUpload}
             onFolderCreate={store.folderCreate}
             onFolderOpen={store.folderOpen}
+            onFolderRoleChange={store.folderRoleUpdate}
             onHistoryMoreLoad={store.historyMoreLoad}
             onPreviewClose={store.previewClose}
             onPreviewPanelChange={store.previewPanelUpdate}
