@@ -95,6 +95,10 @@ import {
     type HappyAgentSecretsStore,
 } from "./happyAgentSecretsStore.js";
 import {
+    happyAgentClusterSecretsStoreCreate,
+    type HappyAgentClusterSecretsStore,
+} from "./happyAgentClusterSecretsStore.js";
+import {
     happyAgentGlobalSkillsStoreCreate,
     type HappyAgentGlobalSkillsStore,
 } from "./happyAgentGlobalSkillsStore.js";
@@ -302,6 +306,8 @@ export interface HappyAgentWorkspaceClient {
     securityPolicy(): HappyAgentSecurityPolicyStore;
     /** Global write-only environment bundles, materialized while Settings reads them. */
     secrets(): HappyAgentSecretsStore;
+    /** Settings › Secrets on Happy Cloud: the typed secret catalog; undefined anywhere else. */
+    clusterSecrets(): HappyAgentClusterSecretsStore | undefined;
     /**
      * Enabled, ready global skills, which a composer offers before any agent
      * exists to answer for its own catalog. Materialized on first access.
@@ -744,6 +750,7 @@ export function happyAgentWorkspaceClientCreate(
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
     let secretsStore: HappyAgentSecretsStore | undefined;
+    let clusterSecretsStore: HappyAgentClusterSecretsStore | undefined;
     let globalSkillsStore: HappyAgentGlobalSkillsStore | undefined;
     let artifacts: HappyAgentArtifacts | undefined;
     let feed: HappyAgentFeed | undefined;
@@ -1242,6 +1249,16 @@ export function happyAgentWorkspaceClientCreate(
             });
             return secretsStore;
         },
+        clusterSecrets() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            clusterSecretsStore ??= happyAgentClusterSecretsStoreCreate({
+                client: deps.client,
+                request,
+            });
+            return clusterSecretsStore;
+        },
         globalSkills() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             globalSkillsStore ??= happyAgentGlobalSkillsStoreCreate({
@@ -1416,6 +1433,8 @@ export function happyAgentWorkspaceClientCreate(
             securityPolicyStore = undefined;
             secretsStore?.[Symbol.dispose]();
             secretsStore = undefined;
+            clusterSecretsStore?.[Symbol.dispose]();
+            clusterSecretsStore = undefined;
             globalSkillsStore?.[Symbol.dispose]();
             globalSkillsStore = undefined;
             artifacts?.[Symbol.dispose]();
