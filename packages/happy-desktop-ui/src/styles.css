@@ -163,6 +163,7 @@
 @import "./styles/mobile-pairing.css";
 @import "./styles/happy-agent-mobile-link.css";
 @import "./styles/happy-agent-secret-settings.css";
+@import "./styles/happy-agent-cluster-secret-settings.css";
 @import "./styles/happy-agent-file-tier-settings.css";
 @import "./styles/happy-agent-usage-settings.css";
 @import "./styles/usage-activity-grid.css";

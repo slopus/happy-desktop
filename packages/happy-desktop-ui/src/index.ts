@@ -1179,6 +1179,30 @@ export {
     type HappyAgentSecretSettingsProps,
 } from "./pages/settings/HappyAgentSecretSettings";
 export {
+    HappyAgentClusterSecretSettings,
+    type HappyAgentClusterSecretDialog,
+    type HappyAgentClusterSecretRow,
+    type HappyAgentClusterSecretSettingsProps,
+} from "./pages/settings/HappyAgentClusterSecretSettings";
+export {
+    HappyAgentClusterSecretCreateDialog,
+    HappyAgentClusterSecretDeleteDialog,
+    HappyAgentClusterSecretEditDialog,
+    type HappyAgentClusterSecretCreateDialogProps,
+    type HappyAgentClusterSecretDeleteDialogProps,
+    type HappyAgentClusterSecretEditDialogProps,
+} from "./pages/settings/HappyAgentClusterSecretDialogs";
+export {
+    happyAgentClusterSecretDraftCreate,
+    type HappyAgentClusterSecretCreateDraft,
+    type HappyAgentClusterSecretCreateInput,
+    type HappyAgentClusterSecretDetails,
+    type HappyAgentClusterSecretOwner,
+    type HappyAgentClusterSecretType,
+    type HappyAgentClusterSecretUpdateInput,
+    type HappyAgentClusterSecretValueDraft,
+} from "./pages/settings/happyAgentClusterSecretDraft";
+export {
     HappyAgentPasswordSettings,
     type HappyAgentPasswordSettingsProps,
 } from "./pages/settings/HappyAgentPasswordSettings";
