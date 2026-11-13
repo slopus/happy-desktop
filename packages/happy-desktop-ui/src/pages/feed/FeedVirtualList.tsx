@@ -56,7 +56,10 @@ export interface FeedVirtualListProps<Slot extends { readonly id: string }> {
      * it appears, and applied as soon as that slot is held.
      */
     scrollPosition?: FeedScrollPosition | null;
-    /** Reports where the reader is as they scroll, `null` at the top. */
+    /**
+     * Reports where the reader left the list, `null` at the top: once, as the
+     * list goes away, such as when an entry they opened takes its place.
+     */
     onScrollPositionChange?: (position: FeedScrollPosition | null) => void;
     "aria-label": string;
 }
@@ -160,6 +163,29 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
     }>({ order: [], starts: new Map(), heights: new Map() });
     // Where the list opens, until it has been put there or cannot be.
     const restore = useRef(props.scrollPosition ?? null);
+    // How far the reader has scrolled, kept here as they scroll and reported
+    // only as the list goes away, so scrolling never writes to the owner.
+    const scrolled = useRef(0);
+    const leave = props.onScrollPositionChange;
+    // eslint-disable-next-line happy-react/no-layout-effect -- Where the reader left the list must be read as it unmounts, before the next surface mounts; no event marks a list leaving the screen.
+    useLayoutEffect(
+        () => () => {
+            if (!leave || restore.current !== null) return;
+            const top = scrolled.current - LIST_INSET;
+            if (scrolled.current <= 0) {
+                leave(null);
+                return;
+            }
+            const { order, starts, heights } = held.current;
+            const rowId = order.find((id) => (starts.get(id) ?? 0) + (heights.get(id) ?? 0) > top);
+            leave(
+                rowId === undefined
+                    ? null
+                    : { rowId, offset: Math.round(top - (starts.get(rowId) ?? 0)) },
+            );
+        },
+        [leave],
+    );
     // eslint-disable-next-line happy-react/no-layout-effect -- Scroll anchoring for positioned slots must correct scrollTop after the new offsets commit and before they paint; no declarative boundary sees both.
     useLayoutEffect(() => {
         const before = held.current;
@@ -174,6 +200,7 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
             restore.current = null;
             const start = starts.get(leftAt.rowId);
             if (start !== undefined) element.scrollTop = start + leftAt.offset + LIST_INSET;
+            scrolled.current = element.scrollTop;
             return;
         }
         if (element === null || element.scrollTop <= 0 || before.order.length === 0) return;
@@ -218,20 +245,8 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
             viewportProps={{
                 onScroll: (event) => {
                     const scrollTop = event.currentTarget.scrollTop;
+                    scrolled.current = scrollTop;
                     parkedSet(scrollTop > 0);
-                    const report = props.onScrollPositionChange;
-                    if (!report || restore.current !== null) return;
-                    if (scrollTop <= 0) {
-                        report(null);
-                        return;
-                    }
-                    const { order, starts, heights } = held.current;
-                    const top = scrollTop - LIST_INSET;
-                    const rowId = order.find(
-                        (id) => (starts.get(id) ?? 0) + (heights.get(id) ?? 0) > top,
-                    );
-                    if (rowId === undefined) return;
-                    report({ rowId, offset: Math.round(top - (starts.get(rowId) ?? 0)) });
                 },
             }}
             viewportRef={scrollElement}
