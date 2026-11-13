@@ -53,6 +53,20 @@ const PLUGIN_ROWS = 3;
 const noopSubscribe = () => () => undefined;
 const noSnapshot = () => undefined;
 
+/** Why the plugins step's Continue waits: the required plugins still to connect, by name. */
+function pluginsFootnote(
+    gate: Extract<HappyAgentOnboardingGate, { readonly kind: "plugins" }>,
+): string {
+    const left = gate.plugins.filter((plugin) => plugin.required && !plugin.active);
+    if (left.length === 0) return "Connect a plugin to continue.";
+    const names = left.map((plugin) => plugin.name);
+    const list =
+        names.length === 1
+            ? names[0]!
+            : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    return `Connect ${list} to continue.`;
+}
+
 function inferenceOptions(
     providers: HappyAgentCloudProvidersSnapshot | undefined,
     store: HappyAgentCloudProvidersStore | undefined,
@@ -210,9 +224,19 @@ export function AppCloudOnboarding(props: {
             installation.available &&
             installation.status !== "active",
     );
-    const screen = ((): Pick<CloudOnboardingScreenProps, "view" | "action" | "skip"> => {
+    const screen = ((): Pick<
+        CloudOnboardingScreenProps,
+        "view" | "action" | "skip" | "footnote"
+    > => {
         if (flow.stance && flow.stance !== "act")
-            return { view: { kind: "notice", reason: flow.stance, step: STEP_LABELS[gate.kind] } };
+            return {
+                view: {
+                    kind: "notice",
+                    reason: flow.stance,
+                    step: STEP_LABELS[gate.kind],
+                    owners: flow.owners,
+                },
+            };
         const photo = {
             busy: profileSnapshot.saving,
             loading: profileSnapshot.loading,
@@ -255,6 +279,7 @@ export function AppCloudOnboarding(props: {
                         disabled: !named || profileSnapshot.loading,
                         onSelect: () => void create(),
                     },
+                    footnote: "Add your name to continue.",
                 };
             }
             case "avatar":
@@ -273,6 +298,7 @@ export function AppCloudOnboarding(props: {
                     },
                     action: proceed,
                     ...(skip ? { skip } : {}),
+                    footnote: "Add a photo to continue.",
                 };
             case "adminBot":
                 return {
@@ -297,6 +323,7 @@ export function AppCloudOnboarding(props: {
                         onSelect: store.adminBotNameSubmit,
                     },
                     ...(skip ? { skip } : {}),
+                    footnote: "Give it a name to continue.",
                 };
             case "inference":
                 return {
@@ -309,6 +336,7 @@ export function AppCloudOnboarding(props: {
                     },
                     action: proceed,
                     ...(skip ? { skip } : {}),
+                    footnote: "Connect one to continue.",
                 };
             case "plugins":
                 return {
@@ -329,6 +357,7 @@ export function AppCloudOnboarding(props: {
                     },
                     action: proceed,
                     ...(skip ? { skip } : {}),
+                    footnote: pluginsFootnote(gate),
                 };
             case "teammates": {
                 const invites = props.snapshot.invites;
@@ -348,6 +377,7 @@ export function AppCloudOnboarding(props: {
                     },
                     action: proceed,
                     ...(skip ? { skip } : {}),
+                    footnote: "Invite someone to continue.",
                 };
             }
             case "mobileApp":
@@ -360,6 +390,7 @@ export function AppCloudOnboarding(props: {
                     },
                     action: proceed,
                     ...(skip ? { skip } : {}),
+                    footnote: "Sign in on your phone. This page moves on by itself.",
                 };
             case "paymentMethod":
             case "payment": {
@@ -391,6 +422,10 @@ export function AppCloudOnboarding(props: {
                         ask: gate.kind === "paymentMethod" ? "method" : "credit",
                         method: account?.paymentMethod ? methodText(account.paymentMethod) : null,
                         balance: account ? moneyText(account.balance) : null,
+                        detail:
+                            gate.kind === "paymentMethod"
+                                ? "With it on file, adding credit later takes one step."
+                                : "Owners can cap what agents spend each month in Settings.",
                         testMode: account?.mode === "test",
                         ...(gate.kind === "payment"
                             ? {
@@ -427,6 +462,7 @@ export function AppCloudOnboarding(props: {
                                 onSelect: () => paymentsStore.topUpSubmit(target),
                             },
                     ...(skip ? { skip } : {}),
+                    footnote: "Pick an amount to continue.",
                 };
             }
             case "unknown":

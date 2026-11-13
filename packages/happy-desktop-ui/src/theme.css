@@ -975,6 +975,7 @@
     --onboarding-grain-3: #a78bfa;
     --onboarding-foreground: #14112e;
     --onboarding-action-label: #ffffff;
+    --onboarding-accent: #4f46e5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -988,6 +989,7 @@
         --onboarding-grain-3: #2a00ff;
         --onboarding-foreground: #ffffff;
         --onboarding-action-label: #14112e;
+        --onboarding-accent: #a5b4fc;
     }
 }
 
@@ -1004,6 +1006,7 @@
     --onboarding-grain-3: #2a00ff;
     --onboarding-foreground: #ffffff;
     --onboarding-action-label: #14112e;
+    --onboarding-accent: #a5b4fc;
 }
 
 /* ThemeScope intentionally has no layout box. */

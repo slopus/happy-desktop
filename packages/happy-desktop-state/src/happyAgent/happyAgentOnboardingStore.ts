@@ -9,6 +9,7 @@ import {
 import {
     happyAgentOnboardingFlowDerive,
     happyAgentOnboardingGatesRead,
+    happyAgentOnboardingSummaryRead,
     type HappyAgentOnboardingFlow,
     type HappyAgentOnboardingGate,
 } from "./happyAgentOnboardingGates.js";
@@ -193,7 +194,7 @@ function onboardingStatesEqual(
 ): boolean {
     if (left === right) return true;
     if (!left || !right) return false;
-    if (!deepEqual(gatesOf(left), gatesOf(right))) return false;
+    if (!deepEqual(onboardingGatesOf(left), onboardingGatesOf(right))) return false;
     if (!chiefOfStaffEqual(left.steps.chiefOfStaff, right.steps.chiefOfStaff)) return false;
     if (left.server !== right.server) {
         if (!left.server || !right.server) return false;
@@ -226,8 +227,10 @@ function onboardingStatesEqual(
 }
 
 /** The server's gates, which the daemon's protocol package does not name. */
-function gatesOf(state: HappyAgentOnboardingState): unknown {
-    return (state as { readonly gates?: unknown }).gates;
+/** The parts of the onboarding answer the gate flow reads. */
+function onboardingGatesOf(state: HappyAgentOnboardingState): unknown {
+    const body = state as { readonly gates?: unknown; finished?: unknown; owners?: unknown };
+    return { gates: body.gates, finished: body.finished, owners: body.owners };
 }
 
 /** Remote onboarding follows the daemon's state without scanning providers or requiring a project. */
@@ -292,8 +295,11 @@ export function happyAgentOnboardingStoreCreate(
     ): HappyAgentOnboardingFlow | undefined => {
         const gates = state ? happyAgentOnboardingGatesRead(state, client.endpoint) : undefined;
         if (!gates) return undefined;
+        const { finished, owners } = happyAgentOnboardingSummaryRead(state);
         const flow = happyAgentOnboardingFlowDerive({
             gates,
+            ...(finished === undefined ? {} : { finished }),
+            owners,
             pinned,
             passed,
             sequence,

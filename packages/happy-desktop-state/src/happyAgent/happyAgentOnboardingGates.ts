@@ -218,6 +218,25 @@ export function happyAgentOnboardingGatesRead(
 }
 
 /**
+ * What `GET /v0/onboarding` says around its gates: whether nothing is left for
+ * the reader, absent from a server that predates `finished`, and the owners a
+ * member waits on.
+ */
+export function happyAgentOnboardingSummaryRead(onboarding: unknown): {
+    readonly finished: boolean | undefined;
+    readonly owners: readonly string[];
+} {
+    const body = recordOf(onboarding);
+    return {
+        finished: typeof body?.finished === "boolean" ? body.finished : undefined,
+        owners: (Array.isArray(body?.owners) ? body.owners : []).flatMap((owner) => {
+            const name = textOf(recordOf(owner)?.name).trim();
+            return name ? [name] : [];
+        }),
+    };
+}
+
+/**
  * Whether the flow puts this gate on screen: one the reader can act on that is
  * still open, or one that holds them back, which says why (waiting for an
  * admin, or an update) when they cannot act on it. An optional gate this
@@ -258,6 +277,8 @@ export interface HappyAgentOnboardingFlow {
     /** The gate on screen, or `undefined` once nothing is left to show. */
     readonly current?: HappyAgentOnboardingGate;
     readonly stance?: HappyAgentOnboardingGateStance;
+    /** The owners' names, for a reader waiting on one of them. */
+    readonly owners: readonly string[];
     /** Whether Continue may leave the current gate: it is done, or it is optional. */
     readonly continuable: boolean;
     /** The gate whose skip, rename or continue the server has not answered yet. */
@@ -273,6 +294,9 @@ export interface HappyAgentOnboardingFlow {
  */
 export function happyAgentOnboardingFlowDerive(input: {
     readonly gates: readonly HappyAgentOnboardingGate[];
+    /** The server's `finished`; absent from one that predates it, where the gates decide. */
+    readonly finished?: boolean;
+    readonly owners?: readonly string[];
     readonly pinned: string | undefined;
     readonly passed: ReadonlySet<string>;
     readonly sequence: readonly string[];
@@ -281,12 +305,18 @@ export function happyAgentOnboardingFlowDerive(input: {
 }): HappyAgentOnboardingFlow {
     const { gates } = input;
     const pinned = gates.find((gate) => gate.id === input.pinned);
+    // A server that says nothing is left shows nothing new; the gate on
+    // screen still stays until the reader leaves it.
     const current =
         pinned ??
-        gates.find((gate) => happyAgentOnboardingGateShown(gate) && !input.passed.has(gate.id)) ??
-        // A gate that blocks is shown whether or not it was passed: the server
-        // decides, and passing it here was only this client's guess.
-        gates.find((gate) => gate.blocking);
+        (input.finished === true
+            ? undefined
+            : (gates.find(
+                  (gate) => happyAgentOnboardingGateShown(gate) && !input.passed.has(gate.id),
+              ) ??
+              // A gate that blocks is shown whether or not it was passed: the server
+              // decides, and passing it here was only this client's guess.
+              gates.find((gate) => gate.blocking)));
     const known = new Set(gates.map((gate) => gate.id));
     const sequence = input.sequence.filter((id) => known.has(id));
     for (const gate of gates)
@@ -297,6 +327,7 @@ export function happyAgentOnboardingFlowDerive(input: {
     return {
         gates,
         sequence,
+        owners: input.owners ?? [],
         ...(current
             ? {
                   current,

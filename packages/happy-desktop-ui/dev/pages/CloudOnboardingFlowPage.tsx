@@ -140,6 +140,7 @@ const screens: readonly Screen[] = [
             currentStep: "plugins",
             serverLabel: "Acme",
             action: { label: "Continue", disabled: true, onSelect: noop },
+            footnote: "Connect GitHub to continue.",
             view: {
                 kind: "plugins",
                 plugins: [
@@ -181,6 +182,7 @@ const screens: readonly Screen[] = [
             currentStep: "plugins",
             serverLabel: "Acme",
             action: { label: "Continue", disabled: true, onSelect: noop },
+            footnote: "Connect GitHub to continue.",
             view: {
                 kind: "plugins",
                 plugins: [
@@ -307,6 +309,7 @@ const screens: readonly Screen[] = [
                 ask: "method",
                 method: null,
                 balance: null,
+                detail: "With it on file, adding credit later takes one step.",
                 testMode: true,
                 waiting: false,
             },
@@ -324,6 +327,7 @@ const screens: readonly Screen[] = [
                 ask: "credit",
                 method: "Visa •••• 4242",
                 balance: "$0.00",
+                detail: "Owners can cap what agents spend each month in Settings.",
                 testMode: false,
                 amounts: [
                     { id: "1000", label: "$10" },
@@ -343,7 +347,12 @@ const screens: readonly Screen[] = [
         props: {
             currentStep: "plugins",
             serverLabel: "Acme",
-            view: { kind: "notice", reason: "waitForAdmin", step: "Plugins" },
+            view: {
+                kind: "notice",
+                reason: "waitForAdmin",
+                step: "Plugins",
+                owners: ["Olga Petrova"],
+            },
         },
     },
     {
@@ -353,6 +362,15 @@ const screens: readonly Screen[] = [
             currentStep: "plugins",
             serverLabel: "Acme",
             view: { kind: "notice", reason: "update", step: "Plugins" },
+        },
+    },
+    {
+        id: "unavailable",
+        label: "Not checkable yet",
+        props: {
+            currentStep: "paymentMethod",
+            serverLabel: "Acme",
+            view: { kind: "notice", reason: "unavailable", step: "Payment" },
         },
     },
 ];

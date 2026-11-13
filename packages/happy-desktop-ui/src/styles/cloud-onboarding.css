@@ -57,7 +57,8 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+    background: var(--onboarding-accent);
+    color: var(--onboarding-action-label);
 }
 
 .happy-cloud-onboarding__lead {
@@ -535,4 +536,34 @@
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
+}
+
+/* The words and what the step asks for read as one block, centred between the
+   step bar and the footer, rather than the words floating halfway up. */
+.happy-setup-page.happy-cloud-onboarding[data-placement="centered"]
+    .happy-setup-page__body::before {
+    content: "";
+    flex: 1 1 0;
+}
+
+.happy-setup-page.happy-cloud-onboarding[data-placement="centered"] .happy-setup-page__header {
+    flex: none;
+    padding: 0 0 32px;
+}
+
+.happy-cloud-onboarding__notice-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.happy-cloud-onboarding__next {
+    max-width: 360px;
+    margin: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+    text-align: center;
 }

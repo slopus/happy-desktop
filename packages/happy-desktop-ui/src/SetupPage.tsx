@@ -149,6 +149,11 @@ export interface SetupPageProps {
     readonly action?: SetupPageAction;
     /** Under the primary action, in a slot every page reserves whether or not it is used. */
     readonly secondary?: SetupPageSecondaryAction;
+    /**
+     * One quiet line in that same slot when it holds no secondary action, such
+     * as why the primary action is not available yet.
+     */
+    readonly footnote?: string;
     /** Pinned to the bottom-right corner, outside the page's own bands. */
     readonly help?: ReactNode;
     /** Pinned top-left where the connection rail's first tile stands: whose setup this is. */
@@ -201,6 +206,7 @@ export function SetupPage(props: SetupPageProps) {
         "children",
         "action",
         "secondary",
+        "footnote",
         "help",
         "identity",
         "placement",
@@ -355,6 +361,13 @@ export function SetupPage(props: SetupPageProps) {
                                 >
                                     {local.secondary.label}
                                 </Button>
+                            ) : local.footnote ? (
+                                <p
+                                    className="happy-setup-page__footnote"
+                                    data-happy-desktop-ui="setup-page-footnote"
+                                >
+                                    {local.footnote}
+                                </p>
                             ) : null}
                         </div>
                     </div>

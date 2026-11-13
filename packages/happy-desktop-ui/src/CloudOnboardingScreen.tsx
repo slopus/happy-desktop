@@ -127,6 +127,8 @@ export type CloudOnboardingView =
           readonly method: string | null;
           /** The balance, formatted, once it is known. */
           readonly balance: string | null;
+          /** What having it on file does for the team, one short line. */
+          readonly detail: string;
           readonly testMode: boolean;
           readonly amounts?: readonly CloudOnboardingAmount[];
           readonly amount?: string;
@@ -145,6 +147,8 @@ export type CloudOnboardingView =
           readonly reason: "waitForAdmin" | "update" | "unavailable";
           /** The step, as the bar names it. */
           readonly step: string;
+          /** For `waitForAdmin`: the owners who can finish it, by name. */
+          readonly owners?: readonly string[];
       };
 
 export interface CloudOnboardingScreenProps {
@@ -161,6 +165,8 @@ export interface CloudOnboardingScreenProps {
      * words in the same place; a required step has none.
      */
     readonly skip?: Omit<SetupPageSecondaryAction, "label">;
+    /** Why the action is not available yet, said quietly under it when there is no skip. */
+    readonly footnote?: string;
     onExternalOpen?(url: string): void;
 }
 
@@ -575,6 +581,7 @@ function page(
                                     ? (view.method ?? "Nothing on file yet")
                                     : (view.balance ?? "…")}
                             </span>
+                            <p className="happy-cloud-onboarding__note-text">{view.detail}</p>
                         </div>
                         {view.ask === "credit" && view.amounts && view.onAmountSelect ? (
                             <div
@@ -610,42 +617,71 @@ function page(
                 ),
             };
         case "notice":
-            return NOTICES[view.reason](view.step);
+            return NOTICES[view.reason](view.step, view.owners ?? []);
     }
+}
+
+/** "Olga", "Olga or Sam", "Olga, Sam or Ana": who the reader is waiting on. */
+function ownersText(owners: readonly string[]): string {
+    if (owners.length === 0) return "An owner of this server";
+    if (owners.length === 1) return owners[0]!;
+    return `${owners.slice(0, -1).join(", ")} or ${owners[owners.length - 1]}`;
 }
 
 const NOTICES: Readonly<
     Record<
         Extract<CloudOnboardingView, { readonly kind: "notice" }>["reason"],
-        (step: string) => {
+        (
+            step: string,
+            owners: readonly string[],
+        ) => {
             readonly title: string;
             readonly copy: string;
             readonly body: ReactNode;
         }
     >
 > = {
-    waitForAdmin: (step) => ({
+    waitForAdmin: (step, owners) => ({
         title: "Waiting for your admin",
-        copy: `An owner of this server needs to finish "${step}" before you can start.`,
-        body: <NoticeMark icon="clock" />,
+        copy: `${ownersText(owners)} needs to finish "${step}" before you can start.`,
+        body: (
+            <NoticeMark
+                icon="clock"
+                next={`Let ${owners.length === 1 ? "them" : "an owner"} know you're here. This page moves on by itself once it's done.`}
+            />
+        ),
     }),
     update: () => ({
         title: "Update Happy to continue",
         copy: "This server asks for a step this version of Happy can't show.",
-        body: <NoticeMark icon="arrow-down" />,
+        body: (
+            <NoticeMark
+                icon="arrow-down"
+                next="Install the latest Happy, then sign in again. You'll pick up right here."
+            />
+        ),
     }),
     unavailable: (step) => ({
         title: "Almost ready",
-        copy: `This server can't check "${step}" yet. It will let you in as soon as it can.`,
-        body: <NoticeMark icon="clock" />,
+        copy: `This server can't check "${step}" yet.`,
+        body: (
+            <NoticeMark
+                icon="clock"
+                next="There's nothing to do here. This page moves on by itself as soon as it can."
+            />
+        ),
     }),
 };
 
-function NoticeMark(props: { readonly icon: "clock" | "arrow-down" }) {
+/** The notice's picture, and what happens next in one quiet line under it. */
+function NoticeMark(props: { readonly icon: "clock" | "arrow-down"; readonly next: string }) {
     return (
-        <span className="happy-cloud-onboarding__notice" aria-hidden>
-            <Icon name={props.icon} size={32} />
-        </span>
+        <div className="happy-cloud-onboarding__notice-body">
+            <span className="happy-cloud-onboarding__notice" aria-hidden>
+                <Icon name={props.icon} size={32} />
+            </span>
+            <p className="happy-cloud-onboarding__next">{props.next}</p>
+        </div>
     );
 }
 
@@ -665,6 +701,7 @@ export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
         <SetupPage
             {...(props.action ? { action: props.action } : {})}
             {...(props.skip ? { secondary: { ...props.skip, label: "Skip for now" } } : {})}
+            {...(props.footnote && props.action?.disabled ? { footnote: props.footnote } : {})}
             backdrop={{ appearance: props.appearance, kind: "sky" }}
             className={
                 props.view.kind === "inference"

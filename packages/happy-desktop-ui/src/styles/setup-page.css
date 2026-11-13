@@ -400,6 +400,19 @@
 
 /* The way out under the primary action hovers in the primary's own pill, so
    the two read as one pair of buttons rather than a pill over a tile. */
+.happy-setup-page__footnote {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__footnote {
+    color: color-mix(in srgb, var(--onboarding-foreground) 64%, transparent);
+}
+
 .happy-setup-page__footer-secondary > .happy-button[data-variant="ghost"] {
     border-radius: var(--happy-radius-pill);
 }

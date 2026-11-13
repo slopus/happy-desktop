@@ -70,3 +70,57 @@ it("shows the gate flow once the server sends gates", async () => {
     expect(store.get().flow?.current?.id).toBe("profile");
     unsubscribe();
 });
+
+/* On a v6 server `completed` is the legacy flag: it can be true while an
+ * optional gate is still open for the reader. `finished` says whether anything
+ * is left; a server that predates it is read from its gates, never `completed`. */
+
+const avatarOpen = {
+    id: "avatar",
+    scope: "member",
+    requirement: "optional",
+    status: "open",
+    blocking: false,
+    canComplete: true,
+    data: {},
+};
+
+it("shows an open optional gate while finished is false, though completed is true", async () => {
+    const { store, calls, unsubscribe } = storeCreate({
+        finished: false,
+        completed: true,
+        blocking: [],
+        gates: [avatarOpen],
+        steps,
+    });
+    await settle();
+    expect(store.get().flow?.current?.id).toBe("avatar");
+    expect(calls).not.toContain("POST v0/onboarding/complete");
+    unsubscribe();
+});
+
+it("shows an open optional gate from a server without finished, though completed is true", async () => {
+    const { store, unsubscribe } = storeCreate({
+        completed: true,
+        blocking: [],
+        gates: [avatarOpen],
+        steps,
+    });
+    await settle();
+    expect(store.get().flow?.current?.id).toBe("avatar");
+    unsubscribe();
+});
+
+it("shows nothing once the server says finished", async () => {
+    const { store, unsubscribe } = storeCreate({
+        finished: true,
+        completed: true,
+        blocking: [],
+        gates: [avatarOpen],
+        steps,
+    });
+    await settle();
+    expect(store.get().flow).toBeDefined();
+    expect(store.get().flow?.current).toBeUndefined();
+    unsubscribe();
+});
