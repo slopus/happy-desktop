@@ -621,10 +621,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         securityPolicyStore?.get ?? securityPolicyUnavailable,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
     );
-    // Happy Cloud lists Instructions once it has said it keeps the documents
-    // and who may change them; one from before keeps them in its Policy vault.
-    const instructionsShown =
-        !happyCloud || instructions.access === "edit" || instructions.access === "read";
+    // Instructions is left out only where Happy Cloud has no routes for the documents.
+    const instructionsShown = !happyCloud || instructions.access !== "unserved";
     const instructionsReadOnly = happyCloud && instructions.access === "read";
     const securityPolicyReadOnly = happyCloud && securityPolicy.access === "read";
     const paymentsAbsent = !paymentsStore || (!payments.loading && !payments.available);

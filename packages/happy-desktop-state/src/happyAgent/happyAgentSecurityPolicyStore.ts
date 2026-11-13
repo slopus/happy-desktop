@@ -1,7 +1,7 @@
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import {
     happyAgentGlobalDocumentStoreCreate,
-    type HappyAgentGlobalDocumentAccess,
+    type HappyAgentPolicyAccess,
     type HappyAgentGlobalDocumentSnapshot,
     type HappyAgentGlobalDocumentStore,
 } from "./happyAgentInstructionsStore.js";
@@ -14,7 +14,7 @@ export type HappyAgentSecurityPolicyStore = HappyAgentGlobalDocumentStore;
 
 export interface HappyAgentSecurityPolicyStoreDeps {
     readonly client: Pick<HappyAgentClient, "getSecurityPolicy" | "putSecurityPolicy">;
-    readonly access?: () => Promise<Exclude<HappyAgentGlobalDocumentAccess, "unknown">>;
+    readonly access?: () => Promise<HappyAgentPolicyAccess>;
 }
 
 /** Creates the editor store for the policy used when this Happy Agent reviews permission requests. */

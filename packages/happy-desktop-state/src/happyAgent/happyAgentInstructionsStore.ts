@@ -1,6 +1,6 @@
 import { createStore } from "zustand/vanilla";
 import type { Loadable } from "../conversation/loadable.js";
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import type { UserError } from "../types.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError } from "./happyAgentSupport.js";
@@ -15,11 +15,18 @@ export const HAPPY_AGENT_INSTRUCTIONS_MAX_BYTES = 256 * 1024;
 
 /**
  * What this reader may do with a document. `read` is a Happy Cloud member who
- * is not an owner; `unserved` is a Happy Cloud server from before owner-gated
- * documents, which keeps them as files in its Policy vault instead; `unknown`
- * is a server that has not said yet.
+ * is not an owner; `unserved` is a Happy Cloud server without the documents'
+ * routes at all; `unknown` is a server that has not said yet. A server whose
+ * catalog does not list `policy.edit` is `edit`: its routes decide, as they did
+ * before it said who may change the documents.
  */
 export type HappyAgentGlobalDocumentAccess = "unknown" | "edit" | "read" | "unserved";
+
+/**
+ * What a Happy Cloud permission catalog says about the documents: `unlisted`
+ * is a server from before `policy.edit`, where the routes alone decide.
+ */
+export type HappyAgentPolicyAccess = "edit" | "read" | "unlisted";
 
 export interface HappyAgentGlobalDocumentSnapshot {
     readonly access: HappyAgentGlobalDocumentAccess;
@@ -58,7 +65,7 @@ export interface HappyAgentGlobalDocumentStore {
 
 export interface HappyAgentInstructionsStoreDeps {
     readonly client: Pick<HappyAgentClient, "getInstructions" | "putInstructions">;
-    readonly access?: () => Promise<Exclude<HappyAgentGlobalDocumentAccess, "unknown">>;
+    readonly access?: () => Promise<HappyAgentPolicyAccess>;
 }
 
 export type HappyAgentInstructionsSnapshot = HappyAgentGlobalDocumentSnapshot;
@@ -66,7 +73,7 @@ export type HappyAgentInstructionsStore = HappyAgentGlobalDocumentStore;
 
 interface HappyAgentGlobalDocumentStoreDeps {
     /** Asked before each read; without it the reader may always edit. */
-    readonly access?: () => Promise<Exclude<HappyAgentGlobalDocumentAccess, "unknown">>;
+    readonly access?: () => Promise<HappyAgentPolicyAccess>;
     readonly read: (signal?: AbortSignal) => Promise<string>;
     readonly write: (value: string) => Promise<string>;
 }
@@ -88,11 +95,12 @@ function byteLength(text: string): number {
 /**
  * Happy Cloud lets only owners change the global documents, and says so in
  * its permission catalog: every caller finds `policy.edit` listed there, and
- * owners find it granted. A server that does not list it has no such documents.
+ * owners find it granted. A server that does not list it still has the
+ * documents, guarded by its routes alone.
  */
 export function happyAgentPolicyAccessRead(
     request: HappyCloudRequest,
-): () => Promise<Exclude<HappyAgentGlobalDocumentAccess, "unknown">> {
+): () => Promise<HappyAgentPolicyAccess> {
     return async () => {
         const answer = await request("GET", "v0/permissions");
         const permissions =
@@ -107,7 +115,7 @@ export function happyAgentPolicyAccessRead(
                     permission !== null &&
                     (permission as { id?: unknown }).id === POLICY_EDIT,
             );
-        if (!listed) return "unserved";
+        if (!listed) return "unlisted";
         return Array.isArray(permissions.granted) && permissions.granted.includes(POLICY_EDIT)
             ? "edit"
             : "read";
@@ -188,9 +196,22 @@ export function happyAgentGlobalDocumentStoreCreate(
         const access = deps.access;
         void (async () => {
             const allowed = access ? await access() : "edit";
-            // A server without the documents is not asked for them, nor asked again while watched.
-            if (allowed === "unserved") return undefined;
-            return { allowed, confirmed: await deps.read(currentController.signal) };
+            try {
+                return {
+                    allowed: allowed === "read" ? ("read" as const) : ("edit" as const),
+                    confirmed: await deps.read(currentController.signal),
+                };
+            } catch (error) {
+                // Only a server without the routes leaves the documents out; it
+                // is not asked again while watched.
+                if (
+                    allowed === "unlisted" &&
+                    error instanceof HappyAgentApiError &&
+                    error.status === 404
+                )
+                    return undefined;
+                throw error;
+            }
         })().then(
             (answer) => {
                 if (disposed || controller !== currentController) return;
