@@ -3888,6 +3888,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             if ("error" in read) {
                 // An abandoned attempt is not the daemon's answer; the loop retries it.
                 if (attemptSignal.aborted) throw read.error;
+                // A member who owes a profile is refused the bootstrap and the feed alike
+                // until they save one. The step-by-step start waits that out on the routes
+                // they may read, instead of asking for both again every round.
+                if (
+                    options.memberProfileRequired !== false &&
+                    read.error instanceof HappyAgentApiError &&
+                    read.error.code === "profile_required"
+                ) {
+                    feedClose();
+                    return "gated";
+                }
                 reportDebug({
                     detail: errorDetail(read.error),
                     level: "warning",

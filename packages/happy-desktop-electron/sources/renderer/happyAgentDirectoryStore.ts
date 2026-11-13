@@ -749,8 +749,10 @@ export function happyAgentDirectoryStoreCreate(
             cloudHost: deps.cloudHostFor(happyAgent.entry.id),
             guidedMobileSetup: happyAgent.entry.id === LOCAL_HAPPY_AGENT_ID,
             // The local daemon is the one this app installed and runs solo;
-            // only a remote Happy Agent can be a team that needs a profile.
-            memberProfileRequired: happyAgent.entry.id !== LOCAL_HAPPY_AGENT_ID,
+            // only a remote Happy Agent, or the Happy Cloud server the web
+            // app is served by, can be a team that needs a profile.
+            memberProfileRequired:
+                happyAgent.entry.id !== LOCAL_HAPPY_AGENT_ID || deps.localHappyCloud === true,
             host: happyAgent.entry.remoteId
                 ? {
                       projectSource: "repository",
