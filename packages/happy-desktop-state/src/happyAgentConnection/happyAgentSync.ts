@@ -30,7 +30,10 @@ type QueuedSyncInput =
  * Events only Happy Cloud sends, which the daemon's protocol package does not
  * name. They carry no payload a follower reads; each is a hint to read again.
  */
-export type HappyCloudEventType = "compute.nodes.updated" | "compute.approvals.updated";
+export type HappyCloudEventType =
+    | "compute.nodes.updated"
+    | "compute.approvals.updated"
+    | "plugins.changed";
 
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {

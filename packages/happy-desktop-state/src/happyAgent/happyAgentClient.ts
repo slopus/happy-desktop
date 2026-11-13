@@ -133,6 +133,10 @@ import {
     type HappyAgentRepositoriesStore,
 } from "./happyAgentRepositoriesStore.js";
 import {
+    happyAgentPluginsStoreCreate,
+    type HappyAgentPluginsStore,
+} from "./happyAgentPluginsStore.js";
+import {
     happyAgentComputeStoreCreate,
     type HappyAgentComputeStore,
 } from "./happyAgentComputeStore.js";
@@ -269,6 +273,8 @@ export interface HappyAgentWorkspaceClient {
     cloudProviders(): HappyAgentCloudProvidersStore | undefined;
     /** Settings › Repositories on Happy Cloud; undefined anywhere else. */
     repositories(): HappyAgentRepositoriesStore | undefined;
+    /** The plugins this connection's server offers and the team's installations of them. */
+    plugins(): HappyAgentPluginsStore | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
@@ -739,6 +745,7 @@ export function happyAgentWorkspaceClientCreate(
     let credentialImportStore: HappyAgentCredentialImportStore | undefined;
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
+    let pluginsStore: HappyAgentPluginsStore | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
@@ -1162,6 +1169,17 @@ export function happyAgentWorkspaceClientCreate(
             repositoriesStore ??= happyAgentRepositoriesStoreCreate({ request });
             return repositoriesStore;
         },
+        plugins() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            pluginsStore ??= happyAgentPluginsStoreCreate({
+                request,
+                endpoint: deps.client.endpoint,
+                sync: deps.connection.sync,
+            });
+            return pluginsStore;
+        },
         compute() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1411,6 +1429,8 @@ export function happyAgentWorkspaceClientCreate(
             cloudProvidersStore = undefined;
             repositoriesStore?.[Symbol.dispose]();
             repositoriesStore = undefined;
+            pluginsStore?.[Symbol.dispose]();
+            pluginsStore = undefined;
             computeStore?.[Symbol.dispose]();
             computeStore = undefined;
             previewsStore?.[Symbol.dispose]();

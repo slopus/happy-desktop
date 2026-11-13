@@ -242,6 +242,19 @@ export type HappyCloudRequest = (
     headers?: Readonly<Record<string, string>>,
 ) => Promise<unknown>;
 
+/** A Happy Cloud route that answered and refused, with its status and parsed body. */
+export class HappyCloudRequestRefusal extends UserError {
+    constructor(
+        message: string,
+        code: string | undefined,
+        readonly status: number,
+        readonly body: unknown,
+    ) {
+        super(message, code);
+        this.name = "HappyCloudRequestRefusal";
+    }
+}
+
 export function happyCloudRequestCreate(options: {
     readonly endpoint: string;
     readonly token: string;
@@ -290,11 +303,13 @@ export function happyCloudRequestCreate(options: {
                 : undefined;
         const message = envelope ? envelope.message : answer?.error;
         const code = envelope ? envelope.code : answer?.code;
-        throw new UserError(
+        throw new HappyCloudRequestRefusal(
             typeof message === "string" && message.length > 0
                 ? message
                 : `The server answered ${String(response.status)}.`,
             response.status === 404 ? "not_found" : typeof code === "string" ? code : undefined,
+            response.status,
+            answer,
         );
     };
 }
