@@ -16,7 +16,7 @@ export default (cues) => ({
             openingTop: 190,
             aware: { x: centred(1.3), y: 60 },
             progress: { x: centred(1.3), y: 60 },
-            activity: { scale: 1.3, x: centred(1.3), y: 60 },
+            activity: { scale: 1.3, x: centred(1.3), y: 66 },
             activityUntil: ["step1-rest", 1.2],
         },
         [
