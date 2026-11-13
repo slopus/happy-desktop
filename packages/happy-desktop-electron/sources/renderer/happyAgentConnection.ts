@@ -44,6 +44,7 @@ import {
     type HappyAgentVoiceSettingsStore,
     type HappyAgentSecurityPolicyStore,
     type HappyAgentSecretsStore,
+    type HappyAgentClusterSecretsStore,
     type HappyAgentArtifacts,
     type HappyAgentSearchStore,
     type HappyAgentSurfaces,
@@ -173,6 +174,7 @@ export interface HappyAgentSession {
     readonly instructions: HappyAgentInstructionsStore;
     readonly securityPolicy: HappyAgentSecurityPolicyStore;
     readonly secrets: () => HappyAgentSecretsStore;
+    readonly clusterSecrets: () => HappyAgentClusterSecretsStore | undefined;
     /** This Happy Agent's published artifacts, materialized as their surfaces open. */
     readonly artifacts: HappyAgentArtifacts;
     /** The reader's feed on this Happy Agent, materialized as its surfaces open. */
@@ -712,6 +714,7 @@ export function happyAgentConnectionOpen(input: {
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
                     secrets: () => client.secrets(),
+                    clusterSecrets: () => client.clusterSecrets(),
                     artifacts: client.artifacts(),
                     feed: client.feed(),
                     surfaces: client.surfaces(),

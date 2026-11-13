@@ -123,6 +123,7 @@ import type {
     HappyAgentInstructionsStore,
     HappyAgentSecurityPolicyStore,
     HappyAgentSecretsStore,
+    HappyAgentClusterSecretsStore,
     HappyAgentAvailabilitySnapshot,
     HappyAgentProviderUsageStore,
     HappyAgentProvidersStore,
@@ -743,6 +744,8 @@ export interface AppHappyAgentSession {
     readonly securityPolicy?: HappyAgentSecurityPolicyStore;
     /** This Happy Agent's global write-only environment bundles. */
     readonly secrets?: () => HappyAgentSecretsStore;
+    /** Happy Cloud's typed secret catalog; undefined on a Happy Agent daemon. */
+    readonly clusterSecrets?: () => HappyAgentClusterSecretsStore | undefined;
     /**
      * What this Happy Agent's agents and people have published. A Happy Agent
      * that keeps none reports so through its catalog, and every surface that

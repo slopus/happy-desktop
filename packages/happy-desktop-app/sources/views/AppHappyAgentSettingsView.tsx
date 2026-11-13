@@ -73,6 +73,7 @@ import {
     type HappyAgentMembersSnapshot,
     type HappyAgentCredentialImportSnapshot,
     happyAgentSecretsStoreNoop,
+    happyAgentClusterSecretsStoreNoop,
     happyAgentVoiceSettingsStoreNoop,
     happyAgentWindowStoreNoop,
     happyAgentAttentionConnection,
@@ -128,6 +129,7 @@ import {
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppComputeSettings } from "./AppComputeSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
+import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
 import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
 import {
     AppMobileDirectSection,
@@ -712,14 +714,24 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     // Secrets are safe metadata only. The store starts its repeating read while
     // this category (or raw Dev Tools state) watches it and stops immediately
-    // when the surface leaves.
+    // when the surface leaves. Happy Cloud keeps a typed catalog instead of the
+    // daemon's environment bundles, and answers the daemon's routes with 404.
+    const secretsWatched = section === "secrets" || stateOpen;
     const secretsStore =
-        (section === "secrets" || stateOpen ? host?.session?.secrets?.() : undefined) ??
+        (secretsWatched && !happyCloud ? host?.session?.secrets?.() : undefined) ??
         happyAgentSecretsStoreNoop;
     const secrets = useSyncExternalStore(
         secretsStore.subscribe,
         secretsStore.get,
         secretsStore.get,
+    );
+    const clusterSecretsStore =
+        (secretsWatched && happyCloud ? host?.session?.clusterSecrets?.() : undefined) ??
+        happyAgentClusterSecretsStoreNoop;
+    const clusterSecrets = useSyncExternalStore(
+        clusterSecretsStore.subscribe,
+        clusterSecretsStore.get,
+        clusterSecretsStore.get,
     );
     // The Providers category is the only thing that reads this, and subscribing
     // is what starts the work: the daemon's configuration is read, and re-read
@@ -903,7 +915,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             activeCategoryId={section}
             categories={categories}
             description={
-                mobileLinkHeading ? mobileLinkHeading.description : CATEGORY_DESCRIPTIONS[section]
+                mobileLinkHeading
+                    ? mobileLinkHeading.description
+                    : section === "secrets" && happyCloud
+                      ? "Keys and credentials agents use without seeing them"
+                      : CATEGORY_DESCRIPTIONS[section]
             }
             onCategorySelect={props.onCategorySelect}
             onClose={props.onClose}
@@ -1187,7 +1203,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             models,
                             profile,
                             providers,
-                            secrets,
+                            secrets: happyCloud ? clusterSecrets : secrets,
                             securityPolicy,
                             settings,
                             titleShimmer,
@@ -1579,6 +1595,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 )
             ) : section === "passwords" ? (
                 <HappyAgentPasswordSettings available={props.browserPasswordsAvailable ?? false} />
+            ) : section === "secrets" && happyCloud ? (
+                <AppClusterSecretSettings
+                    snapshot={clusterSecrets}
+                    store={clusterSecretsStore}
+                    {...(unavailable === undefined ? {} : { unavailable })}
+                />
             ) : section === "secrets" ? (
                 <HappyAgentSecretSettings
                     loading={secrets.loading}
