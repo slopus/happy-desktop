@@ -1,4 +1,3 @@
-import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import {
     analyticsBucket,
     analyticsClientCreate,
@@ -35,6 +34,7 @@ import {
 } from "happy-desktop-analytics";
 import {
     entryKey,
+    HappyAgentApiError,
     usageAnalyticsStoreCreate,
     type ConversationEntry,
     type ConversationFailure,
