@@ -1,5 +1,6 @@
 import { chapters } from "./chapters.mjs";
 import { square } from "./stage.mjs";
+import { ending } from "./ending.mjs";
 
 /*
  * The square cut, 1080×1080, from 764×800 takes (MULTIPLAYER_VIEWPORT=764x800).
@@ -21,15 +22,7 @@ export default (cues) => ({
             loading: [0.11, 0.38],
             activityUntil: ["step1-rest", 1.0],
         },
-        [
-            {
-                kind: "card",
-                wordmark: "Happy",
-                line: "One place for you, your team, and your agents.",
-                small: "On your phone too. Free and open source.",
-                seconds: 3.5,
-            },
-        ],
+        ending(cues, true),
         cues,
     ),
     id: "multiplayer-square",

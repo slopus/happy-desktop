@@ -17,7 +17,7 @@ const move = 0.8;
 
 const opening = [
     { text: "Today most tasks start as conversations with agents.", at: -0.3 },
-    { text: "Happy is built around this idea.", at: 0.9 },
+    { text: "Happy is built around this idea.", at: 1.2 },
 ];
 const awareTitle = "See who’s working on what";
 const activityTitle = "See the most important updates from the team";
@@ -54,11 +54,12 @@ export function chapters(stage, views, ending, cues) {
         ...more,
     });
 
-    // Chapter 1, with the opening on its first frame held still: the first
-    // task lands at about 4.4 s, after the camera has moved in.
+    // The intro holds the first recorded frame until the camera has moved in.
     const aware = cues.aware;
-    const risen = 2.6;
-    const freeze = Math.max(risen + 0.4 + move, 4.4 - aware["arrival:Android Push Fixes"]);
+    const riseFrom = 4.5;
+    const risen = 5.9;
+    const captionFrom = 6.2;
+    const freeze = risen + 0.4 + move;
     const lineHeight = Math.round(stage.type.opening * 1.15);
     const lineGap = Math.round(lineHeight * 0.18);
     const linesTop = Math.round((views.openingTop - 2 * lineHeight - lineGap) / 2);
@@ -66,8 +67,8 @@ export function chapters(stage, views, ending, cues) {
         ...line,
         top: linesTop + index * (lineHeight + lineGap),
     }));
-    // The lines stand where they rest from the start; only the window rises.
-    const drop = 0;
+    // Both lines stand still for three seconds before the words and window rise.
+    const drop = Math.round(output.height / 2 - lineHeight / 2 - linesTop);
 
     const activity = cues.activity;
     // Enter on the working rows, just before List cache finishes. Leave out
@@ -91,12 +92,17 @@ export function chapters(stage, views, ending, cues) {
             chapter("aware", 0, aware["back-open"] + 1.0, {
                 freeze,
                 title: awareTitle,
-                titleFrom: 2.8,
-                opening: { lines, rise: [1.6, risen], out: 2.8, drop },
+                titleFrom: captionFrom,
+                titleTo: freeze + aware["arrival-settled:Offline Drafts"] + 0.9,
+                opening: { lines, rise: [riseFrom, risen], out: captionFrom, drop },
                 camera: [
                     { at: 0, ...whole(output.height) },
-                    { at: risen, move: risen - 1.6, ...whole(views.openingTop) },
-                    { at: 2.8 + 0.4 + move, move, css: { scale: stage.push, ...views.aware } },
+                    { at: risen, move: risen - riseFrom, ...whole(views.openingTop) },
+                    {
+                        at: captionFrom + 0.4 + move,
+                        move,
+                        css: { scale: stage.push, ...views.aware },
+                    },
                     // Once both tasks have landed the camera settles on the
                     // tasks and the conversation: opening a task leaves its
                     // Activity entry unread, and the badge is not this
@@ -108,10 +114,8 @@ export function chapters(stage, views, ending, cues) {
                     },
                 ],
             }),
-            { kind: "card", text: activityTitle, seconds: 2.2 },
+            { kind: "card", text: activityTitle, seconds: 2.4, entrance: "after-window" },
             chapter("activity", activityFrom, until - skippedBefore(until), {
-                title: activityTitle,
-                titleTo: onCut(activity["activity-open"] + 2.0),
                 skips,
                 camera: [
                     { at: 0, css: { scale: stage.push, ...views.progress } },

@@ -11,7 +11,7 @@ const type = {
     card: 76,
     wordmark: 132,
     line: 46,
-    small: 46,
+    small: 30,
     gap: 22,
     // How far a card's words rise as they fade in.
     rise: 18,
@@ -58,7 +58,7 @@ export const square = {
     stage: { x: 28, y: 26, width: 1024, height: 886 },
     push: 1.3,
     title: { centerY: 990, size: 44, lineHeight: 54 },
-    type: { ...type, card: 68, wordmark: 116, line: 40, small: 40, cardWidth: 900, opening: 37 },
+    type: { ...type, card: 68, wordmark: 116, line: 40, small: 25, cardWidth: 900, opening: 37 },
     dissolve: 0.2,
     encode: { crf: 16 },
 };

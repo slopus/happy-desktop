@@ -2,7 +2,7 @@
  * Draws the pages' and covers' icons, then renders each artifact page to the
  * cover its agent publishes with it: 1600×900 WebP, the page itself at
  * 1152×648 CSS pixels, wide enough that the whole page fits. The covers in
- * `covers.mjs` are drawn at 800×450 CSS pixels, twice over, into `covers/`.
+ * `covers.mjs` are drawn at 1152×648 CSS pixels into `covers/`.
  *
  * Each icon is the app's own Ionicons glyph (the font `happy-desktop-ui`
  * vendors, at the codepoint its generated name map gives), white on clear,
@@ -59,7 +59,10 @@ for (const [key, html] of Object.entries(pages)) {
 const { coverFile, covers } = await import(
     `${pathToFileURL(resolve(import.meta.dirname, "covers.mjs"))}?icons`
 );
-const cover = await browser.newPage({ viewport: { width: 800, height: 450 }, deviceScaleFactor: 2 });
+const cover = await browser.newPage({
+    viewport: { width: 1152, height: 648 },
+    deviceScaleFactor: 1600 / 1152,
+});
 await mkdir(dirname(coverFile("perf")), { recursive: true });
 for (const [key, entry] of Object.entries(covers)) {
     await cover.setContent(entry.html());

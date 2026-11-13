@@ -1,6 +1,6 @@
-import { join } from "node:path";
 import { chapters } from "./chapters.mjs";
 import { stage } from "./stage.mjs";
+import { ending } from "./ending.mjs";
 
 /*
  * The landscape cut, 1920×1080, from 1133×800 takes. At rest the whole window
@@ -9,7 +9,6 @@ import { stage } from "./stage.mjs";
  * A view's `x` centres the window across the frame.
  */
 const centred = (scale) => (stage.stage.x - (stage.output.width - 1133 * scale) / 2) / scale;
-const phone = (name) => join(import.meta.dirname, "phone", name);
 
 export default (cues) => ({
     ...chapters(
@@ -27,22 +26,7 @@ export default (cues) => ({
             loading: [0.11, 0.38],
             activityUntil: ["step3-rest", 2.0],
         },
-        [
-            {
-                kind: "card",
-                text: "Also on iOS and Android",
-                small: "The app as it ships, from the App Store",
-                pictures: [phone("build-together.jpg"), phone("computer-and-team-servers.jpg")],
-                seconds: 4.0,
-            },
-            {
-                kind: "card",
-                wordmark: "Happy",
-                line: "One place for you, your team, and your agents.",
-                small: "Free and open source. Runs on your own server.",
-                seconds: 4.0,
-            },
-        ],
+        ending(cues),
         cues,
     ),
     id: "multiplayer",

@@ -31,8 +31,9 @@
  * rises into the frame beneath them, and fade before the caption comes in.
  * A card may show `pictures` under its words, side by side.
  *
- * Segments hand over with a short dissolve. Cards stay complete through
- * the handover, so the next card crossfades directly from visible content.
+ * Segments hand over with a short dissolve. A chapter card fades the window
+ * to the backdrop before its words enter. The ending keeps one phone on a
+ * horizontal rail while its two compositions change around it.
  */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -114,9 +115,25 @@ async function wordsDraw(cut) {
     const { width, height } = cut.output;
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     const type = cut.type;
+    const ionicons = (
+        await readFile(
+            resolve(workspace, "packages/happy-desktop-ui/src/assets/fonts/Ionicons.ttf"),
+        )
+    ).toString("base64");
+    const names = await readFile(
+        resolve(workspace, "packages/happy-desktop-ui/src/vectorIcons/ioniconsGlyphs.ts"),
+        "utf8",
+    );
+    const glyph = (name) => {
+        const found = new RegExp(`^\\s+"?${name}"?: (0x[0-9a-f]+),$`, "mu").exec(names);
+        if (!found) throw new Error(`No Ionicons glyph is named ${name}.`);
+        return `<span class="glyph">&#${Number(found[1])};</span>`;
+    };
+    const square = width === height;
     const style = `
         ${await fontFace("IBM Plex Sans", "ibm-plex-sans-latin.woff2", "400 700")}
         ${await fontFace("Bricolage Grotesque", "bricolage-grotesque-latin.woff2", "200 800")}
+        @font-face { font-family: Ionicons; src:url(data:font/ttf;base64,${ionicons}); }
         html, body { margin: 0; background: transparent; }
         body { width: ${width}px; height: ${height}px; overflow: hidden; position: relative;
             font-family: "IBM Plex Sans"; -webkit-font-smoothing: antialiased; color: #fff; }
@@ -138,6 +155,26 @@ async function wordsDraw(cut) {
             box-shadow: 0 18px 60px rgba(18, 0, 42, 0.55); }
         .line { position: absolute; left: 0; right: 0; text-align: center; font-weight: 600;
             font-size: ${type.opening ?? type.card}px; line-height: 1.15; letter-spacing: -0.03em; white-space: nowrap; }
+        .closing { position:absolute; inset:0; font-family:"IBM Plex Sans"; }
+        .closing .phone { position:absolute; width:${square ? 430 : 480}px; aspect-ratio:1406/2822;
+            left:0; top:0; }
+        .closing .screen { position:absolute; left:7.25462%; top:3.543586%; width:85.775249%; height:92.912828%; object-fit:contain; background:#000; mask-mode:luminance; mask-size:100% 100%; }
+        .closing .bezel { position:absolute; inset:0; width:100%; height:100%; }
+        .closing .desktop { position:absolute; left:${square ? 430 : 1020}px; top:${square ? 340 : 62}px; width:${square ? 780 : 1340}px;
+            border-radius:12px; overflow:hidden; box-shadow:0 20px 65px #14002880; border:1px solid #ffffff25; }
+        .closing .desktop>img { display:block; width:100%; }
+        .closing .traffic { position:absolute; left:18px; top:18px; display:flex; gap:9px; }
+        .closing .traffic i { width:12px; height:12px; border-radius:50%; background:#ff5f57; }
+        .closing .traffic i:nth-child(2){background:#febc2e}.closing .traffic i:nth-child(3){background:#28c840}
+        .platform-copy { position:absolute; left:${square ? 430 : 500}px; top:${square ? 65 : 400}px; }
+        .platform-copy h1 { margin:0; font-size:${square ? 72 : 90}px; font-weight:600; line-height:1.03; letter-spacing:-.025em; }
+        .icons { display:flex; gap:${square ? 20 : 22}px; margin-top:25px; font-size:${square ? 43 : 56}px; align-items:center; }
+        .glyph { font-family:Ionicons; font-weight:400; line-height:1; }
+        .brand-copy { position:absolute; left:${square ? 540 : 845}px; top:${square ? 280 : 270}px; text-align:left; }
+        .brand-copy h1 { margin:0; font-size:${square ? 155 : 190}px; font-weight:600; line-height:1; letter-spacing:-.035em; }
+        .brand-copy p { margin:26px 0 0; font-size:${square ? 36 : 48}px; line-height:1.3; font-weight:400; letter-spacing:-.02em; white-space:pre-line; }
+        .brand-copy .stars { display:flex; align-items:center; gap:${square ? 12 : 18}px; margin-top:28px; opacity:.9; font-size:${square ? 25 : 34}px; white-space:nowrap; }
+        .brand-copy .stars .glyph { margin-left:6px; }
     `;
     const draw = async (body) => {
         await page.setContent(`<style>${style}</style>${body}`);
@@ -146,10 +183,39 @@ async function wordsDraw(cut) {
     };
     const escape = (value) =>
         value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-    const words = { titles: new Map(), cards: new Map(), lines: new Map() };
+    const words = { titles: new Map(), cards: new Map(), lines: new Map(), phones: new Map() };
     const picture = async (file) =>
         `data:image/png;base64,${(await sharp(file).png().toBuffer()).toString("base64")}`;
+    const device = async (phone) =>
+        `<div class="phone"><img class="screen" src="${await picture(phone.screen)}" style="mask-image:url('${await picture(phone.mask)}')"><img class="bezel" src="${await picture(phone.frame)}"></div>`;
+    const closing = async (segment) => {
+        if (segment.layout === "brand")
+            return `<div class="closing shade"><div class="brand-copy"><h1>${escape(segment.wordmark)}</h1><p>${escape(segment.line)}</p><div class="stars">${escape(segment.small)}${glyph("logo-github")}<span>${segment.stars}</span></div></div></div>`;
+        const desktop = segment.desktop;
+        const file = options.takes[desktop.take];
+        const size = await probe(file);
+        let still;
+        for await (const frame of takeOpen(file, desktop.at, 1, cut.output.fps, size))
+            still = await sharp(frame, { raw: { ...size, channels: 3 } })
+                .png()
+                .toBuffer();
+        if (!still) throw new Error("No final desktop frame for the platform card.");
+        return `<div class="closing platforms shade"><div class="platform-copy"><h1>All<br>platforms</h1><div class="icons">${["logo-apple", "logo-windows", "logo-tux", "logo-android"].map(glyph).join("")}</div></div><div class="desktop"><img src="data:image/png;base64,${still.toString("base64")}"><div class="traffic"><i></i><i></i><i></i></div></div></div>`;
+    };
     for (const segment of cut.segments) {
+        if (segment.phone) {
+            const phoneWidth = square ? 430 : 480;
+            const phoneHeight = Math.round((phoneWidth * 2822) / 1406);
+            const layer = await draw(`<div class="closing">${await device(segment.phone)}</div>`);
+            words.phones.set(segment, {
+                input: await sharp(layer)
+                    .extract({ left: 0, top: 0, width: phoneWidth, height: phoneHeight })
+                    .png()
+                    .toBuffer(),
+                width: phoneWidth,
+                height: phoneHeight,
+            });
+        }
         // Each opening line on its own layer, where it rests once the window is in.
         if (segment.opening) {
             const layers = [];
@@ -190,21 +256,23 @@ async function wordsDraw(cut) {
             words.cards.set(
                 segment,
                 await draw(
-                    `<div class="card shade">${
-                        segment.wordmark
-                            ? `<div class="word">${escape(segment.wordmark)}</div>`
-                            : ""
-                    }${segment.text ? `<h1>${escape(segment.text)}</h1>` : ""}${
-                        segment.line ? `<p>${escape(segment.line)}</p>` : ""
-                    }${segment.small ? `<small>${escape(segment.small)}</small>` : ""}${
-                        segment.pictures
-                            ? `<div class="pictures">${(
-                                  await Promise.all(segment.pictures.map(picture))
-                              )
-                                  .map((src) => `<img src="${src}">`)
-                                  .join("")}</div>`
-                            : ""
-                    }</div>`,
+                    segment.layout
+                        ? await closing(segment)
+                        : `<div class="card shade">${
+                              segment.wordmark
+                                  ? `<div class="word">${escape(segment.wordmark)}</div>`
+                                  : ""
+                          }${segment.text ? `<h1>${escape(segment.text)}</h1>` : ""}${
+                              segment.line ? `<p>${escape(segment.line)}</p>` : ""
+                          }${segment.small ? `<small>${escape(segment.small)}</small>` : ""}${
+                              segment.pictures
+                                  ? `<div class="pictures">${(
+                                        await Promise.all(segment.pictures.map(picture))
+                                    )
+                                        .map((src) => `<img src="${src}">`)
+                                        .join("")}</div>`
+                                  : ""
+                          }</div>`,
                 ),
             );
     }
@@ -527,20 +595,45 @@ async function* segmentFrames(segment, first, last, start) {
     const count = Math.round(segment.seconds * fps);
     if (segment.kind === "card") {
         const layer = words.cards.get(segment);
+        const phone = words.phones.get(segment);
+        const square = width === height;
         for (let index = 0; index < count; index += 1) {
-            // The complete card crossfades directly from the previous segment.
+            // A chapter card waits for the window to dissolve to the backdrop.
+            const glide =
+                segment.layout === "platforms"
+                    ? ease(clamp01((index / fps - segment.seconds + 0.7) / 0.7))
+                    : 1;
+            const amount =
+                segment.entrance === "after-window"
+                    ? ease(clamp01((index / fps - cut.dissolve) / 0.2))
+                    : segment.layout === "platforms"
+                      ? 1 - glide
+                      : segment.layout === "brand"
+                        ? ease(clamp01(index / fps / 0.35))
+                        : 1;
+            const layers = [
+                { input: amount === 1 ? layer : await fade(layer, amount), left: 0, top: 0 },
+            ];
+            if (phone) {
+                const left = Math.round((square ? -85 : -90) + (square ? 130 : 335) * glide);
+                const top = square ? 108 : 42;
+                const crop = Math.max(0, -left);
+                layers.push({
+                    input: await sharp(phone.input)
+                        .extract({
+                            left: crop,
+                            top: 0,
+                            width: Math.min(phone.width - crop, width - Math.max(0, left)),
+                            height: phone.height,
+                        })
+                        .png()
+                        .toBuffer(),
+                    left: Math.max(0, left),
+                    top,
+                });
+            }
             const back = await backdrop.next();
-            yield await sharp(back, raw)
-                .composite([
-                    {
-                        input: layer,
-                        left: 0,
-                        top: 0,
-                    },
-                ])
-                .removeAlpha()
-                .raw()
-                .toBuffer();
+            yield await sharp(back, raw).composite(layers).removeAlpha().raw().toBuffer();
         }
         return;
     }
@@ -592,9 +685,23 @@ async function* segmentFrames(segment, first, last, start) {
             const amount = Math.min(clamp01((t - line.at) / 0.3), out);
             if (amount <= 0) continue;
             shown.push({
-                input: await fade(layers[at], amount),
+                input: await sharp(
+                    await sharp(await fade(layers[at], amount))
+                        .extend({
+                            top: Math.round((1 - k) * opening.drop),
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            background: { r: 0, g: 0, b: 0, alpha: 0 },
+                        })
+                        .png()
+                        .toBuffer(),
+                )
+                    .extract({ left: 0, top: 0, width, height })
+                    .png()
+                    .toBuffer(),
                 left: 0,
-                top: Math.round((1 - k) * opening.drop),
+                top: 0,
             });
         }
         return shown;

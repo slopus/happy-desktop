@@ -1,6 +1,6 @@
 # Multiplayer
 
-Five short takes of one world for the multiplayer video, cut together by
+The multiplayer cut uses the aware and activity takes of one world, cut by
 `scripts/demo/compositions/multiplayer/` into a 1920×1080 cut and a
 1080×1080 one.
 
@@ -31,6 +31,29 @@ node scripts/demo/compositions/multiplayer/compose.mjs \
 
 Each take needs a fresh `.d`. The cuts read each take's `cues.json`, so a
 re-recorded take needs no retiming in `chapters.mjs`.
+
+The opening's first line begins in the middle. The second appears underneath
+at 1.2 seconds; both stand still until 4.5 seconds, then glide up together as
+the window rises. The title and brand typography use IBM Plex Sans, matching
+the homepage's mobile-capture compositions.
+
+Activity covers are screenshots of the seven actual staged HTML report pages,
+rendered at 1152×648 CSS pixels into 1600×900 images. Each page has ordinary
+document type, a title, body and table or chart. Render them with
+`node scripts/demo/demos/multiplayer/artifacts/render.mjs` before recording.
+Activity scrolling uses native wheel input, a short accelerating push and a
+decaying tail. The pointer takes curved reaches with a short pause before
+clicking; it does not travel along the sidebar margin.
+
+The close follows the homepage's two beats: All platforms, with the real
+multiplayer Activity window and a native phone capture, then the phone beside
+Happy and its stacked copy. `ending.mjs` names those inputs; `phone/README.md`
+records their sources and the approved static GitHub count. There is one
+shader behind both devices. The phone keeps its size and vertical position as
+it glides horizontally between the beats. The old App Store marketing
+screenshots are unused. The chapter card enters after the app has faded to the
+shader; its words are not dissolved over the UI. Activity has no repeated
+caption, and chapter 1's caption fades before the close conversation view.
 
 ## The takes
 

@@ -493,7 +493,7 @@ export class Director {
         const from = { ...this.#pointer };
         const distance = Math.hypot(point.x - from.x, point.y - from.y);
         if (distance < 1.5) return point;
-        const duration = options.duration ?? Math.min(940, 300 + distance * 0.52);
+        const duration = options.duration ?? Math.min(850, 240 + distance * 0.62);
         // Bow the path perpendicular to the travel, to whichever side keeps the
         // arc away from the shorter axis of the move.
         // `straight` keeps a move on its line, where a bow would brush the rows beside it.
@@ -502,8 +502,14 @@ export class Director {
             : Math.min(distance * 0.16, 90) * (from.x < point.x ? -1 : 1);
         const normal = { x: -(point.y - from.y) / distance, y: (point.x - from.x) / distance };
         await this.#render(duration, async (progress) => {
-            const eased = easeInOutCubic(progress);
-            const arc = Math.sin(progress * Math.PI) * bow;
+            // A reach accelerates early, passes its target by a pixel or two,
+            // then settles. The correction vanishes at both endpoints.
+            const eased =
+                easeInOutCubic(Math.min(1, progress / 0.91)) +
+                (distance > 90
+                    ? (Math.sin(Math.PI * Math.max(0, (progress - 0.79) / 0.21)) * 1.8) / distance
+                    : 0);
+            const arc = Math.sin(progress * Math.PI) * bow * (1 - progress * 0.35);
             this.#pointer.visible = true;
             this.#pointer.x = from.x + (point.x - from.x) * eased + normal.x * arc;
             this.#pointer.y = from.y + (point.y - from.y) * eased + normal.y * arc;

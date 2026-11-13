@@ -1,430 +1,202 @@
-/*
- * The covers teammates' agents publish with their artifacts in Activity:
- * one 1600×900 picture each, a headline of about four words set large enough
- * to read on a phone, over the one thing the artifact shows. Every title,
- * number and name is the screenplay's look-alike; none is Happy Core's.
- *
- * Each cover is drawn in the app's own type (Figtree, JetBrains Mono) and
- * dark palette, its glyphs the app's Ionicons, drawn white by `render.mjs`
- * into `icons/<name>.png`. A cover is also its artifact's page.
- *
- * The screenshot cover frames real crops of this build's sidebar, saved
- * under `shots/` from a gym still.
- */
-import { existsSync, readFileSync } from "node:fs";
+/* The cover is a screenshot of the published report, at ordinary page scale. */
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const workspace = resolve(import.meta.dirname, "../../../../..");
-const fontsource = resolve(
-    workspace,
-    "packages/happy-desktop-ui/node_modules/@fontsource-variable",
+const fontRoot = resolve(
+    import.meta.dirname,
+    "../../../../../packages/happy-desktop-ui/node_modules/@fontsource-variable",
 );
-const fontData = (path) => readFileSync(resolve(fontsource, path)).toString("base64");
+const font = readFileSync(join(fontRoot, "figtree/files/figtree-latin-wght-normal.woff2")).toString(
+    "base64",
+);
+export const coverIcons = [];
+const table = (heads, rows) =>
+    `<table><thead><tr>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((v) => `<td>${v}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+const section = (title, text) => `<h2>${title}</h2><p>${text}</p>`;
+const badge = (text, tone = "green") => `<span class="badge ${tone}">${text}</span>`;
 
-/** The glyphs the covers draw, by Ionicons name. */
-export const coverIcons = [
-    "speedometer",
-    "git-pull-request",
-    "git-commit",
-    "checkmark",
-    "checkmark-circle",
-    "alert-circle",
-    "ellipse",
-    "time",
-    "flag",
-    "shield-checkmark",
-    "logo-apple",
-    "logo-windows",
-    "logo-tux",
-    "logo-android",
-    "images",
-    "document-text",
-    "people",
-    "person",
-    "key",
-    "phone-portrait",
-    "remove",
-];
-
-const iconFile = (name) => join(import.meta.dirname, "icons", `${name}.png`);
-/** An Ionicons glyph, white, as an inline image; tinted by its parent's `--tint` mask. */
-function icon(name, className = "") {
-    const file = iconFile(name);
-    if (!existsSync(file)) return "";
-    const data = readFileSync(file).toString("base64");
-    return `<i class="glyph ${className}" style="-webkit-mask-image:url(data:image/png;base64,${data})"></i>`;
-}
-function shot(name) {
-    const file = join(import.meta.dirname, "shots", `${name}.png`);
-    if (!existsSync(file)) return "";
-    return `data:image/png;base64,${readFileSync(file).toString("base64")}`;
-}
-
-const style = () => `
-@font-face { font-family: Figtree; font-weight: 300 900; src: url(data:font/woff2;base64,${fontData("figtree/files/figtree-latin-wght-normal.woff2")}) format("woff2"); }
-@font-face { font-family: "JetBrains Mono"; font-weight: 100 800; src: url(data:font/woff2;base64,${fontData("jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2")}) format("woff2"); }
-:root {
-    color-scheme: dark;
-    --ink: #f2f2f2;
-    --muted: #a3a3a3;
-    --faint: #6b6b6b;
-    --line: rgba(255, 255, 255, 0.08);
-    --card: #262626;
-    --well: #1f1f1f;
-    --green: #30d158;
-    --orange: #ff9f0a;
-    --red: #ff453a;
-    --blue: #0a84ff;
-    --indigo: #7d7aff;
-    --purple: #bf5af2;
-    --teal: #40c8e0;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; }
-body {
-    width: 800px;
-    height: 450px;
-    overflow: hidden;
-    padding: 36px 44px 38px;
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
-    font: 500 16px/1.3 Figtree, system-ui, sans-serif;
-    color: var(--ink);
-    background: #1b1b1b;
-    font-variant-numeric: tabular-nums;
-}
-.glyph {
-    display: block;
-    flex: none;
-    width: 1em;
-    height: 1em;
-    background: var(--tint, currentColor);
-    -webkit-mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-}
-header { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 17px; }
-.tile {
-    flex: none;
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    --tint: #fff;
-}
-header b { color: var(--ink); font-weight: 650; }
-header .from { margin-left: auto; font-family: "JetBrains Mono"; font-size: 14px; color: var(--faint); }
-h1 { margin: 0; font-size: 60px; line-height: 1; font-weight: 750; letter-spacing: -0.035em; }
-main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
-.row { display: flex; align-items: center; gap: 14px; }
-.pill {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 14px;
-    border-radius: 999px;
-    font-size: 18px;
-    font-weight: 650;
-    white-space: nowrap;
-}
-.mono { font-family: "JetBrains Mono"; }
-`;
-
-function page({ title, kind, tint, glyph, from, body }) {
-    return `<!doctype html>
-<html lang="en">
-<meta charset="utf-8" />
-<title>${title}</title>
-<style>${style()}</style>
-<body>
-<header><div class="tile" style="background:var(--${tint})">${icon(glyph)}</div><b>${kind}</b>${from ? `<span class="from">${from}</span>` : ""}</header>
-<h1>${title}</h1>
-<main>${body}</main>
-</body>
-</html>`;
-}
-
-/** Entry 1: the task list's first paint, before and after the cache. */
-function perf() {
-    const bars = [
-        { label: "Before", ms: 420, colour: "#4a4a4a" },
-        { label: "Cached", ms: 140, colour: "var(--green)" },
-    ];
-    const rows = bars
-        .map(
-            (bar) => `<div class="bar">
-    <span class="label">${bar.label}</span>
-    <div class="lane"><div style="width:${((bar.ms / 420) * 100).toFixed(1)}%;background:${bar.colour}"></div></div>
-    <span class="ms">${bar.ms} ms</span>
-</div>`,
-        )
-        .join("");
-    return page({
+const reports = {
+    perf: {
+        kind: "Performance investigation",
         title: "Task list, 3× faster",
-        kind: "Benchmark",
-        tint: "green",
-        glyph: "speedometer",
-        from: "10,000 tasks · first paint",
-        body: `<style>
-.bar { display: flex; align-items: center; gap: 18px; }
-.bar .label { width: 92px; font-size: 22px; color: var(--muted); }
-.bar .lane { flex: 1; height: 54px; border-radius: 12px; background: var(--well); overflow: hidden; display: flex; }
-.bar .lane div { height: 100%; border-radius: 12px; }
-.bar .ms { width: 112px; text-align: right; font-size: 30px; font-weight: 700; }
-main { justify-content: center; gap: 20px; }
-</style>${rows}`,
-    });
-}
-
-/** Entry 4: a code review's verdict, its findings by severity, and the files it read. */
-function review() {
-    const counts = [
-        { n: 0, label: "high", colour: "var(--red)" },
-        { n: 1, label: "medium", colour: "var(--orange)" },
-        { n: 2, label: "low", colour: "var(--faint)" },
-    ];
-    const files = [
-        { path: "sync/RetryQueue.ts", added: 48, deleted: 12 },
-        { path: "sync/upload.ts", added: 9, deleted: 3 },
-        { path: "sync/RetryQueue.test.ts", added: 61, deleted: 0 },
-    ];
-    return page({
-        title: "Approve, with one fix",
+        owner: "List cache · Scoteezy",
+        lead: "Caching the task list query cuts first paint from 420 ms to 140 ms on a 10,000-task workspace. The cache stays current through the existing difference stream.",
+        body: () => `${section("First paint · median of 20 cold starts", "Same workspace, same machine, renderer restarted between runs.")}
+            <div class="chart"><div><span>Before</span><i style="width:100%;background:#62626a"></i><b>420 ms</b></div><div><span>Cached</span><i style="width:33.3%;background:#58ba91"></i><b>140 ms</b></div></div>
+            ${table(
+                ["Measurement", "Before", "Cached", "Change"],
+                [
+                    ["First paint", "420 ms", "140 ms", "−67%"],
+                    ["List query", "312 ms", "38 ms", "−88%"],
+                    ["Heap after idle", "86 MB", "88 MB", "+2 MB"],
+                ],
+            )}
+            ${section("What changed", "The first snapshot reuses the materialized list. Membership changes invalidate the affected rows; ordinary progress updates preserve row identity.")}
+            <footer>Chromium · 10,000 tasks · local team server · warmed filesystem</footer>`,
+    },
+    review: {
         kind: "Code review",
-        tint: "indigo",
-        glyph: "git-pull-request",
-        from: "commit 7e2c91a",
-        body: `<style>
-.verdict { gap: 12px; }
-.verdict .ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); --tint: var(--green); }
-.count { display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--muted); }
-.count i.dot { width: 11px; height: 11px; border-radius: 50%; }
-.count b { color: var(--ink); font-weight: 700; }
-.files { margin-top: 4px; border-radius: 14px; background: var(--card); padding: 6px 18px; }
-.file { display: flex; align-items: center; gap: 12px; padding: 10px 0; font-size: 17px; }
-.file + .file { border-top: 1px solid var(--line); }
-.file .path { flex: 1; color: var(--ink); }
-.file .add { color: var(--green); }
-.file .del { color: var(--red); width: 44px; text-align: right; }
-</style>
-<div class="row verdict">
-    <span class="pill ok">${icon("checkmark-circle")}Approve</span>
-    ${counts.map((count) => `<span class="count"><i class="dot" style="background:${count.colour}"></i><b>${count.n}</b> ${count.label}</span>`).join('<span class="count">·</span>')}
-</div>
-<div class="files mono">${files
-            .map(
-                (file) =>
-                    `<div class="file"><span class="path">${file.path}</span><span class="add">+${file.added}</span><span class="del">${file.deleted ? `−${file.deleted}` : ""}</span></div>`,
-            )
-            .join("")}</div>`,
-    });
-}
-
-/** Entry 5: a three-part plan, two parts in. */
-function progress() {
-    const parts = [
-        {
-            name: "Agent sign-in",
-            state: "Merged",
-            colour: "var(--green)",
-            glyph: "checkmark-circle",
-        },
-        { name: "Desktop sessions", state: "In review", colour: "var(--orange)", glyph: "time" },
-        { name: "iOS server codes", state: "Next", colour: "var(--faint)", glyph: "ellipse" },
-    ];
-    return page({
-        title: "Sign-in: 2 of 3",
+        title: "Message retry queue",
+        owner: "Message Retry Queue · Kirill",
+        lead: "The queue preserves message order and retries interrupted uploads. One medium finding remains before this is ready to merge.",
+        body: () => `<div class="verdict">${badge("Changes requested", "amber")}<span>0 high · 1 medium · 2 low</span><code>7e2c91a</code></div>
+            ${section("M1 · Keep one idempotency key across upload retries", "If the connection drops after the server accepts an upload, retrying with a new key can deliver the same message twice. Retain the original key until the send resolves.")}
+            ${table(
+                ["File", "Added", "Removed", "Review"],
+                [
+                    ["sync/RetryQueue.ts", "+48", "−12", "One finding"],
+                    ["sync/upload.ts", "+9", "−3", "Read"],
+                    ["sync/RetryQueue.test.ts", "+61", "—", "Read"],
+                ],
+            )}
+            ${section("Validation", "Ordering, cancellation and reconnect behavior pass. Add the accepted-but-disconnected case, then rerun the focused queue checks.")}
+            <footer>Reviewed against the current diff · three files · no high severity findings</footer>`,
+    },
+    progress: {
         kind: "Progress report",
-        tint: "blue",
-        glyph: "flag",
-        from: "Team Servers",
-        body: `<style>
-.meter { height: 14px; border-radius: 7px; background: var(--well); overflow: hidden; }
-.meter div { width: 66.7%; height: 100%; border-radius: 7px; background: var(--blue); }
-.parts { border-radius: 14px; background: var(--card); padding: 4px 20px; }
-.part { display: flex; align-items: center; gap: 14px; padding: 13px 0; font-size: 22px; }
-.part + .part { border-top: 1px solid var(--line); }
-.part .glyph { font-size: 24px; }
-.part .name { flex: 1; }
-.part .state { font-size: 18px; color: var(--muted); }
-</style>
-<div class="meter"><div></div></div>
-<div class="parts">${parts
-            .map(
-                (part) =>
-                    `<div class="part" style="--tint:${part.colour}">${icon(part.glyph)}<span class="name">${part.name}</span><span class="state">${part.state}</span></div>`,
-            )
-            .join("")}</div>`,
-    });
-}
-
-/** Entry 6: the preview's QA receipt, every step on every platform. */
-function qa() {
-    const platforms = [
-        { name: "macOS", glyph: "logo-apple" },
-        { name: "Windows", glyph: "logo-windows" },
-        { name: "Linux", glyph: "logo-tux" },
-    ];
-    const steps = ["Install", "Sign in", "Open a team task", "Update"];
-    return page({
-        title: "Preview QA passes",
+        title: "Team server sign-in",
+        owner: "Team Servers · Steve",
+        lead: "Agent sign-in is merged. Desktop sessions are in review; iOS server codes follow once the desktop contract is settled.",
+        body: () => `${table(
+            ["Workstream", "Status", "Next step"],
+            [
+                ["Agent sign-in", badge("Merged"), "Included on main"],
+                [
+                    "Desktop sessions",
+                    badge("In review", "amber"),
+                    "Resolve session lifetime feedback",
+                ],
+                ["iOS server codes", badge("Next", "muted"), "Use the approved sign-in contract"],
+            ],
+        )}
+            ${section("Since the last update", "The agent now connects with an authenticated session and restores it after reconnecting. The desktop branch handles expired credentials and switching team servers.")}
+            ${section("Current gate", "The desktop review needs a clear lifetime for sessions when a server is removed. Steve is checking that the UI and agent agree before the mobile work starts.")}
+            <footer>8 updates · Team Servers · implementation in progress</footer>`,
+    },
+    qa: {
         kind: "QA receipt",
-        tint: "green",
-        glyph: "shield-checkmark",
-        from: "Desktop preview",
-        body: `<style>
-.grid { flex: 1; display: flex; flex-direction: column; border-radius: 14px; background: var(--card); padding: 6px 22px; }
-.grid .line { flex: 1; display: flex; align-items: center; }
-.grid .line + .line { border-top: 1px solid var(--line); }
-.grid .step { flex: 1.4; font-size: 20px; }
-.grid .cell { flex: 1; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 17px; color: var(--muted); --tint: var(--muted); }
-.grid .cell .glyph { font-size: 20px; }
-.grid .tick { width: 30px; height: 30px; border-radius: 50%; background: color-mix(in srgb, var(--green) 20%, transparent); display: flex; align-items: center; justify-content: center; --tint: var(--green); font-size: 18px; }
-</style>
-<div class="grid">
-    <div class="line"><span class="step"></span>${platforms.map((platform) => `<span class="cell">${icon(platform.glyph)}${platform.name}</span>`).join("")}</div>
-    ${steps.map((step) => `<div class="line"><span class="step">${step}</span>${platforms.map(() => `<span class="cell"><span class="tick">${icon("checkmark")}</span></span>`).join("")}</div>`).join("")}
-</div>`,
-    });
-}
-
-/** Entry 8: real crops of this build's sidebar rows, read and unread. */
-function screenshot() {
-    const frames = [
-        { label: "Read", image: shot("rows-read") },
-        { label: "Unread", image: shot("rows-unread") },
-    ];
-    return page({
-        title: "Unread dots, steadier",
-        kind: "Screenshot",
-        tint: "purple",
-        glyph: "images",
-        from: "Sidebar Unread Dots",
-        body: `<style>
-main { flex-direction: row; align-items: center; gap: 18px; }
-.frame { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.frame span { font-size: 18px; color: var(--muted); }
-.frame img { display: block; width: 100%; border-radius: 14px; border: 1px solid var(--line); }
-</style>${frames.map((frame) => `<div class="frame"><span>${frame.label}</span><img alt="" src="${frame.image}"></div>`).join("")}`,
-    });
-}
-
-/** Entry 10: a design draft, as the table it proposes. */
-function design() {
-    const columns = ["Member", "Owner", "Bot"];
-    const rows = [
-        { name: "Read its conversation", cells: [true, true, true] },
-        { name: "Write to it", cells: [true, true, true] },
-        { name: "Change its settings", cells: ["switch", true, false] },
-    ];
-    const cell = (value) =>
-        value === true
-            ? `<span class="yes">${icon("checkmark")}</span>`
-            : value === false
-              ? `<span class="no">${icon("remove")}</span>`
-              : `<span class="switch">Owner's switch</span>`;
-    return page({
-        title: "Bot permissions, draft",
+        title: "Desktop preview",
+        owner: "Desktop QA · Kirill",
+        lead: "Install, sign in, open a shared task and update the preview on all three desktop platforms. The complete path passes on clean test machines.",
+        body: () => `${table(
+            ["Scenario", "macOS", "Windows", "Linux"],
+            [
+                ["Install and launch", "Pass", "Pass", "Pass"],
+                ["Sign in to team server", "Pass", "Pass", "Pass"],
+                ["Open a shared task", "Pass", "Pass", "Pass"],
+                ["Receive a teammate message", "Pass", "Pass", "Pass"],
+                ["Update and reopen", "Pass", "Pass", "Pass"],
+            ],
+        )}
+            ${section("Receipt", "Each machine started with a fresh profile. Signing and installer checks pass, the shared task receives live messages, and the preview reopens after updating.")}
+            <footer>Clean profiles · signed preview builds · no blocking findings</footer>`,
+    },
+    screenshot: {
+        kind: "UI change",
+        title: "Steadier unread dots",
+        owner: "Sidebar Unread Dots · Scoteezy",
+        lead: "Unread dots now sit on the task picture. A task name keeps its place when a new message arrives or the conversation is marked read.",
+        body: () => `<div class="screens">${["read", "unread"].map((state) => `<figure><figcaption>${state === "read" ? "Read" : "Unread"}</figcaption><img src="data:image/png;base64,${readFileSync(join(import.meta.dirname, "shots", `rows-${state}.png`)).toString("base64")}"></figure>`).join("")}</div>
+            ${section("What to look for", "The label and its baseline are identical in both states. Only the small marker on the picture changes; the row, hover controls and neighboring tasks stay still.")}
+            ${table(
+                ["State change", "Label position", "Row identity"],
+                [
+                    ["Read → unread", "Preserved", "Preserved"],
+                    ["Unread → read", "Preserved", "Preserved"],
+                ],
+            )}`,
+    },
+    design: {
         kind: "Design draft",
-        tint: "orange",
-        glyph: "document-text",
-        from: "Bot Permissions",
-        body: `<style>
-.table { flex: 1; display: flex; flex-direction: column; border-radius: 14px; background: var(--card); padding: 4px 22px; }
-.table .line { flex: 1; display: flex; align-items: center; }
-.table .line + .line { border-top: 1px solid var(--line); }
-.table .head { color: var(--muted); font-size: 17px; flex: 0.8; }
-.table .name { flex: 1.5; font-size: 20px; }
-.table .col { flex: 1; display: flex; justify-content: center; font-size: 22px; }
-.table .yes { --tint: var(--green); }
-.table .no { --tint: var(--faint); }
-.table .switch { font-size: 15px; color: var(--orange); padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--orange) 16%, transparent); }
-</style>
-<div class="table">
-    <div class="line head"><span class="name"></span>${columns.map((column) => `<span class="col">${column}</span>`).join("")}</div>
-    ${rows.map((row) => `<div class="line"><span class="name">${row.name}</span>${row.cells.map((value) => `<span class="col">${cell(value)}</span>`).join("")}</div>`).join("")}
-</div>`,
-    });
+        title: "Bot permissions",
+        owner: "Bot Permissions · Steve",
+        lead: "A team bot is a shared conversation. Members can read and write by default, while owners can restrict who changes the bot’s settings.",
+        body: () => `${table(
+            ["Capability", "Member", "Owner", "Bot"],
+            [
+                ["Read the conversation", "Allowed", "Allowed", "Allowed"],
+                ["Send a message", "Allowed", "Allowed", "Allowed"],
+                ["Change settings", "Owner’s switch", "Allowed", "—"],
+            ],
+        )}
+            ${section("Proposed behavior", "Keep joining a bot as simple as opening its conversation. Show the current access policy in settings, with a clear owner-only option for changing instructions and connected tools.")}
+            ${section("Open question", "Should the owner-only switch apply to every setting, or only instructions and tools? The draft recommends one policy so the control stays understandable.")}
+            <footer>Draft v5 · permissions are enforced by the server</footer>`,
+    },
+    mobile: {
+        kind: "Release status",
+        title: "Mobile preview",
+        owner: "Mobile preview · Kirill",
+        lead: "The iOS build is waiting for TestFlight review. Android is available to the internal track while the team checks sign-in and shared conversations.",
+        body: () => `${table(
+            ["Platform", "Distribution", "Status"],
+            [
+                ["iOS", "TestFlight", badge("In review", "amber")],
+                ["Android", "Internal track", badge("Available")],
+            ],
+        )}
+            ${section("Latest build", "Both builds include the current team server sign-in flow, task membership and live messages. The release notes cover reconnect behavior and the shared bot conversation.")}
+            ${section("Before widening the preview", "Complete the clean-install receipt, confirm notification delivery with the app backgrounded, and check that existing sessions survive an update.")}
+            <footer>14 updates · staged preview · release checks in progress</footer>`,
+    },
+};
+
+function reportPage(key) {
+    const report = reports[key];
+    return `<!doctype html><html lang="en"><meta charset="utf-8"><title>${report.title}</title><style>
+        @font-face{font-family:Figtree;src:url(data:font/woff2;base64,${font}) format('woff2');font-weight:300 900}
+        *{box-sizing:border-box}html,body{margin:0}body{width:1152px;height:648px;overflow:hidden;padding:38px 58px;background:#1c1c1e;color:#e9e9ed;font:400 15px/1.5 Figtree,system-ui,sans-serif;display:flex;flex-direction:column;font-variant-numeric:tabular-nums}
+        header{display:flex;align-items:center;justify-content:space-between;color:#8f9098;font-size:13px;padding-bottom:16px;border-bottom:1px solid #323237}
+        h1{font-size:30px;line-height:1.2;font-weight:650;letter-spacing:-.025em;margin:22px 0 12px}h2{font-size:16px;font-weight:600;margin:20px 0 7px}p{margin:0;color:#bfc0c8;max-width:960px}.lead{font-size:16px;line-height:1.55;margin-bottom:18px;max-width:980px}
+        table{width:100%;border-collapse:collapse;font-size:14px;text-align:left;margin:8px 0}th{color:#92939e;font-weight:500;background:#242427}th,td{padding:10px 14px;border-bottom:1px solid #333338}td:first-child{font-weight:500}td:not(:first-child){color:#bfc0c8}
+        .badge{display:inline-block;padding:3px 9px;border-radius:5px;font-size:12px;background:#294236;color:#8cdbaf}.amber{background:#443a29;color:#dfc18a}.muted{background:#333339;color:#b4b4be}.verdict{display:flex;gap:18px;align-items:center;color:#92939e;font-size:13px;margin-bottom:6px}.verdict code{margin-left:auto;font-size:12px}
+        .chart{display:flex;flex-direction:column;gap:12px;max-width:850px;margin:17px 0 22px}.chart>div{display:flex;align-items:center;gap:14px}.chart span{width:60px;flex:none;color:#a4a5af;font-size:13px}.chart i{height:17px;border-radius:3px}.chart b{font-size:14px;font-weight:500;white-space:nowrap}
+        footer{color:#797a85;font-size:12px;margin-top:22px;padding-top:12px;border-top:1px solid #323237}.screens{display:flex;gap:20px;max-width:750px}.screens figure{flex:1;margin:4px 0 0}.screens img{display:block;width:100%;border:1px solid #38383d;border-radius:6px}.screens figcaption{font-size:12px;color:#999aa5;margin-bottom:8px}
+        </style><body><header><span>${report.kind}</span><span>${report.owner}</span></header><h1>${report.title}</h1><p class="lead">${report.lead}</p><main>${report.body()}</main></body></html>`;
 }
 
-/** Entry 11: where each phone build of the preview stands. */
-function mobile() {
-    const builds = [
-        { name: "iOS", glyph: "logo-apple", state: "TestFlight review", colour: "var(--orange)" },
-        { name: "Android", glyph: "logo-android", state: "Internal track", colour: "var(--green)" },
-    ];
-    return page({
-        title: "Mobile preview status",
-        kind: "Status",
-        tint: "teal",
-        glyph: "phone-portrait",
-        from: "Mobile preview",
-        body: `<style>
-main { gap: 16px; }
-.build { flex: 1; display: flex; align-items: center; gap: 18px; padding: 0 24px; border-radius: 14px; background: var(--card); font-size: 28px; font-weight: 650; }
-.build .glyph { font-size: 34px; --tint: var(--ink); }
-.build .name { flex: 1; }
-.build .pill { font-size: 20px; }
-.build .pill i.dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
-</style>${builds
-            .map(
-                (build) =>
-                    `<div class="build">${icon(build.glyph)}<span class="name">${build.name}</span><span class="pill" style="color:${build.colour};background:color-mix(in srgb, ${build.colour} 16%, transparent)"><i class="dot"></i>${build.state}</span></div>`,
-            )
-            .join("")}`,
-    });
-}
-
-/** Every cover by key, with the title and summary its artifact is published under. */
 export const covers = {
     perf: {
         title: "Task list, 3× faster",
         summary:
             "With 10,000 tasks, the sidebar's first paint drops from 420 ms to 140 ms by caching the list query.",
-        html: perf,
+        html: () => reportPage("perf"),
     },
     review: {
         title: "Review: message retry queue",
         summary:
             "Commit 7e2c91a passes with one medium finding: a retried send can arrive twice if the upload is cut off.",
-        html: review,
+        html: () => reportPage("review"),
     },
     progress: {
         title: "Team server sign-in: progress",
         summary:
             "The agent's sign-in is merged. The desktop's sessions are next, then iOS server codes.",
-        html: progress,
+        html: () => reportPage("progress"),
     },
     qa: {
         title: "Desktop preview: QA",
         summary: "Install, sign in, open a team task, and update, on macOS, Windows and Linux.",
-        html: qa,
+        html: () => reportPage("qa"),
     },
     screenshot: {
         title: "Sidebar: steadier unread dots",
         summary:
             "Unread dots sit on the row's picture, so a task's name doesn't move when one appears.",
-        html: screenshot,
+        html: () => reportPage("screenshot"),
     },
     design: {
         title: "Draft: bot permissions",
         summary:
             "Who can read, write to and change a team bot: members by default, with an owner-only switch for settings.",
-        html: design,
+        html: () => reportPage("design"),
     },
     mobile: {
         title: "Mobile preview: status",
         summary: "iOS is in TestFlight review. Android is on the internal track.",
-        html: mobile,
+        html: () => reportPage("mobile"),
     },
 };
 
-/** An artifact's page: its cover, drawn as the page. */
 export const coverPage = (key) => covers[key].html();
-
-/** The cover published with an artifact. */
 export const coverFile = (key) => join(import.meta.dirname, "covers", `${key}.webp`);

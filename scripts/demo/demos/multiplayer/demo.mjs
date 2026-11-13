@@ -741,11 +741,6 @@ export default {
         if (shot !== "aware" && shot !== "activity") activity.start();
         framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
         await writeFile(join(output, "framing.json"), JSON.stringify(framing, null, 2));
-        /** The hand leaves a row the way it came, then goes to `to` if given. */
-        const leave = async (to) => {
-            await demo.moveTo({ x: lane, y: demo.pointer.y }, { straight: true });
-            if (to) await demo.moveTo(to);
-        };
         /** Where a thing is on screen now, in CSS pixels, for the cut's camera. */
         const place = async (locator) => {
             const box = await locator.boundingBox().catch(() => null);
@@ -756,37 +751,11 @@ export default {
         // Where the hand goes once it is done: the empty top-left corner of the
         // title bar, where it hovers nothing, out of every pushed-in view.
         const away = { x: 760, y: 14 };
-        /**
-         * Where the hand travels up and down: the sidebar's own margin, right
-         * of its rows and left of the resize handle, where it hovers nothing.
-         */
-        const margin = await page.evaluate(() => {
-            const rights = [...document.querySelectorAll('[data-happy-desktop-ui="sidebar-item"]')]
-                .map((row) => row.getBoundingClientRect())
-                .filter((box) => box.width > 0)
-                .map((box) => box.right);
-            const right = Math.max(...rights);
-            const lefts = [
-                ...document.querySelectorAll('[data-happy-desktop-ui="app-shell-resize-handle"]'),
-            ]
-                .map((handle) => handle.getBoundingClientRect().left)
-                .filter((left) => left >= right);
-            return { right, left: Math.min(...lefts) };
-        });
-        filmed.sidebarMargin = margin;
-        const lane =
-            margin.left - margin.right >= 2 ? Math.round((margin.right + margin.left) / 2) : 420;
-        filmed.lane = lane;
-        /**
-         * The hand goes across to the lane, along it to the target's row, and
-         * into the row; it dwells a quarter second and clicks.
-         */
+        /** One curved reach, a short reading pause, then a click. */
         const choose = async (target, name) => {
-            const box = await target.boundingBox();
-            await demo.moveTo({ x: lane, y: demo.pointer.y }, { straight: true });
-            await demo.moveTo({ x: lane, y: box.y + box.height / 2 }, { straight: true });
-            await demo.moveTo(target, { straight: true });
-            await demo.hold(250);
+            await demo.hold(180);
+            await demo.moveTo(target);
+            await demo.hold(210);
             cue(`${name}-click`, demo);
             await demo.click(target, { after: 0 });
         };
@@ -822,7 +791,6 @@ export default {
                 "Offline Drafts' plan",
             );
             cue("visit-open", demo);
-            await leave();
             await demo.hold(2600);
             await choose(sidebarRow(page, world.openTask), "back");
             const opened = world.doneTasks.find((task) => task.name === world.openTask);
@@ -832,7 +800,6 @@ export default {
                 "Voice waveform again",
             );
             cue("back-open", demo);
-            await leave();
             await demo.hold(2200);
         }
 
@@ -877,9 +844,9 @@ export default {
             const first = page.getByText(covers.perf.summary).first();
             await until(demo, () => first.isVisible(), "the Activity page");
             cue("activity-open", demo, await place(first));
-            await leave(away);
+            await demo.moveTo({ x: viewport.width - 38, y: 435 }, { duration: 720 });
             await demo.hold(2500);
-            // Each step brings one entry to the top of the feed in 0.8 s, eased.
+            // Each short trackpad gesture brings the next report into view.
             const steps = [
                 { title: covers.review.title, above: 24, rest: 1000 },
                 { title: covers.progress.title, above: 24, rest: 1000 },
@@ -887,11 +854,11 @@ export default {
             ];
             for (const [index, step] of steps.entries()) {
                 cue(`step${index + 1}`, demo);
-                await page
+                const scroll = await page
                     .getByText(step.title)
                     .first()
                     .evaluate(
-                        (title, { above, ms }) => {
+                        (title, { above }) => {
                             let port = title.parentElement;
                             while (
                                 port &&
@@ -901,25 +868,25 @@ export default {
                                 )
                             )
                                 port = port.parentElement;
-                            const from = port.scrollTop;
-                            const to =
-                                from +
-                                title.getBoundingClientRect().top -
-                                port.getBoundingClientRect().top -
-                                above;
-                            const start = performance.now();
-                            const ease = (k) =>
-                                k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2;
-                            const frame = (now) => {
-                                const k = Math.min(1, (now - start) / ms);
-                                port.scrollTop = from + (to - from) * ease(k);
-                                if (k < 1) requestAnimationFrame(frame);
+                            const rect = port.getBoundingClientRect();
+                            return {
+                                distance: title.getBoundingClientRect().top - rect.top - above,
+                                x: rect.right - 28,
+                                y: rect.top + rect.height * 0.56,
                             };
-                            requestAnimationFrame(frame);
                         },
-                        { above: step.above, ms: 800 },
+                        { above: step.above },
                     );
-                await demo.hold(800);
+                await demo.moveTo({ x: scroll.x, y: scroll.y }, { duration: 310 + index * 35 });
+                await demo.hold(140);
+                // Native wheel input: a short push followed by a decaying tail.
+                const weights = [2, 5, 9, 12, 13, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0.6, 0.4];
+                const total = weights.reduce((sum, n) => sum + n, 0);
+                for (const [tick, weight] of weights.entries()) {
+                    await page.mouse.wheel(0, (scroll.distance * weight) / total);
+                    await demo.hold(tick < 7 ? 17 : 23 + (tick % 3) * 4);
+                }
+                await demo.hold(170);
                 cue(`step${index + 1}-rest`, demo);
                 await demo.hold(step.rest);
             }
