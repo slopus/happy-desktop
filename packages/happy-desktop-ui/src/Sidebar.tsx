@@ -832,6 +832,77 @@ const SETTLE_MS = 160;
 /** How far outside the scrollport a stopped spinner starts turning again: about three rows. */
 const SPINNER_SIGHT_MARGIN = 96;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+/** How long the body takes to scroll an active row into view, on the settle's easing. */
+const REVEAL_MS = 240;
+/** How many rows of the list a revealed row keeps between itself and the edge it came in at. */
+const REVEAL_MARGIN_ROWS = 5;
+
+/**
+ * Where the body's scroll puts a row it has to reveal, or nothing when the row
+ * is already wholly on screen. The row stops `REVEAL_MARGIN_ROWS` of its own
+ * pitch inside the edge it came in at — centred instead where the scrollport
+ * is too short for that — and the list's own ends stop it short of either.
+ */
+function revealScrollTop(viewport: HTMLElement, row: DOMRect): number | undefined {
+    const view = viewport.getBoundingClientRect();
+    if (row.top >= view.top && row.bottom <= view.bottom) return undefined;
+    const margin = REVEAL_MARGIN_ROWS * (row.height + SIDEBAR_ROW_GAP);
+    const offset =
+        view.height < row.height + 2 * margin
+            ? row.top - view.top - (view.height - row.height) / 2
+            : row.top < view.top
+              ? row.top - view.top - margin
+              : row.bottom - view.bottom + margin;
+    const max = viewport.scrollHeight - viewport.clientHeight;
+    return Math.min(max, Math.max(0, viewport.scrollTop + offset));
+}
+
+/**
+ * Scrolls the body to `target` over `REVEAL_MS` on the settle's easing, or at
+ * once under reduced motion. The eased progress is read from a Web Animation
+ * that animates nothing, so the curve is the very one the stylesheet names.
+ * The reader's own scrolling takes over: a wheel, a touch or a press on the
+ * body, or the scroll moving anywhere but where the last frame put it, ends
+ * the glide where it stands. Returns what stops it early.
+ */
+function revealScroll(viewport: HTMLElement, target: number): () => void {
+    if (reducedMotion() || typeof KeyframeEffect !== "function") {
+        viewport.scrollTop = target;
+        return () => undefined;
+    }
+    const from = viewport.scrollTop;
+    const timing = new Animation(
+        new KeyframeEffect(null, null, {
+            duration: REVEAL_MS,
+            easing: SETTLE_EASING,
+            fill: "forwards",
+        }),
+    );
+    let frame = 0;
+    let placed = from;
+    const stop = () => {
+        cancelAnimationFrame(frame);
+        timing.cancel();
+        for (const type of ["wheel", "touchstart", "pointerdown"])
+            viewport.removeEventListener(type, stop);
+    };
+    for (const type of ["wheel", "touchstart", "pointerdown"])
+        viewport.addEventListener(type, stop, { passive: true });
+    const step = () => {
+        if (!viewport.isConnected || Math.abs(viewport.scrollTop - placed) > 1) {
+            stop();
+            return;
+        }
+        const progress = timing.effect?.getComputedTiming().progress ?? 1;
+        viewport.scrollTop = from + (target - from) * progress;
+        placed = viewport.scrollTop;
+        if (timing.playState === "finished") stop();
+        else frame = requestAnimationFrame(step);
+    };
+    timing.play();
+    frame = requestAnimationFrame(step);
+    return stop;
+}
 /**
  * How long a drop holds the geometry it captured while it waits for the render
  * that rearranges the rows. Long enough for a reorder to come back through the
@@ -3349,18 +3420,23 @@ export function Sidebar(props: SidebarProps) {
         };
     });
     /**
-     * The active row brought into view, once for each row made active: the
-     * scrollport moves just far enough to show it, and not at all when it is
-     * already on screen. A row that is not drawn yet, such as a task whose
-     * join the host has not answered, is brought into view when it arrives.
-     * After that the reader's own scrolling is left alone.
+     * The active row brought into view, once for each row made active: a row
+     * already wholly on screen moves nothing, and one that is not glides in
+     * to stand clear of the edge (`revealScrollTop`). A row that is not drawn
+     * yet, such as a task whose join the host has not answered, is brought
+     * into view when it arrives. After that the reader's own scrolling is
+     * left alone, and the next row made active stops one still gliding.
      */
     const activeRevealed = useRef<string | undefined>(undefined);
+    const revealStop = useRef<() => void>(undefined);
     // eslint-disable-next-line happy-react/no-layout-effect -- the row an address lands on is known only once it is laid out, and it must be scrolled to before paint so it never shows off screen first
     useLayoutEffect(() => {
         const id = local.activeItemId;
         const viewport = bodyViewport.current;
         if (activeRevealed.current === id || !viewport) return;
+        // A glide toward the row active before stops, wherever this one is.
+        revealStop.current?.();
+        revealStop.current = undefined;
         const row = [
             ...viewport.querySelectorAll<HTMLElement>(
                 '[data-happy-desktop-ui="sidebar-item"][data-item-id]',
@@ -3371,9 +3447,8 @@ export function Sidebar(props: SidebarProps) {
         const box = row.getBoundingClientRect();
         // A row folded away draws no box, and unfolding it is the reader's call.
         if (box.height === 0) return;
-        const view = viewport.getBoundingClientRect();
-        if (box.top < view.top) viewport.scrollTop -= view.top - box.top;
-        else if (box.bottom > view.bottom) viewport.scrollTop += box.bottom - view.bottom;
+        const target = revealScrollTop(viewport, box);
+        if (target !== undefined) revealStop.current = revealScroll(viewport, target);
     });
     const moveAnnounce = (text: string): void => {
         const slot = announceSlot === 0 ? 1 : 0;
