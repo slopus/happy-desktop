@@ -13,7 +13,7 @@ export function ComputeChipPage() {
             title="Compute chip"
         >
             <Specimen
-                detail="no machine yet · a pool, online · one machine, online · one machine, offline"
+                detail="no machine yet · a pool, online · one machine, online · one machine, offline · a computer, online · a computer, offline"
                 label="States"
                 number="01"
                 stage="surface"
@@ -30,6 +30,10 @@ export function ComputeChipPage() {
                     <ComputeChip compute={{ kind: "pool", label: "Lab machines", online: true }} />
                     <ComputeChip compute={{ kind: "runner", label: "build-1", online: true }} />
                     <ComputeChip compute={{ kind: "runner", label: "build-2", online: false }} />
+                    <ComputeChip
+                        compute={{ kind: "computer", label: "Build farm", online: true }}
+                    />
+                    <ComputeChip compute={{ kind: "computer", label: "laptop", online: false }} />
                 </div>
             </Specimen>
             <Specimen

@@ -4,8 +4,8 @@ import { Icon } from "./Icon";
 export type ComputeChipCompute =
     | { readonly kind: "none" }
     | {
-          readonly kind: "pool" | "runner";
-          /** The pool's name or the machine's hostname. */
+          readonly kind: "pool" | "runner" | "computer";
+          /** The pool's name, the machine's hostname, or the computer's name. */
           readonly label: string;
           /** Absent until the server has said; no dot is drawn then. */
           readonly online?: boolean;

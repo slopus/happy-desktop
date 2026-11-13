@@ -12387,7 +12387,10 @@ function HappyAgentTerminalScreen(props: {
 function computeChipOf(compute: HappyAgentCompute): ComputeChipCompute {
     if (compute.kind === "none") return { kind: "none" };
     const label =
-        compute.label ?? (compute.kind === "pool" ? compute.poolId : compute.runnerId.slice(0, 8));
+        compute.label ??
+        (compute.kind === "pool"
+            ? compute.poolId
+            : (compute.kind === "runner" ? compute.runnerId : compute.computerId).slice(0, 8));
     return {
         kind: compute.kind,
         label,

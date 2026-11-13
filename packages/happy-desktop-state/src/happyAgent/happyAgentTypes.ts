@@ -478,8 +478,9 @@ export interface HappyAgentUsageContext {
  */
 /**
  * Where a Happy Cloud conversation's shell, file and git tools run: nothing,
- * any machine of a pool, or one machine. `label` is the pool's name or the
- * machine's hostname; `online` is absent until the server has said.
+ * any machine of a pool, or one machine or computer. `label` is the pool's
+ * name, the machine's hostname, or the computer's name; `online` is absent
+ * until the server has said.
  */
 export type HappyAgentCompute =
     | { readonly kind: "none" }
@@ -492,6 +493,12 @@ export type HappyAgentCompute =
     | {
           readonly kind: "runner";
           readonly runnerId: string;
+          readonly label?: string;
+          readonly online?: boolean;
+      }
+    | {
+          readonly kind: "computer";
+          readonly computerId: string;
           readonly label?: string;
           readonly online?: boolean;
       };

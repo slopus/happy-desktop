@@ -174,8 +174,24 @@ function repositoryProject(agent: object): HappyAgentRepositoryBinding | undefin
     };
 }
 
-/** The cloud's compute binding, as the conversation shows it. */
-function computeProject(compute: AgentCompute): HappyAgentCompute {
+/**
+ * An agent's compute as Happy Cloud sends it. The client package does not
+ * state the `computer` binding yet, so it is stated here.
+ */
+type CloudCompute =
+    | AgentCompute
+    | {
+          type: "computer";
+          computerId: string;
+          label?: string;
+          status?: "online" | "offline";
+      };
+
+/**
+ * The cloud's compute binding, as the conversation shows it. A binding this
+ * client does not know yet shows nothing rather than failing the session.
+ */
+export function computeProject(compute: CloudCompute): HappyAgentCompute | undefined {
     const status =
         compute.type === "none" || compute.status === undefined
             ? {}
@@ -197,6 +213,15 @@ function computeProject(compute: AgentCompute): HappyAgentCompute {
                 ...(compute.label === undefined ? {} : { label: compute.label }),
                 ...status,
             };
+        case "computer":
+            return {
+                kind: "computer",
+                computerId: compute.computerId,
+                ...(compute.label === undefined ? {} : { label: compute.label }),
+                ...status,
+            };
+        default:
+            return undefined;
     }
 }
 
@@ -263,7 +288,9 @@ export function projectSession(input: SessionProjectionInput): SessionState {
             (input.mode === null && agent.parentAgentId === null),
         ...(agent.title === null ? {} : { title: agent.title }),
         titleStatus: agent.titleStatus,
-        ...(agent.compute === undefined ? {} : { compute: computeProject(agent.compute) }),
+        ...((compute) => (compute ? { compute } : {}))(
+            agent.compute === undefined ? undefined : computeProject(agent.compute),
+        ),
         ...((repository) => (repository ? { repository } : {}))(repositoryProject(agent)),
         effort: mode.effort,
         ...(serviceTier === undefined ? {} : { serviceTier }),
