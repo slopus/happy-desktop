@@ -271,6 +271,7 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             {...(setup.cloudProviders ? { cloudProviders: setup.cloudProviders } : {})}
             {...(setup.plugins ? { plugins: setup.plugins } : {})}
             {...(setup.payments ? { payments: setup.payments } : {})}
+            {...(setup.providers ? { providers: setup.providers } : {})}
             mobilePairingMethod={context.mobilePairingMethod}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.externalLinkOpen ? { onExternalOpen: context.externalLinkOpen } : {})}

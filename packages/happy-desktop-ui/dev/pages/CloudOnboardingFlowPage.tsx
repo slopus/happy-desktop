@@ -125,8 +125,8 @@ const screens: readonly Screen[] = [
             view: {
                 kind: "inference",
                 options: [
-                    { id: "claude", connected: true },
                     { id: "chatgpt", connected: false, onSelect: noop },
+                    { id: "claude", connected: true },
                     { id: "grok", connected: false, onSelect: noop },
                     { id: "custom", connected: false, onSelect: noop },
                 ],

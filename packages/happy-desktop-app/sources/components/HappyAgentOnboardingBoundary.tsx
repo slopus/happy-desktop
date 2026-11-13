@@ -6,6 +6,7 @@ import {
     type ExperimentsStore,
     type HappyAgentCloudProvidersStore,
     type HappyAgentPaymentsStore,
+    type HappyAgentProvidersStore,
     type HappyAgentPluginsStore,
     type HappyAgentClockStore,
     type HappyAgentOnboardingStore,
@@ -45,6 +46,7 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly cloudProviders?: () => HappyAgentCloudProvidersStore | undefined;
     readonly plugins?: () => HappyAgentPluginsStore | undefined;
     readonly payments?: () => HappyAgentPaymentsStore | undefined;
+    readonly providers?: () => HappyAgentProvidersStore;
     readonly children: ReactNode;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
@@ -140,6 +142,7 @@ export function HappyAgentOnboardingBoundary(props: {
                 {...(props.cloudProviders ? { cloudProviders: props.cloudProviders } : {})}
                 {...(props.plugins ? { plugins: props.plugins } : {})}
                 {...(props.payments ? { payments: props.payments } : {})}
+                {...(props.providers ? { providers: props.providers } : {})}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
             />

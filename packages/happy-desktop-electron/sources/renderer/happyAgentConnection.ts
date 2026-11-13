@@ -616,6 +616,7 @@ export function happyAgentConnectionOpen(input: {
                         cloudProviders: () => client.cloudProviders(),
                         plugins: () => client.plugins(),
                         payments: () => client.payments(),
+                        providers: () => client.providers(),
                     }
                   : {}),
           }

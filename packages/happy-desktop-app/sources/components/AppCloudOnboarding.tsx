@@ -7,6 +7,7 @@ import {
     type HappyAgentOnboardingSnapshot,
     type HappyAgentOnboardingStore,
     type HappyAgentPaymentsStore,
+    type HappyAgentProvidersStore,
     happyAgentMoneyExponent,
     type HappyAgentPluginsSnapshot,
     type HappyAgentPluginsStore,
@@ -22,7 +23,7 @@ import {
     type CloudOnboardingScreenProps,
     type ThemeMode,
 } from "happy-desktop-ui";
-import { providerAddProps } from "../views/AppHappyAgentSettingsView";
+import { AppCustomProviderDialog, providerAddProps } from "../views/AppHappyAgentSettingsView";
 import { methodText, moneyText, PAYMENT_PRESETS } from "../views/AppPaymentsSettings";
 
 const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = {
@@ -70,6 +71,7 @@ function pluginsFootnote(
 function inferenceOptions(
     providers: HappyAgentCloudProvidersSnapshot | undefined,
     store: HappyAgentCloudProvidersStore | undefined,
+    customCreate: (() => void) | undefined,
 ): readonly CloudOnboardingInferenceOption[] {
     const vendors = new Set(
         (providers?.connections ?? [])
@@ -89,24 +91,24 @@ function inferenceOptions(
         readonly connected: boolean;
         readonly onSelect?: (() => void) | undefined;
     }[] = [
-        {
-            id: "claude",
-            connected: vendors.has(TILE_VENDORS.claude),
-            ...(providers?.signIns.has("claude") || providers?.setupToken
-                ? {
-                      onSelect: open({
-                          flow: { kind: "claude", setupToken: !providers.signIns.has("claude") },
-                          to,
-                      }),
-                  }
-                : {}),
-        },
+        // A family signs in where the server offers it, and takes an API key otherwise.
         {
             id: "chatgpt",
             connected: vendors.has(TILE_VENDORS.chatgpt),
-            ...(providers?.signIns.has("codex")
-                ? { onSelect: open({ flow: { kind: "chatgpt" }, to }) }
-                : {}),
+            onSelect: open(
+                providers?.signIns.has("codex")
+                    ? { flow: { kind: "chatgpt" }, to }
+                    : { flow: { kind: "apiKey", vendor: "openai" }, to },
+            ),
+        },
+        {
+            id: "claude",
+            connected: vendors.has(TILE_VENDORS.claude),
+            onSelect: open(
+                providers?.signIns.has("claude") || providers?.setupToken
+                    ? { flow: { kind: "claude", setupToken: !providers.signIns.has("claude") }, to }
+                    : { flow: { kind: "apiKey", vendor: "anthropic" }, to },
+            ),
         },
         {
             id: "grok",
@@ -116,7 +118,7 @@ function inferenceOptions(
         {
             id: "custom",
             connected: [...vendors].some((vendor) => !known.has(vendor)),
-            onSelect: open({ flow: { kind: "choose" }, to }),
+            onSelect: customCreate,
         },
     ];
     return options.map(({ onSelect, ...option }) => (onSelect ? { ...option, onSelect } : option));
@@ -178,6 +180,7 @@ export function AppCloudOnboarding(props: {
     readonly cloudProviders?: () => HappyAgentCloudProvidersStore | undefined;
     readonly plugins?: () => HappyAgentPluginsStore | undefined;
     readonly payments?: () => HappyAgentPaymentsStore | undefined;
+    readonly providers?: () => HappyAgentProvidersStore;
     readonly appearance: ThemeMode;
     readonly serverLabel?: string;
     readonly placeholderSeed: string;
@@ -191,6 +194,20 @@ export function AppCloudOnboarding(props: {
         providersStore?.get ?? noSnapshot,
         providersStore?.get ?? noSnapshot,
     );
+    // The team's own providers, for the Custom tile, where the reader may add one.
+    const customStore = providersStore ? props.providers?.() : undefined;
+    const custom = useSyncExternalStore(
+        customStore?.subscribe ?? noopSubscribe,
+        customStore?.get ?? noSnapshot,
+        customStore?.get ?? noSnapshot,
+    );
+    const customCreate =
+        customStore && custom?.customProvidersManageable
+            ? () => {
+                  providersStore?.addClose();
+                  customStore.customProviderCreateOpen();
+              }
+            : undefined;
     const pluginsStore = gate.kind === "plugins" ? props.plugins?.() : undefined;
     const plugins = useSyncExternalStore(
         pluginsStore?.subscribe ?? noopSubscribe,
@@ -333,7 +350,7 @@ export function AppCloudOnboarding(props: {
                 return {
                     view: {
                         kind: "inference",
-                        options: inferenceOptions(providers, providersStore),
+                        options: inferenceOptions(providers, providersStore, customCreate),
                         ...((flow.error ?? providers?.error?.message)
                             ? { error: flow.error ?? providers?.error?.message }
                             : {}),
@@ -520,7 +537,11 @@ export function AppCloudOnboarding(props: {
             {providersStore && providers?.add ? (
                 <HappyAgentProviderAddDialog
                     {...providerAddProps(providers, providersStore, props.onExternalOpen)}
+                    {...(customCreate ? { onCustomProviderCreate: customCreate } : {})}
                 />
+            ) : null}
+            {customStore && custom ? (
+                <AppCustomProviderDialog snapshot={custom} store={customStore} />
             ) : null}
         </>
     );

@@ -186,10 +186,15 @@ const INFERENCE: Readonly<
         }
     >
 > = {
-    claude: { name: "Claude", mark: "claude", action: "Sign in", detail: "Pro or Max" },
-    chatgpt: { name: "ChatGPT", mark: "openai", action: "Sign in", detail: "Plus or Pro" },
+    chatgpt: { name: "ChatGPT", mark: "openai", action: "Connect", detail: "Sign in or API key" },
+    claude: { name: "Claude", mark: "claude", action: "Connect", detail: "Setup token or API key" },
     grok: { name: "Grok", mark: "grok", action: "Add key", detail: "xAI API key" },
-    custom: { name: "Custom", mark: "custom", action: "Add", detail: "Key or endpoint" },
+    custom: {
+        name: "Custom",
+        mark: "custom",
+        action: "Add",
+        detail: "Any endpoint that speaks OpenAI’s API",
+    },
 };
 
 /** A short sentence-case mark beside a row's title. */

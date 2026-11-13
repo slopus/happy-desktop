@@ -678,6 +678,8 @@ export interface AppHappyAgentSetup {
     readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
     /** A Happy Cloud server's payments, for its onboarding's payment steps. */
     readonly payments?: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
+    /** The team's own providers, which onboarding's AI step adds a custom one to. */
+    readonly providers?: () => import("happy-desktop-state").HappyAgentProvidersStore;
 }
 
 export interface AppHappyAgentSession {

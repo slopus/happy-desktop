@@ -15,6 +15,8 @@ import type {
     HappyAgentSecret,
     HappyAgentModelKey,
     HappyAgentCustomProviderEditor,
+    HappyAgentProvidersSnapshot,
+    HappyAgentProvidersStore,
     HappyAgentCloudConnection,
     HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
@@ -1563,36 +1565,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
-                    {providers.customProviderEditor ? (
-                        <HappyAgentCustomProviderDialog
-                            {...customProviderDialogValues(providers.customProviderEditor)}
-                            onClose={() => providersStore.customProviderEditorClose()}
-                            onSave={(values) =>
-                                providersStore.customProviderSave(values.providerId, {
-                                    name: values.name,
-                                    baseUrl: values.baseUrl,
-                                    protocol: values.protocol,
-                                    promptCacheKey: values.promptCacheKey,
-                                    models: values.models.map((model) => ({
-                                        id: model.id,
-                                        name: model.name,
-                                        contextWindow: model.contextWindow,
-                                        inputTypes: model.images ? ["text", "image"] : ["text"],
-                                    })),
-                                })
-                            }
-                            {...(providers.customProviderEditor.providerId === undefined
-                                ? {}
-                                : {
-                                      onRemove: () => {
-                                          const providerId =
-                                              providers.customProviderEditor?.providerId;
-                                          if (providerId !== undefined)
-                                              providersStore.customProviderRemove(providerId);
-                                      },
-                                  })}
-                        />
-                    ) : null}
+                    <AppCustomProviderDialog snapshot={providers} store={providersStore} />
                 </>
             ) : section === "repositories" ? (
                 repositoriesShown ? (
@@ -2407,6 +2380,47 @@ export function providerAddProps(
         onSignInCodeSubmit: (code) => store.signInCodeSubmit(code),
         ...(externalLinkOpen ? { onExternalOpen: externalLinkOpen } : {}),
     };
+}
+
+/**
+ * The team's own provider being added or edited, over whichever surface
+ * opened it: Settings › Inference, or onboarding's AI step.
+ */
+export function AppCustomProviderDialog(props: {
+    readonly snapshot: HappyAgentProvidersSnapshot;
+    readonly store: HappyAgentProvidersStore;
+}) {
+    const { snapshot: providers, store: providersStore } = props;
+    if (!providers.customProviderEditor) return null;
+    return (
+        <HappyAgentCustomProviderDialog
+            {...customProviderDialogValues(providers.customProviderEditor)}
+            onClose={() => providersStore.customProviderEditorClose()}
+            onSave={(values) =>
+                providersStore.customProviderSave(values.providerId, {
+                    name: values.name,
+                    baseUrl: values.baseUrl,
+                    protocol: values.protocol,
+                    promptCacheKey: values.promptCacheKey,
+                    models: values.models.map((model) => ({
+                        id: model.id,
+                        name: model.name,
+                        contextWindow: model.contextWindow,
+                        inputTypes: model.images ? ["text", "image"] : ["text"],
+                    })),
+                })
+            }
+            {...(providers.customProviderEditor.providerId === undefined
+                ? {}
+                : {
+                      onRemove: () => {
+                          const providerId = providers.customProviderEditor?.providerId;
+                          if (providerId !== undefined)
+                              providersStore.customProviderRemove(providerId);
+                      },
+                  })}
+        />
+    );
 }
 
 /** The open provider dialog's state, as the dialog takes it. */

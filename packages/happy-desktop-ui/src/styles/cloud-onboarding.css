@@ -198,8 +198,11 @@
     height: 40px;
 }
 
+/* The words take the room left, so every tile's action sits on one line
+   whether its detail wraps or not. */
 .happy-cloud-onboarding__tile-text {
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
     align-items: center;
     gap: 2px;
