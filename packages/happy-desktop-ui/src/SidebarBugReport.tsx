@@ -142,7 +142,7 @@ export function SidebarBugReport(props: SidebarBugReportProps) {
                         size="small"
                         variant="secondary"
                     >
-                        Troubleshoot
+                        Write a bug report
                     </Button>
                     {note === undefined ? null : (
                         <span className="happy-sidebar-bug-report__note">{note}</span>

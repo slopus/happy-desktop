@@ -99,6 +99,22 @@
     overflow-y: auto;
 }
 
+/* The header band above draws no hairline: a row scrolled up under it fades
+   out over the content's own 8px top clearance instead of being sliced. At
+   rest that band is empty, so the fade shows only while scrolled. It takes no
+   room of its own and never takes the pointer. */
+.happy-agent-settings__body-viewport::before {
+    content: "";
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    flex: none;
+    height: 8px;
+    margin-bottom: -8px;
+    background: linear-gradient(to bottom, var(--groupped-background), transparent);
+    pointer-events: none;
+}
+
 /* Read down the content column every page of the main lane shares, centred
    in the lane, so a category reads where a chat or the feed does. */
 .happy-agent-settings__content {
