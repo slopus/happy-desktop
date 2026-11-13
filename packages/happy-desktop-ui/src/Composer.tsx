@@ -534,9 +534,29 @@ export function Composer(props: ComposerProps) {
         };
         element.addEventListener("beforeinput", sizingHold);
         element.addEventListener("input", sizingRelease);
+        /* React keeps a controlled textarea's `defaultValue` equal to its value,
+         * and a textarea's default value is its text content: every keystroke
+         * replaced the text node inside it. Chromium ends the open typing
+         * command on that mutation, so Undo took the draft back one character
+         * at a time instead of a typed run at a time. Nothing resets this
+         * draft through a form, so its default stays as it was mounted and
+         * the writes are dropped. */
+        const defaultValue = Object.getOwnPropertyDescriptor(
+            targetWindow.HTMLTextAreaElement.prototype,
+            "defaultValue",
+        );
+        if (defaultValue?.get) {
+            const defaultValueRead = defaultValue.get;
+            Object.defineProperty(element, "defaultValue", {
+                configurable: true,
+                get: () => defaultValueRead.call(element) as string,
+                set: () => {},
+            });
+        }
         return () => {
             element.removeEventListener("beforeinput", sizingHold);
             element.removeEventListener("input", sizingRelease);
+            Reflect.deleteProperty(element, "defaultValue");
             sizingRelease();
             textareaEl.current = null;
         };
