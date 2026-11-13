@@ -665,6 +665,12 @@ export interface AppHappyAgentSetup {
     /** Counts pairing codes down during setup, before the session's stores load. */
     readonly clock: HappyAgentClockStore;
     readonly retry: () => void;
+    /** A Happy Cloud server's AI connections, for its onboarding's AI step. */
+    readonly cloudProviders?: () =>
+        | import("happy-desktop-state").HappyAgentCloudProvidersStore
+        | undefined;
+    /** A Happy Cloud server's plugins, for its onboarding's plugins step. */
+    readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
 }
 
 export interface AppHappyAgentSession {

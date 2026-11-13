@@ -12,7 +12,15 @@ import {
     type HappyAgentOnboardingFlow,
     type HappyAgentOnboardingGate,
 } from "./happyAgentOnboardingGates.js";
-import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import {
+    HappyCloudRequestRefusal,
+    type HappyCloudRequest,
+} from "./happyAgentProviderCredentials.js";
+import type {
+    HappyAgentPluginConnectTarget,
+    HappyAgentPluginsStore,
+} from "./happyAgentPluginsStore.js";
+import { UserError } from "../types.js";
 import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
 
 /**
@@ -78,8 +86,31 @@ export interface HappyAgentOnboardingState {
     };
 }
 
+/** Invites sent from the teammates gate in this flow. */
+export interface HappyAgentOnboardingInvites {
+    /** The address typed for the next invite. */
+    readonly email: string;
+    /** Which invite is being made. */
+    readonly creating?: "email" | "link";
+    /** Emails sent in this flow, newest first. */
+    readonly sent: readonly {
+        readonly id: string;
+        readonly email: string;
+        readonly delivery: "sent" | "failed";
+    }[];
+    /** A link invite, shown this once: the server keeps none. */
+    readonly link?: string;
+    /** Why the last invite was not sent, or that a link stands in for email. */
+    readonly error?: string;
+}
+
 export interface HappyAgentOnboardingSnapshot {
     readonly state?: HappyAgentOnboardingState;
+    /** The admin bot's name as typed; absent until edited, when the server's stands. */
+    readonly adminBotName?: string;
+    readonly invites: HappyAgentOnboardingInvites;
+    /** The plugin the plugins gate is installing or signing in. */
+    readonly pluginConnecting?: string;
     /**
      * A Happy Cloud server's onboarding gates and where the reader is in them.
      * Absent where the server has no gates; the reader is let in once it has no
@@ -102,9 +133,21 @@ export interface HappyAgentOnboardingStore {
      * for the reader (a member gate) or the team (a server gate). A gate that
      * still blocks is read again and left only if the server now says it is done.
      */
-    gateContinue(gateId: string): void;
-    /** Names the server's admin bot, then leaves its gate. */
-    adminBotNameSubmit(name: string): void;
+    gateContinue(gateId: string, options?: { readonly also?: readonly string[] }): void;
+    adminBotNameUpdate(value: string): void;
+    /** Names the server's admin bot with the typed name, or keeps its own, then leaves its gate. */
+    adminBotNameSubmit(): void;
+    inviteEmailUpdate(value: string): void;
+    /** Emails an invite to the typed address; a server without email makes a link instead. */
+    inviteEmailSend(): void;
+    inviteLinkCreate(): void;
+    /**
+     * Installs a plugin the plugins gate offers, when it is not yet, and sends
+     * `target` to its sign-in; the server finishes it and the gate reads again.
+     */
+    pluginConnect(pluginId: string, target: HappyAgentPluginConnectTarget): void;
+    /** Reads the gates again, as when the window comes back to the front. */
+    onboardingRead(): void;
     [Symbol.dispose](): void;
 }
 
@@ -194,6 +237,8 @@ export function happyAgentOnboardingStoreCreate(
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
         /** Happy Cloud's own routes, which skip gates and name the admin bot. */
         readonly cloudRequest?: HappyCloudRequest;
+        /** The server's plugins, which the plugins gate installs. */
+        readonly plugins?: () => HappyAgentPluginsStore | undefined;
         /**
          * The reader finished a flow that showed them at least one gate, and the
          * server took the completion; the Chief of Staff opens its first conversation.
@@ -204,6 +249,7 @@ export function happyAgentOnboardingStoreCreate(
     let snapshot: HappyAgentOnboardingSnapshot = {
         available: false,
         pending: false,
+        invites: { email: "", sent: [] },
     };
     const listeners = new Set<() => void>();
     let controller: AbortController | undefined;
@@ -391,6 +437,109 @@ export function happyAgentOnboardingStoreCreate(
                 setupSynchronize();
             });
     }
+    /**
+     * Leaves the gate on screen: one that is done goes; an optional one is
+     * skipped; one that blocks is read again and goes if the server now says
+     * it is done. `first` says the reader asked for this gate; a gate named in
+     * `also` is passed only if it is the one on screen by then.
+     */
+    async function gateLeaveOrSkip(
+        gateId: string,
+        signal: AbortSignal,
+        first: boolean,
+    ): Promise<boolean> {
+        const gate = snapshot.flow?.current;
+        if (!gate || gate.id !== gateId) return !first;
+        if (gate.status === "done" || gate.status === "skipped") {
+            gateLeave(gateId);
+            return true;
+        }
+        if (!gate.blocking && gate.kind !== "unknown") {
+            const state = await cloud()(
+                "POST",
+                `v0/onboarding/gates/${encodeURIComponent(gateId)}/skip`,
+                {},
+            );
+            if (signal.aborted) return false;
+            publish({ ...snapshot, state: state as HappyAgentOnboardingState, available: true });
+            gateLeave(gateId);
+            return true;
+        }
+        // A step finished elsewhere may not have been heard about yet.
+        await gatesRead(signal);
+        const after = snapshot.flow?.current;
+        if (signal.aborted || after?.id !== gateId || after.blocking) return false;
+        gateLeave(gateId);
+        return true;
+    }
+    /** Makes one invite with the member role; `email` absent makes a link. */
+    function inviteCreate(email: string | undefined, notice?: string): void {
+        const request = options.cloudRequest;
+        if (!request || disposed) return;
+        const { error: _cleared, ...invites } = snapshot.invites;
+        publish(
+            {
+                ...snapshot,
+                invites: {
+                    ...invites,
+                    creating: email ? "email" : "link",
+                    ...(notice ? { error: notice } : {}),
+                },
+            },
+            true,
+        );
+        void request("POST", "v0/invites", {
+            ...(email ? { email } : {}),
+            mutationId: crypto.randomUUID(),
+        })
+            .then((answer) => {
+                if (disposed) return;
+                const invite = (answer as { readonly invite?: Record<string, unknown> }).invite;
+                const id = typeof invite?.id === "string" ? invite.id : crypto.randomUUID();
+                const { creating: _done, ...rest } = snapshot.invites;
+                publish(
+                    {
+                        ...snapshot,
+                        invites: email
+                            ? {
+                                  ...rest,
+                                  email: "",
+                                  sent: [
+                                      {
+                                          id,
+                                          email,
+                                          delivery:
+                                              invite?.deliveryStatus === "failed"
+                                                  ? "failed"
+                                                  : "sent",
+                                      },
+                                      ...rest.sent,
+                                  ],
+                              }
+                            : {
+                                  ...rest,
+                                  ...(typeof invite?.link === "string"
+                                      ? { link: invite.link }
+                                      : {}),
+                              },
+                    },
+                    true,
+                );
+            })
+            .catch((error: unknown) => {
+                if (disposed) return;
+                const refused = happyAgentUserError(error);
+                const { creating: _done, ...rest } = snapshot.invites;
+                if (email && refused.code === "email_not_configured") {
+                    inviteCreate(
+                        undefined,
+                        "This server can't send email. Share this link instead.",
+                    );
+                    return;
+                }
+                publish({ ...snapshot, invites: { ...rest, error: refused.message } }, true);
+            });
+    }
     const cloud = (): HappyCloudRequest => {
         if (!options.cloudRequest) throw new Error("This server has no onboarding gates.");
         return options.cloudRequest;
@@ -452,6 +601,8 @@ export function happyAgentOnboardingStoreCreate(
                     "bot.updated",
                     "plugins.changed",
                     "invite.created",
+                    "member.updated",
+                    "member.removed",
                     "onboarding.updated",
                 ],
                 onOnboarding: (input) => {
@@ -549,46 +700,87 @@ export function happyAgentOnboardingStoreCreate(
             setupActive = true;
             setupSynchronize();
         },
-        gateContinue(gateId) {
-            const flow = snapshot.flow;
-            const gate = flow?.current;
+        gateContinue(gateId, continueOptions) {
+            const gate = snapshot.flow?.current;
             if (!gate || gate.id !== gateId || gatePending !== undefined) return;
-            if (gate.status === "done" || gate.status === "skipped") {
-                gateLeave(gateId);
-                return;
-            }
-            if (!gate.blocking) {
-                gateRun(gateId, async (signal) => {
-                    const state = await cloud()(
-                        "POST",
-                        `v0/onboarding/gates/${encodeURIComponent(gateId)}/skip`,
-                        {},
-                    );
-                    if (signal.aborted) return;
-                    publish({
-                        ...snapshot,
-                        state: state as HappyAgentOnboardingState,
-                        available: true,
-                    });
-                    gateLeave(gateId);
-                });
-                return;
-            }
-            // A step finished elsewhere may not have been heard about yet.
             gateRun(gateId, async (signal) => {
-                await gatesRead(signal);
-                const after = snapshot.flow?.current;
-                if (!signal.aborted && after?.id === gateId && !after.blocking) gateLeave(gateId);
+                for (const id of [gateId, ...(continueOptions?.also ?? [])]) {
+                    if (!(await gateLeaveOrSkip(id, signal, id === gateId))) return;
+                }
             });
         },
-        adminBotNameSubmit(name) {
+        adminBotNameUpdate(value) {
+            publish({ ...snapshot, adminBotName: value }, true);
+        },
+        inviteEmailUpdate(value) {
+            const { error: _cleared, ...invites } = snapshot.invites;
+            publish({ ...snapshot, invites: { ...invites, email: value } }, true);
+        },
+        inviteEmailSend() {
+            const email = snapshot.invites.email.trim();
+            if (email === "" || snapshot.invites.creating) return;
+            inviteCreate(email);
+        },
+        inviteLinkCreate() {
+            if (!snapshot.invites.creating) inviteCreate(undefined);
+        },
+        pluginConnect(pluginId, target) {
+            if (snapshot.flow?.current?.kind !== "plugins") return;
+            const gateId = snapshot.flow.current.id;
+            publish({ ...snapshot, pluginConnecting: pluginId }, true);
+            gateRun(gateId, async () => {
+                try {
+                    const plugins = options.plugins?.();
+                    if (!plugins) throw new UserError("This server has no plugins.");
+                    const { plugins: catalog, installations } = plugins.get();
+                    const plugin = catalog.find((entry) => entry.id === pluginId);
+                    const installed = installations.find(
+                        (entry) => entry.pluginId === pluginId && entry.available,
+                    );
+                    if (installed?.status === "active") return;
+                    const installationId = installed?.id ?? (await plugins.pluginInstall(pluginId));
+                    if (plugin && !plugin.authRequired && plugin.authMethods.length === 0) return;
+                    const method = plugin?.authMethods.find((entry) => entry.type === "oauth");
+                    if (!method)
+                        throw new UserError(
+                            `${plugin?.name ?? "This plugin"} asks for details. Finish it under Plugins once you're in.`,
+                        );
+                    await plugins.installationConnect(installationId, method.id, target);
+                } finally {
+                    const { pluginConnecting: _done, ...rest } = snapshot;
+                    snapshot = rest;
+                }
+            });
+        },
+        onboardingRead() {
+            const active = controller;
+            if (active && !disposed) void reconcile(active.signal).catch(() => undefined);
+        },
+        adminBotNameSubmit() {
             const gate = snapshot.flow?.current;
-            const trimmed = name.trim();
+            if (gate?.kind !== "adminBot") return;
+            const trimmed = (snapshot.adminBotName ?? gate.name).trim();
             if (gate?.kind !== "adminBot" || trimmed === "" || gate.botId === "") return;
             gateRun(gate.id, async (signal) => {
-                await cloud()("PATCH", `v0/bots/${encodeURIComponent(gate.botId)}`, {
-                    name: trimmed,
-                });
+                const rename = (version: string) =>
+                    cloud()(
+                        "PATCH",
+                        `v0/bots/${encodeURIComponent(gate.botId)}`,
+                        { name: trimmed },
+                        version === "" ? undefined : { "if-match": version },
+                    );
+                try {
+                    await rename(gate.version);
+                } catch (error) {
+                    // Someone else changed the bot since this screen read it:
+                    // read its version again and rename that one, once.
+                    if (!(error instanceof HappyCloudRequestRefusal) || error.status !== 409)
+                        throw error;
+                    await gatesRead(signal);
+                    const current = snapshot.flow?.gates.find((item) => item.id === gate.id);
+                    if (current?.kind !== "adminBot") return;
+                    await rename(current.version);
+                }
                 await gatesRead(signal);
                 if (!signal.aborted) gateLeave(gate.id);
             });

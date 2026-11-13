@@ -206,6 +206,8 @@ export interface HappyAgentDirectoryDeps {
     readonly cloud?: boolean;
     /** The cloud web app, where this window's own Happy Agent is a Happy Cloud server. */
     readonly localHappyCloud?: boolean;
+    /** What this window's own Happy Agent is called, where it is not "This Mac". */
+    readonly localLabel?: string;
     readonly conversationOpen: (happyAgentId: string, location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (happyAgentId: string, groupId: string) => void;
     /**
@@ -428,7 +430,7 @@ export function happyAgentDirectoryStoreCreate(
     const happyAgent: LocalHappyAgent = {
         entry: {
             id: LOCAL_HAPPY_AGENT_ID,
-            label: "This Mac",
+            label: deps.localLabel ?? "This Mac",
             ...(deps.localHappyCloud ? { happyCloud: true as const } : {}),
             bots: [],
             botsCreating: [],

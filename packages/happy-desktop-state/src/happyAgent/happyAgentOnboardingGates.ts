@@ -33,11 +33,17 @@ export type HappyAgentOnboardingGate = HappyAgentOnboardingGateCommon &
         | {
               readonly kind: "adminBot";
               readonly botId: string;
+              /** The bot's version, sent as `If-Match` when renaming it. */
+              readonly version: string;
               readonly name: string;
               readonly avatarUrl: string | null;
               /** The server's own words for this step. */
               readonly title: string;
               readonly description: string;
+              /** What the bot can do for the team, a line each; empty when the server sends none. */
+              readonly points: readonly string[];
+              /** Who may talk to it; empty when the server sends none. */
+              readonly note: string;
           }
         | {
               readonly kind: "inference";
@@ -52,7 +58,7 @@ export type HappyAgentOnboardingGate = HappyAgentOnboardingGateCommon &
               readonly required: readonly string[];
               readonly plugins: readonly HappyAgentOnboardingPluginGateEntry[];
           }
-        | { readonly kind: "teammates"; readonly invites: number; readonly members: number }
+        | { readonly kind: "teammates"; readonly invited: boolean; readonly members: number }
         | {
               readonly kind: "mobileApp";
               readonly registered: boolean;
@@ -131,6 +137,7 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
                 ...common,
                 kind: "adminBot",
                 botId,
+                version: textOf(data.version),
                 name: textOf(data.name),
                 avatarUrl:
                     botId !== "" && thumbhash !== ""
@@ -142,6 +149,8 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
                         : null,
                 title: textOf(data.title),
                 description: textOf(data.description),
+                points: textsOf(data.points),
+                note: textOf(data.note),
             };
         }
         case "inference":
@@ -175,7 +184,7 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
             return {
                 ...common,
                 kind: "teammates",
-                invites: countOf(data.invites),
+                invited: data.invited === true,
                 members: countOf(data.members),
             };
         case "mobileApp":

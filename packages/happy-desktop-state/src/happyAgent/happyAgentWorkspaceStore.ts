@@ -1610,6 +1610,11 @@ export interface HappyAgentWorkspaceStore {
      * and the draft keeps the Chief of Staff's own model and access mode.
      */
     chiefOfStaffDraftAppend(request: HappyAgentChiefOfStaffRequest): Promise<void>;
+    /**
+     * Opens the Chief of Staff's conversation, as soon as its bot is listed
+     * when it is not yet: the first one after onboarding is the bot's own.
+     */
+    chiefOfStaffOpen(): void;
     /** Replaces one explicitly addressed conversation's composer draft. */
     draftUpdate(sessionId: HappyAgentSessionId, message: string): Promise<void>;
     /** Adds an unsent suggestion without replacing an existing draft or duplicating an unchanged retry. */
@@ -2437,6 +2442,8 @@ export function happyAgentWorkspaceStoreCreate(
     const listeners = new Set<() => void>();
     let active = false;
     let disposed = false;
+    /** Stops waiting for the Chief of Staff to be listed. */
+    let chiefOfStaffWait: (() => void) | undefined;
     let unsubscribeList: (() => void) | undefined;
     let unsubscribeWorkspaceFiles: (() => void) | undefined;
     let unsubscribeComputeRunners: (() => void) | undefined;
@@ -7687,6 +7694,29 @@ export function happyAgentWorkspaceStoreCreate(
             }
             if (!disposed) output({ type: "conversationOpenRequested", location });
         },
+        chiefOfStaffOpen() {
+            chiefOfStaffWait?.();
+            chiefOfStaffWait = undefined;
+            const open = (): boolean => {
+                const chief = list.get().bots.find((bot) => bot.systemKey === "chief_of_staff");
+                if (!chief || disposed) return false;
+                output({
+                    type: "conversationOpenRequested",
+                    location: {
+                        sessionId: chief.conversation.id as HappyAgentSessionId,
+                        groupId: chief.workspaceId,
+                    },
+                });
+                return true;
+            };
+            if (open()) return;
+            const unsubscribe = list.subscribe(() => {
+                if (!open()) return;
+                unsubscribe();
+                chiefOfStaffWait = undefined;
+            });
+            chiefOfStaffWait = unsubscribe;
+        },
         async voiceSessionAcquire(sessionId) {
             const acquired = await client.chat(sessionId);
             let released = false;
@@ -9214,6 +9244,8 @@ export function happyAgentWorkspaceStoreCreate(
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            chiefOfStaffWait?.();
+            chiefOfStaffWait = undefined;
             stop();
             botCreateRelease(true);
             for (const parked of createDraftsParked.values()) {

@@ -30,6 +30,7 @@ const clock = {
 const onboarding: HappyAgentOnboardingSnapshot = {
     pending: false,
     available: true,
+    invites: { email: "", sent: [] },
     state: {
         completed: false,
         steps: {

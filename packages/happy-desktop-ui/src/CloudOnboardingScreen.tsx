@@ -255,7 +255,7 @@ function page(
                 ? {
                       title: "Add a photo",
                       copy: "So your team can tell you apart at a glance.",
-                      body: <ProfileSetupForm {...view} />,
+                      body: <ProfileSetupForm {...view} nameHidden />,
                   }
                 : {
                       title: "Create your profile",

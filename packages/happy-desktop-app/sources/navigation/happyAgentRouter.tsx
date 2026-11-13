@@ -268,6 +268,8 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             // their placeholder, and it holds still while they type.
             placeholderSeed={entry?.remoteId ?? entry?.id ?? "happy-agent"}
             onRetry={setup.retry}
+            {...(setup.cloudProviders ? { cloudProviders: setup.cloudProviders } : {})}
+            {...(setup.plugins ? { plugins: setup.plugins } : {})}
             mobilePairingMethod={context.mobilePairingMethod}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.externalLinkOpen ? { onExternalOpen: context.externalLinkOpen } : {})}

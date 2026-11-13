@@ -643,7 +643,10 @@ export {
 } from "./CloudSignInNoticeDialog";
 export {
     CloudOnboardingScreen,
+    type CloudOnboardingAmount,
     type CloudOnboardingInferenceOption,
+    type CloudOnboardingInvite,
+    type CloudOnboardingPlugin,
     type CloudOnboardingScreenProps,
     type CloudOnboardingStep,
     type CloudOnboardingView,

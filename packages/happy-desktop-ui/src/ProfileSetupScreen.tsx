@@ -103,6 +103,8 @@ export interface ProfileSetupFormProps {
     readonly message?: string;
     readonly photoError?: string;
     readonly photoCrop?: ProfilePhotoCropSource;
+    /** Asks for the photo alone, from someone whose name is already saved. */
+    readonly nameHidden?: boolean;
     onNameChange(value: string): void;
     /** Enter in the name field. */
     onSubmit(): void;
@@ -186,18 +188,20 @@ export function ProfileSetupForm(props: ProfileSetupFormProps) {
                     ref={photoInput}
                     type="file"
                 />
-                <TextField
-                    aria-label="Name"
-                    autoFocus
-                    className="happy-profile-setup__name"
-                    disabled={props.busy}
-                    fullWidth
-                    onSubmit={props.onSubmit}
-                    onValueChange={props.onNameChange}
-                    placeholder="Your name"
-                    size="large"
-                    value={props.name}
-                />
+                {props.nameHidden ? null : (
+                    <TextField
+                        aria-label="Name"
+                        autoFocus
+                        className="happy-profile-setup__name"
+                        disabled={props.busy}
+                        fullWidth
+                        onSubmit={props.onSubmit}
+                        onValueChange={props.onNameChange}
+                        placeholder="Your name"
+                        size="large"
+                        value={props.name}
+                    />
+                )}
                 <p
                     className="happy-profile-setup__hint"
                     data-tone={hint ? "attention" : undefined}

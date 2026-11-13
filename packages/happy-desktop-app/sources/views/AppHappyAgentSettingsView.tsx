@@ -2279,7 +2279,7 @@ function providerEditProps(
 }
 
 /** The add dialog's props from the AI providers store. */
-function providerAddProps(
+export function providerAddProps(
     snapshot: HappyAgentCloudProvidersSnapshot,
     store: HappyAgentCloudProvidersStore,
     externalLinkOpen: ((url: string) => void) | undefined,

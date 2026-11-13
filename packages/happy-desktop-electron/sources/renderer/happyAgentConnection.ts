@@ -500,16 +500,6 @@ export function happyAgentConnectionOpen(input: {
     const mobileConnector = pairingObserve?.connector(connectorStore) ?? connectorStore;
     /** Settings' Happy Mobile store, observed once for the connection. */
     let happyIntegration: HappyAgentIntegrationStore | undefined;
-    const onboardingStore = happyAgentOnboardingStoreCreate(directClient, agentConnection.sync, {
-        setupActive: input.happyAgentId !== "local" && welcome.get().welcomeAcknowledged,
-        mobileSkipped: desktopHappyMobileOnboardingSkipped(input.happyAgentId),
-        onMobileSkip: () => desktopHappyMobileOnboardingSkip(input.happyAgentId),
-        guidedMobileSetup: input.guidedMobileSetup,
-        mobileConnector,
-    });
-    const onboarding = pairingObserve
-        ? { ...onboardingStore, mobile: pairingObserve.onboarding(onboardingStore.mobile) }
-        : onboardingStore;
     // Happy Cloud's own routes, over the same transport as the daemon's.
     const cloudRequest = input.happyCloud
         ? happyCloudRequestCreate({
@@ -517,6 +507,25 @@ export function happyAgentConnectionOpen(input: {
               token: "happy-local-capability",
           })
         : undefined;
+    const onboardingStore = happyAgentOnboardingStoreCreate(directClient, agentConnection.sync, {
+        setupActive: input.happyAgentId !== "local" && welcome.get().welcomeAcknowledged,
+        mobileSkipped: desktopHappyMobileOnboardingSkipped(input.happyAgentId),
+        onMobileSkip: () => desktopHappyMobileOnboardingSkip(input.happyAgentId),
+        guidedMobileSetup: input.guidedMobileSetup,
+        mobileConnector,
+        ...(cloudRequest
+            ? {
+                  cloudRequest,
+                  plugins: () => client.plugins(),
+                  // The first owner to finish starts the Chief of Staff's first
+                  // conversation, which is where the reader goes next.
+                  onFinished: () => workspace?.chiefOfStaffOpen(),
+              }
+            : {}),
+    });
+    const onboarding = pairingObserve
+        ? { ...onboardingStore, mobile: pairingObserve.onboarding(onboardingStore.mobile) }
+        : onboardingStore;
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
         providerCredentials: happyAgentProviderCredentialsApiCreate({
@@ -595,6 +604,12 @@ export function happyAgentConnectionOpen(input: {
               profile: profileStore,
               clock,
               retry: () => agentConnection.retry(),
+              ...(cloudRequest
+                  ? {
+                        cloudProviders: () => client.cloudProviders(),
+                        plugins: () => client.plugins(),
+                    }
+                  : {}),
           }
         : undefined;
 
@@ -773,6 +788,11 @@ export function happyAgentConnectionOpen(input: {
         ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
     );
 
+    // A phone signing in moves the onboarding on and tells no other device, so
+    // a Happy Cloud server's gates are read again when the window comes back.
+    const onboardingFocusRead = (): void => onboarding.onboardingRead();
+    if (cloudRequest) window.addEventListener("focus", onboardingFocusRead);
+
     return {
         setup,
         get: () => session,
@@ -798,6 +818,7 @@ export function happyAgentConnectionOpen(input: {
                 sessionConnection = undefined;
             }
             for (const unsubscribe of accountKeepWarm) unsubscribe();
+            window.removeEventListener("focus", onboardingFocusRead);
             onboarding[Symbol.dispose]();
             client[Symbol.dispose]();
             mobileConnector[Symbol.dispose]();

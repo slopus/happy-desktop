@@ -35,7 +35,9 @@ export type HappyCloudEventType =
     | "compute.approvals.updated"
     | "plugins.changed"
     | "onboarding.updated"
-    | "invite.created";
+    | "invite.created"
+    | "member.updated"
+    | "member.removed";
 
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {
