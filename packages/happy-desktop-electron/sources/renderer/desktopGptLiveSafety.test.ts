@@ -291,7 +291,7 @@ it("reads immutable context during a mutation, stages in the existing composer a
                 }),
             ),
         );
-        f.workspace.composerTextUpdate("My edited message");
+        f.workspace.composerTextUpdate(f.id, "My edited message");
         expect(f.voice.draftRead()?.voiceDraft).toBe(true);
         expect(f.daemon.callCount("sendMessage")).toBe(0);
         controller.close();
@@ -312,7 +312,7 @@ it("reads immutable context during a mutation, stages in the existing composer a
 
 it("refuses sessionSend and composerDraftAppend over an existing human draft without modifying it", async () => {
     const f = await fixture();
-    f.workspace.composerTextUpdate("Private existing human draft");
+    f.workspace.composerTextUpdate(f.id, "Private existing human draft");
     const frames: Parameters<Parameters<typeof gptLiveControllerCreate>[0]["send"]>[0][] = [];
     const receive = vi.fn();
     const controller = gptLiveControllerCreate({
@@ -528,6 +528,7 @@ it.each(["edit", "empty", "submit"] as const)(
             if (change === "submit") f.workspace.composerTextSubmit();
             else
                 f.workspace.composerTextUpdate(
+                    f.id,
                     change === "empty" ? "" : "Human edited the suggestion",
                 );
             if (change === "submit") {
@@ -1019,7 +1020,7 @@ it("retains watch selections across disconnection, resumes public updates, and s
         online = false;
         connectionChanged();
         const updates = frames.filter((frame) => frame.type === "sessionUpdate").length;
-        f.workspace.composerTextUpdate("A local edit after disconnection");
+        f.workspace.composerTextUpdate(f.id, "A local edit after disconnection");
         await new Promise((resolve) => setTimeout(resolve, 300));
         expect(frames.filter((frame) => frame.type === "sessionUpdate")).toHaveLength(updates);
         online = true;
@@ -1034,7 +1035,7 @@ it("retains watch selections across disconnection, resumes public updates, and s
         ).toHaveLength(1);
         const count = frames.length;
         controller.close();
-        f.workspace.composerTextUpdate("Still a normal human draft after call end");
+        f.workspace.composerTextUpdate(f.id, "Still a normal human draft after call end");
         await new Promise((resolve) => setTimeout(resolve, 300));
         expect(frames).toHaveLength(count);
     } finally {
@@ -1156,16 +1157,16 @@ it("keeps watch quota consistent and idempotently disables targets missing from 
 it("keeps edited voice drafts local across navigation and blocks a later question on normal Enter", async () => {
     const f = await fixture();
     try {
-        f.workspace.composerTextUpdate("Original human draft");
+        f.workspace.composerTextUpdate(f.id, "Original human draft");
         await vi.waitFor(() => expect(f.daemon.callCount("saveAgentDraft")).toBe(1));
         await expect(f.voice.draftAppend("Approve", "Original human draft")).rejects.toThrow(
             "human draft",
         );
         expect(f.voice.draftRead()?.text).toBe("Original human draft");
-        f.workspace.composerTextUpdate("");
+        f.workspace.composerTextUpdate(f.id, "");
         await vi.waitFor(() => expect(f.daemon.callCount("saveAgentDraft")).toBe(2));
         await f.voice.draftAppend("Approve", "");
-        f.workspace.composerTextUpdate("Approve this edited voice suggestion");
+        f.workspace.composerTextUpdate(f.id, "Approve this edited voice suggestion");
         f.workspace.conversationOpen(f.otherId, f.group);
         f.workspace.conversationOpen(f.id, f.group);
         await vi.waitFor(() =>
@@ -1181,9 +1182,9 @@ it("keeps edited voice drafts local across navigation and blocks a later questio
         expect(f.daemon.callCount("saveAgentDraft")).toBe(2);
         const remote = await f.daemon.client.getAgentBootstrap(f.id);
         expect(remote.draft.value?.text ?? "").toBe("");
-        f.workspace.composerTextUpdate("");
+        f.workspace.composerTextUpdate(f.id, "");
         expect(f.voice.draftRead()?.voiceDraft).toBeUndefined();
-        f.workspace.composerTextUpdate("Approve");
+        f.workspace.composerTextUpdate(f.id, "Approve");
         f.workspace.composerTextSubmit();
         // A composer reply is a real message; the question is released once it is accepted.
         await vi.waitFor(() => expect(f.daemon.callCount("answerQuestion")).toBe(1));
@@ -1217,7 +1218,7 @@ it("retains edited voice text when the existing composer send is refused", async
     const f = await fixture();
     try {
         await f.voice.draftAppend("Reviewed text", "");
-        f.workspace.composerTextUpdate("Changed text");
+        f.workspace.composerTextUpdate(f.id, "Changed text");
         expect(f.daemon.callCount("sendMessage")).toBe(0);
         f.daemon.failOnce(
             "sendMessage",
@@ -1269,7 +1270,7 @@ it("revalidates the context after asynchronous acquisition before appending or r
                 text: "Stale generated text",
             },
         });
-        f.workspace.composerTextUpdate("Human typed after the voice intent");
+        f.workspace.composerTextUpdate(f.id, "Human typed after the voice intent");
         await vi.waitFor(() =>
             expect(frames).toContainEqual(
                 expect.objectContaining({

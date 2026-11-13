@@ -1949,8 +1949,16 @@ export interface HappyAgentWorkspaceStore {
     fileDraftSave(tabId: string): Promise<void>;
 
     // Composer actions for the open conversation (no draft lives in React).
-    composerTextUpdate(text: string): void;
-    composerFocusUpdate(focused: boolean): void;
+    /**
+     * The text and focus of a composer, named by the draft (`ComposerSnapshot.scopeId`)
+     * its control was editing, and applied only while that draft is the open
+     * one. A view kept for a conversation the reader left still holds its own
+     * text control, and the browser can fire input on it after the move — its
+     * one undo history for the whole window replays into that control — so an
+     * edit that names no live draft is not this draft's.
+     */
+    composerTextUpdate(scopeId: string, text: string): void;
+    composerFocusUpdate(scopeId: string, focused: boolean): void;
     composerTextSubmit(): void;
     composerCommandInvoke(commandId: string): void;
     /**
@@ -4886,6 +4894,12 @@ export function happyAgentWorkspaceStoreCreate(
         );
         retainedTrim();
         retainedPublish();
+    };
+
+    /** The open draft's composer, if it is the draft named. */
+    const composerLive = (scopeId: string): ComposerStore | undefined => {
+        const live = groupComposer ?? composer;
+        return live?.getState().scopeId === scopeId ? live : undefined;
     };
 
     /** Takes a kept conversation back to be opened again, if it is kept. */
@@ -8604,9 +8618,9 @@ export function happyAgentWorkspaceStoreCreate(
             }
         },
 
-        composerTextUpdate: (text) => (groupComposer ?? composer)?.getState().textUpdate(text),
-        composerFocusUpdate: (focused) =>
-            (groupComposer ?? composer)?.getState().focusUpdate(focused),
+        composerTextUpdate: (scopeId, text) => composerLive(scopeId)?.getState().textUpdate(text),
+        composerFocusUpdate: (scopeId, focused) =>
+            composerLive(scopeId)?.getState().focusUpdate(focused),
         composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
         composerCommandInvoke: (commandId) =>
             (groupComposer ?? composer)?.getState().commandInvoke(commandId),

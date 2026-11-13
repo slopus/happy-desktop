@@ -307,6 +307,16 @@ export type ComposerProps = {
      * gives it to whichever of them is being written into.
      */
     focusKey?: string;
+    /**
+     * Which draft the text control is editing. The browser keeps one undo
+     * history for the whole window and replays it into whatever element its
+     * steps were typed in, so a control left mounted while the draft under it
+     * changes would undo one conversation's typing into the next one's draft.
+     * Each draft therefore gets an element of its own, and the browser drops
+     * an element's undo steps with it. Absent, one control serves the
+     * composer's whole lifetime.
+     */
+    draftId?: string;
     /** e.g. "Enter to send · @ to hand off to an agent" */
     hint?: string;
     /** Opens a host-owned attachment browser. Takes precedence over the native picker. */
@@ -1234,6 +1244,7 @@ export function Composer(props: ComposerProps) {
             className="happy-composer__textarea"
             data-claims-typing={props.focusOnType === true && !busy ? "" : undefined}
             data-happy-desktop-ui="composer-textarea"
+            key={props.draftId}
             disabled={props.disabled}
             readOnly={props.pending}
             onBlur={() => {
