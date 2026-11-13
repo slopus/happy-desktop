@@ -22,17 +22,17 @@
  *
  * A segment may hold its take's first frame (`freeze`) or last frame
  * (`tail`) still for some seconds: the take's own pixels, never repainted.
- * It may leave out one stretch of its take (`skip`, take seconds from and
- * to): a page's loading state between a click and what it opens. The
- * segment's `seconds` and camera are on the cut's clock, after the skip.
+ * It may leave out stretches of its take (`skips`, pairs of take seconds
+ * from and to): idle holds or a page's loading state. The segment's
+ * `seconds` and camera are on the cut's clock, after those omissions.
  *
  * The first window segment may open with `opening` lines: they stand centred
  * on the backdrop, each fading in at its own time, then rise as the window
  * rises into the frame beneath them, and fade before the caption comes in.
  * A card may show `pictures` under its words, side by side.
  *
- * Segments hand over with a short dissolve. Words never overlap: a caption
- * or card fades out before the dissolve and the next fades in after it.
+ * Segments hand over with a short dissolve. Cards stay complete through
+ * the handover, so the next card crossfades directly from visible content.
  */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -91,8 +91,6 @@ function cubicBezier([x1, y1, x2, y2]) {
 }
 /** The camera's one curve: ease-in-out, no overshoot. */
 const ease = cubicBezier([0.65, 0, 0.35, 1]);
-/** Words arriving: a quick start that settles. */
-const settle = cubicBezier([0.2, 0.8, 0.2, 1]);
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
 const svg = (width, height, body, viewBox) =>
@@ -508,9 +506,8 @@ const words = await wordsDraw(cut);
 const backdrop = backdropOpen(options.backdrop, fps, { width, height });
 
 /**
- * How much of a segment's words show at `t`: one caption or card at a time.
- * They come in once the dissolve into the segment is over and are gone before
- * the dissolve out of it starts, except at the video's two ends.
+ * How much of a window's caption shows at `t`. Captions arrive after the
+ * dissolve; cards are drawn complete and crossfaded by the segment handover.
  */
 function wordsShown(segment, t, first, last) {
     const handover = cut.dissolve ?? 0;
@@ -530,19 +527,15 @@ async function* segmentFrames(segment, first, last, start) {
     const count = Math.round(segment.seconds * fps);
     if (segment.kind === "card") {
         const layer = words.cards.get(segment);
-        const rise = cut.type.rise;
         for (let index = 0; index < count; index += 1) {
-            const t = index / fps;
-            // The words fade and rise into place over 0.3 s, once the dissolve is over.
-            const shownNow = wordsShown(segment, t, first, last);
-            const k = settle(shownNow.into);
+            // The complete card crossfades directly from the previous segment.
             const back = await backdrop.next();
             yield await sharp(back, raw)
                 .composite([
                     {
-                        input: await fade(layer, shownNow.amount),
+                        input: layer,
                         left: 0,
-                        top: Math.round((1 - k) * rise),
+                        top: 0,
                     },
                 ])
                 .removeAlpha()
@@ -564,9 +557,11 @@ async function* segmentFrames(segment, first, last, start) {
     const pictures = (async function* () {
         let lastPicture;
         let shown = 0;
-        const [skipFrom, skipTo] = segment.skip ?? [0, 0];
-        const skipped = Math.round((skipTo - skipFrom) * fps);
-        const skipAt = Math.round((skipFrom - segment.from) * fps);
+        const skips = (segment.skips ?? []).map(([from, to]) => ({
+            at: Math.round((from - segment.from) * fps),
+            frames: Math.round((to - from) * fps),
+        }));
+        const skipped = skips.reduce((total, skip) => total + skip.frames, 0);
         let read = 0;
         for await (const picture of takeOpen(
             source,
@@ -576,7 +571,7 @@ async function* segmentFrames(segment, first, last, start) {
             size,
         )) {
             read += 1;
-            if (read > skipAt && read <= skipAt + skipped) continue;
+            if (skips.some((skip) => read > skip.at && read <= skip.at + skip.frames)) continue;
             if (!lastPicture) for (; shown < held; shown += 1) yield picture;
             lastPicture = picture;
             shown += 1;
@@ -610,7 +605,11 @@ async function* segmentFrames(segment, first, last, start) {
         const rect = windowRect(cut, segment, t);
         if (!intersect(rect, frame)) {
             const back = await backdrop.next();
-            yield await sharp(back, raw).composite(await linesAt(t)).removeAlpha().raw().toBuffer();
+            yield await sharp(back, raw)
+                .composite(await linesAt(t))
+                .removeAlpha()
+                .raw()
+                .toBuffer();
             index += 1;
             continue;
         }
@@ -787,7 +786,7 @@ for (const [position, segment] of cut.segments.entries()) {
         // The take second drawn at the segment's start (before any frozen
         // opening), to find a take's moment in the cut.
         ...(segment.kind === "window" ? { takeFrom: segment.from - (segment.freeze ?? 0) } : {}),
-        ...(segment.skip ? { skip: segment.skip } : {}),
+        ...(segment.skips ? { skips: segment.skips } : {}),
     });
     process.stdout.write(
         `  ${segment.kind.padEnd(7)}${(start / fps).toFixed(2)}–${(total / fps).toFixed(2)} s  ${label}\n`,

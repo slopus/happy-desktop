@@ -5,8 +5,8 @@
  *
  * The opening's two lines stand on the backdrop; the window rises under them,
  * then the lines give way to chapter 1's caption and the camera makes one
- * eased move in. Chapter 2 is named by a short card, opens on the whole
- * window, moves in for the progress and the badge, and eases out once
+ * eased move in. Chapter 2 is named by a short card, opens on the working
+ * rows for the progress and the badge, and eases out once
  * Activity opens; the moment Activity spends loading after the click is left
  * out. The take itself steps down Activity, one cover at a time.
  *
@@ -16,7 +16,7 @@
 const move = 0.8;
 
 const opening = [
-    { text: "Today most tasks start as conversations with agents.", at: 0 },
+    { text: "Today most tasks start as conversations with agents.", at: -0.3 },
     { text: "Happy is built around this idea.", at: 0.9 },
 ];
 const awareTitle = "See who’s working on what";
@@ -70,11 +70,20 @@ export function chapters(stage, views, ending, cues) {
     const drop = 0;
 
     const activity = cues.activity;
-    const activityFrom = activity.open;
+    // Enter on the working rows, just before List cache finishes. Leave out
+    // the stationary wait after the badge and one second of the first cover.
+    const activityFrom = activity.open + 1.2;
     const [restStep, restSeconds] = views.activityUntil;
     const click = activity["activity-click"];
-    const skip = [click + views.loading[0], click + views.loading[1]];
-    const skipped = skip[1] - skip[0];
+    const skips = [
+        [activity["parent-done"] + 0.1, activity["parent-done"] + 1.6],
+        [click + views.loading[0], click + views.loading[1]],
+        [activity["activity-open"] + 2.1, activity["activity-open"] + 3.1],
+    ];
+    const skippedBefore = (at) =>
+        skips.reduce((total, [from, to]) => total + Math.max(0, Math.min(at, to) - from), 0);
+    const onCut = (at) => at - activityFrom - skippedBefore(at);
+    const until = activity[restStep] + restSeconds;
 
     return {
         ...stage,
@@ -100,15 +109,14 @@ export function chapters(stage, views, ending, cues) {
                 ],
             }),
             { kind: "card", text: activityTitle, seconds: 2.2 },
-            chapter("activity", activityFrom, activity[restStep] + restSeconds - skipped, {
+            chapter("activity", activityFrom, until - skippedBefore(until), {
                 title: activityTitle,
-                titleTo: activity["activity-open"] + 2.0 - skipped - activityFrom,
-                skip,
+                titleTo: onCut(activity["activity-open"] + 2.0),
+                skips,
                 camera: [
-                    { at: 0 },
-                    { at: 0.2 + move, move, css: { scale: stage.push, ...views.progress } },
+                    { at: 0, css: { scale: stage.push, ...views.progress } },
                     {
-                        at: activity["activity-open"] + 0.3 - skipped - activityFrom,
+                        at: onCut(activity["activity-open"] + 0.3),
                         move,
                         css: views.activity,
                     },

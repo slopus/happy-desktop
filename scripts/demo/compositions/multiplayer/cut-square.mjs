@@ -19,7 +19,7 @@ export default (cues) => ({
             progress: { x: centred(1.3), y: 60 },
             activity: { scale: 1.3, x: centred(1.3), y: 66 },
             loading: [0.11, 0.38],
-            activityUntil: ["step1-rest", 1.2],
+            activityUntil: ["step1-rest", 1.0],
         },
         [
             {
