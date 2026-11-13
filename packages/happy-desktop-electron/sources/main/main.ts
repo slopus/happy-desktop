@@ -105,7 +105,12 @@ import {
     desktopBrowserProxyTargetValidate,
 } from "./happyAgentIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
-import { artifactSiteScheme, artifactSitesCreate, type ArtifactSiteHandle } from "./artifactSite";
+import {
+    ArtifactSiteError,
+    artifactSiteScheme,
+    artifactSitesCreate,
+    type ArtifactSiteHandle,
+} from "./artifactSite";
 import { happyCloudArtifactClient } from "./happyCloudArtifacts";
 import { artifactNetworkProxyCreate, type ArtifactNetworkProxyHandle } from "./artifactNetwork";
 import { deviceBridgeHostCreate } from "./deviceBridgeHost";
@@ -1781,6 +1786,21 @@ void app
                 ),
             desktopDebugEnabled ? desktopDebugLog : undefined,
             serverSessions,
+            // Happy Cloud's sites need no Happy Agent, only the artifact
+            // partition and the person's sign-in, both held here.
+            async (connectionId, site) => {
+                const sites = artifactSites?.register();
+                if (!sites)
+                    throw new ArtifactSiteError(501, "This desktop cannot run a vault app.");
+                return site.kind === "artifact"
+                    ? await sites.open(site.artifactId, site.version, connectionId)
+                    : await sites.openVaultApp(
+                          site.surfaceId,
+                          site.fileId,
+                          site.version,
+                          connectionId,
+                      );
+            },
         );
         htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();

@@ -1,8 +1,11 @@
 import type { UtilityProcess } from "electron";
+import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import type { HappyAgentRemoteAuthorization } from "./happyAgentDaemonClient";
+import { ArtifactSiteError } from "./artifactSite";
 import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 import type { HappyAgentRendererProxy, HappyAgentRendererTarget } from "./happyAgentRendererProxy";
 import type {
+    RendererCloudSite,
     RendererUtilityInput,
     RendererUtilityOutput,
     RendererLiveAttempt,
@@ -32,6 +35,12 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
     readonly offline: () => void;
     readonly debug?: (text: string) => void;
     readonly remote?: RendererRemoteTokens;
+    /**
+     * Opens a Happy Cloud connection's artifact or vault app as a site and
+     * names its entry. Main holds the sites and the sign-in, so this works
+     * whether or not a Happy Agent runs on this computer.
+     */
+    readonly cloudSiteOpen?: (connectionId: string, site: RendererCloudSite) => Promise<string>;
 }): Promise<HappyAgentRendererProxy> {
     const remote = options.remote;
     let closed = false;
@@ -134,6 +143,29 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
                     void remote
                         .refresh(message.connectionId, message.rejected)
                         .then(answer, () => answer(undefined));
+            } else if (message.type === "cloud-site-open" && child === running) {
+                const { requestId } = message;
+                const answer = (input: RendererUtilityInput) => {
+                    if (child === running) running.postMessage(input);
+                };
+                void (async () => {
+                    if (!options.cloudSiteOpen)
+                        throw new ArtifactSiteError(501, "This desktop cannot run a vault app.");
+                    return await options.cloudSiteOpen(message.connectionId, message.site);
+                })().then(
+                    (url) => answer({ type: "cloud-site-opened", requestId, url }),
+                    (error: unknown) =>
+                        answer({
+                            type: "cloud-site-refused",
+                            requestId,
+                            status:
+                                error instanceof ArtifactSiteError ||
+                                error instanceof HappyAgentApiError
+                                    ? error.status
+                                    : 502,
+                            error: error instanceof Error ? error.message : String(error),
+                        }),
+                );
             } else if (message.type === "remote-sign-in-required") {
                 remote?.signInRequire(message.connectionId, message.rejected);
             } else if (message.type === "remote-server-moved") {

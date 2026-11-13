@@ -11,6 +11,7 @@ import {
     happyAgentRendererUtilityProxyCreate,
     type RendererRemoteTokens,
 } from "./happyAgentRendererUtilityProxy";
+import type { RendererCloudSite } from "../shared/happyAgentRendererUtilityContract";
 import { rendererNavigationAllowed } from "./navigation";
 import { mediaPreviewAddressAllowed } from "./mediaPreviewWindow";
 import { HAPPY_AGENT_LIVE_WINDOW_HEADER, happyAgentLiveRoute } from "./happyAgentLiveRoute";
@@ -35,6 +36,7 @@ export async function happyAgentRendererSessionCreate(
     fork: () => UtilityProcess,
     debug?: (message: string) => void,
     remote?: RendererRemoteTokens,
+    cloudSiteOpen?: (connectionId: string, site: RendererCloudSite) => Promise<string>,
 ): Promise<HappyAgentRendererSession> {
     let active = false;
     let closed = false;
@@ -68,6 +70,7 @@ export async function happyAgentRendererSessionCreate(
         },
         ...(debug ? { debug } : {}),
         ...(remote ? { remote } : {}),
+        ...(cloudSiteOpen ? { cloudSiteOpen } : {}),
     });
     const windows = new Map<
         number,

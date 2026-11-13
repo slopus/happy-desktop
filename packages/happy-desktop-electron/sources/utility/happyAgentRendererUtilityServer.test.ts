@@ -178,6 +178,81 @@ describe("isolated Happy Agent HTTP transport", () => {
         await vi.waitFor(() => expect(cancelled).toBe(true));
     });
 
+    it("opens Happy Cloud sites through main with no Happy Agent, and nothing else without one", async () => {
+        const events = vi.fn();
+        isolated = await happyAgentRendererUtilityServerCreate(events, false);
+        const auth = `Basic ${Buffer.from(`${isolated.username}:${isolated.password}`).toString("base64")}`;
+        const asked = () =>
+            events.mock.calls
+                .map(([event]) => event as { type: string; requestId?: number })
+                .filter((event) => event.type === "cloud-site-open");
+
+        const vault = get("/connections/cloud-acme/vault-app?surfaceId=s&fileId=f&version=3", auth);
+        await vi.waitFor(() => expect(asked()).toHaveLength(1));
+        expect(asked()[0]).toEqual({
+            type: "cloud-site-open",
+            requestId: 1,
+            connectionId: "cloud-acme",
+            site: { kind: "vault", surfaceId: "s", fileId: "f", version: 3 },
+        });
+        await isolated.receive({
+            type: "cloud-site-opened",
+            requestId: 1,
+            url: "happy-artifact://vault-a-v3.cabc/index.html",
+        });
+        expect(await vault).toEqual({
+            status: 200,
+            body: JSON.stringify({ url: "happy-artifact://vault-a-v3.cabc/index.html" }),
+        });
+
+        const artifact = get("/connections/cloud-acme/artifact-site?artifactId=a&version=2", auth);
+        await vi.waitFor(() => expect(asked()).toHaveLength(2));
+        expect(asked()[1]).toMatchObject({
+            connectionId: "cloud-acme",
+            site: { kind: "artifact", artifactId: "a", version: 2 },
+        });
+        await isolated.receive({
+            type: "cloud-site-refused",
+            requestId: 2,
+            status: 403,
+            error: "Sign in to this server to use it.",
+        });
+        expect(await artifact).toEqual({
+            status: 403,
+            body: JSON.stringify({ error: "Sign in to this server to use it." }),
+        });
+
+        expect(await get("/connections/cloud-acme/vault-app?surfaceId=s&version=3", auth)).toEqual({
+            status: 400,
+            body: JSON.stringify({ error: "fileId is required." }),
+        });
+        expect(
+            (
+                await get(
+                    "/connections/cloud-acme/vault-app?surfaceId=s&fileId=f&version=3",
+                    auth,
+                    "https://untrusted.example",
+                )
+            ).status,
+        ).toBe(403);
+        // Every other desktop service still needs Happy Agent, a host
+        // connection's apps included.
+        for (const path of [
+            "/open-in-targets",
+            "/vault-app?surfaceId=s&fileId=f&version=3",
+            "/connections/team/vault-app?surfaceId=s&fileId=f&version=3",
+            "/connections/cloud-acme/html-preview?workspaceId=w&path=a.html",
+        ])
+            expect(await get(path, auth)).toEqual({
+                status: 503,
+                body: JSON.stringify({
+                    error: "Happy Agent isn't running on this computer.",
+                    code: "local_unavailable",
+                }),
+            });
+        expect(asked()).toHaveLength(2);
+    });
+
     if (process.env.HAPPY_TRANSPORT_BENCH === "1")
         it("measures 100 local 1 MiB responses (Node fixture, not Electron)", async () => {
             directory = await mkdtemp(join(tmpdir(), "happy-utility-bench-"));

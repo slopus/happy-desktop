@@ -3,7 +3,11 @@ import type { Session, UtilityProcess, WebContents } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import { happyAgentRendererUtilityProxyCreate } from "./happyAgentRendererUtilityProxy";
 import { happyAgentRendererSessionCreate } from "./happyAgentRendererSession";
-import type { RendererUtilityInput } from "../shared/happyAgentRendererUtilityContract";
+import type {
+    RendererCloudSite,
+    RendererUtilityInput,
+} from "../shared/happyAgentRendererUtilityContract";
+import { ArtifactSiteError } from "./artifactSite";
 
 class FakeUtility extends EventEmitter {
     readonly sent: RendererUtilityInput[] = [];
@@ -117,6 +121,53 @@ describe("isolated renderer proxy lifecycle", () => {
         });
         first.kill();
         await expect(replacement).rejects.toThrow("exited");
+        proxy.close();
+    });
+
+    it("opens a Happy Cloud site for the utility with no Happy Agent backing it", async () => {
+        const first = new FakeUtility();
+        const cloudSiteOpen = vi.fn(async (_connectionId: string, site: RendererCloudSite) => {
+            if (site.kind === "artifact")
+                throw new ArtifactSiteError(403, "Sign in to this server to use it.");
+            return "happy-artifact://vault-a-v3.cabc/index.html";
+        });
+        const starting = happyAgentRendererUtilityProxyCreate({
+            fork: () => first as unknown as UtilityProcess,
+            ready: async () => undefined,
+            offline: () => undefined,
+            cloudSiteOpen,
+        });
+        first.ready(10101);
+        const proxy = await starting;
+        const vault = { kind: "vault", surfaceId: "s", fileId: "f", version: 3 } as const;
+        first.emit("message", {
+            type: "cloud-site-open",
+            requestId: 7,
+            connectionId: "cloud-acme",
+            site: vault,
+        });
+        first.emit("message", {
+            type: "cloud-site-open",
+            requestId: 8,
+            connectionId: "cloud-acme",
+            site: { kind: "artifact", artifactId: "a", version: 2 },
+        });
+        await vi.waitFor(() => expect(first.sent).toHaveLength(2));
+        expect(cloudSiteOpen).toHaveBeenCalledWith("cloud-acme", vault);
+        expect(first.sent).toEqual([
+            {
+                type: "cloud-site-opened",
+                requestId: 7,
+                url: "happy-artifact://vault-a-v3.cabc/index.html",
+            },
+            {
+                type: "cloud-site-refused",
+                requestId: 8,
+                status: 403,
+                error: "Sign in to this server to use it.",
+            },
+        ]);
+        expect(first.sent.some((message) => message.type === "backing")).toBe(false);
         proxy.close();
     });
 

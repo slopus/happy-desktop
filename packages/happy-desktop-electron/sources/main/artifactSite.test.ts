@@ -500,6 +500,16 @@ describe("artifact site handler", () => {
         expect(happyCloud).toHaveBeenCalledWith("cloud-acme");
         expect(connection).not.toHaveBeenCalled();
 
+        // With no Happy Agent at all, only Happy Cloud's sites open.
+        const daemonless = sites.register();
+        expect(await daemonless.openVaultApp(surfaceId, fileId, 3, "cloud-acme")).toBe(url);
+        await expect(daemonless.openVaultApp(surfaceId, fileId, 3)).rejects.toMatchObject({
+            status: 501,
+        });
+        await expect(daemonless.openVaultApp(surfaceId, fileId, 3, "team")).rejects.toMatchObject({
+            status: 501,
+        });
+
         // Without a Happy Cloud reader the host is still never asked.
         await expect(
             artifactSitesCreate().register(host).openVaultApp(surfaceId, fileId, 3, "cloud-acme"),

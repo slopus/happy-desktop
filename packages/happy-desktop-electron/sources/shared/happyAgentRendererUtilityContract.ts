@@ -14,6 +14,19 @@ export interface RendererLiveAttempt {
  */
 export const rendererUtilityOriginArgument = "--happy-agent-renderer-origin=";
 
+/**
+ * One artifact version, or one version of a vault's `.artifact` file, that a
+ * Happy Cloud connection's window asks to open as a site of its own.
+ */
+export type RendererCloudSite =
+    | { readonly kind: "artifact"; readonly artifactId: string; readonly version: number }
+    | {
+          readonly kind: "vault";
+          readonly surfaceId: string;
+          readonly fileId: string;
+          readonly version: number;
+      };
+
 /** Private main <-> utility-process protocol. Neither side sends this to Chromium. */
 export type RendererUtilityInput =
     | {
@@ -51,6 +64,15 @@ export type RendererUtilityInput =
           readonly type: "remote-refreshed";
           readonly requestId: number;
           readonly credential?: ServerRemoteCredential;
+      }
+    /** Main opened the site one `cloud-site-open` asked for, at `url`. */
+    | { readonly type: "cloud-site-opened"; readonly requestId: number; readonly url: string }
+    /** Main could not open it, with the status and reason the window is told. */
+    | {
+          readonly type: "cloud-site-refused";
+          readonly requestId: number;
+          readonly status: number;
+          readonly error: string;
       };
 
 export type RendererUtilityOutput =
@@ -83,6 +105,17 @@ export type RendererUtilityOutput =
           readonly type: "remote-sign-in-required";
           readonly connectionId: string;
           readonly rejected: string;
+      }
+    /**
+     * A Happy Cloud connection's window asks for one of its sites. Main holds
+     * the sites and the sign-in, and needs no Happy Agent to open one; it
+     * answers with `cloud-site-opened` or `cloud-site-refused`.
+     */
+    | {
+          readonly type: "cloud-site-open";
+          readonly requestId: number;
+          readonly connectionId: string;
+          readonly site: RendererCloudSite;
       }
     /** The roster no longer names `serverUrl` for the connection: its sign-in ends. */
     | {

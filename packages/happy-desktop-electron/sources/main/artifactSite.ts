@@ -31,8 +31,10 @@ export interface ArtifactSiteHandle {
      * Opens sites backed by one Happy Agent connection. The returned function
      * reads the version's manifest and names the address its entry is served
      * at; every file the page asks for afterwards is read through `client`.
+     * Without one, only a Happy Cloud connection's sites open, as on a
+     * computer where no Happy Agent runs.
      */
-    register(client: ArtifactSiteClient): {
+    register(client?: ArtifactSiteClient): {
         readonly open: (
             artifactId: string,
             version: number,
@@ -64,7 +66,7 @@ type ArtifactSiteSource =
 
 /** One numbered version published as an origin of its own. */
 interface ArtifactSite {
-    readonly client: ArtifactSiteClient;
+    readonly client: ArtifactSiteClient | undefined;
     readonly connectionId?: string;
     readonly source: ArtifactSiteSource;
     readonly version: number;
@@ -246,13 +248,13 @@ export function artifactSitesCreate(
 ): ArtifactSiteHandle {
     /** Who a site's files are read through: Happy Agent, one of its connections, or Happy Cloud. */
     const readerOf = (
-        client: ArtifactSiteClient,
+        client: ArtifactSiteClient | undefined,
         connectionId: string | undefined,
     ): ArtifactSiteClient | undefined => {
         if (connectionId === undefined) return client;
         if (happyCloudServerNameOf(connectionId) !== undefined)
             return options.happyCloud?.(connectionId);
-        return client.connection?.(connectionId);
+        return client?.connection?.(connectionId);
     };
     // Only installed, trusted bytes are exposed here, never a guest-selected path.
     // The same module serves local and remote artifact sites without reaching
