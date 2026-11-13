@@ -28,7 +28,7 @@ export type TabbedPaneProps = {
     closeRevealedId?: string;
     /** Full titles scroll at their natural widths instead of sharing equal cells. */
     tabSizing?: "equal" | "content";
-    /** Fade the scroller's trailing edge while more tabs remain out of view. */
+    /** Fade each edge of the scroller while more tabs remain out of view past it. */
     overflowFade?: boolean;
     /** Commits a drag with the tab ids in their new order; supplying it makes tabs draggable. */
     onReorder?: (ids: readonly string[]) => void;
@@ -103,8 +103,10 @@ export function TabbedPane(props: TabbedPaneProps) {
         "transferable",
     ]);
     const scroller = useRef<HTMLDivElement>(null);
+    const [overflowStart, setOverflowStart] = useState(false);
     const [overflowEnd, setOverflowEnd] = useState(false);
     const measureOverflow = (viewport: HTMLElement) => {
+        setOverflowStart(viewport.scrollLeft > 1);
         setOverflowEnd(viewport.scrollWidth - viewport.clientWidth - viewport.scrollLeft > 1);
     };
     // eslint-disable-next-line happy-react/no-layout-effect -- activation must reveal the committed tab before paint by moving its horizontal browser scrollport; depending only on activeId preserves a deliberate manual scroll until another tab is activated
@@ -145,7 +147,16 @@ export function TabbedPane(props: TabbedPaneProps) {
                 <div
                     className="happy-tabbed-pane__scroller"
                     data-fade-end={local.overflowFade && overflowEnd ? "" : undefined}
+                    data-fade-start={local.overflowFade && overflowStart ? "" : undefined}
                     data-happy-desktop-ui="tabbed-pane-scroller"
+                    // The strip only scrolls sideways, and a mouse wheel only
+                    // turns one way: without this, tabs past the edge are out of
+                    // reach for anyone without a trackpad. A wheel that already
+                    // turns sideways is left to the browser.
+                    onWheel={(event) => {
+                        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+                        event.currentTarget.scrollLeft += event.deltaY;
+                    }}
                     onScroll={
                         local.overflowFade
                             ? (event) => measureOverflow(event.currentTarget)

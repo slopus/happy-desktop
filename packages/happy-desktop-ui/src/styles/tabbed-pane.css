@@ -63,9 +63,25 @@
     display: none;
 }
 
-/* Fade tab ink into the bar's surface, like the overlay close affordance. */
+/* Fade tab ink into the bar's surface, like the overlay close affordance, at
+   each edge with tabs scrolled past it: a tab cut at the leading edge reads as
+   one that goes on, not as a title that is only "…k". */
 .happy-tabbed-pane__scroller[data-fade-end] {
     mask-image: linear-gradient(to right, var(--surface) calc(100% - 36px), transparent);
+}
+
+.happy-tabbed-pane__scroller[data-fade-start] {
+    mask-image: linear-gradient(to right, transparent, var(--surface) 36px);
+}
+
+.happy-tabbed-pane__scroller[data-fade-start][data-fade-end] {
+    mask-image: linear-gradient(
+        to right,
+        transparent,
+        var(--surface) 36px,
+        var(--surface) calc(100% - 36px),
+        transparent
+    );
 }
 
 /*
