@@ -194,10 +194,11 @@ export function happyAgentCheckoutsStoreCreate(deps: {
         );
     };
 
-    function load(): void {
+    /** `hint` is news that may postdate a read in flight; a new subscriber's read joins that read. */
+    function load(hint = true): void {
         if (disposed || listeners.size === 0) return;
         if (reading) {
-            readAgain = true;
+            if (hint) readAgain = true;
             return;
         }
         if (retry !== undefined) clearTimeout(retry);
@@ -233,6 +234,14 @@ export function happyAgentCheckoutsStoreCreate(deps: {
                 greeted = true;
                 // The first read was sent after this subscription was installed.
                 if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
+                // The stream resumes after its last event on reconnect, so news of the connection
+                // itself, which the follower also replays on subscribing, changes no checkout.
+                if (
+                    input.kind === "update" &&
+                    input.update.kind !== "event" &&
+                    input.update.kind !== "state_lost"
+                )
+                    continue;
                 // Events are hints, any agent's included: the list is read again rather than patched.
                 load();
             }
@@ -248,7 +257,7 @@ export function happyAgentCheckoutsStoreCreate(deps: {
             if (listeners.size === 1) {
                 followStart();
                 // Subscribing during React's commit never publishes synchronously.
-                queueMicrotask(load);
+                queueMicrotask(() => load(false));
             }
             return () => {
                 unsubscribe();
