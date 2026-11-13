@@ -22,10 +22,20 @@ const STEPS = [
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Plugins" },
     { id: "teammates", label: "Team" },
+    { id: "mobileApp", label: "Phone" },
+    { id: "paymentMethod", label: "Payment" },
 ];
+const APP_STORE = "https://apps.apple.com/us/app/happy-claude-code-client/id6748571505";
+const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.ex3ndr.happy";
 
 const ADMIN_BOT_DESCRIPTION =
     "This is your server's admin bot. It has expanded capabilities: it can change the server's settings, connect tools and create other bots, so it can adapt Happy and build a system around how your team works. Only owners can talk to it.";
+const ADMIN_BOT_LEAD = "It has expanded capabilities, so it can shape Happy around your team.";
+const ADMIN_BOT_POINTS = [
+    "Changes this server's settings when you ask",
+    "Connects your tools and creates the bots you need",
+    "Builds a system around how your team works",
+];
 
 type Screen = {
     readonly id: string;
@@ -66,7 +76,32 @@ const screens: readonly Screen[] = [
             view: {
                 kind: "adminBot",
                 title: "Name your admin bot",
+                description: ADMIN_BOT_LEAD,
+                points: ADMIN_BOT_POINTS,
+                note: "Only owners can talk to it.",
+                name: "Chief of Staff",
+                avatarUrl: null,
+                placeholderSeed: "chief-of-staff",
+                busy: false,
+                onNameChange: noop,
+                onSubmit: noop,
+            },
+        },
+    },
+    {
+        id: "admin-bot-plain",
+        label: "Admin bot · one description",
+        props: {
+            currentStep: "adminBot",
+            serverLabel: "Acme",
+            action: { label: "Continue", onSelect: noop },
+            skip: { onSelect: noop },
+            view: {
+                kind: "adminBot",
+                title: "Name your admin bot",
                 description: ADMIN_BOT_DESCRIPTION,
+                points: [],
+                note: "",
                 name: "Chief of Staff",
                 avatarUrl: null,
                 placeholderSeed: "chief-of-staff",
@@ -83,16 +118,174 @@ const screens: readonly Screen[] = [
             currentStep: "inference",
             serverLabel: "Acme",
             action: { label: "Continue", onSelect: noop },
-            secondary: { label: "Use the free model for now", onSelect: noop },
+            skip: { onSelect: noop },
             view: {
                 kind: "inference",
                 options: [
                     { id: "claude", connected: true },
                     { id: "chatgpt", connected: false, onSelect: noop },
                     { id: "grok", connected: false, onSelect: noop },
+                    { id: "custom", connected: false, onSelect: noop },
                 ],
-                onOtherSelect: noop,
             },
+        },
+    },
+    {
+        id: "plugins",
+        label: "Plugins",
+        props: {
+            currentStep: "plugins",
+            serverLabel: "Acme",
+            action: { label: "Continue", disabled: true, onSelect: noop },
+            view: {
+                kind: "plugins",
+                plugins: [
+                    {
+                        id: "github",
+                        name: "GitHub",
+                        description: "Repositories, issues and pull requests",
+                        image: null,
+                        required: true,
+                        state: "setup",
+                        onSelect: noop,
+                    },
+                    {
+                        id: "linear",
+                        name: "Linear",
+                        description: "Issues, projects and cycles",
+                        image: null,
+                        required: false,
+                        state: "connected",
+                    },
+                    {
+                        id: "slack",
+                        name: "Slack",
+                        description: "Channels and messages",
+                        image: null,
+                        required: false,
+                        state: "available",
+                        busy: true,
+                        onSelect: noop,
+                    },
+                ],
+            },
+        },
+    },
+    {
+        id: "teammates",
+        label: "Team",
+        props: {
+            currentStep: "teammates",
+            serverLabel: "Acme",
+            action: { label: "Continue", onSelect: noop },
+            skip: { onSelect: noop },
+            view: {
+                kind: "teammates",
+                email: "kirill@acme.dev",
+                busy: false,
+                invites: [
+                    { id: "i2", email: "anna@acme.dev", delivery: "sent" },
+                    { id: "i1", email: "lee@acme.dev", delivery: "failed" },
+                ],
+                onEmailChange: noop,
+                onInvite: noop,
+                onLinkCreate: noop,
+            },
+        },
+    },
+    {
+        id: "teammates-link",
+        label: "Team · email unavailable",
+        props: {
+            currentStep: "teammates",
+            serverLabel: "Acme",
+            action: { label: "Continue", onSelect: noop },
+            view: {
+                kind: "teammates",
+                email: "",
+                busy: false,
+                invites: [],
+                link: "https://acme.happybases.com/invite/7Hq2mZpX4t",
+                error: "This server can't send email. Share this link instead.",
+                onEmailChange: noop,
+                onInvite: noop,
+            },
+        },
+    },
+    {
+        id: "mobile",
+        label: "Phone",
+        props: {
+            currentStep: "mobileApp",
+            serverLabel: "Acme",
+            action: { label: "Continue", disabled: true, onSelect: noop },
+            skip: { onSelect: noop },
+            view: {
+                kind: "mobileApp",
+                appStoreUrl: APP_STORE,
+                playStoreUrl: PLAY_STORE,
+                registered: false,
+            },
+        },
+    },
+    {
+        id: "payment-method",
+        label: "Payment method",
+        props: {
+            currentStep: "paymentMethod",
+            serverLabel: "Acme",
+            action: { label: "Add a card", onSelect: noop },
+            view: {
+                kind: "payment",
+                ask: "method",
+                method: null,
+                balance: null,
+                testMode: true,
+                waiting: false,
+            },
+        },
+    },
+    {
+        id: "payment-credit",
+        label: "Credit",
+        props: {
+            currentStep: "paymentMethod",
+            serverLabel: "Acme",
+            action: { label: "Add $25", busy: true, onSelect: noop },
+            view: {
+                kind: "payment",
+                ask: "credit",
+                method: "Visa •••• 4242",
+                balance: "$0.00",
+                testMode: false,
+                amounts: [
+                    { id: "1000", label: "$10" },
+                    { id: "2500", label: "$25" },
+                    { id: "5000", label: "$50" },
+                    { id: "10000", label: "$100" },
+                ],
+                amount: "2500",
+                onAmountSelect: noop,
+                waiting: true,
+            },
+        },
+    },
+    {
+        id: "wait-for-admin",
+        label: "Waiting for your admin",
+        props: {
+            currentStep: "plugins",
+            serverLabel: "Acme",
+            view: { kind: "notice", reason: "waitForAdmin", step: "Plugins" },
+        },
+    },
+    {
+        id: "update",
+        label: "Update Happy",
+        props: {
+            currentStep: "plugins",
+            serverLabel: "Acme",
+            view: { kind: "notice", reason: "update", step: "Plugins" },
         },
     },
 ];

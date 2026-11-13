@@ -20,19 +20,79 @@
 .happy-cloud-onboarding__admin-bot {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     align-self: center;
     gap: 8px;
     width: 100%;
-    max-width: 420px;
+    max-width: 460px;
+}
+
+/* What the bot can do is the point of the page, so it reads at body size, a
+   line each, rather than as small print in a box. */
+.happy-cloud-onboarding__points {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-cloud-onboarding__point {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 24px;
+}
+
+.happy-cloud-onboarding__point-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+}
+
+.happy-cloud-onboarding__lead {
+    margin: 0;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    font-size: 16px;
+    line-height: 24px;
+    text-align: center;
+}
+
+.happy-cloud-onboarding__footnote {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 8px 0 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 64%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-onboarding__bot-row {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    gap: 12px;
 }
 
 .happy-cloud-onboarding__bot-avatar {
-    position: relative;
     display: flex;
     flex: 0 0 auto;
-    width: 96px;
-    height: 96px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
 }
 
@@ -44,28 +104,9 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 18%, transparent);
 }
 
-/* The admin mark sits on the picture's lower-right like the profile's camera,
-   ringed so it reads as a badge on the bot rather than part of its face. */
-.happy-cloud-onboarding__bot-mark {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--surface);
-    box-shadow:
-        0 0 0 3px color-mix(in srgb, var(--onboarding-foreground) 22%, transparent),
-        0 2px 6px var(--shadow-subtle);
-    color: var(--text);
-}
-
 .happy-cloud-onboarding__name {
-    align-self: stretch;
-    margin-top: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .happy-cloud-onboarding__name .happy-text-field__control[data-size="large"] {
@@ -117,8 +158,118 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    align-self: center;
     gap: 8px;
     width: 100%;
+    max-width: 640px;
+}
+
+/* Four equal tiles: the brands and Custom stand side by side as equals. */
+.happy-cloud-onboarding__tiles {
+    display: flex;
+    gap: 12px;
+}
+
+.happy-cloud-onboarding__tile {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 16px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding__tile[data-connected] {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--success) 70%, transparent);
+}
+
+.happy-cloud-onboarding__tile-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+}
+
+.happy-cloud-onboarding__tile-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    max-width: 100%;
+    text-align: center;
+}
+
+.happy-cloud-onboarding__tile-name {
+    font-family: var(--happy-font-ui);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-onboarding__tile .happy-cloud-onboarding__row-detail {
+    white-space: normal;
+}
+
+.happy-cloud-onboarding__done[data-fill] {
+    align-self: stretch;
+    min-width: 0;
+}
+
+/* The step bar on the sky: larger names, every step legible, and the step
+   you are on unmistakable. Colour alone changes between states, so no label
+   reflows as it lights. */
+.happy-cloud-onboarding .happy-segmented-progress {
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding .happy-segmented-progress__track {
+    background: color-mix(in srgb, var(--onboarding-foreground) 16%, transparent);
+}
+
+.happy-cloud-onboarding .happy-segmented-progress__label {
+    color: color-mix(in srgb, var(--onboarding-foreground) 56%, transparent);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    opacity: 1;
+}
+
+.happy-cloud-onboarding
+    .happy-segmented-progress__segment[data-state="pending"]
+    .happy-segmented-progress__label {
+    opacity: 1;
+}
+
+.happy-cloud-onboarding
+    .happy-segmented-progress__segment[data-state="done"]
+    .happy-segmented-progress__fill {
+    background: color-mix(in srgb, var(--onboarding-foreground) 48%, transparent);
+}
+
+.happy-cloud-onboarding
+    .happy-segmented-progress[data-mode="steps"]
+    .happy-segmented-progress__segment[data-state="running"]
+    .happy-segmented-progress__fill {
+    background: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding
+    .happy-segmented-progress__segment[data-state="done"]
+    .happy-segmented-progress__label {
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+}
+
+.happy-cloud-onboarding
+    .happy-segmented-progress__segment[data-state="running"]
+    .happy-segmented-progress__label {
+    color: var(--onboarding-foreground);
 }
 
 .happy-cloud-onboarding__other {
@@ -128,4 +279,221 @@
 .happy-setup-page[data-backdrop="sky"]
     .happy-cloud-onboarding__other.happy-button[data-variant="ghost"] {
     color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+}
+
+/* Rows of plugins or invites: one framed list, each row the same 16px inset
+   on every side as the note above it. */
+.happy-cloud-onboarding__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-self: center;
+    width: 100%;
+    max-width: 480px;
+}
+
+.happy-cloud-onboarding__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-height: 64px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding__row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-cloud-onboarding__row-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-cloud-onboarding__row-detail {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A finished row says so in the box its button took, so nothing moves. */
+.happy-cloud-onboarding__done {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 96px;
+    height: 28px;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-cloud-onboarding__done .happy-icon {
+    color: var(--success);
+}
+
+.happy-cloud-onboarding__done[data-tone="attention"] .happy-icon {
+    color: var(--text-destructive);
+}
+
+.happy-cloud-onboarding__done[data-size="large"] {
+    height: 44px;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+.happy-cloud-onboarding__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 64px;
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding__invite {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    align-self: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 480px;
+}
+
+.happy-cloud-onboarding__invite-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-cloud-onboarding__email {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy-cloud-onboarding__link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-cloud-onboarding__link-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-cloud-onboarding__stores {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+}
+
+.happy-cloud-onboarding__store {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-cloud-onboarding__payment {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    align-self: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+}
+
+.happy-cloud-onboarding__figure {
+    font-family: var(--happy-font-ui);
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 32px;
+}
+
+.happy-cloud-onboarding__amounts {
+    display: flex;
+    gap: 8px;
+}
+
+.happy-cloud-onboarding__amounts > .happy-button {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.happy-cloud-onboarding__notice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--onboarding-foreground) 8%, transparent);
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding__tag {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-onboarding__tag[data-tone="attention"] {
+    background: color-mix(in srgb, var(--box-warning-border) 24%, transparent);
+}
+
+.happy-cloud-onboarding__email .happy-text-field__control[data-size="large"] {
+    height: 44px;
+    border-radius: 10px;
+}
+
+/* Four tiles side by side need more measure than a paragraph, like the local
+   setup's assistants page. */
+.happy-cloud-onboarding--wide .happy-setup-page__body {
+    max-width: 720px;
 }
