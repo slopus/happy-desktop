@@ -145,7 +145,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
                 })}\n`,
                 "utf8",
             );
-            const reply = this.#reply(payload);
+            const reply = usageMeasured(payload, this.#reply(payload));
             response.writeHead(200, { "content-type": "application/json" });
             response.end(JSON.stringify(reply));
         } catch (error) {
@@ -540,6 +540,27 @@ function contextLatestPromptText(context: unknown): string {
         return message.role === "agent" ? text.replace(/^Message from agent \S+:\n\n/u, "") : text;
     }
     return "";
+}
+
+/**
+ * A real provider reports how much context it read and wrote. Without that,
+ * Happy Agent records every reply as one that read 0 tokens, so each seeded
+ * compaction said it was made "from 0 tokens" and its context meter sat at
+ * zero. Four characters a token is the usual rough measure, and deterministic.
+ */
+function usageMeasured(
+    request: GymInferenceRequest,
+    reply: GymInferenceResponse,
+): GymInferenceResponse {
+    if (reply.usage !== undefined || reply.errorMessage !== undefined) return reply;
+    const tokens = (chars: number) => Math.max(1, Math.ceil(chars / 4));
+    return {
+        ...reply,
+        usage: {
+            input: tokens(JSON.stringify(request.context ?? null).length),
+            output: tokens(JSON.stringify(reply.content).length),
+        },
+    };
 }
 
 function contextSummaryRead(context: unknown): {
