@@ -40,8 +40,6 @@ export interface HappyAgentVaultSurfacePageProps {
     vault: HappyAgentVaultSnapshot;
     /** The Surface's shared chat, toggled from the header. */
     chat?: HappyAgentSurfaceChatToggle;
-    /** The team's default vault, the one every member starts with; marked in the header. */
-    defaultVault?: boolean;
     /** Who is reading, so their own changes say "You". */
     viewer?: { readonly userId: string | null };
     /** Now, in epoch milliseconds, for "Today" and "Yesterday". */
@@ -497,7 +495,9 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     )
                 }
                 {...(props.chat ? { chat: props.chat } : {})}
-                {...(props.defaultVault ? { marker: "Default" } : {})}
+                {...(vault.settings.status === "ready" && vault.settings.defaultVault
+                    ? { marker: "Default" }
+                    : {})}
                 surface={props.surface}
             />
             {vault.status === "missing" ? (

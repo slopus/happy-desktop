@@ -287,10 +287,18 @@ export type HappyAgentVaultDialog =
     | { readonly kind: "move"; readonly itemId: HappyAgentVaultItemId }
     | { readonly kind: "settings" };
 
-/** The vault's retention policy as the Happy Agent holds it, with this window's edit applied. */
+/**
+ * The vault's settings as the Happy Agent holds them, with this window's
+ * retention edit applied. `defaultVault` marks the organization's default
+ * vault; a Happy Agent has none, so it is always `false` there.
+ */
 export type HappyAgentVaultSettings =
     | { readonly status: "loading" }
-    | { readonly status: "ready"; readonly retention: HappyAgentVaultRetention }
+    | {
+          readonly status: "ready";
+          readonly retention: HappyAgentVaultRetention;
+          readonly defaultVault: boolean;
+      }
     | { readonly status: "failed"; readonly error: UserError };
 
 /**

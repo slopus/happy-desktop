@@ -823,6 +823,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     settings: {
                         status: "ready",
                         retention: happyAgentVaultRetentionProject(response.settings.retention),
+                        defaultVault: response.settings.defaultVault === true,
                     },
                 };
                 notify();
@@ -995,10 +996,16 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 }
                 settingsVersion = payload.version;
                 if (settingsPending !== undefined) return;
+                // The event carries only the retention; whether this is the
+                // default vault never changes after the settings first load.
+                if (snapshot.settings.status !== "ready") {
+                    settingsLoad(reads.signal);
+                    return;
+                }
                 snapshot = {
                     ...snapshot,
                     settings: {
-                        status: "ready",
+                        ...snapshot.settings,
                         retention: happyAgentVaultRetentionProject(payload.changes.retention),
                     },
                 };
@@ -1829,7 +1836,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             const before = settings.retention;
             const pending = { retention, mutationId: idCreate() };
             settingsPending = pending;
-            snapshot = { ...snapshot, settings: { status: "ready", retention } };
+            snapshot = { ...snapshot, settings: { ...settings, retention } };
             notify();
             void (async () => {
                 await deps.surfaceCreated?.catch(() => undefined);
@@ -1855,6 +1862,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                                 retention: happyAgentVaultRetentionProject(
                                     response.settings.retention,
                                 ),
+                                defaultVault: response.settings.defaultVault === true,
                             },
                         };
                         notify();
@@ -1865,7 +1873,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                             settingsPending = undefined;
                             snapshot = {
                                 ...snapshot,
-                                settings: { status: "ready", retention: before },
+                                settings: { ...settings, retention: before },
                                 failure: happyAgentUserError(error),
                             };
                             notify();

@@ -11,6 +11,7 @@ import {
     type HappyAgentVaultItemId,
     type HappyAgentVaultHistory,
     type HappyAgentVaultPreview,
+    type HappyAgentVaultSettings,
     type HappyAgentVaultSnapshot,
     type HappyAgentVaultUpload,
     type HappyAgentVaultVersion,
@@ -266,6 +267,7 @@ function vaultOf(
         settings: {
             status: "ready",
             retention: { ...HAPPY_AGENT_VAULT_RETENTION_PRESETS.timeMachine, trashDays: 30 },
+            defaultVault: false,
         },
         people: new Map([
             ["u1", { name: "Steve Korshakov", photo: null }],
@@ -521,17 +523,19 @@ const FILES: HappyAgentSurfaceView = {
     members: STUDIO.members,
 };
 
+/** The settings of the team's default vault, which the header marks. */
+const DEFAULT_VAULT_SETTINGS: HappyAgentVaultSettings = {
+    status: "ready",
+    retention: { ...HAPPY_AGENT_VAULT_RETENTION_PRESETS.timeMachine, trashDays: 30 },
+    defaultVault: true,
+};
+
 /** The page in a frame that holds its dialogs' fixed overlay, so each specimen keeps its own. */
-function Page(props: {
-    vault: HappyAgentVaultSnapshot;
-    surface?: HappyAgentSurfaceView;
-    defaultVault?: boolean;
-}) {
+function Page(props: { vault: HappyAgentVaultSnapshot; surface?: HappyAgentSurfaceView }) {
     return (
         <div style={FRAME}>
             <HappyAgentVaultSurfacePage
                 {...handlers}
-                {...(props.defaultVault ? { defaultVault: true } : {})}
                 now={NOW}
                 surface={props.surface ?? STUDIO}
                 vault={props.vault}
@@ -856,6 +860,7 @@ export function HappyAgentVaultBlueprintPage() {
                                 ],
                                 trashDays: 14,
                             },
+                            defaultVault: false,
                         },
                     })}
                 />
@@ -941,7 +946,7 @@ export function HappyAgentVaultBlueprintPage() {
                 screen="23-default-vault-1100x760"
                 window={WINDOW}
             >
-                <Page defaultVault surface={FILES} vault={vaultOf(null)} />
+                <Page surface={FILES} vault={vaultOf(null, { settings: DEFAULT_VAULT_SETTINGS })} />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
@@ -951,7 +956,10 @@ export function HappyAgentVaultBlueprintPage() {
                 screen="24-skills-folder-1100x760"
                 window={WINDOW}
             >
-                <Page defaultVault surface={FILES} vault={vaultOf("skills")} />
+                <Page
+                    surface={FILES}
+                    vault={vaultOf("skills", { settings: DEFAULT_VAULT_SETTINGS })}
+                />
             </FullScreenSpecimen>
         </ComponentPage>
     );

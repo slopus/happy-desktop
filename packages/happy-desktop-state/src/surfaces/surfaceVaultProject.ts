@@ -81,8 +81,7 @@ export function happyAgentVaultFolderProject(folder: VaultFolder): HappyAgentVau
     return {
         ...happyAgentVaultItemFields(folder),
         kind: "folder",
-        // The client's vault protocol carries a folder's role from 0.0.169.
-        role: null,
+        role: folder.role ?? null,
     };
 }
 
@@ -119,6 +118,7 @@ export function happyAgentVaultFolderChangesApply(
             ? {}
             : { parentId: changes.parentId as HappyAgentVaultItemId | null }),
         ...(changes.deletedAt === undefined ? {} : { deletedAt: changes.deletedAt }),
+        ...(changes.role === undefined ? {} : { role: changes.role }),
         updatedAt: changes.updatedAt,
         updatedBy: changes.updatedBy,
         version: payload.version,
