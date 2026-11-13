@@ -123,6 +123,9 @@ export async function happyAgentVaultContentRead(
         if (file === null) throw new UserError("The app's file could not be read.");
         return file.data;
     };
+    /* Gen UI vault apps are specified but not drawn here yet; never open one as a page. */
+    if (manifest.type === "gen_ui")
+        throw new UserError("Gen UI apps in a vault can't be shown here yet.");
     const entryPath = manifest.entry;
     if (manifest.type === "markdown")
         return {

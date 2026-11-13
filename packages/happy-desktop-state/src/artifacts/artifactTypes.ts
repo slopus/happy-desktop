@@ -1,3 +1,4 @@
+import { GEN_UI_RENDER_PATH } from "@slopus/happy-agent-client";
 /**
  * Closed product projections of a Happy Agent's artifacts: finished work an agent
  * or a person published to the installation's one global catalog, with every
@@ -49,7 +50,7 @@ export const HAPPY_AGENT_ARTIFACT_TYPES: readonly Exclude<HappyAgentArtifactType
 ];
 
 /** Where a `gen_ui` version keeps the render document the daemon compiled, among its files. */
-export const HAPPY_AGENT_GEN_UI_RENDER_PATH = ".genui/render.json";
+export const HAPPY_AGENT_GEN_UI_RENDER_PATH = GEN_UI_RENDER_PATH;
 
 /** One file of one version. Equal digests mean equal content. */
 export interface HappyAgentArtifactFile {

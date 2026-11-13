@@ -28,8 +28,8 @@ export interface HappyAgentVaultActor {
 
 /** What an artifact is: an HTML app, or a Markdown document. */
 export interface HappyAgentVaultArtifactSummary {
-    readonly type: "html" | "markdown";
-    readonly entry: "index.html" | "index.md";
+    readonly type: "html" | "markdown" | "gen_ui";
+    readonly entry: "index.html" | "index.md" | "index.genui.json";
     readonly fileCount: number;
 }
 
