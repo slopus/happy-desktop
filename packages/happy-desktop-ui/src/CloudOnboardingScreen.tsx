@@ -563,7 +563,7 @@ function page(
                 title: view.ask === "method" ? "Add a payment method" : "Add credit",
                 copy:
                     view.ask === "method"
-                        ? `A card or Link on file keeps ${server} running. Stripe keeps the details.`
+                        ? "Add a card or Link so your team can add credit. Stripe keeps the details."
                         : `Agents on ${server} spend from the team's credit.`,
                 body: (
                     <div
