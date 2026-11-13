@@ -217,12 +217,16 @@ async function gymElectronDockWatch(app: ElectronApplication): Promise<void> {
         // watcher has looked: the record is told on the way out instead.
         const exit = electronApp.exit.bind(electronApp);
         electronApp.exit = (code?: number) => {
-            const visible = dock.isVisible();
-            if ((code ?? 0) !== 0 || visible !== shown)
-                report(
-                    `app.exit(${String(code)}) with the Dock tile ${visible ? "visible" : "hidden"}`,
-                );
-            exit(code);
+            // The report must never keep a run the guard is ending alive.
+            try {
+                const visible = dock.isVisible();
+                if ((code ?? 0) !== 0 || visible !== shown)
+                    report(
+                        `app.exit(${String(code)}) with the Dock tile ${visible ? "visible" : "hidden"}`,
+                    );
+            } finally {
+                exit(code);
+            }
         };
     });
 }
