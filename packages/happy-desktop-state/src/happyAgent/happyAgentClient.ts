@@ -134,6 +134,10 @@ import {
     type HappyAgentRepositoriesStore,
 } from "./happyAgentRepositoriesStore.js";
 import {
+    happyAgentPaymentsStoreCreate,
+    type HappyAgentPaymentsStore,
+} from "./happyAgentPaymentsStore.js";
+import {
     happyAgentOnboardingSettingsStoreCreate,
     type HappyAgentOnboardingSettingsStore,
 } from "./happyAgentOnboardingSettingsStore.js";
@@ -286,6 +290,8 @@ export interface HappyAgentWorkspaceClient {
     repositories(): HappyAgentRepositoriesStore | undefined;
     /** Settings › Onboarding on Happy Cloud; undefined anywhere else. */
     onboardingSettings(): HappyAgentOnboardingSettingsStore | undefined;
+    /** Settings › Payments on Happy Cloud; undefined anywhere else. */
+    payments(): HappyAgentPaymentsStore | undefined;
     /**
      * The plugins this connection's server offers and what it installed: a
      * Happy Cloud team's installations, or this Happy Agent's own. Undefined
@@ -768,6 +774,7 @@ export function happyAgentWorkspaceClientCreate(
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let onboardingSettingsStore: HappyAgentOnboardingSettingsStore | undefined;
+    let paymentsStore: HappyAgentPaymentsStore | undefined;
     let pluginsStore: HappyAgentPluginsStore | undefined;
     let genUiActions: HappyAgentGenUiActions | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
@@ -1203,6 +1210,16 @@ export function happyAgentWorkspaceClientCreate(
             });
             return onboardingSettingsStore;
         },
+        payments() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            paymentsStore ??= happyAgentPaymentsStoreCreate({
+                request,
+                sync: deps.connection.sync,
+            });
+            return paymentsStore;
+        },
         plugins() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!happyAgentHealthCapability(deps.connection.sync.health(), "plugins"))
@@ -1481,6 +1498,8 @@ export function happyAgentWorkspaceClientCreate(
             repositoriesStore = undefined;
             onboardingSettingsStore?.[Symbol.dispose]();
             onboardingSettingsStore = undefined;
+            paymentsStore?.[Symbol.dispose]();
+            paymentsStore = undefined;
             pluginsStore?.[Symbol.dispose]();
             pluginsStore = undefined;
             computeStore?.[Symbol.dispose]();
