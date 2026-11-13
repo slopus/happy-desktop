@@ -642,6 +642,13 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
+    CloudOnboardingScreen,
+    type CloudOnboardingInferenceOption,
+    type CloudOnboardingScreenProps,
+    type CloudOnboardingStep,
+    type CloudOnboardingView,
+} from "./CloudOnboardingScreen";
+export {
     CloudConnectScreen,
     type CloudConnectAvailability,
     type CloudConnectJoin,
@@ -741,7 +748,12 @@ export {
 } from "./LocalOnboardingScreen";
 export { OnboardingNode, type OnboardingNodeIdentity } from "./OnboardingNode";
 export { ClaudeSetupTokenDialog, type ClaudeSetupTokenDialogProps } from "./ClaudeSetupTokenDialog";
-export { ProfileSetupScreen, type ProfileSetupScreenProps } from "./ProfileSetupScreen";
+export {
+    ProfileSetupForm,
+    ProfileSetupScreen,
+    type ProfileSetupFormProps,
+    type ProfileSetupScreenProps,
+} from "./ProfileSetupScreen";
 export {
     DesktopMobileSetup,
     desktopMobilePairingOptionsCopy,

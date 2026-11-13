@@ -60,17 +60,11 @@ const AVATAR_SIDE = 120;
  * error never moves the page.
  */
 export function ProfileSetupScreen(props: ProfileSetupScreenProps) {
-    const photoInput = useRef<HTMLInputElement>(null);
     const blocked = props.busy || props.loading === true;
-    const photoBusy = blocked || props.photoOpening === true;
     const name = props.name.trim();
     const create = () => {
         if (!blocked && name) props.onCreate();
     };
-    const photoPick = () => {
-        if (!photoBusy) photoInput.current?.click();
-    };
-    const hint = props.message ?? props.photoError;
     return (
         <SetupPage
             action={{
@@ -94,6 +88,43 @@ export function ProfileSetupScreen(props: ProfileSetupScreenProps) {
             title="Create your profile"
             transitionKey="profile-setup"
         >
+            <ProfileSetupForm {...props} onSubmit={create} />
+        </SetupPage>
+    );
+}
+
+export interface ProfileSetupFormProps {
+    readonly busy: boolean;
+    readonly loading?: boolean;
+    readonly name: string;
+    readonly placeholderSeed: string;
+    readonly photoUrl?: string;
+    readonly photoOpening?: boolean;
+    readonly message?: string;
+    readonly photoError?: string;
+    readonly photoCrop?: ProfilePhotoCropSource;
+    onNameChange(value: string): void;
+    /** Enter in the name field. */
+    onSubmit(): void;
+    onPhotoChoose(file: File): void;
+    onPhotoCropCancel(): void;
+    onPhotoCropConfirm(region: ImageCropRegion): void;
+}
+
+/**
+ * The avatar that picks a photo, the name field, and the line under it, as
+ * any setup page that asks for a profile draws them.
+ */
+export function ProfileSetupForm(props: ProfileSetupFormProps) {
+    const photoInput = useRef<HTMLInputElement>(null);
+    const blocked = props.busy || props.loading === true;
+    const photoBusy = blocked || props.photoOpening === true;
+    const photoPick = () => {
+        if (!photoBusy) photoInput.current?.click();
+    };
+    const hint = props.message ?? props.photoError;
+    return (
+        <>
             <div className="happy-profile-setup__form" data-happy-desktop-ui="profile-setup">
                 <button
                     aria-label={props.photoUrl ? "Change photo" : "Add photo"}
@@ -161,7 +192,7 @@ export function ProfileSetupScreen(props: ProfileSetupScreenProps) {
                     className="happy-profile-setup__name"
                     disabled={props.busy}
                     fullWidth
-                    onSubmit={create}
+                    onSubmit={props.onSubmit}
                     onValueChange={props.onNameChange}
                     placeholder="Your name"
                     size="large"
@@ -184,6 +215,6 @@ export function ProfileSetupScreen(props: ProfileSetupScreenProps) {
                     source={props.photoCrop}
                 />
             ) : null}
-        </SetupPage>
+        </>
     );
 }

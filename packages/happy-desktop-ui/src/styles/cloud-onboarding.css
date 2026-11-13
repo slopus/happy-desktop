@@ -1,0 +1,131 @@
+/* A Happy Cloud server's onboarding: one gate per page, drawn in SetupPage's
+   bands. Ink follows the onboarding foreground so the same body reads on the
+   sky and on the app's own surface. */
+.happy-cloud-onboarding__hint {
+    align-self: stretch;
+    min-height: 32px;
+    margin: 4px 0 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-cloud-onboarding__hint[data-tone="attention"] {
+    color: var(--onboarding-foreground);
+    font-weight: 600;
+}
+
+.happy-cloud-onboarding__admin-bot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-self: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+}
+
+.happy-cloud-onboarding__bot-avatar {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+}
+
+.happy-cloud-onboarding__bot-photo {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 18%, transparent);
+}
+
+/* The admin mark sits on the picture's lower-right like the profile's camera,
+   ringed so it reads as a badge on the bot rather than part of its face. */
+.happy-cloud-onboarding__bot-mark {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--onboarding-foreground) 22%, transparent),
+        0 2px 6px var(--shadow-subtle);
+    color: var(--text);
+}
+
+.happy-cloud-onboarding__name {
+    align-self: stretch;
+    margin-top: 12px;
+}
+
+.happy-cloud-onboarding__name .happy-text-field__control[data-size="large"] {
+    height: 56px;
+    border-radius: 12px;
+    padding: 0 18px;
+}
+
+.happy-cloud-onboarding__name
+    .happy-text-field__control[data-size="large"]
+    input.happy-text-field__input {
+    font-size: 20px;
+}
+
+/* Equal 16px on every side: the frame's content sits the same distance from
+   each edge. */
+.happy-cloud-onboarding__note {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-self: stretch;
+    box-sizing: border-box;
+    padding: 16px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: var(--onboarding-foreground);
+}
+
+.happy-cloud-onboarding__note-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-cloud-onboarding__note-text {
+    margin: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-cloud-onboarding__inference {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy-cloud-onboarding__other {
+    align-self: center;
+}
+
+.happy-setup-page[data-backdrop="sky"]
+    .happy-cloud-onboarding__other.happy-button[data-variant="ghost"] {
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+}
