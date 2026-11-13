@@ -41,6 +41,7 @@ export function happyAgentArtifactTypeProject(type: string): HappyAgentArtifactT
         case "image_series":
         case "video":
         case "document":
+        case "gen_ui":
             return type;
         default:
             return "unknown";

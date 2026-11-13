@@ -83,6 +83,8 @@ export function happyAgentArtifactTypeLabel(type: HappyAgentArtifactType): strin
             return "Video";
         case "document":
             return "Document";
+        case "gen_ui":
+            return "Gen UI";
         case "unknown":
             return "Artifact";
     }

@@ -17,11 +17,12 @@ import {
     happyAgentArtifactTypeProject,
     happyAgentArtifactVersionProject,
 } from "./artifactProject.js";
-import type {
-    HappyAgentArtifactDisplay,
-    HappyAgentArtifactId,
-    HappyAgentArtifactLive,
-    HappyAgentArtifactType,
+import {
+    HAPPY_AGENT_GEN_UI_RENDER_PATH,
+    type HappyAgentArtifactDisplay,
+    type HappyAgentArtifactId,
+    type HappyAgentArtifactLive,
+    type HappyAgentArtifactType,
 } from "./artifactTypes.js";
 import type { HappyAgentArtifactFileLink } from "./artifactViewerStore.js";
 
@@ -47,6 +48,14 @@ export type HappyAgentInlineArtifactContent =
           readonly files: ReadonlyMap<string, string>;
       }
     | {
+          /** A Gen UI artifact: its compiled render document's text, parsed where it is drawn. */
+          readonly type: "gen_ui";
+          readonly version: number;
+          readonly render: string;
+          /** Every file of the version by path, so the document's pictures resolve to them. */
+          readonly files: ReadonlyMap<string, string>;
+      }
+    | {
           readonly type: "files";
           readonly version: number;
           readonly files: readonly HappyAgentArtifactFileLink[];
@@ -60,6 +69,7 @@ const CONTENT_TYPES: ReadonlySet<HappyAgentArtifactType> = new Set([
     "image_series",
     "video",
     "document",
+    "gen_ui",
 ]);
 
 /** An artifact the transcript shows inline, as it is now. */
@@ -354,6 +364,21 @@ export function happyAgentInlineArtifactsStoreCreate(
             );
             const link = (path: string): string =>
                 deps.client.artifactFileUrl(artifactId, version, path);
+            if (held.artifactType === "gen_ui") {
+                const render = await deps.client.getArtifactFile(
+                    artifactId,
+                    version,
+                    HAPPY_AGENT_GEN_UI_RENDER_PATH,
+                    { signal },
+                );
+                if (render === null) throw new Error("The artifact file could not be read.");
+                return {
+                    type: "gen_ui",
+                    version,
+                    render: new TextDecoder().decode(render.data),
+                    files: new Map(manifest.files.map((file) => [file.path, link(file.path)])),
+                };
+            }
             if (held.artifactType !== "markdown")
                 return {
                     type: "files",

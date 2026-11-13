@@ -21,13 +21,14 @@ import {
 } from "./artifactPageMode.js";
 import { happyAgentArtifactAuthors } from "./artifactPeopleStore.js";
 import { happyAgentArtifactProject, happyAgentArtifactVersionProject } from "./artifactProject.js";
-import type {
-    HappyAgentArtifact,
-    HappyAgentArtifactAuthor,
-    HappyAgentArtifactFile,
-    HappyAgentArtifactId,
-    HappyAgentArtifactLive,
-    HappyAgentArtifactVersion,
+import {
+    HAPPY_AGENT_GEN_UI_RENDER_PATH,
+    type HappyAgentArtifact,
+    type HappyAgentArtifactAuthor,
+    type HappyAgentArtifactFile,
+    type HappyAgentArtifactId,
+    type HappyAgentArtifactLive,
+    type HappyAgentArtifactVersion,
 } from "./artifactTypes.js";
 
 /** How many versions one history read asks for. */
@@ -117,6 +118,13 @@ export type HappyAgentArtifactContent =
           readonly document: HappyAgentArtifactFileLink;
           /** An object URL of the bytes, when this host shows the document inline. */
           readonly inlineUrl?: string;
+      }
+    | {
+          /** A Gen UI artifact: its compiled render document's text, parsed where it is drawn. */
+          readonly type: "gen_ui";
+          readonly render: string;
+          /** Every file of the version by path, so the document's pictures resolve to them. */
+          readonly files: ReadonlyMap<string, string>;
       }
     /** A type this build does not know: its files are the whole of what can be shown. */
     | { readonly type: "files" };
@@ -476,6 +484,19 @@ export function happyAgentArtifactViewerStoreCreate(
                 inlineRelease();
                 inlineUrl = url;
                 return { type: "document", document: entry, inlineUrl: url };
+            }
+            case "gen_ui": {
+                const { data } = await fileText(id, number, HAPPY_AGENT_GEN_UI_RENDER_PATH, signal);
+                return {
+                    type: "gen_ui",
+                    render: new TextDecoder().decode(data),
+                    files: new Map(
+                        version.files.map((file) => [
+                            file.path,
+                            deps.client.artifactFileUrl(id, number, file.path),
+                        ]),
+                    ),
+                };
             }
             case "unknown":
                 return { type: "files" };

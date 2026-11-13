@@ -22,6 +22,12 @@ export type HappyAgentArtifactType =
     | "image_series"
     | "video"
     | "document"
+    /**
+     * A Gen UI document. The model writes `index.genui.json`; the daemon
+     * compiles it into a render document at `HAPPY_AGENT_GEN_UI_RENDER_PATH`,
+     * which is the only file a client reads to draw it.
+     */
+    | "gen_ui"
     | "unknown";
 
 /**
@@ -39,7 +45,11 @@ export const HAPPY_AGENT_ARTIFACT_TYPES: readonly Exclude<HappyAgentArtifactType
     "image_series",
     "video",
     "document",
+    "gen_ui",
 ];
+
+/** Where a `gen_ui` version keeps the render document the daemon compiled, among its files. */
+export const HAPPY_AGENT_GEN_UI_RENDER_PATH = ".genui/render.json";
 
 /** One file of one version. Equal digests mean equal content. */
 export interface HappyAgentArtifactFile {
