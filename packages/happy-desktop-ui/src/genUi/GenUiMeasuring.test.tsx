@@ -59,10 +59,16 @@ type RawDocument = {
     >;
 };
 
+/* Every conformance host reports both capabilities. */
+const REPORTED = { secretActions: true, plugins: true } as const;
 const hosts = {
-    happy_agent: genUiActionsServed({ backend: "happyAgent", origin: true }),
-    happy_agent_without_origin: genUiActionsServed({ backend: "happyAgent", origin: false }),
-    cluster: genUiActionsServed({ backend: "cluster", origin: true }),
+    happy_agent: genUiActionsServed({ backend: "happyAgent", origin: true, ...REPORTED }),
+    happy_agent_without_origin: genUiActionsServed({
+        backend: "happyAgent",
+        origin: false,
+        ...REPORTED,
+    }),
+    cluster: genUiActionsServed({ backend: "cluster", origin: true, ...REPORTED }),
 } as const;
 
 /* An address that is never answered, so a picture stays loading while it is measured. */

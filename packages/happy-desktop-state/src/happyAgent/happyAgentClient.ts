@@ -14,6 +14,7 @@ import {
     type HappyAgentAgentIdentitySource,
 } from "./happyAgentAgentIdentities.js";
 import type { MutationRejectedDelta } from "../happyAgentConnection/index.js";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
 import type {
     HappyAgentConnection,
     HappyAgentTeammate,
@@ -281,11 +282,15 @@ export interface HappyAgentWorkspaceClient {
     repositories(): HappyAgentRepositoriesStore | undefined;
     /**
      * The plugins this connection's server offers and what it installed: a
-     * Happy Cloud team's installations, or this Happy Agent's own.
+     * Happy Cloud team's installations, or this Happy Agent's own. Undefined
+     * while the server's health does not say it serves plugins.
      */
-    plugins(): HappyAgentPluginsStore;
-    /** What this connection's server does for Gen UI actions it runs itself, such as secret forms. */
-    genUiActions(): HappyAgentGenUiActions;
+    plugins(): HappyAgentPluginsStore | undefined;
+    /**
+     * What this connection's server does for Gen UI actions it runs itself,
+     * such as secret forms. Undefined while its health does not say it serves them.
+     */
+    genUiActions(): HappyAgentGenUiActions | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
@@ -1183,6 +1188,8 @@ export function happyAgentWorkspaceClientCreate(
         },
         plugins() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "plugins"))
+                return undefined;
             const request = deps.cloudRequest;
             pluginsStore ??= request
                 ? happyAgentPluginsStoreCreate({
@@ -1198,6 +1205,8 @@ export function happyAgentWorkspaceClientCreate(
         },
         genUiActions() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "artifactSecretActions"))
+                return undefined;
             const request = deps.cloudRequest;
             genUiActions ??= request
                 ? happyAgentGenUiClusterActionsCreate({ request })

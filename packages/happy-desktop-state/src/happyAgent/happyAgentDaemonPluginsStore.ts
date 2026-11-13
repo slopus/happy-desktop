@@ -201,16 +201,10 @@ export function happyAgentDaemonPluginsStoreCreate(
         void read(controller.signal)
             .catch((error: unknown) => {
                 if (disposed || controller.signal.aborted) return;
-                const unsupported =
-                    error instanceof HappyAgentApiError &&
-                    (error.status === 404 || error.status === 501);
-                // A daemon from before plugins offers none; any other failure keeps what was read.
-                if (unsupported) {
-                    catalog = new Map();
-                    store.setState({ ...EMPTY, loading: false }, true);
-                } else if (store.getState().loading)
+                // A failure keeps what was read, and the read is tried again.
+                if (store.getState().loading)
                     store.setState({ loading: false, error: happyAgentUserError(error) });
-                if (!unsupported && retry === undefined)
+                if (retry === undefined)
                     retry = setTimeout(() => {
                         retry = undefined;
                         load();

@@ -166,10 +166,16 @@ it("reports an image viewer tap to the host apart from actions", async () => {
 });
 
 /* The spec's conformance cases: which element each host enables. Nothing is dropped. */
+/* Every conformance host reports both capabilities. */
+const REPORTED = { secretActions: true, plugins: true } as const;
 const conformanceHosts = {
-    happy_agent: genUiActionsServed({ backend: "happyAgent", origin: true }),
-    happy_agent_without_origin: genUiActionsServed({ backend: "happyAgent", origin: false }),
-    cluster: genUiActionsServed({ backend: "cluster", origin: true }),
+    happy_agent: genUiActionsServed({ backend: "happyAgent", origin: true, ...REPORTED }),
+    happy_agent_without_origin: genUiActionsServed({
+        backend: "happyAgent",
+        origin: false,
+        ...REPORTED,
+    }),
+    cluster: genUiActionsServed({ backend: "cluster", origin: true, ...REPORTED }),
 } as const;
 
 for (const [host, served] of Object.entries(conformanceHosts)) {

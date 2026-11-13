@@ -218,16 +218,21 @@ export type GenUiActionType = GenUiAction["type"];
 /**
  * Which actions a host runs (SPEC rule 7). `message` and the secret actions go
  * to the origin agent, the one that wrote the version, so without a live one
- * they cannot run. Each backend serves only its own secret form, and no host
- * runs `tool` yet.
+ * they cannot run. Each backend serves only its own secret form, and only when
+ * its health reports `artifactSecretActions`; `plugin` needs `plugins` the same
+ * way. No host runs `tool` yet.
  */
 export function genUiActionsServed(host: {
     readonly backend: "happyAgent" | "cluster";
     readonly origin: boolean;
+    readonly secretActions: boolean;
+    readonly plugins: boolean;
 }): ReadonlySet<GenUiActionType> {
-    const served: GenUiActionType[] = ["open", "copy", "plugin"];
-    if (host.origin)
-        served.push("message", host.backend === "cluster" ? "cluster_secret" : "secret");
+    const served: GenUiActionType[] = ["open", "copy"];
+    if (host.plugins) served.push("plugin");
+    if (host.origin) served.push("message");
+    if (host.origin && host.secretActions)
+        served.push(host.backend === "cluster" ? "cluster_secret" : "secret");
     return new Set(served);
 }
 

@@ -44,6 +44,7 @@ import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
     genUiInlineHostCreate,
+    genUiSecretHostsCreate,
     inlineArtifactsStoreNoop,
 } from "./conversationInlinePages";
 import {
@@ -5048,16 +5049,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
               },
           }
         : undefined;
-    /*
-     * Secret forms are not offered yet: a deployed server or a released Happy
-     * Agent has no action route, and none says in its health whether it has
-     * one. They are wired with `genUiSecretHostsCreate` once the health
-     * protocol names that capability, so their buttons stay unavailable until then.
-     */
-    const genUiMachine: GenUiMachineHost =
-        active && props.onPluginOpen
-            ? { pluginOpen: (pluginId: string) => props.onPluginOpen?.(active.id, pluginId) }
-            : {};
+    // A `plugin` button and the secret forms are offered only where the
+    // machine's health says it serves them, known from when it connected.
+    const genUiActions = active?.session?.genUiActions?.();
+    const genUiMachine: GenUiMachineHost = active
+        ? {
+              ...(props.onPluginOpen && active.session?.plugins?.()
+                  ? {
+                        pluginOpen: (pluginId: string) => props.onPluginOpen?.(active.id, pluginId),
+                    }
+                  : {}),
+              ...(genUiActions ? genUiSecretHostsCreate(genUiActions) : {}),
+          }
+        : {};
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
             <GenUiMachineContext value={genUiMachine}>
