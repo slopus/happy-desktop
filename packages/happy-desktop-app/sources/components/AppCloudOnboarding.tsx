@@ -130,9 +130,13 @@ function pluginRows(
 ): readonly CloudOnboardingPlugin[] {
     const catalog = plugins?.plugins ?? [];
     const required = gate.plugins.filter((plugin) => plugin.required);
+    // The gate's own list stands in where the catalog could not be read.
     const offered = [
-        ...required.map((plugin) => plugin.id),
-        ...catalog.map((plugin) => plugin.id).filter((id) => !gate.required.includes(id)),
+        ...new Set([
+            ...required.map((plugin) => plugin.id),
+            ...catalog.map((plugin) => plugin.id),
+            ...gate.plugins.map((plugin) => plugin.id),
+        ]),
     ].slice(0, Math.max(PLUGIN_ROWS, required.length));
     return offered.map((id) => {
         const entry = catalog.find((plugin) => plugin.id === id);

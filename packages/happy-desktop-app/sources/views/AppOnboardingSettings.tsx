@@ -75,7 +75,7 @@ export function AppOnboardingSettings(props: {
                     description: STEPS[gate.id]?.description ?? "",
                     requirement: gate.requirement,
                     editable: gate.editable,
-                    operator: gate.source === "global" || gate.source === "operator-tenant",
+                    operator: gate.scope !== "tenant-editable",
                     saving: gate.saving,
                 }),
             )}

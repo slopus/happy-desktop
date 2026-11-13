@@ -271,9 +271,11 @@ function page(
         case "adminBot":
             return {
                 title: view.title || "Name your admin bot",
+                // With the points listed, the server's long description would
+                // say them twice; the line under the title only introduces them.
                 copy:
                     view.points.length > 0
-                        ? view.description
+                        ? "It has expanded capabilities, so it can shape Happy around your team."
                         : `Your admin bot runs ${server} with you.`,
                 body: (
                     <div

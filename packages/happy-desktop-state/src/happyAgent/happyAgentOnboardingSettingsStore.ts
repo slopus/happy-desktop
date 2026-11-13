@@ -9,6 +9,11 @@ export type HappyAgentOnboardingRequirement = "off" | "optional" | "required";
 
 /** Where a setting's value came from, as the server names its layers. */
 export type HappyAgentOnboardingSettingSource = "default" | "global" | "operator-tenant" | "tenant";
+/**
+ * Who may set it: `tenant-editable` lets the team's owner override the
+ * operator; `per-tenant` and `global` are the operator's alone.
+ */
+export type HappyAgentOnboardingSettingScope = "global" | "per-tenant" | "tenant-editable";
 
 /** One onboarding gate's requirement, as Settings › Onboarding lists it. */
 export interface HappyAgentOnboardingGateSetting {
@@ -18,6 +23,7 @@ export interface HappyAgentOnboardingGateSetting {
     /** Whether this reader may change it, as the server decides for them. */
     readonly editable: boolean;
     readonly source: HappyAgentOnboardingSettingSource;
+    readonly scope: HappyAgentOnboardingSettingScope;
     /** A change the server has not answered yet. */
     readonly saving: boolean;
 }
@@ -76,6 +82,10 @@ function requirementOf(value: unknown): HappyAgentOnboardingRequirement | undefi
     return value === "off" || value === "optional" || value === "required" ? value : undefined;
 }
 
+function scopeOf(value: unknown): HappyAgentOnboardingSettingScope {
+    return value === "tenant-editable" || value === "per-tenant" ? value : "global";
+}
+
 function sourceOf(value: unknown): HappyAgentOnboardingSettingSource {
     return value === "global" || value === "operator-tenant" || value === "tenant"
         ? value
@@ -122,6 +132,7 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
                 requirement,
                 editable: recordOf(layer)?.editable === true,
                 source: sourceOf(recordOf(layer)?.source),
+                scope: scopeOf(recordOf(layer)?.scope),
                 saving: pending.has(key),
             });
         }
