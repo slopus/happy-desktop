@@ -1,3 +1,4 @@
+import { AssistantMark, type AssistantMarkName } from "./AssistantMark";
 import { Icon, type IconName } from "./Icon";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 
@@ -16,8 +17,10 @@ export type IconTileTone =
 export type IconTileSize = "small" | "medium";
 
 type IconTileGlyph =
-    | { readonly icon: IconName; readonly ionicon?: never }
-    | { readonly ionicon: IoniconName; readonly icon?: never };
+    | { readonly icon: IconName; readonly ionicon?: never; readonly mark?: never }
+    | { readonly ionicon: IoniconName; readonly icon?: never; readonly mark?: never }
+    /** A vendor's own mark, a little smaller than a glyph, as the native clients draw it. */
+    | { readonly mark: AssistantMarkName; readonly icon?: never; readonly ionicon?: never };
 
 export type IconTileProps = IconTileGlyph & {
     readonly tone: IconTileTone;
@@ -26,6 +29,7 @@ export type IconTileProps = IconTileGlyph & {
 };
 
 const GLYPH_SIZE = { small: 14, medium: 18 } as const;
+const MARK_SIZE = { small: 12, medium: 16 } as const;
 
 /**
  * A white glyph on a filled, rounded square of one hue: the mark the native
@@ -45,6 +49,8 @@ export function IconTile(props: IconTileProps) {
         >
             {props.icon !== undefined ? (
                 <Icon name={props.icon} size={GLYPH_SIZE[size]} />
+            ) : props.mark !== undefined ? (
+                <AssistantMark name={props.mark} size={MARK_SIZE[size]} />
             ) : (
                 <Ionicon name={props.ionicon} size={GLYPH_SIZE[size]} />
             )}

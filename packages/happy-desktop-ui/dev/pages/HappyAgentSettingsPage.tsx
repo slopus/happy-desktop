@@ -725,6 +725,7 @@ function AiProvidersSpecimen(props: {
                                   onSetupTokenSubmit: noop,
                                   onSignInStart: noop,
                                   onSignInCodeSubmit: noop,
+                                  onCustomProviderCreate: () => addSet(undefined),
                               },
                           }
                         : {})}
@@ -1782,7 +1783,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 <AiProvidersSpecimen />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Adding an AI provider: the choices, with Save to for someone who may add for the team"
+                detail="Adding a provider: ChatGPT, Claude, Grok and Custom with their ways, and Save to for someone who may add for the team; ChatGPT and Claude ask which way next"
                 label="Happy Agent settings — add an AI provider"
                 number="03i"
                 screen="ai-providers-add"

@@ -4,6 +4,7 @@ import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { CopyButton } from "../../CopyButton";
 import { Icon } from "../../Icon";
+import { IconTile, type IconTileProps } from "../../IconTile";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { SegmentedControl } from "../../SegmentedControl";
@@ -68,6 +69,8 @@ export interface HappyAgentProviderAddDialogProps {
     onSignInCodeSubmit: (code: string) => void;
     /** Opens a vendor's page; a browser tab when absent. */
     onExternalOpen?: (url: string) => void;
+    /** Starts a custom provider for the team; the Custom family is offered only with it. */
+    onCustomProviderCreate?: () => void;
 }
 
 const KEY_VENDORS: readonly HappyAgentProviderKeyVendor[] = [
@@ -109,10 +112,148 @@ interface AwsDraft {
 
 const AWS_EMPTY: AwsDraft = { accessKeyId: "", secretAccessKey: "", region: "" };
 
+/** A row of the chooser: one vendor, with every way this server and role offer to add it. */
+interface ProviderFamily {
+    readonly id: "chatgpt" | "claude" | "grok" | "custom";
+    readonly name: string;
+    readonly tile: IconTileProps;
+    /** The line under the name; Custom says what it takes instead. */
+    readonly ways?: string;
+    readonly methods: readonly ProviderMethod[];
+}
+
+/** One way of adding a family's provider; `way` is its word in the family's line. */
+interface ProviderMethod {
+    readonly id: string;
+    readonly way: string;
+    readonly title: string;
+    readonly detail: string;
+    readonly pick: () => void;
+}
+
+function waysOf(family: ProviderFamily): string {
+    if (family.ways !== undefined) return family.ways;
+    const ways = family.methods.map((method, index) =>
+        index > 0 && /^\p{Lu}\p{Ll}/u.test(method.way)
+            ? method.way[0]!.toLowerCase() + method.way.slice(1)
+            : method.way,
+    );
+    return ways.length > 1 ? `${ways.slice(0, -1).join(", ")} or ${ways.at(-1)}` : ways.join("");
+}
+
+/**
+ * The families in the native clients' order and words: ChatGPT, Claude,
+ * Grok, Custom, each only with a way to add it.
+ */
+function familiesOf(
+    props: HappyAgentProviderAddDialogProps,
+    select: (flow: HappyAgentProviderAddFlow) => void,
+): readonly ProviderFamily[] {
+    const keys = (vendor: HappyAgentProviderKeyVendor): boolean =>
+        props.keyVendors.includes(vendor);
+    const key = (
+        vendor: HappyAgentProviderKeyVendor,
+        title: string,
+        detail: string,
+    ): ProviderMethod => ({
+        id: `api-key-${vendor}`,
+        way: "API key",
+        title,
+        detail,
+        pick: () => select({ kind: "apiKey", vendor }),
+    });
+    const families: ProviderFamily[] = [
+        {
+            id: "chatgpt",
+            name: "ChatGPT",
+            tile: { mark: "openai", tone: "green" },
+            methods: [
+                ...(props.chatgptAvailable
+                    ? [
+                          {
+                              id: "sign-in",
+                              way: "Sign in",
+                              title: "Sign in with ChatGPT",
+                              detail: "Uses your ChatGPT plan",
+                              pick: () => select({ kind: "chatgpt" }),
+                          },
+                      ]
+                    : []),
+                ...(keys("openai")
+                    ? [key("openai", "OpenAI API key", "Billed to your OpenAI account")]
+                    : []),
+            ],
+        },
+        {
+            id: "claude",
+            name: "Claude",
+            tile: { mark: "claude", tone: "orange" },
+            methods: [
+                ...(props.claudeAvailable
+                    ? [
+                          {
+                              id: "sign-in",
+                              way: "Sign in",
+                              title: "Sign in with Claude",
+                              detail: "Uses your Claude plan",
+                              pick: () => select({ kind: "claude", setupToken: false }),
+                          },
+                      ]
+                    : []),
+                ...(props.setupTokenAvailable
+                    ? [
+                          {
+                              id: "setup-token",
+                              way: "Setup token",
+                              title: "Use a setup token",
+                              detail: "Uses your Claude plan, from claude setup-token",
+                              pick: () => select({ kind: "claude", setupToken: true }),
+                          },
+                      ]
+                    : []),
+                ...(keys("anthropic")
+                    ? [key("anthropic", "Anthropic API key", "Billed to your Anthropic account")]
+                    : []),
+            ],
+        },
+        {
+            id: "grok",
+            name: "Grok",
+            tile: { ionicon: "flash-outline", tone: "gray" },
+            methods: keys("grok")
+                ? [
+                      {
+                          ...key("grok", "xAI API key", "Billed to your xAI account"),
+                          way: "xAI API key",
+                      },
+                  ]
+                : [],
+        },
+    ];
+    const custom = props.onCustomProviderCreate;
+    if (custom)
+        families.push({
+            id: "custom",
+            name: "Custom",
+            tile: { ionicon: "code-slash-outline", tone: "blue" },
+            ways: "Any endpoint that speaks OpenAI’s API",
+            methods: [
+                {
+                    id: "custom",
+                    way: "",
+                    title: "Custom provider",
+                    detail: "An endpoint that speaks OpenAI’s Responses API.",
+                    pick: custom,
+                },
+            ],
+        });
+    return families.filter((family) => family.methods.length > 0);
+}
+
 function titleOf(flow: HappyAgentProviderAddFlow): string {
     switch (flow.kind) {
         case "choose":
-            return "Add an AI provider";
+            return "Add a provider";
         case "apiKey":
             return "Add API key";
         case "chatgpt":
@@ -123,11 +264,14 @@ function titleOf(flow: HappyAgentProviderAddFlow): string {
 }
 
 /**
- * Adds an AI provider on Happy Cloud: a ChatGPT or Claude sign-in that the
- * server finishes itself, an OpenAI or Anthropic API key, or a Claude setup
- * token. What the person types is held here only until it is sent.
+ * Adds an AI provider on Happy Cloud. It opens on the families; one with two
+ * ways or more asks which next, and a way is a ChatGPT or Claude sign-in that
+ * the server finishes itself, an API key, a Claude setup token, or a custom
+ * provider. Which family is open is held here, so Back from a way returns to
+ * it; what the person types is held here only until it is sent.
  */
 export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogProps) {
+    const [familyId, setFamilyId] = useState<ProviderFamily["id"] | undefined>(undefined);
     const [secret, setSecret] = useState("");
     const [aws, setAws] = useState<AwsDraft | undefined>(undefined);
     const [region, setRegion] = useState("");
@@ -163,6 +307,11 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
     };
     const flow = props.flow;
     const done = props.phase === "done";
+    const families = familiesOf(props, flowSelect);
+    const family =
+        flow.kind === "choose"
+            ? families.find((each) => each.id === familyId && each.methods.length > 1)
+            : undefined;
     const primary = ((): { label: string; onClick: () => void; disabled?: boolean } | undefined => {
         if (done) return { label: "Done", onClick: props.onClose };
         if (flow.kind === "apiKey" && aws)
@@ -201,8 +350,12 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
             <Modal
                 footer={
                     <>
-                        {flow.kind === "choose" || done ? null : (
-                            <Button disabled={busy} onClick={back} variant="ghost">
+                        {(flow.kind === "choose" && !family) || done ? null : (
+                            <Button
+                                disabled={busy}
+                                onClick={family ? () => setFamilyId(undefined) : back}
+                                variant="ghost"
+                            >
                                 Back
                             </Button>
                         )}
@@ -225,7 +378,7 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                 icon="spark"
                 onClose={busy ? undefined : close}
                 size="medium"
-                title={titleOf(flow)}
+                title={family ? family.name : titleOf(flow)}
             >
                 <Box
                     className="happy-agent-provider-add"
@@ -266,39 +419,61 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                     />
                                 </Box>
                             ) : null}
-                            {flow.kind === "choose" ? (
-                                <Box className="happy-agent-provider-add__choices">
-                                    {props.chatgptAvailable ? (
-                                        <Button
-                                            onClick={() => flowSelect({ kind: "chatgpt" })}
-                                            variant="secondary"
+                            {flow.kind === "choose" && family ? (
+                                <Box
+                                    className="happy-agent-provider-add__choices"
+                                    data-happy-desktop-ui="happy-agent-provider-add-methods"
+                                >
+                                    {family.methods.map((method) => (
+                                        <button
+                                            className="happy-agent-provider-add__choice"
+                                            data-choice={method.id}
+                                            key={method.id}
+                                            onClick={method.pick}
+                                            type="button"
                                         >
-                                            Sign in with ChatGPT
-                                        </Button>
-                                    ) : null}
-                                    {props.claudeAvailable || props.setupTokenAvailable ? (
-                                        <Button
-                                            onClick={() =>
-                                                flowSelect({
-                                                    kind: "claude",
-                                                    setupToken: !props.claudeAvailable,
-                                                })
+                                            <span className="happy-agent-provider-add__choice-text">
+                                                <span className="happy-agent-provider-add__choice-name">
+                                                    {method.title}
+                                                </span>
+                                                <span className="happy-agent-provider-add__choice-detail">
+                                                    {method.detail}
+                                                </span>
+                                            </span>
+                                        </button>
+                                    ))}
+                                </Box>
+                            ) : flow.kind === "choose" ? (
+                                <Box
+                                    className="happy-agent-provider-add__choices"
+                                    data-happy-desktop-ui="happy-agent-provider-add-families"
+                                >
+                                    {families.map((each) => (
+                                        <button
+                                            className="happy-agent-provider-add__choice"
+                                            data-choice={each.id}
+                                            key={each.id}
+                                            onClick={
+                                                each.methods.length > 1
+                                                    ? () => setFamilyId(each.id)
+                                                    : each.methods[0]!.pick
                                             }
-                                            variant="secondary"
+                                            type="button"
                                         >
-                                            {props.claudeAvailable
-                                                ? "Sign in with Claude"
-                                                : "Use a Claude setup token"}
-                                        </Button>
-                                    ) : null}
-                                    <Button
-                                        onClick={() =>
-                                            flowSelect({ kind: "apiKey", vendor: "openai" })
-                                        }
-                                        variant="secondary"
-                                    >
-                                        Add API key
-                                    </Button>
+                                            <IconTile {...each.tile} />
+                                            <span className="happy-agent-provider-add__choice-text">
+                                                <span className="happy-agent-provider-add__choice-name">
+                                                    {each.name}
+                                                </span>
+                                                <span className="happy-agent-provider-add__choice-detail">
+                                                    {waysOf(each)}
+                                                </span>
+                                            </span>
+                                            {each.methods.length > 1 ? (
+                                                <Icon name="chevron-right" size={14} />
+                                            ) : null}
+                                        </button>
+                                    ))}
                                 </Box>
                             ) : flow.kind === "apiKey" ? (
                                 <>

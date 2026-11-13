@@ -822,10 +822,61 @@
     gap: 8px;
 }
 
+/* The rows' hover fill reaches past the text column, so their marks line up with it. */
 .happy-agent-provider-add__choices {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 2px;
+    margin-inline: -8px;
+}
+
+/* A family or a way: the native clients' settings row, which takes the one
+   hover shape every control shares (theme.css). */
+.happy-agent-provider-add__choice {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-provider-add__choice:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-agent-provider-add__choice:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 0;
+}
+
+.happy-agent-provider-add__choice-text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-provider-add__choice-name {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-agent-provider-add__choice-detail {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
 }
 
 .happy-agent-provider-add__user-code {

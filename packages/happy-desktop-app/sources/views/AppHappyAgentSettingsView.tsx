@@ -1463,11 +1463,22 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             teamManageable={cloudProviders.teamAllowed}
                             {...(cloudProviders.add
                                 ? {
-                                      add: providerAddProps(
-                                          cloudProviders,
-                                          cloudProvidersStore,
-                                          props.externalLinkOpen,
-                                      ),
+                                      add: {
+                                          ...providerAddProps(
+                                              cloudProviders,
+                                              cloudProvidersStore,
+                                              props.externalLinkOpen,
+                                          ),
+                                          ...(providers.customProvidersManageable
+                                              ? {
+                                                    onCustomProviderCreate: () => {
+                                                        if (!happyAgentOnline()) return;
+                                                        cloudProvidersStore.addClose();
+                                                        providersStore.customProviderCreateOpen();
+                                                    },
+                                                }
+                                              : {}),
+                                      },
                                   }
                                 : {})}
                             {...(cloudProviderEdit ? { edit: cloudProviderEdit } : {})}
