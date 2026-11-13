@@ -7,7 +7,6 @@ import type {
 } from "happy-desktop-state";
 import {
     HappyAgentComputeMachineAddDialog,
-    HappyAgentComputeMachineEditDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddStage,
@@ -21,7 +20,6 @@ export function AppComputeSettings(props: {
 }) {
     const { snapshot, store } = props;
     const add = snapshot.machineAdd;
-    const edit = snapshot.machineEdit;
     return (
         <>
             <HappyAgentComputeSettings
@@ -37,7 +35,6 @@ export function AppComputeSettings(props: {
                 loading={snapshot.loading}
                 machines={snapshot.machines.map((machine) => machineRow(machine, snapshot))}
                 onMachineAdd={() => store.machineAddOpen()}
-                onMachineEdit={(machineId) => store.machineEditOpen(machineId)}
                 onMachineRelease={(machineId) => store.machineLockRelease(machineId)}
                 onRequestAnswer={(key, approve) =>
                     store.approvalAnswer(key, approve ? "approve" : "deny")
@@ -49,22 +46,8 @@ export function AppComputeSettings(props: {
                     modes={snapshot.access === "manage" ? "any" : "private"}
                     onClose={() => store.machineAddClose()}
                     onCreate={() => store.machineAddCreate()}
-                    onDescriptionChange={(text) => store.machineAddDescriptionUpdate(text)}
                     onModeChange={(mode) => store.machineAddModeUpdate(mode)}
-                    onNameChange={(name) => store.machineAddNameUpdate(name)}
                     stage={addStage(add)}
-                />
-            ) : null}
-            {edit ? (
-                <HappyAgentComputeMachineEditDialog
-                    description={edit.draft.description}
-                    {...(edit.step === "failed" ? { error: edit.error.message } : {})}
-                    name={edit.draft.name}
-                    onClose={() => store.machineEditClose()}
-                    onDescriptionChange={(text) => store.machineEditDescriptionUpdate(text)}
-                    onNameChange={(name) => store.machineEditNameUpdate(name)}
-                    onSave={() => store.machineEditSave()}
-                    saving={edit.step === "saving"}
                 />
             ) : null}
         </>
@@ -130,7 +113,6 @@ function machineRow(
             : {}),
         ...(holder ? { heldBy: holder.title ?? "an agent" } : {}),
         ...(machine.sandboxError ? { sandboxError: machine.sandboxError } : {}),
-        edit: machine.editable,
         release:
             holder && snapshot.access === "manage"
                 ? snapshot.lockReleases.has(machine.id)

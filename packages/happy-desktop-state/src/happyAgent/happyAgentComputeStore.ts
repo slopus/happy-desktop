@@ -60,8 +60,6 @@ export interface HappyAgentComputeMachine {
     readonly mode: HappyAgentComputeMachineMode;
     /** What agents read about it in `list_compute`. */
     readonly description: string | null;
-    /** Whether the reader may rename it and change its description. */
-    readonly editable: boolean;
     /** Why its sandbox failed its self-test, while it does; shown only to managers. */
     readonly sandboxError: string | null;
     /** When the status last changed, in milliseconds. */
@@ -93,11 +91,9 @@ export interface HappyAgentComputeInstall {
     readonly expiresAt: number;
 }
 
-/** What a new machine will be: its mode, and the name and description it joins with. */
+/** What a new machine will be: its mode. It joins under its hostname. */
 export interface HappyAgentComputeMachineDraft {
     readonly mode: HappyAgentComputeMode;
-    readonly name: string;
-    readonly description: string;
 }
 
 /** Adding a machine, while its dialog is open. */
@@ -111,23 +107,6 @@ export type HappyAgentComputeMachineAdd =
       }
     /** Shown once; closing the dialog forgets it. */
     | { readonly step: "shown"; readonly install: HappyAgentComputeInstall };
-
-/** A machine's name and description as the edit dialog holds them. */
-export interface HappyAgentComputeMachineEditDraft {
-    readonly machineId: string;
-    readonly name: string;
-    readonly description: string;
-}
-
-/** Renaming or describing a machine, while its dialog is open. */
-export type HappyAgentComputeMachineEdit =
-    | { readonly step: "editing"; readonly draft: HappyAgentComputeMachineEditDraft }
-    | { readonly step: "saving"; readonly draft: HappyAgentComputeMachineEditDraft }
-    | {
-          readonly step: "failed";
-          readonly draft: HappyAgentComputeMachineEditDraft;
-          readonly error: UserError;
-      };
 
 export type HappyAgentComputeApprovalAnswer = "approve" | "deny";
 
@@ -143,7 +122,6 @@ export interface HappyAgentComputeSnapshot {
     /** Exclusive machines whose lock is being freed. */
     readonly lockReleases: ReadonlySet<string>;
     readonly machineAdd?: HappyAgentComputeMachineAdd;
-    readonly machineEdit?: HappyAgentComputeMachineEdit;
     /** Why the last answer or release did not go through. */
     readonly actionError?: UserError;
     readonly error?: UserError;
@@ -151,8 +129,8 @@ export interface HappyAgentComputeSnapshot {
 
 /**
  * Settings › Compute on Happy Cloud: the computers agents join, the requests to
- * join the reader's private computers, adding a computer, and editing one. The
- * lists are read again on `runners.updated`, `compute.nodes.updated` and
+ * join the reader's private computers, and adding a computer. The lists are
+ * read again on `runners.updated`, `compute.nodes.updated` and
  * `compute.approvals.updated`, and every few seconds while on screen, since a
  * computer going offline is announced by nothing.
  */
@@ -162,15 +140,8 @@ export interface HappyAgentComputeStore {
     machineAddOpen(): void;
     machineAddClose(): void;
     machineAddModeUpdate(mode: HappyAgentComputeMode): void;
-    machineAddNameUpdate(name: string): void;
-    machineAddDescriptionUpdate(description: string): void;
     /** Mints the machine's one-time join token and its install commands. */
     machineAddCreate(): void;
-    machineEditOpen(machineId: string): void;
-    machineEditClose(): void;
-    machineEditNameUpdate(name: string): void;
-    machineEditDescriptionUpdate(description: string): void;
-    machineEditSave(): void;
     /** Frees an exclusive machine from the agent holding it. */
     machineLockRelease(machineId: string): void;
     approvalAnswer(key: string, answer: HappyAgentComputeApprovalAnswer): void;
@@ -203,10 +174,9 @@ function modeOf(value: unknown): HappyAgentComputeMode | undefined {
     return HAPPY_AGENT_COMPUTE_MODES.find((mode) => mode === value);
 }
 
-/** Who the reader is and what they may do, for reading the machines they see. */
+/** Who the reader is, for reading the machines they see. */
 interface Reader {
     readonly userId: string | undefined;
-    readonly access: HappyAgentComputeAccess;
     readonly names: ReadonlyMap<string, string | null>;
 }
 
@@ -253,9 +223,6 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
         arch: textOrNull(computer.arch),
         mode,
         description: textOrNull(computer.description),
-        editable:
-            reader.access === "manage" ||
-            (mode.mode === "private" && mode.owner?.kind === "reader"),
         sandboxError: textOrNull(computer.sandboxError),
         since: numberOr(computer.since, 0),
     };
@@ -309,12 +276,6 @@ function installRead(value: unknown): HappyAgentComputeInstall | undefined {
 function computerCompare(left: HappyAgentComputeMachine, right: HappyAgentComputeMachine): number {
     const online = Number(right.status === "online") - Number(left.status === "online");
     return online !== 0 ? online : left.name.localeCompare(right.name);
-}
-
-/** The fields' trimmed text, or null where it is empty. */
-function draftText(value: string): string | null {
-    const trimmed = value.trim();
-    return trimmed === "" ? null : trimmed;
 }
 
 export function happyAgentComputeStoreCreate(deps: {
@@ -401,7 +362,7 @@ export function happyAgentComputeStoreCreate(deps: {
                   ]);
         if (access === "manage") await namesRead(computers);
         if (disposed) return;
-        const reader: Reader = { userId, access, names };
+        const reader: Reader = { userId, names };
         const current = store.getState();
         const { error: _cleared, ...rest } = current;
         store.setState(
@@ -481,12 +442,6 @@ export function happyAgentComputeStoreCreate(deps: {
         machineAddSet({ step: "choosing", draft: { ...add.draft, ...change } });
     };
 
-    const machineEditDraftUpdate = (change: Partial<HappyAgentComputeMachineEditDraft>): void => {
-        const edit = store.getState().machineEdit;
-        if (disposed || !edit || edit.step === "saving") return;
-        set({ machineEdit: { step: "editing", draft: { ...edit.draft, ...change } } });
-    };
-
     /** Runs a release or an answer, keeping its mark until it settles. */
     const act = (
         request: () => Promise<unknown>,
@@ -534,8 +489,6 @@ export function happyAgentComputeStoreCreate(deps: {
                 draft: {
                     // A member may add only a private machine of their own.
                     mode: access === "manage" ? "sandbox" : "private",
-                    name: "",
-                    description: "",
                 },
             });
         },
@@ -548,116 +501,36 @@ export function happyAgentComputeStoreCreate(deps: {
             if (mode !== "private" && store.getState().access !== "manage") return;
             machineAddDraftUpdate({ mode });
         },
-        machineAddNameUpdate(name) {
-            machineAddDraftUpdate({ name });
-        },
-        machineAddDescriptionUpdate(description) {
-            machineAddDraftUpdate({ description });
-        },
         machineAddCreate() {
             const add = store.getState().machineAdd;
             if (disposed || !add || (add.step !== "choosing" && add.step !== "failed")) return;
             const creating: HappyAgentComputeMachineAdd = { step: "creating", draft: add.draft };
             machineAddSet(creating);
-            const name = draftText(add.draft.name);
-            const description = draftText(add.draft.description);
-            void deps
-                .request("POST", "v0/computers/join-tokens", {
-                    mode: add.draft.mode,
-                    ...(name === null ? {} : { name }),
-                    ...(description === null ? {} : { description }),
-                })
-                .then(
-                    (answer) => {
-                        if (disposed || store.getState().machineAdd !== creating) return;
-                        const install = installRead(answer);
-                        machineAddSet(
-                            install
-                                ? { step: "shown", install }
-                                : {
-                                      step: "failed",
-                                      draft: add.draft,
-                                      error: new UserError(
-                                          "Happy Cloud didn't send an install command.",
-                                      ),
-                                  },
-                        );
-                    },
-                    (error: unknown) => {
-                        if (disposed || store.getState().machineAdd !== creating) return;
-                        machineAddSet({
-                            step: "failed",
-                            draft: add.draft,
-                            error: happyAgentUserError(error),
-                        });
-                    },
-                );
-        },
-        machineEditOpen(machineId) {
-            const machine = store.getState().machines.find((entry) => entry.id === machineId);
-            if (disposed || !machine?.editable) return;
-            set({
-                machineEdit: {
-                    step: "editing",
-                    draft: {
-                        machineId,
-                        name: machine.name,
-                        description: machine.description ?? "",
-                    },
+            void deps.request("POST", "v0/computers/join-tokens", { mode: add.draft.mode }).then(
+                (answer) => {
+                    if (disposed || store.getState().machineAdd !== creating) return;
+                    const install = installRead(answer);
+                    machineAddSet(
+                        install
+                            ? { step: "shown", install }
+                            : {
+                                  step: "failed",
+                                  draft: add.draft,
+                                  error: new UserError(
+                                      "Happy Cloud didn't send an install command.",
+                                  ),
+                              },
+                    );
                 },
-            });
-        },
-        machineEditClose() {
-            const { machineEdit, ...rest } = store.getState();
-            if (disposed || !machineEdit || machineEdit.step === "saving") return;
-            store.setState(rest, true);
-        },
-        machineEditNameUpdate(name) {
-            machineEditDraftUpdate({ name });
-        },
-        machineEditDescriptionUpdate(description) {
-            machineEditDraftUpdate({ description });
-        },
-        machineEditSave() {
-            const { machineEdit: edit, machines } = store.getState();
-            if (disposed || !edit || edit.step === "saving") return;
-            const draft = edit.draft;
-            const machine = machines.find((entry) => entry.id === draft.machineId);
-            const name = draftText(draft.name);
-            const description = draftText(draft.description);
-            if (!machine || name === null) return;
-            const body = {
-                ...(name === machine.name ? {} : { name }),
-                // `null` clears the description.
-                ...(description === machine.description ? {} : { description }),
-            };
-            if (Object.keys(body).length === 0) {
-                const { machineEdit: _closed, ...rest } = store.getState();
-                store.setState(rest, true);
-                return;
-            }
-            const saving: HappyAgentComputeMachineEdit = { step: "saving", draft };
-            set({ machineEdit: saving });
-            void deps
-                .request("PATCH", `v0/computers/${encodeURIComponent(draft.machineId)}`, body)
-                .then(
-                    () => {
-                        if (disposed || store.getState().machineEdit !== saving) return;
-                        const { machineEdit: _closed, ...rest } = store.getState();
-                        store.setState(rest, true);
-                        load();
-                    },
-                    (error: unknown) => {
-                        if (disposed || store.getState().machineEdit !== saving) return;
-                        set({
-                            machineEdit: {
-                                step: "failed",
-                                draft,
-                                error: happyAgentUserError(error),
-                            },
-                        });
-                    },
-                );
+                (error: unknown) => {
+                    if (disposed || store.getState().machineAdd !== creating) return;
+                    machineAddSet({
+                        step: "failed",
+                        draft: add.draft,
+                        error: happyAgentUserError(error),
+                    });
+                },
+            );
         },
         machineLockRelease(machineId) {
             const snapshot = store.getState();
@@ -728,14 +601,7 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     machineAddOpen: () => undefined,
     machineAddClose: () => undefined,
     machineAddModeUpdate: () => undefined,
-    machineAddNameUpdate: () => undefined,
-    machineAddDescriptionUpdate: () => undefined,
     machineAddCreate: () => undefined,
-    machineEditOpen: () => undefined,
-    machineEditClose: () => undefined,
-    machineEditNameUpdate: () => undefined,
-    machineEditDescriptionUpdate: () => undefined,
-    machineEditSave: () => undefined,
     machineLockRelease: () => undefined,
     approvalAnswer: () => undefined,
     [Symbol.dispose]: () => undefined,

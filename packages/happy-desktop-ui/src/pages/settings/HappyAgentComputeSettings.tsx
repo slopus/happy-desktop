@@ -7,7 +7,6 @@ import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Spinner } from "../../Spinner";
 import { IconTile } from "../../IconTile";
-import { TextField } from "../../TextField";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** How a machine takes agents; the machine's own config decides it. */
@@ -40,8 +39,6 @@ export interface HappyAgentComputeMachineRow {
     readonly heldBy?: string;
     /** Why its sandbox failed its self-test, while it does. */
     readonly sandboxError?: string;
-    /** Whether the reader may rename it and change its description. */
-    readonly edit: boolean;
     /** Freeing a held exclusive machine: not for this reader or machine, offered, or under way. */
     readonly release: "none" | "offered" | "releasing";
 }
@@ -70,7 +67,6 @@ export interface HappyAgentComputeSettingsProps {
     /** Why the last answer or release did not go through. */
     readonly actionError?: string;
     onMachineAdd: () => void;
-    onMachineEdit: (machineId: string) => void;
     onMachineRelease: (machineId: string) => void;
     onRequestAnswer: (key: string, approve: boolean) => void;
 }
@@ -158,7 +154,6 @@ const OS_TONE = {
 
 function HappyAgentComputeMachineItem(props: {
     readonly machine: HappyAgentComputeMachineRow;
-    onEdit: (machineId: string) => void;
     onRelease: (machineId: string) => void;
 }) {
     const machine = props.machine;
@@ -196,29 +191,18 @@ function HappyAgentComputeMachineItem(props: {
                     </span>
                 ) : null}
             </span>
-            {machine.edit || machine.release !== "none" ? (
+            {machine.release === "none" ? null : (
                 <span className="happy-agent-compute__row-actions">
-                    {machine.release === "none" ? null : (
-                        <Button
-                            loading={machine.release === "releasing"}
-                            onClick={() => props.onRelease(machine.id)}
-                            size="small"
-                            variant="ghost"
-                        >
-                            Release
-                        </Button>
-                    )}
-                    {machine.edit ? (
-                        <Button
-                            onClick={() => props.onEdit(machine.id)}
-                            size="small"
-                            variant="ghost"
-                        >
-                            Edit
-                        </Button>
-                    ) : null}
+                    <Button
+                        loading={machine.release === "releasing"}
+                        onClick={() => props.onRelease(machine.id)}
+                        size="small"
+                        variant="ghost"
+                    >
+                        Release
+                    </Button>
                 </span>
-            ) : null}
+            )}
             <span className="happy-agent-compute__status" data-status={machine.status}>
                 <span className="happy-agent-compute__dot" />
                 {STATUS_TEXT[machine.status]}
@@ -345,7 +329,6 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                             <HappyAgentComputeMachineItem
                                 key={machine.id}
                                 machine={machine}
-                                onEdit={props.onMachineEdit}
                                 onRelease={props.onMachineRelease}
                             />
                         ))
@@ -371,8 +354,6 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
 /** What a new machine will be, as the form holds it. */
 export interface HappyAgentComputeMachineAddDraft {
     readonly mode: HappyAgentComputeModeName;
-    readonly name: string;
-    readonly description: string;
 }
 
 /** The one-time install, as the dialog shows it. */
@@ -401,8 +382,6 @@ export interface HappyAgentComputeMachineAddDialogProps {
     readonly modes: "any" | "private";
     readonly stage: HappyAgentComputeMachineAddStage;
     onModeChange: (mode: HappyAgentComputeModeName) => void;
-    onNameChange: (name: string) => void;
-    onDescriptionChange: (description: string) => void;
     onCreate: () => void;
     onClose: () => void;
 }
@@ -475,7 +454,7 @@ function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeIn
     );
 }
 
-/** Adds a machine: its mode, name and description, then the one-time command that installs it. */
+/** Adds a machine: its mode, then the one-time command that installs it. */
 export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachineAddDialogProps) {
     const stage = props.stage;
     const busy = stage.step === "form" && stage.creating;
@@ -559,101 +538,8 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                                     );
                                 })}
                             </Box>
-                            <TextField
-                                disabled={busy}
-                                fullWidth
-                                hint="Optional. Agents see this name; it starts as the computer's hostname."
-                                label="Name"
-                                onValueChange={props.onNameChange}
-                                placeholder="Its hostname"
-                                value={stage.draft.name}
-                            />
-                            <TextField
-                                disabled={busy}
-                                fullWidth
-                                hint="Optional. Agents read it when they choose a computer."
-                                label="Description"
-                                multiline
-                                onValueChange={props.onDescriptionChange}
-                                placeholder="What agents should know about this computer"
-                                rows={3}
-                                value={stage.draft.description}
-                            />
                         </>
                     )}
-                </Box>
-            </Modal>
-        </ModalOverlay>
-    );
-}
-
-export interface HappyAgentComputeMachineEditDialogProps {
-    readonly name: string;
-    readonly description: string;
-    readonly saving: boolean;
-    readonly error?: string;
-    onNameChange: (name: string) => void;
-    onDescriptionChange: (description: string) => void;
-    onSave: () => void;
-    onClose: () => void;
-}
-
-/** Renames a machine and changes what agents read about it. */
-export function HappyAgentComputeMachineEditDialog(props: HappyAgentComputeMachineEditDialogProps) {
-    return (
-        <ModalOverlay
-            onDismiss={() => {
-                if (!props.saving) props.onClose();
-            }}
-        >
-            <Modal
-                footer={
-                    <>
-                        <Button disabled={props.saving} onClick={props.onClose} variant="ghost">
-                            Cancel
-                        </Button>
-                        <Button
-                            disabled={props.name.trim() === ""}
-                            loading={props.saving}
-                            onClick={props.onSave}
-                        >
-                            Save
-                        </Button>
-                    </>
-                }
-                icon="terminal"
-                onClose={props.saving ? undefined : props.onClose}
-                size="medium"
-                title="Edit computer"
-            >
-                <Box
-                    className="happy-agent-compute__form"
-                    data-happy-desktop-ui="compute-machine-edit"
-                >
-                    {props.error ? (
-                        <Banner tone="danger" title="Not saved">
-                            {props.error}
-                        </Banner>
-                    ) : null}
-                    <TextField
-                        disabled={props.saving}
-                        fullWidth
-                        label="Name"
-                        onValueChange={props.onNameChange}
-                        required
-                        value={props.name}
-                    />
-                    <TextField
-                        disabled={props.saving}
-                        fullWidth
-                        hint="Agents read it when they choose a computer."
-                        label="Description"
-                        multiline
-                        onValueChange={props.onDescriptionChange}
-                        placeholder="What agents should know about this computer"
-                        rows={4}
-                        value={props.description}
-                    />
                 </Box>
             </Modal>
         </ModalOverlay>

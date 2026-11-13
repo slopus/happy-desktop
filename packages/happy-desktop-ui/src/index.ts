@@ -1129,7 +1129,6 @@ export {
 } from "./pages/settings/HappyAgentRepositoriesSettings";
 export {
     HappyAgentComputeMachineAddDialog,
-    HappyAgentComputeMachineEditDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeAddAccess,
     type HappyAgentComputeInstallView,
@@ -1137,7 +1136,6 @@ export {
     type HappyAgentComputeMachineAddDialogProps,
     type HappyAgentComputeMachineAddDraft,
     type HappyAgentComputeMachineAddStage,
-    type HappyAgentComputeMachineEditDialogProps,
     type HappyAgentComputeMachineRow,
     type HappyAgentComputeMachineRowStatus,
     type HappyAgentComputeModeName,

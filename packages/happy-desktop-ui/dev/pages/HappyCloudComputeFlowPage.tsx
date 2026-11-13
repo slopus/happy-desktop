@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
     HappyAgentComputeMachineAddDialog,
-    HappyAgentComputeMachineEditDialog,
     HappyAgentComputeSettings,
     HappyAgentSettingsShell,
     type HappyAgentComputeAddAccess,
@@ -41,7 +40,6 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
         mode: "sandbox",
         detail: "build-01.acme.internal · Linux x86_64",
         description: "General builds and tests. Docker is installed; repos check out under /work.",
-        edit: true,
         release: "none",
     },
     {
@@ -54,7 +52,6 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
         description:
             "GPU box, CUDA 12.4, use for training; repo checkouts under /data. One run at a time, so leave when you are done.",
         heldBy: "Train the ranking model",
-        edit: true,
         release: "offered",
     },
     {
@@ -66,7 +63,6 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
         detail: "steve-mbp.local · macOS arm64",
         description: "My laptop. Xcode 26 and the iOS simulators.",
         owner: { kind: "reader" },
-        edit: true,
         release: "none",
     },
     {
@@ -77,7 +73,6 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
         mode: "shared",
         detail: "team-box.acme.internal · Linux aarch64",
         description: "The team's staging stack. Postgres and Redis run here for integration tests.",
-        edit: true,
         release: "none",
     },
     {
@@ -88,7 +83,6 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
         mode: "private",
         detail: "Windows x86_64 · 3 h ago",
         owner: { kind: "member", name: "Kirill" },
-        edit: true,
         release: "none",
     },
 ];
@@ -98,7 +92,6 @@ const memberMachines: readonly HappyAgentComputeMachineRow[] = machines
     .filter((machine) => machine.owner?.kind !== "member")
     .map((machine) => ({
         ...machine,
-        edit: machine.owner?.kind === "reader",
         release: "none",
         ...(machine.heldBy ? { heldBy: "an agent" } : {}),
     }));
@@ -153,7 +146,6 @@ function List(props: {
             loading={false}
             machines={props.empty ? [] : props.add === "any" ? machines : memberMachines}
             onMachineAdd={noop}
-            onMachineEdit={noop}
             onMachineRelease={noop}
             onRequestAnswer={noop}
             requests={props.requests ?? []}
@@ -167,12 +159,10 @@ function Add(props: Partial<HappyAgentComputeMachineAddDialogProps>) {
             modes="any"
             onClose={noop}
             onCreate={noop}
-            onDescriptionChange={noop}
             onModeChange={noop}
-            onNameChange={noop}
             stage={{
                 step: "form",
-                draft: { mode: "sandbox", name: "", description: "" },
+                draft: { mode: "sandbox" },
                 creating: false,
             }}
             {...props}
@@ -205,7 +195,7 @@ export function HappyCloudComputeFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's compute: the computers agents join and their modes, the agents asking to join the reader's private computers, adding a computer with a one-time install command, and editing a computer's name and description."
+            summary="A Happy Cloud server's compute: the computers agents join and their modes, the agents asking to join the reader's private computers, and adding a computer with a one-time install command."
             title="Happy Cloud compute flow"
             width={WINDOWS[0].width + 96}
         >
@@ -226,11 +216,7 @@ export function HappyCloudComputeFlowPage() {
                 <Add
                     stage={{
                         step: "form",
-                        draft: {
-                            mode: "sandbox",
-                            name: "build-02",
-                            description: "Second build box. Docker and Node 24.",
-                        },
+                        draft: { mode: "sandbox" },
                         creating: false,
                     }}
                 />
@@ -241,7 +227,7 @@ export function HappyCloudComputeFlowPage() {
                     modes="private"
                     stage={{
                         step: "form",
-                        draft: { mode: "private", name: "", description: "" },
+                        draft: { mode: "private" },
                         creating: false,
                     }}
                 />
@@ -258,24 +244,12 @@ export function HappyCloudComputeFlowPage() {
                 <List add="any" />
                 <Add stage={{ step: "install", install: install("shared") }} />
             </Screen>
-            <Screen detail="editing a machine" number="10" screen="10-edit">
-                <List add="any" />
-                <HappyAgentComputeMachineEditDialog
-                    description="GPU box, CUDA 12.4, use for training; repo checkouts under /data. One run at a time, so leave when you are done."
-                    name="a100-box"
-                    onClose={noop}
-                    onDescriptionChange={noop}
-                    onNameChange={noop}
-                    onSave={noop}
-                    saving={false}
-                />
-            </Screen>
-            <Screen detail="the server has no compute set up" number="11" screen="11-add-refused">
+            <Screen detail="the server has no compute set up" number="10" screen="10-add-refused">
                 <List add="any" />
                 <Add
                     stage={{
                         step: "form",
-                        draft: { mode: "shared", name: "", description: "" },
+                        draft: { mode: "shared" },
                         creating: false,
                         error: "This server isn't set up to run machines yet.",
                     }}
