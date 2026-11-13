@@ -496,7 +496,10 @@ export class Director {
         const duration = options.duration ?? Math.min(940, 300 + distance * 0.52);
         // Bow the path perpendicular to the travel, to whichever side keeps the
         // arc away from the shorter axis of the move.
-        const bow = Math.min(distance * 0.16, 90) * (from.x < point.x ? -1 : 1);
+        // `straight` keeps a move on its line, where a bow would brush the rows beside it.
+        const bow = options.straight
+            ? 0
+            : Math.min(distance * 0.16, 90) * (from.x < point.x ? -1 : 1);
         const normal = { x: -(point.y - from.y) / distance, y: (point.x - from.x) / distance };
         await this.#render(duration, async (progress) => {
             const eased = easeInOutCubic(progress);
@@ -711,6 +714,11 @@ export class Director {
      */
     pointerExternal(external = true) {
         this.#pointerExternal = external;
+    }
+
+    /** Where the pointer is now, in CSS pixels. */
+    get pointer() {
+        return { x: this.#pointer.x, y: this.#pointer.y };
     }
 
     /** The pointer's pose on every frame of a take shot with `pointerExternal`, in CSS pixels. */

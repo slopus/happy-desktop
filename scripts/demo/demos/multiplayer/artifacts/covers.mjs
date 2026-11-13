@@ -15,7 +15,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const workspace = resolve(import.meta.dirname, "../../../../..");
-const fontsource = resolve(workspace, "packages/happy-desktop-ui/node_modules/@fontsource-variable");
+const fontsource = resolve(
+    workspace,
+    "packages/happy-desktop-ui/node_modules/@fontsource-variable",
+);
 const fontData = (path) => readFileSync(resolve(fontsource, path)).toString("base64");
 
 /** The glyphs the covers draw, by Ionicons name. */
@@ -224,7 +227,12 @@ function review() {
 /** Entry 5: a three-part plan, two parts in. */
 function progress() {
     const parts = [
-        { name: "Agent sign-in", state: "Merged", colour: "var(--green)", glyph: "checkmark-circle" },
+        {
+            name: "Agent sign-in",
+            state: "Merged",
+            colour: "var(--green)",
+            glyph: "checkmark-circle",
+        },
         { name: "Desktop sessions", state: "In review", colour: "var(--orange)", glyph: "time" },
         { name: "iOS server codes", state: "Next", colour: "var(--faint)", glyph: "ellipse" },
     ];
@@ -287,7 +295,7 @@ function qa() {
 /** Entry 8: real crops of this build's sidebar rows, read and unread. */
 function screenshot() {
     const frames = [
-        { label: "Working", image: shot("rows-read") },
+        { label: "Read", image: shot("rows-read") },
         { label: "Unread", image: shot("rows-unread") },
     ];
     return page({
@@ -387,7 +395,8 @@ export const covers = {
     },
     progress: {
         title: "Team server sign-in: progress",
-        summary: "The agent's sign-in is merged. The desktop's sessions are next, then iOS server codes.",
+        summary:
+            "The agent's sign-in is merged. The desktop's sessions are next, then iOS server codes.",
         html: progress,
     },
     qa: {
@@ -397,7 +406,8 @@ export const covers = {
     },
     screenshot: {
         title: "Sidebar: steadier unread dots",
-        summary: "Unread dots sit on the row's picture, so a task's name doesn't move when one appears.",
+        summary:
+            "Unread dots sit on the row's picture, so a task's name doesn't move when one appears.",
         html: screenshot,
     },
     design: {
@@ -418,4 +428,3 @@ export const coverPage = (key) => covers[key].html();
 
 /** The cover published with an artifact. */
 export const coverFile = (key) => join(import.meta.dirname, "covers", `${key}.webp`);
-

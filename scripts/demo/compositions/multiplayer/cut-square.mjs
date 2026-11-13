@@ -15,6 +15,7 @@ export default (cues) => ({
         {
             openingTop: 190,
             aware: { x: centred(1.3), y: 60 },
+            awareTasks: { scale: 1.3, x: centred(1.3), y: 158 },
             progress: { x: centred(1.3), y: 60 },
             activity: { scale: 1.3, x: centred(1.3), y: 66 },
             loading: [0.11, 0.38],

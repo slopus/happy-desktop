@@ -501,7 +501,10 @@ export const openTask = "Voice waveform";
 
 const gates = new Map();
 const reached = new Set();
+/** Gates opened before anything reached them: whatever reaches one later goes straight through. */
+const opened = new Set();
 export function release(name) {
+    if (!gates.has(name)) opened.add(name);
     gates.get(name)?.();
     gates.delete(name);
 }
@@ -513,6 +516,7 @@ export function close() {
     for (const resolveGate of gates.values()) resolveGate();
     gates.clear();
     reached.clear();
+    opened.clear();
 }
 /** Forgets which gates were reached, for the next take on the same world. */
 export function rehearse() {
@@ -520,6 +524,7 @@ export function rehearse() {
 }
 async function gate(name) {
     reached.add(name);
+    if (opened.delete(name)) return;
     await new Promise((settle) => gates.set(name, settle));
 }
 
@@ -766,9 +771,11 @@ export async function reply(payload) {
                     text: `SPEED ${speedTask.subtask.title} for: ${speedTask.message}`,
                 }),
             ]);
+        // It waits on List cache with the daemon's own `wait`, which the
+        // subtask's report ends early, so its turn ends only once, at the end.
         reached.add("speed:parent");
         await gate("speed:parent");
-        return quick([text("Reading List cache's numbers.")]);
+        return quick([tool("wait", { duration: "1h" })]);
     }
     if (turn.text.startsWith("SPEED ")) {
         if (turn.answered === 0) {
@@ -782,6 +789,7 @@ export async function reply(payload) {
     // List cache's report reaches the parent, which publishes and ends.
     if (textOf(messages.find((message) => message.role === "user")) === speedTask.message) {
         const artifacts = [{ cover: "perf", versions: 0 }];
+        if (turn.answered === 0) await gate("speed:publish");
         const call = await publishCall(artifacts, turn.answered, resultsOf(turn));
         if (call) return quick([call]);
         reached.add("speed:published");

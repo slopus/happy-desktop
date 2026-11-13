@@ -88,6 +88,15 @@ export function chapters(stage, views, ending, cues) {
                     { at: 0, ...whole(output.height) },
                     { at: risen, move: risen - 1.6, ...whole(views.openingTop) },
                     { at: 2.8 + 0.4 + move, move, css: { scale: stage.push, ...views.aware } },
+                    // Once both tasks have landed the camera settles on the
+                    // tasks and the conversation: opening a task leaves its
+                    // Activity entry unread, and the badge is not this
+                    // chapter's subject.
+                    {
+                        at: freeze + aware["arrival-settled:Offline Drafts"] + 0.6 + move,
+                        move,
+                        css: views.awareTasks,
+                    },
                 ],
             }),
             { kind: "card", text: activityTitle, seconds: 2.2 },

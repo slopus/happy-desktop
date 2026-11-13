@@ -18,6 +18,8 @@ export default (cues) => ({
             openingTop: 164,
             // Activity and its badge, the bots, the task list, and the open conversation.
             aware: { x: centred(1.45), y: 60 },
+            // The task list and the open conversation, Activity above the frame.
+            awareTasks: { scale: 1.645, x: centred(1.645), y: 158 },
             progress: { x: centred(1.45), y: 60 },
             // The feed, one cover at a time, beside the sidebar.
             // Low enough that the hand parked in the title bar stays out of frame.

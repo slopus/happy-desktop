@@ -157,7 +157,10 @@ async function botFacts(clients) {
         facts.memberCreate = { allowed: true };
         const seenByOwner = Boolean(await botFind(clients[world.owner], "probe_bot"));
         facts.memberCreate.listedForOwner = seenByOwner;
-        await clients.scoteezy.archiveBot(bot.id, { ifMatch: bot.version, mutationId: randomUUID() });
+        await clients.scoteezy.archiveBot(bot.id, {
+            ifMatch: bot.version,
+            mutationId: randomUUID(),
+        });
     } catch (error) {
         facts.memberCreate = { allowed: false, error: String(error?.message ?? error) };
     }
@@ -219,14 +222,17 @@ async function settled(client, agentId, { subtask = false } = {}) {
  * (MULTIPLAYER_SPREAD_SECONDS, about 2100). Other takes make them at once.
  */
 const spreadSeconds = Number(process.env.MULTIPLAYER_SPREAD_SECONDS ?? 0);
-/** One step of the spread: earlier tasks, the two working ones, then each publication. */
-const spreadStep = () =>
+/**
+ * One step of the spread, `weight` steps long: each publication and each of
+ * chapter 1's arrivals is a step after the one before, and the take a half
+ * step after the last; the earlier tasks, below them in Activity, are made at once.
+ */
+const spreadStep = (weight = 1) =>
     spreadSeconds > 0
         ? new Promise((settle) =>
               setTimeout(
                   settle,
-                  (spreadSeconds * 1000) /
-                      (world.doneTasks.length + 2 + world.publications.length),
+                  (weight * spreadSeconds * 1000) / (world.publications.length + 2.5),
               ),
           )
         : undefined;
@@ -239,7 +245,6 @@ async function doneTasksPrepare(clients) {
     for (const [index, entry] of world.doneTasks.entries()) {
         const client = clients[entry.owner];
         if (await taskFind(client, entry.name)) continue;
-        if (index > 0) await spreadStep();
         const { task } = await client.createTask({ name: entry.name, mutationId: randomUUID() });
         await client.sendMessage(task.agent.id, {
             id: cuid(),
@@ -253,7 +258,8 @@ async function doneTasksPrepare(clients) {
             180000,
         );
         // The owner's own follow-ups; a teammate's come later (`followUpsPrepare`).
-        for (const more of entry.more ?? []) if (!more.from) await turnSend(clients, task, entry, more);
+        for (const more of entry.more ?? [])
+            if (!more.from) await turnSend(clients, task, entry, more);
         process.stdout.write(`    task      ${entry.name}\n`);
     }
 }
@@ -301,7 +307,12 @@ async function publicationsPrepare(clients) {
         const client = clients[job.from];
         const agentId = job.bot
             ? (await botFind(client, job.bot)).agent.id
-            : (await taskFind(clients[world.doneTasks.find((task) => task.name === job.task).owner], job.task)).agent.id;
+            : (
+                  await taskFind(
+                      clients[world.doneTasks.find((task) => task.name === job.task).owner],
+                      job.task,
+                  )
+              ).agent.id;
         const before = (await client.getMessages(agentId, { limit: 16 })).runs.length;
         await client.sendMessage(agentId, { id: cuid(), text: job.text, mode: world.seedMode });
         await wait(
@@ -552,6 +563,7 @@ export default {
         // From chapter 2 on, chapter 1's three tasks are working.
         const arrivalsSettle = async () => {
             for (const arrival of world.arrivals) {
+                await spreadStep();
                 pending.push(arrivalStart(clients, arrival));
                 await wait(
                     () => world.hasReached(`arrival:${arrival.name}`),
@@ -564,9 +576,7 @@ export default {
         await rehearsalsArchive(kirill);
         await doneTasksPrepare(clients);
         await followUpsPrepare(clients);
-        await spreadStep();
         filmed.speedTaskId = (await speedTaskPrepare(clients[world.speedTask.owner])).id;
-        await spreadStep();
         const live = await liveTaskPrepare(clients[world.liveTask.owner]);
         process.stdout.write(`    task      ${world.liveTask.name}\n`);
         filmed.liveTaskId = live.id;
@@ -574,9 +584,16 @@ export default {
         await sidebarArrange(kirill);
         // From chapter 2 on, chapter 1's tasks have started, and Kirill has
         // since read everything: chapter 2 opens with Activity read.
-        if (shot !== "aware") await arrivalsSettle();
+        if (shot !== "aware") {
+            await arrivalsSettle();
+            await spreadStep(0.5);
+        }
         if (shot === "bots") filmed.botAgentId = (await botJobPrepare(clients)).agent.id;
-        for (const client of [...Object.values(clients), personal.client]) await readAll(client);
+        // Chapter 1's take first shows Kirill's sidebar as he left it, with the
+        // team's earlier work unread, for the screenshot cover's rows; then he
+        // reads it all.
+        for (const client of [...Object.values(clients), personal.client])
+            if (shot !== "aware" || client !== kirill) await readAll(client);
 
         const page = demo.page;
         // Kirill has used this app for months: he was welcomed long ago, here
@@ -594,23 +611,7 @@ export default {
             () => Intl.DateTimeFormat().resolvedOptions().timeZone,
         );
         await page.setViewportSize(viewport);
-        await page.reload({ waitUntil: "domcontentloaded" });
         await mkdir(output, { recursive: true });
-        const shell = page.locator('[data-happy-desktop-ui="connection-shell"]');
-        await shell.waitFor({ timeout: 60000 }).catch(async (error) => {
-            await page.screenshot({ path: join(output, "failed.png") });
-            await writeFile(join(output, "failed.txt"), await page.locator("body").innerText());
-            throw error;
-        });
-        // Happy Core, the team's server, is the one on screen.
-        const server = page.getByRole("button", {
-            name: new RegExp(`^${world.team.node}, `, "u"),
-        });
-        await server.waitFor({ timeout: 60000 });
-        await server.click();
-        await sidebarRow(page, world.liveTask.subtask.title)
-            .filter({ hasText: /\+\d/u })
-            .waitFor({ timeout: 60000 });
         // Where each chapter finds Kirill: where the one before left him.
         const opening = {
             aware: world.openTask,
@@ -619,13 +620,45 @@ export default {
             "step-in": world.stepIn.task,
             explore: world.openTask,
         }[shot];
-        await sidebarRow(page, opening).click();
-        if (opening === world.openTask) {
-            const opened = world.doneTasks.find((task) => task.name === world.openTask);
-            await page
-                .getByText((opened.more?.at(-1) ?? opened).reply)
-                .first()
-                .waitFor({ timeout: 30000 });
+        const load = async () => {
+            await page.reload({ waitUntil: "domcontentloaded" });
+            const shell = page.locator('[data-happy-desktop-ui="connection-shell"]');
+            await shell.waitFor({ timeout: 60000 }).catch(async (error) => {
+                await page.screenshot({ path: join(output, "failed.png") });
+                await writeFile(join(output, "failed.txt"), await page.locator("body").innerText());
+                throw error;
+            });
+            // Happy Core, the team's server, is the one on screen.
+            const server = page.getByRole("button", {
+                name: new RegExp(`^${world.team.node}, `, "u"),
+            });
+            await server.waitFor({ timeout: 60000 });
+            await server.click();
+            await sidebarRow(page, world.liveTask.subtask.title)
+                .filter({ hasText: /\+\d/u })
+                .waitFor({ timeout: 60000 });
+            await sidebarRow(page, opening).click();
+            if (opening === world.openTask) {
+                const opened = world.doneTasks.find((task) => task.name === world.openTask);
+                await page
+                    .getByText((opened.more?.at(-1) ?? opened).reply)
+                    .first()
+                    .waitFor({ timeout: 30000 });
+            }
+        };
+        await load();
+        if (shot === "aware") {
+            await page.waitForTimeout(2500);
+            await page.screenshot({ path: join(output, "rows-unread.png") });
+            await writeFile(
+                join(output, "rows-unread.json"),
+                JSON.stringify(await rowRect(page, "Message Retry Queue")),
+            );
+            // He reads it all, and the window opens again on what he has read.
+            await readAll(kirill);
+            await load();
+            await page.waitForTimeout(2500);
+            await page.screenshot({ path: join(output, "rows-read.png") });
         }
         // The sidebar rests at its top, Activity and the bots in view.
         await page
@@ -708,6 +741,11 @@ export default {
         if (shot !== "aware" && shot !== "activity") activity.start();
         framing = await demo.framingPrepare(page.locator("body"), { rawWindow: true });
         await writeFile(join(output, "framing.json"), JSON.stringify(framing, null, 2));
+        /** The hand leaves a row the way it came, then goes to `to` if given. */
+        const leave = async (to) => {
+            await demo.moveTo({ x: lane, y: demo.pointer.y }, { straight: true });
+            if (to) await demo.moveTo(to);
+        };
         /** Where a thing is on screen now, in CSS pixels, for the cut's camera. */
         const place = async (locator) => {
             const box = await locator.boundingBox().catch(() => null);
@@ -717,10 +755,37 @@ export default {
         const rest = { x: Math.round(viewport.width * 0.62), y: Math.round(viewport.height * 0.2) };
         // Where the hand goes once it is done: the empty top-left corner of the
         // title bar, where it hovers nothing, out of every pushed-in view.
-        const away = { x: 220, y: 14 };
-        /** The hand glides to a target, dwells a quarter second, and clicks it. */
+        const away = { x: 760, y: 14 };
+        /**
+         * Where the hand travels up and down: the sidebar's own margin, right
+         * of its rows and left of the resize handle, where it hovers nothing.
+         */
+        const margin = await page.evaluate(() => {
+            const rights = [...document.querySelectorAll('[data-happy-desktop-ui="sidebar-item"]')]
+                .map((row) => row.getBoundingClientRect())
+                .filter((box) => box.width > 0)
+                .map((box) => box.right);
+            const right = Math.max(...rights);
+            const lefts = [
+                ...document.querySelectorAll('[data-happy-desktop-ui="app-shell-resize-handle"]'),
+            ]
+                .map((handle) => handle.getBoundingClientRect().left)
+                .filter((left) => left >= right);
+            return { right, left: Math.min(...lefts) };
+        });
+        filmed.sidebarMargin = margin;
+        const lane =
+            margin.left - margin.right >= 2 ? Math.round((margin.right + margin.left) / 2) : 420;
+        filmed.lane = lane;
+        /**
+         * The hand goes across to the lane, along it to the target's row, and
+         * into the row; it dwells a quarter second and clicks.
+         */
         const choose = async (target, name) => {
-            await demo.moveTo(target);
+            const box = await target.boundingBox();
+            await demo.moveTo({ x: lane, y: demo.pointer.y }, { straight: true });
+            await demo.moveTo({ x: lane, y: box.y + box.height / 2 }, { straight: true });
+            await demo.moveTo(target, { straight: true });
             await demo.hold(250);
             cue(`${name}-click`, demo);
             await demo.click(target, { after: 0 });
@@ -757,7 +822,7 @@ export default {
                 "Offline Drafts' plan",
             );
             cue("visit-open", demo);
-            await demo.moveTo(rest);
+            await leave();
             await demo.hold(2600);
             await choose(sidebarRow(page, world.openTask), "back");
             const opened = world.doneTasks.find((task) => task.name === world.openTask);
@@ -767,7 +832,7 @@ export default {
                 "Voice waveform again",
             );
             cue("back-open", demo);
-            await demo.moveTo(rest);
+            await leave();
             await demo.hold(2200);
         }
 
@@ -780,28 +845,39 @@ export default {
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo, await place(row));
+            world.release("speed:parent");
+            cue("parent-waits", demo);
             await demo.hold(Number(process.env.MULTIPLAYER_REPORT_AT_MS ?? 1600));
             world.release("speed:subtask");
             cue("subtask-released", demo);
-            await demo.hold(500);
-            world.release("speed:parent");
-            cue("parent-released", demo);
-            await until(demo, () => world.hasReached("speed:published"), "the published report", 60000);
-            cue("published", demo);
             await until(
                 demo,
-                async () => /\b1\b/u.test(await row.innerText()),
-                "Activity's badge",
-                30000,
-                16,
+                () => world.hasReached("speed:publish"),
+                "the parent reading the report",
+                60000,
             );
-            cue("badge", demo, await place(row));
-            await demo.hold(900);
+            // The subtask's dot stands a moment; then the parent publishes and
+            // ends its turn, and its dot and Activity's badge appear, slowed.
+            await demo.hold(Number(process.env.MULTIPLAYER_BADGE_AFTER_MS ?? 900));
+            await arrivalFilm(
+                "badge",
+                async () => world.release("speed:publish"),
+                async () => /\b1\b/u.test(await row.innerText()),
+            );
+            cue("badge-settled", demo, await place(row));
+            await until(
+                demo,
+                () => world.hasReached("speed:published"),
+                "the parent's last word",
+                60000,
+            );
+            cue("parent-done", demo);
+            await demo.hold(1800);
             await choose(row, "activity");
             const first = page.getByText(covers.perf.summary).first();
             await until(demo, () => first.isVisible(), "the Activity page");
             cue("activity-open", demo, await place(first));
-            await demo.moveTo(away);
+            await leave(away);
             await demo.hold(2500);
             // Each step brings one entry to the top of the feed in 0.8 s, eased.
             const steps = [
@@ -811,24 +887,38 @@ export default {
             ];
             for (const [index, step] of steps.entries()) {
                 cue(`step${index + 1}`, demo);
-                await page.getByText(step.title).first().evaluate(
-                    (title, { above, ms }) => {
-                        let port = title.parentElement;
-                        while (port && !(port.scrollHeight > port.clientHeight + 4 && /auto|scroll/u.test(getComputedStyle(port).overflowY)))
-                            port = port.parentElement;
-                        const from = port.scrollTop;
-                        const to = from + title.getBoundingClientRect().top - port.getBoundingClientRect().top - above;
-                        const start = performance.now();
-                        const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
-                        const frame = (now) => {
-                            const k = Math.min(1, (now - start) / ms);
-                            port.scrollTop = from + (to - from) * ease(k);
-                            if (k < 1) requestAnimationFrame(frame);
-                        };
-                        requestAnimationFrame(frame);
-                    },
-                    { above: step.above, ms: 800 },
-                );
+                await page
+                    .getByText(step.title)
+                    .first()
+                    .evaluate(
+                        (title, { above, ms }) => {
+                            let port = title.parentElement;
+                            while (
+                                port &&
+                                !(
+                                    port.scrollHeight > port.clientHeight + 4 &&
+                                    /auto|scroll/u.test(getComputedStyle(port).overflowY)
+                                )
+                            )
+                                port = port.parentElement;
+                            const from = port.scrollTop;
+                            const to =
+                                from +
+                                title.getBoundingClientRect().top -
+                                port.getBoundingClientRect().top -
+                                above;
+                            const start = performance.now();
+                            const ease = (k) =>
+                                k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2;
+                            const frame = (now) => {
+                                const k = Math.min(1, (now - start) / ms);
+                                port.scrollTop = from + (to - from) * ease(k);
+                                if (k < 1) requestAnimationFrame(frame);
+                            };
+                            requestAnimationFrame(frame);
+                        },
+                        { above: step.above, ms: 800 },
+                    );
                 await demo.hold(800);
                 cue(`step${index + 1}-rest`, demo);
                 await demo.hold(step.rest);
