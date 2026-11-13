@@ -5,6 +5,7 @@ import {
     type AppearanceStore,
     type ExperimentsStore,
     type HappyAgentCloudProvidersStore,
+    type HappyAgentPaymentsStore,
     type HappyAgentPluginsStore,
     type HappyAgentClockStore,
     type HappyAgentOnboardingStore,
@@ -39,9 +40,10 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly experiments?: ExperimentsStore;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
-    /** A Happy Cloud server's AI connections and plugins, for its gates. */
+    /** A Happy Cloud server's AI connections, plugins and payments, for its gates. */
     readonly cloudProviders?: () => HappyAgentCloudProvidersStore | undefined;
     readonly plugins?: () => HappyAgentPluginsStore | undefined;
+    readonly payments?: () => HappyAgentPaymentsStore | undefined;
     readonly children: ReactNode;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
@@ -120,6 +122,7 @@ export function HappyAgentOnboardingBoundary(props: {
                 store={props.store}
                 {...(props.cloudProviders ? { cloudProviders: props.cloudProviders } : {})}
                 {...(props.plugins ? { plugins: props.plugins } : {})}
+                {...(props.payments ? { payments: props.payments } : {})}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
             />

@@ -3,6 +3,7 @@
 import {
     CLOUD_WEB_PICKER_URL,
     cloudWeb,
+    cloudWebPaymentsReturn,
     cloudWebSessionEndSubscribe,
     cloudWebSignIn,
     cloudWebSignOut,
@@ -1357,6 +1358,7 @@ const root = createRoot(document.getElementById("root")!);
 // data is then already being erased): the whole page becomes the way to sign in,
 // with nothing else on it.
 if (cloudWeb) {
+    cloudWebPaymentsReturn();
     const signIn = cloudWebSignInStoreCreate();
     cloudWebSessionEndSubscribe(() =>
         root.render(

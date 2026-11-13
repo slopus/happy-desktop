@@ -60,6 +60,7 @@ import {
     happyAgentRepositoriesStoreNoop,
     happyAgentComputeStoreNoop,
     happyAgentOnboardingSettingsStoreNoop,
+    happyAgentPaymentsStoreNoop,
     happyAgentDailyUsageStoreNoop,
     happyAgentCloudProviderAddTeamOnly,
     happyAgentCloudConnectionName,
@@ -128,6 +129,7 @@ import {
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppOnboardingSettings } from "./AppOnboardingSettings";
+import { AppPaymentsSettings } from "./AppPaymentsSettings";
 import { AppComputeSettings } from "./AppComputeSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
@@ -174,6 +176,9 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     // What people are asked for when they first open a Happy Cloud server;
     // listed only where the server reports onboarding settings.
     { group: "Team", icon: "check-circle", id: "onboarding", label: "Onboarding", tone: "green" },
+    // The team's credit and card; listed only where the server takes payments
+    // and the reader may manage them.
+    { group: "Team", icon: "zap", id: "payments", label: "Payments", tone: "green" },
     // How each project's changes are split into tiers in the Changes listing.
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
     { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
@@ -434,6 +439,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     repositories: "The code your team works on",
     compute: "The computers agents run on",
     onboarding: "What people are asked for when they first open this server",
+    payments: "Credit, the card on file and what agents spend",
 };
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
@@ -593,13 +599,23 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (onboardingSettingsStore ?? happyAgentOnboardingSettingsStoreNoop).get,
         (onboardingSettingsStore ?? happyAgentOnboardingSettingsStoreNoop).get,
     );
+    // Followed while Settings is open: Payments is listed only once the server
+    // has said it takes payments and the reader may manage them.
+    const paymentsStore = host?.session?.payments?.();
+    const payments = useSyncExternalStore(
+        (paymentsStore ?? happyAgentPaymentsStoreNoop).subscribe,
+        (paymentsStore ?? happyAgentPaymentsStoreNoop).get,
+        (paymentsStore ?? happyAgentPaymentsStoreNoop).get,
+    );
+    const paymentsAbsent = !paymentsStore || (!payments.loading && !payments.available);
     // A link to Onboarding on a server that reports no onboarding settings
     // opens the default category, once the server has said so.
     const onboardingAbsent =
         !onboardingSettingsStore || (!onboardingSettings.loading && !onboardingSettings.available);
     const section =
         happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
-        !(props.section === "onboarding" && onboardingAbsent)
+        !(props.section === "onboarding" && onboardingAbsent) &&
+        !(props.section === "payments" && paymentsAbsent)
             ? props.section
             : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
     const stateOpen = section === "debug";
@@ -617,7 +633,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined) &&
             (category.id !== "onboarding" ||
-                (onboardingSettingsStore !== undefined && onboardingSettings.available)),
+                (onboardingSettingsStore !== undefined && onboardingSettings.available)) &&
+            (category.id !== "payments" || (paymentsStore !== undefined && payments.available)),
     );
     const hostAvailability = host?.session
         ? happyAgentAvailabilityProject(host.session.connection.get(), true, {
@@ -1558,6 +1575,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(onboardingPlugins ? { plugins: onboardingPlugins } : {})}
                         snapshot={onboardingSettings}
                         store={onboardingSettingsStore}
+                    />
+                ) : null
+            ) : section === "payments" ? (
+                paymentsStore ? (
+                    <AppPaymentsSettings
+                        // A desktop sends Stripe's pages to the system browser and
+                        // reads again on focus; a browser tab goes there itself and
+                        // comes back to this page.
+                        pageOpen={props.externalLinkOpen ?? ((url) => window.location.assign(url))}
+                        snapshot={payments}
+                        store={paymentsStore}
                     />
                 ) : null
             ) : section === "compute" ? (

@@ -676,6 +676,8 @@ export interface AppHappyAgentSetup {
         | undefined;
     /** A Happy Cloud server's plugins, for its onboarding's plugins step. */
     readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
+    /** A Happy Cloud server's payments, for its onboarding's payment steps. */
+    readonly payments?: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
 }
 
 export interface AppHappyAgentSession {
@@ -740,6 +742,8 @@ export interface AppHappyAgentSession {
     readonly onboardingSettings?: () =>
         | import("happy-desktop-state").HappyAgentOnboardingSettingsStore
         | undefined;
+    /** Settings › Payments, on a Happy Cloud server that takes payments; absent or undefined elsewhere. */
+    readonly payments?: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
     /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
     /** Settings › Usage's daily token history; absent or undefined where it cannot be read. */

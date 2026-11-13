@@ -85,3 +85,11 @@
     justify-content: center;
     padding-block: 8px;
 }
+
+/* The page's one call to act stands out against its card in both
+   appearances: the text colour as its face and the card's as its label, so it
+   is black on a light card and white on a dark one. */
+.happy-button.happy-agent-payments__act[data-variant="primary"]:not(:disabled) {
+    background-color: var(--text);
+    color: var(--surface);
+}

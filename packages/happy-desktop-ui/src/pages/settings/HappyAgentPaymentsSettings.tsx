@@ -36,6 +36,8 @@ export interface HappyAgentPaymentsSettingsProps {
     readonly pending?: string;
     /** The card on file, for example "Visa ending 4242 · expires 04/30"; absent with none. */
     readonly method?: string;
+    /** Whether Stripe has a billing portal for the team yet; it has none before a first card or payment. */
+    readonly portal: boolean;
     readonly topUp: {
         /** Preset amounts by value, with their labels. */
         readonly presets: readonly { readonly value: string; readonly label: string }[];
@@ -154,6 +156,7 @@ export function HappyAgentPaymentsSettings(props: HappyAgentPaymentsSettingsProp
                                 />
                             ) : null}
                             <Button
+                                className="happy-agent-payments__act"
                                 disabled={busy || topUp.invalid !== undefined}
                                 loading={props.redirecting === "topUp"}
                                 onClick={props.onTopUp}
@@ -173,6 +176,7 @@ export function HappyAgentPaymentsSettings(props: HappyAgentPaymentsSettingsProp
                 <FormRow
                     control={
                         <Button
+                            className="happy-agent-payments__act"
                             disabled={busy}
                             loading={props.redirecting === "setup"}
                             onClick={props.onMethodSetup}
@@ -189,21 +193,23 @@ export function HappyAgentPaymentsSettings(props: HappyAgentPaymentsSettingsProp
                     }
                     label={props.method ?? "Nothing on file yet"}
                 />
-                <FormRow
-                    control={
-                        <Button
-                            disabled={busy}
-                            loading={props.redirecting === "portal"}
-                            onClick={props.onPortalOpen}
-                            size="small"
-                            variant="secondary"
-                        >
-                            Open Stripe
-                        </Button>
-                    }
-                    description="Invoices, receipts and billing details, on Stripe."
-                    label="Billing history"
-                />
+                {props.portal ? (
+                    <FormRow
+                        control={
+                            <Button
+                                disabled={busy}
+                                loading={props.redirecting === "portal"}
+                                onClick={props.onPortalOpen}
+                                size="small"
+                                variant="secondary"
+                            >
+                                Open Stripe
+                            </Button>
+                        }
+                        description="Invoices, receipts and billing details, on Stripe."
+                        label="Billing history"
+                    />
+                ) : null}
             </HappyAgentSettingsSection>
             <HappyAgentSettingsSection
                 description="Agents stop spending for the rest of the month once it is reached. Leave it empty for no cap."

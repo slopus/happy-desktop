@@ -63,6 +63,28 @@ export async function cloudWebSignOut(): Promise<void> {
     window.location.assign(CLOUD_WEB_PICKER_URL);
 }
 
+/**
+ * Back from a page Stripe hosts: Stripe returns to the server's address with
+ * `?payments=setup|top-up|portal` (and `&result=` for the first two). The
+ * marks leave the address, the page opens on Settings › Payments, and the
+ * server is asked to read Stripe again; what changed arrives as
+ * `payments.updated`.
+ */
+export function cloudWebPaymentsReturn(): void {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("payments")) return;
+    url.searchParams.delete("payments");
+    url.searchParams.delete("result");
+    url.hash = "#/settings/payments";
+    window.history.replaceState(window.history.state, "", url);
+    void fetch("/v0/payments/sync", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: "{}",
+    }).catch(() => undefined);
+}
+
 /** Whether the edge holds a session for this page; never a token. */
 export async function cloudWebSessionRead(): Promise<boolean> {
     const response = await originalFetch(SESSION_PATH, {

@@ -96,9 +96,15 @@ export interface HappyAgentPaymentsSnapshot {
         readonly nextCursor: string | null;
         readonly loadingMore: boolean;
     };
-    /** The amount picked for the next top-up, in minor units. */
-    readonly topUpAmount: number;
+    /** The next top-up: a preset amount in minor units, or the typed one. */
+    readonly topUp: { readonly preset: number | "custom"; readonly custom: string };
+    /** The cap as typed, in major units; absent until edited, when the server's stands. */
+    readonly capDraft?: string;
+    /** Members' names by user ID, for the ledger; null for one who saved none. */
+    readonly names: ReadonlyMap<string, string | null>;
     readonly redirecting?: HappyAgentPaymentsRedirect;
+    /** The last Stripe page the reader was sent to, while they may still be on it. */
+    readonly opened?: HappyAgentPaymentsRedirect;
     readonly capSaving: boolean;
     readonly error?: UserError;
     /** Why the last action did not go through. */
@@ -118,15 +124,19 @@ export interface HappyAgentPaymentsTarget {
 export interface HappyAgentPaymentsStore {
     get(): HappyAgentPaymentsSnapshot;
     subscribe(listener: () => void): () => void;
-    topUpAmountUpdate(minor: number): void;
+    topUpPresetSelect(minor: number): void;
+    topUpCustomSelect(): void;
+    /** The typed amount, in major units as the reader writes them. */
+    topUpCustomUpdate(text: string): void;
     /** Starts a Stripe Checkout for the picked amount; the page opens in `target`. */
     topUpSubmit(target: HappyAgentPaymentsTarget): void;
     /** Adds or replaces the card through Stripe Checkout. */
     methodSetup(target: HappyAgentPaymentsTarget): void;
     /** Opens Stripe's billing portal: invoices, receipts and the card on file. */
     portalOpen(target: HappyAgentPaymentsTarget): void;
-    /** Sets the monthly cap, or removes it with null. */
-    capUpdate(limit: HappyAgentMoney | null): void;
+    capDraftUpdate(text: string): void;
+    /** Saves the typed cap; an empty one removes the cap. */
+    capSave(): void;
     ledgerMore(): void;
     /** Asks the server to read Stripe again, as when the reader comes back from it. */
     paymentsSync(): void;
@@ -140,11 +150,43 @@ const TOP_UP_DEFAULT = 2_500;
 const LEDGER_PAGE = 50;
 const MANAGE_PERMISSION = "payments.manage";
 
+/** How many minor units a currency's major unit has, as a power of ten. */
+export function happyAgentMoneyExponent(currency: string): number {
+    try {
+        return (
+            new Intl.NumberFormat("en", {
+                style: "currency",
+                currency: currency.toUpperCase(),
+            }).resolvedOptions().maximumFractionDigits ?? 2
+        );
+    } catch {
+        return 2;
+    }
+}
+
+/** An amount typed in major units, in minor units; undefined when it is not one. */
+export function happyAgentMoneyParse(text: string, currency: string): number | undefined {
+    const trimmed = text.trim().replace(/,/gu, "");
+    if (!/^\d+(\.\d+)?$/u.test(trimmed)) return undefined;
+    const exponent = happyAgentMoneyExponent(currency);
+    const [whole = "0", fraction = ""] = trimmed.split(".");
+    if (fraction.length > exponent) return undefined;
+    return Number(whole) * 10 ** exponent + Number(fraction.padEnd(exponent, "0") || "0");
+}
+
+/** The amount the next top-up is for, in minor units; undefined when the typed one is not an amount. */
+export function happyAgentTopUpAmount(snapshot: HappyAgentPaymentsSnapshot): number | undefined {
+    return snapshot.topUp.preset === "custom"
+        ? happyAgentMoneyParse(snapshot.topUp.custom, snapshot.account?.currency ?? "usd")
+        : snapshot.topUp.preset;
+}
+
 const EMPTY: HappyAgentPaymentsSnapshot = {
     loading: true,
     available: false,
     ledger: { entries: [], nextCursor: null, loadingMore: false },
-    topUpAmount: TOP_UP_DEFAULT,
+    topUp: { preset: TOP_UP_DEFAULT, custom: "" },
+    names: new Map(),
     capSaving: false,
 };
 
@@ -302,6 +344,26 @@ export function happyAgentPaymentsStoreCreate(deps: {
         };
     };
 
+    /** Reads member names only while the ledger names a member it does not know. */
+    const namesRead = async (entries: readonly HappyAgentPaymentsEntry[]): Promise<void> => {
+        const known = store.getState().names;
+        const unknown = entries.some(
+            (entry) => entry.actor?.kind === "user" && entry.actor.id && !known.has(entry.actor.id),
+        );
+        if (!unknown) return;
+        const answer = recordOf(await deps.request("GET", "v0/members").catch(() => undefined));
+        const names = new Map(known);
+        for (const item of Array.isArray(answer?.members) ? answer.members : []) {
+            const member = recordOf(item);
+            const id = textOrNull(member?.userId);
+            if (id) names.set(id, textOrNull(member?.name));
+        }
+        for (const entry of entries)
+            if (entry.actor?.kind === "user" && entry.actor.id && !names.has(entry.actor.id))
+                names.set(entry.actor.id, null);
+        set({ names });
+    };
+
     const read = async (): Promise<void> => {
         const granted = recordOf(await deps.request("GET", "v0/permissions"))?.granted;
         if (!Array.isArray(granted) || !granted.includes(MANAGE_PERMISSION)) {
@@ -320,6 +382,7 @@ export function happyAgentPaymentsStoreCreate(deps: {
         }
         const account = accountOf(answer);
         const head = await ledgerRead(null, account.currency);
+        await namesRead(head.entries);
         if (disposed) return;
         const current = store.getState();
         // A newer head keeps the older pages already read below it.
@@ -394,7 +457,7 @@ export function happyAgentPaymentsStoreCreate(deps: {
     ): void => {
         const snapshot = store.getState();
         if (disposed || !snapshot.available || snapshot.redirecting) return;
-        const { actionError: _cleared, ...rest } = snapshot;
+        const { actionError: _cleared, opened: _left, ...rest } = snapshot;
         store.setState({ ...rest, redirecting: kind }, true);
         void ask()
             .then((answer) => {
@@ -403,6 +466,7 @@ export function happyAgentPaymentsStoreCreate(deps: {
                     throw new UserError("The server gave no Stripe address.");
                 done?.();
                 target.open(url);
+                set({ opened: kind });
             })
             .catch((error: unknown) => set({ actionError: happyAgentUserError(error) }))
             .finally(() => {
@@ -434,14 +498,26 @@ export function happyAgentPaymentsStoreCreate(deps: {
                 follow = undefined;
             };
         },
-        topUpAmountUpdate(minor) {
+        topUpPresetSelect(minor) {
             if (!Number.isInteger(minor)) return;
             const { actionError: _cleared, ...rest } = store.getState();
-            store.setState({ ...rest, topUpAmount: minor }, true);
+            store.setState({ ...rest, topUp: { ...rest.topUp, preset: minor } }, true);
+        },
+        topUpCustomSelect() {
+            const { actionError: _cleared, ...rest } = store.getState();
+            store.setState({ ...rest, topUp: { ...rest.topUp, preset: "custom" } }, true);
+        },
+        topUpCustomUpdate(text) {
+            const { actionError: _cleared, ...rest } = store.getState();
+            store.setState({ ...rest, topUp: { preset: "custom", custom: text } }, true);
         },
         topUpSubmit(target) {
-            const amount = store.getState().topUpAmount;
-            if (amount < HAPPY_AGENT_TOP_UP_MIN || amount > HAPPY_AGENT_TOP_UP_MAX) {
+            const amount = happyAgentTopUpAmount(store.getState());
+            if (
+                amount === undefined ||
+                amount < HAPPY_AGENT_TOP_UP_MIN ||
+                amount > HAPPY_AGENT_TOP_UP_MAX
+            ) {
                 set({ actionError: new UserError("A top-up can't be that amount.") });
                 return;
             }
@@ -466,15 +542,33 @@ export function happyAgentPaymentsStoreCreate(deps: {
         portalOpen(target) {
             redirect("portal", target, () => deps.request("POST", "v0/payments/portal", {}));
         },
-        capUpdate(limit) {
+        capDraftUpdate(text) {
+            set({ capDraft: text });
+        },
+        capSave() {
             const snapshot = store.getState();
             if (disposed || !snapshot.available || snapshot.capSaving) return;
+            if (snapshot.capDraft === undefined) return;
+            const currency = snapshot.account?.currency ?? "usd";
+            const typed = snapshot.capDraft.trim();
+            const minor = typed === "" ? null : happyAgentMoneyParse(typed, currency);
+            if (minor === undefined) {
+                set({ actionError: new UserError("A cap is an amount, or empty for none.") });
+                return;
+            }
             const { actionError: _cleared, ...rest } = snapshot;
             store.setState({ ...rest, capSaving: true }, true);
             void deps
-                .request("PUT", "v0/payments/cap", { limit })
+                .request("PUT", "v0/payments/cap", {
+                    limit: minor === null ? null : { minor, currency },
+                })
                 .then(
-                    () => load(),
+                    () => {
+                        if (disposed) return;
+                        const { capDraft: _saved, ...settled } = store.getState();
+                        store.setState(settled, true);
+                        load();
+                    },
                     (error: unknown) => set({ actionError: happyAgentUserError(error) }),
                 )
                 .finally(() => set({ capSaving: false }));
@@ -485,7 +579,8 @@ export function happyAgentPaymentsStoreCreate(deps: {
             if (disposed || !cursor || snapshot.ledger.loadingMore) return;
             set({ ledger: { ...snapshot.ledger, loadingMore: true } });
             void ledgerRead(cursor, currency())
-                .then((page) => {
+                .then(async (page) => {
+                    await namesRead(page.entries);
                     const ledger = store.getState().ledger;
                     const known = new Set(ledger.entries.map((entry) => entry.id));
                     set({
@@ -530,11 +625,14 @@ const INERT_SNAPSHOT: HappyAgentPaymentsSnapshot = { ...EMPTY, loading: false };
 export const happyAgentPaymentsStoreNoop: HappyAgentPaymentsStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
-    topUpAmountUpdate: () => undefined,
+    topUpPresetSelect: () => undefined,
+    topUpCustomSelect: () => undefined,
+    topUpCustomUpdate: () => undefined,
     topUpSubmit: () => undefined,
     methodSetup: () => undefined,
     portalOpen: () => undefined,
-    capUpdate: () => undefined,
+    capDraftUpdate: () => undefined,
+    capSave: () => undefined,
     ledgerMore: () => undefined,
     paymentsSync: () => undefined,
     [Symbol.dispose]: () => undefined,

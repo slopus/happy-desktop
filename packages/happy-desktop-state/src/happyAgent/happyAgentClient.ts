@@ -294,7 +294,10 @@ export interface HappyAgentWorkspaceClient {
     repositories(): HappyAgentRepositoriesStore | undefined;
     /** Settings › Onboarding on Happy Cloud; undefined anywhere else. */
     onboardingSettings(): HappyAgentOnboardingSettingsStore | undefined;
-    /** Settings › Payments on Happy Cloud; undefined anywhere else. */
+    /**
+     * Settings › Payments on Happy Cloud; undefined anywhere else, and while
+     * the server's health does not say it takes payments.
+     */
     payments(): HappyAgentPaymentsStore | undefined;
     /**
      * The plugins this connection's server offers and what it installed: a
@@ -1225,6 +1228,8 @@ export function happyAgentWorkspaceClientCreate(
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
             if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "payments"))
+                return undefined;
             paymentsStore ??= happyAgentPaymentsStoreCreate({
                 request,
                 sync: deps.connection.sync,

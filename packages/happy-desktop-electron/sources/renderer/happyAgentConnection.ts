@@ -160,6 +160,7 @@ export interface HappyAgentSession {
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
     readonly compute: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
+    readonly payments: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
     readonly onboardingSettings: () =>
         | import("happy-desktop-state").HappyAgentOnboardingSettingsStore
         | undefined;
@@ -614,6 +615,7 @@ export function happyAgentConnectionOpen(input: {
                   ? {
                         cloudProviders: () => client.cloudProviders(),
                         plugins: () => client.plugins(),
+                        payments: () => client.payments(),
                     }
                   : {}),
           }
@@ -728,6 +730,7 @@ export function happyAgentConnectionOpen(input: {
                     repositories: () => client.repositories(),
                     compute: () => client.compute(),
                     onboardingSettings: () => client.onboardingSettings(),
+                    payments: () => client.payments(),
                     plugins: () => client.plugins(),
                     genUiActions: () => client.genUiActions(),
                     dailyUsage: () => client.dailyUsage(),
@@ -798,7 +801,13 @@ export function happyAgentConnectionOpen(input: {
 
     // A phone signing in moves the onboarding on and tells no other device, so
     // a Happy Cloud server's gates are read again when the window comes back.
-    const onboardingFocusRead = (): void => onboarding.onboardingRead();
+    // Coming back from Stripe in the system browser asks the server to read
+    // Stripe again, once Payments has been shown.
+    const onboardingFocusRead = (): void => {
+        onboarding.onboardingRead();
+        const payments = disposed ? undefined : client.payments();
+        if (payments?.get().available) payments.paymentsSync();
+    };
     if (cloudRequest) window.addEventListener("focus", onboardingFocusRead);
 
     return {

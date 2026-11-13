@@ -35,6 +35,7 @@ const funded: HappyAgentPaymentsSettingsProps = {
     balanceDetail: "$45.30 available · $3.50 held for work under way",
     pending: "$25.00 on its way from Stripe",
     method: "Visa ending 4242 · expires 04/30",
+    portal: true,
     topUp: { presets, selected: "2500", custom: "", symbol: "$" },
     cap: {
         summary: "$162.40 of $200.00 spent this month",
@@ -95,6 +96,7 @@ const cases: readonly {
             testMode: false,
             balance: "$0.00",
             balanceDetail: "No credit yet",
+            portal: false,
             topUp: {
                 presets,
                 selected: "custom",

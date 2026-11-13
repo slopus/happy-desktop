@@ -6,6 +6,8 @@ import {
     type HappyAgentOnboardingGate,
     type HappyAgentOnboardingSnapshot,
     type HappyAgentOnboardingStore,
+    type HappyAgentPaymentsStore,
+    happyAgentMoneyExponent,
     type HappyAgentPluginsSnapshot,
     type HappyAgentPluginsStore,
     type HappyAgentProfileSnapshot,
@@ -21,6 +23,7 @@ import {
     type ThemeMode,
 } from "happy-desktop-ui";
 import { providerAddProps } from "../views/AppHappyAgentSettingsView";
+import { methodText, moneyText, PAYMENT_PRESETS } from "../views/AppPaymentsSettings";
 
 const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = {
     profile: "Profile",
@@ -156,6 +159,7 @@ export function AppCloudOnboarding(props: {
     readonly profileSnapshot: HappyAgentProfileSnapshot;
     readonly cloudProviders?: () => HappyAgentCloudProvidersStore | undefined;
     readonly plugins?: () => HappyAgentPluginsStore | undefined;
+    readonly payments?: () => HappyAgentPaymentsStore | undefined;
     readonly appearance: ThemeMode;
     readonly serverLabel?: string;
     readonly placeholderSeed: string;
@@ -174,6 +178,13 @@ export function AppCloudOnboarding(props: {
         pluginsStore?.subscribe ?? noopSubscribe,
         pluginsStore?.get ?? noSnapshot,
         pluginsStore?.get ?? noSnapshot,
+    );
+    const paymentsStore =
+        gate.kind === "paymentMethod" || gate.kind === "payment" ? props.payments?.() : undefined;
+    const payments = useSyncExternalStore(
+        paymentsStore?.subscribe ?? noopSubscribe,
+        paymentsStore?.get ?? noSnapshot,
+        paymentsStore?.get ?? noSnapshot,
     );
     const { store, profile, profileSnapshot } = props;
     const pending = flow.pending === gate.id;
@@ -351,7 +362,73 @@ export function AppCloudOnboarding(props: {
                     ...(skip ? { skip } : {}),
                 };
             case "paymentMethod":
-            case "payment":
+            case "payment": {
+                // Without the server's payments, or where they turn out to be
+                // off for this reader, the step cannot be done from here.
+                if (!paymentsStore || !payments || (!payments.loading && !payments.available))
+                    return {
+                        view: {
+                            kind: "notice",
+                            reason: "unavailable",
+                            step: STEP_LABELS[gate.kind],
+                        },
+                        ...(skip ? { skip } : {}),
+                    };
+                const account = payments.account;
+                const currency = account?.currency ?? "usd";
+                const unit = 10 ** happyAgentMoneyExponent(currency);
+                const kind = gate.kind === "paymentMethod" ? "setup" : "topUp";
+                const waiting =
+                    !done && (payments.redirecting === kind || payments.opened === kind);
+                const target = { open };
+                const error =
+                    payments.actionError?.message ?? payments.error?.message ?? flow.error;
+                const selected =
+                    payments.topUp.preset === "custom" ? undefined : payments.topUp.preset;
+                return {
+                    view: {
+                        kind: "payment",
+                        ask: gate.kind === "paymentMethod" ? "method" : "credit",
+                        method: account?.paymentMethod ? methodText(account.paymentMethod) : null,
+                        balance: account ? moneyText(account.balance) : null,
+                        testMode: account?.mode === "test",
+                        ...(gate.kind === "payment"
+                            ? {
+                                  amounts: PAYMENT_PRESETS.map((major) => ({
+                                      id: String(major * unit),
+                                      label: moneyText({ minor: major * unit, currency }, true),
+                                  })),
+                                  ...(selected !== undefined ? { amount: String(selected) } : {}),
+                                  onAmountSelect: (id: string) =>
+                                      paymentsStore.topUpPresetSelect(Number(id)),
+                              }
+                            : {}),
+                        waiting,
+                        ...(error ? { error } : {}),
+                    },
+                    // Stripe reports back to the server; the gate's own status
+                    // moves the page on, so the action is Continue once it is done.
+                    action: done
+                        ? proceed
+                        : gate.kind === "paymentMethod"
+                          ? {
+                                label: "Add card",
+                                busy: payments.redirecting === "setup",
+                                disabled: payments.loading,
+                                onSelect: () => paymentsStore.methodSetup(target),
+                            }
+                          : {
+                                label:
+                                    selected !== undefined
+                                        ? `Add ${moneyText({ minor: selected, currency }, true)}`
+                                        : "Add credit",
+                                busy: payments.redirecting === "topUp",
+                                disabled: payments.loading || selected === undefined,
+                                onSelect: () => paymentsStore.topUpSubmit(target),
+                            },
+                    ...(skip ? { skip } : {}),
+                };
+            }
             case "unknown":
                 return {
                     view: { kind: "notice", reason: "unavailable", step: STEP_LABELS[gate.kind] },
