@@ -607,6 +607,26 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (paymentsStore ?? happyAgentPaymentsStoreNoop).get,
         (paymentsStore ?? happyAgentPaymentsStoreNoop).get,
     );
+    // Subscribing is what starts the read, so the instructions are asked for
+    // only while this window is open, and only once however often it is.
+    const instructionsStore = host?.session?.instructions;
+    const instructions = useSyncExternalStore(
+        instructionsStore?.subscribe ?? noSubscribe,
+        instructionsStore?.get ?? instructionsUnavailable,
+        instructionsStore?.get ?? instructionsUnavailable,
+    );
+    const securityPolicyStore = host?.session?.securityPolicy;
+    const securityPolicy = useSyncExternalStore(
+        securityPolicyStore?.subscribe ?? noSubscribe,
+        securityPolicyStore?.get ?? securityPolicyUnavailable,
+        securityPolicyStore?.get ?? securityPolicyUnavailable,
+    );
+    // Happy Cloud lists Instructions once it has said it keeps the documents
+    // and who may change them; one from before keeps them in its Policy vault.
+    const instructionsShown =
+        !happyCloud || instructions.access === "edit" || instructions.access === "read";
+    const instructionsReadOnly = happyCloud && instructions.access === "read";
+    const securityPolicyReadOnly = happyCloud && securityPolicy.access === "read";
     const paymentsAbsent = !paymentsStore || (!payments.loading && !payments.available);
     // A link to Onboarding on a server that reports no onboarding settings
     // opens the default category, once the server has said so.
@@ -615,7 +635,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const section =
         happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
         !(props.section === "onboarding" && onboardingAbsent) &&
-        !(props.section === "payments" && paymentsAbsent)
+        !(props.section === "payments" && paymentsAbsent) &&
+        !(props.section === "instructions" && happyCloud && instructions.access === "unserved")
             ? props.section
             : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
     const stateOpen = section === "debug";
@@ -629,6 +650,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
         (category) =>
             happyAgentSettingsCategoryAvailable(category.id, happyCloud) &&
+            (category.id !== "instructions" || instructionsShown) &&
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined) &&
@@ -734,20 +756,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         mobileConnector.pairingOpen &&
         !happyIntegration.pairingOpen &&
         happyIntegration.setup === undefined;
-    // Subscribing is what starts the read, so the instructions are asked for
-    // only while this window is open, and only once however often it is.
-    const instructionsStore = host?.session?.instructions;
-    const instructions = useSyncExternalStore(
-        instructionsStore?.subscribe ?? noSubscribe,
-        instructionsStore?.get ?? instructionsUnavailable,
-        instructionsStore?.get ?? instructionsUnavailable,
-    );
-    const securityPolicyStore = host?.session?.securityPolicy;
-    const securityPolicy = useSyncExternalStore(
-        securityPolicyStore?.subscribe ?? noSubscribe,
-        securityPolicyStore?.get ?? securityPolicyUnavailable,
-        securityPolicyStore?.get ?? securityPolicyUnavailable,
-    );
     // Secrets are safe metadata only. The store starts its repeating read while
     // this category (or raw Dev Tools state) watches it and stops immediately
     // when the surface leaves. Happy Cloud keeps a typed catalog instead of the
@@ -955,7 +963,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     ? mobileLinkHeading.description
                     : section === "secrets" && happyCloud
                       ? "Keys and credentials agents use without seeing them"
-                      : CATEGORY_DESCRIPTIONS[section]
+                      : section === "instructions" && happyCloud
+                        ? "Agent guidance and permission review for this team"
+                        : CATEGORY_DESCRIPTIONS[section]
             }
             onCategorySelect={props.onCategorySelect}
             onClose={props.onClose}
@@ -1376,8 +1386,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     documents={[
                         {
                             bytes: instructions.bytes,
-                            description:
-                                "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
+                            description: happyCloud
+                                ? `Given to every agent on this team, on top of the project's own AGENTS.md. ${OWNERS_ONLY}`
+                                : "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
                             dirty: instructions.dirty,
                             error: documentError(instructionsStore, instructions),
                             id: "agents",
@@ -1389,8 +1400,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                 if (happyAgentOnline()) instructionsStore?.save();
                             },
                             onValueChange: (value) => instructionsStore?.draftUpdate(value),
-                            path: INSTRUCTIONS_PATH,
-                            placeholder: "Anything every agent on this machine should know…",
+                            path: happyCloud ? "Team AGENTS.md" : INSTRUCTIONS_PATH,
+                            placeholder: instructionsReadOnly
+                                ? "No team instructions yet."
+                                : happyCloud
+                                  ? "Anything every agent on this team should know…"
+                                  : "Anything every agent on this machine should know…",
+                            readOnly: instructionsReadOnly,
                             saveError: instructions.saveError?.message,
                             saving: instructions.saving,
                             value: instructions.draft,
@@ -1403,8 +1419,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         },
                         {
                             bytes: securityPolicy.bytes,
-                            description:
-                                "Applied when this machine reviews whether an agent action is allowed.",
+                            description: happyCloud
+                                ? `Applied when this team's agents are reviewed for whether an action is allowed. ${OWNERS_ONLY}`
+                                : "Applied when this machine reviews whether an agent action is allowed.",
                             dirty: securityPolicy.dirty,
                             error: documentError(securityPolicyStore, securityPolicy),
                             id: "security",
@@ -1416,8 +1433,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                 if (happyAgentOnline()) securityPolicyStore?.save();
                             },
                             onValueChange: (value) => securityPolicyStore?.draftUpdate(value),
-                            path: SECURITY_POLICY_PATH,
-                            placeholder: "Rules for deciding which agent actions are allowed…",
+                            path: happyCloud ? "Team SECURITY.md" : SECURITY_POLICY_PATH,
+                            placeholder: securityPolicyReadOnly
+                                ? "No team security policy yet."
+                                : "Rules for deciding which agent actions are allowed…",
+                            readOnly: securityPolicyReadOnly,
                             saveError: securityPolicy.saveError?.message,
                             saving: securityPolicy.saving,
                             value: securityPolicy.draft,
@@ -1933,6 +1953,8 @@ function stateReplacer(_key: string, value: unknown): unknown {
  * itself and is shown rather than asked for, so it is plain what a save changes.
  */
 const INSTRUCTIONS_PATH = "~/Happy/Config/AGENTS.md";
+/** Happy Cloud lets only owners change its global documents, and no agent. */
+const OWNERS_ONLY = "Only owners can change this. Agents can't.";
 const SECURITY_POLICY_PATH = "~/Happy/Config/SECURITY.md";
 
 const noSubscribe = () => () => undefined;
@@ -2135,6 +2157,7 @@ function usageOpenSubscribe(
 }
 
 const INSTRUCTIONS_UNAVAILABLE: HappyAgentInstructionsSnapshot = {
+    access: "unknown",
     stored: { type: "unloaded" },
     draft: "",
     dirty: false,

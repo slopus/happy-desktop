@@ -85,6 +85,7 @@ import {
 } from "./happyAgentInboxStore.js";
 import {
     happyAgentInstructionsStoreCreate,
+    happyAgentPolicyAccessRead,
     type HappyAgentInstructionsStore,
 } from "./happyAgentInstructionsStore.js";
 import {
@@ -1350,12 +1351,22 @@ export function happyAgentWorkspaceClientCreate(
         },
         instructions() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
-            instructionsStore ??= happyAgentInstructionsStoreCreate({ client: deps.client });
+            instructionsStore ??= happyAgentInstructionsStoreCreate({
+                client: deps.client,
+                ...(deps.cloudRequest
+                    ? { access: happyAgentPolicyAccessRead(deps.cloudRequest) }
+                    : {}),
+            });
             return instructionsStore;
         },
         securityPolicy() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
-            securityPolicyStore ??= happyAgentSecurityPolicyStoreCreate({ client: deps.client });
+            securityPolicyStore ??= happyAgentSecurityPolicyStoreCreate({
+                client: deps.client,
+                ...(deps.cloudRequest
+                    ? { access: happyAgentPolicyAccessRead(deps.cloudRequest) }
+                    : {}),
+            });
             return securityPolicyStore;
         },
         secrets() {

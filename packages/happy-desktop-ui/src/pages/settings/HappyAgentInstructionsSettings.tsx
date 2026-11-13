@@ -31,6 +31,8 @@ export type HappyAgentInstructionDocument = {
     /** Why the local draft cannot currently be persisted. */
     saveDisabled?: boolean;
     saveDisabledReason?: string;
+    /** The reader may read the document but not change it. */
+    readOnly?: boolean;
     /** Bytes the draft occupies, and the most the machine will keep. */
     bytes: number;
     maximumBytes: number;
@@ -102,11 +104,12 @@ export function HappyAgentInstructionsSettings(props: HappyAgentInstructionsSett
                         onValueChange={active.onValueChange}
                         path={active.path}
                         placeholder={active.placeholder}
+                        readOnly={active.readOnly}
                         rendered={<MarkdownDocument text={active.value} />}
                         saving={active.saving}
                         saveDisabled={active.saveDisabled}
                         status={
-                            active.saveDisabledReason ??
+                            (active.readOnly ? "Read only" : active.saveDisabledReason) ??
                             `${bytesLabel(active.bytes)} of ${bytesLabel(active.maximumBytes)}`
                         }
                         value={active.value}
