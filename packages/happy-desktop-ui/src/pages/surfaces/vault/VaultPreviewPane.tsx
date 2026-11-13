@@ -13,6 +13,7 @@ import {
 import { Banner } from "../../../Banner";
 import { Button } from "../../../Button";
 import { FilePreview, type FilePreviewContent } from "../../../FilePreview";
+import { GenUiArtifact } from "../../../genUi/GenUiArtifact";
 import { HtmlPreviewFrame } from "../../../HtmlPreviewFrame";
 import type { HtmlPreviewRenderer } from "../../../htmlPreview";
 import { Icon } from "../../../Icon";
@@ -21,6 +22,7 @@ import { MarkdownDocument, type MarkdownDocumentReferences } from "../../../Mark
 import { ScrollArea } from "../../../Scrollbar";
 import { SegmentedControl } from "../../../SegmentedControl";
 import { Ionicon } from "../../../vectorIcons/VectorIcon";
+import type { GenUiInlineHost } from "../../artifacts/ArtifactInlineContent";
 import { HappyAgentArtifactHtmlFrame } from "../../artifacts/HappyAgentArtifactHtmlFrame";
 import {
     vaultActorName,
@@ -40,6 +42,8 @@ export interface VaultPreviewPaneProps {
     now: number;
     zone: LocalTimeZone;
     renderPage?: HtmlPreviewRenderer;
+    /** Runs a Gen UI app's controls; without it they are drawn unavailable. */
+    genUi?: GenUiInlineHost;
     onPanelChange: (panel: "preview" | "history") => void;
     onVersionSelect: (number: number | undefined) => void;
     onHistoryMoreLoad: () => void;
@@ -62,6 +66,7 @@ function fileContent(content: HappyAgentVaultContent): FilePreviewContent {
             return { type: "text", text: content.text };
         case "unavailable":
         case "markdownArtifact":
+        case "genUiArtifact":
         case "htmlArtifact":
             return { type: "unavailable" };
     }
@@ -192,6 +197,30 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
             />
         );
     }
+    if (content.type === "genUiArtifact")
+        return (
+            <FilePreview
+                {...common}
+                content={{ type: "text", text: content.render }}
+                kind="text"
+                rendered={
+                    <ScrollArea
+                        className="happy-vault-preview__gen-ui"
+                        data-testid="happy-vault-preview-gen-ui"
+                        viewportClassName="happy-vault-preview__gen-ui-viewport"
+                    >
+                        <div className="happy-vault-preview__gen-ui-column">
+                            <GenUiArtifact
+                                actionsSupported={props.genUi?.actionsSupported ?? new Set()}
+                                files={content.files}
+                                render={content.render}
+                                {...(props.genUi ? { onAction: props.genUi.onAction } : {})}
+                            />
+                        </div>
+                    </ScrollArea>
+                }
+            />
+        );
     if (content.type === "htmlArtifact") {
         const page = content.page;
         const rendered: ReactNode =

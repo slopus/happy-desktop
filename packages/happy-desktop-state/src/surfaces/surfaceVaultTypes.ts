@@ -225,6 +225,13 @@ export type HappyAgentVaultContent =
           readonly files: ReadonlyMap<string, string>;
       }
     | {
+          /** A Gen UI app: its compiled render document's text, parsed where it is drawn. */
+          readonly type: "genUiArtifact";
+          readonly render: string;
+          /** Every file of the version by path, so the document's pictures resolve to them. */
+          readonly files: ReadonlyMap<string, string>;
+      }
+    | {
           readonly type: "htmlArtifact";
           readonly entryPath: string;
           readonly page: HappyAgentArtifactPage;

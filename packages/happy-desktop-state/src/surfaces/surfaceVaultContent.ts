@@ -1,4 +1,4 @@
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { GEN_UI_RENDER_PATH, type HappyAgentClient } from "@slopus/happy-agent-client";
 import type { HappyAgentArtifactSiteOpening } from "../happyAgent/happyAgentHostServices.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentArtifactPageModeRead } from "../artifacts/artifactPageMode.js";
@@ -123,9 +123,22 @@ export async function happyAgentVaultContentRead(
         if (file === null) throw new UserError("The app's file could not be read.");
         return file.data;
     };
-    /* Gen UI vault apps are specified but not drawn here yet; never open one as a page. */
+    const fileLinks = () =>
+        new Map(
+            manifest.files.map((file) => [
+                file.path,
+                client.vaultArtifactFileUrl(surfaceId, vaultFile.id, number, file.path),
+            ]),
+        );
+    /* A Gen UI app is drawn from the render document the daemon compiled into the bundle. */
     if (manifest.type === "gen_ui")
-        throw new UserError("Gen UI apps in a vault can't be shown here yet.");
+        return {
+            content: {
+                type: "genUiArtifact",
+                render: new TextDecoder().decode(await fileText(GEN_UI_RENDER_PATH)),
+                files: fileLinks(),
+            },
+        };
     const entryPath = manifest.entry;
     if (manifest.type === "markdown")
         return {
@@ -133,12 +146,7 @@ export async function happyAgentVaultContentRead(
                 type: "markdownArtifact",
                 entryPath,
                 text: new TextDecoder().decode(await fileText(entryPath)),
-                files: new Map(
-                    manifest.files.map((file) => [
-                        file.path,
-                        client.vaultArtifactFileUrl(surfaceId, vaultFile.id, number, file.path),
-                    ]),
-                ),
+                files: fileLinks(),
             },
         };
     const entryText = fileText(entryPath).then((data) => new TextDecoder().decode(data));

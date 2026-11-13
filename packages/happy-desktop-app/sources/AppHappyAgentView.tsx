@@ -6633,6 +6633,7 @@ function HappyAgentVaultSurface(props: {
     return (
         <HappyAgentVaultSurfacePage
             {...(props.chat ? { chat: props.chat } : {})}
+            genUi={GEN_UI_VIEWER_HOST}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             {...(props.viewer ? { viewer: props.viewer } : {})}
             onDialogClose={store.dialogClose}

@@ -21,6 +21,7 @@ import {
     type HappyAgentSurfaceChatToggle,
 } from "../HappyAgentSurfaceHeader";
 import type { HappyAgentSurfaceView } from "../surfacePresentation";
+import type { GenUiInlineHost } from "../../artifacts/ArtifactInlineContent";
 import { VaultMoveDialog, VaultNameDialog, VaultSettingsDialog } from "./VaultDialogs";
 import { VaultItemList } from "./VaultItemList";
 import { VaultPreviewPane } from "./VaultPreviewPane";
@@ -46,6 +47,8 @@ export interface HappyAgentVaultSurfacePageProps {
     zone?: LocalTimeZone;
     /** The host's engine for an app whose scripts run. */
     renderPage?: HtmlPreviewRenderer;
+    /** Runs a Gen UI app's controls. */
+    genUi?: GenUiInlineHost;
     /** A picture's thumbnail for its tile. */
     thumbnailOf?: (entry: HappyAgentVaultItem) => string | undefined;
     /** Saves an entry, a folder or an artifact as a zip; `version` defaults to the newest. */
@@ -607,6 +610,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                                 onVersionSelect={props.onPreviewVersionSelect}
                                 preview={preview}
                                 {...(props.renderPage ? { renderPage: props.renderPage } : {})}
+                                {...(props.genUi ? { genUi: props.genUi } : {})}
                                 rootName={props.surface.name}
                                 zone={zone}
                             />

@@ -585,6 +585,29 @@
     height: auto;
 }
 
+/* A Gen UI app scrolls inside the preview, its document on the reading column. */
+.happy-vault-preview__gen-ui {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-vault-preview__gen-ui-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.happy-vault-preview__gen-ui-column {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 16px calc(16px + var(--happy-chat-frame-outset));
+}
+
 /* ---- History ------------------------------------------------------------ */
 
 .happy-vault-history {
