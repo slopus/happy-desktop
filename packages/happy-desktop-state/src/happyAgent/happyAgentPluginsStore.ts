@@ -334,14 +334,20 @@ export function happyAgentPluginsStoreCreate(deps: {
 
     const read = async (): Promise<void> => {
         const [catalog, permissions] = await Promise.all([
-            deps.request("GET", "v0/plugins"),
+            deps.request("GET", "v0/plugins").catch((error: unknown) => {
+                // A server from before plugins has no catalog: it offers none.
+                if (error instanceof HappyCloudRequestRefusal && error.status === 404)
+                    return undefined;
+                throw error;
+            }),
             deps.request("GET", "v0/permissions"),
         ]);
         const granted = recordOf(permissions)?.granted;
         const manage = Array.isArray(granted) && granted.includes(MANAGE_PERMISSION);
-        const installed = manage
-            ? await deps.request("GET", "v0/plugins/installations")
-            : undefined;
+        const installed =
+            manage && catalog !== undefined
+                ? await deps.request("GET", "v0/plugins/installations")
+                : undefined;
         if (disposed) return;
         const current = store.getState();
         const { error: _cleared, ...rest } = current;

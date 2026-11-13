@@ -38,9 +38,6 @@ const EMPTY: HappyAgentPluginsSnapshot = {
 const RETRY_MS = 4_000;
 const PLUGIN_EVENTS = ["plugins.updated"] as const;
 const NO_SIGN_IN = "Plugins on this machine have no sign-in.";
-const UNSUPPORTED =
-    "This machine's Happy Agent has no plugins yet. Update Happy Agent to install them.";
-
 const STATUS: Record<PluginInstallationStatus, HappyAgentPluginInstallationStatus> = {
     installing: "installing",
     installed: "active",
@@ -207,14 +204,12 @@ export function happyAgentDaemonPluginsStoreCreate(
                 const unsupported =
                     error instanceof HappyAgentApiError &&
                     (error.status === 404 || error.status === 501);
-                // A daemon without plugins says so; any other failure keeps what was read.
-                if (unsupported || store.getState().loading)
-                    store.setState({
-                        loading: false,
-                        error: unsupported
-                            ? new UserError(UNSUPPORTED)
-                            : happyAgentUserError(error),
-                    });
+                // A daemon from before plugins offers none; any other failure keeps what was read.
+                if (unsupported) {
+                    catalog = new Map();
+                    store.setState({ ...EMPTY, loading: false }, true);
+                } else if (store.getState().loading)
+                    store.setState({ loading: false, error: happyAgentUserError(error) });
                 if (!unsupported && retry === undefined)
                     retry = setTimeout(() => {
                         retry = undefined;
