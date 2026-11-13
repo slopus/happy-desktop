@@ -15,21 +15,23 @@ export default (cues) => ({
     ...chapters(
         stage,
         {
-            openingTop: 180,
+            openingTop: 164,
             // Activity and its badge, the bots, the task list, and the open conversation.
             aware: { x: centred(1.45), y: 60 },
             progress: { x: centred(1.45), y: 60 },
             // The feed, one cover at a time, beside the sidebar.
             // Low enough that the hand parked in the title bar stays out of frame.
             activity: { scale: 1.3, x: centred(1.3), y: 66 },
+            loading: [0.11, 0.38],
             activityUntil: ["step3-rest", 2.0],
         },
         [
             {
                 kind: "card",
                 text: "Also on iOS and Android",
+                small: "The app as it ships, from the App Store",
                 pictures: [phone("build-together.jpg"), phone("computer-and-team-servers.jpg")],
-                seconds: 5.0,
+                seconds: 4.0,
             },
             {
                 kind: "card",

@@ -7,7 +7,8 @@
  * then the lines give way to chapter 1's caption and the camera makes one
  * eased move in. Chapter 2 is named by a short card, opens on the whole
  * window, moves in for the progress and the badge, and eases out once
- * Activity opens. The take itself steps down Activity, one cover at a time.
+ * Activity opens; the moment Activity spends loading after the click is left
+ * out. The take itself steps down Activity, one cover at a time.
  *
  * Takes, by `--take` name, each the multiplayer demo with that MULTIPLAYER_SHOT:
  * aware, activity.
@@ -16,7 +17,7 @@ const move = 0.8;
 
 const opening = [
     { text: "Today most tasks start as conversations with agents.", at: 0 },
-    { text: "Happy is built around this idea.", at: 1.3 },
+    { text: "Happy is built around this idea.", at: 0.9 },
 ];
 const awareTitle = "See who’s working on what";
 const activityTitle = "See the most important updates from the team";
@@ -27,7 +28,8 @@ const activityTitle = "See the most important updates from the team";
  *               `aware`: chapter 1's close view; `progress`: chapter 2's close
  *               view before the click; `activity`: Activity's view after it;
  *               `activityUntil`: the step whose rest ends chapter 2, and how
- *               long it holds
+ *               long it holds; `loading`: when, after the click, Activity
+ *               starts loading and has drawn its feed
  * @param ending the segments after chapter 2
  * @param cues   the takes' cues by take and name, in take seconds
  */
@@ -64,17 +66,20 @@ export function chapters(stage, views, ending, cues) {
         ...line,
         top: linesTop + index * (lineHeight + lineGap),
     }));
-    // Before the window rises the two lines stand at the frame's middle.
-    const drop = Math.round(output.height / 2 - views.openingTop / 2);
+    // The lines stand where they rest from the start; only the window rises.
+    const drop = 0;
 
     const activity = cues.activity;
     const activityFrom = activity.open;
     const [restStep, restSeconds] = views.activityUntil;
+    const click = activity["activity-click"];
+    const skip = [click + views.loading[0], click + views.loading[1]];
+    const skipped = skip[1] - skip[0];
 
     return {
         ...stage,
         segments: [
-            chapter("aware", 0, aware["back-open"] + 2.0, {
+            chapter("aware", 0, aware["back-open"] + 1.0, {
                 freeze,
                 title: awareTitle,
                 titleFrom: 2.8,
@@ -85,14 +90,16 @@ export function chapters(stage, views, ending, cues) {
                     { at: 2.8 + 0.4 + move, move, css: { scale: stage.push, ...views.aware } },
                 ],
             }),
-            { kind: "card", text: activityTitle, seconds: 1.3 },
-            chapter("activity", activityFrom, activity[restStep] + restSeconds, {
+            { kind: "card", text: activityTitle, seconds: 2.2 },
+            chapter("activity", activityFrom, activity[restStep] + restSeconds - skipped, {
                 title: activityTitle,
+                titleTo: activity["activity-open"] + 2.0 - skipped - activityFrom,
+                skip,
                 camera: [
                     { at: 0 },
-                    { at: 0.6 + move, move, css: { scale: stage.push, ...views.progress } },
+                    { at: 0.2 + move, move, css: { scale: stage.push, ...views.progress } },
                     {
-                        at: activity["activity-open"] + 0.3 - activityFrom,
+                        at: activity["activity-open"] + 0.3 - skipped - activityFrom,
                         move,
                         css: views.activity,
                     },

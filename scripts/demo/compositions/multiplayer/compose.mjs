@@ -22,6 +22,9 @@
  *
  * A segment may hold its take's first frame (`freeze`) or last frame
  * (`tail`) still for some seconds: the take's own pixels, never repainted.
+ * It may leave out one stretch of its take (`skip`, take seconds from and
+ * to): a page's loading state between a click and what it opens. The
+ * segment's `seconds` and camera are on the cut's clock, after the skip.
  *
  * The first window segment may open with `opening` lines: they stand centred
  * on the backdrop, each fading in at its own time, then rise as the window
@@ -178,7 +181,7 @@ async function wordsDraw(cut) {
                 svg(
                     pill.width,
                     pill.height,
-                    `<rect width="${pill.width}" height="${pill.height}" rx="${pill.height / 2}" fill="#140a22" fill-opacity="0.78"/>`,
+                    `<rect width="${pill.width}" height="${pill.height}" rx="${pill.height / 2}" fill="#140a22" fill-opacity="0.94"/>`,
                 ),
             )
                 .png()
@@ -517,7 +520,8 @@ function wordsShown(segment, t, first, last) {
             : first
               ? 1
               : clamp01((t - handover) / 0.3);
-    const out = last ? 1 : clamp01((segment.seconds - 1 / fps - t) / 0.15);
+    const end = Math.min(segment.seconds - 1 / fps, segment.titleTo ?? Infinity);
+    const out = last ? 1 : clamp01((end - t) / 0.15);
     return { into, amount: Math.min(into, out) };
 }
 
@@ -560,7 +564,19 @@ async function* segmentFrames(segment, first, last, start) {
     const pictures = (async function* () {
         let lastPicture;
         let shown = 0;
-        for await (const picture of takeOpen(source, segment.from, count - held - tail, fps, size)) {
+        const [skipFrom, skipTo] = segment.skip ?? [0, 0];
+        const skipped = Math.round((skipTo - skipFrom) * fps);
+        const skipAt = Math.round((skipFrom - segment.from) * fps);
+        let read = 0;
+        for await (const picture of takeOpen(
+            source,
+            segment.from,
+            count - held - tail + skipped,
+            fps,
+            size,
+        )) {
+            read += 1;
+            if (read > skipAt && read <= skipAt + skipped) continue;
             if (!lastPicture) for (; shown < held; shown += 1) yield picture;
             lastPicture = picture;
             shown += 1;
@@ -771,6 +787,7 @@ for (const [position, segment] of cut.segments.entries()) {
         // The take second drawn at the segment's start (before any frozen
         // opening), to find a take's moment in the cut.
         ...(segment.kind === "window" ? { takeFrom: segment.from - (segment.freeze ?? 0) } : {}),
+        ...(segment.skip ? { skip: segment.skip } : {}),
     });
     process.stdout.write(
         `  ${segment.kind.padEnd(7)}${(start / fps).toFixed(2)}–${(total / fps).toFixed(2)} s  ${label}\n`,

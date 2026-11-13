@@ -37,7 +37,7 @@ export const stage = {
     stage: { x: 70, y: 30, width: 1780, height: 912 },
     push: 1.45,
     title: { centerY: 1006, size: 50, lineHeight: 60 },
-    type: { ...type, cardWidth: 1400, pictureHeight: 820 },
+    type: { ...type, cardWidth: 1400, pictureHeight: 740 },
     /** Seconds one segment dissolves into the next. */
     dissolve: 0.2,
     encode: { crf: 16 },
