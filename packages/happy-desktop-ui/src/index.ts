@@ -642,6 +642,10 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
+    CloudOnboardingPluginDialog,
+    type CloudOnboardingPluginDialogProps,
+} from "./CloudOnboardingPluginDialog";
+export {
     CloudOnboardingScreen,
     type CloudOnboardingAmount,
     type CloudOnboardingInferenceOption,
@@ -888,6 +892,7 @@ export {
 } from "./pages/plugins/HappyAgentPluginsPage";
 export {
     HappyAgentPluginPage,
+    HappyAgentPluginSetup,
     type HappyAgentPluginPageProps,
     type HappyAgentPluginSetupRefusal,
 } from "./pages/plugins/HappyAgentPluginPage";

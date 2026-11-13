@@ -112,6 +112,11 @@ export interface HappyAgentOnboardingSnapshot {
     /** The plugin the plugins gate is installing or signing in. */
     readonly pluginConnecting?: string;
     /**
+     * The installation whose sign-in is open over the plugins gate: its
+     * plugin asks for fields, or offers more than one way in.
+     */
+    readonly pluginSetup?: { readonly pluginId: string; readonly installationId: string };
+    /**
      * A Happy Cloud server's onboarding gates and where the reader is in them.
      * Absent where the server has no gates; the reader is let in once it has no
      * `current` gate.
@@ -146,6 +151,8 @@ export interface HappyAgentOnboardingStore {
      * `target` to its sign-in; the server finishes it and the gate reads again.
      */
     pluginConnect(pluginId: string, target: HappyAgentPluginConnectTarget): void;
+    /** Closes the plugin sign-in `pluginConnect` opened; the gate reads again. */
+    pluginSetupClose(): void;
     /** Reads the gates again, as when the window comes back to the front. */
     onboardingRead(): void;
     [Symbol.dispose](): void;
@@ -739,18 +746,32 @@ export function happyAgentOnboardingStoreCreate(
                     );
                     if (installed?.status === "active") return;
                     const installationId = installed?.id ?? (await plugins.pluginInstall(pluginId));
-                    if (plugin && !plugin.authRequired && plugin.authMethods.length === 0) return;
-                    const method = plugin?.authMethods.find((entry) => entry.type === "oauth");
-                    if (!method)
+                    const methods = plugin?.authMethods ?? [];
+                    if (plugin && !plugin.authRequired && methods.length === 0) return;
+                    // One OAuth sign-in goes straight to the browser; fields, or a
+                    // choice of ways in, are asked for over the gate.
+                    const only = methods.length === 1 ? methods[0] : undefined;
+                    if (only?.type === "oauth") {
+                        await plugins.installationConnect(installationId, only.id, target);
+                        return;
+                    }
+                    if (methods.length === 0)
                         throw new UserError(
-                            `${plugin?.name ?? "This plugin"} asks for details. Finish it under Plugins once you're in.`,
+                            `${plugin?.name ?? "This plugin"} has no way to sign in on this server.`,
                         );
-                    await plugins.installationConnect(installationId, method.id, target);
+                    snapshot = { ...snapshot, pluginSetup: { pluginId, installationId } };
                 } finally {
                     const { pluginConnecting: _done, ...rest } = snapshot;
                     snapshot = rest;
                 }
             });
+        },
+        pluginSetupClose() {
+            if (!snapshot.pluginSetup) return;
+            const { pluginSetup: _closed, ...rest } = snapshot;
+            publish(rest, true);
+            const active = controller;
+            if (active && !disposed) void reconcile(active.signal).catch(() => undefined);
         },
         onboardingRead() {
             const active = controller;

@@ -1,16 +1,18 @@
 import { useSyncExternalStore } from "react";
-import type {
-    HappyAgentCloudProvidersSnapshot,
-    HappyAgentCloudProvidersStore,
-    HappyAgentOnboardingGate,
-    HappyAgentOnboardingSnapshot,
-    HappyAgentOnboardingStore,
-    HappyAgentPluginsSnapshot,
-    HappyAgentPluginsStore,
-    HappyAgentProfileSnapshot,
-    HappyAgentProfileStore,
+import {
+    HappyAgentPluginFieldsError,
+    type HappyAgentCloudProvidersSnapshot,
+    type HappyAgentCloudProvidersStore,
+    type HappyAgentOnboardingGate,
+    type HappyAgentOnboardingSnapshot,
+    type HappyAgentOnboardingStore,
+    type HappyAgentPluginsSnapshot,
+    type HappyAgentPluginsStore,
+    type HappyAgentProfileSnapshot,
+    type HappyAgentProfileStore,
 } from "happy-desktop-state";
 import {
+    CloudOnboardingPluginDialog,
     CloudOnboardingScreen,
     HappyAgentProviderAddDialog,
     type CloudOnboardingInferenceOption,
@@ -188,6 +190,15 @@ export function AppCloudOnboarding(props: {
             : undefined;
     const open = (url: string) =>
         props.onExternalOpen ? props.onExternalOpen(url) : window.open(url, "_blank", "noopener");
+    // The sign-in the plugins gate opened, while its installation still needs one.
+    const setup = props.snapshot.pluginSetup;
+    const setupPlugin = plugins?.plugins.find((plugin) => plugin.id === setup?.pluginId);
+    const setupInstallation = plugins?.installations.find(
+        (installation) =>
+            installation.id === setup?.installationId &&
+            installation.available &&
+            installation.status !== "active",
+    );
     const screen = ((): Pick<CloudOnboardingScreenProps, "view" | "action" | "skip"> => {
         if (flow.stance && flow.stance !== "act")
             return { view: { kind: "notice", reason: flow.stance, step: STEP_LABELS[gate.kind] } };
@@ -355,6 +366,35 @@ export function AppCloudOnboarding(props: {
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
                 {...screen}
             />
+            {pluginsStore && setup && setupPlugin && setupInstallation ? (
+                <CloudOnboardingPluginDialog
+                    description={setupPlugin.description}
+                    image={setupPlugin.image}
+                    installation={setupInstallation}
+                    methods={setupPlugin.authMethods}
+                    name={setupPlugin.name}
+                    onClose={store.pluginSetupClose}
+                    onConfigure={async (installationId, methodId, values) => {
+                        try {
+                            await pluginsStore.installationConfigure(
+                                installationId,
+                                methodId,
+                                values,
+                            );
+                        } catch (error) {
+                            if (error instanceof HappyAgentPluginFieldsError)
+                                return { message: error.message, fields: error.fields };
+                            throw error;
+                        }
+                        store.pluginSetupClose();
+                        return undefined;
+                    }}
+                    onConnect={async (installationId, methodId) => {
+                        await pluginsStore.installationConnect(installationId, methodId, { open });
+                        store.pluginSetupClose();
+                    }}
+                />
+            ) : null}
             {providersStore && providers?.add ? (
                 <HappyAgentProviderAddDialog
                     {...providerAddProps(providers, providersStore, props.onExternalOpen)}

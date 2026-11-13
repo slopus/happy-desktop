@@ -497,3 +497,26 @@
 .happy-cloud-onboarding--wide .happy-setup-page__body {
     max-width: 720px;
 }
+
+.happy-cloud-onboarding-plugin__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-cloud-onboarding-plugin__summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-cloud-onboarding-plugin__description {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-cloud-onboarding-plugin .happy-agent-plugin-setup {
+    max-width: none;
+}

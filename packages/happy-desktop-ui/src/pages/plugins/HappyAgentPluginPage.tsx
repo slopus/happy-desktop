@@ -293,7 +293,7 @@ function InstallationCard(props: {
                 </ModalOverlay>
             ) : null}
             {installation.available && !signedIn && methods.length > 0 ? (
-                <InstallationSetup
+                <HappyAgentPluginSetup
                     installation={installation}
                     methods={methods}
                     onConfigure={props.onConfigure}
@@ -304,7 +304,12 @@ function InstallationCard(props: {
     );
 }
 
-function InstallationSetup(props: {
+/**
+ * One installation's sign-in: a choice of methods when there are several,
+ * then the method's fields with each field's refusal under it, or the way to
+ * its OAuth sign-in. Onboarding's plugins step shows it too.
+ */
+export function HappyAgentPluginSetup(props: {
     readonly installation: HappyAgentPluginInstallation;
     readonly methods: readonly HappyAgentPluginAuthMethod[];
     readonly onConfigure: HappyAgentPluginPageProps["onConfigure"];
