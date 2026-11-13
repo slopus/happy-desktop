@@ -183,7 +183,7 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { group: "Team", icon: "zap", id: "payments", label: "Payments", tone: "green" },
     // How each project's changes are split into tiers in the Changes listing.
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
-    { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
+    { group: "Advanced", icon: "spark", id: "experimental", label: "Experimental", tone: "purple" },
     { group: "Advanced", icon: "code", id: "debug", label: "Dev tools", tone: "gray" },
 ];
 
