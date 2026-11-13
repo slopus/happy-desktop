@@ -1,3 +1,4 @@
+import { happyLogoBlackUrl } from "../../src/assets";
 import type { ReactNode } from "react";
 import {
     ComposerFooterBar,
@@ -148,23 +149,46 @@ const detail: HappyAgentRepositoryDialogProps = {
     onNameSave: noop,
 };
 
-const chips: readonly { label: string; repository: RepositoryChipRepository }[] = [
+/** A repository's own picture, as the server serves it: Happy's, for its own repository. */
+const REPOSITORY_PICTURE = happyLogoBlackUrl;
+
+const chips: readonly { label: string; repositories: readonly RepositoryChipRepository[] }[] = [
     {
         label: "checking out",
-        repository: { name: "rig", branch: "juno/fix-login", checkout: "pending" },
+        repositories: [{ name: "rig", branch: "juno/fix-login", checkout: "pending" }],
     },
     {
         label: "ready",
-        repository: { name: "rig", branch: "juno/fix-login", checkout: "ready" },
+        repositories: [{ name: "rig", branch: "juno/fix-login", checkout: "ready" }],
     },
     {
         label: "failed",
-        repository: {
-            name: "rig",
-            branch: "juno/fix-login",
-            checkout: "failed",
-            error: "You have no git credential for github.com/slopus.",
-        },
+        repositories: [
+            {
+                name: "rig",
+                branch: "juno/fix-login",
+                checkout: "failed",
+                error: "You have no git credential for github.com/slopus.",
+            },
+        ],
+    },
+    {
+        label: "two checkouts: one changed, with its picture, and one read-only",
+        repositories: [
+            {
+                name: "happy-agent",
+                branch: "happy/juno",
+                checkout: "ready",
+                avatarUrl: REPOSITORY_PICTURE,
+                changes: { files: 4, added: 128, deleted: 37 },
+            },
+            {
+                name: "design-system",
+                branch: "happy/juno",
+                checkout: "ready",
+                readOnly: true,
+            },
+        ],
     },
 ];
 
@@ -278,7 +302,7 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Specimen
-                detail="checking out · checked out · checkout failed, each beside the compute chip · shown once the agent attached a repository"
+                detail="checking out · checked out · checkout failed · two checkouts, one with the lines it changed and its picture, one read-only · each beside the compute chip, one chip per checkout"
                 label="Repository chip in the composer row"
                 number="11"
                 stage="surface"
@@ -290,7 +314,12 @@ export function HappyCloudRepositoriesFlowPage() {
                                 leading={<span style={{ fontSize: 12 }}>Auto</span>}
                                 trailing={
                                     <>
-                                        <RepositoryChip repository={chip.repository} />
+                                        {chip.repositories.map((repository) => (
+                                            <RepositoryChip
+                                                key={repository.name}
+                                                repository={repository}
+                                            />
+                                        ))}
                                         <ComputeChip
                                             compute={{
                                                 kind: "computer",

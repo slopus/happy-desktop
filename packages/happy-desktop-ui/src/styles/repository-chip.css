@@ -26,3 +26,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+.happy-repository-chip__avatar {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    object-fit: cover;
+}
+
+.happy-repository-chip__lock {
+    display: inline-flex;
+    flex: none;
+}
