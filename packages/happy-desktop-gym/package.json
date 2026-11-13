@@ -19,6 +19,7 @@
         "gym:electron:prepare": "node --import tsx sources/electron/cli.ts prepare --profile smoke",
         "gym:electron:run": "pnpm run gym:electron:build-profile && node --import tsx sources/electron/cli.ts run --profile smoke --workload all",
         "gym:electron:clean": "node --import tsx sources/electron/cli.ts clean",
+        "gym:electron:hosted-renderer": "node --import tsx sources/electron/hostedRenderer.ts",
         "typecheck": "tsc --project tsconfig.json",
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",
