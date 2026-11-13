@@ -25,6 +25,15 @@ const LOAD_AHEAD = 8;
 /** How many slots from the top of the screen are looked at to hold the reader's place. */
 const ANCHOR_SPAN = 24;
 
+/**
+ * Where the reader is in a list: the slot the top of the screen is in, by
+ * its id, and how far into it they have scrolled.
+ */
+export interface FeedScrollPosition {
+    readonly rowId: string;
+    readonly offset: number;
+}
+
 export interface FeedVirtualListProps<Slot extends { readonly id: string }> {
     slots: readonly Slot[];
     /**
@@ -42,6 +51,16 @@ export interface FeedVirtualListProps<Slot extends { readonly id: string }> {
     onLoadMore?: () => void;
     /** Drawn in place of the slots when there are none. */
     empty?: ReactNode;
+    /**
+     * Where the reader left this list, which it opens at: read once, as
+     * it appears, and applied as soon as that slot is held.
+     */
+    scrollPosition?: FeedScrollPosition | null;
+    /**
+     * Reports where the reader left the list, `null` at the top: once, as the
+     * list goes away, such as when an entry they opened takes its place.
+     */
+    onScrollPositionChange?: (position: FeedScrollPosition | null) => void;
     "aria-label": string;
 }
 
@@ -142,12 +161,48 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
         readonly starts: ReadonlyMap<string, number>;
         readonly heights: ReadonlyMap<string, number>;
     }>({ order: [], starts: new Map(), heights: new Map() });
+    // Where the list opens, until it has been put there or cannot be.
+    const restore = useRef(props.scrollPosition ?? null);
+    // How far the reader has scrolled, kept here as they scroll and reported
+    // only as the list goes away, so scrolling never writes to the owner.
+    const scrolled = useRef(0);
+    const leave = props.onScrollPositionChange;
+    // eslint-disable-next-line happy-react/no-layout-effect -- Where the reader left the list must be read as it unmounts, before the next surface mounts; no event marks a list leaving the screen.
+    useLayoutEffect(
+        () => () => {
+            if (!leave || restore.current !== null) return;
+            const top = scrolled.current - LIST_INSET;
+            if (scrolled.current <= 0) {
+                leave(null);
+                return;
+            }
+            const { order, starts, heights } = held.current;
+            const rowId = order.find((id) => (starts.get(id) ?? 0) + (heights.get(id) ?? 0) > top);
+            leave(
+                rowId === undefined
+                    ? null
+                    : { rowId, offset: Math.round(top - (starts.get(rowId) ?? 0)) },
+            );
+        },
+        [leave],
+    );
     // eslint-disable-next-line happy-react/no-layout-effect -- Scroll anchoring for positioned slots must correct scrollTop after the new offsets commit and before they paint; no declarative boundary sees both.
     useLayoutEffect(() => {
         const before = held.current;
         const { starts, heights } = placesOf(props.slots, (slot) => heightAt(slot, width));
         held.current = { order: props.slots.map((slot) => slot.id), starts, heights };
         const element = scrollElement.current;
+        // Coming back to the list puts the reader where they left it, once
+        // the slots and the width their heights follow are known. A slot
+        // that is no longer here leaves the list at its top.
+        const leftAt = restore.current;
+        if (leftAt !== null && element !== null && width > 0 && props.slots.length > 0) {
+            restore.current = null;
+            const start = starts.get(leftAt.rowId);
+            if (start !== undefined) element.scrollTop = start + leftAt.offset + LIST_INSET;
+            scrolled.current = element.scrollTop;
+            return;
+        }
         if (element === null || element.scrollTop <= 0 || before.order.length === 0) return;
         const top = element.scrollTop - LIST_INSET;
         const first = before.order.findIndex((id) => (before.starts.get(id) ?? 0) >= top);
@@ -188,7 +243,11 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
             data-happy-desktop-ui="happy-agent-feed-scroll"
             viewportClassName="happy-agent-feed__scroll-viewport"
             viewportProps={{
-                onScroll: (event) => parkedSet(event.currentTarget.scrollTop > 0),
+                onScroll: (event) => {
+                    const scrollTop = event.currentTarget.scrollTop;
+                    scrolled.current = scrollTop;
+                    parkedSet(scrollTop > 0);
+                },
             }}
             viewportRef={scrollElement}
         >
