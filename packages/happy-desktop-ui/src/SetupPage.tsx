@@ -3,7 +3,8 @@ import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { Banner } from "./Banner";
 import type { Dimension } from "./dimensions";
-import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { type LottieSceneName } from "./LottieScene";
+import { LottieSceneStage } from "./LottieSceneStage";
 import { OnboardingSky } from "./OnboardingSky";
 import { ScrollArea } from "./Scrollbar";
 import { SetupCommand } from "./SetupCommand";
@@ -284,7 +285,7 @@ export function SetupPage(props: SetupPageProps) {
                                 onClick={local.onScenePress}
                             >
                                 {local.scene ? (
-                                    <LottieScene
+                                    <LottieSceneStage
                                         name={local.scene}
                                         // The picture repeats what the title already says, so
                                         // the only thing worth offering is one more play.

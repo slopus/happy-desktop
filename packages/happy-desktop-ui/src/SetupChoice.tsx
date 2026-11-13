@@ -1,7 +1,8 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { Button, type ButtonVariant } from "./Button";
-import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { type LottieSceneName } from "./LottieScene";
+import { LottieSceneStage } from "./LottieSceneStage";
 
 /** One of the two ways forward: a picture, what it means, and the button for it. */
 export interface SetupChoiceOption {
@@ -88,7 +89,11 @@ export function SetupChoice(props: SetupChoiceProps) {
                         className="happy-setup-choice__art"
                         data-happy-desktop-ui="setup-choice-art"
                     >
-                        <LottieScene name={option.scene} replayLabel={option.title} size={88} />
+                        <LottieSceneStage
+                            name={option.scene}
+                            replayLabel={option.title}
+                            size={88}
+                        />
                     </span>
                     <span
                         className="happy-setup-choice__title"

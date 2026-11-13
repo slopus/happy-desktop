@@ -1,7 +1,8 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { happyLogoBlackUrl } from "./assets";
 import { LiquidMetalMark } from "./LiquidMetalMark";
-import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { type LottieSceneName } from "./LottieScene";
+import { LottieSceneStage } from "./LottieSceneStage";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
 
 /** What one slide shows above its words. */
@@ -287,7 +288,7 @@ function welcomeArt(slide: WelcomeSlide) {
             />
         );
     return (
-        <LottieScene
+        <LottieSceneStage
             key={slide.id}
             name={slide.art.name}
             replayLabel={`Play the ${slide.title} animation again`}

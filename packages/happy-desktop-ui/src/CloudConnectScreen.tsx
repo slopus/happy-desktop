@@ -6,7 +6,8 @@ import { SetupPage, type SetupPageProps } from "./SetupPage";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
-import { LottieScene, type LottieSceneName } from "./LottieScene";
+import { type LottieSceneName } from "./LottieScene";
+import { LottieSceneStage } from "./LottieSceneStage";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import type { WelcomeSlide } from "./WelcomeDeck";
 import { WelcomeScreen } from "./WelcomeScreen";
@@ -427,7 +428,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                             data-happy-desktop-ui="cloud-connect-plan"
                                             key={plan.id}
                                         >
-                                            <LottieScene
+                                            <LottieSceneStage
                                                 className="happy-cloud-connect__plan-scene"
                                                 name={plan.scene}
                                                 replayLabel={plan.title}

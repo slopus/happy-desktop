@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "./Button";
-import { LottieScene } from "./LottieScene";
+import { LottieSceneStage } from "./LottieSceneStage";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 export type SidebarBugReportProps = {
@@ -101,7 +101,7 @@ export function SidebarBugReport(props: SidebarBugReportProps) {
                 >
                     <div className="happy-sidebar-bug-report__head">
                         <span aria-hidden="true" className="happy-sidebar-bug-report__scene">
-                            <LottieScene
+                            <LottieSceneStage
                                 name="crow-eating-worm"
                                 replayLabel="Play the crow again"
                                 size={56}
