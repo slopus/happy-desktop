@@ -1166,6 +1166,11 @@ export {
     type HappyAgentOnboardingStepRow,
 } from "./pages/settings/HappyAgentOnboardingSettings";
 export {
+    HappyAgentPaymentsSettings,
+    type HappyAgentPaymentsLedgerRow,
+    type HappyAgentPaymentsSettingsProps,
+} from "./pages/settings/HappyAgentPaymentsSettings";
+export {
     HappyAgentComputeMachineAddDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeAddAccess,

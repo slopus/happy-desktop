@@ -1,0 +1,87 @@
+/* Settings › Payments: the balance leads its card as one row of its own. */
+.happy-agent-payments__balance {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-block: 16px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-payments__balance-value {
+    color: var(--text);
+    font-size: 28px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 34px;
+}
+
+.happy-agent-payments__balance-detail {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-payments__pending {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-payments__top-up,
+.happy-agent-payments__cap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.happy-agent-payments__amount {
+    width: 120px;
+}
+
+/* How much of the cap is spent: a track the width of the card, filled by a
+   scaled bar so a change never lays anything out again. */
+.happy-agent-payments__meter {
+    overflow: hidden;
+    height: 4px;
+    margin-bottom: 14px;
+    border-radius: 2px;
+    background: var(--surface-highest);
+}
+
+.happy-agent-payments__meter-fill {
+    display: block;
+    height: 100%;
+    background: var(--switch-track-active);
+    transform-origin: left center;
+}
+
+.happy-agent-payments__meter[data-full] .happy-agent-payments__meter-fill {
+    background: var(--warning-critical);
+}
+
+.happy-agent-payments__entry-amount {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    color: var(--text);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+}
+
+.happy-agent-payments__entry-balance {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-payments__more {
+    display: flex;
+    justify-content: center;
+    padding-block: 8px;
+}
