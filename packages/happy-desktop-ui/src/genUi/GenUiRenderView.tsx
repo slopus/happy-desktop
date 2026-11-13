@@ -108,6 +108,33 @@ const HostContext = createContext<Host>({
 /** Whether a box is inside a card, so a nested card drops its frame. */
 const InCardContext = createContext(false);
 
+/**
+ * Whether text sits beside fixed text in a row: there an identifier may break
+ * after its `_`s, so its narrowest readable width is its widest piece.
+ */
+const KeyContext = createContext(false);
+
+/** A break allowed after each `_` between two letters or digits (`STRIPE_SECRET_KEY`). */
+function underscoreBreaks(text: string): ReactNode {
+    const pieces = text.split(/(?<=[\p{L}\p{N}]_)(?=[\p{L}\p{N}])/u);
+    if (pieces.length === 1) return text;
+    return pieces.flatMap((piece, index) => (index === 0 ? [piece] : [<wbr key={index} />, piece]));
+}
+
+/**
+ * A row holding fixed text, which stacks its children when the fixed text
+ * would leave a sibling narrower than its widest piece (gen-ui.css).
+ */
+function keyRow(node: GenUiBox): boolean {
+    return (
+        node.direction === "row" &&
+        !node.wrap &&
+        !node.equal &&
+        node.divide === "none" &&
+        node.children.some((child) => child.type === "text" && child.fixed)
+    );
+}
+
 const NOT_SUPPORTED = "Not supported yet";
 const NONE_SETTLED: ReadonlySet<string> = new Set();
 
@@ -154,6 +181,7 @@ function useActivation(
 function TextView(props: { node: GenUiText }) {
     const { node } = props;
     const host = useContext(HostContext);
+    const key = useContext(KeyContext);
     return (
         <p
             className="gen-ui-text"
@@ -165,7 +193,7 @@ function TextView(props: { node: GenUiText }) {
             style={node.tone ? { color: genUiText(node.tone) } : undefined}
         >
             {node.spans.map((span, index) => {
-                let body: ReactNode = span.text;
+                let body: ReactNode = key ? underscoreBreaks(span.text) : span.text;
                 if (span.code) body = <code className="gen-ui-inline-code">{body}</code>;
                 if (span.emphasis) body = <em>{body}</em>;
                 if (span.strong) body = <strong>{body}</strong>;
@@ -293,7 +321,16 @@ function pressRole(node: GenUiRenderNode | undefined) {
 function BoxView(props: { node: GenUiBox }) {
     const { node } = props;
     const inCard = useContext(InCardContext);
-    const children = node.children.map((child) => <Node key={child.key} node={child} />);
+    const stacks = keyRow(node);
+    const children = node.children.map((child) =>
+        stacks && !(child.type === "text" && child.fixed) ? (
+            <KeyContext key={child.key} value>
+                <Node node={child} />
+            </KeyContext>
+        ) : (
+            <Node key={child.key} node={child} />
+        ),
+    );
     /* A mosaic of pictures is laid out here by count. An older compiler sent
        its rows as boxes; those are drawn as the boxes they are. */
     if (node.role === "mosaic" && node.children.every((child) => child.type === "image"))
@@ -331,6 +368,7 @@ function BoxView(props: { node: GenUiBox }) {
             data-leading={node.leading}
             data-nested={nested ? "" : undefined}
             data-role={node.role}
+            data-stacks={stacks ? "" : undefined}
             data-tone={node.role === "notice" ? (node.tone ?? "neutral") : undefined}
             style={
                 node.role === "notice"

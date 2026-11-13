@@ -376,6 +376,27 @@
     flex: none;
 }
 
+/* A row holding fixed text stacks its children at the start, 2px apart, when
+   the fixed text at its natural width would leave a sibling narrower than its
+   widest piece between breaks (spaces, and an identifier's `_`). The siblings
+   wrap onto the next line at that width and no sooner: each grows from nothing
+   to its natural width, the widest giving way first, as iOS and Android lay
+   the row out. */
+.gen-ui-box[data-direction="row"][data-stacks] {
+    flex-wrap: wrap;
+    row-gap: 2px;
+}
+
+.gen-ui-box[data-stacks] > :not(.gen-ui-text[data-fixed]) {
+    flex: 1 1 0%;
+    min-width: min-content;
+    max-width: max-content;
+}
+
+.gen-ui-box[data-stacks] > .gen-ui-box[data-grow] {
+    max-width: none;
+}
+
 /* Text laid straight on the reply reads as the reply: the chat's paragraph type. */
 .gen-ui > .gen-ui-text[data-role="body"],
 .gen-ui > .gen-ui-box:not([data-role="card"]) > .gen-ui-text[data-role="body"] {
