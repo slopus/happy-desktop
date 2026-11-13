@@ -4,6 +4,8 @@ import type {
     HappyAgentInlineArtifactsStore,
 } from "happy-desktop-state";
 import type {
+    GenUiAction,
+    GenUiInlineHost,
     ArtifactLiveRenderer,
     BrowserContentRenderer,
     BrowserFailure,
@@ -88,6 +90,7 @@ export function conversationInlinePagesCreate(input: {
     readonly pageOpen: (url: string) => void;
     readonly entities?: ConversationInlinePages["entities"];
     readonly previews?: ConversationInlinePages["previews"];
+    readonly genUi?: GenUiInlineHost;
 }): ConversationInlinePages {
     const artifactPage = input.artifactPage;
     const browserContent = input.browserContent;
@@ -134,5 +137,49 @@ export function conversationInlinePagesCreate(input: {
         artifactOpen: input.artifactOpen,
         pageOpen: input.pageOpen,
         ...(input.entities ? { entities: input.entities } : {}),
+        ...(input.genUi ? { genUi: input.genUi } : {}),
+    };
+}
+
+/**
+ * Runs what a Gen UI artifact's controls ask for, as if the person had done
+ * it themselves: a `message` is sent as their next message in this
+ * conversation, an `open` opens an https address beside it, and a `copy` puts
+ * the text on the clipboard. The model wrote these actions, so nothing runs
+ * that the person could not have done with the same tap, and anything but an
+ * https address is refused. A `tool` call is shown as not supported yet, and
+ * so is a `message` where there is no conversation to send it to.
+ */
+export function genUiInlineHostCreate(input: {
+    readonly messageSend?: (text: string) => Promise<void>;
+    readonly linkOpen: (url: string) => void;
+}): GenUiInlineHost {
+    const messageSend = input.messageSend;
+    const supported: GenUiAction["type"][] = ["open", "copy"];
+    if (messageSend) supported.push("message");
+    return {
+        actionsSupported: new Set(supported),
+        onAction: async (_elementKey, action) => {
+            switch (action.type) {
+                case "message":
+                    await messageSend?.(action.text);
+                    return;
+                case "open": {
+                    let url: URL;
+                    try {
+                        url = new URL(action.url);
+                    } catch {
+                        return;
+                    }
+                    if (url.protocol === "https:") input.linkOpen(url.href);
+                    return;
+                }
+                case "copy":
+                    await navigator.clipboard.writeText(action.text);
+                    return;
+                case "tool":
+                    return;
+            }
+        },
     };
 }

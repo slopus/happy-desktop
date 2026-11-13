@@ -1068,6 +1068,8 @@ function artifactGlyph(type: HappyAgentArtifactType): IconName {
             return "play";
         case "document":
             return "files";
+        case "gen_ui":
+            return "braces";
         case "unknown":
             return "package";
     }
@@ -1541,6 +1543,7 @@ const ARTIFACT_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifactType>([
     "image_series",
     "video",
     "document",
+    "gen_ui",
     "unknown",
 ]);
 

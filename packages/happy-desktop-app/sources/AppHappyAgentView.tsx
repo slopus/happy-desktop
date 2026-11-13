@@ -43,6 +43,7 @@ import {
 import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
+    genUiInlineHostCreate,
     inlineArtifactsStoreNoop,
 } from "./conversationInlinePages";
 import {
@@ -6060,6 +6061,7 @@ function HappyAgentArtifactViewerSurface(props: {
     const viewer = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentArtifactViewer
+            genUi={GEN_UI_VIEWER_HOST}
             entities={entities}
             labels={props.labels}
             onBack={props.onClose}
@@ -6738,6 +6740,12 @@ function HappyAgentTodoSurface(props: {
  * panel. It is the same viewer the Artifacts page shows, held in a store of
  * its own, opened on the version the reference named when it named one.
  */
+/**
+ * A Gen UI version open in a viewer is not in a conversation, so its controls
+ * can open links and copy, but have no chat to send a message to.
+ */
+const GEN_UI_VIEWER_HOST = genUiInlineHostCreate({ linkOpen: openExternalLink });
+
 function HappyAgentArtifactPanelViewerSurface(props: {
     artifacts: HappyAgentArtifacts;
     entities?: MessageReferences;
@@ -6760,6 +6768,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
     const viewer = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentArtifactViewer
+            genUi={GEN_UI_VIEWER_HOST}
             {...(props.entities ? { entities: props.entities } : {})}
             labels={artifactLabels(props.places, people)}
             onDeletionCancel={store.deletionCancel}
@@ -6818,6 +6827,7 @@ function HappyAgentArtifactTabSurface(props: {
     const viewer = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentArtifactViewer
+            genUi={GEN_UI_VIEWER_HOST}
             {...(props.entities ? { entities: props.entities } : {})}
             labels={artifactLabels(props.places, people)}
             onDeletionCancel={store.deletionCancel}
@@ -10274,6 +10284,17 @@ function HappyAgentConversationSurface(props: {
                           : workspace.panel.artifactViewOpen(artifactId, version),
                   pageOpen: (url) => workspace.panel.browserAdd(url),
                   entities: references,
+                  ...(props.readOnly
+                      ? {}
+                      : {
+                            genUi: genUiInlineHostCreate({
+                                messageSend: (text) =>
+                                    props.happyAgentOnline()
+                                        ? workspace.messageSendCurrent(text)
+                                        : Promise.resolve(),
+                                linkOpen: (url) => workspace.panel.browserAdd(url),
+                            }),
+                        }),
               })
             : undefined;
     return (
