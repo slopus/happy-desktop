@@ -2044,8 +2044,8 @@ function documentLinkResolve(from: string, href: string): string {
 
 /**
  * The tasks a window can open: the reader's own, then every active one they
- * have not joined. One they left is still found in search, and opening it shows
- * it without putting it back in their list.
+ * have not joined. One they left is still found in search, and opening it from
+ * there joins it again; it shows here while that join is on its way.
  */
 function tasksOpenable(list: {
     readonly tasks: readonly HappyAgentTask[];
@@ -5679,6 +5679,17 @@ function paletteCommandRun(
     switch (command.kind) {
         case "chatOpen": {
             if (!command.archived) {
+                // Opening a task the reader left puts it back at the top of
+                // their Tasks, as the feed's and a profile's Open do. It opens
+                // at once all the same: a task is open to them joined or not.
+                const unjoined = props.facts.taskDirectory?.find(
+                    (task) =>
+                        task.workspaceId === command.groupId &&
+                        task.membership === undefined &&
+                        !props.tasks.some((joined) => joined.id === task.id),
+                );
+                if (unjoined && props.workspace && props.online)
+                    void props.workspace.taskJoin(unjoined.id).catch(() => undefined);
                 props.onChatSelect(command.happyAgentId, command.groupId, command.chatId);
                 return;
             }
