@@ -207,6 +207,58 @@ describe("happyAgentProxyHandle bridge routes", () => {
         expect(connection).toHaveBeenCalledWith("team");
     });
 
+    it("opens a Happy Cloud connection's artifact sites and vault apps, and nothing else of it", async () => {
+        const connection = vi.fn();
+        const client = { connection } as unknown as HappyAgentProxyClient;
+        const artifactSiteUrl = vi.fn(async () => "happy-artifact://a-v2.cloud/index.html");
+        const vaultAppUrl = vi.fn(async () => "happy-artifact://vault-f-v3.cloud/index.html");
+        const server = createServer((request, response) => {
+            const url = new URL(request.url ?? "/", "http://127.0.0.1");
+            void happyAgentProxyHandle({
+                client,
+                method: request.method ?? "GET",
+                path: url.pathname,
+                query: url.searchParams,
+                request,
+                response,
+                artifactSiteUrl,
+                vaultAppUrl,
+            }).then((handled) => {
+                if (!handled) response.writeHead(404).end();
+            });
+        });
+        servers.push(server);
+        await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+        const base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
+        const get = async (path: string) => {
+            const response = await fetch(`${base}${path}`);
+            return { status: response.status, body: (await response.json()) as unknown };
+        };
+        expect(
+            await get("/connections/cloud-acme/vault-app?surfaceId=s&fileId=f&version=3"),
+        ).toEqual({ status: 200, body: { url: "happy-artifact://vault-f-v3.cloud/index.html" } });
+        expect(vaultAppUrl).toHaveBeenCalledWith("s", "f", 3, "cloud-acme");
+        expect(await get("/connections/cloud-acme/artifact-site?artifactId=a&version=2")).toEqual({
+            status: 200,
+            body: { url: "happy-artifact://a-v2.cloud/index.html" },
+        });
+        expect(artifactSiteUrl).toHaveBeenCalledWith("a", 2, "cloud-acme");
+        for (const path of [
+            "/connections/cloud-acme/html-preview?workspaceId=w&path=a.html",
+            "/connections/cloud-acme/workspace-file-bytes?workspaceId=w&path=a.png",
+            "/connections/cloud-acme/open-in-targets",
+            "/connections/cloud-acme/bridge-events",
+        ])
+            expect(await get(path)).toEqual({
+                status: 501,
+                body: {
+                    error: "Happy Cloud doesn't offer this desktop service.",
+                    code: "not_implemented",
+                },
+            });
+        expect(connection).not.toHaveBeenCalled();
+    });
+
     it("says, as JSON, that a desktop without a bridge host cannot bridge", async () => {
         const base = await serverCreate();
         const response = await fetch(`${base}/bridge-events`);

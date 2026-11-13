@@ -5,6 +5,7 @@ import {
     artifactSiteHost,
     artifactSitePath,
     artifactSitesCreate,
+    vaultAppHost,
     type ArtifactSiteClient,
 } from "./artifactSite";
 
@@ -437,5 +438,72 @@ describe("artifact site handler", () => {
         expect((await sites.handle(new Request(url))).status).toBe(200);
         expect(remote.reads).toEqual([{ artifactId: ARTIFACT, version: 2, path: "index.html" }]);
         expect(sites.owns(`happy-artifact://${ARTIFACT}-v2/index.html`)).toBe(false);
+    });
+
+    it("runs a Happy Cloud vault app from its server, never through the host, on the connection's origin", async () => {
+        const surfaceId = "p8k2m4q6s1t3v5x7z9b0c2d4";
+        const fileId = "f7h2j4k6m8n0p1q3r5s7t9v2";
+        const reads: string[] = [];
+        const cloud: ArtifactSiteClient = {
+            getArtifactVersion: (async () => {
+                throw new Error("unreachable");
+            }) as never,
+            openArtifactFile: (async () => {
+                throw new Error("unreachable");
+            }) as never,
+            openArtifactApi: (async () => {
+                throw new Error("unreachable");
+            }) as never,
+            getVaultVersion: (async (surface: string, file: string, number: number) => ({
+                version: {
+                    surfaceId: surface,
+                    fileId: file,
+                    number,
+                    artifact: {
+                        type: "html",
+                        entry: "index.html",
+                        files: [
+                            { path: "index.html", mimeType: "text/html" },
+                            { path: "api/data.json", mimeType: "application/json" },
+                        ],
+                    },
+                },
+            })) as never,
+            openVaultArtifactFile: (async (
+                _surface: string,
+                _file: string,
+                _number: number,
+                path: string,
+            ) => {
+                reads.push(path);
+                return { statusCode: 200, headers: {}, body: Readable.from([Buffer.from("ok")]) };
+            }) as never,
+        };
+        const connection = vi.fn();
+        const host = { ...fixture().client, connection } as ArtifactSiteClient;
+        const happyCloud = vi.fn(() => cloud);
+        const sites = artifactSitesCreate({ happyCloud });
+        const url = await sites.register(host).openVaultApp(surfaceId, fileId, 3, "cloud-acme");
+        expect(url).toBe(
+            `happy-artifact://${vaultAppHost(surfaceId, fileId, 3, "cloud-acme")}/index.html`,
+        );
+        expect(url).not.toBe(`happy-artifact://${vaultAppHost(surfaceId, fileId, 3)}/index.html`);
+        const page = await sites.handle(new Request(url));
+        expect(page.status).toBe(200);
+        expect(page.headers.get("content-type")).toBe("text/html");
+        expect(page.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+        expect(page.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(page.headers.get("x-content-type-options")).toBe("nosniff");
+        // A vault app has no API, from Happy Cloud as from anywhere.
+        expect((await sites.handle(new Request(new URL("/api/data.json", url)))).status).toBe(200);
+        expect(reads).toEqual(["index.html", "api/data.json"]);
+        expect(happyCloud).toHaveBeenCalledWith("cloud-acme");
+        expect(connection).not.toHaveBeenCalled();
+
+        // Without a Happy Cloud reader the host is still never asked.
+        await expect(
+            artifactSitesCreate().register(host).openVaultApp(surfaceId, fileId, 3, "cloud-acme"),
+        ).rejects.toMatchObject({ status: 501 });
+        expect(connection).not.toHaveBeenCalled();
     });
 });

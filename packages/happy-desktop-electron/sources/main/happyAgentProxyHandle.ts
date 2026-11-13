@@ -95,23 +95,28 @@ export async function happyAgentProxyHandle(
     const remote = /^\/connections\/([a-z][a-z0-9_-]{0,63})(\/[^/]+)$/u.exec(path);
     const connectionId = remote?.[1];
     if (connectionId) {
-        // Happy Cloud's files live on its own server, which the window reaches
-        // directly; the host does not know that connection.
+        const route = remote![2]!;
         if (happyCloudServerNameOf(connectionId) !== undefined) {
-            writeJson(response, 501, {
-                error: "Happy Cloud doesn't offer this desktop service.",
-                code: "not_implemented",
-            });
-            return true;
+            // Happy Cloud's files live on its own server, which the window
+            // reaches directly; the host does not know that connection. Only
+            // its artifact sites are served here, read from that server.
+            if (route !== "/artifact-site" && route !== "/vault-app") {
+                writeJson(response, 501, {
+                    error: "Happy Cloud doesn't offer this desktop service.",
+                    code: "not_implemented",
+                });
+                return true;
+            }
+        } else {
+            if (!client.connection) {
+                writeJson(response, 501, {
+                    error: "Update the desktop shell to use remote file services.",
+                });
+                return true;
+            }
+            client = client.connection(connectionId);
         }
-        if (!client.connection) {
-            writeJson(response, 501, {
-                error: "Update the desktop shell to use remote file services.",
-            });
-            return true;
-        }
-        client = client.connection(connectionId);
-        path = remote![2]!;
+        path = route;
     }
     const daemonPath = happyAgentDaemonPath(path, query);
     if (daemonPath !== undefined) {

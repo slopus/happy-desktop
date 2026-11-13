@@ -106,6 +106,7 @@ import {
 } from "./happyAgentIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { artifactSiteScheme, artifactSitesCreate, type ArtifactSiteHandle } from "./artifactSite";
+import { happyCloudArtifactClient } from "./happyCloudArtifacts";
 import { artifactNetworkProxyCreate, type ArtifactNetworkProxyHandle } from "./artifactNetwork";
 import { deviceBridgeHostCreate } from "./deviceBridgeHost";
 import {
@@ -931,6 +932,7 @@ function artifactSessionGet() {
 async function artifactSessionStart(): Promise<void> {
     const sites = artifactSitesCreate({
         codeModuleRead: () => readFile(join(dirname, "artifact-code", "code.js")),
+        happyCloud: (connectionId) => happyCloudArtifactClient(connectionId, serverSessions),
     });
     artifactNetworkProxy = await artifactNetworkProxyCreate().catch(() => undefined);
     artifactGuests = new ArtifactGuests(sites);

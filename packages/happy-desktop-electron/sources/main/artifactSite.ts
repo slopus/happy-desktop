@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import type { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
+import { happyCloudServerNameOf } from "../shared/happyCloud";
 
 /** The scheme every artifact site is served under, and only inside its own partition. */
 export const artifactSiteScheme = "happy-artifact";
@@ -227,13 +228,32 @@ function artifactSiteUrl(host: string, path: string): string {
  * storage, and one version's, out of reach of every other.
  *
  * Only a version's manifest is ever served, path for path. Main reads every
- * file from Happy Agent with the daemon credential, which never leaves this
- * process: the guest is answered bytes and never a cookie, a token, or an
- * address it could take somewhere else.
+ * file from Happy Agent with the daemon credential, or from a Happy Cloud
+ * server with the person's access token, and neither leaves this process: the
+ * guest is answered bytes and never a cookie, a token, or an address it could
+ * take somewhere else.
  */
 export function artifactSitesCreate(
-    options: { readonly codeModuleRead?: () => Promise<Uint8Array> } = {},
+    options: {
+        readonly codeModuleRead?: () => Promise<Uint8Array>;
+        /**
+         * Reads a Happy Cloud connection's sites from its server directly.
+         * The host Happy Agent does not know that connection, so without this
+         * one is not served at all.
+         */
+        readonly happyCloud?: (connectionId: string) => ArtifactSiteClient;
+    } = {},
 ): ArtifactSiteHandle {
+    /** Who a site's files are read through: Happy Agent, one of its connections, or Happy Cloud. */
+    const readerOf = (
+        client: ArtifactSiteClient,
+        connectionId: string | undefined,
+    ): ArtifactSiteClient | undefined => {
+        if (connectionId === undefined) return client;
+        if (happyCloudServerNameOf(connectionId) !== undefined)
+            return options.happyCloud?.(connectionId);
+        return client.connection?.(connectionId);
+    };
     // Only installed, trusted bytes are exposed here, never a guest-selected path.
     // The same module serves local and remote artifact sites without reaching
     // their daemon or exposing its credential to a page.
@@ -280,8 +300,7 @@ export function artifactSitesCreate(
                 const host = artifactSiteHost(artifactId, version, connectionId);
                 if (host === undefined)
                     throw new ArtifactSiteError(400, "This artifact version cannot be served.");
-                const reader =
-                    connectionId === undefined ? client : client.connection?.(connectionId);
+                const reader = readerOf(client, connectionId);
                 if (!reader)
                     throw new ArtifactSiteError(501, "Remote artifacts are unavailable here.");
                 const { version: read } = await reader.getArtifactVersion(artifactId, version);
@@ -308,8 +327,7 @@ export function artifactSitesCreate(
                 const host = vaultAppHost(surfaceId, fileId, version, connectionId);
                 if (host === undefined)
                     throw new ArtifactSiteError(400, "This vault version cannot be served.");
-                const reader =
-                    connectionId === undefined ? client : client.connection?.(connectionId);
+                const reader = readerOf(client, connectionId);
                 if (!reader?.getVaultVersion)
                     throw new ArtifactSiteError(501, "This vault is unavailable here.");
                 const { version: read } = await reader.getVaultVersion(surfaceId, fileId, version);
@@ -345,7 +363,13 @@ export function artifactSitesCreate(
             // A vault app has no API, so its `/api/` paths name its own files.
             if (api && apiSite?.source.kind === "artifact") {
                 if (api.rest === "v1/code.js") return codeAnswer(request);
-                return forward(apiSite, apiSite.source.artifactId, api.rest, api.search, request);
+                return forward(
+                    readerOf(apiSite.client, apiSite.connectionId),
+                    apiSite.source.artifactId,
+                    api.rest,
+                    api.search,
+                    request,
+                );
             }
             // A version is something to read. There is nothing on a site to
             // submit to, and a page asking to is answered as such.
@@ -354,10 +378,7 @@ export function artifactSitesCreate(
             const site = address ? sites.get(address.host) : undefined;
             const mimeType = address && site ? site.files.get(address.path) : undefined;
             if (!address || !site || mimeType === undefined) return refuse(404);
-            const reader =
-                site.connectionId === undefined
-                    ? site.client
-                    : site.client.connection?.(site.connectionId);
+            const reader = readerOf(site.client, site.connectionId);
             if (!reader) return refuse(502);
             const range = request.headers.get("range") ?? undefined;
             const asked = range !== undefined && BYTE_RANGE.test(range) ? range : undefined;
@@ -492,15 +513,13 @@ const apiResponseHeaders = [
  * and nothing else, so its answers, errors included, reach the page untouched.
  */
 async function forward(
-    site: ArtifactSite,
+    reader: ArtifactSiteClient | undefined,
     artifactId: string,
     rest: string | null,
     search: string,
     request: Request,
 ): Promise<Response> {
     if (rest === null) return refuse(404);
-    const reader =
-        site.connectionId === undefined ? site.client : site.client.connection?.(site.connectionId);
     if (!reader) return refuse(502);
     const headers: Record<string, string> = {};
     for (const name of apiRequestHeaders) {
