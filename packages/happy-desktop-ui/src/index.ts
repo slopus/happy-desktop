@@ -1286,6 +1286,8 @@ export {
     GenUiArtifact,
     type GenUiClusterSecretForm,
     type GenUiClusterSecretHost,
+    type GenUiSecretForm,
+    type GenUiSecretHost,
 } from "./genUi/GenUiArtifact";
 export type { GenUiInlineHost } from "./pages/artifacts/ArtifactInlineContent";
 export {

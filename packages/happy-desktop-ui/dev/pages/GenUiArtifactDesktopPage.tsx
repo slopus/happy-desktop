@@ -22,8 +22,9 @@ import { Sidebar } from "../../src/Sidebar";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import releaseRender from "../assets/genui/11-release.render.json?raw";
 import galleryRender from "../assets/genui/05-gallery-grid.render.json?raw";
+import agentSecretRender from "../assets/genui/blueprint/agent-secret-requests.render.json?raw";
 import secretRender from "../assets/genui/blueprint/secret-requests.render.json?raw";
-import type { GenUiClusterSecretHost } from "../../src/genUi/GenUiArtifact";
+import type { GenUiClusterSecretHost, GenUiSecretHost } from "../../src/genUi/GenUiArtifact";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-044";
@@ -56,6 +57,7 @@ const files: ReadonlyMap<string, string> = new Map(
 const RELEASE_ID = "genui-release" as HappyAgentArtifactId;
 const GALLERY_ID = "genui-gallery" as HappyAgentArtifactId;
 const SECRETS_ID = "genui-secrets" as HappyAgentArtifactId;
+const AGENT_SECRETS_ID = "genui-agent-secrets" as HappyAgentArtifactId;
 
 const COMPOSER: ComposerSnapshot = {
     agentUserIds: [],
@@ -248,6 +250,25 @@ const clusterSecrets: GenUiClusterSecretHost = {
     }),
 };
 
+/*
+ * A Happy Agent as a `secret` form sees it: the OpenAI secret the second
+ * button names is stored with two variables, the Stripe one does not exist.
+ */
+const agentSecrets: GenUiSecretHost = {
+    formOpen: async (_source, _element, secretId) => ({
+        secret:
+            secretId === "openai"
+                ? {
+                      id: "openai",
+                      description: "OpenAI key for release summaries",
+                      variables: ["OPENAI_API_KEY", "OPENAI_ORG"],
+                  }
+                : undefined,
+        create: () => new Promise((resolve) => setTimeout(resolve, 600)),
+        update: () => new Promise((resolve) => setTimeout(resolve, 600)),
+    }),
+};
+
 const viewerHandlers = {
     onDeletionCancel: noop,
     onDeletionConfirm: noop,
@@ -400,6 +421,35 @@ export function GenUiArtifactDesktopPage() {
                         }}
                         labels={labels}
                         viewer={genUiViewer(SECRETS_ID, "Billing keys", secretRender)}
+                    />
+                </DesktopWindow>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="On a Happy Agent a secret button opens the Settings secret form with the agent's name, description and variable names; the values are typed here. A name that is already stored opens that secret instead: its variables keep their values unless retyped, and one removed is deleted."
+                label="Viewer · Secret request on a Happy Agent"
+                number="04"
+                screen="04-genui-agent-secret-request-1440x1000"
+                window={WINDOW}
+            >
+                <DesktopWindow>
+                    <HappyAgentArtifactViewer
+                        {...viewerHandlers}
+                        genUi={{
+                            actionsSupported: new Set<GenUiAction["type"]>([
+                                "open",
+                                "copy",
+                                "secret",
+                            ]),
+                            onAction: noop,
+                            secrets: agentSecrets,
+                        }}
+                        labels={labels}
+                        viewer={genUiViewer(
+                            AGENT_SECRETS_ID,
+                            "Billing test keys",
+                            agentSecretRender,
+                        )}
                     />
                 </DesktopWindow>
             </FullScreenSpecimen>

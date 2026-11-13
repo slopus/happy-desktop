@@ -1,6 +1,7 @@
 import type {
     HappyAgentArtifactId,
     HappyAgentGenUiActions,
+    HappyAgentGenUiClusterActions,
     HappyAgentInlineArtifactsSnapshot,
     HappyAgentInlineArtifactsStore,
 } from "happy-desktop-state";
@@ -8,6 +9,7 @@ import type {
     GenUiAction,
     GenUiClusterSecretHost,
     GenUiInlineHost,
+    GenUiSecretHost,
     ArtifactLiveRenderer,
     BrowserContentRenderer,
     BrowserFailure,
@@ -153,22 +155,25 @@ export function conversationInlinePagesCreate(input: {
  * https address is refused. A `plugin` opens that plugin's page, where the
  * person may install it; the tap installs nothing. A `tool` call is shown as
  * not supported yet, and so is a `message` where there is no conversation to
- * send it to. A `cluster_secret` opens the artifact's own form, served where
- * the server is Happy Cloud; a Happy Agent's `secret` form is not served yet.
+ * send it to. `secret` and `cluster_secret` open the artifact's own form, each
+ * served on the kind of server that stores it.
  */
 export function genUiInlineHostCreate(input: {
     readonly messageSend?: (text: string) => Promise<void>;
     readonly linkOpen: (url: string) => void;
     readonly pluginOpen?: (pluginId: string) => void;
+    readonly secrets?: GenUiSecretHost;
     readonly clusterSecrets?: GenUiClusterSecretHost;
 }): GenUiInlineHost {
     const messageSend = input.messageSend;
     const supported: GenUiAction["type"][] = ["open", "copy"];
     if (messageSend) supported.push("message");
     if (input.pluginOpen) supported.push("plugin");
+    if (input.secrets) supported.push("secret");
     if (input.clusterSecrets) supported.push("cluster_secret");
     return {
         actionsSupported: new Set(supported),
+        ...(input.secrets ? { secrets: input.secrets } : {}),
         ...(input.clusterSecrets ? { clusterSecrets: input.clusterSecrets } : {}),
         onAction: async (_elementKey, action) => {
             switch (action.type) {
@@ -201,12 +206,42 @@ export function genUiInlineHostCreate(input: {
 }
 
 /**
- * The cluster secret forms of Gen UI documents on a Happy Cloud server. The
- * artifact draws the form; saving it goes through the version's action route,
- * which also tells the agent that asked.
+ * The secret forms of Gen UI documents, by the server's kind: a Happy Agent's
+ * `secret` form or a Happy Cloud server's `cluster_secret` form. The artifact
+ * draws the form; saving it goes through the version's action route, which
+ * also tells the agent that asked.
  */
-export function genUiClusterSecretHostCreate(
+export function genUiSecretHostsCreate(
     actions: HappyAgentGenUiActions,
+): { readonly secrets: GenUiSecretHost } | { readonly clusterSecrets: GenUiClusterSecretHost } {
+    if (actions.backend === "happyAgent")
+        return {
+            secrets: {
+                formOpen: async (source, element, secretId) => {
+                    const form = await actions.secretFormOpen(source, element, secretId);
+                    return {
+                        secret: form.secret
+                            ? {
+                                  id: form.secret.id,
+                                  description: form.secret.description,
+                                  variables: form.secret.environmentVariables,
+                              }
+                            : undefined,
+                        create: async (input) => {
+                            await form.create(input);
+                        },
+                        update: async (input) => {
+                            await form.update(input);
+                        },
+                    };
+                },
+            },
+        };
+    return { clusterSecrets: genUiClusterSecretHostCreate(actions) };
+}
+
+function genUiClusterSecretHostCreate(
+    actions: HappyAgentGenUiClusterActions,
 ): GenUiClusterSecretHost {
     return {
         formOpen: async (source, element, secretId) => {

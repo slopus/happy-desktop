@@ -133,7 +133,8 @@ import {
     type HappyAgentRepositoriesStore,
 } from "./happyAgentRepositoriesStore.js";
 import {
-    happyAgentGenUiActionsCreate,
+    happyAgentGenUiClusterActionsCreate,
+    happyAgentGenUiDaemonActionsCreate,
     type HappyAgentGenUiActions,
 } from "./happyAgentGenUiActions.js";
 import { happyAgentDaemonPluginsStoreCreate } from "./happyAgentDaemonPluginsStore.js";
@@ -283,8 +284,8 @@ export interface HappyAgentWorkspaceClient {
      * Happy Cloud team's installations, or this Happy Agent's own.
      */
     plugins(): HappyAgentPluginsStore;
-    /** What this connection's server does for Gen UI actions; undefined where it serves none. */
-    genUiActions(): HappyAgentGenUiActions | undefined;
+    /** What this connection's server does for Gen UI actions it runs itself, such as secret forms. */
+    genUiActions(): HappyAgentGenUiActions;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
@@ -1198,8 +1199,9 @@ export function happyAgentWorkspaceClientCreate(
         genUiActions() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
-            if (!request) return undefined;
-            genUiActions ??= happyAgentGenUiActionsCreate({ request });
+            genUiActions ??= request
+                ? happyAgentGenUiClusterActionsCreate({ request })
+                : happyAgentGenUiDaemonActionsCreate({ client: deps.client });
             return genUiActions;
         },
         compute() {

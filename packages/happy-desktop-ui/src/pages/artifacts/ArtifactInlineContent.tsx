@@ -4,7 +4,11 @@ import {
     type HappyAgentInlineArtifactContent,
 } from "happy-desktop-state";
 import { ConversationMedia } from "../../ConversationMedia";
-import { GenUiArtifact, type GenUiClusterSecretHost } from "../../genUi/GenUiArtifact";
+import {
+    GenUiArtifact,
+    type GenUiClusterSecretHost,
+    type GenUiSecretHost,
+} from "../../genUi/GenUiArtifact";
 import type { GenUiActionType } from "../../genUi/genUiRender";
 import type { GenUiActionHandler } from "../../genUi/GenUiRenderView";
 import type { InlinePageFit } from "../../inlinePageFit";
@@ -28,6 +32,8 @@ export interface ArtifactInlineContentProps {
 export interface GenUiInlineHost {
     readonly onAction: GenUiActionHandler;
     readonly actionsSupported: ReadonlySet<GenUiActionType>;
+    /** Opens and saves a Happy Agent's `secret` forms. */
+    readonly secrets?: GenUiSecretHost;
     /** Opens and saves `cluster_secret` forms, on a Happy Cloud server. */
     readonly clusterSecrets?: GenUiClusterSecretHost;
 }
@@ -107,6 +113,7 @@ export function genUiArtifactHost(host: GenUiInlineHost) {
     return {
         actionsSupported: host.actionsSupported,
         onAction: host.onAction,
+        ...(host.secrets ? { secrets: host.secrets } : {}),
         ...(host.clusterSecrets ? { clusterSecrets: host.clusterSecrets } : {}),
     };
 }

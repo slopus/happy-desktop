@@ -296,8 +296,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: 0.0.167
-        version: 0.0.167
+        specifier: 0.0.168
+        version: 0.0.168
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2100,8 +2100,8 @@ packages:
     resolution: {integrity: sha512-xNjm8bZwWyWJ46Z7azXyNIz2UWHNEXRIH2hI4SndhLpozESgUbhNJIFidNjqs+N6suxuUeCg+0aU/y/kmFejqw==}
     engines: {node: '>=20'}
 
-  '@slopus/happy-agent-client@0.0.167':
-    resolution: {integrity: sha512-6hXVEYPLIxMlyGKvXmaNIgRxDRXNg3ugvsVZV15KEd1/hufS36VhbINlgALaMUIfFYM9VEgnVjK8buMCxgBI1g==}
+  '@slopus/happy-agent-client@0.0.168':
+    resolution: {integrity: sha512-P+YqviKmYggvX6Fes6Rjy//LorKt0Pr1VcQYOtmbagL94SdPqz3677Ksn3yMohwW1toBbZxGKEdZ/cb632yDDA==}
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7396,7 +7396,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@0.0.167':
+  '@slopus/happy-agent-client@0.0.168':
     dependencies:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1

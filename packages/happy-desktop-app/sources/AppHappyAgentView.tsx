@@ -43,8 +43,8 @@ import {
 import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
-    genUiClusterSecretHostCreate,
     genUiInlineHostCreate,
+    genUiSecretHostsCreate,
     inlineArtifactsStoreNoop,
 } from "./conversationInlinePages";
 import {
@@ -351,6 +351,7 @@ import {
     happyAgentComposerModelUsageWatch,
     sidebarReorderMove,
     type GenUiClusterSecretHost,
+    type GenUiSecretHost,
     type IconName,
     type MenuItem,
     type FileTreeNode,
@@ -5047,7 +5048,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         ...(active && props.onPluginOpen
             ? { pluginOpen: (pluginId: string) => props.onPluginOpen?.(active.id, pluginId) }
             : {}),
-        ...(genUiActions ? { clusterSecrets: genUiClusterSecretHostCreate(genUiActions) } : {}),
+        ...(genUiActions ? genUiSecretHostsCreate(genUiActions) : {}),
     };
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
@@ -6822,12 +6823,13 @@ function HappyAgentTodoSurface(props: {
  */
 /**
  * What a Gen UI document may reach on the addressed machine wherever it is
- * shown: one plugin's page, for a `plugin` action, and the cluster's secret
- * forms. Each is absent where the machine offers none, which leaves those
- * buttons disabled.
+ * shown: one plugin's page, for a `plugin` action, and its secret forms, a
+ * Happy Agent's or a cluster's. Each is absent where the machine offers none,
+ * which leaves those buttons disabled.
  */
 interface GenUiMachineHost {
     readonly pluginOpen?: (pluginId: string) => void;
+    readonly secrets?: GenUiSecretHost;
     readonly clusterSecrets?: GenUiClusterSecretHost;
 }
 const GenUiMachineContext = createContext<GenUiMachineHost>({});

@@ -105,7 +105,8 @@ export function happyAgentSecretsStoreCreate(
         store.setState({ loading: false, secrets }, true);
     };
 
-    const settle = (next: readonly Secret[]): void => settleProjected(next.map(secretProject));
+    const settle = (next: readonly Secret[]): void =>
+        settleProjected(next.map(happyAgentSecretProject));
 
     const readAll = async (controller: AbortController): Promise<readonly Secret[]> => {
         const secrets: Secret[] = [];
@@ -237,7 +238,7 @@ export function happyAgentSecretsStoreCreate(
                 if (disposed) return;
                 const current = store.getState();
                 settleProjected([
-                    secretProject(response.secret),
+                    happyAgentSecretProject(response.secret),
                     ...current.secrets.filter((secret) => secret.id !== response.secret.id),
                 ]);
             } catch (error) {
@@ -259,7 +260,7 @@ export function happyAgentSecretsStoreCreate(
     };
 }
 
-function secretProject(secret: Secret): HappyAgentSecret {
+export function happyAgentSecretProject(secret: Secret): HappyAgentSecret {
     return {
         availableToAgents: secret.availableToAgents,
         createdAt: secret.createdAt,
