@@ -46,7 +46,7 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                 subtitle={
                     snapshot.loading
                         ? "Loading…"
-                        : `${String(snapshot.plugins.length)} available${snapshot.manage ? ` · ${String(installedCount)} installed` : ""}`
+                        : `${String(snapshot.plugins.length)} available · ${String(installedCount)} installed`
                 }
                 title="Plugins"
             />
@@ -73,33 +73,31 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                         />
                     ) : (
                         <>
-                            {snapshot.manage ? (
-                                <section className="happy-agent-plugins__section">
-                                    <h2 className="happy-agent-plugins__heading">Installed</h2>
-                                    {installedCount === 0 ? (
-                                        <p className="happy-agent-plugins__note">
-                                            Nothing installed yet. Install a plugin below to give
-                                            agents its tools.
-                                        </p>
-                                    ) : (
-                                        <div className="happy-agent-plugins__list" role="list">
-                                            {snapshot.installations.map((installation) => (
-                                                <InstallationRow
-                                                    installation={installation}
-                                                    key={installation.id}
-                                                    onOpen={props.onPluginOpen}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                </section>
-                            ) : null}
+                            <section className="happy-agent-plugins__section">
+                                <h2 className="happy-agent-plugins__heading">Installed</h2>
+                                {installedCount === 0 ? (
+                                    <p className="happy-agent-plugins__note">
+                                        {snapshot.manage
+                                            ? "Nothing installed yet. Install a plugin below to give agents its tools."
+                                            : "Nothing installed yet."}
+                                    </p>
+                                ) : (
+                                    <div className="happy-agent-plugins__list" role="list">
+                                        {snapshot.installations.map((installation) => (
+                                            <InstallationRow
+                                                installation={installation}
+                                                key={installation.id}
+                                                onOpen={props.onPluginOpen}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
                             <section className="happy-agent-plugins__section">
                                 <h2 className="happy-agent-plugins__heading">Available</h2>
                                 {snapshot.manage ? null : (
                                     <p className="happy-agent-plugins__note">
-                                        Only people who manage plugins can install them and see what
-                                        is installed.
+                                        Only people who manage plugins can install them.
                                     </p>
                                 )}
                                 <div className="happy-agent-plugins__list" role="list">

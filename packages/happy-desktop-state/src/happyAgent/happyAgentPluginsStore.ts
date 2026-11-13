@@ -106,7 +106,7 @@ export interface HappyAgentPluginsSnapshot {
     readonly error?: UserError;
     /** Sorted by name. */
     readonly plugins: readonly HappyAgentPlugin[];
-    /** Empty when the reader may not manage plugins, since only managers may read them. */
+    /** Every installation on the team; a reader who may not manage them sees them too. */
     readonly installations: readonly HappyAgentPluginInstallation[];
     /** Whether the reader may install, set up and remove plugins. */
     readonly manage: boolean;
@@ -168,7 +168,6 @@ const EMPTY: HappyAgentPluginsSnapshot = {
 };
 /** Installation writes stream an event; the catalog changes only with a server release. */
 const POLL_INTERVAL_MS = 30_000;
-const MANAGE_PERMISSION = "mcp.manage";
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
     return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -333,15 +332,12 @@ export function happyAgentPluginsStoreCreate(deps: {
     };
 
     const read = async (): Promise<void> => {
-        const [catalog, permissions] = await Promise.all([
+        // Every member reads both; the installations say whether the reader may manage them.
+        const [catalog, installed] = await Promise.all([
             deps.request("GET", "v0/plugins"),
-            deps.request("GET", "v0/permissions"),
+            deps.request("GET", "v0/plugins/installations"),
         ]);
-        const granted = recordOf(permissions)?.granted;
-        const manage = Array.isArray(granted) && granted.includes(MANAGE_PERMISSION);
-        const installed = manage
-            ? await deps.request("GET", "v0/plugins/installations")
-            : undefined;
+        const manage = recordOf(installed)?.canManage === true;
         if (disposed) return;
         const current = store.getState();
         const { error: _cleared, ...rest } = current;

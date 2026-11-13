@@ -150,7 +150,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                     </Button>
                                 ) : null}
                             </section>
-                            {snapshot.manage && installations.length > 0 ? (
+                            {installations.length > 0 ? (
                                 <section className="happy-agent-plugins__section">
                                     <h2 className="happy-agent-plugins__heading">Installed</h2>
                                     <div className="happy-agent-plugins__cards">
@@ -158,6 +158,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                             <InstallationCard
                                                 installation={installation}
                                                 key={installation.id}
+                                                manage={snapshot.manage}
                                                 onConfigure={props.onConfigure}
                                                 onConnect={props.onConnect}
                                                 onDisconnect={props.onDisconnect}
@@ -204,6 +205,8 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
 function InstallationCard(props: {
     readonly installation: HappyAgentPluginInstallation;
     readonly plugin: HappyAgentPlugin | undefined;
+    /** Whether the reader may sign it in and out and remove it; without, the card only reads. */
+    readonly manage: boolean;
     readonly onRemove: HappyAgentPluginPageProps["onRemove"];
     readonly onConfigure: HappyAgentPluginPageProps["onConfigure"];
     readonly onConnect: HappyAgentPluginPageProps["onConnect"];
@@ -225,30 +228,32 @@ function InstallationCard(props: {
                     {pluginInstallationTitle(installation)}
                 </span>
                 <PluginInstallationStatus installation={installation} />
-                <span className="happy-agent-plugin-card__actions">
-                    {signedIn ? (
+                {props.manage ? (
+                    <span className="happy-agent-plugin-card__actions">
+                        {signedIn ? (
+                            <Button
+                                disabled={!installation.available}
+                                loading={disconnect.pending}
+                                onClick={() =>
+                                    void disconnect.run(() => props.onDisconnect(installation.id))
+                                }
+                                size="small"
+                                variant="secondary"
+                            >
+                                Sign out
+                            </Button>
+                        ) : null}
                         <Button
                             disabled={!installation.available}
-                            loading={disconnect.pending}
-                            onClick={() =>
-                                void disconnect.run(() => props.onDisconnect(installation.id))
-                            }
+                            loading={remove.pending}
+                            onClick={() => setConfirming(true)}
                             size="small"
                             variant="secondary"
                         >
-                            Sign out
+                            Remove
                         </Button>
-                    ) : null}
-                    <Button
-                        disabled={!installation.available}
-                        loading={remove.pending}
-                        onClick={() => setConfirming(true)}
-                        size="small"
-                        variant="secondary"
-                    >
-                        Remove
-                    </Button>
-                </span>
+                    </span>
+                ) : null}
             </header>
             {installation.status === "failed" && installation.error ? (
                 <p className="happy-agent-plugin__error">{installation.error}</p>
@@ -292,7 +297,7 @@ function InstallationCard(props: {
                     </Modal>
                 </ModalOverlay>
             ) : null}
-            {installation.available && !signedIn && methods.length > 0 ? (
+            {props.manage && installation.available && !signedIn && methods.length > 0 ? (
                 <HappyAgentPluginSetup
                     installation={installation}
                     methods={methods}

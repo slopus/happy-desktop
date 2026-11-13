@@ -121,7 +121,7 @@ const manager: HappyAgentPluginsSnapshot = {
     installations: [githubActive, githubSecond, retired],
 };
 
-const member: HappyAgentPluginsSnapshot = { ...manager, manage: false, installations: [] };
+const member: HappyAgentPluginsSnapshot = { ...manager, manage: false };
 
 const loading: HappyAgentPluginsSnapshot = {
     loading: true,
@@ -239,7 +239,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A member without mcp.manage sees what the server offers but cannot install, and is not shown the installations."
+                detail="A member without mcp.manage sees what the server offers and what the team installed, but cannot install."
                 label="Catalog, member"
                 number="02"
                 screen="02-catalog-member-1100x760"
@@ -307,6 +307,15 @@ export function HappyAgentPluginsBlueprintPage() {
                     pluginId={translations.id}
                     plugins={daemon}
                 />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An installed plugin as a member sees it: its installations and their state, with nothing to sign in, sign out or remove."
+                label="Plugin, installed, member"
+                number="08"
+                screen="08-plugin-installed-member-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginPage {...detailHandlers} pluginId="github" plugins={member} />
             </FullScreenSpecimen>
         </ComponentPage>
     );
