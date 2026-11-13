@@ -123,6 +123,83 @@ export const genUiIconNames = [
 ] as const;
 export type GenUiIconName = (typeof genUiIconNames)[number];
 
+/** One variable a Happy Agent secret form asks a value for. */
+export type GenUiSecretVariable = { readonly name: string; readonly description?: string };
+
+/** What a Happy Agent secret form starts with. It never holds a value. */
+export type GenUiSecretPrefill = {
+    /** A secret to change when it exists; otherwise the suggested name of a new one. */
+    readonly id?: string;
+    readonly description?: string;
+    readonly variables: readonly GenUiSecretVariable[];
+};
+
+export type GenUiHttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
+
+export type GenUiEndpointTarget = {
+    readonly host: string;
+    readonly ports?: readonly number[];
+    readonly pathPrefixes?: readonly string[];
+    readonly methods?: readonly GenUiHttpMethod[];
+};
+
+export type GenUiGitMethod =
+    | { readonly kind: "ssh_key"; readonly knownHosts?: readonly string[] }
+    | { readonly kind: "password"; readonly username?: string }
+    | { readonly kind: "token"; readonly username?: string };
+
+type GenUiClusterSecretCommon = {
+    /** An existing cluster secret to change; absent creates one. */
+    readonly id?: string;
+    readonly name: string;
+    readonly description?: string;
+    readonly owner?: "me" | "team";
+};
+
+/**
+ * What a Happy Cloud secret form starts with, one shape per secret type, each
+ * with only its own public metadata. It never holds a value.
+ */
+export type GenUiClusterSecretPrefill = GenUiClusterSecretCommon &
+    (
+        | {
+              readonly type: "endpoint";
+              readonly uses?: readonly ("egress" | "mcp")[];
+              readonly public?: {
+                  readonly targets?: readonly GenUiEndpointTarget[];
+                  readonly headers?: readonly {
+                      readonly name: string;
+                      readonly prefix?: string;
+                  }[];
+              };
+          }
+        | {
+              readonly type: "ssh_key";
+              readonly uses?: readonly "ssh"[];
+              readonly public?: {
+                  readonly hosts?: readonly string[];
+                  readonly ports?: readonly number[];
+                  readonly knownHosts?: readonly string[];
+              };
+          }
+        | {
+              readonly type: "git_credential";
+              readonly uses?: readonly "git"[];
+              readonly public?: {
+                  readonly server?: string;
+                  readonly port?: number;
+                  readonly method?: GenUiGitMethod;
+                  readonly repos?: readonly string[];
+                  readonly operations?: readonly ("read" | "write" | "sign")[];
+              };
+          }
+        | {
+              readonly type: "environment";
+              readonly uses?: readonly ("environment" | "mcp")[];
+              readonly public?: { readonly variables?: readonly string[] };
+          }
+    );
+
 export type GenUiAction =
     | { readonly type: "message"; readonly text: string }
     | { readonly type: "open"; readonly url: string }
@@ -131,7 +208,28 @@ export type GenUiAction =
           readonly type: "tool";
           readonly name: string;
           readonly input?: Readonly<Record<string, unknown>>;
-      };
+      }
+    | { readonly type: "secret"; readonly secret: GenUiSecretPrefill }
+    | { readonly type: "cluster_secret"; readonly secret: GenUiClusterSecretPrefill }
+    | { readonly type: "plugin"; readonly plugin: { readonly id: string } };
+
+export type GenUiActionType = GenUiAction["type"];
+
+/**
+ * Which actions a host runs (SPEC rule 7). `message` and the secret actions go
+ * to the origin agent, the one that wrote the version, so without a live one
+ * they cannot run. Each backend serves only its own secret form, and no host
+ * runs `tool` yet.
+ */
+export function genUiActionsServed(host: {
+    readonly backend: "happyAgent" | "cluster";
+    readonly origin: boolean;
+}): ReadonlySet<GenUiActionType> {
+    const served: GenUiActionType[] = ["open", "copy", "plugin"];
+    if (host.origin)
+        served.push("message", host.backend === "cluster" ? "cluster_secret" : "secret");
+    return new Set(served);
+}
 
 export type GenUiSpan = {
     readonly text: string;
@@ -237,7 +335,8 @@ export type GenUiPill = Keyed & {
 export type GenUiButton = Keyed & {
     readonly type: "button";
     readonly label: string;
-    readonly action: GenUiAction;
+    /** Absent when the action is unknown or invalid: the button is drawn disabled. */
+    readonly action?: GenUiAction;
     readonly icon?: GenUiIconName;
     readonly variant: "primary" | "secondary" | "plain" | "chip";
     readonly tone: GenUiTone;
@@ -417,6 +516,215 @@ function action(value: unknown): GenUiAction | undefined {
             const input = record(source.input);
             return input ? { type: "tool", name, input } : { type: "tool", name };
         }
+        case "secret": {
+            const secret = secretPrefill(source.secret);
+            return secret ? { type: "secret", secret } : undefined;
+        }
+        case "cluster_secret": {
+            const secret = clusterSecretPrefill(source.secret);
+            return secret ? { type: "cluster_secret", secret } : undefined;
+        }
+        case "plugin": {
+            const id = text(record(source.plugin)?.id);
+            return id ? { type: "plugin", plugin: { id } } : undefined;
+        }
+        default:
+            return undefined;
+    }
+}
+
+/** An optional array prop: past `max` the extra items are ignored; below `min` it is absent. */
+function bounded<T>(
+    value: unknown,
+    item: (entry: unknown) => T | undefined,
+    min: number,
+    max: number,
+): T[] | undefined {
+    const items = list(value, item)?.slice(0, max);
+    return items && items.length >= min ? items : undefined;
+}
+
+const strings = (value: unknown, min: number, max: number) => bounded(value, text, min, max);
+const integers = (value: unknown, max: number) =>
+    bounded(value, (entry) => (Number.isInteger(entry) ? (entry as number) : undefined), 0, max);
+
+/** Copies the optional fields that parsed, leaving out the ones that did not. */
+function defined<T extends Record<string, unknown>>(fields: T): Partial<T> {
+    return Object.fromEntries(
+        Object.entries(fields).filter(([, value]) => value !== undefined),
+    ) as Partial<T>;
+}
+
+/* A secret action never carries a value; one that does is invalid as a whole. */
+function secretPrefill(value: unknown): GenUiSecretPrefill | undefined {
+    const source = record(value);
+    if (!source) return undefined;
+    if (
+        Array.isArray(source.variables) &&
+        source.variables.some((entry) => "value" in Object(entry))
+    )
+        return undefined;
+    const variables = bounded(
+        source.variables,
+        (entry) => {
+            const variable = record(entry);
+            const name = text(variable?.name);
+            if (!name) return undefined;
+            const description = text(variable?.description);
+            return description === undefined ? { name } : { name, description };
+        },
+        1,
+        64,
+    );
+    if (!variables) return undefined;
+    return {
+        ...defined({ id: text(source.id), description: text(source.description) }),
+        variables,
+    };
+}
+
+const httpMethods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+
+function gitMethod(value: unknown): GenUiGitMethod | undefined {
+    const source = record(value);
+    switch (source?.kind) {
+        case "ssh_key":
+            return {
+                kind: "ssh_key",
+                ...defined({ knownHosts: strings(source.knownHosts, 0, 32) }),
+            };
+        case "password":
+        case "token":
+            return { kind: source.kind, ...defined({ username: text(source.username) }) };
+        default:
+            return undefined;
+    }
+}
+
+function clusterSecretPrefill(value: unknown): GenUiClusterSecretPrefill | undefined {
+    const source = record(value);
+    const name = text(source?.name);
+    if (!source || !name || "material" in source) return undefined;
+    const owner = oneOf(source.owner, ["me", "team"] as const);
+    const common = {
+        name,
+        ...defined({ id: text(source.id), description: text(source.description), owner }),
+    };
+    const pub = record(source.public);
+    switch (source.type) {
+        case "endpoint": {
+            const algorithm = record(pub?.algorithm);
+            return {
+                ...common,
+                type: "endpoint",
+                ...defined({
+                    uses: bounded(
+                        source.uses,
+                        (use) => oneOf(use, ["egress", "mcp"] as const),
+                        1,
+                        2,
+                    ),
+                    public: pub
+                        ? defined({
+                              targets: bounded(
+                                  pub.targets,
+                                  (entry) => {
+                                      const target = record(entry);
+                                      const host = text(target?.host);
+                                      if (!host) return undefined;
+                                      return {
+                                          host,
+                                          ...defined({
+                                              ports: integers(target?.ports, 16),
+                                              pathPrefixes: strings(target?.pathPrefixes, 0, 16),
+                                              methods: bounded(
+                                                  target?.methods,
+                                                  (method) => oneOf(method, httpMethods),
+                                                  0,
+                                                  16,
+                                              ),
+                                          }),
+                                      };
+                                  },
+                                  1,
+                                  16,
+                              ),
+                              headers:
+                                  algorithm?.kind === "headers"
+                                      ? bounded(
+                                            algorithm.headers,
+                                            (entry) => {
+                                                const header = record(entry);
+                                                const headerName = text(header?.name);
+                                                if (!headerName) return undefined;
+                                                return {
+                                                    name: headerName,
+                                                    ...defined({ prefix: text(header?.prefix) }),
+                                                };
+                                            },
+                                            1,
+                                            8,
+                                        )
+                                      : undefined,
+                          })
+                        : undefined,
+                }),
+            };
+        }
+        case "ssh_key":
+            return {
+                ...common,
+                type: "ssh_key",
+                ...defined({
+                    uses: bounded(source.uses, (use) => oneOf(use, ["ssh"] as const), 1, 1),
+                    public: pub
+                        ? defined({
+                              hosts: strings(pub.hosts, 1, 16),
+                              ports: integers(pub.ports, 8),
+                              knownHosts: strings(pub.knownHosts, 0, 32),
+                          })
+                        : undefined,
+                }),
+            };
+        case "git_credential":
+            return {
+                ...common,
+                type: "git_credential",
+                ...defined({
+                    uses: bounded(source.uses, (use) => oneOf(use, ["git"] as const), 1, 1),
+                    public: pub
+                        ? defined({
+                              server: text(pub.server),
+                              port: Number.isInteger(pub.port) ? (pub.port as number) : undefined,
+                              method: gitMethod(pub.method),
+                              repos: strings(pub.repos, 0, 64),
+                              operations: bounded(
+                                  pub.operations,
+                                  (operation) =>
+                                      oneOf(operation, ["read", "write", "sign"] as const),
+                                  1,
+                                  3,
+                              ),
+                          })
+                        : undefined,
+                }),
+            };
+        case "environment":
+            return {
+                ...common,
+                type: "environment",
+                ...defined({
+                    uses: bounded(
+                        source.uses,
+                        (use) => oneOf(use, ["environment", "mcp"] as const),
+                        1,
+                        2,
+                    ),
+                    public: pub
+                        ? defined({ variables: strings(pub.variables, 1, 256) })
+                        : undefined,
+                }),
+            };
         default:
             return undefined;
     }
@@ -682,14 +990,15 @@ function element(walk: Walk, key: string, source: Json | undefined): GenUiRender
             const variant =
                 oneOf(props.variant, ["primary", "secondary", "plain", "chip"] as const) ??
                 "secondary";
-            if (label === undefined || !run) return undefined;
+            // A missing action skips the button; one present but invalid draws it disabled.
+            if (label === undefined || props.action === undefined) return undefined;
             const glyph = icon(props.icon);
             const group = text(props.group);
             return {
                 key,
                 type: "button",
                 label,
-                action: run,
+                ...(run ? { action: run } : {}),
                 variant,
                 tone: tone(props.tone) ?? "neutral",
                 ...(glyph ? { icon: glyph } : {}),

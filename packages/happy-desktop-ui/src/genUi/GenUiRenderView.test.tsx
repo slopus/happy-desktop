@@ -7,8 +7,14 @@ import "../styles/copy-button.css";
 import "../styles/code-block.css";
 import "../styles/gen-ui.css";
 import { createRenderer } from "../testing";
-import { genUiRenderParse, genUiRenderParseText, type GenUiAction } from "./genUiRender";
+import {
+    genUiActionsServed,
+    genUiRenderParse,
+    genUiRenderParseText,
+    type GenUiAction,
+} from "./genUiRender";
 import { GenUiRenderView } from "./GenUiRenderView";
+import actionsConformance from "./shared/conformance/actions.json";
 
 /* The daemon's compiled reference documents, copied verbatim. */
 const compiled = import.meta.glob<string>("../../dev/assets/genui/*.render.json", {
@@ -158,3 +164,42 @@ it("reports an image viewer tap to the host apart from actions", async () => {
     view.container.querySelector<HTMLButtonElement>(".gen-ui-image-open")?.click();
     expect(opened).toEqual([["pic", "trip", 2]]);
 });
+
+/* The spec's conformance cases: which element each host enables. Nothing is dropped. */
+const conformanceHosts = {
+    happy_agent: genUiActionsServed({ backend: "happyAgent", origin: true }),
+    happy_agent_without_origin: genUiActionsServed({ backend: "happyAgent", origin: false }),
+    cluster: genUiActionsServed({ backend: "cluster", origin: true }),
+} as const;
+
+for (const [host, served] of Object.entries(conformanceHosts)) {
+    it(`enables exactly the actions the spec's conformance expects for ${host}`, async () => {
+        const view = createRenderer();
+        view.render(
+            () => (
+                <GenUiRenderView
+                    actionsSupported={served}
+                    document={genUiRenderParse(actionsConformance.document)}
+                    fileUrl={fileUrl}
+                />
+            ),
+            { width: 600, height: 900, padding: 16 },
+        );
+        await view.ready();
+        const enabled = Object.fromEntries(
+            [...view.container.querySelectorAll<HTMLElement>("[data-gen-ui-key]")].map(
+                (element) => [
+                    element.dataset.genUiKey,
+                    element instanceof HTMLButtonElement && !element.disabled,
+                ],
+            ),
+        );
+        const expected = Object.fromEntries(
+            actionsConformance.cases.map((entry) => [
+                entry.element,
+                entry.enabled[host as keyof typeof conformanceHosts],
+            ]),
+        );
+        expect(enabled).toEqual(expected);
+    });
+}

@@ -10,6 +10,7 @@ import { genUiFill, genUiInk, genUiMarkerTones, genUiText } from "./genUiTheme";
 import { GenUiPlot } from "./GenUiPlot";
 import type {
     GenUiAction,
+    GenUiActionType,
     GenUiBox,
     GenUiButton,
     GenUiGrid,
@@ -48,7 +49,7 @@ export type GenUiRenderViewProps = {
      */
     readonly onAction?: GenUiActionHandler;
     /** Which kinds of action the host can run; the others are drawn unavailable. */
-    readonly actionsSupported?: ReadonlySet<GenUiAction["type"]>;
+    readonly actionsSupported?: ReadonlySet<GenUiActionType>;
     /** The address of one of the artifact's files, through the host's file route. */
     readonly fileUrl: (path: string) => string;
     /**
@@ -64,7 +65,15 @@ export type GenUiRenderViewProps = {
 /** Where "regular" layouts begin, in CSS pixels of the document's own width. */
 const REGULAR_MIN_WIDTH = 560;
 
-const ALL_ACTIONS: ReadonlySet<GenUiAction["type"]> = new Set(["message", "open", "copy", "tool"]);
+const ALL_ACTIONS: ReadonlySet<GenUiActionType> = new Set([
+    "message",
+    "open",
+    "copy",
+    "tool",
+    "secret",
+    "cluster_secret",
+    "plugin",
+]);
 
 type Host = {
     readonly act: (elementKey: string, action: GenUiAction) => Promise<void>;
@@ -106,15 +115,19 @@ const DONE_MS = 1_600;
  * then done for a moment. In a single-choice group the first pick sticks, and
  * every other member of the group is disabled.
  */
-function useActivation(elementKey: string, action: GenUiAction, group: string | undefined) {
+function useActivation(
+    elementKey: string,
+    action: GenUiAction | undefined,
+    group: string | undefined,
+) {
     const host = useContext(HostContext);
     const [press, setPress] = useState<Press>("idle");
-    const supported = host.supported(action);
+    const supported = action !== undefined && host.supported(action);
     const picked = group === undefined ? undefined : host.picked.get(group);
     const chosen = picked !== undefined && picked === elementKey;
     const disabled = !supported || (picked !== undefined && !chosen);
     const run = () => {
-        if (disabled || press !== "idle" || chosen) return;
+        if (!action || disabled || press !== "idle" || chosen) return;
         if (group !== undefined) host.pick(group, elementKey);
         setPress("pending");
         host.act(elementKey, action).then(
@@ -463,6 +476,7 @@ function ButtonView(props: { node: GenUiButton }) {
             className="gen-ui-button"
             data-button-tone={node.tone}
             data-chip={chip ? "" : undefined}
+            data-gen-ui-key={node.key}
             data-picked={chosen ? "" : undefined}
             data-press={press}
             disabled={disabled || press !== "idle"}
@@ -501,7 +515,7 @@ function PressView(props: { node: GenUiPress }) {
     const { node } = props;
     if (node.action) return <ActivePress action={node.action} node={node} />;
     return (
-        <div className="gen-ui-press" data-role={node.role}>
+        <div className="gen-ui-press" data-gen-ui-key={node.key} data-role={node.role}>
             {node.children.map((child) => (
                 <Node key={child.key} node={child} />
             ))}
@@ -520,6 +534,7 @@ function ActivePress(props: { node: GenUiPress; action: GenUiAction }) {
         <button
             aria-pressed={node.group === undefined ? undefined : chosen}
             className="gen-ui-press"
+            data-gen-ui-key={node.key}
             data-picked={chosen ? "" : undefined}
             data-role={node.role}
             data-press={press}

@@ -1278,8 +1278,12 @@ export {
     type GenUiRenderViewProps,
 } from "./genUi/GenUiRenderView";
 export {
+    genUiActionsServed,
     genUiRenderParse,
     genUiRenderParseText,
     type GenUiAction,
+    type GenUiActionType,
+    type GenUiClusterSecretPrefill,
     type GenUiRenderDocument,
+    type GenUiSecretPrefill,
 } from "./genUi/genUiRender";

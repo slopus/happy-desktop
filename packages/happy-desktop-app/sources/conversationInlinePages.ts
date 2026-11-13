@@ -147,16 +147,20 @@ export function conversationInlinePagesCreate(input: {
  * conversation, an `open` opens an https address beside it, and a `copy` puts
  * the text on the clipboard. The model wrote these actions, so nothing runs
  * that the person could not have done with the same tap, and anything but an
- * https address is refused. A `tool` call is shown as not supported yet, and
- * so is a `message` where there is no conversation to send it to.
+ * https address is refused. A `plugin` opens that plugin's page, where the
+ * person may install it; the tap installs nothing. A `tool` call is shown as
+ * not supported yet, and so is a `message` where there is no conversation to
+ * send it to. The secret forms are not served here yet.
  */
 export function genUiInlineHostCreate(input: {
     readonly messageSend?: (text: string) => Promise<void>;
     readonly linkOpen: (url: string) => void;
+    readonly pluginOpen?: (pluginId: string) => void;
 }): GenUiInlineHost {
     const messageSend = input.messageSend;
     const supported: GenUiAction["type"][] = ["open", "copy"];
     if (messageSend) supported.push("message");
+    if (input.pluginOpen) supported.push("plugin");
     return {
         actionsSupported: new Set(supported),
         onAction: async (_elementKey, action) => {
@@ -177,7 +181,12 @@ export function genUiInlineHostCreate(input: {
                 case "copy":
                     await navigator.clipboard.writeText(action.text);
                     return;
+                case "plugin":
+                    input.pluginOpen?.(action.plugin.id);
+                    return;
                 case "tool":
+                case "secret":
+                case "cluster_secret":
                     return;
             }
         },
