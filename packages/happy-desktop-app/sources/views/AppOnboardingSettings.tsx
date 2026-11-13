@@ -53,7 +53,6 @@ export function AppOnboardingSettings(props: {
             {...(snapshot.error ? { error: snapshot.error.message } : {})}
             {...(snapshot.saveError ? { saveError: snapshot.saveError.message } : {})}
             loading={snapshot.loading}
-            manage={snapshot.manage}
             onPluginRequiredChange={(pluginId, on) =>
                 store.requiredPluginsUpdate(
                     on ? [...required, pluginId] : required.filter((id) => id !== pluginId),
@@ -76,6 +75,7 @@ export function AppOnboardingSettings(props: {
                     description: STEPS[gate.id]?.description ?? "",
                     requirement: gate.requirement,
                     editable: gate.editable,
+                    operator: gate.source === "global" || gate.source === "operator-tenant",
                     saving: gate.saving,
                 }),
             )}

@@ -14,8 +14,10 @@ export interface HappyAgentOnboardingStepRow {
     readonly label: string;
     readonly description: string;
     readonly requirement: HappyAgentOnboardingRequirementChoice;
-    /** False where the server's operator set it; it is shown, never offered. */
+    /** Whether the reader may change it; otherwise it is shown, never offered. */
     readonly editable: boolean;
+    /** The server's operator set it, so no one on the team changes it. */
+    readonly operator: boolean;
     readonly saving: boolean;
 }
 
@@ -30,8 +32,6 @@ export interface HappyAgentOnboardingSettingsProps {
     readonly loading: boolean;
     readonly error?: string;
     readonly saveError?: string;
-    /** Whether the reader may change the steps the team may change. */
-    readonly manage: boolean;
     readonly steps: readonly HappyAgentOnboardingStepRow[];
     /** The plugins step's list; absent while that step is off. */
     readonly plugins?: {
@@ -74,9 +74,14 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                 </Box>
             </HappyAgentSettingsSection>
         );
+    // Someone who may change nothing the team sets is told who can.
+    const readOnly =
+        !props.steps.some((step) => step.editable) &&
+        !props.plugins?.editable &&
+        props.steps.some((step) => !step.operator);
     return (
         <>
-            {props.error || props.saveError || !props.manage ? (
+            {props.error || props.saveError || readOnly ? (
                 <Box className="happy-agent-settings__notices">
                     {props.error ? (
                         <Banner tone="danger" title="Onboarding settings unavailable">
@@ -88,7 +93,7 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                             {props.saveError}
                         </Banner>
                     ) : null}
-                    {!props.manage && !props.error ? (
+                    {readOnly && !props.error ? (
                         <Banner tone="neutral" title="Only owners change onboarding">
                             You can see what new people are asked for here.
                         </Banner>
@@ -102,7 +107,7 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                 {props.steps.map((step) => (
                     <FormRow
                         control={
-                            step.editable && props.manage ? (
+                            step.editable ? (
                                 <Box className="happy-agent-settings__pending">
                                     {step.saving ? <Spinner size={14} /> : null}
                                     <SegmentedControl
@@ -121,11 +126,11 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                             ) : (
                                 <span className="happy-agent-onboarding-settings__value">
                                     {CHOICE_LABEL[step.requirement]}
-                                    {step.editable ? null : (
+                                    {step.operator ? (
                                         <span className="happy-agent-onboarding-settings__source">
                                             Set by your operator
                                         </span>
-                                    )}
+                                    ) : null}
                                 </span>
                             )
                         }
@@ -150,7 +155,7 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                         props.plugins.rows.map((plugin) => (
                             <FormRow
                                 control={
-                                    props.manage && props.plugins!.editable ? (
+                                    props.plugins!.editable ? (
                                         <Switch
                                             aria-label={`Ask for ${plugin.name}`}
                                             checked={plugin.required}

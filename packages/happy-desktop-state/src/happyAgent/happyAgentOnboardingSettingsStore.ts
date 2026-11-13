@@ -15,7 +15,7 @@ export interface HappyAgentOnboardingGateSetting {
     /** The gate's ID, as `GET /v0/onboarding` names it. */
     readonly id: string;
     readonly requirement: HappyAgentOnboardingRequirement;
-    /** Whether the team may change it; the operator decides the rest. */
+    /** Whether this reader may change it, as the server decides for them. */
     readonly editable: boolean;
     readonly source: HappyAgentOnboardingSettingSource;
     /** A change the server has not answered yet. */
@@ -30,8 +30,6 @@ export interface HappyAgentOnboardingSettingsSnapshot {
      * before onboarding gates reports none, and Settings leaves the page out.
      */
     readonly available: boolean;
-    /** Whether the reader may change what the team may change. */
-    readonly manage: boolean;
     /** Every gate the server has a setting for, in the server's order. */
     readonly gates: readonly HappyAgentOnboardingGateSetting[];
     /** The plugins the plugins gate asks for; empty asks for any one. */
@@ -60,12 +58,10 @@ export interface HappyAgentOnboardingSettingsStore {
 
 const GATE_PREFIX = "onboarding.gates.";
 const REQUIRED_PLUGINS = "onboarding.requiredPlugins";
-const MANAGE_PERMISSION = "config.manage";
 
 const EMPTY: HappyAgentOnboardingSettingsSnapshot = {
     loading: true,
     available: false,
-    manage: false,
     gates: [],
     requiredPlugins: { ids: [], editable: false, saving: false },
 };
@@ -108,16 +104,12 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
     };
 
     const read = async (): Promise<void> => {
-        const [answer, permissions] = await Promise.all([
-            deps.request("GET", "v0/config"),
-            deps.request("GET", "v0/permissions"),
-        ]);
+        const answer = await deps.request("GET", "v0/config");
         if (disposed) return;
         const config = recordOf(recordOf(answer)?.config);
         const settings = recordOf(config?.settings) ?? {};
         const operator = recordOf(config?.operatorSettings) ?? {};
         const layers = recordOf(config?.settingLayers) ?? {};
-        const granted = recordOf(permissions)?.granted;
         const valueOf = (key: string): unknown =>
             pending.has(key) ? pending.get(key) : key in settings ? settings[key] : operator[key];
         const gates: HappyAgentOnboardingGateSetting[] = [];
@@ -141,7 +133,6 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
                 ...rest,
                 loading: false,
                 available: gates.length > 0,
-                manage: Array.isArray(granted) && granted.includes(MANAGE_PERMISSION),
                 gates: referencesPreserve(current.gates, gates),
                 requiredPlugins: {
                     ids: referencesPreserve(
@@ -241,7 +232,7 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
         gateRequirementUpdate(gateId, requirement) {
             const snapshot = store.getState();
             const gate = snapshot.gates.find((entry) => entry.id === gateId);
-            if (disposed || !snapshot.manage || !gate?.editable) return;
+            if (disposed || !gate?.editable) return;
             if (gate.requirement === requirement) return;
             save(`${GATE_PREFIX}${gateId}`, requirement, () =>
                 set({
@@ -253,7 +244,7 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
         },
         requiredPluginsUpdate(ids) {
             const snapshot = store.getState();
-            if (disposed || !snapshot.manage || !snapshot.requiredPlugins.editable) return;
+            if (disposed || !snapshot.requiredPlugins.editable) return;
             const next = [...new Set(ids)];
             save(REQUIRED_PLUGINS, next, () =>
                 set({ requiredPlugins: { ...snapshot.requiredPlugins, ids: next, saving: true } }),

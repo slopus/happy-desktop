@@ -17,6 +17,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "Each person adds a profile picture.",
         requirement: "optional",
         editable: true,
+        operator: false,
         saving: false,
     },
     {
@@ -25,6 +26,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "An owner names the admin bot that can change this server.",
         requirement: "required",
         editable: true,
+        operator: false,
         saving: false,
     },
     {
@@ -33,6 +35,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "The team connects an AI account of its own.",
         requirement: "optional",
         editable: false,
+        operator: true,
         saving: false,
     },
     {
@@ -41,6 +44,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "The team connects the tools agents work in.",
         requirement: "required",
         editable: true,
+        operator: false,
         saving: true,
     },
     {
@@ -49,6 +53,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "Someone invites a teammate.",
         requirement: "optional",
         editable: true,
+        operator: false,
         saving: false,
     },
     {
@@ -57,6 +62,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "Each person signs in to the mobile app.",
         requirement: "off",
         editable: false,
+        operator: true,
         saving: false,
     },
     {
@@ -65,6 +71,7 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "The team adds a card.",
         requirement: "off",
         editable: false,
+        operator: true,
         saving: false,
     },
 ];
@@ -89,7 +96,6 @@ const cases: readonly {
         label: "Owner",
         props: {
             loading: false,
-            manage: true,
             steps,
             plugins,
             onStepRequirementChange: noop,
@@ -101,9 +107,8 @@ const cases: readonly {
         label: "Member, read only",
         props: {
             loading: false,
-            manage: false,
-            steps,
-            plugins,
+            steps: steps.map((step) => ({ ...step, editable: false })),
+            plugins: { ...plugins, editable: false },
             onStepRequirementChange: noop,
             onPluginRequiredChange: noop,
         },
@@ -113,7 +118,6 @@ const cases: readonly {
         label: "Change refused",
         props: {
             loading: false,
-            manage: true,
             steps,
             saveError: "Only owners can change onboarding.",
             onStepRequirementChange: noop,
@@ -125,7 +129,6 @@ const cases: readonly {
         label: "Reading",
         props: {
             loading: true,
-            manage: false,
             steps: [],
             onStepRequirementChange: noop,
             onPluginRequiredChange: noop,
