@@ -73,10 +73,18 @@ export type HappyAgentControlMenuProps = {
  * geometry, rows, and current-item check marks stay consistent with the system.
  */
 export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
-    const [open, setOpen] = useState(false);
-    const expanded = open && !props.disabled;
+    /*
+     * How the popover is open. A ghost control opens on `hover` and closes when
+     * the pointer leaves, so it draws no backdrop: a full-window layer inside
+     * the control would keep the pointer "inside" forever and eat the next
+     * click. A click `pin`s it — the backdrop then closes it on an outside
+     * press, and focus is on the trigger, so Escape reaches it.
+     */
+    const [open, setOpen] = useState<false | "hover" | "pinned">(false);
+    const expanded = open !== false && !props.disabled;
     const ghost = props.variant === "ghost";
     const split = props.onPrimary !== undefined;
+    const pinToggle = () => setOpen((value) => (value === "pinned" ? false : "pinned"));
 
     return (
         <div
@@ -87,7 +95,7 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
             data-testid={props["data-testid"]}
             data-variant={ghost ? "ghost" : undefined}
             onKeyDown={(event) => {
-                if (event.key === "Escape" && open) {
+                if (event.key === "Escape" && open !== false) {
                     event.stopPropagation();
                     setOpen(false);
                 }
@@ -95,8 +103,13 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
             // A ghost control is quiet enough that pointing at it is the whole
             // gesture: the popover follows the pointer in and leaves with it.
             // The popover's own hover bridge keeps the 4px gap from closing it.
-            onPointerEnter={ghost ? () => setOpen(true) : undefined}
-            onPointerLeave={ghost ? () => setOpen(false) : undefined}
+            // A pinned popover stays until it is answered or dismissed.
+            onPointerEnter={
+                ghost ? () => setOpen((value) => (value === false ? "hover" : value)) : undefined
+            }
+            onPointerLeave={
+                ghost ? () => setOpen((value) => (value === "hover" ? false : value)) : undefined
+            }
             style={props.style}
         >
             <button
@@ -110,7 +123,7 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                     : {
                           "aria-expanded": expanded ? ("true" as const) : ("false" as const),
                           "aria-haspopup": "menu" as const,
-                          onClick: () => setOpen((value) => !value),
+                          onClick: pinToggle,
                       })}
                 className="happy-agent-control__trigger"
                 data-happy-desktop-ui="happy-agent-control-trigger"
@@ -158,7 +171,7 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
                     className="happy-agent-control__trigger happy-agent-control__trigger--menu"
                     data-happy-desktop-ui="happy-agent-control-menu-trigger"
                     disabled={props.disabled}
-                    onClick={() => setOpen((value) => !value)}
+                    onClick={pinToggle}
                     type="button"
                 >
                     <span aria-hidden="true" className="happy-agent-control__chevron">
@@ -168,16 +181,19 @@ export function HappyAgentControlMenu(props: HappyAgentControlMenuProps) {
             ) : null}
             {expanded ? (
                 <>
-                    {/* Transparent full-window backdrop closes the popover on an
-                        outside pointer-down without an imperative document listener. */}
-                    <button
-                        aria-hidden="true"
-                        className="happy-agent-control__backdrop"
-                        data-happy-desktop-ui="happy-agent-control-backdrop"
-                        onClick={() => setOpen(false)}
-                        tabIndex={-1}
-                        type="button"
-                    />
+                    {/* Transparent full-window backdrop closes a pinned popover on
+                        an outside pointer-down without an imperative document
+                        listener. A hovered one closes when the pointer leaves. */}
+                    {open === "pinned" ? (
+                        <button
+                            aria-hidden="true"
+                            className="happy-agent-control__backdrop"
+                            data-happy-desktop-ui="happy-agent-control-backdrop"
+                            onClick={() => setOpen(false)}
+                            tabIndex={-1}
+                            type="button"
+                        />
+                    ) : null}
                     <div
                         className="happy-agent-control__popover"
                         data-happy-desktop-ui="happy-agent-control-popover"
@@ -223,6 +239,12 @@ export type HappyAgentSessionControlsProps = {
     fields?: readonly HappyAgentSessionControlField[];
     /** Direction each selected control's menu opens. Defaults to below. */
     menuPlacement?: "above" | "below";
+    /**
+     * Edge of each trigger its menu hangs from. A bar standing at the trailing
+     * edge of its row, as a settings control does, passes `end` so its menus
+     * open back over the row instead of past the window's edge.
+     */
+    menuAlign?: "start" | "end";
     /**
      * How loudly the controls sit on the surface. The composer footer asks for
      * `ghost`: these are settings you glance at, not chrome that competes with
@@ -306,6 +328,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
                     items={modelItems}
                     key={field}
                     label="Model"
+                    menuAlign={props.menuAlign}
                     menuPlacement={props.menuPlacement}
                     variant={props.variant}
                     menuWidth={240}
@@ -324,6 +347,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
                     items={effortItems}
                     key={field}
                     label="Effort"
+                    menuAlign={props.menuAlign}
                     menuPlacement={props.menuPlacement}
                     variant={props.variant}
                     onSelect={(id) => props.onEffortChange(id as HappyAgentThinkingLevel)}
@@ -337,6 +361,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
                     disabled={props.disabled || !menus}
                     items={permissionItems}
                     key={field}
+                    menuAlign={props.menuAlign}
                     menuPlacement={props.menuPlacement}
                     variant={props.variant}
                     menuWidth={200}
@@ -353,6 +378,7 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
                 items={serviceTierItems}
                 key={field}
                 label={props.variant === "ghost" ? undefined : "Speed"}
+                menuAlign={props.menuAlign}
                 menuPlacement={props.menuPlacement}
                 variant={props.variant}
                 onSelect={(id) => {
