@@ -38,37 +38,3 @@
 .happy-lottie-scene[data-still="shown"] {
     background: var(--happy-lottie-scene-still) center / contain no-repeat;
 }
-
-/*
- * LottieSceneStage — a scene over its placeholder glyph. The glyph and the
- * canvas occupy one square and swap in place, the one thing flexbox cannot
- * express here; the square itself is the scene's size, so the swap moves
- * nothing.
- */
-.happy-lottie-scene-stage {
-    position: relative;
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    color: var(--text-secondary);
-}
-
-.happy-lottie-scene-stage__art {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    translate: -50% -50%;
-    opacity: 0;
-}
-
-.happy-lottie-scene-stage__art[data-painted="true"] {
-    opacity: 1;
-}
-
-/* The glyph steps aside once the artwork is really painting, rather than
-   showing through it. */
-.happy-lottie-scene-stage:has(.happy-lottie-scene-stage__art[data-painted="true"]) .happy-icon {
-    opacity: 0;
-}

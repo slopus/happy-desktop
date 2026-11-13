@@ -2,7 +2,6 @@ import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { LottieScene } from "./LottieScene";
-import robotStill from "./assets/animations/stills/robot.webp?inline";
 import { TextField } from "./TextField";
 
 export type HappyAgentCreateBotPageProps = {
@@ -68,7 +67,6 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                         play="on-hover"
                         replayLabel="Play the robot"
                         size={80}
-                        still={robotStill}
                     />
                 </span>
                 <h1

@@ -1,5 +1,5 @@
 import { Button } from "./Button";
-import { LottieSceneStage } from "./LottieSceneStage";
+import { LottieScene } from "./LottieScene";
 import { SegmentedProgress, type SegmentedProgressSegment } from "./SegmentedProgress";
 import { Octicon } from "./vectorIcons/VectorIcon";
 
@@ -172,7 +172,7 @@ export function AgentUpdateCard(props: AgentUpdateCardProps) {
         >
             <div className="happy-agent-update-card__row">
                 <span aria-hidden="true" className="happy-agent-update-card__scene">
-                    <LottieSceneStage
+                    <LottieScene
                         loop={!settled}
                         name="snail"
                         replayLabel="Play the snail again"

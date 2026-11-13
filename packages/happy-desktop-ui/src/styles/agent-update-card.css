@@ -293,7 +293,7 @@ button.happy-agent-update-card__agent:hover .happy-agent-update-card__agent-go {
         height: 40px;
     }
 
-    .happy-agent-update-card__scene > .happy-lottie-scene-stage {
+    .happy-agent-update-card__scene > .happy-lottie-scene {
         transform: scale(calc(40 / 56));
     }
 

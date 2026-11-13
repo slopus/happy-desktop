@@ -1,8 +1,7 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { LottieScene } from "./LottieScene";
-import { LottieSceneStage } from "./LottieSceneStage";
-import magicWandStill from "./assets/animations/stills/magic-wand.webp?inline";
+import magicWandStill from "./assets/animations/stills/magic-wand-start.webp?inline";
 
 export type HappyAgentCreateTaskPageProps = {
     /**
@@ -74,23 +73,13 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                     {/* The magic wand is still on its first frame until a
                         pointer enters it: one whole play each time, then back
                         to that frame. The crow plays once as the bug report
-                        opens, then replays on click; it has no still picture,
-                        so it stands on its placeholder glyph until painted. */}
-                    {"still" in purpose.motion ? (
-                        <LottieScene
-                            name={purpose.scene}
-                            {...purpose.motion}
-                            replayLabel={purpose.replayLabel}
-                            size={80}
-                        />
-                    ) : (
-                        <LottieSceneStage
-                            name={purpose.scene}
-                            {...purpose.motion}
-                            replayLabel={purpose.replayLabel}
-                            size={80}
-                        />
-                    )}
+                        opens, then replays on click. */}
+                    <LottieScene
+                        name={purpose.scene}
+                        {...purpose.motion}
+                        replayLabel={purpose.replayLabel}
+                        size={80}
+                    />
                 </span>
                 <h1
                     className="happy-agent-create-task__title"

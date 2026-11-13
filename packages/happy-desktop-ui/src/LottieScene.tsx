@@ -17,6 +17,7 @@ import {
     reducedMotionSubscribe,
     scenePixelRatio,
 } from "./lottie/dotLottieRuntime";
+import { SCENE_STILLS } from "./lottie/sceneStills";
 import alienMonsterUrl from "./assets/animations/alien-monster.json?url";
 import cherryBlossomUrl from "./assets/animations/cherry-blossom.json?url";
 import closedLockUrl from "./assets/animations/closed-lock.json?url";
@@ -185,9 +186,11 @@ export type LottieSceneProps = {
      * A picture of the rest frame, drawn under the canvas from the scene's first
      * paint until the player has drawn that frame itself. The player has to
      * fetch, parse, and render the animation first, so without one a scene's
-     * square stands empty for a moment as its page appears. Pass it inline
-     * (a `?inline` import) so nothing is fetched for it either; it must be the
-     * frame `rest` names, or the picture jumps when the player takes over.
+     * square would stand empty for a moment as its page appears. Every scene
+     * already has its end frame (`SCENE_STILLS`), so this is only for a scene
+     * that rests at its start. Pass it inline (a `?inline` import) so nothing
+     * is fetched for it either; it must be the frame `rest` names, or the
+     * picture jumps when the player takes over.
      */
     still?: string;
     /**
@@ -267,6 +270,7 @@ export function LottieScene(props: LottieSceneProps) {
     );
     const play = props.play ?? "on-appear";
     const restAt = props.rest ?? "end";
+    const still = props.still ?? (restAt === "end" ? SCENE_STILLS[props.name] : undefined);
     /*
      * A control only once there is really something to replay. Before the first
      * frame is painted — and permanently in an engine where the worker renderer
@@ -298,7 +302,7 @@ export function LottieScene(props: LottieSceneProps) {
          * screen with the page, and an engine that never brings the player up
          * keeps it for good.
          */
-        if (props.still !== undefined) element.dataset.still = "shown";
+        if (still !== undefined) element.dataset.still = "shown";
         const view = element.ownerDocument.defaultView;
         if (view === null) return;
         /*
@@ -632,9 +636,7 @@ export function LottieScene(props: LottieSceneProps) {
             role={control ? "button" : undefined}
             style={{
                 ...props.style,
-                ...(props.still === undefined
-                    ? {}
-                    : { "--happy-lottie-scene-still": `url("${props.still}")` }),
+                ...(still === undefined ? {} : { "--happy-lottie-scene-still": `url("${still}")` }),
                 height: box,
                 width: box,
             }}

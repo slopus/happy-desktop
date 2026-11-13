@@ -1,6 +1,5 @@
 import { EmptyState } from "../../src/EmptyState";
 import { LottieScene } from "../../src/LottieScene";
-import { LottieSceneStage } from "../../src/LottieSceneStage";
 import { ComponentPage, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -245,37 +244,9 @@ export function LottieScenePage() {
             </Specimen>
 
             <Specimen
-                detail="LottieSceneStage: a scene with no still picture, on its placeholder glyph. Each scene names one glyph for its meaning; it is drawn in the scene's own square until the artwork paints, then steps aside, so the hand-over moves nothing. Shown at the 56px card size and the 80px page size."
-                label="On its placeholder glyph"
-                number="05"
-                stage="surface"
-            >
-                <div style={{ alignItems: "center", display: "flex", gap: 16 }}>
-                    <LottieSceneStage
-                        name="crow-eating-worm"
-                        play="on-demand"
-                        replayLabel="Play the crow again"
-                        size={56}
-                    />
-                    <LottieSceneStage
-                        name="snail"
-                        play="on-demand"
-                        replayLabel="Play the snail again"
-                        size={56}
-                    />
-                    <LottieSceneStage
-                        name="crow-eating-worm"
-                        play="on-demand"
-                        replayLabel="Play the crow again"
-                        size={80}
-                    />
-                </div>
-            </Specimen>
-
-            <Specimen
                 detail="The plain medallion, for contrast. A screen that searched and found nothing keeps it: a miss is not a settled absence, and a filter that matched nothing changes with every keystroke — art that replayed on each of them would be noise."
                 label="Unanimated, for contrast"
-                number="06"
+                number="05"
                 stage="app"
             >
                 <EmptyState

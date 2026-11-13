@@ -70,11 +70,17 @@ of the page a new task is made on, where the clapper board stood before it.
 
 ## Stills
 
-`stills/robot.webp` and `stills/magic-wand.webp` are 240×240 renders of
-`robot.json` at frame 179 and `magic-wand.json` at frame 0, the frames each
-scene rests on in the create pages. They were drawn by the same dotLottie
-player and encoded as WebP; `LottieScene` shows them under the canvas until the
-player has drawn its first frame, so the picture is there when the page is.
+`stills/<scene>.webp` is a 240×240 render of every scene at the frame
+`LottieScene` rests on with `rest="end"` — the animation's last frame, or its
+playback segment's end (`spider-catching-bug` at relative frame 130) —
+and `stills/magic-wand-start.webp` is `magic-wand.json` at frame 0, the frame
+the Create task page rests it on. They were drawn by the same dotLottie worker
+player at device pixel ratio 1 with `fit: "contain"`, captured with a
+transparent background, and encoded with `cwebp -q 90 -m 6` (re-rendering
+`robot.json` this way reproduces the original `robot.webp` byte for byte).
+`LottieScene` shows a scene's still under its canvas until the player has drawn
+that frame itself, so the picture is there when the page is. Re-render a scene's
+still whenever its JSON or playback segment changes.
 
 ## Where these came from
 
