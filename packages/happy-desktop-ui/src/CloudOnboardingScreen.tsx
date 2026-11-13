@@ -138,6 +138,11 @@ export type CloudOnboardingView =
           readonly error?: string;
       }
     | {
+          /** The last page, for a reader the admin bot does not work with. */
+          readonly kind: "finished";
+          readonly botName: string;
+      }
+    | {
           readonly kind: "notice";
           /**
            * `waitForAdmin`: only someone else can complete this step. `update`:
@@ -618,6 +623,17 @@ function page(
                     </div>
                 ),
             };
+        case "finished":
+            return {
+                title: "You're all set",
+                copy: `${view.botName || "The admin bot"} works with the people who manage bots.`,
+                body: (
+                    <NoticeMark
+                        icon="check-circle"
+                        next="Your team's chats and tasks are waiting for you."
+                    />
+                ),
+            };
         case "notice":
             return NOTICES[view.reason](view.step, view.owners ?? []);
     }
@@ -676,7 +692,10 @@ const NOTICES: Readonly<
 };
 
 /** The notice's picture, and what happens next in one quiet line under it. */
-function NoticeMark(props: { readonly icon: "clock" | "arrow-down"; readonly next: string }) {
+function NoticeMark(props: {
+    readonly icon: "clock" | "arrow-down" | "check-circle";
+    readonly next: string;
+}) {
     return (
         <div className="happy-cloud-onboarding__notice-body">
             <span className="happy-cloud-onboarding__notice" aria-hidden>

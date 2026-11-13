@@ -14,6 +14,7 @@ import {
     type WelcomeStore,
 } from "happy-desktop-state";
 import {
+    CloudOnboardingScreen,
     LocalOnboardingScreen,
     ProfileSetupScreen,
     WelcomeScreen,
@@ -111,6 +112,22 @@ export function HappyAgentOnboardingBoundary(props: {
     // A server with onboarding gates decides every step; the reader is in once
     // none is left on screen.
     if (snapshot.flow) {
+        if (snapshot.finale)
+            return (
+                <CloudOnboardingScreen
+                    action={{
+                        label: "Go to Happy",
+                        autoFocus: true,
+                        onSelect: props.store.finaleDismiss,
+                    }}
+                    appearance={appearance.mode}
+                    currentStep=""
+                    steps={[]}
+                    view={{ kind: "finished", botName: snapshot.finale.botName }}
+                    {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
+                    {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
+                />
+            );
         if (!snapshot.flow.current) return props.children;
         return (
             <AppCloudOnboarding

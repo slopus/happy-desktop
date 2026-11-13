@@ -123,6 +123,11 @@ export interface HappyAgentOnboardingSnapshot {
      * `current` gate.
      */
     readonly flow?: HappyAgentOnboardingFlow;
+    /**
+     * The reader finished, and the admin bot they would be taken to works only
+     * with the people who manage bots: a last page says so before the app opens.
+     */
+    readonly finale?: { readonly botName: string };
     readonly pending: boolean;
     /** Authenticated setup endpoints are ready even before protected sync starts. */
     readonly available: boolean;
@@ -154,6 +159,8 @@ export interface HappyAgentOnboardingStore {
     pluginConnect(pluginId: string, target: HappyAgentPluginConnectTarget): void;
     /** Closes the plugin sign-in `pluginConnect` opened; the gate reads again. */
     pluginSetupClose(): void;
+    /** Leaves the last page for the app. */
+    finaleDismiss(): void;
     /** Reads the gates again, as when the window comes back to the front. */
     onboardingRead(): void;
     [Symbol.dispose](): void;
@@ -387,7 +394,13 @@ export function happyAgentOnboardingStoreCreate(
             .completeOnboarding({ signal: active.signal })
             .then(() => {
                 gatesCompleted = true;
-                if (passed.size) options.onFinished?.();
+                if (!passed.size) return;
+                // A reader the server says may not talk to the admin bot is not
+                // taken to it; one whose server does not say is, as before.
+                const adminBot = flow.gates.find((gate) => gate.kind === "adminBot");
+                if (adminBot?.kind === "adminBot" && adminBot.canTalk === false)
+                    publish({ ...snapshot, finale: { botName: adminBot.name } }, true);
+                else options.onFinished?.();
             })
             .catch(() => {
                 // Nothing blocks the reader any more, so they are already in;
@@ -771,6 +784,11 @@ export function happyAgentOnboardingStoreCreate(
                     snapshot = rest;
                 }
             });
+        },
+        finaleDismiss() {
+            if (!snapshot.finale) return;
+            const { finale: _left, ...rest } = snapshot;
+            publish(rest, true);
         },
         pluginSetupClose() {
             if (!snapshot.pluginSetup) return;

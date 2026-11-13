@@ -365,6 +365,16 @@ const screens: readonly Screen[] = [
         },
     },
     {
+        id: "finished-member",
+        label: "Finished, the admin bot works with owners",
+        props: {
+            currentStep: "",
+            serverLabel: "Acme",
+            action: { label: "Go to Happy", onSelect: noop },
+            view: { kind: "finished", botName: "Atlas" },
+        },
+    },
+    {
         id: "unavailable",
         label: "Not checkable yet",
         props: {

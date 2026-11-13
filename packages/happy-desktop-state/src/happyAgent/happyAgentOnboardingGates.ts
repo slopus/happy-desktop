@@ -44,6 +44,11 @@ export type HappyAgentOnboardingGate = HappyAgentOnboardingGateCommon &
               readonly points: readonly string[];
               /** Who may talk to it; empty when the server sends none. */
               readonly note: string;
+              /**
+               * Whether this reader may talk to it, which decides where they go
+               * after the last step; absent from a server that does not say.
+               */
+              readonly canTalk: boolean | undefined;
           }
         | {
               readonly kind: "inference";
@@ -151,6 +156,7 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
                 description: textOf(data.description),
                 points: textsOf(data.points),
                 note: textOf(data.note),
+                canTalk: typeof data.canTalk === "boolean" ? data.canTalk : undefined,
             };
         }
         case "inference":
