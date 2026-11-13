@@ -5489,12 +5489,19 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     sendConfirmations.delete(mutationId);
                     if (response !== undefined) {
                         // Happy Cloud answers before the run that takes the
-                        // message is announced, and without its runId. Until
-                        // run.started places it, it stays pending at the tail;
-                        // filed under an unknown run it would leave the
-                        // transcript for that moment.
+                        // message is announced: its events take a Redis hint
+                        // and a journal read to arrive, its reply does not.
+                        // The reply names that run, or on an older server
+                        // leaves it out. Only a run the stream has announced
+                        // is drawn, so until run.started places the message it
+                        // stays pending at the tail; filed under a run this
+                        // session does not hold it would leave the transcript
+                        // for that moment.
                         const message = response.message;
-                        if (message.runId == null)
+                        if (
+                            message.runId == null ||
+                            sessions.get(sessionId)?.runs.has(message.runId) !== true
+                        )
                             updateMessage(
                                 sessionId,
                                 message.role === "user"

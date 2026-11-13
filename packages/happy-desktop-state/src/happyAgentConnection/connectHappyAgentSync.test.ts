@@ -3056,8 +3056,11 @@ it("retains the last successful Git comparison through failed scans and clears i
     await vi.waitFor(() => expect(groups.projects[0]?.git?.comparison).toBe("ready"));
 });
 
-/** A send reply as Happy Cloud gives it: accepted, with no runId, before run.started. */
-function cloudSendReplyHold(daemon: FakeHappyAgentDaemon) {
+/**
+ * A send reply as Happy Cloud gives it: accepted, before run.started. An older
+ * server leaves the runId out; a current one names the run it has yet to announce.
+ */
+function cloudSendReplyHold(daemon: FakeHappyAgentDaemon, runId?: string) {
     let reply: (() => void) | undefined;
     let sentId: string | undefined;
     (daemon.client as unknown as { sendMessage: unknown }).sendMessage = (
@@ -3078,6 +3081,7 @@ function cloudSendReplyHold(daemon: FakeHappyAgentDaemon) {
                         mode: request.mode,
                         role: "user",
                         status: "accepted",
+                        ...(runId === undefined ? {} : { runId }),
                     },
                 });
         });
@@ -3111,9 +3115,12 @@ it("keeps a sent message in place when Happy Cloud answers before its run is ann
     );
 });
 
-it("leaves a message its run already took where it is when the reply comes late", async () => {
+it.each([
+    ["leaves out its run", undefined],
+    ["names its run", "cloud-run"],
+])("leaves a message its run already took where it is when a late reply %s", async (_, runId) => {
     const { daemon, chat, sessionId, connection } = await liveHarness();
-    const send = cloudSendReplyHold(daemon);
+    const send = cloudSendReplyHold(daemon, runId);
     connection.sendMessage(sessionId, "hello");
     await vi.waitFor(() => expect(send.sentId()).toBeDefined());
     const id = send.sentId()!;
@@ -3129,4 +3136,39 @@ it("leaves a message its run already took where it is when the reply comes late"
     expect(userMessages(chat.elements)).toMatchObject([
         { messageId: id, groupId: "cloud-run", delivery: "sent" },
     ]);
+});
+
+it("keeps a sent message in place when Happy Cloud's answer names a run not yet announced", async () => {
+    const { daemon, chat, sessionId, connection } = await liveHarness();
+    const send = cloudSendReplyHold(daemon, "cloud-run");
+    connection.sendMessage(sessionId, "hello");
+    await vi.waitFor(() => expect(send.sentId()).toBeDefined());
+    const id = send.sentId()!;
+    expect(userMessages(chat.elements).map((element) => element.messageId)).toEqual([id]);
+
+    // The reply reaches the desktop first, then the events of the same send
+    // in the order Happy Cloud commits them.
+    send.reply();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(userMessages(chat.elements)).toMatchObject([
+        { messageId: id, groupId: `pending:${id}`, delivery: "pending_steering" },
+    ]);
+
+    daemon.eventEmit("message.created", {
+        agentId: sessionId,
+        runId: null,
+        message: fakeUserMessage({ id, delivery: "steer" }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(userMessages(chat.elements)).toMatchObject([
+        { messageId: id, groupId: `pending:${id}`, delivery: "pending_steering" },
+    ]);
+
+    const run = fakeRun({ id: "cloud-run", status: "running" });
+    daemon.eventEmit("run.started", { agentId: sessionId, run, acceptedMessageIds: [id] });
+    await vi.waitFor(() =>
+        expect(userMessages(chat.elements)).toMatchObject([
+            { messageId: id, groupId: "cloud-run", delivery: "sent" },
+        ]),
+    );
 });
