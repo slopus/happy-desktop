@@ -173,10 +173,24 @@ async function gymElectronDockWatch(app: ElectronApplication): Promise<void> {
                 record(`event ${event}`, false),
             );
         let shown = dock.isVisible();
-        setInterval(() => {
-            const now = dock.isVisible();
-            if (now === shown) return;
-            shown = now;
+        // Written straight to the descriptor: stderr is a pipe, which Node
+        // writes asynchronously on macOS, and the guard exits the process in
+        // the same tick it sees the tile.
+        const fs = (process as { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule?.(
+            "node:fs",
+        ) as { writeSync(fd: number, text: string): number } | undefined;
+        const say = (text: string): void => {
+            try {
+                if (fs) {
+                    fs.writeSync(2, `${text}\n`);
+                    return;
+                }
+            } catch {
+                // Fall through to the console.
+            }
+            console.error(text);
+        };
+        const report = (headline: string): void => {
             const windows = BrowserWindow.getAllWindows().map((window) => ({
                 id: window.id,
                 title: window.getTitle(),
@@ -184,14 +198,36 @@ async function gymElectronDockWatch(app: ElectronApplication): Promise<void> {
                 focused: window.isFocused(),
                 url: window.webContents.getURL().slice(0, 120),
             }));
-            console.error(
-                `[gym-dock] the Dock tile ${now ? "appeared" : "went away"} at ${String(Date.now() - started)} ms; windows ${JSON.stringify(windows)}`,
+            say(
+                `[gym-dock] ${headline} at ${String(Date.now() - started)} ms; windows ${JSON.stringify(windows)}`,
             );
             for (const entry of recent)
-                console.error(
+                say(
                     `[gym-dock]   +${String(entry.at)} ms ${entry.what}${entry.stack ? `\n${entry.stack}` : ""}`,
                 );
+        };
+        setInterval(() => {
+            const now = dock.isVisible();
+            if (now === shown) return;
+            shown = now;
+            report(`the Dock tile ${now ? "appeared" : "went away"}`);
         }, 10).unref();
+        // The guard polls less often than this watcher, but a main thread busy
+        // past both deadlines lets the guard run first and exit before this
+        // watcher has looked: the record is told on the way out instead.
+        const exit = electronApp.exit.bind(electronApp);
+        electronApp.exit = (code?: number) => {
+            // The report must never keep a run the guard is ending alive.
+            try {
+                const visible = dock.isVisible();
+                if ((code ?? 0) !== 0 || visible !== shown)
+                    report(
+                        `app.exit(${String(code)}) with the Dock tile ${visible ? "visible" : "hidden"}`,
+                    );
+            } finally {
+                exit(code);
+            }
+        };
     });
 }
 
