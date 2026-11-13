@@ -1,5 +1,5 @@
 import { act, fireEvent, render } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import type {
     HappyAgentBot,
     HappyAgentBotId,
@@ -17,6 +17,7 @@ import type {
 } from "happy-desktop-state";
 import {
     appearanceStoreCreate,
+    commandPaletteStoreCreate,
     happyAgentGroupAccessRefused,
     happyAgentHostNoop,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
@@ -42,6 +43,11 @@ const CONNECTED = { connection: "connected", daemon: "ready", attempt: 0 } as co
 const PANEL_CLOSED = { open: false, tabs: [] } as const;
 const MODELS_LOADING = { type: "loading" } as const;
 const PHOTO = "data:image/png;base64,iVBORw0KGgo=";
+
+beforeAll(() => {
+    // jsdom lays nothing out, so it has nothing to scroll into view.
+    Element.prototype.scrollIntoView ??= () => undefined;
+});
 
 const conversation = (id: string, title: string) => ({
     id,
@@ -125,6 +131,7 @@ const TASKS: readonly HappyAgentTask[] = [
 ];
 
 interface TaskActions {
+    taskJoin: (taskId: string) => Promise<void>;
     taskLeave: (taskId: string) => Promise<void>;
     taskArchive: (taskId: string) => Promise<void>;
     taskReorder: (taskId: string, afterId: string | null) => Promise<void>;
@@ -134,6 +141,8 @@ interface TaskActions {
 
 interface Listing {
     readonly tasks: readonly HappyAgentTask[];
+    /** Every active task, joined or not; the joined ones alone when absent. */
+    readonly taskDirectory?: readonly HappyAgentTask[];
     readonly browseOpen?: boolean;
 }
 
@@ -143,8 +152,9 @@ function workspace(actions: TaskActions, listing: Listing): HappyAgentWorkspaceS
         list: {
             bots: BOTS,
             tasks: listing.tasks,
-            taskDirectory: listing.tasks,
+            taskDirectory: listing.taskDirectory ?? listing.tasks,
             tasksArchived: [],
+            archivedSessions: [],
             tasksJoining: new Set(),
             taskFailures: new Map(),
             projects: { type: "ready" as const, value: PROJECTS },
@@ -154,6 +164,7 @@ function workspace(actions: TaskActions, listing: Listing): HappyAgentWorkspaceS
         groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),
         fileTabs: [],
         tabOrder: [],
+        recentTabs: [],
         openInTargets: [],
         fileViewMode: "unified" as const,
         fileScope: "changed" as const,
@@ -223,9 +234,13 @@ function view(
         entries?: (actions: TaskActions) => readonly AppHappyAgentEntry[];
         projectsVisibility?: ProjectsVisibilityStore;
         onTaskCreateOpen?: (happyAgentId: string) => void;
+        onChatSelect?: (happyAgentId: string, groupId: string, chatId?: string) => void;
+        palette?: true;
     } = {},
 ) {
+    const palette = commandPaletteStoreCreate();
     const actions: TaskActions = {
+        taskJoin: vi.fn(() => Promise.resolve()),
         taskLeave: vi.fn(() => Promise.resolve()),
         taskArchive: vi.fn(() => Promise.resolve()),
         taskReorder: vi.fn(() => Promise.resolve()),
@@ -244,7 +259,8 @@ function view(
     const rendered = render(
         <AppHappyAgentView
             appearance={appearanceStoreCreate({ mode: "light" })}
-            onChatSelect={() => undefined}
+            {...(options.palette ? { commandPalette: palette } : {})}
+            onChatSelect={options.onChatSelect ?? (() => undefined)}
             onFileClose={() => undefined}
             onFileSelect={() => undefined}
             onSettingsOpen={() => undefined}
@@ -256,7 +272,7 @@ function view(
             {...(options.onTaskCreateOpen ? { onTaskCreateOpen: options.onTaskCreateOpen } : {})}
         />,
     );
-    return { ...rendered, actions };
+    return { ...rendered, actions, palette };
 }
 
 const rowIds = (container: HTMLElement): (string | null)[] =>
@@ -321,6 +337,39 @@ it("leaves a task from the row's own control", () => {
     fireEvent.click(leave);
     expect(actions.taskLeave).toHaveBeenCalledWith("billing");
     expect(actions.taskArchive).not.toHaveBeenCalled();
+});
+
+it("puts a task the reader left back in their list when they open it from search", () => {
+    const { membership: _, ...left } = task("left", "Review the roadmap", {});
+    const onChatSelect = vi.fn();
+    const { actions, palette } = view({
+        onChatSelect,
+        palette: true,
+        entries: (taskActions) => [
+            entry("local", taskActions, {}, { tasks: TASKS, taskDirectory: [...TASKS, left] }),
+        ],
+    });
+    act(() => palette.paletteOpen());
+    act(() => palette.queryUpdate("roadmap"));
+    fireEvent.click(
+        document.querySelector(
+            '[data-happy-desktop-ui="command-palette-results-row"][data-row-id="task:left"]',
+        )!,
+    );
+    expect(actions.taskJoin).toHaveBeenCalledExactlyOnceWith("left");
+    // It opens at once, while the join is on its way.
+    expect(onChatSelect).toHaveBeenCalledExactlyOnceWith("local", "ws_left", "ses_left");
+
+    // One already in the list only opens.
+    act(() => palette.paletteOpen());
+    act(() => palette.queryUpdate("invoice"));
+    fireEvent.click(
+        document.querySelector(
+            '[data-happy-desktop-ui="command-palette-results-row"][data-row-id="task:billing"]',
+        )!,
+    );
+    expect(actions.taskJoin).toHaveBeenCalledOnce();
+    expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_billing", "ses_billing");
 });
 
 it("offers Archive in the context menu only for a task the reader may archive", () => {

@@ -3348,6 +3348,33 @@ export function Sidebar(props: SidebarProps) {
             },
         };
     });
+    /**
+     * The active row brought into view, once for each row made active: the
+     * scrollport moves just far enough to show it, and not at all when it is
+     * already on screen. A row that is not drawn yet, such as a task whose
+     * join the host has not answered, is brought into view when it arrives.
+     * After that the reader's own scrolling is left alone.
+     */
+    const activeRevealed = useRef<string | undefined>(undefined);
+    // eslint-disable-next-line happy-react/no-layout-effect -- the row an address lands on is known only once it is laid out, and it must be scrolled to before paint so it never shows off screen first
+    useLayoutEffect(() => {
+        const id = local.activeItemId;
+        const viewport = bodyViewport.current;
+        if (activeRevealed.current === id || !viewport) return;
+        const row = [
+            ...viewport.querySelectorAll<HTMLElement>(
+                '[data-happy-desktop-ui="sidebar-item"][data-item-id]',
+            ),
+        ].find((node) => node.dataset.itemId === id);
+        if (!row) return;
+        activeRevealed.current = id;
+        const box = row.getBoundingClientRect();
+        // A row folded away draws no box, and unfolding it is the reader's call.
+        if (box.height === 0) return;
+        const view = viewport.getBoundingClientRect();
+        if (box.top < view.top) viewport.scrollTop -= view.top - box.top;
+        else if (box.bottom > view.bottom) viewport.scrollTop += box.bottom - view.bottom;
+    });
     const moveAnnounce = (text: string): void => {
         const slot = announceSlot === 0 ? 1 : 0;
         setAnnounceSlot(slot);
