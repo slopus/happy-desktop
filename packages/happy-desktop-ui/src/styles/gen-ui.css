@@ -972,8 +972,10 @@ button.gen-ui-press[data-role="tile"]:hover:not(:disabled) .gen-ui-image {
     align-items: center;
     justify-content: space-between;
     height: 32px;
-    /* The code below starts 8px inside the frame; its title starts with it. */
-    padding-inline: 7px 6px;
+    /* The code below starts 8px inside the frame; its title starts with it.
+       The copy button sits 8px in too, beside the frame's 8px corner rather
+       than inside its curve. */
+    padding-inline: 7px;
     border-bottom: 1px solid var(--divider);
     color: var(--text-secondary);
     font-size: 13px;

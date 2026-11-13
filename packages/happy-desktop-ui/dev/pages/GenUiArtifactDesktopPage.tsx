@@ -22,7 +22,7 @@ import { Sidebar } from "../../src/Sidebar";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import releaseRender from "../assets/genui/11-release.render.json?raw";
 import galleryRender from "../assets/genui/05-gallery-grid.render.json?raw";
-import secretRender from "../assets/genui/13-cluster-secret.render.json?raw";
+import secretRender from "../assets/genui/blueprint/secret-requests.render.json?raw";
 import type { GenUiClusterSecretHost } from "../../src/genUi/GenUiArtifact";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
