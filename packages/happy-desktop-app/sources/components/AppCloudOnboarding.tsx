@@ -109,7 +109,7 @@ function pluginRows(
     gate: Extract<HappyAgentOnboardingGate, { readonly kind: "plugins" }>,
     plugins: HappyAgentPluginsSnapshot | undefined,
     connecting: string | undefined,
-    connect: (pluginId: string) => void,
+    connect: ((pluginId: string) => void) | undefined,
 ): readonly CloudOnboardingPlugin[] {
     const catalog = plugins?.plugins ?? [];
     const required = gate.plugins.filter((plugin) => plugin.required);
@@ -137,7 +137,7 @@ function pluginRows(
             required: gate.required.includes(id),
             state,
             ...(connecting === id ? { busy: true } : {}),
-            ...(state === "connected" || (connecting !== undefined && connecting !== id)
+            ...(!connect || state === "connected" || (connecting !== undefined && connecting !== id)
                 ? {}
                 : { onSelect: () => connect(id) }),
         };
@@ -303,10 +303,15 @@ export function AppCloudOnboarding(props: {
                 return {
                     view: {
                         kind: "plugins",
-                        plugins: pluginRows(gate, plugins, props.snapshot.pluginConnecting, (id) =>
-                            store.pluginConnect(id, { open }),
+                        // A server whose health does not say it serves plugins has no
+                        // store: its required plugins are listed from the gate, not offered.
+                        plugins: pluginRows(
+                            gate,
+                            plugins,
+                            props.snapshot.pluginConnecting,
+                            pluginsStore ? (id) => store.pluginConnect(id, { open }) : undefined,
                         ),
-                        loading: plugins?.loading ?? true,
+                        loading: pluginsStore ? (plugins?.loading ?? true) : false,
                         ...((flow.error ?? plugins?.error?.message)
                             ? { error: flow.error ?? plugins?.error?.message }
                             : {}),
