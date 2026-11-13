@@ -59,6 +59,7 @@ import {
     happyAgentCloudProvidersStoreNoop,
     happyAgentRepositoriesStoreNoop,
     happyAgentComputeStoreNoop,
+    happyAgentOnboardingSettingsStoreNoop,
     happyAgentDailyUsageStoreNoop,
     happyAgentCloudProviderAddTeamOnly,
     happyAgentCloudConnectionName,
@@ -126,6 +127,7 @@ import {
     HappyCloudWebSettings,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
+import { AppOnboardingSettings } from "./AppOnboardingSettings";
 import { AppComputeSettings } from "./AppComputeSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
@@ -169,6 +171,9 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
     // The team's code on a Happy Cloud server; offered only there.
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
+    // What people are asked for when they first open a Happy Cloud server;
+    // listed only where the server reports onboarding settings.
+    { group: "Team", icon: "check-circle", id: "onboarding", label: "Onboarding", tone: "green" },
     // How each project's changes are split into tiers in the Changes listing.
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
     { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
@@ -428,6 +433,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     usage: "What each provider account has spent",
     repositories: "The code your team works on",
     compute: "The computers agents run on",
+    onboarding: "What people are asked for when they first open this server",
 };
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
@@ -579,13 +585,29 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const host = hostHappyAgent(directory);
     const happyCloud = host?.happyCloud === true;
-    const section = happyAgentSettingsCategoryAvailable(props.section, happyCloud)
-        ? props.section
-        : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
+    // Followed while Settings is open: whether Onboarding is listed at all
+    // depends on the server reporting onboarding settings.
+    const onboardingSettingsStore = host?.session?.onboardingSettings?.();
+    const onboardingSettings = useSyncExternalStore(
+        (onboardingSettingsStore ?? happyAgentOnboardingSettingsStoreNoop).subscribe,
+        (onboardingSettingsStore ?? happyAgentOnboardingSettingsStoreNoop).get,
+        (onboardingSettingsStore ?? happyAgentOnboardingSettingsStoreNoop).get,
+    );
+    // A link to Onboarding on a server that reports no onboarding settings
+    // opens the default category, once the server has said so.
+    const onboardingAbsent =
+        !onboardingSettingsStore || (!onboardingSettings.loading && !onboardingSettings.available);
+    const section =
+        happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
+        !(props.section === "onboarding" && onboardingAbsent)
+            ? props.section
+            : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
     const stateOpen = section === "debug";
     const membersStore = host?.session?.members?.();
     const repositoriesStore = host?.session?.repositories?.();
     const computeStore = host?.session?.compute?.();
+    // The plugins step's choices come from the server's plugin catalog.
+    const onboardingPlugins = section === "onboarding" ? host?.session?.plugins?.() : undefined;
     // A category the host cannot serve is left out of the list rather than
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
@@ -593,7 +615,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             happyAgentSettingsCategoryAvailable(category.id, happyCloud) &&
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
-            (category.id !== "compute" || computeStore !== undefined),
+            (category.id !== "compute" || computeStore !== undefined) &&
+            (category.id !== "onboarding" ||
+                (onboardingSettingsStore !== undefined && onboardingSettings.available)),
     );
     const hostAvailability = host?.session
         ? happyAgentAvailabilityProject(host.session.connection.get(), true, {
@@ -1527,6 +1551,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             ) : section === "repositories" ? (
                 repositoriesShown ? (
                     <AppRepositoriesSettings snapshot={repositories} store={repositoriesShown} />
+                ) : null
+            ) : section === "onboarding" ? (
+                onboardingSettingsStore && onboardingSettings.available ? (
+                    <AppOnboardingSettings
+                        {...(onboardingPlugins ? { plugins: onboardingPlugins } : {})}
+                        snapshot={onboardingSettings}
+                        store={onboardingSettingsStore}
+                    />
                 ) : null
             ) : section === "compute" ? (
                 computeShown ? (

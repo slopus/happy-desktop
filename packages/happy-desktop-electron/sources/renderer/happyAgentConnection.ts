@@ -160,6 +160,9 @@ export interface HappyAgentSession {
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
     readonly compute: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
+    readonly onboardingSettings: () =>
+        | import("happy-desktop-state").HappyAgentOnboardingSettingsStore
+        | undefined;
     readonly plugins: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
     readonly genUiActions: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
     readonly dailyUsage: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
@@ -721,6 +724,7 @@ export function happyAgentConnectionOpen(input: {
                     cloudProviders: () => client.cloudProviders(),
                     repositories: () => client.repositories(),
                     compute: () => client.compute(),
+                    onboardingSettings: () => client.onboardingSettings(),
                     plugins: () => client.plugins(),
                     genUiActions: () => client.genUiActions(),
                     dailyUsage: () => client.dailyUsage(),

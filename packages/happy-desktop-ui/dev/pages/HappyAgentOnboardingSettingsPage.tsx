@@ -1,0 +1,193 @@
+import {
+    HappyAgentOnboardingSettings,
+    type HappyAgentOnboardingSettingsProps,
+    type HappyAgentOnboardingStepRow,
+} from "../../src/pages/settings/HappyAgentOnboardingSettings";
+import { HappyAgentSettingsShell } from "../../src/pages/settings/HappyAgentSettingsShell";
+import { ThemeScope, type ThemeMode } from "../../src/ThemeScope";
+import { ComponentPage, FullScreenSpecimen } from "../kit";
+
+export const componentNumber = "C-347";
+const noop = () => undefined;
+
+const steps: readonly HappyAgentOnboardingStepRow[] = [
+    {
+        id: "avatar",
+        label: "Photo",
+        description: "Each person adds a profile picture.",
+        requirement: "optional",
+        editable: true,
+        saving: false,
+    },
+    {
+        id: "adminBot",
+        label: "Admin bot",
+        description: "An owner names the admin bot that can change this server.",
+        requirement: "required",
+        editable: true,
+        saving: false,
+    },
+    {
+        id: "inference",
+        label: "AI",
+        description: "The team connects an AI account of its own.",
+        requirement: "optional",
+        editable: false,
+        saving: false,
+    },
+    {
+        id: "plugins",
+        label: "Plugins",
+        description: "The team connects the tools agents work in.",
+        requirement: "required",
+        editable: true,
+        saving: true,
+    },
+    {
+        id: "teammates",
+        label: "Team",
+        description: "Someone invites a teammate.",
+        requirement: "optional",
+        editable: true,
+        saving: false,
+    },
+    {
+        id: "mobileApp",
+        label: "Phone",
+        description: "Each person signs in to the mobile app.",
+        requirement: "off",
+        editable: false,
+        saving: false,
+    },
+    {
+        id: "paymentMethod",
+        label: "Payment method",
+        description: "The team adds a card.",
+        requirement: "off",
+        editable: false,
+        saving: false,
+    },
+];
+
+const plugins: HappyAgentOnboardingSettingsProps["plugins"] = {
+    editable: true,
+    saving: false,
+    rows: [
+        { id: "github", name: "GitHub", required: true },
+        { id: "linear", name: "Linear", required: false },
+        { id: "slack", name: "Slack", required: false },
+    ],
+};
+
+const cases: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly props: HappyAgentOnboardingSettingsProps;
+}[] = [
+    {
+        id: "owner",
+        label: "Owner",
+        props: {
+            loading: false,
+            manage: true,
+            steps,
+            plugins,
+            onStepRequirementChange: noop,
+            onPluginRequiredChange: noop,
+        },
+    },
+    {
+        id: "member",
+        label: "Member, read only",
+        props: {
+            loading: false,
+            manage: false,
+            steps,
+            plugins,
+            onStepRequirementChange: noop,
+            onPluginRequiredChange: noop,
+        },
+    },
+    {
+        id: "refused",
+        label: "Change refused",
+        props: {
+            loading: false,
+            manage: true,
+            steps,
+            saveError: "Only owners can change onboarding.",
+            onStepRequirementChange: noop,
+            onPluginRequiredChange: noop,
+        },
+    },
+    {
+        id: "loading",
+        label: "Reading",
+        props: {
+            loading: true,
+            manage: false,
+            steps: [],
+            onStepRequirementChange: noop,
+            onPluginRequiredChange: noop,
+        },
+    },
+];
+
+export function HappyAgentOnboardingSettingsPage() {
+    const modes: readonly ThemeMode[] = ["light", "dark"];
+    return (
+        <ComponentPage
+            contract="Props only"
+            number={componentNumber}
+            summary="Settings › Onboarding on Happy Cloud: each onboarding step off, optional or required, and the plugins the plugins step asks for. Steps the operator set are shown, not offered."
+            title="Onboarding settings"
+        >
+            {modes.flatMap((mode) =>
+                cases.map((entry, index) => (
+                    <FullScreenSpecimen
+                        detail={`${mode} · 1100 × 900`}
+                        key={`${mode}-${entry.id}`}
+                        label={`${entry.label} · ${mode}`}
+                        number={String(index + 1).padStart(2, "0")}
+                        screen={`${mode}-${entry.id}-1100x900`}
+                        window={{ width: 1100, height: 900 }}
+                    >
+                        <ThemeScope mode={mode}>
+                            <HappyAgentSettingsShell
+                                activeCategoryId="onboarding"
+                                categories={[
+                                    {
+                                        icon: "settings",
+                                        id: "general",
+                                        label: "General",
+                                        tone: "gray",
+                                    },
+                                    {
+                                        group: "Team",
+                                        icon: "users",
+                                        id: "members",
+                                        label: "Members",
+                                        tone: "orange",
+                                    },
+                                    {
+                                        group: "Team",
+                                        icon: "check-circle",
+                                        id: "onboarding",
+                                        label: "Onboarding",
+                                        tone: "green",
+                                    },
+                                ]}
+                                description="What people are asked for when they first open this server"
+                                onCategorySelect={noop}
+                                onClose={noop}
+                                title="Onboarding"
+                            >
+                                <HappyAgentOnboardingSettings {...entry.props} />
+                            </HappyAgentSettingsShell>
+                        </ThemeScope>
+                    </FullScreenSpecimen>
+                )),
+            )}
+        </ComponentPage>
+    );
+}

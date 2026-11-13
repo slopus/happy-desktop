@@ -1159,6 +1159,13 @@ export {
     type HappyAgentRepositoryRow,
 } from "./pages/settings/HappyAgentRepositoriesSettings";
 export {
+    HappyAgentOnboardingSettings,
+    type HappyAgentOnboardingPluginRow,
+    type HappyAgentOnboardingRequirementChoice,
+    type HappyAgentOnboardingSettingsProps,
+    type HappyAgentOnboardingStepRow,
+} from "./pages/settings/HappyAgentOnboardingSettings";
+export {
     HappyAgentComputeMachineAddDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeAddAccess,
