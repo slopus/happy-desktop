@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 /** The homepage's platform beat and phone/wordmark close, using this film's own desktop take. */
-export function ending(cues, square = false) {
+export function ending(square = false) {
     const phone = {
         screen: join(import.meta.dirname, "phone/native-home.jpg"),
         frame: join(import.meta.dirname, "phone/device.png"),
@@ -13,9 +13,12 @@ export function ending(cues, square = false) {
             layout: "platforms",
             text: "All platforms",
             phone,
+            entrance: "window-slide",
+            move: 0.9,
             desktop: {
-                take: "activity",
-                at: cues.activity[square ? "step1-rest" : "step3-rest"] + 0.7,
+                left: square ? 430 : 1020,
+                top: square ? 340 : 62,
+                width: square ? 780 : 1340,
             },
             seconds: square ? 3 : 3.2,
         },

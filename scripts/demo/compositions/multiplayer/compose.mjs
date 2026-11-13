@@ -32,8 +32,9 @@
  * A card may show `pictures` under its words, side by side.
  *
  * Segments hand over with a short dissolve. A chapter card fades the window
- * to the backdrop before its words enter. The ending keeps one phone on a
- * horizontal rail while its two compositions change around it.
+ * to the backdrop before its words enter. The ending carries the last live
+ * window right into All platforms as the phone and words slide in from the
+ * left, then keeps the phone on a horizontal rail into the Happy card.
  */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -160,12 +161,6 @@ async function wordsDraw(cut) {
             left:0; top:0; }
         .closing .screen { position:absolute; left:7.25462%; top:3.543586%; width:85.775249%; height:92.912828%; object-fit:contain; background:#000; mask-mode:luminance; mask-size:100% 100%; }
         .closing .bezel { position:absolute; inset:0; width:100%; height:100%; }
-        .closing .desktop { position:absolute; left:${square ? 430 : 1020}px; top:${square ? 340 : 62}px; width:${square ? 780 : 1340}px;
-            border-radius:12px; overflow:hidden; box-shadow:0 20px 65px #14002880; border:1px solid #ffffff25; }
-        .closing .desktop>img { display:block; width:100%; }
-        .closing .traffic { position:absolute; left:18px; top:18px; display:flex; gap:9px; }
-        .closing .traffic i { width:12px; height:12px; border-radius:50%; background:#ff5f57; }
-        .closing .traffic i:nth-child(2){background:#febc2e}.closing .traffic i:nth-child(3){background:#28c840}
         .platform-copy { position:absolute; left:${square ? 430 : 500}px; top:${square ? 65 : 400}px; }
         .platform-copy h1 { margin:0; font-size:${square ? 72 : 90}px; font-weight:600; line-height:1.03; letter-spacing:-.025em; }
         .icons { display:flex; gap:${square ? 20 : 22}px; margin-top:25px; font-size:${square ? 43 : 56}px; align-items:center; }
@@ -191,16 +186,7 @@ async function wordsDraw(cut) {
     const closing = async (segment) => {
         if (segment.layout === "brand")
             return `<div class="closing shade"><div class="brand-copy"><h1>${escape(segment.wordmark)}</h1><p>${escape(segment.line)}</p><div class="stars">${escape(segment.small)}${glyph("logo-github")}<span>${segment.stars}</span></div></div></div>`;
-        const desktop = segment.desktop;
-        const file = options.takes[desktop.take];
-        const size = await probe(file);
-        let still;
-        for await (const frame of takeOpen(file, desktop.at, 1, cut.output.fps, size))
-            still = await sharp(frame, { raw: { ...size, channels: 3 } })
-                .png()
-                .toBuffer();
-        if (!still) throw new Error("No final desktop frame for the platform card.");
-        return `<div class="closing platforms shade"><div class="platform-copy"><h1>All<br>platforms</h1><div class="icons">${["logo-apple", "logo-windows", "logo-tux", "logo-android"].map(glyph).join("")}</div></div><div class="desktop"><img src="data:image/png;base64,${still.toString("base64")}"><div class="traffic"><i></i><i></i><i></i></div></div></div>`;
+        return `<div class="closing platforms shade"><div class="platform-copy"><h1>All<br>platforms</h1><div class="icons">${["logo-apple", "logo-windows", "logo-tux", "logo-android"].map(glyph).join("")}</div></div></div>`;
     };
     for (const segment of cut.segments) {
         if (segment.phone) {
@@ -445,6 +431,57 @@ async function windowLayers(cut, rect, dims) {
     return { shown, over, mask, shadow, halo };
 }
 
+/** Draw the same recorded window and frame at a new camera rectangle. */
+async function windowDraw(picture, size, rect, dims) {
+    const made = await windowLayers(cut, rect, dims);
+    const { shown } = made;
+    const scaled = await sharp(picture, { raw: { ...size, channels: 3 } })
+        .resize(rect.width, rect.height, { kernel: "lanczos3" })
+        .extract({
+            left: shown.left - rect.left,
+            top: shown.top - rect.top,
+            width: shown.width,
+            height: shown.height,
+        })
+        .ensureAlpha()
+        .raw()
+        .toBuffer();
+    const shaped = await sharp(scaled, {
+        raw: { width: shown.width, height: shown.height, channels: 4 },
+    })
+        .composite([
+            { input: made.over, left: 0, top: 0 },
+            { input: made.mask, left: 0, top: 0, blend: "dest-in" },
+        ])
+        .png({ compressionLevel: 0 })
+        .toBuffer();
+    return [
+        { input: made.shadow, left: made.halo.left, top: made.halo.top },
+        { input: shaped, left: shown.left, top: shown.top },
+    ];
+}
+
+/** Clip a translated layer to the output without changing its opacity. */
+async function translated(input, size, left, top) {
+    const shown = intersect({ left, top, ...size }, { left: 0, top: 0, width, height });
+    if (!shown) return [];
+    return [
+        {
+            input: await sharp(input)
+                .extract({
+                    left: shown.left - left,
+                    top: shown.top - top,
+                    width: shown.width,
+                    height: shown.height,
+                })
+                .png()
+                .toBuffer(),
+            left: shown.left,
+            top: shown.top,
+        },
+    ];
+}
+
 // ---------------------------------------------------------------- decoding
 
 function framesOf(child, bytes) {
@@ -572,6 +609,8 @@ const raw = { raw: { width, height, channels: 3 } };
 await mkdir(options.out, { recursive: true });
 const words = await wordsDraw(cut);
 const backdrop = backdropOpen(options.backdrop, fps, { width, height });
+// Exact last source pixels and camera, carried across the window/card boundary.
+let closingWindow;
 
 /**
  * How much of a window's caption shows at `t`. Captions arrive after the
@@ -597,7 +636,12 @@ async function* segmentFrames(segment, first, last, start) {
         const layer = words.cards.get(segment);
         const phone = words.phones.get(segment);
         const square = width === height;
+        if (segment.entrance === "window-slide" && !closingWindow)
+            throw new Error("All platforms needs the preceding recorded window.");
         for (let index = 0; index < count; index += 1) {
+            const entrance =
+                segment.entrance === "window-slide" ? ease(clamp01(index / fps / segment.move)) : 1;
+            const shift = Math.round(-(square ? 850 : 1000) * (1 - entrance));
             // A chapter card waits for the window to dissolve to the backdrop.
             const glide =
                 segment.layout === "platforms"
@@ -611,26 +655,47 @@ async function* segmentFrames(segment, first, last, start) {
                       : segment.layout === "brand"
                         ? ease(clamp01(index / fps / 0.35))
                         : 1;
-            const layers = [
-                { input: amount === 1 ? layer : await fade(layer, amount), left: 0, top: 0 },
-            ];
+            const layers = await translated(
+                amount === 1 ? layer : await fade(layer, amount),
+                { width, height },
+                shift,
+                0,
+            );
+            if (segment.desktop) {
+                const from = closingWindow.rect;
+                const to = segment.desktop;
+                const scale = from.scale + (to.width / cut.window.cssWidth - from.scale) * entrance;
+                const rect = {
+                    left: Math.round(from.left + (to.left - from.left) * entrance),
+                    top: Math.round(from.top + (to.top - from.top) * entrance),
+                    width: Math.round(cut.window.cssWidth * scale),
+                    height: Math.round(cut.window.cssHeight * scale),
+                    scale,
+                };
+                const desktop = await windowDraw(
+                    closingWindow.picture,
+                    closingWindow.size,
+                    rect,
+                    closingWindow.dims,
+                );
+                for (const piece of desktop)
+                    layers.push({
+                        ...piece,
+                        input: amount === 1 ? piece.input : await fade(piece.input, amount),
+                    });
+            }
             if (phone) {
-                const left = Math.round((square ? -85 : -90) + (square ? 130 : 335) * glide);
+                const left =
+                    Math.round((square ? -85 : -90) + (square ? 130 : 335) * glide) + shift;
                 const top = square ? 108 : 42;
-                const crop = Math.max(0, -left);
-                layers.push({
-                    input: await sharp(phone.input)
-                        .extract({
-                            left: crop,
-                            top: 0,
-                            width: Math.min(phone.width - crop, width - Math.max(0, left)),
-                            height: phone.height,
-                        })
-                        .png()
-                        .toBuffer(),
-                    left: Math.max(0, left),
-                    top,
-                });
+                layers.push(
+                    ...(await translated(
+                        phone.input,
+                        { width: phone.width, height: phone.height },
+                        left,
+                        top,
+                    )),
+                );
             }
             const back = await backdrop.next();
             yield await sharp(back, raw).composite(layers).removeAlpha().raw().toBuffer();
@@ -720,28 +785,9 @@ async function* segmentFrames(segment, first, last, start) {
             index += 1;
             continue;
         }
-        const made = await windowLayers(cut, rect, dimsAt(segment, t));
-        const { shown } = made;
-        const scaled = await sharp(picture, { raw: { ...size, channels: 3 } })
-            .resize(rect.width, rect.height, { kernel: "lanczos3" })
-            .extract({
-                left: shown.left - rect.left,
-                top: shown.top - rect.top,
-                width: shown.width,
-                height: shown.height,
-            })
-            .ensureAlpha()
-            .raw()
-            .toBuffer();
-        const shaped = await sharp(scaled, {
-            raw: { width: shown.width, height: shown.height, channels: 4 },
-        })
-            .composite([
-                { input: made.over, left: 0, top: 0 },
-                { input: made.mask, left: 0, top: 0, blend: "dest-in" },
-            ])
-            .png({ compressionLevel: 0 })
-            .toBuffer();
+        const dims = dimsAt(segment, t);
+        const windowOnly = await windowDraw(picture, size, rect, dims);
+        if (index === count - 1) closingWindow = { picture, size, rect, dims };
         // Where the window runs under the caption, the caption sits on its pill.
         const under = title ? intersect(rect, title.pill) : undefined;
         const covered = under
@@ -749,10 +795,6 @@ async function* segmentFrames(segment, first, last, start) {
             : 0;
         const caption = wordsShown(segment, t, first, last).amount;
         const back = await backdrop.next();
-        const windowOnly = [
-            { input: made.shadow, left: made.halo.left, top: made.halo.top },
-            { input: shaped, left: shown.left, top: shown.top },
-        ];
         // A still for the page has no caption: the page sets its own words above it.
         if (stills.has(start + index))
             cleanStills.set(
@@ -850,7 +892,8 @@ let total = 0;
 let previous;
 for (const [position, segment] of cut.segments.entries()) {
     const start = total;
-    const dissolve = previous ? Math.round((cut.dissolve ?? 0) * fps) : 0;
+    const dissolve =
+        previous && segment.entrance !== "window-slide" ? Math.round((cut.dissolve ?? 0) * fps) : 0;
     let index = 0;
     const first = position === 0;
     const last = position === cut.segments.length - 1;

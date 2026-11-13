@@ -49,7 +49,10 @@ The close follows the homepage's two beats: All platforms, with the real
 multiplayer Activity window and a native phone capture, then the phone beside
 Happy and its stacked copy. `ending.mjs` names those inputs; `phone/README.md`
 records their sources and the approved static GitHub count. There is one
-shader behind both devices. The phone keeps its size and vertical position as
+shader behind both devices. The final Activity frame carries directly into
+All platforms: its window slides right and scales down while the phone, words
+and icons enter from the left on one 0.9-second ease-in-out, with no dissolve.
+The phone keeps its size and vertical position as
 it glides horizontally between the beats. The old App Store marketing
 screenshots are unused. The chapter card enters after the app has faded to the
 shader; its words are not dissolved over the UI. Activity has no repeated

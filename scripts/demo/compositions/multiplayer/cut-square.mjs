@@ -22,7 +22,7 @@ export default (cues) => ({
             loading: [0.11, 0.38],
             activityUntil: ["step1-rest", 1.0],
         },
-        ending(cues, true),
+        ending(true),
         cues,
     ),
     id: "multiplayer-square",

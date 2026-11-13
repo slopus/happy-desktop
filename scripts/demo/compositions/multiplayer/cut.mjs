@@ -26,7 +26,7 @@ export default (cues) => ({
             loading: [0.11, 0.38],
             activityUntil: ["step3-rest", 2.0],
         },
-        ending(cues),
+        ending(),
         cues,
     ),
     id: "multiplayer",
