@@ -1,0 +1,343 @@
+/*
+ * P-045 Happy Agent plugins: the catalog of what a server offers and the team
+ * installed, and one plugin's page with each installation's setup.
+ *
+ * Read down the content column under the shared surface header, as the
+ * artifacts catalog is. Layout is flexbox throughout; colors, radii, and type
+ * come only from theme roles.
+ */
+
+.happy-agent-plugins {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-agent-plugins__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+.happy-agent-plugins__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-agent-plugins__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-agent-plugins__content {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 24px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 4px var(--happy-content-gutter) 48px;
+}
+
+.happy-agent-plugins__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-plugins__heading {
+    margin: 0;
+    padding-inline: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-agent-plugins__note {
+    margin: 0;
+    padding-inline: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-plugins__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-agent-plugins__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    border-radius: 8px;
+}
+
+.happy-agent-plugins__item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-agent-plugins__row-action {
+    display: flex;
+    flex: none;
+    padding-inline-end: 8px;
+}
+
+/* ---- Row --------------------------------------------------------------- */
+
+.happy-agent-plugin-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-plugin-row:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-agent-plugin-row__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-plugin-row__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-plugin-row__meta {
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Mark -------------------------------------------------------------- */
+
+.happy-agent-plugin-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    background-color: var(--surface-high);
+    background-position: center;
+    background-size: cover;
+    color: var(--text-secondary);
+}
+
+.happy-agent-plugin-mark[data-size="row"] {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+}
+
+.happy-agent-plugin-mark[data-size="hero"] {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+}
+
+.happy-agent-plugin-mark__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ---- Status ------------------------------------------------------------ */
+
+.happy-agent-plugin-status {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-plugin-status__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--text-secondary);
+}
+
+.happy-agent-plugin-status[data-tone="ready"] .happy-agent-plugin-status__dot {
+    background: var(--success);
+}
+
+.happy-agent-plugin-status[data-tone="attention"] .happy-agent-plugin-status__dot {
+    background: var(--box-warning-text);
+}
+
+/* ---- One plugin -------------------------------------------------------- */
+
+.happy-agent-plugin__summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 8px;
+}
+
+.happy-agent-plugin__summary-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding-top: 2px;
+}
+
+.happy-agent-plugin__description {
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy-agent-plugin__error {
+    margin: 0;
+    color: var(--text-destructive);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-plugin__tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0 8px;
+    list-style: none;
+}
+
+.happy-agent-plugin__tool {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-agent-plugin__tool-name {
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy-agent-plugin__tool-summary {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-plugins__cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Content sits 16px from every edge of the card. */
+.happy-agent-plugin-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    padding: 16px;
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.happy-agent-plugin-card__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    min-height: 28px;
+}
+
+.happy-agent-plugin-card__title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-plugin-card__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin-inline-start: auto;
+}
+
+.happy-agent-plugin-card__meta {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-plugin-card__meta code {
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+}
+
+.happy-agent-plugin-setup {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    max-width: 480px;
+}
+
+.happy-agent-plugin-setup__actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+}

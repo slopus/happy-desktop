@@ -868,6 +868,15 @@ export {
     type HappyAgentArtifactsPageProps,
 } from "./pages/artifacts/HappyAgentArtifactsPage";
 export {
+    HappyAgentPluginsPage,
+    type HappyAgentPluginsPageProps,
+} from "./pages/plugins/HappyAgentPluginsPage";
+export {
+    HappyAgentPluginPage,
+    type HappyAgentPluginPageProps,
+    type HappyAgentPluginSetupRefusal,
+} from "./pages/plugins/HappyAgentPluginPage";
+export {
     HappyAgentArtifactsPanel,
     type HappyAgentArtifactsPanelProps,
 } from "./pages/artifacts/HappyAgentArtifactsPanel";
