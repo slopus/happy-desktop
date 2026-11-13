@@ -31,6 +31,6 @@ export function AppClusterSecretSettings(props: {
 const UPDATED_AT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 /** Catalog metadata with its timestamp localized for the list. */
-function clusterSecretRow(secret: HappyAgentClusterSecret): HappyAgentClusterSecretRow {
+export function clusterSecretRow(secret: HappyAgentClusterSecret): HappyAgentClusterSecretRow {
     return { ...secret, updatedAt: UPDATED_AT.format(new Date(secret.updatedAt)) };
 }

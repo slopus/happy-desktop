@@ -43,6 +43,7 @@ import {
 import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
+    genUiClusterSecretHostCreate,
     genUiInlineHostCreate,
     inlineArtifactsStoreNoop,
 } from "./conversationInlinePages";
@@ -349,6 +350,7 @@ import {
     happyAgentComposerModelControlProps,
     happyAgentComposerModelUsageWatch,
     sidebarReorderMove,
+    type GenUiClusterSecretHost,
     type IconName,
     type MenuItem,
     type FileTreeNode,
@@ -717,6 +719,8 @@ export interface AppHappyAgentSession {
         | undefined;
     /** The plugins this machine offers and its team installed; absent or undefined where it offers none. */
     readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
+    /** The Gen UI actions a Happy Cloud server runs, such as secret forms; absent or undefined elsewhere. */
+    readonly genUiActions?: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
     /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
     /** Settings › Usage's daily token history; absent or undefined where it cannot be read. */
@@ -5038,13 +5042,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
               },
           }
         : undefined;
-    const genUiPluginOpen =
-        active && props.onPluginOpen
-            ? (pluginId: string) => props.onPluginOpen?.(active.id, pluginId)
-            : undefined;
+    const genUiActions = active?.session?.genUiActions?.();
+    const genUiMachine: GenUiMachineHost = {
+        ...(active && props.onPluginOpen
+            ? { pluginOpen: (pluginId: string) => props.onPluginOpen?.(active.id, pluginId) }
+            : {}),
+        ...(genUiActions ? { clusterSecrets: genUiClusterSecretHostCreate(genUiActions) } : {}),
+    };
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
-            <GenUiPluginOpenContext value={genUiPluginOpen}>
+            <GenUiMachineContext value={genUiMachine}>
                 <MessageSettingsLinksContext.Provider value={settingsLinks}>
                     <LinkCopyContext.Provider value={linkCopy}>
                         {/* Window chrome has one lifetime. Happy Agent workspaces keep their own
@@ -5185,7 +5192,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         </WindowCover>
                     </LinkCopyContext.Provider>
                 </MessageSettingsLinksContext.Provider>
-            </GenUiPluginOpenContext>
+            </GenUiMachineContext>
         </HappyAgentVersionProvider>
     );
 }
@@ -6814,19 +6821,20 @@ function HappyAgentTodoSurface(props: {
  * can open links and copy, but have no chat to send a message to.
  */
 /**
- * Opens one plugin's page on the addressed machine, for a Gen UI `plugin`
- * action wherever the document is shown. Absent where no machine is
- * addressed, which leaves those buttons disabled.
+ * What a Gen UI document may reach on the addressed machine wherever it is
+ * shown: one plugin's page, for a `plugin` action, and the cluster's secret
+ * forms. Each is absent where the machine offers none, which leaves those
+ * buttons disabled.
  */
-const GenUiPluginOpenContext = createContext<((pluginId: string) => void) | undefined>(undefined);
+interface GenUiMachineHost {
+    readonly pluginOpen?: (pluginId: string) => void;
+    readonly clusterSecrets?: GenUiClusterSecretHost;
+}
+const GenUiMachineContext = createContext<GenUiMachineHost>({});
 
 /** The Gen UI host of an artifact viewer, which has no conversation to send to. */
 function useGenUiViewerHost() {
-    const pluginOpen = use(GenUiPluginOpenContext);
-    return genUiInlineHostCreate({
-        linkOpen: openExternalLink,
-        ...(pluginOpen ? { pluginOpen } : {}),
-    });
+    return genUiInlineHostCreate({ ...use(GenUiMachineContext), linkOpen: openExternalLink });
 }
 
 function HappyAgentArtifactPanelViewerSurface(props: {
@@ -10211,7 +10219,7 @@ function HappyAgentConversationSurface(props: {
     viewerId: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
-    const genUiPluginOpen = use(GenUiPluginOpenContext);
+    const genUiMachine = use(GenUiMachineContext);
     const { conversation, workspace } = props;
     const previewBindings = useConversationPreviews({
         workspace,
@@ -10374,7 +10382,7 @@ function HappyAgentConversationSurface(props: {
                       ? {}
                       : {
                             genUi: genUiInlineHostCreate({
-                                ...(genUiPluginOpen ? { pluginOpen: genUiPluginOpen } : {}),
+                                ...genUiMachine,
                                 messageSend: (text) =>
                                     props.happyAgentOnline()
                                         ? workspace.messageSendCurrent(text)

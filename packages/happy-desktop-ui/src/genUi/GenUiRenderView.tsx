@@ -50,6 +50,11 @@ export type GenUiRenderViewProps = {
     readonly onAction?: GenUiActionHandler;
     /** Which kinds of action the host can run; the others are drawn unavailable. */
     readonly actionsSupported?: ReadonlySet<GenUiActionType>;
+    /**
+     * Elements whose action the host has finished for good, such as a secret
+     * form that was saved: drawn done and never offered again.
+     */
+    readonly settled?: ReadonlySet<string>;
     /** The address of one of the artifact's files, through the host's file route. */
     readonly fileUrl: (path: string) => string;
     /**
@@ -85,6 +90,7 @@ type Host = {
     /** Single-choice groups: the key picked in each group so far. */
     readonly picked: ReadonlyMap<string, string>;
     readonly pick: (group: string, elementKey: string) => void;
+    readonly settled: ReadonlySet<string>;
 };
 
 const HostContext = createContext<Host>({
@@ -96,12 +102,14 @@ const HostContext = createContext<Host>({
     viewerOpen: () => {},
     picked: new Map(),
     pick: () => {},
+    settled: new Set(),
 });
 
 /** Whether a box is inside a card, so a nested card drops its frame. */
 const InCardContext = createContext(false);
 
 const NOT_SUPPORTED = "Not supported yet";
+const NONE_SETTLED: ReadonlySet<string> = new Set();
 
 /* ---- Pressed state ---------------------------------------------------------- */
 
@@ -124,7 +132,7 @@ function useActivation(
     const [press, setPress] = useState<Press>("idle");
     const supported = action !== undefined && host.supported(action);
     const picked = group === undefined ? undefined : host.picked.get(group);
-    const chosen = picked !== undefined && picked === elementKey;
+    const chosen = (picked !== undefined && picked === elementKey) || host.settled.has(elementKey);
     const disabled = !supported || (picked !== undefined && !chosen);
     const run = () => {
         if (!action || disabled || press !== "idle" || chosen) return;
@@ -746,6 +754,7 @@ export function GenUiRenderView(props: GenUiRenderViewProps) {
             if (picked.has(group)) return;
             setPicked(new Map([...picked, [group, elementKey]]));
         },
+        settled: props.settled ?? NONE_SETTLED,
     };
     const shown = viewing ? viewing.items[viewing.index] : undefined;
     const step = (direction: 1 | -1) => {

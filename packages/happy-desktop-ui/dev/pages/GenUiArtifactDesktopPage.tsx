@@ -22,6 +22,8 @@ import { Sidebar } from "../../src/Sidebar";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import releaseRender from "../assets/genui/11-release.render.json?raw";
 import galleryRender from "../assets/genui/05-gallery-grid.render.json?raw";
+import secretRender from "../assets/genui/13-cluster-secret.render.json?raw";
+import type { GenUiClusterSecretHost } from "../../src/genUi/GenUiArtifact";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-044";
@@ -53,6 +55,7 @@ const files: ReadonlyMap<string, string> = new Map(
 
 const RELEASE_ID = "genui-release" as HappyAgentArtifactId;
 const GALLERY_ID = "genui-gallery" as HappyAgentArtifactId;
+const SECRETS_ID = "genui-secrets" as HappyAgentArtifactId;
 
 const COMPOSER: ComposerSnapshot = {
     agentUserIds: [],
@@ -131,7 +134,13 @@ const inline: HappyAgentInlineArtifactsSnapshot = new Map([
             artifactType: "gen_ui",
             latestVersion: 1,
             display: null,
-            content: { type: "gen_ui", version: 1, render: releaseRender, files },
+            content: {
+                type: "gen_ui",
+                version: 1,
+                source: { artifactId: RELEASE_ID, version: 1, origin: true },
+                render: releaseRender,
+                files,
+            },
         },
     ],
 ]);
@@ -146,15 +155,19 @@ function file(path: string, mimeType: string, size: number): HappyAgentArtifactF
     return { path, mimeType, size, sha256: `sha-${path}` };
 }
 
-/** The gallery document open in the viewer at version 1. */
-function galleryViewer(): HappyAgentArtifactViewerSnapshot {
+/** A document open in the viewer at version 1, written by an agent. */
+function genUiViewer(
+    id: HappyAgentArtifactId,
+    title: string,
+    renderText: string,
+): HappyAgentArtifactViewerSnapshot {
     const entry = file("index.genui.json", "application/json", 1_840);
-    const render = file(HAPPY_AGENT_GEN_UI_RENDER_PATH, "application/json", galleryRender.length);
+    const render = file(HAPPY_AGENT_GEN_UI_RENDER_PATH, "application/json", renderText.length);
     const at = 1_794_000_000_000;
     const artifact: HappyAgentArtifact = {
-        id: GALLERY_ID,
+        id,
         type: "gen_ui",
-        title: "Trip photos",
+        title,
         status: "active",
         latestVersion: 1,
         cover: null,
@@ -175,13 +188,13 @@ function galleryViewer(): HappyAgentArtifactViewerSnapshot {
         version: "v-gallery",
     };
     return {
-        artifactId: GALLERY_ID,
+        artifactId: id,
         artifact: { type: "ready", value: artifact },
         versions: [],
         versionsLoading: false,
         versionsHasMore: false,
         version: {
-            artifactId: GALLERY_ID,
+            artifactId: id,
             number: 1,
             title: artifact.title,
             entry,
@@ -191,11 +204,49 @@ function galleryViewer(): HappyAgentArtifactViewerSnapshot {
             createdAt: at,
         },
         files: [{ file: entry, url: "https://happy-agent.invalid/gallery/index.genui.json" }],
-        content: { type: "gen_ui", render: galleryRender, files },
+        content: {
+            type: "gen_ui",
+            source: { artifactId: id, version: 1, origin: true },
+            render: renderText,
+            files,
+        },
         markdownView: "document",
         deletion: { phase: "idle" },
     };
 }
+
+/*
+ * The cluster as a `cluster_secret` form sees it: the reader may add team and
+ * personal secrets, the GitHub token the second button names exists, and a
+ * save takes a moment, the way the action route answers.
+ */
+const clusterSecrets: GenUiClusterSecretHost = {
+    formOpen: async (_source, _element, secretId) => ({
+        owners: ["team", "me"],
+        secret:
+            secretId === undefined
+                ? undefined
+                : {
+                      id: secretId,
+                      name: "GitHub billing",
+                      description: "Token for slopus/billing",
+                      owner: "team",
+                      access: { use: true, manage: true, attach: true },
+                      uses: ["git"],
+                      version: "v-1",
+                      updatedAt: "Oct 2, 2026",
+                      type: "git_credential",
+                      public: {
+                          server: "github.com",
+                          method: { kind: "token", username: "x-access-token" },
+                          repos: ["slopus/billing"],
+                          operations: ["read", "write"],
+                      },
+                  },
+        create: () => new Promise((resolve) => setTimeout(resolve, 600)),
+        update: () => new Promise((resolve) => setTimeout(resolve, 600)),
+    }),
+};
 
 const viewerHandlers = {
     onDeletionCancel: noop,
@@ -323,7 +374,32 @@ export function GenUiArtifactDesktopPage() {
                             onAction: noop,
                         }}
                         labels={labels}
-                        viewer={galleryViewer()}
+                        viewer={genUiViewer(GALLERY_ID, "Trip photos", galleryRender)}
+                    />
+                </DesktopWindow>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A cluster_secret button opens the Settings secret form filled with what the agent suggested; every field stays editable and the values are typed here, never by the agent. With an id it opens that secret's own form instead. A saved form marks its button done for good."
+                label="Viewer · Secret request"
+                number="03"
+                screen="03-genui-secret-request-1440x1000"
+                window={WINDOW}
+            >
+                <DesktopWindow>
+                    <HappyAgentArtifactViewer
+                        {...viewerHandlers}
+                        genUi={{
+                            actionsSupported: new Set<GenUiAction["type"]>([
+                                "open",
+                                "copy",
+                                "cluster_secret",
+                            ]),
+                            onAction: noop,
+                            clusterSecrets,
+                        }}
+                        labels={labels}
+                        viewer={genUiViewer(SECRETS_ID, "Billing keys", secretRender)}
                     />
                 </DesktopWindow>
             </FullScreenSpecimen>

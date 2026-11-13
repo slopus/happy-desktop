@@ -899,12 +899,15 @@ export interface HappyAgentClusterSecretEditDialogProps {
     readonly secret: HappyAgentClusterSecretRow;
     /** Opens with the value fields shown, for restored and fixture state. */
     readonly initialReplacing?: boolean;
+    /** Opens on a suggested name or description instead of the secret's own, such as an agent's. */
+    readonly initialName?: string;
+    readonly initialDescription?: string;
     readonly unavailable?: string;
     onClose(): void;
     /** Saves what changed against `version`, the one the form stands on; rejects with the reason to show. */
     onSave(version: string, input: HappyAgentClusterSecretUpdateInput): Promise<void>;
-    /** Asks to delete the secret at the version the form stands on. */
-    onDeleteOpen(version: string): void;
+    /** Asks to delete the secret at the version the form stands on; without it the form offers no delete. */
+    onDeleteOpen?(version: string): void;
 }
 
 /**
@@ -914,8 +917,8 @@ export interface HappyAgentClusterSecretEditDialogProps {
 export function HappyAgentClusterSecretEditDialog(props: HappyAgentClusterSecretEditDialogProps) {
     const secret = props.secret;
     const manage = secret.access.manage;
-    const [name, setName] = useState(secret.name);
-    const [description, setDescription] = useState(secret.description);
+    const [name, setName] = useState(props.initialName ?? secret.name);
+    const [description, setDescription] = useState(props.initialDescription ?? secret.description);
     const [value, setValue] = useState<HappyAgentClusterSecretValueDraft | undefined>(() =>
         props.initialReplacing ? happyAgentClusterSecretValueDraftOf(secret) : undefined,
     );
@@ -1116,24 +1119,26 @@ export function HappyAgentClusterSecretEditDialog(props: HappyAgentClusterSecret
                                     </>
                                 )}
                             </fieldset>
-                            <Box className="happy-agent-cluster-secret-form__danger">
-                                <Box className="happy-agent-cluster-secret-form__danger-text">
-                                    <span className="happy-agent-cluster-secret-form__label">
-                                        Delete this secret
-                                    </span>
-                                    <span className="happy-agent-cluster-secret-form__hint">
-                                        Every agent and workspace it was given to loses it.
-                                    </span>
+                            {props.onDeleteOpen ? (
+                                <Box className="happy-agent-cluster-secret-form__danger">
+                                    <Box className="happy-agent-cluster-secret-form__danger-text">
+                                        <span className="happy-agent-cluster-secret-form__label">
+                                            Delete this secret
+                                        </span>
+                                        <span className="happy-agent-cluster-secret-form__hint">
+                                            Every agent and workspace it was given to loses it.
+                                        </span>
+                                    </Box>
+                                    <Button
+                                        disabled={disabled}
+                                        onClick={() => props.onDeleteOpen?.(base.version)}
+                                        size="small"
+                                        variant="danger"
+                                    >
+                                        Delete…
+                                    </Button>
                                 </Box>
-                                <Button
-                                    disabled={disabled}
-                                    onClick={() => props.onDeleteOpen(base.version)}
-                                    size="small"
-                                    variant="danger"
-                                >
-                                    Delete…
-                                </Button>
-                            </Box>
+                            ) : null}
                         </>
                     ) : null}
                 </Box>

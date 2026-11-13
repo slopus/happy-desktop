@@ -42,7 +42,7 @@ import {
 } from "./artifactPresentation";
 import { ArtifactHeader } from "./ArtifactHeader";
 import { ArtifactLivePage, type ArtifactLiveRenderer } from "./ArtifactLivePage";
-import type { GenUiInlineHost } from "./ArtifactInlineContent";
+import { genUiArtifactHost, type GenUiInlineHost } from "./ArtifactInlineContent";
 import { HappyAgentArtifactHtmlFrame } from "./HappyAgentArtifactHtmlFrame";
 import type { MessageReferences } from "../../messageReferences";
 
@@ -693,12 +693,8 @@ function ArtifactContent(props: {
                         <GenUiArtifact
                             files={content.files}
                             render={content.render}
-                            {...(props.genUi
-                                ? {
-                                      actionsSupported: props.genUi.actionsSupported,
-                                      onAction: props.genUi.onAction,
-                                  }
-                                : {})}
+                            source={content.source}
+                            {...(props.genUi ? genUiArtifactHost(props.genUi) : {})}
                         />
                     </div>
                 </ScrollArea>

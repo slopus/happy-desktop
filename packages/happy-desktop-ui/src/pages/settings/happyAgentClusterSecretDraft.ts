@@ -1,3 +1,5 @@
+import type { GenUiClusterSecretPrefill } from "../../genUi/genUiRender";
+
 export type HappyAgentClusterSecretType = "endpoint" | "ssh_key" | "git_credential" | "environment";
 export type HappyAgentClusterSecretOwner = "me" | "team";
 export type HappyAgentClusterSecretUse = "egress" | "git" | "ssh" | "mcp" | "environment";
@@ -625,5 +627,96 @@ export function happyAgentClusterSecretSummary(secret: HappyAgentClusterSecretDe
         }
         case "environment":
             return secret.public.variables.join(", ");
+    }
+}
+
+/**
+ * The form a Gen UI `cluster_secret` action opens on: everything the agent
+ * suggested, every field editable, and every value empty for the person to
+ * type. A suggestion this form has no field for, such as an endpoint's ports,
+ * is left to the server's defaults.
+ */
+export function happyAgentClusterSecretDraftFromPrefill(
+    prefill: GenUiClusterSecretPrefill,
+): HappyAgentClusterSecretCreateDraft {
+    const base = happyAgentClusterSecretDraftCreate(prefill.type, prefill.owner ?? "me");
+    const common = {
+        ...base,
+        name: prefill.name,
+        description: prefill.description ?? "",
+    };
+    switch (prefill.type) {
+        case "endpoint": {
+            const targets = prefill.public?.targets ?? [];
+            const headers = prefill.public?.headers ?? [];
+            return {
+                ...common,
+                shape: {
+                    type: "endpoint",
+                    targets:
+                        targets.length === 0
+                            ? [{ id: 1, host: "", path: "" }]
+                            : targets.map((target, index) => ({
+                                  id: index + 1,
+                                  host: target.host,
+                                  path: target.pathPrefixes?.[0] ?? "",
+                              })),
+                    mcp: prefill.uses?.includes("mcp") ?? false,
+                },
+                value:
+                    headers.length === 0
+                        ? base.value
+                        : {
+                              kind: "headers",
+                              headers: headers.map((header, index) => ({
+                                  id: index + 1,
+                                  name: header.name,
+                                  prefix: header.prefix ?? "",
+                                  value: "",
+                              })),
+                          },
+                nextId: Math.max(targets.length, headers.length, 1) + 1,
+            };
+        }
+        case "ssh_key":
+            return {
+                ...common,
+                shape: { type: "ssh_key", hosts: (prefill.public?.hosts ?? []).join(", ") },
+            };
+        case "git_credential": {
+            const method = prefill.public?.method;
+            const kind = method?.kind ?? "token";
+            return {
+                ...common,
+                shape: {
+                    type: "git_credential",
+                    server: prefill.public?.server ?? "",
+                    method: kind,
+                    username: method && method.kind !== "ssh_key" ? (method.username ?? "") : "",
+                    repos: (prefill.public?.repos ?? []).join(", "),
+                    operations: prefill.public?.operations ?? ["read"],
+                },
+                value: gitValueDraft(kind),
+            };
+        }
+        case "environment": {
+            const names = prefill.public?.variables ?? [];
+            return {
+                ...common,
+                shape: { type: "environment", mcp: prefill.uses?.includes("mcp") ?? false },
+                value:
+                    names.length === 0
+                        ? base.value
+                        : {
+                              kind: "variables",
+                              variables: names.map((name, index) => ({
+                                  id: index + 1,
+                                  name,
+                                  value: "",
+                              })),
+                          },
+                nextId: names.length + 1,
+            };
+        }
     }
 }

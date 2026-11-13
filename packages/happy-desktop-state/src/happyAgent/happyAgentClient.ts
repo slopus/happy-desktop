@@ -133,6 +133,10 @@ import {
     type HappyAgentRepositoriesStore,
 } from "./happyAgentRepositoriesStore.js";
 import {
+    happyAgentGenUiActionsCreate,
+    type HappyAgentGenUiActions,
+} from "./happyAgentGenUiActions.js";
+import {
     happyAgentPluginsStoreCreate,
     type HappyAgentPluginsStore,
 } from "./happyAgentPluginsStore.js";
@@ -275,6 +279,8 @@ export interface HappyAgentWorkspaceClient {
     repositories(): HappyAgentRepositoriesStore | undefined;
     /** The plugins this connection's server offers and the team's installations of them. */
     plugins(): HappyAgentPluginsStore | undefined;
+    /** What this connection's server does for Gen UI actions; undefined where it serves none. */
+    genUiActions(): HappyAgentGenUiActions | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
@@ -746,6 +752,7 @@ export function happyAgentWorkspaceClientCreate(
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let pluginsStore: HappyAgentPluginsStore | undefined;
+    let genUiActions: HappyAgentGenUiActions | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
@@ -1179,6 +1186,13 @@ export function happyAgentWorkspaceClientCreate(
                 sync: deps.connection.sync,
             });
             return pluginsStore;
+        },
+        genUiActions() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            genUiActions ??= happyAgentGenUiActionsCreate({ request });
+            return genUiActions;
         },
         compute() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");

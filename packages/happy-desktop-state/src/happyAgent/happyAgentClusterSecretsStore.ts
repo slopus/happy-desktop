@@ -168,7 +168,7 @@ export function happyAgentClusterSecretsStoreCreate(
                 { limit: PAGE_SIZE, ...(cursor === undefined ? {} : { cursor }) },
                 { signal },
             );
-            secrets.push(...page.secrets.map(clusterSecretProject));
+            secrets.push(...page.secrets.map(happyAgentClusterSecretProject));
             const next = page.nextCursor ?? undefined;
             if (next !== undefined && next === cursor)
                 throw new Error("Happy Cloud returned a repeating secrets cursor.");
@@ -182,7 +182,7 @@ export function happyAgentClusterSecretsStoreCreate(
             deps.request("GET", "v0/permissions"),
             pagesRead(signal),
         ]);
-        return { secrets, owners: ownersRead(permissions) };
+        return { secrets, owners: happyAgentClusterSecretOwnersRead(permissions) };
     };
 
     function load(): void {
@@ -256,7 +256,8 @@ export function happyAgentClusterSecretsStoreCreate(
     /** Adopts the current secret a `409` carries and says why nothing changed. */
     const conflictAdopt = (error: HappyAgentApiError): UserError => {
         const current = error.body?.secret;
-        if (Value.Check(clusterSecretSchema, current)) secretAdopt(clusterSecretProject(current));
+        if (Value.Check(clusterSecretSchema, current))
+            secretAdopt(happyAgentClusterSecretProject(current));
         return new UserError(CONFLICT_MESSAGE, "conflict", error);
     };
 
@@ -283,7 +284,7 @@ export function happyAgentClusterSecretsStoreCreate(
                         { ...input, mutationId: globalThis.crypto.randomUUID() },
                         { signal },
                     );
-                    if (!disposed) secretAdopt(clusterSecretProject(response.secret));
+                    if (!disposed) secretAdopt(happyAgentClusterSecretProject(response.secret));
                 } catch (error) {
                     throw happyAgentUserError(error);
                 }
@@ -297,7 +298,7 @@ export function happyAgentClusterSecretsStoreCreate(
                         ifMatch: version,
                         signal,
                     });
-                    if (!disposed) secretAdopt(clusterSecretProject(response.secret));
+                    if (!disposed) secretAdopt(happyAgentClusterSecretProject(response.secret));
                 } catch (error) {
                     if (error instanceof HappyAgentApiError && error.status === 409)
                         throw conflictAdopt(error);
@@ -339,7 +340,7 @@ export function happyAgentClusterSecretsStoreCreate(
 }
 
 /** Copies the metadata field by field, so a value the cluster ever sent would not be kept. */
-function clusterSecretProject(secret: ClusterSecret): HappyAgentClusterSecret {
+export function happyAgentClusterSecretProject(secret: ClusterSecret): HappyAgentClusterSecret {
     const fields: HappyAgentClusterSecretFields = {
         id: secret.id,
         name: secret.name,
@@ -368,7 +369,9 @@ function clusterSecretProject(secret: ClusterSecret): HappyAgentClusterSecret {
 }
 
 /** Which owners `secrets.manage` (team) and `secrets.own` (me) let the reader create for. */
-function ownersRead(permissions: unknown): readonly HappyAgentClusterSecretOwner[] {
+export function happyAgentClusterSecretOwnersRead(
+    permissions: unknown,
+): readonly HappyAgentClusterSecretOwner[] {
     const granted =
         typeof permissions === "object" && permissions !== null && "granted" in permissions
             ? permissions.granted

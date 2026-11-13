@@ -1,3 +1,4 @@
+import type { HappyAgentGenUiSource } from "../happyAgent/happyAgentGenUiActions.js";
 import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
@@ -51,6 +52,8 @@ export type HappyAgentInlineArtifactContent =
           /** A Gen UI artifact: its compiled render document's text, parsed where it is drawn. */
           readonly type: "gen_ui";
           readonly version: number;
+          /** The version its actions are sent against. */
+          readonly source: HappyAgentGenUiSource;
           readonly render: string;
           /** Every file of the version by path, so the document's pictures resolve to them. */
           readonly files: ReadonlyMap<string, string>;
@@ -375,6 +378,11 @@ export function happyAgentInlineArtifactsStoreCreate(
                 return {
                     type: "gen_ui",
                     version,
+                    source: {
+                        artifactId,
+                        version,
+                        origin: manifest.createdBy.kind === "agent",
+                    },
                     render: new TextDecoder().decode(render.data),
                     files: new Map(manifest.files.map((file) => [file.path, link(file.path)])),
                 };

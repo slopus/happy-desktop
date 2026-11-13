@@ -4,7 +4,7 @@ import {
     type HappyAgentInlineArtifactContent,
 } from "happy-desktop-state";
 import { ConversationMedia } from "../../ConversationMedia";
-import { GenUiArtifact } from "../../genUi/GenUiArtifact";
+import { GenUiArtifact, type GenUiClusterSecretHost } from "../../genUi/GenUiArtifact";
 import type { GenUiActionType } from "../../genUi/genUiRender";
 import type { GenUiActionHandler } from "../../genUi/GenUiRenderView";
 import type { InlinePageFit } from "../../inlinePageFit";
@@ -28,6 +28,8 @@ export interface ArtifactInlineContentProps {
 export interface GenUiInlineHost {
     readonly onAction: GenUiActionHandler;
     readonly actionsSupported: ReadonlySet<GenUiActionType>;
+    /** Opens and saves `cluster_secret` forms, on a Happy Cloud server. */
+    readonly clusterSecrets?: GenUiClusterSecretHost;
 }
 
 /**
@@ -67,12 +69,8 @@ export function ArtifactInlineContent(props: ArtifactInlineContentProps) {
                     <GenUiArtifact
                         files={content.files}
                         render={content.render}
-                        {...(props.genUi
-                            ? {
-                                  actionsSupported: props.genUi.actionsSupported,
-                                  onAction: props.genUi.onAction,
-                              }
-                            : {})}
+                        source={content.source}
+                        {...(props.genUi ? genUiArtifactHost(props.genUi) : {})}
                     />
                 ) : content.type === "files" ? (
                     <ConversationMedia
@@ -101,5 +99,14 @@ function markdownReferences(
             return target.type === "file" ? content.files.get(target.path) : undefined;
         },
         link: () => undefined,
+    };
+}
+
+/** What a Gen UI artifact takes from the host it is drawn in. */
+export function genUiArtifactHost(host: GenUiInlineHost) {
+    return {
+        actionsSupported: host.actionsSupported,
+        onAction: host.onAction,
+        ...(host.clusterSecrets ? { clusterSecrets: host.clusterSecrets } : {}),
     };
 }
