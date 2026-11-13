@@ -831,10 +831,47 @@ const SETTLE_MS = 160;
 /** How far outside the scrollport a stopped spinner starts turning again: about three rows. */
 const SPINNER_SIGHT_MARGIN = 96;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-/** How long the body takes to scroll an active row into view, on the settle's easing. */
-const REVEAL_MS = 240;
+/**
+ * How long the body takes to scroll an active row into view: a quarter of a
+ * millisecond for each pixel on top of `REVEAL_MIN_MS`, up to `REVEAL_MAX_MS`,
+ * so a long way is not covered at a short way's speed.
+ */
+const REVEAL_MIN_MS = 200;
+const REVEAL_MAX_MS = 400;
+const REVEAL_MS_PER_PX = 0.25;
+/**
+ * The reveal's curve, CSS `ease`. It starts gently and lands softly. The
+ * settle's own curve starts at four and a half times its average speed, which
+ * suits a 34px glide but throws a long scroll a third of the way in its first
+ * frame and then crawls the last pixels one at a time.
+ */
+const REVEAL_EASING = cubicBezier(0.25, 0.1, 0.25, 1);
+/**
+ * The most one frame advances the reveal's clock. A frame that runs long, as
+ * the one that opens what the row addresses often does, delays the glide
+ * rather than making it leap to catch up.
+ */
+const REVEAL_FRAME_MS = 1000 / 60;
 /** How many rows of the list a revealed row keeps between itself and the edge it came in at. */
 const REVEAL_MARGIN_ROWS = 5;
+
+/** A CSS `cubic-bezier()` timing function, as progress by elapsed fraction. */
+function cubicBezier(x1: number, y1: number, x2: number, y2: number): (x: number) => number {
+    const at = (a: number, b: number, t: number) =>
+        3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+    return (x) => {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        let low = 0;
+        let high = 1;
+        for (let index = 0; index < 30; index += 1) {
+            const middle = (low + high) / 2;
+            if (at(x1, x2, middle) < x) low = middle;
+            else high = middle;
+        }
+        return at(y1, y2, (low + high) / 2);
+    };
+}
 
 /**
  * Where the body's scroll puts a row it has to reveal, or nothing when the row
@@ -857,48 +894,48 @@ function revealScrollTop(viewport: HTMLElement, row: DOMRect): number | undefine
 }
 
 /**
- * Scrolls the body to `target` over `REVEAL_MS` on the settle's easing, or at
- * once under reduced motion. The eased progress is read from a Web Animation
- * that animates nothing, so the curve is the very one the stylesheet names.
- * The reader's own scrolling takes over: a wheel, a touch or a press on the
- * body, or the scroll moving anywhere but where the last frame put it, ends
- * the glide where it stands. Returns what stops it early.
+ * Scrolls the body to `target` on `REVEAL_EASING`, or at once under reduced
+ * motion. The clock advances with the frames the browser paints, starting a
+ * frame in so the first one already moves, and never more than
+ * `REVEAL_FRAME_MS` at a time. The reader's own scrolling takes over: a wheel,
+ * a touch or a press on the body, or the scroll moving anywhere but where the
+ * last frame put it, ends the glide where it stands. Returns what stops it
+ * early.
  */
 function revealScroll(viewport: HTMLElement, target: number): () => void {
-    if (reducedMotion() || typeof KeyframeEffect !== "function") {
+    if (reducedMotion()) {
         viewport.scrollTop = target;
         return () => undefined;
     }
     const from = viewport.scrollTop;
-    const timing = new Animation(
-        new KeyframeEffect(null, null, {
-            duration: REVEAL_MS,
-            easing: SETTLE_EASING,
-            fill: "forwards",
-        }),
+    const duration = Math.min(
+        REVEAL_MAX_MS,
+        REVEAL_MIN_MS + Math.abs(target - from) * REVEAL_MS_PER_PX,
     );
     let frame = 0;
     let placed = from;
+    let elapsed = 0;
+    let last: number | undefined;
     const stop = () => {
         cancelAnimationFrame(frame);
-        timing.cancel();
         for (const type of ["wheel", "touchstart", "pointerdown"])
             viewport.removeEventListener(type, stop);
     };
     for (const type of ["wheel", "touchstart", "pointerdown"])
         viewport.addEventListener(type, stop, { passive: true });
-    const step = () => {
+    const step = (now: number) => {
         if (!viewport.isConnected || Math.abs(viewport.scrollTop - placed) > 1) {
             stop();
             return;
         }
-        const progress = timing.effect?.getComputedTiming().progress ?? 1;
+        elapsed += last === undefined ? REVEAL_FRAME_MS : Math.min(now - last, REVEAL_FRAME_MS);
+        last = now;
+        const progress = REVEAL_EASING(elapsed / duration);
         viewport.scrollTop = from + (target - from) * progress;
         placed = viewport.scrollTop;
-        if (timing.playState === "finished") stop();
-        else frame = requestAnimationFrame(step);
+        if (progress < 1) frame = requestAnimationFrame(step);
+        else stop();
     };
-    timing.play();
     frame = requestAnimationFrame(step);
     return stop;
 }

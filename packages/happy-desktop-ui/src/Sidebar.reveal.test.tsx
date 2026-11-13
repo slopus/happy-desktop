@@ -7,7 +7,7 @@ import { createRenderer } from "./testing";
 
 /*
  * The active row is brought into view. One already wholly on screen moves
- * nothing. One that is not glides in, briefly and on the settle's easing, to
+ * nothing. One that is not glides in, gently at both ends, to
  * stand five rows clear of the edge it came in at — centred where the body is
  * too short for that, and stopped by the list's own ends. Reduced motion lands
  * at once, the reader's own scrolling stops a glide, and a row that arrives
@@ -86,7 +86,7 @@ const frames = async (count = 3) => {
 
 /** Longer than any glide, then a few frames for the last write to land. */
 const settle = async () => {
-    await new Promise((done) => setTimeout(done, 400));
+    await new Promise((done) => setTimeout(done, 600));
     await frames();
 };
 
