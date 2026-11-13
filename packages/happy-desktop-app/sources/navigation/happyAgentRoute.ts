@@ -51,6 +51,10 @@ export type HappyAgentRoute =
     | { readonly kind: "group"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "home" }
     | { readonly kind: "inbox"; readonly happyAgentId: string }
+    /** The plugins one machine offers and its team installed. */
+    | { readonly kind: "plugins"; readonly happyAgentId: string }
+    /** One plugin on one machine, with its installations. */
+    | { readonly kind: "plugin"; readonly happyAgentId: string; readonly pluginId: string }
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
     | { readonly kind: "settingsSection"; readonly section: string }
@@ -106,6 +110,10 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return "/";
         case "inbox":
             return `/inbox/${part(route.happyAgentId)}`;
+        case "plugins":
+            return `/plugins/${part(route.happyAgentId)}`;
+        case "plugin":
+            return `/plugins/${part(route.happyAgentId)}/${part(route.pluginId)}`;
         case "happyAgent":
             return `/chats/${part(route.happyAgentId)}`;
         case "settings":
@@ -212,6 +220,11 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             return first !== undefined && segments.length === 2
                 ? { kind: "inbox", happyAgentId: first }
                 : undefined;
+        case "plugins":
+            if (first === undefined || segments.length > 3) return undefined;
+            return second === undefined
+                ? { kind: "plugins", happyAgentId: first }
+                : { kind: "plugin", happyAgentId: first, pluginId: second };
         case "people":
             return first !== undefined && second !== undefined && segments.length === 3
                 ? { kind: "userProfile", happyAgentId: first, userId: second }
@@ -289,6 +302,17 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         case "feed": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             return happyAgentId ? { kind: "feed", happyAgentId } : undefined;
+        }
+        case "plugins": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "plugins", happyAgentId } : undefined;
+        }
+        case "plugin": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const pluginId = fieldOf(record, "pluginId");
+            return happyAgentId && pluginId
+                ? { kind: "plugin", happyAgentId, pluginId }
+                : undefined;
         }
         case "file": {
             const happyAgentId = fieldOf(record, "happyAgentId");

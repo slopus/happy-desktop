@@ -507,6 +507,18 @@ const userProfileRoute = createRoute({
     path: "/people/$happyAgentId/$userId",
 });
 
+/** The plugins one machine offers, and the team's installations of them. */
+const pluginsRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/plugins/$happyAgentId",
+});
+
+/** One plugin on the machine that offers it. */
+const pluginRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/plugins/$happyAgentId/$pluginId",
+});
+
 /** One artifact open in the viewer, on the machine that keeps it. */
 const artifactRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -627,6 +639,8 @@ const routeTree = rootRoute.addChildren([
         inboxRoute,
         artifactsRoute,
         artifactRoute,
+        pluginsRoute,
+        pluginRoute,
         feedRoute,
         userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
@@ -658,6 +672,7 @@ function HappyAgentWorkspaceLayout() {
         botCreate: matched.has(botCreateRoute.id),
         feed: matched.has(feedRoute.id),
         inbox: matched.has(inboxRoute.id),
+        plugins: matched.has(pluginsRoute.id) || matched.has(pluginRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
         bugReportCreate: matched.has(bugReportCreateRoute.id),
@@ -703,6 +718,19 @@ function HappyAgentWorkspaceLayout() {
             inboxOpen={shows.inbox}
             artifactsOpen={shows.artifacts}
             feedOpen={shows.feed}
+            pluginsOpen={shows.plugins}
+            {...(shows.plugins && params.pluginId !== undefined
+                ? { pluginId: params.pluginId }
+                : {})}
+            onPluginsOpen={(happyAgentId) =>
+                void navigate({ params: { happyAgentId }, to: "/plugins/$happyAgentId" })
+            }
+            onPluginOpen={(happyAgentId, pluginId) =>
+                void navigate({
+                    params: { happyAgentId, pluginId },
+                    to: "/plugins/$happyAgentId/$pluginId",
+                })
+            }
             {...(shows.artifacts && params.artifactId !== undefined
                 ? { artifactId: params.artifactId }
                 : {})}

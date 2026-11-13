@@ -402,6 +402,7 @@ import {
     type HappyAgentPreviewMedia,
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
+import { HappyAgentPluginsSurface } from "./views/HappyAgentPluginsSurface";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
@@ -714,6 +715,8 @@ export interface AppHappyAgentSession {
     readonly repositories?: () =>
         | import("happy-desktop-state").HappyAgentRepositoriesStore
         | undefined;
+    /** The plugins this machine offers and its team installed; absent or undefined where it offers none. */
+    readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
     /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
     /** Settings › Usage's daily token history; absent or undefined where it cannot be read. */
@@ -1017,6 +1020,14 @@ export interface AppHappyAgentViewProps {
     onArtifactsOpen?(): void;
     /** Addresses one artifact on one Happy Agent. */
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
+    /** Whether the URL addresses the addressed Happy Agent's plugins. */
+    pluginsOpen?: boolean;
+    /** The plugin the URL opens, within those plugins. */
+    pluginId?: string;
+    /** Addresses one Happy Agent's plugins. */
+    onPluginsOpen?(happyAgentId: string): void;
+    /** Addresses one plugin on one Happy Agent. */
+    onPluginOpen?(happyAgentId: string, pluginId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
     /** The person whose profile the URL opens, on the addressed Happy Agent. */
@@ -2984,6 +2995,7 @@ function happyAgentTopSection(
         items: [
             { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ARTIFACTS_SIDEBAR_ITEM,
+            ...(happyAgent?.session?.plugins?.() ? [PLUGINS_SIDEBAR_ITEM] : []),
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3347,6 +3359,13 @@ const INBOX_ITEM = "inbox";
 const ARTIFACTS_ITEM = "artifacts";
 
 /**
+ * The row that opens the addressed Happy Agent's plugins, directly under
+ * Artifacts. Like it, it belongs to the machine rather than to any chat, and
+ * it never moves. It is there only where the machine offers plugins.
+ */
+const PLUGINS_ITEM = "plugins";
+
+/**
  * The row that opens the reader's feed on the addressed Happy Agent: what
  * happened there, newest change first. It heads the sidebar's first group and,
  * like Artifacts under it, never moves; it counts what the reader has not
@@ -3378,6 +3397,15 @@ const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
     id: ARTIFACTS_ITEM,
     kind: "project",
     label: "Artifacts",
+    reorderable: false,
+};
+
+const PLUGINS_SIDEBAR_ITEM: SidebarItem = {
+    icon: "plugin",
+    tint: "orange",
+    id: PLUGINS_ITEM,
+    kind: "project",
+    label: "Plugins",
     reorderable: false,
 };
 
@@ -3997,21 +4025,23 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     ? INBOX_ITEM
                     : props.artifactsOpen
                       ? artifactsItemId
-                      : props.feedOpen
-                        ? FEED_ITEM
-                        : props.surfaceId !== undefined
-                          ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                          : props.groupId
-                            ? happyAgentItemId(
-                                  props.happyAgentId,
-                                  activeRowId(
-                                      active?.bots ?? [],
-                                      active?.tasks ?? [],
-                                      props.groupId,
-                                      props.chatId,
-                                  ),
-                              )
-                            : ""
+                      : props.pluginsOpen
+                        ? PLUGINS_ITEM
+                        : props.feedOpen
+                          ? FEED_ITEM
+                          : props.surfaceId !== undefined
+                            ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
+                            : props.groupId
+                              ? happyAgentItemId(
+                                    props.happyAgentId,
+                                    activeRowId(
+                                        active?.bots ?? [],
+                                        active?.tasks ?? [],
+                                        props.groupId,
+                                        props.chatId,
+                                    ),
+                                )
+                              : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -4289,6 +4319,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 if (id === FEED_ITEM) {
                     props.onFeedOpen?.();
+                    return;
+                }
+                if (id === PLUGINS_ITEM) {
+                    props.onPluginsOpen?.(active?.id ?? props.happyAgentId);
                     return;
                 }
                 const row = happyAgentItemParse(id);
@@ -4719,6 +4753,31 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     />
                 </>
             );
+
+        // The plugins belong to the addressed machine, like its artifacts. A
+        // machine that offers none says so, in case its address was reached
+        // some other way than its sidebar row.
+        if (props.pluginsOpen && active?.session) {
+            const plugins = active.session.plugins?.();
+            if (!plugins)
+                return (
+                    <EmptyState
+                        description="This Happy Agent does not offer plugins."
+                        icon="plugin"
+                        size="panel"
+                        title="No plugins here"
+                    />
+                );
+            return (
+                <HappyAgentPluginsSurface
+                    onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
+                    onPluginOpen={(pluginId) => props.onPluginOpen?.(active.id, pluginId)}
+                    onPluginsOpen={() => props.onPluginsOpen?.(active.id)}
+                    {...(props.pluginId === undefined ? {} : { pluginId: props.pluginId })}
+                    store={plugins}
+                />
+            );
+        }
 
         // The feed belongs to the addressed machine, like its artifacts. Its
         // header carries Mark all read, so the header is the window's drag band.
