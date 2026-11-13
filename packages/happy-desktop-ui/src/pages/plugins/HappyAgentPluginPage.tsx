@@ -128,10 +128,17 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                     </p>
                                     {install.error ? (
                                         <p className="happy-agent-plugin__error">{install.error}</p>
+                                    ) : plugin?.installRefusal ? (
+                                        <p className="happy-agent-plugins__note">
+                                            {plugin.installRefusal}
+                                        </p>
                                     ) : null}
                                 </div>
-                                {plugin && snapshot.manage ? (
+                                {plugin &&
+                                snapshot.manage &&
+                                (plugin.multiInstance || installations.length === 0) ? (
                                     <Button
+                                        disabled={plugin.installRefusal !== null}
                                         loading={install.pending}
                                         onClick={() =>
                                             void install.run(() => props.onInstall(plugin.id))
@@ -243,9 +250,14 @@ function InstallationCard(props: {
                     </Button>
                 </span>
             </header>
-            <p className="happy-agent-plugin-card__meta">
-                Agents call its tools as <code>{installation.toolPrefix}…</code>
-            </p>
+            {installation.status === "failed" && installation.error ? (
+                <p className="happy-agent-plugin__error">{installation.error}</p>
+            ) : null}
+            {installation.toolPrefix === null ? null : (
+                <p className="happy-agent-plugin-card__meta">
+                    Agents call its tools as <code>{installation.toolPrefix}…</code>
+                </p>
+            )}
             {remove.error || disconnect.error ? (
                 <p className="happy-agent-plugin__error">{remove.error ?? disconnect.error}</p>
             ) : null}
@@ -274,8 +286,8 @@ function InstallationCard(props: {
                         tone="danger"
                     >
                         <p className="happy-agent-plugins__note">
-                            Its sign-in and everything it stored are deleted, and agents lose its
-                            tools.
+                            Its sign-in and everything it stored are deleted, and agents lose the
+                            tools and skills it gave them.
                         </p>
                     </Modal>
                 </ModalOverlay>

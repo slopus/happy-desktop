@@ -136,6 +136,7 @@ import {
     happyAgentGenUiActionsCreate,
     type HappyAgentGenUiActions,
 } from "./happyAgentGenUiActions.js";
+import { happyAgentDaemonPluginsStoreCreate } from "./happyAgentDaemonPluginsStore.js";
 import {
     happyAgentPluginsStoreCreate,
     type HappyAgentPluginsStore,
@@ -277,8 +278,11 @@ export interface HappyAgentWorkspaceClient {
     cloudProviders(): HappyAgentCloudProvidersStore | undefined;
     /** Settings › Repositories on Happy Cloud; undefined anywhere else. */
     repositories(): HappyAgentRepositoriesStore | undefined;
-    /** The plugins this connection's server offers and the team's installations of them. */
-    plugins(): HappyAgentPluginsStore | undefined;
+    /**
+     * The plugins this connection's server offers and what it installed: a
+     * Happy Cloud team's installations, or this Happy Agent's own.
+     */
+    plugins(): HappyAgentPluginsStore;
     /** What this connection's server does for Gen UI actions; undefined where it serves none. */
     genUiActions(): HappyAgentGenUiActions | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
@@ -1179,12 +1183,16 @@ export function happyAgentWorkspaceClientCreate(
         plugins() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
-            if (!request) return undefined;
-            pluginsStore ??= happyAgentPluginsStoreCreate({
-                request,
-                endpoint: deps.client.endpoint,
-                sync: deps.connection.sync,
-            });
+            pluginsStore ??= request
+                ? happyAgentPluginsStoreCreate({
+                      request,
+                      endpoint: deps.client.endpoint,
+                      sync: deps.connection.sync,
+                  })
+                : happyAgentDaemonPluginsStoreCreate({
+                      client: deps.client,
+                      sync: deps.connection.sync,
+                  });
             return pluginsStore;
         },
         genUiActions() {

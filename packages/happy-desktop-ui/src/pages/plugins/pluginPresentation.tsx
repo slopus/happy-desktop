@@ -39,6 +39,8 @@ export function PluginMark(props: {
 
 const STATUS_LABEL: Record<HappyAgentPluginInstallationStatus, string> = {
     active: "Ready",
+    installing: "Installing…",
+    failed: "Failed",
     notConfigured: "Needs setup",
     methodUnavailable: "Needs setup again",
 };
@@ -47,11 +49,16 @@ const STATUS_LABEL: Record<HappyAgentPluginInstallationStatus, string> = {
 export function PluginInstallationStatus(props: {
     readonly installation: HappyAgentPluginInstallation;
 }) {
+    const status = props.installation.status;
     const tone = !props.installation.available
         ? "muted"
-        : props.installation.status === "active"
+        : status === "active"
           ? "ready"
-          : "attention";
+          : status === "installing"
+            ? "muted"
+            : status === "failed"
+              ? "failed"
+              : "attention";
     return (
         <span className="happy-agent-plugin-status" data-tone={tone}>
             <span aria-hidden="true" className="happy-agent-plugin-status__dot" />

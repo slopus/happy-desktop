@@ -174,16 +174,23 @@ function PluginRow(props: {
                 <span className="happy-agent-plugin-row__text">
                     <span className="happy-agent-plugin-row__name">{plugin.name}</span>
                     <span className="happy-agent-plugin-row__meta">
-                        {install.error ?? (plugin.description || `Version ${plugin.version}`)}
+                        {plugin.catalog === "cluster" ? "Your cluster · " : null}
+                        {install.error ??
+                            plugin.installRefusal ??
+                            (plugin.description || `Version ${plugin.version}`)}
                     </span>
                 </span>
             </button>
-            {props.manage ? (
+            {props.manage && (plugin.multiInstance || !props.installed) ? (
                 <div className="happy-agent-plugins__row-action">
                     <Button
+                        disabled={plugin.installRefusal !== null}
                         loading={install.pending}
                         onClick={() => void install.run(() => props.onInstall(plugin.id))}
                         size="small"
+                        {...(plugin.installRefusal === null
+                            ? {}
+                            : { title: plugin.installRefusal })}
                         variant={props.installed ? "ghost" : "secondary"}
                     >
                         {props.installed ? "Install again" : "Install"}

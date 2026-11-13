@@ -255,6 +255,7 @@ export * from "./happyAgent/happyAgentCloudProvidersStore.js";
 export * from "./happyAgent/happyAgentProviderAddLink.js";
 export * from "./happyAgent/happyAgentRepositoriesStore.js";
 export * from "./happyAgent/happyAgentPluginsStore.js";
+export * from "./happyAgent/happyAgentDaemonPluginsStore.js";
 export * from "./happyAgent/happyAgentGenUiActions.js";
 export * from "./happyAgent/happyAgentComputeStore.js";
 export * from "./happyAgent/happyAgentPreviewsStore.js";

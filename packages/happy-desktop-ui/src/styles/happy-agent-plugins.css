@@ -210,6 +210,10 @@
     background: var(--box-warning-text);
 }
 
+.happy-agent-plugin-status[data-tone="failed"] .happy-agent-plugin-status__dot {
+    background: var(--text-destructive);
+}
+
 /* ---- One plugin -------------------------------------------------------- */
 
 .happy-agent-plugin__summary {

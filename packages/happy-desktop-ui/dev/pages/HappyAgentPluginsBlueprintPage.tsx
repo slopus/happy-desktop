@@ -43,6 +43,9 @@ const github: HappyAgentPlugin = {
         },
         { type: "oauth", id: "install", label: "GitHub App", scopes: ["repo"] },
     ],
+    multiInstance: true,
+    installRefusal: null,
+    catalog: null,
 };
 
 const linear: HappyAgentPlugin = {
@@ -54,6 +57,9 @@ const linear: HappyAgentPlugin = {
     tools: [{ name: "search_issues", summary: "Finds issues by text." }],
     authRequired: true,
     authMethods: [{ type: "oauth", id: "oauth", label: "Linear", scopes: ["read", "write"] }],
+    multiInstance: true,
+    installRefusal: null,
+    catalog: null,
 };
 
 const weather: HappyAgentPlugin = {
@@ -65,6 +71,9 @@ const weather: HappyAgentPlugin = {
     tools: [],
     authRequired: false,
     authMethods: [],
+    multiInstance: true,
+    installRefusal: null,
+    catalog: null,
 };
 
 const githubActive: HappyAgentPluginInstallation = {
@@ -74,6 +83,7 @@ const githubActive: HappyAgentPluginInstallation = {
     ordinal: 1,
     label: "Acme",
     status: "active",
+    error: null,
     authMethod: "token",
     toolPrefix: "plugin_github_",
     image: null,
@@ -97,6 +107,7 @@ const retired: HappyAgentPluginInstallation = {
     ordinal: 1,
     label: null,
     status: "notConfigured",
+    error: null,
     authMethod: null,
     toolPrefix: "plugin_jira_",
     image: null,
@@ -117,6 +128,75 @@ const loading: HappyAgentPluginsSnapshot = {
     manage: false,
     plugins: [],
     installations: [],
+};
+
+/* A Happy Agent's own plugins: skill bundles from its public and cluster catalogs. */
+const daemonPlugin = (
+    id: string,
+    name: string,
+    description: string,
+    installRefusal: string | null = null,
+): HappyAgentPlugin => ({
+    id: `${id === "figma-export" ? "cluster" : "public"}:${id}`,
+    name,
+    description,
+    version: "1.0.0",
+    image: null,
+    tools: [],
+    authRequired: false,
+    authMethods: [],
+    multiInstance: false,
+    installRefusal,
+    catalog: id === "figma-export" ? "cluster" : "public",
+});
+
+const releaseNotes = daemonPlugin(
+    "release-notes",
+    "Release notes",
+    "Skills for writing release notes from merged pull requests.",
+);
+const figma = daemonPlugin(
+    "figma-export",
+    "Figma export",
+    "Exports frames from a Figma file into a workspace.",
+    "Needs Happy Agent 0.0.170 or newer.",
+);
+const translations = daemonPlugin(
+    "translations",
+    "Translations",
+    "Skills for keeping app strings translated.",
+);
+
+const daemonInstallation = (
+    plugin: HappyAgentPlugin,
+    status: HappyAgentPluginInstallation["status"],
+    error: string | null = null,
+): HappyAgentPluginInstallation => ({
+    id: `daemon-${plugin.id}`,
+    pluginId: plugin.id,
+    name: plugin.name,
+    ordinal: 1,
+    label: null,
+    status,
+    error,
+    authMethod: null,
+    toolPrefix: null,
+    image: null,
+    available: true,
+});
+
+const daemon: HappyAgentPluginsSnapshot = {
+    loading: false,
+    manage: true,
+    plugins: [figma, releaseNotes, translations],
+    installations: [
+        daemonInstallation(releaseNotes, "active"),
+        daemonInstallation(
+            translations,
+            "failed",
+            "The archive's checksum did not match the catalog.",
+        ),
+    ],
 };
 
 const settle = (): Promise<void> => Promise.resolve();
@@ -201,6 +281,32 @@ export function HappyAgentPluginsBlueprintPage() {
                 window={WINDOW}
             >
                 <HappyAgentPluginPage {...detailHandlers} pluginId="linear" plugins={member} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A Happy Agent's own plugins. One installed, one whose install failed with the daemon's reason, and one this machine cannot install yet, which says why instead of offering Install. A plugin installed once is not offered again."
+                label="Catalog, Happy Agent"
+                number="06"
+                screen="06-catalog-happy-agent-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginsPage
+                    onPluginInstall={settle}
+                    onPluginOpen={() => undefined}
+                    plugins={daemon}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A failed install on a Happy Agent: the reason under the installation, Remove to clear it. These plugins have no sign-in and no tool prefix."
+                label="Plugin, failed on a Happy Agent"
+                number="07"
+                screen="07-plugin-happy-agent-failed-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginPage
+                    {...detailHandlers}
+                    pluginId={translations.id}
+                    plugins={daemon}
+                />
             </FullScreenSpecimen>
         </ComponentPage>
     );

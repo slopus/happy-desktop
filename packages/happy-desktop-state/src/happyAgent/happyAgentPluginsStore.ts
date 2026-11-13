@@ -47,6 +47,7 @@ export type HappyAgentPluginAuthMethod =
 
 /** One plugin the server offers, installed or not. */
 export interface HappyAgentPlugin {
+    /** The store's own key for it; pass it back unchanged, never read into. */
     readonly id: string;
     readonly name: string;
     readonly description: string;
@@ -57,13 +58,25 @@ export interface HappyAgentPlugin {
     readonly authRequired: boolean;
     /** Only the methods that work on this server. */
     readonly authMethods: readonly HappyAgentPluginAuthMethod[];
+    /** Whether it may be installed again while installed. */
+    readonly multiInstance: boolean;
+    /** Why this server cannot install it, in plain words; null when it can. */
+    readonly installRefusal: string | null;
+    /** `cluster` for a Happy Agent plugin from its cluster's own catalog rather than the public one. */
+    readonly catalog: "public" | "cluster" | null;
 }
 
 /**
  * `notConfigured` is installed but waiting for a sign-in; `methodUnavailable`
- * signed in with a method this server no longer offers.
+ * signed in with a method this server no longer offers. `installing` and
+ * `failed` are a Happy Agent unpacking a plugin, and that ending in an error.
  */
-export type HappyAgentPluginInstallationStatus = "active" | "notConfigured" | "methodUnavailable";
+export type HappyAgentPluginInstallationStatus =
+    | "active"
+    | "installing"
+    | "failed"
+    | "notConfigured"
+    | "methodUnavailable";
 
 /** One installation of a plugin on the team. A plugin may be installed more than once. */
 export interface HappyAgentPluginInstallation {
@@ -75,10 +88,12 @@ export interface HappyAgentPluginInstallation {
     readonly ordinal: number;
     readonly label: string | null;
     readonly status: HappyAgentPluginInstallationStatus;
+    /** Why a `failed` installation failed. */
+    readonly error: string | null;
     /** The method it signed in with, if any. */
     readonly authMethod: string | null;
-    /** What the agent's tools from this installation are named with. */
-    readonly toolPrefix: string;
+    /** What the agent's tools from this installation are named with, where it has tools. */
+    readonly toolPrefix: string | null;
     readonly image: HappyAgentPluginImage | null;
     /** False for a plugin this server no longer offers; it cannot be changed or removed then. */
     readonly available: boolean;
@@ -283,6 +298,9 @@ export function happyAgentPluginsStoreCreate(deps: {
                 const read = methodRead(method);
                 return read ? [read] : [];
             }),
+            multiInstance: true,
+            installRefusal: null,
+            catalog: null,
         };
     };
 
@@ -298,8 +316,9 @@ export function happyAgentPluginsStoreCreate(deps: {
             ordinal: typeof entry.ordinal === "number" ? entry.ordinal : 1,
             label: textOrNull(entry.label),
             status: statusRead(entry.status, entry.reason),
+            error: null,
             authMethod: textOrNull(entry.authMethod),
-            toolPrefix: text(entry.toolPrefix),
+            toolPrefix: textOrNull(entry.toolPrefix),
             image: imageRead(entry.image),
             available: entry.available !== false,
         };
