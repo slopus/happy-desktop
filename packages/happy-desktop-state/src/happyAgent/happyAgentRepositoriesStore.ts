@@ -1,6 +1,11 @@
+import { Value } from "@sinclair/typebox/value";
+import { clusterSecretSchema } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import { UserError } from "../types.js";
-import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import {
+    HappyCloudRequestRefusal,
+    type HappyCloudRequest,
+} from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 
 /** What an access check found. `ok` is `null` for SSH, which the first checkout proves. */
@@ -18,12 +23,13 @@ export interface HappyAgentRepositoryCheck {
 export type HappyAgentRepositoryPluginMethod = "github_app" | "token" | "ssh_key" | "password";
 
 /**
- * How everyone reaches a repository. `automatic` picks a credential per person and
- * `credential` pins a shared one; `plugin` is a repository a plugin installation
- * added and signs in for, whose credential is never shown or changed here.
+ * How everyone reaches a repository. `none` reaches it without a credential, which
+ * suits a public one; `credential` pins a team git credential from Settings ›
+ * Secrets; `plugin` is a repository a plugin installation added and signs in for,
+ * whose credential is never shown or changed here.
  */
 export type HappyAgentRepositoryAuthentication =
-    | { readonly kind: "automatic" }
+    | { readonly kind: "none" }
     | { readonly kind: "credential"; readonly credentialId: string }
     | {
           readonly kind: "plugin";
@@ -46,28 +52,28 @@ export interface HappyAgentRepository {
     readonly path: string;
     readonly transport: "https" | "ssh";
     readonly defaultBranch: string | null;
-    /** The shared git credential everyone reaches it with; `null` picks one per person. */
-    readonly credentialId: string | null;
     readonly authentication: HappyAgentRepositoryAuthentication;
     readonly lastCheck: HappyAgentRepositoryCheck | null;
     /** What a change sends back as `If-Match`. */
     readonly version: string;
 }
 
-/** A shared git credential a repository may be pinned to. Never its value. */
-export interface HappyAgentGitCredential {
+/** A team `git_credential` secret from Settings › Secrets a repository may be pinned to. Never its value. */
+export interface HappyAgentRepositoryCredential {
     readonly id: string;
     readonly name: string;
-    readonly hosts: readonly string[];
+    /** The git server it signs in to, such as `github.com`. */
+    readonly server: string;
 }
 
 /** Adding a repository, while its dialog is open. */
 export interface HappyAgentRepositoryAdd {
     readonly url: string;
     readonly name: string;
+    /** The pinned team secret; `null` reaches the repository without a credential. */
     readonly credentialId: string | null;
-    /** The shared credentials for the URL's host. */
-    readonly credentials: readonly HappyAgentGitCredential[];
+    /** The credentials the reader may pin for the URL. */
+    readonly credentials: readonly HappyAgentRepositoryCredential[];
     readonly checking: boolean;
     /** What checking the URL as it is now found; cleared when the URL or credential changes. */
     readonly check?: HappyAgentRepositoryCheck;
@@ -78,7 +84,7 @@ export interface HappyAgentRepositoryAdd {
 /** One repository's dialog, while it is open. */
 export interface HappyAgentRepositoryOpen {
     readonly repositoryId: string;
-    readonly credentials: readonly HappyAgentGitCredential[];
+    readonly credentials: readonly HappyAgentRepositoryCredential[];
     readonly checking: boolean;
     readonly saving: boolean;
     readonly error?: UserError;
@@ -140,6 +146,25 @@ export interface HappyAgentRepositoriesStore {
 }
 
 const POLL_INTERVAL_MS = 4_000;
+const CREDENTIALS_DELAY_MS = 300;
+
+/**
+ * A request that pins a credential is refused with 403 when it is a team
+ * secret whose role rules do not let the reader use it.
+ */
+function credentialRefusal(error: unknown, credentialId: unknown): UserError {
+    if (
+        typeof credentialId === "string" &&
+        error instanceof HappyCloudRequestRefusal &&
+        error.status === 403
+    )
+        return new UserError(
+            "Your role can't use this credential. Pick another, or ask whoever manages it in Settings › Secrets to let your role use it.",
+            "credential_forbidden",
+            error,
+        );
+    return happyAgentUserError(error);
+}
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
     return typeof value === "object" && value !== null
@@ -176,44 +201,46 @@ const PLUGIN_METHODS: ReadonlySet<string> = new Set<HappyAgentRepositoryPluginMe
     "password",
 ]);
 
-/** A server that sends no `authentication` yet is read from its `credentialId`, as before. */
-function authenticationRead(
-    value: unknown,
-    credentialId: string | null,
-): HappyAgentRepositoryAuthentication {
+/** Nothing for an `authentication` this client cannot read, which drops its repository. */
+function authenticationRead(value: unknown): HappyAgentRepositoryAuthentication | undefined {
     const authentication = recordOf(value);
-    const plugin = recordOf(authentication?.plugin);
-    if (
-        authentication?.kind === "plugin" &&
-        typeof plugin?.id === "string" &&
-        plugin.id !== "" &&
-        typeof plugin.installationId === "string"
-    ) {
-        const method = authentication.method;
-        return {
-            kind: "plugin",
-            plugin: { id: plugin.id, installationId: plugin.installationId },
-            method:
-                typeof method === "string" && PLUGIN_METHODS.has(method)
-                    ? (method as HappyAgentRepositoryPluginMethod)
-                    : null,
-            account: stringOrNull(authentication.account),
-            status: authentication.status === "missing" ? "missing" : "active",
-        };
+    switch (authentication?.kind) {
+        case "none":
+            return { kind: "none" };
+        case "credential": {
+            const credentialId = stringOrNull(authentication.credentialId);
+            return credentialId === null ? undefined : { kind: "credential", credentialId };
+        }
+        case "plugin": {
+            const plugin = recordOf(authentication.plugin);
+            if (
+                typeof plugin?.id !== "string" ||
+                plugin.id === "" ||
+                typeof plugin.installationId !== "string"
+            )
+                return undefined;
+            const method = authentication.method;
+            return {
+                kind: "plugin",
+                plugin: { id: plugin.id, installationId: plugin.installationId },
+                method:
+                    typeof method === "string" && PLUGIN_METHODS.has(method)
+                        ? (method as HappyAgentRepositoryPluginMethod)
+                        : null,
+                account: stringOrNull(authentication.account),
+                status: authentication.status === "missing" ? "missing" : "active",
+            };
+        }
+        default:
+            return undefined;
     }
-    const pinned =
-        authentication?.kind === "credential"
-            ? (stringOrNull(authentication.credentialId) ?? credentialId)
-            : authentication?.kind === "automatic"
-              ? null
-              : credentialId;
-    return pinned === null ? { kind: "automatic" } : { kind: "credential", credentialId: pinned };
 }
 
 function repositoryRead(value: unknown): HappyAgentRepository | undefined {
     const entry = recordOf(value);
     if (!entry || typeof entry.id !== "string" || typeof entry.url !== "string") return undefined;
-    const credentialId = stringOrNull(entry.credentialId);
+    const authentication = authenticationRead(entry.authentication);
+    if (!authentication) return undefined;
     return {
         id: entry.id,
         name: typeof entry.name === "string" ? entry.name : entry.id,
@@ -222,40 +249,37 @@ function repositoryRead(value: unknown): HappyAgentRepository | undefined {
         path: typeof entry.path === "string" ? entry.path : "",
         transport: entry.transport === "ssh" ? "ssh" : "https",
         defaultBranch: stringOrNull(entry.defaultBranch),
-        credentialId,
-        authentication: authenticationRead(entry.authentication, credentialId),
+        authentication,
         lastCheck: checkRead(entry.lastCheck),
         version: typeof entry.version === "string" ? entry.version : "",
     };
 }
 
-function credentialsRead(value: unknown): readonly HappyAgentGitCredential[] {
+/** `GET v0/git/pinnable`: the team's catalog git credentials the reader may pin for a URL. */
+function pinnableRead(value: unknown): readonly HappyAgentRepositoryCredential[] {
     const list = recordOf(value)?.credentials;
     if (!Array.isArray(list)) return [];
     return list.flatMap((item: unknown) => {
         const entry = recordOf(item);
-        if (!entry || typeof entry.id !== "string") return [];
-        return [
-            {
-                id: entry.id,
-                name: typeof entry.name === "string" ? entry.name : entry.id,
-                hosts: Array.isArray(entry.hosts)
-                    ? entry.hosts.filter((host): host is string => typeof host === "string")
-                    : [],
-            },
-        ];
+        const secret: unknown = entry?.secret;
+        if (
+            typeof entry?.credentialId !== "string" ||
+            !Value.Check(clusterSecretSchema, secret) ||
+            secret.type !== "git_credential"
+        )
+            return [];
+        return [{ id: entry.credentialId, name: secret.name, server: secret.public.server }];
     });
 }
 
-/** The host a repository URL names, for its credential picker; nothing until it parses. */
-function hostOf(url: string): string | undefined {
+/** Whether a repository URL names a host yet, so there is something to read its credentials for. */
+function hostNamed(url: string): boolean {
     const trimmed = url.trim();
-    const scp = /^[^@\s]+@([^:/\s]+):/u.exec(trimmed);
-    if (scp) return scp[1];
+    if (/^[^@\s]+@[^:/\s]+:/u.test(trimmed)) return true;
     try {
-        return new URL(trimmed).hostname || undefined;
+        return new URL(trimmed).hostname !== "";
     } catch {
-        return undefined;
+        return false;
     }
 }
 
@@ -273,8 +297,10 @@ export function happyAgentRepositoriesStoreCreate(deps: {
     let disposed = false;
     let reading = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    /** Counts credential reads so an older host's answer never lands. */
+    /** Counts credential reads so an older URL's answer never lands. */
     let credentialsTicket = 0;
+    /** Waits for typing to pause before reading what a URL may pin. */
+    let credentialsTimer: ReturnType<typeof setTimeout> | undefined;
     const repo = (id: string): string => `v0/repositories/${encodeURIComponent(id)}`;
 
     const repositoryOf = (id: string): HappyAgentRepository | undefined =>
@@ -354,24 +380,33 @@ export function happyAgentRepositoriesStoreCreate(deps: {
         );
     }
 
-    /** Reads the shared credentials for a host, for whichever dialog still wants them. */
+    /**
+     * Reads what a repository URL may be pinned to, for whichever dialog still
+     * wants it.
+     */
     const credentialsFor = (
-        host: string | undefined,
-        land: (credentials: readonly HappyAgentGitCredential[]) => void,
+        url: string,
+        land: (credentials: readonly HappyAgentRepositoryCredential[]) => void,
+        delay = 0,
     ): void => {
         const ticket = ++credentialsTicket;
-        if (host === undefined) {
+        if (credentialsTimer !== undefined) clearTimeout(credentialsTimer);
+        credentialsTimer = undefined;
+        if (!hostNamed(url)) {
             land([]);
             return;
         }
-        void deps
-            .request("GET", `v0/git/credentials?host=${encodeURIComponent(host)}&shared=true`)
-            .then(
+        const read = (): void => {
+            credentialsTimer = undefined;
+            void deps.request("GET", `v0/git/pinnable?url=${encodeURIComponent(url.trim())}`).then(
                 (answer) => {
-                    if (!disposed && ticket === credentialsTicket) land(credentialsRead(answer));
+                    if (!disposed && ticket === credentialsTicket) land(pinnableRead(answer));
                 },
                 () => undefined,
             );
+        };
+        if (delay === 0) read();
+        else credentialsTimer = setTimeout(read, delay);
     };
 
     const addUpdate = (change: Partial<HappyAgentRepositoryAdd>): void => {
@@ -414,7 +449,7 @@ export function happyAgentRepositoriesStoreCreate(deps: {
                 },
                 (error: unknown) => {
                     if (disposed) return;
-                    const refused = happyAgentUserError(error);
+                    const refused = credentialRefusal(error, body.credentialId);
                     openUpdate({
                         saving: false,
                         error:
@@ -473,10 +508,25 @@ export function happyAgentRepositoriesStoreCreate(deps: {
         addUrlUpdate(url) {
             const add = store.getState().add;
             if (!add) return;
-            const host = hostOf(url);
-            const changedHost = host !== hostOf(add.url);
-            addEdited({ url, ...(changedHost ? { credentialId: null, credentials: [] } : {}) });
-            if (changedHost) credentialsFor(host, (credentials) => addUpdate({ credentials }));
+            if (url.trim() === add.url.trim()) {
+                addEdited({ url });
+                return;
+            }
+            addEdited({ url });
+            // What may be pinned depends on the whole URL, so a pick the new one no longer offers is let go.
+            credentialsFor(
+                url,
+                (credentials) => {
+                    const picked = store.getState().add?.credentialId ?? null;
+                    addUpdate({
+                        credentials,
+                        ...(picked !== null && !credentials.some((entry) => entry.id === picked)
+                            ? { credentialId: null }
+                            : {}),
+                    });
+                },
+                CREDENTIALS_DELAY_MS,
+            );
         },
         addNameUpdate(name) {
             addUpdate({ name });
@@ -504,7 +554,10 @@ export function happyAgentRepositoriesStoreCreate(deps: {
                     },
                     (error: unknown) => {
                         if (disposed || store.getState().add?.url.trim() !== url) return;
-                        addUpdate({ checking: false, error: happyAgentUserError(error) });
+                        addUpdate({
+                            checking: false,
+                            error: credentialRefusal(error, add.credentialId),
+                        });
                     },
                 );
         },
@@ -531,7 +584,10 @@ export function happyAgentRepositoriesStoreCreate(deps: {
                     },
                     (error: unknown) => {
                         if (!disposed)
-                            addUpdate({ submitting: false, error: happyAgentUserError(error) });
+                            addUpdate({
+                                submitting: false,
+                                error: credentialRefusal(error, add.credentialId),
+                            });
                     },
                 );
         },
@@ -546,7 +602,7 @@ export function happyAgentRepositoriesStoreCreate(deps: {
             );
             // A plugin signs in for its own repositories, so nothing is offered to pin.
             if (repository.authentication.kind !== "plugin")
-                credentialsFor(repository.host || undefined, (credentials) => {
+                credentialsFor(repository.url, (credentials) => {
                     if (store.getState().open?.repositoryId === repositoryId)
                         openUpdate({ credentials });
                 });
@@ -649,6 +705,8 @@ export function happyAgentRepositoriesStoreCreate(deps: {
             disposed = true;
             if (timer !== undefined) clearTimeout(timer);
             timer = undefined;
+            if (credentialsTimer !== undefined) clearTimeout(credentialsTimer);
+            credentialsTimer = undefined;
         },
     };
     return actions;

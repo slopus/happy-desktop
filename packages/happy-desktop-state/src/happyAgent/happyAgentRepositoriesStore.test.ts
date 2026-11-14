@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HappyCloudRequestRefusal } from "./happyAgentProviderCredentials.js";
 import {
     happyAgentRepositoriesStoreCreate,
     type HappyAgentRepositoriesStore,
@@ -12,7 +13,32 @@ const base = {
     defaultBranch: "main",
     lastCheck: null,
     version: "v1",
+    authentication: { kind: "none" },
 };
+
+const PINNABLE = `v0/git/pinnable?url=${encodeURIComponent(base.url)}`;
+
+const deployToken = {
+    id: "s3c7e1t0g1t2c3r4e5d6e7n8",
+    type: "git_credential",
+    name: "Acme deploy token",
+    description: "",
+    public: {
+        server: "github.com",
+        method: { kind: "token" },
+        repos: ["acme/*"],
+        operations: ["read", "write"],
+    },
+    uses: ["git"],
+    owner: "team",
+    access: { use: true, manage: false, attach: true },
+    version: "v-secret-1",
+    createdAt: 1_755_400_000_000,
+    updatedAt: 1_755_400_000_000,
+};
+
+const REFUSED_SECRET =
+    "Your role can't use this credential. Pick another, or ask whoever manages it in Settings › Secrets to let your role use it.";
 
 interface Sent {
     readonly method: string;
@@ -20,15 +46,25 @@ interface Sent {
     readonly body: unknown;
 }
 
-/** A server that lists `repositories` and records every request. */
-function server(repositories: readonly unknown[]) {
+function refusal(status: number): HappyCloudRequestRefusal {
+    return new HappyCloudRequestRefusal("refused", undefined, status, undefined);
+}
+
+/**
+ * A server that lists `repositories` and records every request. `routes`
+ * answers `METHOD path` before the defaults; an Error is thrown as a refusal.
+ */
+function server(repositories: readonly unknown[], routes: Record<string, unknown>) {
     const sent: Sent[] = [];
     const request = vi.fn((method: string, path: string, body?: unknown): Promise<unknown> => {
         sent.push({ method, path, body });
+        const routed = routes[`${method} ${path}`];
+        if (routed instanceof Error) return Promise.reject(routed);
+        if (routed !== undefined) return Promise.resolve(routed);
         if (path === "v0/repositories") return Promise.resolve({ repositories });
         if (path === "v0/permissions")
             return Promise.resolve({ granted: ["repositories.manage", "content.write"] });
-        if (path.startsWith("v0/git/credentials")) return Promise.resolve({ credentials: [] });
+        if (path.startsWith("v0/git/pinnable")) return Promise.resolve({ credentials: [] });
         if (path.endsWith("/branches")) return Promise.resolve({ branches: [] });
         return Promise.resolve({});
     });
@@ -37,8 +73,8 @@ function server(repositories: readonly unknown[]) {
 
 const stores: HappyAgentRepositoriesStore[] = [];
 
-async function loaded(repositories: readonly unknown[]) {
-    const fake = server(repositories);
+async function loaded(repositories: readonly unknown[], routes: Record<string, unknown> = {}) {
+    const fake = server(repositories, routes);
     const store = happyAgentRepositoriesStoreCreate({ request: fake.request });
     stores.push(store);
     store.subscribe(() => undefined);
@@ -56,13 +92,12 @@ describe("repository authentication", () => {
             {
                 ...base,
                 id: "web",
-                credentialId: null,
                 authentication: {
                     kind: "plugin",
                     plugin: { id: "github", installationId: "inst-1" },
                     method: "github_app",
                     account: "acme",
-                    status: "missing",
+                    status: "active",
                 },
             },
         ]);
@@ -71,7 +106,7 @@ describe("repository authentication", () => {
             plugin: { id: "github", installationId: "inst-1" },
             method: "github_app",
             account: "acme",
-            status: "missing",
+            status: "active",
         });
     });
 
@@ -80,7 +115,6 @@ describe("repository authentication", () => {
             {
                 ...base,
                 id: "web",
-                credentialId: null,
                 authentication: {
                     kind: "plugin",
                     plugin: { id: "github", installationId: "inst-1" },
@@ -121,25 +155,22 @@ describe("repository authentication", () => {
         });
     });
 
-    it("reads automatic and credential, and falls back to credentialId without authentication", async () => {
+    it("reads none and credential, and drops a repository without readable authentication", async () => {
         const { store } = await loaded([
-            { ...base, id: "a", credentialId: null, authentication: { kind: "automatic" } },
-            {
-                ...base,
-                id: "b",
-                credentialId: "cred-1",
-                authentication: { kind: "credential", credentialId: "cred-1" },
-            },
-            { ...base, id: "c", credentialId: "cred-2" },
-            { ...base, id: "d" },
-            { ...base, id: "e", credentialId: "cred-3", authentication: { kind: "plugin" } },
+            { ...base, id: "a" },
+            { ...base, id: "b", authentication: { kind: "credential", credentialId: "sec-1" } },
+            { ...base, id: "c", authentication: undefined, credentialId: "sec-2" },
+            { ...base, id: "d", authentication: { kind: "automatic" } },
+            { ...base, id: "e", authentication: { kind: "credential" } },
+            { ...base, id: "f", authentication: { kind: "plugin" } },
         ]);
-        expect(store.get().repositories.map((repository) => repository.authentication)).toEqual([
-            { kind: "automatic" },
-            { kind: "credential", credentialId: "cred-1" },
-            { kind: "credential", credentialId: "cred-2" },
-            { kind: "automatic" },
-            { kind: "credential", credentialId: "cred-3" },
+        expect(
+            store
+                .get()
+                .repositories.map((repository) => [repository.id, repository.authentication]),
+        ).toEqual([
+            ["a", { kind: "none" }],
+            ["b", { kind: "credential", credentialId: "sec-1" }],
         ]);
     });
 
@@ -158,24 +189,94 @@ describe("repository authentication", () => {
             },
         ]);
         store.repositoryOpen("web");
-        store.repositoryCredentialUpdate("cred-1");
+        store.repositoryCredentialUpdate("sec-1");
         await Promise.resolve();
-        expect(sent.some((request) => request.path.startsWith("v0/git/credentials"))).toBe(false);
+        expect(sent.some((request) => request.path.startsWith("v0/git/"))).toBe(false);
         expect(sent.some((request) => request.method === "PATCH")).toBe(false);
         expect(store.get().open?.saving).toBe(false);
     });
 
-    it("still pins a credential on a repository no plugin manages", async () => {
-        const { store, sent } = await loaded([{ ...base, id: "web", credentialId: null }]);
+    it("pins a team secret on a repository no plugin manages", async () => {
+        const { store, sent } = await loaded([{ ...base, id: "web" }]);
         store.repositoryOpen("web");
-        store.repositoryCredentialUpdate("cred-1");
+        store.repositoryCredentialUpdate(deployToken.id);
         await vi.waitFor(() =>
             expect(sent.find((request) => request.method === "PATCH")).toEqual({
                 method: "PATCH",
                 path: "v0/repositories/web",
-                body: { credentialId: "cred-1" },
+                body: { credentialId: deployToken.id },
             }),
         );
-        expect(sent.some((request) => request.path.startsWith("v0/git/credentials"))).toBe(true);
+    });
+});
+
+describe("pinnable credentials", () => {
+    it("lists the team's catalog git credentials for the repository's URL", async () => {
+        const { store, sent } = await loaded([{ ...base, id: "web" }], {
+            [`GET ${PINNABLE}`]: {
+                credentials: [
+                    { credentialId: deployToken.id, secret: deployToken },
+                    { credentialId: "env-1", secret: { ...deployToken, type: "environment" } },
+                    { credentialId: "bare-1" },
+                ],
+            },
+        });
+        store.repositoryOpen("web");
+        await vi.waitFor(() =>
+            expect(store.get().open?.credentials).toEqual([
+                { id: deployToken.id, name: "Acme deploy token", server: "github.com" },
+            ]),
+        );
+        expect(
+            sent.map((request) => request.path).filter((path) => path.startsWith("v0/git/")),
+        ).toEqual([PINNABLE]);
+    });
+
+    it("reads what a new URL may pin once typing pauses, and lets go of a pick it no longer offers", async () => {
+        const { store, sent } = await loaded([], {
+            [`GET ${PINNABLE}`]: {
+                credentials: [{ credentialId: deployToken.id, secret: deployToken }],
+            },
+        });
+        store.addOpen();
+        store.addCredentialUpdate("sec-elsewhere");
+        store.addUrlUpdate("https://github.com/acme/we");
+        store.addUrlUpdate(base.url);
+        await vi.waitFor(() =>
+            expect(store.get().add?.credentials).toEqual([
+                { id: deployToken.id, name: "Acme deploy token", server: "github.com" },
+            ]),
+        );
+        expect(store.get().add?.credentialId).toBeNull();
+        expect(sent.filter((request) => request.path.startsWith("v0/git/"))).toHaveLength(1);
+    });
+
+    it("says why a secret the reader may not use was refused", async () => {
+        const { store } = await loaded([{ ...base, id: "web" }], {
+            "PATCH v0/repositories/web": refusal(403),
+        });
+        store.repositoryOpen("web");
+        store.repositoryCredentialUpdate(deployToken.id);
+        await vi.waitFor(() => expect(store.get().open?.error?.message).toBe(REFUSED_SECRET));
+    });
+
+    it("says why adding with a secret the reader may not use was refused", async () => {
+        const { store } = await loaded([], {
+            "POST v0/repositories": refusal(403),
+        });
+        store.addOpen();
+        store.addUrlUpdate(base.url);
+        store.addCredentialUpdate(deployToken.id);
+        store.addSubmit();
+        await vi.waitFor(() => expect(store.get().add?.error?.message).toBe(REFUSED_SECRET));
+    });
+
+    it("keeps the server's words for a 403 that pinned nothing", async () => {
+        const { store } = await loaded([{ ...base, id: "web" }], {
+            "PATCH v0/repositories/web": refusal(403),
+        });
+        store.repositoryOpen("web");
+        store.repositoryNameSave("site");
+        await vi.waitFor(() => expect(store.get().open?.error?.message).toBe("refused"));
     });
 });
