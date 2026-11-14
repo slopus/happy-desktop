@@ -75,6 +75,30 @@ describe("repository authentication", () => {
         });
     });
 
+    it("reads a plugin repository whose credential is missing, without method or account", async () => {
+        const { store } = await loaded([
+            {
+                ...base,
+                id: "web",
+                credentialId: null,
+                authentication: {
+                    kind: "plugin",
+                    plugin: { id: "github", installationId: "inst-1" },
+                    method: null,
+                    account: null,
+                    status: "missing",
+                },
+            },
+        ]);
+        expect(store.get().repositories[0]?.authentication).toEqual({
+            kind: "plugin",
+            plugin: { id: "github", installationId: "inst-1" },
+            method: null,
+            account: null,
+            status: "missing",
+        });
+    });
+
     it("keeps a plugin repository whose method or status this client does not know", async () => {
         const { store } = await loaded([
             {
