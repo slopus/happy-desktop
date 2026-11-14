@@ -1,5 +1,5 @@
 /*
- * The video's two chapters, its opening and its closing cards, placed by the
+ * The video's three chapters, its opening and its closing cards, placed by the
  * takes' own cues so a re-recorded take needs no retiming here. Both cuts use
  * it; each names its stage, where its camera goes, and how it ends.
  *
@@ -8,10 +8,11 @@
  * eased move in. Chapter 2 is named by a short card, opens on the working
  * rows for the progress and the badge, and eases out once
  * Activity opens; the moment Activity spends loading after the click is left
- * out. The take itself steps down Activity, one cover at a time.
+ * out. The take holds the top report without scrolling. Chapter 3 opens three
+ * shared bot conversations and their inline reports.
  *
  * Takes, by `--take` name, each the multiplayer demo with that MULTIPLAYER_SHOT:
- * aware, activity.
+ * aware, activity, bots.
  */
 const move = 0.8;
 
@@ -27,10 +28,9 @@ const activityTitle = "See the most important updates from the team";
  * @param views  `openingTop`: the window's top in the frame once it has risen;
  *               `aware`: chapter 1's close view; `progress`: chapter 2's close
  *               view before the click; `activity`: Activity's view after it;
- *               `activityUntil`: the step whose rest ends chapter 2, and how
- *               long it holds; `loading`: when, after the click, Activity
+ *               `bots`: chapter 3's view; `loading`: when, after the click, Activity
  *               starts loading and has drawn its feed
- * @param ending the segments after chapter 2
+ * @param ending the segments after chapter 3
  * @param cues   the takes' cues by take and name, in take seconds
  */
 export function chapters(stage, views, ending, cues) {
@@ -72,28 +72,34 @@ export function chapters(stage, views, ending, cues) {
 
     const activity = cues.activity;
     // Enter on the working rows, just before List cache finishes. Leave out
-    // the stationary wait after the badge and one second of the first cover.
-    const activityFrom = activity.open + 1.2;
-    const [restStep, restSeconds] = views.activityUntil;
+    // the stationary wait after the badge and the loading interval.
+    // The longer card-to-app entrance finishes before List cache reports.
+    const activityFrom = activity.open + 0.4;
     const click = activity["activity-click"];
     const skips = [
         [activity["parent-done"] + 0.1, activity["parent-done"] + 1.6],
         [click + views.loading[0], click + views.loading[1]],
-        [activity["activity-open"] + 2.1, activity["activity-open"] + 3.1],
     ];
     const skippedBefore = (at) =>
         skips.reduce((total, [from, to]) => total + Math.max(0, Math.min(at, to) - from), 0);
     const onCut = (at) => at - activityFrom - skippedBefore(at);
-    const until = activity[restStep] + restSeconds;
+    const until = activity["activity-rest-end"] - (output.width === output.height ? 0.6 : 0);
 
     return {
         ...stage,
         segments: [
-            chapter("aware", 0, aware["back-open"] + 1.0, {
+            chapter("aware", 0, aware["leave-settled"] + 0.8, {
                 freeze,
                 title: awareTitle,
                 titleFrom: captionFrom,
                 titleTo: freeze + aware["arrival-settled:Offline Drafts"] + 0.9,
+                captions: [
+                    {
+                        text: "Not interested? Leave it.",
+                        from: freeze + aware["leave-menu-click"] - 0.15,
+                        to: freeze + aware["leave-settled"] + 0.7,
+                    },
+                ],
                 opening: { lines, rise: [riseFrom, risen], out: captionFrom, drop },
                 camera: [
                     { at: 0, ...whole(output.height) },
@@ -114,7 +120,7 @@ export function chapters(stage, views, ending, cues) {
                     },
                 ],
             }),
-            { kind: "card", text: activityTitle, seconds: 2.4, entrance: "after-window" },
+            { kind: "card", text: activityTitle, seconds: 2.2, entrance: "after-window" },
             chapter("activity", activityFrom, until - skippedBefore(until), {
                 skips,
                 camera: [
@@ -125,6 +131,15 @@ export function chapters(stage, views, ending, cues) {
                         css: views.activity,
                     },
                 ],
+            }),
+            {
+                kind: "card",
+                text: "Shared bots own the recurring work",
+                seconds: 2.2,
+                entrance: "after-window",
+            },
+            chapter("bots", 0, cues.bots["health-rest-end"], {
+                camera: [{ at: 0, css: views.bots }],
             }),
             ...ending,
         ],

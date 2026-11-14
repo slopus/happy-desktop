@@ -71,4 +71,18 @@ for (const [key, entry] of Object.entries(covers)) {
     await sharp(png).webp({ quality: 92 }).toFile(coverFile(key));
     process.stdout.write(`  ${coverFile(key)}\n`);
 }
+const { botReports, botReportFile, botReportPage } = await import("./bot-reports.mjs");
+const inline = await browser.newPage({
+    viewport: { width: 900, height: 430 },
+    deviceScaleFactor: 2,
+});
+await mkdir(dirname(botReportFile("releases")), { recursive: true });
+for (const report of botReports) {
+    await inline.setContent(botReportPage(report));
+    await inline.evaluate(() => document.fonts.ready);
+    await sharp(await inline.screenshot({ type: "png" }))
+        .webp({ quality: 92 })
+        .toFile(botReportFile(report.key));
+    process.stdout.write(`  ${botReportFile(report.key)}\n`);
+}
 await browser.close();

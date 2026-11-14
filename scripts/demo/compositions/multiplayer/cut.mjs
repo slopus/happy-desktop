@@ -24,7 +24,7 @@ export default (cues) => ({
             // Low enough that the hand parked in the title bar stays out of frame.
             activity: { scale: 1.3, x: centred(1.3), y: 66 },
             loading: [0.11, 0.38],
-            activityUntil: ["step3-rest", 2.0],
+            bots: { scale: 1.3, x: centred(1.3), y: 0 },
         },
         ending(),
         cues,

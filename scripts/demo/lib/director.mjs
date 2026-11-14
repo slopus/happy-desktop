@@ -525,14 +525,14 @@ export class Director {
         await this.#render(90, (progress) => {
             this.#pointer.press = progress;
         });
-        await this.#page.mouse.down();
+        await this.#page.mouse.down({ button: options.button ?? "left" });
         this.#sounds.push({ frame: this.#sink.frames.length, sound: "click" });
         if (!this.#pointerExternal)
             await this.#page.evaluate(
                 ([x, y]) => window.__happyDemo.ripple(x, y),
                 [this.#pointer.x, this.#pointer.y],
             );
-        await this.#page.mouse.up();
+        await this.#page.mouse.up({ button: options.button ?? "left" });
         await this.#render(130, (progress) => {
             this.#pointer.press = 1 - progress;
         });

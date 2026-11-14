@@ -1,5 +1,6 @@
 import * as world from "./world.mjs";
 import { covers } from "./artifacts/covers.mjs";
+import { botReports } from "./artifacts/bot-reports.mjs";
 import { cuid, nodeAvatarSet, personalOpen, photoSet } from "./personal.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -165,36 +166,6 @@ async function botFacts(clients) {
         facts.memberCreate = { allowed: false, error: String(error?.message ?? error) };
     }
     return facts;
-}
-
-/**
- * Desktop Releases' conversation, made once per world: Kirill asks and is
- * answered; Steve asks, and the bot's answer to him waits for the camera in
- * chapter 2, or is given at once and the bot waits on its build.
- */
-async function botJobPrepare(clients) {
-    const job = world.releaseBot;
-    const owner = clients[world.owner];
-    const bot = await botFind(owner, job.username);
-    const agentId = bot.agent.id;
-    if ((await owner.getMessages(agentId, { limit: 4 })).runs.length > 0) return bot;
-    const [asked, follow] = job.turns;
-    const theirs = async (key) => (await botFind(clients[key], job.username)).agent.id;
-    await clients[asked.from].sendMessage(await theirs(asked.from), {
-        id: cuid(),
-        text: asked.text,
-        mode: world.agentMode,
-    });
-    await wait(() => settled(owner, agentId), "Desktop Releases' first answer");
-    // Up to chapter 3, Steve has not written yet: he does on camera.
-    if (shot === "activity" || shot === "bots") return bot;
-    await clients[follow.from].sendMessage(await theirs(follow.from), {
-        id: cuid(),
-        text: follow.text,
-        mode: world.agentMode,
-    });
-    await wait(() => world.hasReached("bots:reported"), "Desktop Releases to be at work");
-    return bot;
 }
 
 /** A task by name, among the caller's active ones. */
@@ -588,7 +559,23 @@ export default {
             await arrivalsSettle();
             await spreadStep(0.5);
         }
-        if (shot === "bots") filmed.botAgentId = (await botJobPrepare(clients)).agent.id;
+        if (shot === "bots") {
+            filmed.botReports = [];
+            for (const report of botReports) {
+                const bot = await botFind(kirill, report.username);
+                await kirill.sendMessage(bot.agent.id, {
+                    id: cuid(),
+                    text: report.prompt,
+                    mode: world.seedMode,
+                });
+                await wait(() => settled(kirill, bot.agent.id), `${report.name}'s inline report`);
+                filmed.botReports.push({
+                    name: report.name,
+                    agentId: bot.agent.id,
+                    media: report.key,
+                });
+            }
+        }
         // Chapter 1's take first shows Kirill's sidebar as he left it, with the
         // team's earlier work unread, for the screenshot cover's rows; then he
         // reads it all.
@@ -647,6 +634,12 @@ export default {
             }
         };
         await load();
+        // Chapter 1's Leave affects Kirill's own membership in later takes too.
+        if (shot !== "aware" && shot !== "explore") {
+            await sidebarRow(page, "Android Push Fixes").click({ button: "right" });
+            await page.getByRole("menuitem", { name: "Leave task", exact: true }).click();
+            await sidebarRow(page, "Android Push Fixes").waitFor({ state: "detached" });
+        }
         if (shot === "aware") {
             await page.waitForTimeout(2500);
             await page.screenshot({ path: join(output, "rows-unread.png") });
@@ -791,7 +784,7 @@ export default {
                 "Offline Drafts' plan",
             );
             cue("visit-open", demo);
-            await demo.hold(2600);
+            await demo.hold(viewport.width < 1000 ? 1400 : 1900);
             await choose(sidebarRow(page, world.openTask), "back");
             const opened = world.doneTasks.find((task) => task.name === world.openTask);
             await until(
@@ -800,14 +793,38 @@ export default {
                 "Voice waveform again",
             );
             cue("back-open", demo);
-            await demo.hold(2200);
+            await demo.hold(600);
+            const leaving = sidebarRow(page, "Android Push Fixes");
+            await demo.moveTo(leaving);
+            await demo.hold(210);
+            cue("leave-menu-click", demo, { rect: await rowRect(page, "Android Push Fixes") });
+            await demo.click(leaving, { button: "right", after: 0 });
+            const leave = page.getByRole("menuitem", { name: "Leave task", exact: true });
+            await leave.waitFor();
+            cue("leave-menu-open", demo, await place(leave));
+            await choose(leave, "leave");
+            await until(
+                demo,
+                async () => (await sidebarRow(page, "Android Push Fixes").count()) === 0,
+                "Android Push Fixes left",
+            );
+            cue("leave-settled", demo);
+            const ownerTask = await taskFind(clients.scoteezy, "Android Push Fixes");
+            filmed.leave = {
+                label: "Leave task",
+                task: "Android Push Fixes",
+                removedFromKirillSidebar: true,
+                ownerTaskStillActive: Boolean(ownerTask),
+                ownerTaskId: ownerTask?.id,
+            };
+            await demo.hold(1100);
         }
 
         if (shot === "activity") {
             // Chapter 2, "See the most important updates from the team": Kirill
             // is in his own task with Activity read. Scoteezy's List cache
             // reports, its parent publishes, and Activity's badge appears.
-            // Kirill opens Activity and reads down it, one cover at a time.
+            // Kirill opens Activity for one glance, without scrolling.
             const row = sidebarRow(page, "Activity");
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
@@ -846,93 +863,26 @@ export default {
             cue("activity-open", demo, await place(first));
             await demo.moveTo({ x: viewport.width - 38, y: 435 }, { duration: 720 });
             await demo.hold(2500);
-            // Each short trackpad gesture brings the next report into view.
-            const steps = [
-                { title: covers.review.title, above: 24, rest: 1000 },
-                { title: covers.progress.title, above: 24, rest: 1000 },
-                { title: covers.screenshot.title, above: 120, rest: 2000 },
-            ];
-            for (const [index, step] of steps.entries()) {
-                cue(`step${index + 1}`, demo);
-                const scroll = await page
-                    .getByText(step.title)
-                    .first()
-                    .evaluate(
-                        (title, { above }) => {
-                            let port = title.parentElement;
-                            while (
-                                port &&
-                                !(
-                                    port.scrollHeight > port.clientHeight + 4 &&
-                                    /auto|scroll/u.test(getComputedStyle(port).overflowY)
-                                )
-                            )
-                                port = port.parentElement;
-                            const rect = port.getBoundingClientRect();
-                            return {
-                                distance: title.getBoundingClientRect().top - rect.top - above,
-                                x: rect.right - 28,
-                                y: rect.top + rect.height * 0.56,
-                            };
-                        },
-                        { above: step.above },
-                    );
-                await demo.moveTo({ x: scroll.x, y: scroll.y }, { duration: 310 + index * 35 });
-                await demo.hold(140);
-                // Native wheel input: a short push followed by a decaying tail.
-                const weights = [2, 5, 9, 12, 13, 12, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0.6, 0.4];
-                const total = weights.reduce((sum, n) => sum + n, 0);
-                for (const [tick, weight] of weights.entries()) {
-                    await page.mouse.wheel(0, (scroll.distance * weight) / total);
-                    await demo.hold(tick < 7 ? 17 : 23 + (tick % 3) * 4);
-                }
-                await demo.hold(170);
-                cue(`step${index + 1}-rest`, demo);
-                await demo.hold(step.rest);
-            }
+            cue("activity-rest-end", demo);
         }
 
         if (shot === "bots") {
-            // Chapter 3, "Shared bots for the standing jobs": Kirill opens
-            // Desktop Releases, where his own request is already answered. Steve
-            // writes in it from his own sign-in, and it answers him.
-            const job = world.releaseBot;
-            const [, follow] = job.turns;
+            // Chapter 3: recurring work, with real inline report media.
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo);
-            await demo.hold(700);
-            await choose(sidebarRow(page, job.name), "bot");
-            await until(
-                demo,
-                () => page.getByText(job.turns[0].reply).first().isVisible(),
-                "Desktop Releases' conversation",
-            );
-            cue("bot-opened", demo);
-            await demo.moveTo(away);
-            // Kirill's request and its answer stand a while before Steve writes.
-            await demo.hold(2000);
-            const steve = clients[follow.from];
-            const theirs = (await botFind(steve, job.username)).agent.id;
-            await arrivalFilm(
-                "message",
-                async () =>
-                    void pending.push(
-                        steve.sendMessage(theirs, {
-                            id: cuid(),
-                            text: follow.text,
-                            mode: world.agentMode,
-                        }),
-                    ),
-                () => page.getByText(follow.text).first().isVisible(),
-            );
-            await until(
-                demo,
-                () => page.getByText("Windows is still building.").first().isVisible(),
-                "Desktop Releases' answer",
-            );
-            cue("report", demo);
-            await demo.hold(3200);
+            await demo.hold(400);
+            for (const report of botReports) {
+                await choose(sidebarRow(page, report.name), report.key);
+                await until(
+                    demo,
+                    () => page.getByText(report.tail).first().isVisible(),
+                    `${report.name}'s report`,
+                );
+                cue(`${report.key}-open`, demo);
+                await demo.hold(viewport.width < 1000 ? 1700 : 2350);
+                cue(`${report.key}-rest-end`, demo);
+            }
         }
 
         if (shot === "step-in") {

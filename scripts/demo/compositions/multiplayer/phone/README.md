@@ -2,6 +2,15 @@
 `slopus/happy`, `scripts/mobile-captures/inputs/iphone/01-home.jpg`.
 The fictional story and native-capture provenance are recorded in that pipeline.
 
+Cut 9 uses `native-running.mp4`, a ten-second excerpt (11.5–21.5 s) of the
+homepage's real native team take 11 screen recording, 1206×2622 at 60 fps.
+The local source is `.context/take11/phone.mp4`, acquired with that take's
+`take.json`. Its task list and progress keep updating natively; there is no
+screen translation, synthesized scrolling, or painted UI. It is the separate
+homepage demo world, not a claim of synchronization with cut 9's fresh gym.
+The excerpt excludes the later waveform and keyboard sequence.
+One decoder runs continuously across “On all platforms” and “Happy”.
+
 The device and alpha mask reuse the homepage's `public/video/happy-one/device/`
 assets. The 2D frame is iPhone 16 Pro — Black Titanium from Apple Developer
 Design Resources, distributed by James Jingyi's Device Mockups collection:
@@ -13,8 +22,9 @@ The unchanged 1406×2822 artwork's screen aperture is x=102, y=100,
 width=1206, height=2622. The mask and screen geometry match the homepage.
 
 The mobile capture pipeline's approved static GitHub count is `24k`.
-The ending uses its IBM Plex Sans typography and real phone UI, alongside the
-multiplayer recording's own Activity window. There is one shader behind the
-composition; the phone image contains no marketing copy or shader.
+The ending uses its IBM Plex Sans typography and real phone UI. Cut 9 fades
+the desktop out and the phone in, alone at the centre, before the Happy close.
+There is one shader behind the composition; the phone contains no marketing
+copy or shader.
 
 The two older JPG marketing cards are historical cut 7 inputs and are unused.

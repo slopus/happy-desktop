@@ -28,6 +28,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { coverFile, covers, coverPage } from "./artifacts/covers.mjs";
+import { botReports, botReportFile } from "./artifacts/bot-reports.mjs";
 
 const execFile = promisify(execFileCallback);
 
@@ -737,6 +738,19 @@ export async function reply(payload) {
         return { content: [text("<title>Working session</title>\n<recap>In progress.</recap>")] };
 
     const turn = turnOf(messages);
+
+    // Recurring-work reports are real inline media in the bot conversation.
+    for (const report of botReports) {
+        if (turn.text !== report.prompt) continue;
+        if (turn.answered === 0) {
+            const image = await staged(
+                `bot-reports/${report.key}.webp`,
+                await readFile(botReportFile(report.key)),
+            );
+            return quick([text(report.reply), tool("present_files", { filepaths: [image] })]);
+        }
+        return quick([text(`${report.reply}\n\n${report.tail}`)]);
+    }
 
     // An admin bot is asked, off camera, to wear a picture for its computer.
     const avatar = turn.text.match(/^Use (.+) as this computer's picture\.$/u);
