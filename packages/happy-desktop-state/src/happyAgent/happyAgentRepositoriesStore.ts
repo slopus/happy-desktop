@@ -14,6 +14,28 @@ export interface HappyAgentRepositoryCheck {
     readonly checkedAt: number;
 }
 
+/** How a plugin's credential signs in to the repository's host. */
+export type HappyAgentRepositoryPluginMethod = "github_app" | "token" | "ssh_key" | "password";
+
+/**
+ * How everyone reaches a repository. `automatic` picks a credential per person and
+ * `credential` pins a shared one; `plugin` is a repository a plugin installation
+ * added and signs in for, whose credential is never shown or changed here.
+ */
+export type HappyAgentRepositoryAuthentication =
+    | { readonly kind: "automatic" }
+    | { readonly kind: "credential"; readonly credentialId: string }
+    | {
+          readonly kind: "plugin";
+          readonly plugin: { readonly id: string; readonly installationId: string };
+          /** `null` for a method this client does not know yet. */
+          readonly method: HappyAgentRepositoryPluginMethod | null;
+          /** The account it signs in as, such as a GitHub organization. */
+          readonly account: string | null;
+          /** `missing` once the installation's credential is gone: removed or disconnected. */
+          readonly status: "active" | "missing";
+      };
+
 /** One of the team's repositories on Happy Cloud. */
 export interface HappyAgentRepository {
     readonly id: string;
@@ -26,6 +48,7 @@ export interface HappyAgentRepository {
     readonly defaultBranch: string | null;
     /** The shared git credential everyone reaches it with; `null` picks one per person. */
     readonly credentialId: string | null;
+    readonly authentication: HappyAgentRepositoryAuthentication;
     readonly lastCheck: HappyAgentRepositoryCheck | null;
     /** What a change sends back as `If-Match`. */
     readonly version: string;
@@ -103,6 +126,7 @@ export interface HappyAgentRepositoriesStore {
     repositoryClose(): void;
     repositoryNameSave(name: string): void;
     repositoryDefaultBranchUpdate(branch: string): void;
+    /** Pins a shared credential; does nothing for a repository a plugin manages. */
     repositoryCredentialUpdate(credentialId: string | null): void;
     repositoryCheck(): void;
     /** Deletes the open repository; rejects with the reason to show. */
@@ -145,9 +169,51 @@ function checkRead(value: unknown): HappyAgentRepositoryCheck | null {
     };
 }
 
+const PLUGIN_METHODS: ReadonlySet<string> = new Set<HappyAgentRepositoryPluginMethod>([
+    "github_app",
+    "token",
+    "ssh_key",
+    "password",
+]);
+
+/** A server that sends no `authentication` yet is read from its `credentialId`, as before. */
+function authenticationRead(
+    value: unknown,
+    credentialId: string | null,
+): HappyAgentRepositoryAuthentication {
+    const authentication = recordOf(value);
+    const plugin = recordOf(authentication?.plugin);
+    if (
+        authentication?.kind === "plugin" &&
+        typeof plugin?.id === "string" &&
+        plugin.id !== "" &&
+        typeof plugin.installationId === "string"
+    ) {
+        const method = authentication.method;
+        return {
+            kind: "plugin",
+            plugin: { id: plugin.id, installationId: plugin.installationId },
+            method:
+                typeof method === "string" && PLUGIN_METHODS.has(method)
+                    ? (method as HappyAgentRepositoryPluginMethod)
+                    : null,
+            account: stringOrNull(authentication.account),
+            status: authentication.status === "missing" ? "missing" : "active",
+        };
+    }
+    const pinned =
+        authentication?.kind === "credential"
+            ? (stringOrNull(authentication.credentialId) ?? credentialId)
+            : authentication?.kind === "automatic"
+              ? null
+              : credentialId;
+    return pinned === null ? { kind: "automatic" } : { kind: "credential", credentialId: pinned };
+}
+
 function repositoryRead(value: unknown): HappyAgentRepository | undefined {
     const entry = recordOf(value);
     if (!entry || typeof entry.id !== "string" || typeof entry.url !== "string") return undefined;
+    const credentialId = stringOrNull(entry.credentialId);
     return {
         id: entry.id,
         name: typeof entry.name === "string" ? entry.name : entry.id,
@@ -156,7 +222,8 @@ function repositoryRead(value: unknown): HappyAgentRepository | undefined {
         path: typeof entry.path === "string" ? entry.path : "",
         transport: entry.transport === "ssh" ? "ssh" : "https",
         defaultBranch: stringOrNull(entry.defaultBranch),
-        credentialId: stringOrNull(entry.credentialId),
+        credentialId,
+        authentication: authenticationRead(entry.authentication, credentialId),
         lastCheck: checkRead(entry.lastCheck),
         version: typeof entry.version === "string" ? entry.version : "",
     };
@@ -477,10 +544,12 @@ export function happyAgentRepositoriesStoreCreate(deps: {
                 },
                 false,
             );
-            credentialsFor(repository.host || undefined, (credentials) => {
-                if (store.getState().open?.repositoryId === repositoryId)
-                    openUpdate({ credentials });
-            });
+            // A plugin signs in for its own repositories, so nothing is offered to pin.
+            if (repository.authentication.kind !== "plugin")
+                credentialsFor(repository.host || undefined, (credentials) => {
+                    if (store.getState().open?.repositoryId === repositoryId)
+                        openUpdate({ credentials });
+                });
             actions.branchesLoad(repositoryId);
         },
         repositoryClose() {
@@ -496,6 +565,10 @@ export function happyAgentRepositoriesStoreCreate(deps: {
             openChange({ defaultBranch: branch });
         },
         repositoryCredentialUpdate(credentialId) {
+            const open = store.getState().open;
+            const repository = open ? repositoryOf(open.repositoryId) : undefined;
+            // The server refuses a credential for a repository a plugin manages.
+            if (repository?.authentication.kind === "plugin") return;
             openChange({ credentialId });
         },
         repositoryCheck() {
