@@ -7925,7 +7925,16 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
             void (async () => {
                 try {
-                    const path = await host.directoryPick();
+                    // The picker is the host's window, not the daemon: when it
+                    // fails, its own words are an IPC transport's, so the
+                    // reader is told what did not happen rather than shown them.
+                    const path = await host.directoryPick().catch((error: unknown) => {
+                        throw new UserError(
+                            "Couldn't open the folder picker. Try again.",
+                            undefined,
+                            error,
+                        );
+                    });
                     if (disposed) return;
                     // Choosing nothing is a finished act with nothing to say, so
                     // it says nothing. Any earlier refusal went away when this

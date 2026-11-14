@@ -107,13 +107,8 @@
     border-bottom: none;
 }
 
-.happy-command-palette-results__row:hover {
-    background: var(--surface-ripple);
-}
-
 /* Nothing found is said in a row's place and columns, never as a row to pick. */
-.happy-command-palette-results__empty,
-.happy-command-palette-results__empty:hover {
+.happy-command-palette-results__empty {
     background: transparent;
 }
 
@@ -122,6 +117,10 @@
     font-weight: 400;
 }
 
+/* The highlight is the one row Enter would open. Pointer travel moves it
+   there (see CommandPaletteResults), so a hover fill of its own would only
+   ever mark a second row: the one a resting cursor sits on while the arrow
+   keys have moved on. */
 .happy-command-palette-results__row[data-active] {
     background: var(--surface-selected);
 }

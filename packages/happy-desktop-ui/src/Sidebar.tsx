@@ -2538,6 +2538,14 @@ function SidebarRow({
                             role={props.rename ? "textbox" : undefined}
                             suppressContentEditableWarning={props.rename !== undefined}
                             tabIndex={props.rename ? 0 : undefined}
+                            // A name ends in an ellipsis when the row's marks need
+                            // its room, and names that share a prefix then read
+                            // alike, so the whole name stays a hover away.
+                            title={
+                                props.rename || props.tooltip !== undefined
+                                    ? undefined
+                                    : item().label
+                            }
                         >
                             {/* The row's own colour, with a near-white band wiping through
                         it. Busy is a passing state, so it may not restyle the name:
