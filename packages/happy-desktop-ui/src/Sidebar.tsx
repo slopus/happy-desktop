@@ -466,6 +466,12 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onSectionCollapseToggle?: (sectionId: string) => void;
     onSectionTailToggle?: (sectionId: string) => void;
     activeItemId: string;
+    /**
+     * A row somebody asked to see. Each new `serial` brings that row into view
+     * the way a row made active is, even when it is the active row already.
+     * Opening whatever is folded over it is the caller's part.
+     */
+    revealRequest?: { readonly itemId: string; readonly serial: number };
     /** Which end of a row reports work. Defaults to `trailing`. */
     activityPlacement?: SidebarActivityPlacement;
     /**
@@ -2795,6 +2801,7 @@ export function Sidebar(props: SidebarProps) {
         "foldControlReveal",
         "headerAccessory",
         "onRowsVisibleChange",
+        "revealRequest",
         "headerAction",
         "onHeaderMenuSelect",
         "headerTrailing",
@@ -3462,25 +3469,38 @@ export function Sidebar(props: SidebarProps) {
      * to stand clear of the edge (`revealScrollTop`). A row that is not drawn
      * yet, such as a task whose join the host has not answered, is brought
      * into view when it arrives. After that the reader's own scrolling is
-     * left alone, and the next row made active stops one still gliding.
+     * left alone, and the next row made active stops one still gliding. A
+     * `revealRequest` is answered the same way, once per serial; one naming a
+     * row that is not drawn is dropped rather than held.
      */
     const activeRevealed = useRef<string | undefined>(undefined);
+    const requestRevealed = useRef<number | undefined>(undefined);
     const revealStop = useRef<() => void>(undefined);
     // eslint-disable-next-line happy-react/no-layout-effect -- the row an address lands on is known only once it is laid out, and it must be scrolled to before paint so it never shows off screen first
     useLayoutEffect(() => {
-        const id = local.activeItemId;
         const viewport = bodyViewport.current;
-        if (activeRevealed.current === id || !viewport) return;
+        if (!viewport) return;
+        const rowOf = (id: string) =>
+            [
+                ...viewport.querySelectorAll<HTMLElement>(
+                    '[data-happy-desktop-ui="sidebar-item"][data-item-id]',
+                ),
+            ].find((node) => node.dataset.itemId === id);
+        const request = local.revealRequest;
+        const asked =
+            request !== undefined && requestRevealed.current !== request.serial
+                ? request
+                : undefined;
+        if (asked) requestRevealed.current = asked.serial;
+        const requested = asked && rowOf(asked.itemId);
+        const id = requested ? asked.itemId : local.activeItemId;
+        if (!requested && activeRevealed.current === id) return;
         // A glide toward the row active before stops, wherever this one is.
         revealStop.current?.();
         revealStop.current = undefined;
-        const row = [
-            ...viewport.querySelectorAll<HTMLElement>(
-                '[data-happy-desktop-ui="sidebar-item"][data-item-id]',
-            ),
-        ].find((node) => node.dataset.itemId === id);
+        const row = requested || rowOf(id);
         if (!row) return;
-        activeRevealed.current = id;
+        if (id === local.activeItemId) activeRevealed.current = id;
         const box = row.getBoundingClientRect();
         // A row folded away draws no box, and unfolding it is the reader's call.
         if (box.height === 0) return;

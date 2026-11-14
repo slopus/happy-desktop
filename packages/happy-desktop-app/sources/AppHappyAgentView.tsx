@@ -1914,6 +1914,12 @@ const FILE_TAB_REVEAL_ITEM = {
     label: "Show in Finder",
     icon: "folder-open",
 } as const satisfies MenuItem;
+const AGENT_TAB_SIDEBAR_REVEAL_ITEM = {
+    kind: "item",
+    id: "sidebar-reveal",
+    label: "Reveal in sidebar",
+    icon: "locate",
+} as const satisfies MenuItem;
 const TAB_MENU_CLOSE_OTHERS = "close-others";
 const TAB_MENU_CLOSE_LEFT = "close-left";
 const TAB_MENU_CLOSE_RIGHT = "close-right";
@@ -1922,38 +1928,36 @@ const fileDocumentIdentities = new WeakMap<object, number>();
 let fileDocumentIdentityNext = 0;
 
 /**
- * The context menu one tab offers: the usual sweeps — this tab, the others,
- * everything to one side, the whole strip. Closing a session tab archives the
- * session, so a session tab's menu says "archive", while a file tab, whose
- * closing throws nothing away, says "close". A sweep still applies each tab's
- * own close semantics whatever the word on the item that started it. A sweep
- * with nothing to act on stays visible but disabled, so the menu keeps one
- * shape wherever it opens.
+ * The context menu a file or tool tab offers: the usual sweeps — this tab, the
+ * others, everything to one side, the whole strip. A sweep still applies each
+ * tab's own close semantics, so a session it reaches is archived. A sweep with
+ * nothing to act on stays visible but disabled, so the menu keeps one shape
+ * wherever it opens. A session's own tab offers no sweeps.
  */
-function tabStripMenu(verb: "Archive" | "Close", left: number, right: number): MenuItem[] {
+function tabStripMenu(left: number, right: number): MenuItem[] {
     return [
-        { kind: "item", id: TAB_MENU_CLOSE, label: `${verb} tab` },
+        { kind: "item", id: TAB_MENU_CLOSE, label: "Close tab" },
         { kind: "separator" },
         {
             kind: "item",
             id: TAB_MENU_CLOSE_OTHERS,
-            label: `${verb} other tabs`,
+            label: "Close other tabs",
             disabled: left + right === 0,
         },
         {
             kind: "item",
             id: TAB_MENU_CLOSE_LEFT,
-            label: `${verb} tabs to the left`,
+            label: "Close tabs to the left",
             disabled: left === 0,
         },
         {
             kind: "item",
             id: TAB_MENU_CLOSE_RIGHT,
-            label: `${verb} tabs to the right`,
+            label: "Close tabs to the right",
             disabled: right === 0,
         },
         { kind: "separator" },
-        { kind: "item", id: TAB_MENU_CLOSE_ALL, label: `${verb} all tabs` },
+        { kind: "item", id: TAB_MENU_CLOSE_ALL, label: "Close all tabs" },
     ];
 }
 
@@ -2453,6 +2457,37 @@ function voiceFocusRowIds(focus: GptLiveVoiceFocus): string[] {
     ];
 }
 
+/** The folded rows over `items[at]`, innermost first. */
+function itemFoldsOver(
+    items: readonly SidebarItem[],
+    at: number,
+    collapsed: ReadonlySet<string>,
+): string[] {
+    // Walking up: each earlier row shallower than the last one found is the next ancestor out.
+    const folded: string[] = [];
+    let depth = items[at]!.depth ?? 0;
+    for (let index = at - 1; index >= 0 && depth > 0; index--) {
+        const ancestor = items[index]!;
+        if ((ancestor.depth ?? 0) >= depth) continue;
+        depth = ancestor.depth ?? 0;
+        if (collapsed.has(ancestor.id)) folded.push(ancestor.id);
+    }
+    return folded;
+}
+
+/** The folded rows over the row `rowId`, wherever in the sections it stands. */
+function rowFoldsOver(
+    sections: readonly SidebarSection[],
+    collapsed: ReadonlySet<string>,
+    rowId: string,
+): string[] {
+    for (const section of sections) {
+        const index = section.items.findIndex((item) => item.id === rowId);
+        if (index >= 0) return itemFoldsOver(section.items, index, collapsed);
+    }
+    return [];
+}
+
 /**
  * The sections with the reader's folding applied and the row a voice call
  * points at marked, separately from the row the window has selected.
@@ -2502,15 +2537,7 @@ function sectionsVoiceFocused(
         );
     }
     const items = sections[place.section]!.items;
-    // Walking up: each earlier row shallower than the last one found is the next ancestor out.
-    const folded: string[] = [];
-    let depth = items[place.index]!.depth ?? 0;
-    for (let index = place.index - 1; index >= 0 && depth > 0; index--) {
-        const ancestor = items[index]!;
-        if ((ancestor.depth ?? 0) >= depth) continue;
-        depth = ancestor.depth ?? 0;
-        if (collapsed.has(ancestor.id)) folded.push(ancestor.id);
-    }
+    const folded = itemFoldsOver(items, place.index, collapsed);
     const reveal = focus.reason === "navigation";
     const marked = reveal || folded.length === 0 ? items[place.index]!.id : folded.at(-1)!;
     const shown =
@@ -4048,9 +4075,50 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                   },
               }
             : undefined;
+    // A tab's "Reveal in sidebar": its chat is selected, so its row is the one
+    // marked active, the sidebar opens if it was put away, whatever is folded
+    // over the row opens, and the row is scrolled to even when it was already
+    // the active one.
+    const sidebarReveal = (happyAgent: AppHappyAgentEntry, groupId: string, chatId: string) => {
+        props.onChatSelect(happyAgent.id, groupId, chatId);
+        const rowId = happyAgentItemId(
+            happyAgent.id,
+            activeRowId(happyAgent.bots, happyAgent.tasks ?? [], groupId, chatId),
+        );
+        // A folded Projects list draws none of its rows, so the rows are found
+        // with it open and the heading opens with the rest.
+        const collapsed = sidebarCollapse.collapsed;
+        const projectsId = happyAgentSectionId(happyAgent.id);
+        const sections = happyAgentSections(
+            directory,
+            titleShimmerEnabled,
+            projectsVisibility,
+            attention,
+            new Set([...collapsed].filter((id) => id !== projectsId)),
+        );
+        const projectsFolded =
+            collapsed.has(projectsId) &&
+            sections.some(
+                (section) =>
+                    section.id === projectsId && section.items.some((item) => item.id === rowId),
+            );
+        sidebarVisibilityStore.sidebarHiddenUpdate(false);
+        sidebarCollapseStore.rowReveal(rowId, [
+            ...rowFoldsOver(sections, collapsed, rowId),
+            ...(projectsFolded ? [projectsId] : []),
+        ]);
+    };
     const sidebar = (
         <Sidebar
             actions={pinned}
+            {...(sidebarCollapse.reveal
+                ? {
+                      revealRequest: {
+                          itemId: sidebarCollapse.reveal.rowId,
+                          serial: sidebarCollapse.reveal.serial,
+                      },
+                  }
+                : {})}
             {...(sidebarSearchRow ? { searchRow: sidebarSearchRow } : {})}
             {...(sidebarTaskCreateHappyAgent
                 ? {
@@ -5021,6 +5089,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     onChatSelect={(groupId, chatId, replace) => {
                         props.onChatSelect(active.id, groupId, chatId, replace);
                     }}
+                    onSidebarReveal={(groupId, chatId) => sidebarReveal(active, groupId, chatId)}
                     onChatClose={(groupId, chatId, fallbackChatId) => {
                         return (
                             props.onChatClose?.(active.id, groupId, chatId, fallbackChatId) ?? false
@@ -7151,6 +7220,8 @@ interface HappyAgentWorkspaceSurfaceProps {
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
     onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
+    /** Selects a chat of this Happy Agent and brings its row into view in the sidebar. */
+    onSidebarReveal(groupId: string, chatId: string): void;
     onFileClose(groupId: string, path: string): void;
     onFileSelect(
         groupId: string,
@@ -7464,8 +7535,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                               : sessionTabs(
                                     openGroup,
                                     props.titleShimmerEnabled,
-                                    openGroup.singleConversationId !== undefined &&
-                                        openBot === undefined,
+                                    openGroup.singleConversationId !== undefined,
                                 )
                           )
                               .map((tab) =>
@@ -8722,15 +8792,17 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 }
                                 transferTargets={MAIN_TRANSFER_TARGETS}
                                 tabMenuItems={(tab) => {
-                                    // A chat's tab is its agent, whose link leads the
-                                    // menu in a section of its own.
-                                    const agentCopy: MenuItem[] =
-                                        tabAgentLink(tab.id) === undefined
-                                            ? []
-                                            : [
-                                                  agentLinkCopyMenuItem(tabAgentNoun(tab.id)),
-                                                  { kind: "separator" },
-                                              ];
+                                    // A chat's tab is its agent: it offers the agent's
+                                    // link and its row in the sidebar, and no sweeps.
+                                    // The detached subagent's runner owns it, so it
+                                    // offers only the link.
+                                    if (tabAgentLink(tab.id) !== undefined)
+                                        return [
+                                            agentLinkCopyMenuItem(tabAgentNoun(tab.id)),
+                                            ...(tab.id === detachedConversationId
+                                                ? []
+                                                : [AGENT_TAB_SIDEBAR_REVEAL_ITEM]),
+                                        ];
                                     const revealed: MenuItem[] =
                                         fileReveal !== undefined &&
                                         groupFileTabs.some((entry) => entry.id === tab.id)
@@ -8739,25 +8811,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     const index = sweepableTabs.findIndex(
                                         (entry) => entry.id === tab.id,
                                     );
-                                    // The detached subagent's tab is not in the sweepable
-                                    // order, so it offers nothing else — its runner owns it.
-                                    if (index < 0) return agentCopy.slice(0, 1);
-                                    // A session is archived; a file, a terminal, a
-                                    // page is closed. The verb has to be the true
-                                    // one for the tab it is offered on.
-                                    const verb =
-                                        groupFileTabs.some((entry) => entry.id === tab.id) ||
-                                        mainTools.some((entry) => entry.id === tab.id)
-                                            ? "Close"
-                                            : "Archive";
+                                    if (index < 0) return [];
                                     return [
-                                        ...agentCopy,
                                         ...revealed,
-                                        ...tabStripMenu(
-                                            verb,
-                                            index,
-                                            sweepableTabs.length - index - 1,
-                                        ),
+                                        ...tabStripMenu(index, sweepableTabs.length - index - 1),
                                     ];
                                 }}
                                 onTabMenuSelect={(tab, actionId) => {
@@ -8765,6 +8822,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         const link = tabAgentLink(tab.id);
                                         if (link !== undefined)
                                             void navigator.clipboard?.writeText(link);
+                                        return;
+                                    }
+                                    if (actionId === AGENT_TAB_SIDEBAR_REVEAL_ITEM.id) {
+                                        props.onSidebarReveal(openGroup.id, tab.id);
                                         return;
                                     }
                                     if (actionId === FILE_TAB_REVEAL_ITEM.id) {

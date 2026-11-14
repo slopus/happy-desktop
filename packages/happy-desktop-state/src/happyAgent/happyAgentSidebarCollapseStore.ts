@@ -30,6 +30,17 @@ export interface HappyAgentSidebarCollapsePersistence {
 export interface HappyAgentSidebarCollapseSnapshot {
     /** Every row this window has been told to fold shut, still folded. */
     readonly collapsed: ReadonlySet<string>;
+    /**
+     * The row last asked to be brought into view. Every request takes a new
+     * serial, so asking for the row already on screen scrolls to it again. It
+     * lasts for this window only and is never written down.
+     */
+    readonly reveal?: HappyAgentSidebarRowReveal;
+}
+
+export interface HappyAgentSidebarRowReveal {
+    readonly rowId: string;
+    readonly serial: number;
 }
 
 export interface HappyAgentSidebarCollapseStore {
@@ -37,6 +48,8 @@ export interface HappyAgentSidebarCollapseStore {
     subscribe(listener: () => void): () => void;
     /** Folds `rowId` shut if it is open, and opens it if it is shut. */
     rowCollapseToggle(rowId: string): void;
+    /** Opens every row in `foldedIds`, the folds over `rowId`, and asks for `rowId` to be brought into view. */
+    rowReveal(rowId: string, foldedIds: readonly string[]): void;
 }
 
 /**
@@ -76,6 +89,14 @@ export function happyAgentSidebarCollapseStoreCreate(
         }
     })();
     const listeners = new Set<() => void>();
+    const collapsedWrite = (collapsed: Set<string>) => {
+        try {
+            persistence?.write({ collapsed: [...collapsed] });
+        } catch {
+            // Storage the host refused still keeps this window's folding for
+            // as long as it stays open.
+        }
+    };
     return {
         get: () => snapshot,
         subscribe(listener) {
@@ -95,13 +116,19 @@ export function happyAgentSidebarCollapseStoreCreate(
                 if (oldest.done === true) break;
                 collapsed.delete(oldest.value);
             }
-            snapshot = { collapsed };
-            try {
-                persistence?.write({ collapsed: [...collapsed] });
-            } catch {
-                // Storage the host refused still keeps this window's folding for
-                // as long as it stays open.
-            }
+            snapshot = { ...snapshot, collapsed };
+            collapsedWrite(collapsed);
+            for (const listener of listeners) listener();
+        },
+        rowReveal(rowId, foldedIds) {
+            if (rowId.length === 0) return;
+            const collapsed = new Set(snapshot.collapsed);
+            const opened = foldedIds.filter((id) => collapsed.delete(id)).length > 0;
+            snapshot = {
+                collapsed: opened ? collapsed : snapshot.collapsed,
+                reveal: { rowId, serial: (snapshot.reveal?.serial ?? 0) + 1 },
+            };
+            if (opened) collapsedWrite(collapsed);
             for (const listener of listeners) listener();
         },
     };
@@ -116,4 +143,5 @@ export const happyAgentSidebarCollapseStoreNoop: HappyAgentSidebarCollapseStore 
     get: () => EMPTY_SNAPSHOT,
     subscribe: () => () => undefined,
     rowCollapseToggle: () => undefined,
+    rowReveal: () => undefined,
 };
