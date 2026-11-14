@@ -5,22 +5,27 @@ import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 
 /**
- * How a machine takes agents, fixed by the config on the machine itself:
- * isolated sandboxes, the host shared by every agent, the host held by one
- * agent at a time, or a member's own machine for their own agents.
+ * Who a computer is for, chosen when it is added and never changed: the whole
+ * team, or one member's own agents, each with that member's approval.
  */
-export type HappyAgentComputeMode = "sandbox" | "shared" | "exclusive" | "private";
+export type HappyAgentComputeMachineAccess = "shared" | "private";
 
-export const HAPPY_AGENT_COMPUTE_MODES: readonly HappyAgentComputeMode[] = [
-    "sandbox",
+export const HAPPY_AGENT_COMPUTE_MACHINE_ACCESSES: readonly HappyAgentComputeMachineAccess[] = [
     "shared",
-    "exclusive",
     "private",
 ];
 
+/** The most agents any computer takes at once. */
+export const HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX = 64;
+
+/** How many agents a new computer takes at once unless the person says otherwise. */
+export const HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT: Readonly<
+    Record<HappyAgentComputeMachineAccess, number>
+> = { shared: 8, private: 1 };
+
 /**
- * What the reader may do with compute: add any machine and free a held one
- * (`pools.manage`), use machines and add a private one of their own
+ * What the reader may do with compute: add a shared computer and manage every
+ * one (`pools.manage`), use computers and add a private one of their own
  * (`compute.use`), or nothing at all.
  */
 export type HappyAgentComputeAccess = "manage" | "use" | "none";
@@ -28,8 +33,8 @@ export type HappyAgentComputeAccess = "manage" | "use" | "none";
 /** Where a machine stands; a revoked machine is no longer listed. */
 export type HappyAgentComputeMachineStatus = "online" | "offline" | "draining" | "enrolling";
 
-/** The agent holding an exclusive machine; its title is null when the reader may not see it. */
-export interface HappyAgentComputeHolder {
+/** An agent placed on a computer; its title is null when the reader may not see it. */
+export interface HappyAgentComputeAgent {
     readonly agentId: string;
     readonly title: string | null;
 }
@@ -39,13 +44,19 @@ export type HappyAgentComputeOwner =
     | { readonly kind: "reader" }
     | { readonly kind: "member"; readonly userId: string; readonly name: string | null };
 
-/** A machine's mode, with what only that mode carries. */
-export type HappyAgentComputeMachineMode =
-    | { readonly mode: "sandbox" }
-    | { readonly mode: "shared" }
-    | { readonly mode: "exclusive"; readonly holder: HappyAgentComputeHolder | null }
-    /** `owner` is null for a machine that joined before owners were kept. */
-    | { readonly mode: "private"; readonly owner: HappyAgentComputeOwner | null };
+/** A machine's access, with the owner only a private machine has. */
+export type HappyAgentComputeMachineAccessView =
+    | { readonly kind: "shared" }
+    /** `owner` is null when the server names none. */
+    | { readonly kind: "private"; readonly owner: HappyAgentComputeOwner | null };
+
+/**
+ * Whether the computer can keep a restricted command inside its boundary. When
+ * it cannot, only full-access commands run there.
+ */
+export type HappyAgentComputeBoundary =
+    | { readonly available: true }
+    | { readonly available: false; readonly reason: string | null };
 
 /** One machine agents can join. */
 export interface HappyAgentComputeMachine {
@@ -57,11 +68,18 @@ export interface HappyAgentComputeMachine {
     /** `macos`, `linux` or `windows`, as the machine reported it. */
     readonly os: string | null;
     readonly arch: string | null;
-    readonly mode: HappyAgentComputeMachineMode;
+    readonly access: HappyAgentComputeMachineAccessView;
+    /** How many agents it takes at once; it is full once that many are on it. */
+    readonly concurrency: number;
+    /** The most `concurrency` may be raised to, when the machine has said. */
+    readonly maxConcurrency: number | null;
+    /** The agents on it now. */
+    readonly agents: readonly HappyAgentComputeAgent[];
+    readonly boundary: HappyAgentComputeBoundary;
     /** What agents read about it in `list_compute`. */
     readonly description: string | null;
-    /** Why its sandbox failed its self-test, while it does; shown only to managers. */
-    readonly sandboxError: string | null;
+    /** Whether the reader may edit it and remove agents from it. */
+    readonly manageable: boolean;
     /** When the status last changed, in milliseconds. */
     readonly since: number;
 }
@@ -79,11 +97,19 @@ export interface HappyAgentComputeApproval {
     readonly createdAt: number;
 }
 
+/** A system the server publishes an installer for. */
+export type HappyAgentComputeSystem = "linux" | "macos" | "windows";
+
 /** The one-time install command a new machine joins with. */
 export interface HappyAgentComputeInstall {
-    readonly mode: HappyAgentComputeMode;
+    readonly access: HappyAgentComputeMachineAccess;
+    readonly concurrency: number;
     /** Unix and Windows install commands; null where the server publishes no installer. */
     readonly commands: { readonly unix: string; readonly windows: string } | null;
+    /** The systems an installer is published for; empty when the server did not say. */
+    readonly systems: readonly HappyAgentComputeSystem[];
+    /** What the server says is not available yet, in words for a person. */
+    readonly notice: string | null;
     /** The join token itself, for an install without the commands. */
     readonly token: string;
     readonly clusterUrl: string;
@@ -91,9 +117,11 @@ export interface HappyAgentComputeInstall {
     readonly expiresAt: number;
 }
 
-/** What a new machine will be: its mode. It joins under its hostname. */
+/** What a new machine will be. It joins under its hostname. */
 export interface HappyAgentComputeMachineDraft {
-    readonly mode: HappyAgentComputeMode;
+    readonly access: HappyAgentComputeMachineAccess;
+    /** As typed; sent once it is a whole number in range. */
+    readonly concurrency: string;
 }
 
 /** Adding a machine, while its dialog is open. */
@@ -108,6 +136,27 @@ export type HappyAgentComputeMachineAdd =
     /** Shown once; closing the dialog forgets it. */
     | { readonly step: "shown"; readonly install: HappyAgentComputeInstall };
 
+/** A machine's editable fields, as typed. */
+export interface HappyAgentComputeMachineEditDraft {
+    readonly name: string;
+    readonly description: string;
+    readonly concurrency: string;
+}
+
+/** One machine's dialog, while it is open: its agents, and its fields for a reader who may edit them. */
+export type HappyAgentComputeMachineDetail =
+    | {
+          readonly step: "editing" | "saving";
+          readonly machineId: string;
+          readonly draft: HappyAgentComputeMachineEditDraft;
+      }
+    | {
+          readonly step: "failed";
+          readonly machineId: string;
+          readonly draft: HappyAgentComputeMachineEditDraft;
+          readonly error: UserError;
+      };
+
 export type HappyAgentComputeApprovalAnswer = "approve" | "deny";
 
 export interface HappyAgentComputeSnapshot {
@@ -119,10 +168,11 @@ export interface HappyAgentComputeSnapshot {
     readonly approvals: readonly HappyAgentComputeApproval[];
     /** Answers sent and not yet settled, by approval key. */
     readonly approvalAnswers: ReadonlyMap<string, HappyAgentComputeApprovalAnswer>;
-    /** Exclusive machines whose lock is being freed. */
-    readonly lockReleases: ReadonlySet<string>;
+    /** Agents being removed from a machine, by `computerId/agentId`. */
+    readonly agentRemovals: ReadonlySet<string>;
     readonly machineAdd?: HappyAgentComputeMachineAdd;
-    /** Why the last answer or release did not go through. */
+    readonly machineDetail?: HappyAgentComputeMachineDetail;
+    /** Why the last answer or removal did not go through. */
     readonly actionError?: UserError;
     readonly error?: UserError;
 }
@@ -139,11 +189,19 @@ export interface HappyAgentComputeStore {
     subscribe(listener: () => void): () => void;
     machineAddOpen(): void;
     machineAddClose(): void;
-    machineAddModeUpdate(mode: HappyAgentComputeMode): void;
+    machineAddAccessUpdate(access: HappyAgentComputeMachineAccess): void;
+    machineAddConcurrencyUpdate(value: string): void;
     /** Mints the machine's one-time join token and its install commands. */
     machineAddCreate(): void;
-    /** Frees an exclusive machine from the agent holding it. */
-    machineLockRelease(machineId: string): void;
+    machineDetailOpen(machineId: string): void;
+    machineDetailClose(): void;
+    machineNameUpdate(value: string): void;
+    machineDescriptionUpdate(value: string): void;
+    machineConcurrencyUpdate(value: string): void;
+    /** Saves the open machine's changed fields. */
+    machineSave(): void;
+    /** Takes an agent off a machine, freeing its place. */
+    machineAgentRemove(machineId: string, agentId: string): void;
     approvalAnswer(key: string, answer: HappyAgentComputeApprovalAnswer): void;
     [Symbol.dispose](): void;
 }
@@ -164,47 +222,79 @@ function numberOr(value: unknown, fallback: number): number {
     return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function countOrNull(value: unknown): number | null {
+    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 function computerStatusOf(value: unknown): HappyAgentComputeMachineStatus | undefined {
     return (["online", "offline", "draining", "enrolling"] as const).find(
         (status) => status === value,
     );
 }
 
-function modeOf(value: unknown): HappyAgentComputeMode | undefined {
-    return HAPPY_AGENT_COMPUTE_MODES.find((mode) => mode === value);
+function machineAccessOf(value: unknown): HappyAgentComputeMachineAccess | undefined {
+    return HAPPY_AGENT_COMPUTE_MACHINE_ACCESSES.find((access) => access === value);
+}
+
+function systemsRead(value: unknown): HappyAgentComputeSystem[] {
+    if (!Array.isArray(value)) return [];
+    // Published builds are named `os-arch`, such as `linux-x86_64`.
+    return (["linux", "macos", "windows"] as const).filter((system) =>
+        value.some((entry: unknown) => typeof entry === "string" && entry.startsWith(`${system}-`)),
+    );
+}
+
+/**
+ * The concurrency typed into a field, or why it can't be sent: a whole number
+ * from 1 to the machine's limit.
+ */
+function concurrencyParse(text: string, max: number | null): number | UserError {
+    const limit = Math.min(
+        max ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
+        HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
+    );
+    const value = /^\d+$/.test(text.trim()) ? Number(text.trim()) : Number.NaN;
+    if (Number.isInteger(value) && value >= 1 && value <= limit) return value;
+    return new UserError(`How many agents at once is a whole number from 1 to ${String(limit)}.`);
 }
 
 /** Who the reader is, for reading the machines they see. */
 interface Reader {
     readonly userId: string | undefined;
+    readonly access: HappyAgentComputeAccess;
     readonly names: ReadonlyMap<string, string | null>;
 }
 
-function computerModeRead(computer: Record<string, unknown>, reader: Reader) {
-    const mode = modeOf(computer.mode);
-    if (mode === "exclusive") {
-        const held = recordOf(computer.exclusiveAgent);
-        return {
-            mode,
-            holder:
-                held && typeof held.id === "string"
-                    ? { agentId: held.id, title: textOrNull(held.title) }
-                    : null,
-        } satisfies HappyAgentComputeMachineMode;
-    }
-    if (mode === "private") {
-        const owner = textOrNull(computer.owner);
-        return {
-            mode,
-            owner:
-                owner === null
-                    ? null
-                    : owner === reader.userId
-                      ? { kind: "reader" }
-                      : { kind: "member", userId: owner, name: reader.names.get(owner) ?? null },
-        } satisfies HappyAgentComputeMachineMode;
-    }
-    return mode === undefined ? undefined : { mode };
+function computerAccessRead(
+    computer: Record<string, unknown>,
+    reader: Reader,
+): HappyAgentComputeMachineAccessView | undefined {
+    const access = machineAccessOf(computer.access);
+    if (access !== "private") return access === undefined ? undefined : { kind: access };
+    const owner = textOrNull(computer.owner);
+    return {
+        kind: access,
+        owner:
+            owner === null
+                ? null
+                : owner === reader.userId
+                  ? { kind: "reader" }
+                  : { kind: "member", userId: owner, name: reader.names.get(owner) ?? null },
+    };
+}
+
+function agentRead(value: unknown): HappyAgentComputeAgent | undefined {
+    const agent = recordOf(value);
+    return agent && typeof agent.id === "string"
+        ? { agentId: agent.id, title: textOrNull(agent.title) }
+        : undefined;
+}
+
+function boundaryRead(value: unknown): HappyAgentComputeBoundary {
+    const boundary = recordOf(value);
+    return boundary?.available === false
+        ? { available: false, reason: textOrNull(boundary.reason) }
+        : { available: true };
 }
 
 /** A computer from `/v0/computers`; a revoked one is left out. */
@@ -212,8 +302,8 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
     const computer = recordOf(value);
     const status = computerStatusOf(computer?.status);
     if (!computer || typeof computer.id !== "string" || !status) return undefined;
-    const mode = computerModeRead(computer, reader);
-    if (!mode) return undefined;
+    const access = computerAccessRead(computer, reader);
+    if (!access) return undefined;
     return {
         id: computer.id,
         name: textOrNull(computer.name) ?? textOrNull(computer.hostname) ?? computer.id.slice(0, 8),
@@ -221,9 +311,15 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
         hostname: textOrNull(computer.hostname),
         os: textOrNull(computer.os),
         arch: textOrNull(computer.arch),
-        mode,
+        access,
+        concurrency: countOrNull(computer.concurrency) ?? 1,
+        maxConcurrency: countOrNull(computer.maxConcurrency),
+        agents: listRead(computer, "agents", agentRead),
+        boundary: boundaryRead(computer.boundary),
         description: textOrNull(computer.description),
-        sandboxError: textOrNull(computer.sandboxError),
+        manageable:
+            reader.access === "manage" ||
+            (access.kind === "private" && access.owner?.kind === "reader"),
         since: numberOr(computer.since, 0),
     };
 }
@@ -257,15 +353,19 @@ function listRead<T>(value: unknown, key: string, read: (item: unknown) => T | u
 
 function installRead(value: unknown): HappyAgentComputeInstall | undefined {
     const answer = recordOf(value);
-    const mode = modeOf(answer?.mode);
-    if (!answer || !mode || typeof answer.token !== "string") return undefined;
+    const access = machineAccessOf(answer?.access);
+    if (!answer || !access || typeof answer.token !== "string") return undefined;
     const commands = recordOf(answer.commands);
     return {
-        mode,
+        access,
+        concurrency:
+            countOrNull(answer.concurrency) ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[access],
         commands:
             commands && typeof commands.unix === "string" && typeof commands.windows === "string"
                 ? { unix: commands.unix, windows: commands.windows }
                 : null,
+        systems: systemsRead(answer.platforms),
+        notice: textOrNull(answer.notice),
         token: answer.token,
         clusterUrl: typeof answer.clusterUrl === "string" ? answer.clusterUrl : "",
         expiresAt: numberOr(answer.expiresAt, 0),
@@ -288,7 +388,7 @@ export function happyAgentComputeStoreCreate(deps: {
         machines: [],
         approvals: [],
         approvalAnswers: new Map(),
-        lockReleases: new Set(),
+        agentRemovals: new Set(),
     }));
     const listeners = new Set<() => void>();
     let disposed = false;
@@ -345,6 +445,8 @@ export function happyAgentComputeStoreCreate(deps: {
         names = new Map([...owners.map((owner) => [owner, null] as const), ...members]);
     };
 
+    const reader = (): Reader => ({ userId, access: store.getState().access, names });
+
     const read = async (): Promise<void> => {
         const [permissions, profile] = await Promise.all([
             deps.request("GET", "v0/permissions"),
@@ -362,20 +464,23 @@ export function happyAgentComputeStoreCreate(deps: {
                   ]);
         if (access === "manage") await namesRead(computers);
         if (disposed) return;
-        const reader: Reader = { userId, names };
         const current = store.getState();
-        const { error: _cleared, ...rest } = current;
+        const { error: _cleared, machineDetail, ...rest } = current;
+        const machines = listRead(computers, "computers", (computer) =>
+            computerRead(computer, { userId, access, names }),
+        ).sort(computerCompare);
+        // A machine revoked while its dialog was open takes the dialog with it.
+        const detailKept =
+            machineDetail &&
+            (machineDetail.step === "saving" ||
+                machines.some((machine) => machine.id === machineDetail.machineId));
         store.setState(
             {
                 ...rest,
+                ...(detailKept ? { machineDetail } : {}),
                 loading: false,
                 access,
-                machines: referencesPreserve(
-                    current.machines,
-                    listRead(computers, "computers", (computer) =>
-                        computerRead(computer, reader),
-                    ).sort(computerCompare),
-                ),
+                machines: referencesPreserve(current.machines, machines),
                 approvals: referencesPreserve(
                     current.approvals,
                     listRead(approvals, "approvals", approvalRead),
@@ -442,7 +547,20 @@ export function happyAgentComputeStoreCreate(deps: {
         machineAddSet({ step: "choosing", draft: { ...add.draft, ...change } });
     };
 
-    /** Runs a release or an answer, keeping its mark until it settles. */
+    /** Changes the open machine's draft, which takes back a refusal the earlier draft got. */
+    const machineDraftUpdate = (change: Partial<HappyAgentComputeMachineEditDraft>): void => {
+        const detail = store.getState().machineDetail;
+        if (disposed || !detail || detail.step === "saving") return;
+        set({
+            machineDetail: {
+                step: "editing",
+                machineId: detail.machineId,
+                draft: { ...detail.draft, ...change },
+            },
+        });
+    };
+
+    /** Runs a removal or an answer, keeping its mark until it settles. */
     const act = (
         request: () => Promise<unknown>,
         settle: (snapshot: HappyAgentComputeSnapshot) => Partial<HappyAgentComputeSnapshot>,
@@ -484,11 +602,13 @@ export function happyAgentComputeStoreCreate(deps: {
         machineAddOpen() {
             const access = store.getState().access;
             if (disposed || access === "none") return;
+            // A member may add only a private machine of their own.
+            const machineAccess = access === "manage" ? "shared" : "private";
             machineAddSet({
                 step: "choosing",
                 draft: {
-                    // A member may add only a private machine of their own.
-                    mode: access === "manage" ? "sandbox" : "private",
+                    access: machineAccess,
+                    concurrency: String(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[machineAccess]),
                 },
             });
         },
@@ -497,59 +617,178 @@ export function happyAgentComputeStoreCreate(deps: {
             if (disposed || !machineAdd || machineAdd.step === "creating") return;
             store.setState(rest, true);
         },
-        machineAddModeUpdate(mode) {
-            if (mode !== "private" && store.getState().access !== "manage") return;
-            machineAddDraftUpdate({ mode });
+        machineAddAccessUpdate(access) {
+            const snapshot = store.getState();
+            const add = snapshot.machineAdd;
+            if (access !== "private" && snapshot.access !== "manage") return;
+            if (!add || add.step === "shown" || add.draft.access === access) return;
+            // An untouched count follows the access's own default.
+            const untouched =
+                add.draft.concurrency.trim() ===
+                String(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[add.draft.access]);
+            machineAddDraftUpdate({
+                access,
+                ...(untouched
+                    ? { concurrency: String(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[access]) }
+                    : {}),
+            });
+        },
+        machineAddConcurrencyUpdate(value) {
+            machineAddDraftUpdate({ concurrency: value });
         },
         machineAddCreate() {
             const add = store.getState().machineAdd;
             if (disposed || !add || (add.step !== "choosing" && add.step !== "failed")) return;
+            const concurrency = concurrencyParse(add.draft.concurrency, null);
+            if (concurrency instanceof UserError) {
+                machineAddSet({ step: "failed", draft: add.draft, error: concurrency });
+                return;
+            }
             const creating: HappyAgentComputeMachineAdd = { step: "creating", draft: add.draft };
             machineAddSet(creating);
-            void deps.request("POST", "v0/computers/join-tokens", { mode: add.draft.mode }).then(
-                (answer) => {
-                    if (disposed || store.getState().machineAdd !== creating) return;
-                    const install = installRead(answer);
-                    machineAddSet(
-                        install
-                            ? { step: "shown", install }
-                            : {
-                                  step: "failed",
-                                  draft: add.draft,
-                                  error: new UserError(
-                                      "Happy Cloud didn't send an install command.",
-                                  ),
-                              },
-                    );
-                },
-                (error: unknown) => {
-                    if (disposed || store.getState().machineAdd !== creating) return;
-                    machineAddSet({
-                        step: "failed",
-                        draft: add.draft,
-                        error: happyAgentUserError(error),
-                    });
-                },
-            );
+            void deps
+                .request("POST", "v0/computers/join-tokens", {
+                    access: add.draft.access,
+                    concurrency,
+                })
+                .then(
+                    (answer) => {
+                        if (disposed || store.getState().machineAdd !== creating) return;
+                        const install = installRead(answer);
+                        machineAddSet(
+                            install
+                                ? { step: "shown", install }
+                                : {
+                                      step: "failed",
+                                      draft: add.draft,
+                                      error: new UserError(
+                                          "Happy Cloud didn't send an install command.",
+                                      ),
+                                  },
+                        );
+                    },
+                    (error: unknown) => {
+                        if (disposed || store.getState().machineAdd !== creating) return;
+                        machineAddSet({
+                            step: "failed",
+                            draft: add.draft,
+                            error: happyAgentUserError(error),
+                        });
+                    },
+                );
         },
-        machineLockRelease(machineId) {
+        machineDetailOpen(machineId) {
             const snapshot = store.getState();
-            if (disposed || snapshot.access !== "manage" || snapshot.lockReleases.has(machineId))
-                return;
+            const machine = snapshot.machines.find((entry) => entry.id === machineId);
+            if (disposed || !machine || snapshot.machineDetail?.step === "saving") return;
             set({
-                lockReleases: new Set([...snapshot.lockReleases, machineId]),
+                machineDetail: {
+                    step: "editing",
+                    machineId,
+                    draft: {
+                        name: machine.name,
+                        description: machine.description ?? "",
+                        concurrency: String(machine.concurrency),
+                    },
+                },
+            });
+        },
+        machineDetailClose() {
+            const { machineDetail, ...rest } = store.getState();
+            if (disposed || !machineDetail || machineDetail.step === "saving") return;
+            store.setState(rest, true);
+        },
+        machineNameUpdate(value) {
+            machineDraftUpdate({ name: value });
+        },
+        machineDescriptionUpdate(value) {
+            machineDraftUpdate({ description: value });
+        },
+        machineConcurrencyUpdate(value) {
+            machineDraftUpdate({ concurrency: value });
+        },
+        machineSave() {
+            const snapshot = store.getState();
+            const detail = snapshot.machineDetail;
+            if (disposed || !detail || detail.step === "saving") return;
+            const machine = snapshot.machines.find((entry) => entry.id === detail.machineId);
+            if (!machine?.manageable) return;
+            const refuse = (error: UserError): void => {
+                set({ machineDetail: { ...detail, step: "failed", error } });
+            };
+            const name = detail.draft.name.trim();
+            if (name === "") {
+                refuse(new UserError("Give the computer a name."));
+                return;
+            }
+            const description = detail.draft.description.trim();
+            const concurrency = concurrencyParse(detail.draft.concurrency, machine.maxConcurrency);
+            if (concurrency instanceof UserError) {
+                refuse(concurrency);
+                return;
+            }
+            const changes = {
+                ...(name === machine.name ? {} : { name }),
+                ...(description === (machine.description ?? "")
+                    ? {}
+                    : { description: description === "" ? null : description }),
+                ...(concurrency === machine.concurrency ? {} : { concurrency }),
+            };
+            const close = (): void => {
+                const { machineDetail: _closed, ...rest } = store.getState();
+                store.setState(rest, true);
+            };
+            if (Object.keys(changes).length === 0) {
+                close();
+                return;
+            }
+            const saving: HappyAgentComputeMachineDetail = {
+                step: "saving",
+                machineId: detail.machineId,
+                draft: detail.draft,
+            };
+            set({ machineDetail: saving });
+            void deps
+                .request("PATCH", `v0/computers/${encodeURIComponent(detail.machineId)}`, changes)
+                .then(
+                    (answer) => {
+                        if (disposed || store.getState().machineDetail !== saving) return;
+                        const saved = computerRead(recordOf(answer)?.computer, reader());
+                        if (saved) {
+                            const current = store.getState();
+                            set({
+                                machines: current.machines
+                                    .map((entry) => (entry.id === saved.id ? saved : entry))
+                                    .sort(computerCompare),
+                            });
+                        }
+                        close();
+                        load();
+                    },
+                    (error: unknown) => {
+                        if (disposed || store.getState().machineDetail !== saving) return;
+                        refuse(happyAgentUserError(error));
+                    },
+                );
+        },
+        machineAgentRemove(machineId, agentId) {
+            const snapshot = store.getState();
+            const key = `${machineId}/${agentId}`;
+            const machine = snapshot.machines.find((entry) => entry.id === machineId);
+            if (disposed || !machine?.manageable || snapshot.agentRemovals.has(key)) return;
+            set({
+                agentRemovals: new Set([...snapshot.agentRemovals, key]),
                 actionError: undefined,
             });
             act(
                 () =>
                     deps.request(
-                        "POST",
-                        `v0/computers/${encodeURIComponent(machineId)}/release-lock`,
-                        {},
+                        "DELETE",
+                        `v0/computers/${encodeURIComponent(machineId)}/agents/${encodeURIComponent(agentId)}`,
                     ),
                 (current) => ({
-                    lockReleases: new Set(
-                        [...current.lockReleases].filter((entry) => entry !== machineId),
+                    agentRemovals: new Set(
+                        [...current.agentRemovals].filter((entry) => entry !== key),
                     ),
                 }),
             );
@@ -591,7 +830,7 @@ const INERT_SNAPSHOT: HappyAgentComputeSnapshot = {
     machines: [],
     approvals: [],
     approvalAnswers: new Map(),
-    lockReleases: new Set(),
+    agentRemovals: new Set(),
 };
 
 /** Where there is no Happy Cloud compute: it lists nothing and never changes. */
@@ -600,9 +839,16 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     subscribe: () => () => undefined,
     machineAddOpen: () => undefined,
     machineAddClose: () => undefined,
-    machineAddModeUpdate: () => undefined,
+    machineAddAccessUpdate: () => undefined,
+    machineAddConcurrencyUpdate: () => undefined,
     machineAddCreate: () => undefined,
-    machineLockRelease: () => undefined,
+    machineDetailOpen: () => undefined,
+    machineDetailClose: () => undefined,
+    machineNameUpdate: () => undefined,
+    machineDescriptionUpdate: () => undefined,
+    machineConcurrencyUpdate: () => undefined,
+    machineSave: () => undefined,
+    machineAgentRemove: () => undefined,
     approvalAnswer: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

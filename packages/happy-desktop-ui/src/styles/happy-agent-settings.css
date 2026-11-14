@@ -1491,8 +1491,7 @@
 
 .happy-agent-compute__meta,
 .happy-agent-compute__description,
-.happy-agent-compute__held,
-.happy-agent-compute__fault,
+.happy-agent-compute__warning,
 .happy-agent-compute__status {
     overflow: hidden;
     color: var(--text-secondary);
@@ -1510,15 +1509,11 @@
     color: var(--text);
 }
 
-.happy-agent-compute__held {
+.happy-agent-compute__warning {
     color: var(--box-warning-text);
 }
 
-.happy-agent-compute__fault {
-    color: var(--status-error);
-}
-
-/* A machine's mode, and whose it is: a word in a quiet pill, in sentence case. */
+/* Who a machine is for, and whose it is: a word in a quiet pill, in sentence case. */
 .happy-agent-compute__tag {
     flex: none;
     padding: 0 6px;
@@ -1566,11 +1561,11 @@
     background-color: var(--status-connected);
 }
 
-.happy-agent-compute__status[data-status="busy"] {
+.happy-agent-compute__status[data-status="full"] {
     color: var(--box-warning-text);
 }
 
-.happy-agent-compute__status[data-status="busy"] .happy-agent-compute__dot {
+.happy-agent-compute__status[data-status="full"] .happy-agent-compute__dot {
     background-color: var(--box-warning-border);
 }
 
@@ -1600,13 +1595,39 @@
     gap: 16px;
 }
 
-.happy-agent-compute__modes {
+.happy-agent-compute__summary,
+.happy-agent-compute__agents {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-agent-compute__heading {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-agent-compute__agent {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-compute__options {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.happy-agent-compute__mode {
+.happy-agent-compute__option {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1621,25 +1642,25 @@
     cursor: pointer;
 }
 
-.happy-agent-compute__mode:hover:not(:disabled) {
+.happy-agent-compute__option:hover:not(:disabled) {
     background: var(--surface-ripple);
 }
 
-.happy-agent-compute__mode[aria-checked="true"] {
+.happy-agent-compute__option[aria-checked="true"] {
     background: var(--surface-selected);
 }
 
-.happy-agent-compute__mode:disabled {
+.happy-agent-compute__option:disabled {
     cursor: default;
 }
 
-.happy-agent-compute__mode:disabled .happy-agent-compute__mode-label,
-.happy-agent-compute__mode:disabled .happy-agent-compute__mode-description,
-.happy-agent-compute__mode:disabled .happy-agent-compute__radio {
+.happy-agent-compute__option:disabled .happy-agent-compute__option-label,
+.happy-agent-compute__option:disabled .happy-agent-compute__option-description,
+.happy-agent-compute__option:disabled .happy-agent-compute__radio {
     opacity: 0.45;
 }
 
-.happy-agent-compute__mode:focus-visible {
+.happy-agent-compute__option:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
@@ -1664,40 +1685,40 @@
     background: transparent;
 }
 
-.happy-agent-compute__mode[aria-checked="true"] .happy-agent-compute__radio {
+.happy-agent-compute__option[aria-checked="true"] .happy-agent-compute__radio {
     border-color: var(--radio-active);
 }
 
-.happy-agent-compute__mode[aria-checked="true"] .happy-agent-compute__radio::after {
+.happy-agent-compute__option[aria-checked="true"] .happy-agent-compute__radio::after {
     background: var(--radio-active);
 }
 
-.happy-agent-compute__mode-text {
+.happy-agent-compute__option-text {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
 }
 
-.happy-agent-compute__mode-line {
+.happy-agent-compute__option-line {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.happy-agent-compute__mode-label {
+.happy-agent-compute__option-label {
     font-size: 13px;
     font-weight: 600;
     line-height: 20px;
 }
 
-.happy-agent-compute__mode-lock {
+.happy-agent-compute__option-lock {
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
 }
 
-.happy-agent-compute__mode-description {
+.happy-agent-compute__option-description {
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;

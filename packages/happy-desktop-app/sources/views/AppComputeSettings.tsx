@@ -1,12 +1,14 @@
-import type {
-    HappyAgentComputeApproval,
-    HappyAgentComputeMachine,
-    HappyAgentComputeMachineAdd,
-    HappyAgentComputeSnapshot,
-    HappyAgentComputeStore,
+import {
+    HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
+    type HappyAgentComputeApproval,
+    type HappyAgentComputeMachine,
+    type HappyAgentComputeMachineAdd,
+    type HappyAgentComputeSnapshot,
+    type HappyAgentComputeStore,
 } from "happy-desktop-state";
 import {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddStage,
@@ -20,6 +22,10 @@ export function AppComputeSettings(props: {
 }) {
     const { snapshot, store } = props;
     const add = snapshot.machineAdd;
+    const detail = snapshot.machineDetail;
+    const opened = detail
+        ? snapshot.machines.find((machine) => machine.id === detail.machineId)
+        : undefined;
     return (
         <>
             <HappyAgentComputeSettings
@@ -33,9 +39,9 @@ export function AppComputeSettings(props: {
                           : "none"
                 }
                 loading={snapshot.loading}
-                machines={snapshot.machines.map((machine) => machineRow(machine, snapshot))}
+                machines={snapshot.machines.map(machineRow)}
                 onMachineAdd={() => store.machineAddOpen()}
-                onMachineRelease={(machineId) => store.machineLockRelease(machineId)}
+                onMachineOpen={(machineId) => store.machineDetailOpen(machineId)}
                 onRequestAnswer={(key, approve) =>
                     store.approvalAnswer(key, approve ? "approve" : "deny")
                 }
@@ -43,11 +49,36 @@ export function AppComputeSettings(props: {
             />
             {add ? (
                 <HappyAgentComputeMachineAddDialog
-                    modes={snapshot.access === "manage" ? "any" : "private"}
+                    accesses={snapshot.access === "manage" ? "any" : "private"}
+                    onAccessChange={(access) => store.machineAddAccessUpdate(access)}
                     onClose={() => store.machineAddClose()}
+                    onConcurrencyChange={(value) => store.machineAddConcurrencyUpdate(value)}
                     onCreate={() => store.machineAddCreate()}
-                    onModeChange={(mode) => store.machineAddModeUpdate(mode)}
                     stage={addStage(add)}
+                />
+            ) : null}
+            {detail && opened ? (
+                <HappyAgentComputeMachineDialog
+                    {...(detail.step === "failed" ? { error: detail.error.message } : {})}
+                    {...(snapshot.actionError ? { actionError: snapshot.actionError.message } : {})}
+                    agents={opened.agents.map((agent) => ({
+                        id: agent.agentId,
+                        title: agent.title ?? "An agent you can't open",
+                        removing: snapshot.agentRemovals.has(`${opened.id}/${agent.agentId}`),
+                    }))}
+                    draft={detail.draft}
+                    machine={machineRow(opened)}
+                    maxConcurrency={Math.min(
+                        opened.maxConcurrency ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
+                        HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
+                    )}
+                    onAgentRemove={(agentId) => store.machineAgentRemove(opened.id, agentId)}
+                    onClose={() => store.machineDetailClose()}
+                    onConcurrencyChange={(value) => store.machineConcurrencyUpdate(value)}
+                    onDescriptionChange={(value) => store.machineDescriptionUpdate(value)}
+                    onNameChange={(value) => store.machineNameUpdate(value)}
+                    onSave={() => store.machineSave()}
+                    saving={detail.step === "saving"}
                 />
             ) : null}
         </>
@@ -56,11 +87,17 @@ export function AppComputeSettings(props: {
 
 function addStage(add: HappyAgentComputeMachineAdd): HappyAgentComputeMachineAddStage {
     switch (add.step) {
-        case "shown":
+        case "shown": {
+            const { expiresAt: _expiresAt, notice, ...install } = add.install;
             return {
                 step: "install",
-                install: { ...add.install, expires: expiresText(add.install.expiresAt) },
+                install: {
+                    ...install,
+                    ...(notice === null ? {} : { notice }),
+                    expires: expiresText(add.install.expiresAt),
+                },
             };
+        }
         case "failed":
             return { step: "form", draft: add.draft, creating: false, error: add.error.message };
         case "choosing":
@@ -75,10 +112,7 @@ const OS_NAMES: Readonly<Record<string, string>> = {
     windows: "Windows",
 };
 
-function machineRow(
-    machine: HappyAgentComputeMachine,
-    snapshot: HappyAgentComputeSnapshot,
-): HappyAgentComputeMachineRow {
+function machineRow(machine: HappyAgentComputeMachine): HappyAgentComputeMachineRow {
     const platform = [machine.os ? (OS_NAMES[machine.os] ?? machine.os) : undefined, machine.arch]
         .filter(Boolean)
         .join(" ");
@@ -89,18 +123,17 @@ function machineRow(
     ]
         .filter(Boolean)
         .join(" · ");
-    const mode = machine.mode;
-    const holder = mode.mode === "exclusive" ? mode.holder : null;
-    const owner = mode.mode === "private" ? mode.owner : null;
+    const owner = machine.access.kind === "private" ? machine.access.owner : null;
+    const full = machine.agents.length >= machine.concurrency;
     return {
         id: machine.id,
         name: machine.name,
-        status: holder && machine.status === "online" ? "busy" : machine.status,
+        status: full && machine.status === "online" ? "full" : machine.status,
         os:
             machine.os === "macos" || machine.os === "linux" || machine.os === "windows"
                 ? machine.os
                 : "other",
-        mode: mode.mode,
+        access: machine.access.kind,
         detail: detail || "No details yet",
         ...(machine.description ? { description: machine.description } : {}),
         ...(owner
@@ -111,14 +144,10 @@ function machineRow(
                           : { kind: "member", name: owner.name },
               }
             : {}),
-        ...(holder ? { heldBy: holder.title ?? "an agent" } : {}),
-        ...(machine.sandboxError ? { sandboxError: machine.sandboxError } : {}),
-        release:
-            holder && snapshot.access === "manage"
-                ? snapshot.lockReleases.has(machine.id)
-                    ? "releasing"
-                    : "offered"
-                : "none",
+        agentCount: machine.agents.length,
+        concurrency: machine.concurrency,
+        ...(machine.boundary.available ? {} : { boundary: { reason: machine.boundary.reason } }),
+        manageable: machine.manageable,
     };
 }
 

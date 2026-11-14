@@ -7,15 +7,16 @@ import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Spinner } from "../../Spinner";
 import { IconTile } from "../../IconTile";
+import { TextField } from "../../TextField";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
-/** How a machine takes agents; the machine's own config decides it. */
-export type HappyAgentComputeModeName = "sandbox" | "shared" | "exclusive" | "private";
+/** Who a computer is for: the whole team, or one member's own agents. */
+export type HappyAgentComputeAccessName = "shared" | "private";
 
 export type HappyAgentComputeMachineRowStatus =
     | "online"
-    /** Online, and an exclusive machine another agent holds. */
-    | "busy"
+    /** Online, with as many agents on it as it takes at once. */
+    | "full"
     | "offline"
     | "draining"
     | "enrolling";
@@ -26,7 +27,7 @@ export interface HappyAgentComputeMachineRow {
     readonly name: string;
     readonly status: HappyAgentComputeMachineRowStatus;
     readonly os: "macos" | "linux" | "windows" | "other";
-    readonly mode: HappyAgentComputeModeName;
+    readonly access: HappyAgentComputeAccessName;
     /** Already worded, for example "build-01.acme.internal · Linux x86_64". */
     readonly detail: string;
     /** What agents read about it. */
@@ -35,12 +36,17 @@ export interface HappyAgentComputeMachineRow {
     readonly owner?:
         | { readonly kind: "reader" }
         | { readonly kind: "member"; readonly name: string | null };
-    /** The agent holding an exclusive machine, already worded. */
-    readonly heldBy?: string;
-    /** Why its sandbox failed its self-test, while it does. */
-    readonly sandboxError?: string;
-    /** Freeing a held exclusive machine: not for this reader or machine, offered, or under way. */
-    readonly release: "none" | "offered" | "releasing";
+    /** How many agents are on it now. */
+    readonly agentCount: number;
+    /** How many agents it takes at once. */
+    readonly concurrency: number;
+    /**
+     * Present when it can't keep a restricted command inside its boundary, with
+     * the machine's reason where it gave one.
+     */
+    readonly boundary?: { readonly reason: string | null };
+    /** Whether the reader may edit it and remove agents from it. */
+    readonly manageable: boolean;
 }
 
 /** An agent asking to join one of the reader's private machines. */
@@ -55,7 +61,7 @@ export interface HappyAgentComputeJoinRequestRow {
     readonly answering?: "approve" | "deny";
 }
 
-/** Which machines the reader may add: any mode, only a private one of their own, or none. */
+/** Which machines the reader may add: shared or private, only a private one of their own, or none. */
 export type HappyAgentComputeAddAccess = "any" | "private" | "none";
 
 export interface HappyAgentComputeSettingsProps {
@@ -64,74 +70,33 @@ export interface HappyAgentComputeSettingsProps {
     readonly add: HappyAgentComputeAddAccess;
     readonly machines: readonly HappyAgentComputeMachineRow[];
     readonly requests: readonly HappyAgentComputeJoinRequestRow[];
-    /** Why the last answer or release did not go through. */
+    /** Why the last answer or removal did not go through. */
     readonly actionError?: string;
     onMachineAdd: () => void;
-    onMachineRelease: (machineId: string) => void;
+    onMachineOpen: (machineId: string) => void;
     onRequestAnswer: (key: string, approve: boolean) => void;
 }
 
-/**
- * Each mode's name, the sentence that says what it means, and the systems its
- * installer accepts (happy-cluster deploy/README.md). Only private installs
- * without sudo, and only private installs on Windows.
- */
-const MODES: Readonly<
-    Record<
-        HappyAgentComputeModeName,
-        {
-            readonly label: string;
-            readonly description: string;
-            /** What running the install command does. */
-            readonly install: string;
-            readonly systems: "linux" | "unix" | "any";
-        }
-    >
+/** Each access's name and the sentence that says what it means. */
+const ACCESSES: Readonly<
+    Record<HappyAgentComputeAccessName, { readonly label: string; readonly description: string }>
 > = {
-    sandbox: {
-        label: "Sandbox",
-        description:
-            "Each agent works in its own isolated sandbox, with optional CPU and memory limits. Linux only.",
-        install:
-            "Run this on a Linux computer. Sandbox mode is Linux only. It installs the Happy supervisor as root, joins the computer, and gives each agent its own sandbox.",
-        systems: "linux",
-    },
     shared: {
         label: "Shared",
         description:
-            "Every agent works directly on the host. Only other agents' workspaces are hidden. Linux only.",
-        install:
-            "Run this on a Linux computer. Shared mode is Linux only. It installs the Happy supervisor with sudo and joins the computer in shared mode.",
-        systems: "linux",
-    },
-    exclusive: {
-        label: "Exclusive",
-        description:
-            "One agent at a time works on the host. The rest see it as busy. Linux or macOS.",
-        install:
-            "Run this on a Linux or macOS computer. It installs the Happy supervisor with sudo and joins the computer in exclusive mode.",
-        systems: "unix",
+            "For the whole team. Any member's agents can work on it, each in its own workspace.",
     },
     private: {
         label: "Private",
-        description:
-            "Your own computer. Only your agents can join, and you approve each one. Linux, macOS or Windows.",
-        install:
-            "Run this on your own Linux, macOS or Windows computer, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the computer joins as yours.",
-        systems: "any",
+        description: "Just for you. Only your agents can work on it, and you approve each one.",
     },
 };
 
-const MODE_ORDER: readonly HappyAgentComputeModeName[] = [
-    "sandbox",
-    "shared",
-    "exclusive",
-    "private",
-];
+const ACCESS_ORDER: readonly HappyAgentComputeAccessName[] = ["shared", "private"];
 
 const STATUS_TEXT = {
     online: "Online",
-    busy: "In use",
+    full: "Full",
     offline: "Offline",
     draining: "Draining",
     enrolling: "Joining",
@@ -152,9 +117,49 @@ const OS_TONE = {
     other: "indigo",
 } as const;
 
+function ownerText(owner: NonNullable<HappyAgentComputeMachineRow["owner"]>): string {
+    if (owner.kind === "reader") return "Yours";
+    return owner.name ? `${owner.name}'s` : "A member's";
+}
+
+function agentsText(machine: HappyAgentComputeMachineRow): string {
+    return `${String(machine.agentCount)} of ${String(machine.concurrency)} ${
+        machine.concurrency === 1 ? "agent" : "agents"
+    }`;
+}
+
+/** What a machine's access means, said of its owner where it is someone else's. */
+function accessText(machine: HappyAgentComputeMachineRow): string {
+    if (machine.access === "shared" || machine.owner?.kind !== "member")
+        return ACCESSES[machine.access].description;
+    const owner = machine.owner.name ?? "one member";
+    return `Just for ${owner}. Only their agents can work on it, and they approve each one.`;
+}
+
+function boundaryText(boundary: { readonly reason: string | null }): string {
+    const reason = boundary.reason ? `${boundary.reason.replace(/\.$/, "")}. ` : "";
+    return `${reason}Only commands with full access run on this computer.`;
+}
+
+function HappyAgentComputeTags(props: { readonly machine: HappyAgentComputeMachineRow }) {
+    const machine = props.machine;
+    return (
+        <>
+            <span className="happy-agent-compute__tag" data-access={machine.access}>
+                {ACCESSES[machine.access].label}
+            </span>
+            {machine.owner ? (
+                <span className="happy-agent-compute__tag" data-owner={machine.owner.kind}>
+                    {ownerText(machine.owner)}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 function HappyAgentComputeMachineItem(props: {
     readonly machine: HappyAgentComputeMachineRow;
-    onRelease: (machineId: string) => void;
+    onOpen: (machineId: string) => void;
 }) {
     const machine = props.machine;
     return (
@@ -163,46 +168,32 @@ function HappyAgentComputeMachineItem(props: {
             <span className="happy-agent-compute__text">
                 <span className="happy-agent-compute__title">
                     <span className="happy-agent-compute__name">{machine.name}</span>
-                    <span className="happy-agent-compute__tag" data-mode={machine.mode}>
-                        {MODES[machine.mode].label}
-                    </span>
-                    {machine.owner ? (
-                        <span className="happy-agent-compute__tag" data-owner={machine.owner.kind}>
-                            {machine.owner.kind === "reader"
-                                ? "Yours"
-                                : machine.owner.name
-                                  ? `${machine.owner.name}'s`
-                                  : "A member's"}
-                        </span>
-                    ) : null}
+                    <HappyAgentComputeTags machine={machine} />
                 </span>
-                <span className="happy-agent-compute__meta">{machine.detail}</span>
+                <span className="happy-agent-compute__meta">
+                    {`${machine.detail} · ${agentsText(machine)}`}
+                </span>
                 {machine.description ? (
                     <span className="happy-agent-compute__description" title={machine.description}>
                         {machine.description}
                     </span>
                 ) : null}
-                {machine.heldBy ? (
-                    <span className="happy-agent-compute__held">{`Held by ${machine.heldBy}`}</span>
-                ) : null}
-                {machine.sandboxError ? (
-                    <span className="happy-agent-compute__fault">
-                        {`Sandbox check failed: ${machine.sandboxError}`}
+                {machine.boundary ? (
+                    <span
+                        className="happy-agent-compute__warning"
+                        title={boundaryText(machine.boundary)}
+                    >
+                        {`Only full-access commands run here.${
+                            machine.boundary.reason ? ` ${machine.boundary.reason}` : ""
+                        }`}
                     </span>
                 ) : null}
             </span>
-            {machine.release === "none" ? null : (
-                <span className="happy-agent-compute__row-actions">
-                    <Button
-                        loading={machine.release === "releasing"}
-                        onClick={() => props.onRelease(machine.id)}
-                        size="small"
-                        variant="ghost"
-                    >
-                        Release
-                    </Button>
-                </span>
-            )}
+            <span className="happy-agent-compute__row-actions">
+                <Button onClick={() => props.onOpen(machine.id)} size="small" variant="ghost">
+                    {machine.manageable ? "Manage" : "Details"}
+                </Button>
+            </span>
             <span className="happy-agent-compute__status" data-status={machine.status}>
                 <span className="happy-agent-compute__dot" />
                 {STATUS_TEXT[machine.status]}
@@ -213,9 +204,9 @@ function HappyAgentComputeMachineItem(props: {
 
 /**
  * Settings › Compute on a Happy Cloud server: the requests to join the
- * reader's private machines, then every machine agents can join with its mode.
- * A manager adds a machine in any mode and frees a held one; a member adds a
- * private machine of their own.
+ * reader's private machines, then every machine agents can join with who it is
+ * for and how many agents are on it. A manager adds a shared or private
+ * machine; a member adds a private machine of their own.
  */
 export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps) {
     if (props.error)
@@ -314,7 +305,7 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
             <HappyAgentSettingsSection
                 description={
                     props.add === "any"
-                        ? "Agents choose a computer and join it. Its mode decides who can join and how agents share it."
+                        ? "Agents choose a computer and join it. A shared computer is for the whole team, a private one only for its owner's agents."
                         : props.add === "private"
                           ? "Agents choose a computer and join it. You can add a private computer of your own."
                           : "Agents choose a computer and join it. Your role can see them but not add one."
@@ -329,7 +320,7 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                             <HappyAgentComputeMachineItem
                                 key={machine.id}
                                 machine={machine}
-                                onRelease={props.onMachineRelease}
+                                onOpen={props.onMachineOpen}
                             />
                         ))
                     )}
@@ -351,16 +342,204 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
     );
 }
 
+/** An agent on a machine, as its dialog lists it. */
+export interface HappyAgentComputeMachineAgentRow {
+    readonly id: string;
+    /** The agent's title, already worded where the reader may not see it. */
+    readonly title: string;
+    /** True while it is being taken off the machine. */
+    readonly removing: boolean;
+}
+
+/** A machine's editable fields, as typed. */
+export interface HappyAgentComputeMachineEditDraft {
+    readonly name: string;
+    readonly description: string;
+    readonly concurrency: string;
+}
+
+export interface HappyAgentComputeMachineDialogProps {
+    readonly machine: HappyAgentComputeMachineRow;
+    readonly agents: readonly HappyAgentComputeMachineAgentRow[];
+    /** The most agents it may take at once. */
+    readonly maxConcurrency: number;
+    /** Shown only where `machine.manageable`. */
+    readonly draft: HappyAgentComputeMachineEditDraft;
+    readonly saving: boolean;
+    /** Why the last save did not go through. */
+    readonly error?: string;
+    /** Why the last removal did not go through. */
+    readonly actionError?: string;
+    onNameChange: (value: string) => void;
+    onDescriptionChange: (value: string) => void;
+    onConcurrencyChange: (value: string) => void;
+    onSave: () => void;
+    onAgentRemove: (agentId: string) => void;
+    onClose: () => void;
+}
+
+/**
+ * One machine: who it is for, the agents on it, and, for a reader who may
+ * manage it, its name, description and how many agents it takes at once.
+ */
+export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDialogProps) {
+    const machine = props.machine;
+    const close = (): void => {
+        if (!props.saving) props.onClose();
+    };
+    return (
+        <ModalOverlay onDismiss={close}>
+            <Modal
+                footer={
+                    machine.manageable ? (
+                        <>
+                            <Button disabled={props.saving} onClick={close} variant="ghost">
+                                Cancel
+                            </Button>
+                            <Button loading={props.saving} onClick={props.onSave}>
+                                Save
+                            </Button>
+                        </>
+                    ) : (
+                        <Button onClick={close}>Done</Button>
+                    )
+                }
+                icon="terminal"
+                onClose={props.saving ? undefined : close}
+                size="large"
+                title={machine.name}
+            >
+                <Box
+                    className="happy-agent-compute__form"
+                    data-happy-desktop-ui="compute-machine-detail"
+                >
+                    {props.error ? (
+                        <Banner tone="danger" title="Not saved">
+                            {props.error}
+                        </Banner>
+                    ) : props.actionError ? (
+                        <Banner tone="danger" title="That didn't go through">
+                            {props.actionError}
+                        </Banner>
+                    ) : null}
+                    <Box className="happy-agent-compute__summary">
+                        <span className="happy-agent-compute__title">
+                            <HappyAgentComputeTags machine={machine} />
+                            <span
+                                className="happy-agent-compute__status"
+                                data-status={machine.status}
+                            >
+                                <span className="happy-agent-compute__dot" />
+                                {STATUS_TEXT[machine.status]}
+                            </span>
+                        </span>
+                        <span className="happy-agent-compute__meta" data-wrap="">
+                            {accessText(machine)}
+                        </span>
+                        <span className="happy-agent-compute__meta" data-wrap="">
+                            {machine.detail}
+                        </span>
+                    </Box>
+                    {machine.boundary ? (
+                        <Banner tone="warning" title="Restricted commands can't run here">
+                            {boundaryText(machine.boundary)}
+                        </Banner>
+                    ) : null}
+                    <Box className="happy-agent-compute__agents">
+                        <span className="happy-agent-compute__heading">
+                            {`Agents · ${String(machine.agentCount)} of ${String(machine.concurrency)}`}
+                        </span>
+                        <Box
+                            className="happy-agent-compute__list"
+                            data-happy-desktop-ui="compute-machine-agents"
+                        >
+                            {props.agents.length === 0 ? (
+                                <Box className="happy-agent-compute__none">
+                                    No agent is on this computer.
+                                </Box>
+                            ) : (
+                                props.agents.map((agent) => (
+                                    <Box
+                                        className="happy-agent-compute__agent"
+                                        data-happy-desktop-ui="compute-machine-agent"
+                                        key={agent.id}
+                                    >
+                                        <span className="happy-agent-compute__name">
+                                            {agent.title}
+                                        </span>
+                                        {machine.manageable ? (
+                                            <Button
+                                                loading={agent.removing}
+                                                onClick={() => props.onAgentRemove(agent.id)}
+                                                size="small"
+                                                variant="ghost"
+                                            >
+                                                Remove
+                                            </Button>
+                                        ) : null}
+                                    </Box>
+                                ))
+                            )}
+                        </Box>
+                    </Box>
+                    {machine.manageable ? (
+                        <>
+                            <TextField
+                                disabled={props.saving}
+                                fullWidth
+                                label="Name"
+                                onSubmit={props.onSave}
+                                onValueChange={props.onNameChange}
+                                value={props.draft.name}
+                            />
+                            <TextField
+                                disabled={props.saving}
+                                fullWidth
+                                hint="What agents read about this computer when they choose one."
+                                label="Description"
+                                multiline
+                                onValueChange={props.onDescriptionChange}
+                                rows={3}
+                                value={props.draft.description}
+                            />
+                            <TextField
+                                disabled={props.saving}
+                                fullWidth
+                                hint={`How many agents can work on it at the same time, from 1 to ${String(props.maxConcurrency)}.`}
+                                inputMode="numeric"
+                                label="Agents at once"
+                                onSubmit={props.onSave}
+                                onValueChange={props.onConcurrencyChange}
+                                value={props.draft.concurrency}
+                            />
+                        </>
+                    ) : null}
+                </Box>
+            </Modal>
+        </ModalOverlay>
+    );
+}
+
 /** What a new machine will be, as the form holds it. */
 export interface HappyAgentComputeMachineAddDraft {
-    readonly mode: HappyAgentComputeModeName;
+    readonly access: HappyAgentComputeAccessName;
+    /** As typed. */
+    readonly concurrency: string;
 }
+
+/** A system the server publishes an installer for. */
+export type HappyAgentComputeSystemName = "linux" | "macos" | "windows";
 
 /** The one-time install, as the dialog shows it. */
 export interface HappyAgentComputeInstallView {
-    readonly mode: HappyAgentComputeModeName;
+    readonly access: HappyAgentComputeAccessName;
+    readonly concurrency: number;
     /** Exactly as the server sent them; null where it publishes no installer. */
     readonly commands: { readonly unix: string; readonly windows: string } | null;
+    /** The systems an installer is published for; empty when the server did not say. */
+    readonly systems: readonly HappyAgentComputeSystemName[];
+    /** What the server says is not available yet. */
+    readonly notice?: string;
     readonly token: string;
     readonly clusterUrl: string;
     /** Already worded, for example "Expires in 1 hour". */
@@ -378,10 +557,11 @@ export type HappyAgentComputeMachineAddStage =
     | { readonly step: "install"; readonly install: HappyAgentComputeInstallView };
 
 export interface HappyAgentComputeMachineAddDialogProps {
-    /** `private` offers only a private machine; the other modes need admin permission. */
-    readonly modes: "any" | "private";
+    /** `private` offers only a private machine; a shared one needs admin permission. */
+    readonly accesses: "any" | "private";
     readonly stage: HappyAgentComputeMachineAddStage;
-    onModeChange: (mode: HappyAgentComputeModeName) => void;
+    onAccessChange: (access: HappyAgentComputeAccessName) => void;
+    onConcurrencyChange: (value: string) => void;
     onCreate: () => void;
     onClose: () => void;
 }
@@ -408,15 +588,35 @@ function HappyAgentComputeCommand(props: {
     );
 }
 
+/** The unix command's systems by name, as published; both when the server did not say. */
+function unixSystemsText(systems: readonly HappyAgentComputeSystemName[]): string {
+    const linux = systems.includes("linux");
+    const macos = systems.includes("macos");
+    if (linux && !macos) return "Linux";
+    if (macos && !linux) return "macOS";
+    return "macOS and Linux";
+}
+
 function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeInstallView }) {
     const { install } = props;
     const commands = install.commands;
-    const systems = MODES[install.mode].systems;
+    const unix = unixSystemsText(install.systems);
+    const windows = install.systems.length === 0 || install.systems.includes("windows");
+    const agents = `${String(install.concurrency)} ${install.concurrency === 1 ? "agent" : "agents"}`;
+    const what =
+        install.access === "shared"
+            ? `Run this on the computer. It installs the Happy supervisor with sudo and joins the computer for the whole team, taking up to ${agents} at once.`
+            : `Run this on your own computer, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the computer joins as yours, taking up to ${agents} at once.`;
     return (
         <>
             <p className="happy-agent-compute__note">
-                {`${MODES[install.mode].install} The command works once. ${install.expires}.`}
+                {`${what} The command works once. ${install.expires}.`}
             </p>
+            {install.notice ? (
+                <Banner tone="info" title="Not every system yet">
+                    {install.notice}
+                </Banner>
+            ) : null}
             {commands === null ? (
                 <>
                     <HappyAgentComputeCommand
@@ -433,15 +633,11 @@ function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeIn
             ) : (
                 <>
                     <HappyAgentComputeCommand
-                        copyLabel={
-                            systems === "linux"
-                                ? "Copy Linux command"
-                                : "Copy macOS and Linux command"
-                        }
-                        label={systems === "linux" ? "Linux" : "macOS and Linux"}
+                        copyLabel={`Copy ${unix} command`}
+                        label={unix}
                         text={commands.unix}
                     />
-                    {systems === "any" ? (
+                    {windows ? (
                         <HappyAgentComputeCommand
                             copyLabel="Copy Windows command"
                             label="Windows (PowerShell)"
@@ -454,7 +650,7 @@ function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeIn
     );
 }
 
-/** Adds a machine: its mode, then the one-time command that installs it. */
+/** Adds a machine: who it is for and how many agents it takes, then the one-time command that installs it. */
 export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachineAddDialogProps) {
     const stage = props.stage;
     const busy = stage.step === "form" && stage.creating;
@@ -498,20 +694,21 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                                 </Banner>
                             ) : null}
                             <Box
-                                aria-label="Mode"
-                                className="happy-agent-compute__modes"
+                                aria-label="Who it is for"
+                                className="happy-agent-compute__options"
                                 role="radiogroup"
                             >
-                                {MODE_ORDER.map((mode) => {
-                                    const locked = props.modes === "private" && mode !== "private";
+                                {ACCESS_ORDER.map((access) => {
+                                    const locked =
+                                        props.accesses === "private" && access !== "private";
                                     return (
                                         <button
-                                            aria-checked={stage.draft.mode === mode}
-                                            className="happy-agent-compute__mode"
-                                            data-happy-desktop-ui="compute-mode"
+                                            aria-checked={stage.draft.access === access}
+                                            className="happy-agent-compute__option"
+                                            data-happy-desktop-ui="compute-access"
                                             disabled={busy || locked}
-                                            key={mode}
-                                            onClick={() => props.onModeChange(mode)}
+                                            key={access}
+                                            onClick={() => props.onAccessChange(access)}
                                             role="radio"
                                             type="button"
                                         >
@@ -519,25 +716,35 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                                                 aria-hidden="true"
                                                 className="happy-agent-compute__radio"
                                             />
-                                            <span className="happy-agent-compute__mode-text">
-                                                <span className="happy-agent-compute__mode-line">
-                                                    <span className="happy-agent-compute__mode-label">
-                                                        {MODES[mode].label}
+                                            <span className="happy-agent-compute__option-text">
+                                                <span className="happy-agent-compute__option-line">
+                                                    <span className="happy-agent-compute__option-label">
+                                                        {ACCESSES[access].label}
                                                     </span>
                                                     {locked ? (
-                                                        <span className="happy-agent-compute__mode-lock">
+                                                        <span className="happy-agent-compute__option-lock">
                                                             Needs admin permission
                                                         </span>
                                                     ) : null}
                                                 </span>
-                                                <span className="happy-agent-compute__mode-description">
-                                                    {MODES[mode].description}
+                                                <span className="happy-agent-compute__option-description">
+                                                    {ACCESSES[access].description}
                                                 </span>
                                             </span>
                                         </button>
                                     );
                                 })}
                             </Box>
+                            <TextField
+                                disabled={busy}
+                                fullWidth
+                                hint="How many agents can work on it at the same time, from 1 to 64."
+                                inputMode="numeric"
+                                label="Agents at once"
+                                onSubmit={props.onCreate}
+                                onValueChange={props.onConcurrencyChange}
+                                value={stage.draft.concurrency}
+                            />
                         </>
                     )}
                 </Box>

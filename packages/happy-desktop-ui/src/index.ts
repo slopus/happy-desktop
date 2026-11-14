@@ -1177,17 +1177,22 @@ export {
 } from "./pages/settings/HappyAgentPaymentsSettings";
 export {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineDialog,
     HappyAgentComputeSettings,
+    type HappyAgentComputeAccessName,
     type HappyAgentComputeAddAccess,
     type HappyAgentComputeInstallView,
     type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddDialogProps,
     type HappyAgentComputeMachineAddDraft,
     type HappyAgentComputeMachineAddStage,
+    type HappyAgentComputeMachineAgentRow,
+    type HappyAgentComputeMachineDialogProps,
+    type HappyAgentComputeMachineEditDraft,
     type HappyAgentComputeMachineRow,
     type HappyAgentComputeMachineRowStatus,
-    type HappyAgentComputeModeName,
     type HappyAgentComputeSettingsProps,
+    type HappyAgentComputeSystemName,
 } from "./pages/settings/HappyAgentComputeSettings";
 export {
     HappyAgentCredentialImport,
