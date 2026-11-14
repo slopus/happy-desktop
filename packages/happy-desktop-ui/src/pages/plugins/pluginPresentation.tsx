@@ -10,7 +10,8 @@ import { thumbhashDataUrl } from "../../thumbhashDataUrl";
 /** A plugin's picture over its ThumbHash, or the plugin glyph when it has none. */
 export function PluginMark(props: {
     readonly image: HappyAgentPluginImage | null;
-    readonly size: "row" | "hero";
+    /** `badge` is a 16 px mark beside a name in running text. */
+    readonly size: "badge" | "row" | "hero";
 }) {
     const placeholder = props.image?.thumbhash
         ? thumbhashDataUrl(props.image.thumbhash)
@@ -31,7 +32,10 @@ export function PluginMark(props: {
                     src={props.image.url}
                 />
             ) : (
-                <Icon name="plugin" size={props.size === "hero" ? 24 : 16} />
+                <Icon
+                    name="plugin"
+                    size={props.size === "hero" ? 24 : props.size === "badge" ? 12 : 16}
+                />
             )}
         </span>
     );

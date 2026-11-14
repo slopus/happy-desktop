@@ -39,20 +39,32 @@ export function AppRepositoriesSettings(props: {
                 manage={snapshot.manage}
                 onAdd={() => store.addOpen()}
                 onOpen={(repositoryId) => store.repositoryOpen(repositoryId)}
-                repositories={snapshot.repositories.map((repository) => ({
-                    id: repository.id,
-                    name: repository.name,
-                    location: `${repository.host}/${repository.path}`,
-                    ...(repository.defaultBranch
-                        ? { defaultBranch: repository.defaultBranch }
-                        : {}),
-                    access:
-                        repository.lastCheck === null
-                            ? "unchecked"
-                            : repository.lastCheck.ok === false
-                              ? "failed"
-                              : "reachable",
-                }))}
+                repositories={snapshot.repositories.map((repository) => {
+                    const plugin = pluginOf(repository, props.plugins, undefined);
+                    return {
+                        id: repository.id,
+                        name: repository.name,
+                        location: `${repository.host}/${repository.path}`,
+                        ...(repository.defaultBranch
+                            ? { defaultBranch: repository.defaultBranch }
+                            : {}),
+                        access:
+                            repository.lastCheck === null
+                                ? "unchecked"
+                                : repository.lastCheck.ok === false
+                                  ? "failed"
+                                  : "reachable",
+                        ...(plugin
+                            ? {
+                                  plugin: {
+                                      name: plugin.name,
+                                      image: plugin.image,
+                                      missing: plugin.missing,
+                                  },
+                              }
+                            : {}),
+                    };
+                })}
             />
             {add ? (
                 <HappyAgentRepositoryAddDialog

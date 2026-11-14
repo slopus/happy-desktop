@@ -24,6 +24,8 @@ export interface HappyAgentRepositoryRow {
     readonly defaultBranch?: string;
     /** What the last access check found. */
     readonly access: "reachable" | "failed" | "unchecked";
+    /** The plugin that manages it, marked on the row. */
+    readonly plugin?: Pick<HappyAgentRepositoryPlugin, "name" | "image" | "missing">;
 }
 
 const ACCESS_TEXT = {
@@ -151,11 +153,23 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
                                     : repository.location}
                             </span>
                         </span>
+                        {repository.plugin ? (
+                            <span
+                                className="happy-agent-repositories__plugin-tag"
+                                data-happy-desktop-ui="happy-agent-repository-plugin-tag"
+                            >
+                                <PluginMark image={repository.plugin.image} size="badge" />
+                                {repository.plugin.name}
+                            </span>
+                        ) : null}
+                        {/* A plugin whose credential is gone fails every access, whatever the last check found. */}
                         <span
                             className="happy-agent-repositories__access"
-                            data-access={repository.access}
+                            data-access={repository.plugin?.missing ? "missing" : repository.access}
                         >
-                            {ACCESS_TEXT[repository.access]}
+                            {repository.plugin?.missing
+                                ? "Credential missing"
+                                : ACCESS_TEXT[repository.access]}
                         </span>
                         <Icon name="chevron-right" size={14} />
                     </button>
@@ -466,7 +480,8 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                             )}
                         </Box>
                     ) : null}
-                    {props.check.state === "failed" ? (
+                    {/* The missing-credential warning already says why access fails. */}
+                    {props.check.state === "failed" && !props.plugin?.missing ? (
                         <HappyAgentRepositoryCheckView check={props.check} />
                     ) : null}
                     {props.manage ? (

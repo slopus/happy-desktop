@@ -1293,6 +1293,20 @@
     color: var(--status-error);
 }
 
+.happy-agent-repositories__access[data-access="missing"] {
+    color: var(--box-warning-text);
+}
+
+.happy-agent-repositories__plugin-tag {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
 .happy-agent-repositories__actions,
 .happy-agent-repositories__check-row {
     display: flex;

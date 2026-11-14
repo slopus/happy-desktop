@@ -37,6 +37,15 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 const noop = () => undefined;
 const resolved = () => Promise.resolve();
 
+/**
+ * A plugin picture as the plugins store hands it over: an address and its
+ * ThumbHash. Bundled so nothing loads over the network.
+ */
+const GITHUB_PLUGIN_IMAGE = {
+    url: new URL("../assets/plugin-github-repositories.webp", import.meta.url).href,
+    thumbhash: "1QcSBwAKhod2h3hyioeYR5eI96SkM5QA",
+};
+
 const repositories: readonly HappyAgentRepositoryRow[] = [
     {
         id: "rig",
@@ -51,6 +60,22 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
         location: "github.com/slopus/happy-desktop",
         defaultBranch: "main",
         access: "reachable",
+    },
+    {
+        id: "web",
+        name: "web",
+        location: "github.com/acme/web",
+        defaultBranch: "main",
+        access: "reachable",
+        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, missing: false },
+    },
+    {
+        id: "api",
+        name: "api",
+        location: "github.com/acme/api",
+        defaultBranch: "main",
+        access: "failed",
+        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, missing: true },
     },
     {
         id: "infra",
@@ -152,7 +177,7 @@ const detail: HappyAgentRepositoryDialogProps = {
 
 const githubApp: HappyAgentRepositoryPlugin = {
     name: "GitHub",
-    image: null,
+    image: GITHUB_PLUGIN_IMAGE,
     detail: "GitHub App · acme",
     missing: false,
     onOpen: noop,
@@ -363,7 +388,7 @@ export function HappyCloudRepositoriesFlowPage() {
                 <HappyAgentRepositoryDialog {...managed} />
             </Screen>
             <Screen
-                detail="added by the GitHub plugin, whose credential is gone"
+                detail="added by the GitHub plugin, whose credential is gone: no method or account, and no second refusal box"
                 number="13"
                 screen="13-plugin-missing"
             >
@@ -375,7 +400,14 @@ export function HappyCloudRepositoriesFlowPage() {
                         title: "Can't reach it",
                         message: "github.com refused the request: no credential applies.",
                     }}
-                    plugin={{ ...githubApp, missing: true }}
+                    name="api"
+                    plugin={{
+                        name: "GitHub",
+                        image: GITHUB_PLUGIN_IMAGE,
+                        missing: true,
+                        onOpen: noop,
+                    }}
+                    url="https://github.com/acme/api.git"
                 />
             </Screen>
             <Screen
