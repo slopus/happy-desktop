@@ -106,10 +106,10 @@ export interface AppHappyAgentOutageSnapshot {
     readonly message?: string;
     /** This Happy installed the agent and can restart it. */
     readonly restartable: boolean;
-    /** A restart under way, told as it goes; absent while none is. */
-    readonly restarting?: string;
-    /** A restart asked for here that failed, verbatim. */
-    readonly restartFailure?: string;
+    readonly restart?:
+        | { readonly kind: "draining"; readonly killable: boolean }
+        | { readonly kind: "restarting" }
+        | { readonly kind: "failed"; readonly message: string };
 }
 
 /**
@@ -123,6 +123,6 @@ export interface AppHappyAgentOutageStore {
     subscribe(listener: () => void): () => void;
     /** Restarts the local Happy Agent through the host's managed restart. */
     restart(): void;
-    /** Copies a prompt describing the outage, for another assistant. */
-    detailsCopy(): void;
+    /** Stops waiting for the old agent to drain, using the existing managed kill. */
+    restartNow(): void;
 }

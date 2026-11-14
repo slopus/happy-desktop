@@ -2,8 +2,6 @@ import { type CSSProperties, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
 import { Box } from "./Box";
 import { Button } from "./Button";
-import { Icon } from "./Icon";
-import { Spinner } from "./Spinner";
 import { SidebarKeepAwakeMenu, type SidebarKeepAwakeMode } from "./SidebarKeepAwakeMenu";
 import { MenuButton } from "./MenuButton";
 
@@ -37,12 +35,6 @@ export type SidebarFooterProps = {
     onSettingsOpen?: () => void;
     /** Overrides the settings control's label. */
     settingsLabel?: string;
-    /**
-     * The machine behind this surface is out of reach. It is stated here, in
-     * the footer's leading slot, rather than in a band that would move the
-     * whole window. Absent while the machine is connected.
-     */
-    connection?: SidebarFooterConnection;
     /** Development-only branch and Blueprint control, pinned beside the footer actions. */
     devMenu?: ReactNode;
     /** The bug report control, just before the theme menu. */
@@ -61,7 +53,7 @@ export type SidebarFooterProps = {
         readonly active: boolean;
         readonly onModeSelect: (mode: SidebarKeepAwakeMode) => void;
     };
-    /** The update offer, first in the status bar. */
+    /** Temporary connection and update marks at the left of the status bar. */
     actions?: ReactNode;
     /** Window voice control, after the update offer. */
     voice?: ReactNode;
@@ -81,17 +73,11 @@ export const SIDEBAR_THEME_OPTIONS: readonly { mode: SidebarThemeMode; label: st
     { mode: "custom", label: "Custom" },
 ];
 
-export type SidebarFooterConnection = {
-    /** What is wrong, in full; the row shows it truncated. */
-    message: string;
-    /** Whether Happy is still trying. A settled failure gets no spinner. */
-    retrying: boolean;
-};
-
 /**
  * SidebarFooter — the identity strip pinned to the bottom of a navigation
  * column: who the surface is rendered for, then the status bar in a fixed
- * order — update, call, bug report, theme, keep awake, Settings (always last).
+ * order — temporary marks at the left, then call, bug report, theme, keep awake
+ * and Settings.
  *
  * Every affordance is optional, because the surfaces that use this differ in
  * what genuinely exists. A workspace with an account has a profile to open and may
@@ -155,34 +141,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     </span>
                 )
             ) : null}
-            {props.connection !== undefined ? (
-                <span
-                    aria-live="polite"
-                    className="happy-sidebar-connection"
-                    data-happy-desktop-ui="sidebar-connection"
-                    data-retrying={props.connection.retrying ? "" : undefined}
-                    role="status"
-                    title={props.connection.message}
-                >
-                    <span aria-hidden="true" className="happy-sidebar-connection__icon">
-                        {props.connection.retrying ? (
-                            <Spinner size={14} tone="muted" />
-                        ) : (
-                            <Icon name="alert" size={14} />
-                        )}
-                    </span>
-                    <span className="happy-sidebar-connection__label">
-                        {props.connection.message}
-                    </span>
-                </span>
-            ) : null}
-            {identity === undefined &&
-            props.devMenu === undefined &&
-            props.connection === undefined ? (
-                // No identity to show: the controls keep their trailing position
-                // rather than sliding to the left of an empty row.
-                <span style={{ flex: "1 1 auto" }} />
-            ) : null}
+            {props.actions}
             {props.devMenu !== undefined ? (
                 <span
                     className="happy-sidebar__dev-build"
@@ -191,7 +150,9 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     {props.devMenu}
                 </span>
             ) : null}
-            {props.actions}
+            {identity === undefined && props.devMenu === undefined ? (
+                <span style={{ flex: "1 1 auto" }} />
+            ) : null}
             {props.voice}
             {props.bugReport}
             {props.theme ? (

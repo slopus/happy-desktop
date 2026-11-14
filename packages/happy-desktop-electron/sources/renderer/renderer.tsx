@@ -1965,10 +1965,7 @@ if (mediaPreviewBridge) {
                 runtime: runtimeStore,
             }),
         );
-        const agentOutage = desktopAgentOutageStoreCreate(
-            agentBroken,
-            (text) => void navigator.clipboard.writeText(text).catch(() => undefined),
-        );
+        const agentOutage = desktopAgentOutageStoreCreate(agentBroken);
         function activeRouter(): HappyAgentRouter {
             return (
                 connectionUis.get(happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)

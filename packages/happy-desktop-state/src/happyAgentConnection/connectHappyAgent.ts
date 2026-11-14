@@ -102,6 +102,7 @@ import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 
 const INITIAL_RECONNECT_MS = 250;
 const MAXIMUM_RECONNECT_MS = 5_000;
+const STABLE_RECONNECT_MS = 10_000;
 /**
  * How long after a daemon announces it is draining a replacement is expected. Reconnection still
  * backs off meanwhile, but no further than `REPLACEMENT_MAXIMUM_RECONNECT_MS`, so the window is
@@ -4058,6 +4059,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         // then on startup gates on health and onboarding, as it always did.
         let bootstrapOptimistic = true;
         while (!rootController.signal.aborted) {
+            let connectedAt: number | undefined;
             const attemptController = new AbortController();
             updatesAttemptController = attemptController;
             const attemptSignal = AbortSignal.any([
@@ -4233,7 +4235,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         publishConnection("live");
                         heldWritesFlush();
                         environmentReport();
-                        reconnectMs = INITIAL_RECONNECT_MS;
+                        connectedAt ??= now();
                     } else if (update.kind === "state_lost") {
                         reportDebug({
                             detail: debugDetail({ cursor: update.cursor }),
@@ -4354,6 +4356,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             }
                         }
                         advanceCursor(update.cursor);
+                        // A hello alone can be followed by an immediate drop. Only
+                        // accepted work proves that this attempt made progress.
+                        reconnectMs = INITIAL_RECONNECT_MS;
                     }
                     if (updateSliceSpent()) await updateSliceYield();
                 }
@@ -4390,6 +4395,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     }
                 }
             } finally {
+                // Quiet streams also recover their initial retry delay once
+                // they have stayed connected, without requiring traffic.
+                if (connectedAt !== undefined && now() - connectedAt >= STABLE_RECONNECT_MS) {
+                    reconnectMs = INITIAL_RECONNECT_MS;
+                }
                 if (updatesAttemptController === attemptController) {
                     updatesAttemptController = undefined;
                 }

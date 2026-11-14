@@ -304,12 +304,11 @@ function restartStatus(
 
 /**
  * The local outage as the app tells it beside the local machine's work, once the
- * window has reached that machine: the same restart, its progress, and the same
- * details to copy, while the window stays as it is.
+ * window has reached that machine: the same restart and its progress, while the
+ * window stays as it is.
  */
 export function desktopAgentOutageStoreCreate(
     broken: DesktopAgentBrokenStore,
-    copy: (text: string) => void,
 ): AppHappyAgentOutageStore {
     let from: DesktopAgentBrokenSnapshot | undefined;
     let outage: AppHappyAgentOutageSnapshot | undefined;
@@ -319,16 +318,19 @@ export function desktopAgentOutageStoreCreate(
         from = snapshot;
         if (!snapshot.visible || snapshot.presentation !== "notice") outage = undefined;
         else {
-            const status = snapshot.reconnecting
-                ? { label: "Starting Happy Agent…", busy: true }
-                : restartStatus(snapshot.install);
+            const install = snapshot.install;
+            const restart: AppHappyAgentOutageSnapshot["restart"] =
+                install.phase === "error"
+                    ? { kind: "failed", message: install.message }
+                    : install.phase === "draining"
+                      ? { kind: "draining", killable: install.killable }
+                      : snapshot.reconnecting || install.phase !== "idle"
+                        ? { kind: "restarting" }
+                        : undefined;
             outage = {
                 ...(snapshot.message ? { message: snapshot.message } : {}),
                 restartable: snapshot.restartable,
-                ...(status?.busy ? { restarting: status.label } : {}),
-                ...(snapshot.install.phase === "error"
-                    ? { restartFailure: `Restart failed: ${snapshot.install.message}` }
-                    : {}),
+                ...(restart ? { restart } : {}),
             };
         }
         return outage;
@@ -337,7 +339,7 @@ export function desktopAgentOutageStoreCreate(
         get,
         subscribe: broken.subscribe,
         restart: () => broken.restart(),
-        detailsCopy: () => copy(desktopAgentBrokenPrompt(broken.get())),
+        restartNow: () => broken.kill(),
     };
 }
 

@@ -375,11 +375,11 @@ export {
     type WorkCoordinationSummaryProps,
 } from "./WorkCoordinationSummary";
 export { SidebarBugReport, type SidebarBugReportProps } from "./SidebarBugReport";
+export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
 export {
-    SidebarFooter,
-    type SidebarFooterConnection,
-    type SidebarFooterProps,
-} from "./SidebarFooter";
+    SidebarConnectionAction,
+    type SidebarConnectionActionProps,
+} from "./SidebarConnectionAction";
 export {
     SidebarKeepAwakeMenu,
     type SidebarKeepAwakeMenuProps,

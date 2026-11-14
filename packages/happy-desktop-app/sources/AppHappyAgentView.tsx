@@ -332,6 +332,7 @@ import {
     SegmentedControl,
     Sidebar,
     SidebarFooter,
+    SidebarConnectionAction,
     MenuButton,
     SidebarAgentUpdate,
     SidebarBugReport,
@@ -463,10 +464,8 @@ const sidebarDaemonStoreNoop: AppHappyAgentDaemonStore = {
  * What the composer says while the Happy Agent is draining or restarting. The
  * draft stays editable underneath and nothing is sent until it is back.
  */
-const AGENT_RESTARTING_NOTICE = [
-    "Agent is restarting and can't accept new messages.",
-    "You can keep editing your draft.",
-] as const;
+const AGENT_RESTARTING_NOTICE = ["Agent is restarting. You can keep editing your draft."] as const;
+const AGENT_OFFLINE_NOTICE = ["Agent is offline. You can keep editing your draft."] as const;
 
 const agentUpdateStoreNoop: AppHappyAgentUpdateStore = {
     cardToggle: () => undefined,
@@ -483,7 +482,7 @@ const agentReleaseNotesStoreNoop: AppHappyAgentReleaseNotesStore = {
 };
 
 const agentOutageStoreNoop: AppHappyAgentOutageStore = {
-    detailsCopy: () => undefined,
+    restartNow: () => undefined,
     get: () => undefined,
     restart: () => undefined,
     subscribe: () => () => undefined,
@@ -3872,45 +3871,55 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const updateHost = hostHappyAgent(directory);
     const outageStore = props.agentOutage ?? agentOutageStoreNoop;
     const outage = useSyncExternalStore(outageStore.subscribe, outageStore.get, outageStore.get);
-    // The local Happy Agent out of reach is told in the footer's connection
-    // slot, beside its work, rather than over the whole window: everything
-    // else, and every other Happy Agent, keeps working. What can be done about
-    // it is a menu where the update offer stands, which an outage outranks.
-    const outageName = updateHost?.label ?? "The local Happy Agent";
-    const sidebarOutageConnection = outage
-        ? {
-              message:
-                  outage.restarting ??
-                  outage.restartFailure ??
-                  `${outageName} is not responding. Its work is paused until it is back.`,
-              // The connection keeps trying on its own; a failed restart is settled.
-              retrying: outage.restartFailure === undefined,
-          }
-        : undefined;
-    const sidebarOutage = outage ? (
-        <MenuButton
-            align="start"
-            data-testid="local-agent-outage"
-            icon="alert"
-            items={[
-                ...(outage.restartable && outage.restarting === undefined
-                    ? [{ kind: "item" as const, id: "restart", label: "Restart Happy Agent" }]
-                    : []),
-                { kind: "item" as const, id: "copy", label: "Copy details" },
-            ]}
-            label={`${outageName} is not responding`}
-            menuLabel={`${outageName} is not responding`}
-            menuWidth={220}
-            onSelect={(id) => {
-                if (id === "restart") outageStore.restart();
-                else outageStore.detailsCopy();
-            }}
-            overlay
-            placement="above"
-            size="small"
-            variant="ghost"
+    const restart = outage?.restart;
+    // This component stays mounted when the outage clears, so an open card
+    // can report Connected until the person dismisses it.
+    const sidebarOutage = (
+        <SidebarConnectionAction
+            location={`Happy Agent on ${updateHost?.label ?? "this computer"}`}
+            outage={
+                outage
+                    ? {
+                          status: restart?.kind ?? "reconnecting",
+                          explanation:
+                              restart?.kind === "failed"
+                                  ? restart.message
+                                  : restart?.kind === "draining"
+                                    ? "Waiting for running work to finish. Restart now interrupts it."
+                                    : restart?.kind === "restarting"
+                                      ? "The agent is restarting. Your work stays open."
+                                      : "Trying to reach your agent. Your work stays open.",
+                          ...(restart?.kind === "draining" && restart.killable
+                              ? {
+                                    action: {
+                                        label: "Restart now",
+                                        onSelect: outageStore.restartNow,
+                                    },
+                                }
+                              : outage.restartable &&
+                                  (restart === undefined || restart.kind === "failed")
+                                ? { action: { label: "Restart", onSelect: outageStore.restart } }
+                                : {}),
+                      }
+                    : undefined
+            }
         />
-    ) : undefined;
+    );
+    const remoteConnection =
+        active && active.id !== updateHost?.id ? (
+            <SidebarConnectionAction
+                key={active.id}
+                location={`Happy Agent on ${active.label}`}
+                outage={
+                    activeAvailability?.online === false
+                        ? {
+                              status: "reconnecting",
+                              explanation: "Trying to reach this agent. Your work stays open.",
+                          }
+                        : undefined
+                }
+            />
+        ) : undefined;
     // Local machines share the host's tier preferences; Cloud files stay ungrouped.
     const changeTiersStore = active?.happyCloud
         ? undefined
@@ -4043,8 +4052,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     <AppGptLivePhone store={props.gptLive} experiments={props.experiments} />
                 ) : undefined
             }
-            actions={sidebarOutage ?? sidebarUpdate}
-            {...(sidebarOutageConnection ? { connection: sidebarOutageConnection } : {})}
+            actions={
+                <>
+                    {sidebarOutage}
+                    {remoteConnection}
+                    {sidebarUpdate}
+                </>
+            }
             devMenu={
                 props.buildIdentity ? (
                     <DevBuildMenu
@@ -5124,6 +5138,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <HappyAgentWorkspaceSurface
                     instanceId={active.instanceId}
                     {...(active.session.checkouts ? { checkoutsOf: active.session.checkouts } : {})}
+                    restarting={
+                        active.session.connection.get().drain?.intent === "restart" ||
+                        (active.id === updateHost?.id &&
+                            restart !== undefined &&
+                            restart.kind !== "failed")
+                    }
                     {...(active.workspacesUnavailable ? { workspacesUnavailable: true } : {})}
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
                     availability={
@@ -7246,6 +7266,7 @@ interface HappyAgentWorkspaceSurfaceProps {
     browserConnectionId: string | null;
     /** Unified outer route and daemon health for this already materialized Happy Agent. */
     availability: HappyAgentAvailabilitySnapshot;
+    restarting?: boolean;
     /** Re-reads unified availability when a retained network handler fires. */
     happyAgentOnline: () => boolean;
     /** Joined conversation-list + active-conversation product store. */
@@ -7359,6 +7380,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // about the state already on screen.
     const availability = props.availability;
     const connectionRefusal = availability.refusal;
+    // A shutdown also closes admission, without claiming that it is a restart.
+    const composerConnectionRefusal =
+        connectionRefusal ??
+        (availability.admitting === false
+            ? "This Happy Agent is not accepting messages."
+            : undefined);
     const happyAgentOnline = props.happyAgentOnline;
     const terminalHappyAgentAvailability = availability.online
         ? undefined
@@ -8230,8 +8257,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 groupId={openGroup.id}
                 groupName={openGroup.name}
                 happyAgentOnline={happyAgentOnline}
-                {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
-                {...(availability.admitting === false ? { restarting: true } : {})}
+                {...(composerConnectionRefusal === undefined
+                    ? {}
+                    : { unavailable: composerConnectionRefusal })}
+                {...(props.restarting ? { restarting: true } : {})}
                 workspace={props.workspace}
             />
         ) : (
@@ -8330,8 +8359,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
                 happyAgentOnline={happyAgentOnline}
-                {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
-                {...(availability.admitting === false ? { restarting: true } : {})}
+                {...(composerConnectionRefusal === undefined
+                    ? {}
+                    : { unavailable: composerConnectionRefusal })}
+                {...(props.restarting ? { restarting: true } : {})}
                 {...(conversationReadOnlyReason === undefined
                     ? {}
                     : { readOnlyReason: conversationReadOnlyReason })}
@@ -9804,7 +9835,11 @@ function HappyAgentGroupComposer(props: {
                     submitDisabled={props.unavailable !== undefined || props.restarting === true}
                     notice={[
                         ...(props.composerNotice ?? []),
-                        ...(props.restarting === true ? AGENT_RESTARTING_NOTICE : []),
+                        ...(props.restarting === true
+                            ? AGENT_RESTARTING_NOTICE
+                            : props.unavailable !== undefined
+                              ? AGENT_OFFLINE_NOTICE
+                              : []),
                     ]}
                     // The first message is what creates the session, so its model,
                     // effort, and access mode have to be choosable before it is sent
@@ -10632,12 +10667,16 @@ function HappyAgentConversationSurface(props: {
                         ? { disabledNote: MODELS_NOT_CONFIGURED_NOTE }
                         : {})}
                     submitDisabled={sendRefusal !== undefined || props.restarting === true}
-                    // A restarting agent is said in two plain lines above the input,
+                    // Connection state is said in one plain line above the input,
                     // and only while the input is open: a locked chat already says why.
                     notice={[
                         ...(props.composerNotice ?? []),
-                        ...(props.restarting === true && !composerDisabled
-                            ? AGENT_RESTARTING_NOTICE
+                        ...(!composerDisabled
+                            ? props.restarting === true
+                                ? AGENT_RESTARTING_NOTICE
+                                : props.unavailable !== undefined
+                                  ? AGENT_OFFLINE_NOTICE
+                                  : []
                             : []),
                     ]}
                     composerFocusOnType={!composerDisabled && props.focusOnType}

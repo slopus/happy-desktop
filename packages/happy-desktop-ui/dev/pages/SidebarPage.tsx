@@ -12,6 +12,7 @@ import {
     type SidebarSection,
 } from "../../src/Sidebar";
 import { SidebarFooter } from "../../src/SidebarFooter";
+import { SidebarConnectionAction } from "../../src/SidebarConnectionAction";
 import {
     SidebarUpdateAction,
     type SidebarUpdateActionProps,
@@ -1738,7 +1739,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="A dropped machine is stated in the footer's leading slot: a spinner while reconnecting, an alert once settled. The line takes the free space and truncates; the trailing controls never move and nothing above shifts."
+                detail="A temporary connection mark sits at the left. Its fixed card shares the update card's anchor; theme and settings stay at the right. See Connection Status for every state."
                 label="Connection lost"
                 number="01e"
                 stage="app"
@@ -1766,7 +1767,15 @@ export function SidebarPage() {
                                     activeItemId=""
                                     footer={
                                         <SidebarFooter
-                                            connection={connection}
+                                            actions={
+                                                <SidebarConnectionAction
+                                                    location="Happy Agent on this Mac"
+                                                    outage={{
+                                                        status: "reconnecting",
+                                                        explanation: connection.message,
+                                                    }}
+                                                />
+                                            }
                                             onSettingsOpen={() => {}}
                                         />
                                     }

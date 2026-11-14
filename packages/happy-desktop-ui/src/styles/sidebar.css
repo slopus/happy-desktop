@@ -2005,46 +2005,6 @@
     position: relative;
 }
 
-/*
- * The machine being out of reach, in the footer's leading slot. It takes the
- * row's free space and truncates inside it, so the trailing controls never
- * move and nothing else in the window shifts when it appears.
- */
-.happy-sidebar-connection {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    height: 28px;
-    padding: 0 4px;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-ui);
-    font-size: 12px;
-    line-height: 16px;
-    user-select: none;
-}
-
-.happy-sidebar-connection__icon {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-}
-
-.happy-sidebar-connection:not([data-retrying]) .happy-sidebar-connection__icon {
-    color: var(--status-error);
-}
-
-.happy-sidebar-connection__label {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .happy-sidebar__dev-build {
     display: flex;
     flex: 1 1 auto;
@@ -2152,13 +2112,11 @@
     outline-offset: 2px;
 }
 
-/* The panel leaves the footer's flow and hangs above the whole row, ending on
-   the footer's right gutter — the mark itself sits between other controls and
-   is far too narrow to measure a card against without pushing it off the left
-   edge of the window. `.happy-sidebar-footer` is the containing block. */
+/* Temporary footer marks share a card anchored to the row's left gutter. */
 .happy-sidebar-update__panel {
     position: absolute;
-    right: 0;
+    right: auto;
+    left: 0;
     bottom: calc(100% + 8px);
     z-index: 30;
     display: flex;
@@ -2175,7 +2133,7 @@
     font-synthesis: none;
     /* Grows out of the mark it hangs off, so the panel reads as that control
        opening rather than as a card that was already there. */
-    transform-origin: 100% 100%;
+    transform-origin: 0 100%;
     user-select: none;
 }
 
@@ -2185,6 +2143,51 @@
     flex-direction: column;
     gap: 8px;
     padding: 10px 12px 12px;
+}
+
+.happy-sidebar-connection-action .happy-sidebar-update__trigger {
+    color: var(--text-secondary);
+}
+
+.happy-sidebar-connection-action[data-status="failed"] .happy-sidebar-update__trigger {
+    color: var(--status-error);
+}
+
+.happy-sidebar-connection-action[data-status="connected"] .happy-sidebar-update__trigger {
+    color: var(--status-connected);
+}
+
+.happy-sidebar-connection-action__panel {
+    height: 126px;
+}
+
+.happy-sidebar-connection-action__panel .happy-sidebar-update__main {
+    flex: 1;
+    gap: 4px;
+    min-height: 0;
+}
+
+.happy-sidebar-connection-action__panel .happy-sidebar-update__eyebrow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-sidebar-connection-action__explanation {
+    height: 48px;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.happy-sidebar-connection-action__bottom {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    height: 28px;
+    margin-top: auto;
 }
 
 /* What is new, above the panel in the same card. The measured height collapses
