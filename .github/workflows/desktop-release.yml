@@ -204,6 +204,24 @@ jobs:
                   chmod 600 "$NOTARY_KEY"
                   printf 'APPLE_API_KEY=%s\n' "$NOTARY_KEY" >> "$GITHUB_ENV"
 
+            # Universal Links for link.happy.page need com.slopus.happy's Developer ID
+            # profile. Without the secret the standard app is signed as before, without
+            # them; scripts/release/macUniversalLinks.mjs checks the profile and the result.
+            - name: Prepare Developer ID provisioning profile
+              if: matrix.flavor == 'standard'
+              env:
+                  MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
+              run: |
+                  if [[ -z "$MACOS_PROVISIONING_PROFILE_BASE64" ]]; then
+                    echo "::notice::MACOS_PROVISIONING_PROFILE_BASE64 is not set; Happy for macOS is built without Universal Links."
+                    exit 0
+                  fi
+                  # Outside the checkout: electron-builder embeds any profile it finds in
+                  # the working directory.
+                  PROFILE="$RUNNER_TEMP/happy-developer-id.provisionprofile"
+                  printf '%s' "$MACOS_PROVISIONING_PROFILE_BASE64" | base64 -D > "$PROFILE"
+                  printf 'MACOS_PROVISIONING_PROFILE=%s\n' "$PROFILE" >> "$GITHUB_ENV"
+
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
@@ -231,9 +249,9 @@ jobs:
                   done
                   exit 1
 
-            - name: Remove App Store Connect API key
+            - name: Remove App Store Connect API key and provisioning profile
               if: always()
-              run: rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+              run: rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8" "$RUNNER_TEMP/happy-developer-id.provisionprofile"
 
             - name: Upload signed distribution
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

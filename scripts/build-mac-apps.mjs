@@ -1,11 +1,17 @@
 import { execFile, spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { desktopFlavorNames, desktopFlavorRead } from "./desktopFlavors.mjs";
 import { desktopBuildVersion } from "./release/desktopVersion.mjs";
+import {
+    provisioningProfileRead,
+    provisioningProfileValidate,
+    universalLinksEntitlements,
+    universalLinksVerify,
+} from "./release/macUniversalLinks.mjs";
 import { packagedFilesVerify, packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
 
 const workspace = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -25,6 +31,7 @@ if (process.platform !== "darwin")
     throw new Error("Signed Happy macOS releases must be built on macOS.");
 releaseEnvironmentValidate();
 await keychainSigningIdentityValidate();
+const provisioningProfile = await provisioningProfilePrepare();
 
 await run("pnpm", ["desktop:assets"]);
 await run("pnpm", ["--dir", "packages/happy-desktop-electron", "typecheck"]);
@@ -85,12 +92,15 @@ for (const selectedFlavorName of flavors) {
     const output = join("release", selectedFlavor.output);
     await rm(join(desktopDirectory, output), { force: true, recursive: true });
     await mkdir(join(desktopDirectory, output), { recursive: true });
+    // Only the standard app has a Developer ID profile, so only it opens Universal Links.
+    const universalLinks = selectedFlavorName === "standard" ? provisioningProfile : undefined;
     const config = builderConfiguration(
         packageJson.build,
         output,
         staging,
         selectedFlavorName,
         selectedFlavor,
+        universalLinks,
     );
     try {
         await build({
@@ -105,7 +115,7 @@ for (const selectedFlavorName of flavors) {
     } finally {
         await rm(join(desktopDirectory, staging), { force: true, recursive: true });
     }
-    await releaseVerify(selectedFlavor, output);
+    await releaseVerify(selectedFlavor, output, universalLinks);
     if (architectures.length === 2)
         await run(
             process.execPath,
@@ -120,7 +130,7 @@ console.log(
     `Built, signed, notarized, stapled, and verified ${flavors.join(", ")} for ${architectures.join(", ")}.`,
 );
 
-function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
+function builderConfiguration(base, output, app, flavorName, selectedFlavor, universalLinks) {
     const buildResources = join(desktopDirectory, "build");
     const entitlements = join(buildResources, "entitlements.mac.plist");
     const icon = join(desktopDirectory, "assets", "app-icon", "generated", "app-icon.icns");
@@ -162,8 +172,9 @@ function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
             : {}),
         mac: {
             ...base.mac,
-            entitlements,
+            entitlements: universalLinks ? universalLinks.entitlements : entitlements,
             entitlementsInherit: entitlements,
+            ...(universalLinks ? { provisioningProfile: universalLinks.path } : {}),
             icon,
         },
         publish: { ...structuredClone(base.publish), channel: selectedFlavor.channel },
@@ -179,7 +190,7 @@ function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
  * the release job; that file no longer disagreeing is a property of both sides
  * reading `desktopFlavors.mjs` rather than something checked here.
  */
-async function releaseVerify(selectedFlavor, output) {
+async function releaseVerify(selectedFlavor, output, universalLinks) {
     const releaseDirectory = join(desktopDirectory, output);
     for (const selectedArchitecture of architectures) {
         const applicationDirectory = selectedArchitecture === "arm64" ? "mac-arm64" : "mac";
@@ -217,10 +228,49 @@ async function releaseVerify(selectedFlavor, output) {
             "dist/artifact-code/code.js",
         ]);
         await run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", application]);
+        await universalLinksVerify(application, universalLinks?.profile);
         await staplerValidate(application);
         await run("spctl", ["--assess", "--type", "execute", "--verbose=4", application]);
         await run("hdiutil", ["verify", dmg]);
     }
+}
+
+/*
+ * The Developer ID provisioning profile named by MACOS_PROVISIONING_PROFILE,
+ * checked before anything is built, with the main app's entitlements written
+ * beside the build output. Without one the standard app is signed as before,
+ * without Universal Links. See release/macUniversalLinks.mjs.
+ */
+async function provisioningProfilePrepare() {
+    // electron-builder embeds any profile it finds in the working directory,
+    // whichever flavor it is signing, when it is given none.
+    const strays = (await readdir(process.cwd())).filter((name) =>
+        name.endsWith(".provisionprofile"),
+    );
+    if (strays.length > 0)
+        throw new Error(
+            `Move ${strays.join(", ")} out of ${process.cwd()}: it would be embedded in every app. Name it with MACOS_PROVISIONING_PROFILE instead.`,
+        );
+    const path = process.env.MACOS_PROVISIONING_PROFILE;
+    if (!path || !flavors.includes("standard")) {
+        if (flavors.includes("standard"))
+            console.log(
+                "MACOS_PROVISIONING_PROFILE is not set; Happy is signed without Universal Links.",
+            );
+        return undefined;
+    }
+    const profile = await provisioningProfileRead(resolve(path));
+    provisioningProfileValidate(profile);
+    const entitlements = join(desktopDirectory, "release", ".signing", "entitlements.mac.plist");
+    await mkdir(dirname(entitlements), { recursive: true });
+    await writeFile(
+        entitlements,
+        universalLinksEntitlements(
+            await readFile(join(desktopDirectory, "build", "entitlements.mac.plist"), "utf8"),
+        ),
+    );
+    console.log(`Signing Happy with Universal Links and the provisioning profile ${profile.name}.`);
+    return { path: resolve(path), profile, entitlements };
 }
 
 async function stagedPackagePrepare(path, selectedFlavor) {

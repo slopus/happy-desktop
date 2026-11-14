@@ -164,3 +164,20 @@ Check that workflow and the resulting cask version before reporting Homebrew
 distribution complete. Never disable Gatekeeper or remove quarantine to make a
 cask pass. Linux CI's Chromium sandbox override is test-runner-only, not part of
 the cask or shipped app.
+
+## macOS Universal Links
+
+The standard macOS app opens `https://link.happy.page/#1/<instanceId>/…` share links
+directly when the release has a Developer ID provisioning profile for
+`com.slopus.happy` with Associated Domains enabled. The repository secret
+`MACOS_PROVISIONING_PROFILE_BASE64` (the base64 `.provisionprofile`) turns it on;
+without it the app is signed as before, without Universal Links. Nightly has no
+profile and never claims the domain.
+
+`scripts/release/macUniversalLinks.mjs` refuses a profile that is not Developer ID,
+names another App ID or team, lacks Associated Domains, or has expired, and warns
+30 days before expiry. After signing it reads the app back: the embedded profile,
+the signing certificate the profile names, and the entitlements on the main app
+alone. A mismatch there would stop the app from launching for everyone the
+updater reaches, so a failure fails the release. The association file itself is
+served by `slopus/happy-link` (`link.happy.page/src/wellKnown.ts`).
