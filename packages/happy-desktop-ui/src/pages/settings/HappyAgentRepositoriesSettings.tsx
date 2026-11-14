@@ -25,7 +25,7 @@ export interface HappyAgentRepositoryRow {
     /** What the last access check found. */
     readonly access: "reachable" | "failed" | "unchecked";
     /** The plugin that manages it, marked on the row. */
-    readonly plugin?: Pick<HappyAgentRepositoryPlugin, "name" | "image" | "missing">;
+    readonly plugin?: Pick<HappyAgentRepositoryPlugin, "name" | "image" | "status">;
 }
 
 const ACCESS_TEXT = {
@@ -61,8 +61,14 @@ export interface HappyAgentRepositoryPlugin {
     readonly image: HappyAgentPluginImage | null;
     /** How it signs in and as whom, for example "GitHub App · acme". */
     readonly detail?: string;
-    /** Its credential is gone because the plugin was removed or disconnected. */
-    readonly missing: boolean;
+    /**
+     * `suspended` while the service suspended the plugin's installation, and
+     * `missing` once its credential is gone: the plugin was removed or
+     * disconnected. Git access fails in both.
+     */
+    readonly status: "active" | "suspended" | "missing";
+    /** The account it signs in as, named when the installation is suspended. */
+    readonly account?: string;
     /** Opens the plugin, where it is connected again. */
     onOpen?: () => void;
 }
@@ -165,11 +171,17 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
                         {/* A plugin whose credential is gone fails every access, whatever the last check found. */}
                         <span
                             className="happy-agent-repositories__access"
-                            data-access={repository.plugin?.missing ? "missing" : repository.access}
+                            data-access={
+                                repository.plugin && repository.plugin.status !== "active"
+                                    ? "warning"
+                                    : repository.access
+                            }
                         >
-                            {repository.plugin?.missing
+                            {repository.plugin?.status === "missing"
                                 ? "Credential missing"
-                                : ACCESS_TEXT[repository.access]}
+                                : repository.plugin?.status === "suspended"
+                                  ? "Suspended"
+                                  : ACCESS_TEXT[repository.access]}
                         </span>
                         <Icon name="chevron-right" size={14} />
                     </button>
@@ -213,6 +225,8 @@ function HappyAgentRepositoryCheckView(props: { readonly check: HappyAgentReposi
 
 /** Picks the team git credential a repository is reached with, or none. */
 function HappyAgentRepositoryCredentialPicker(props: {
+    /** An SSH address is refused without a pinned SSH git credential. */
+    readonly ssh: boolean;
     readonly credentialId: string;
     readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
     readonly disabled: boolean;
@@ -226,9 +240,13 @@ function HappyAgentRepositoryCredentialPicker(props: {
                 disabled={props.disabled}
                 fullWidth
                 hint={
-                    empty
-                        ? "No git credential in Settings › Secrets covers this URL. Public repositories work without one."
-                        : "Public repositories work without one. Pin a git credential from Settings › Secrets to reach a private one."
+                    props.ssh
+                        ? empty
+                            ? "An SSH address needs a team SSH git credential, and none in Settings › Secrets covers this URL."
+                            : "An SSH address needs a team SSH git credential from Settings › Secrets."
+                        : empty
+                          ? "No git credential in Settings › Secrets covers this URL. Public repositories work without one."
+                          : "Public repositories work without one. Pin a git credential from Settings › Secrets to reach a private one."
                 }
                 label="Credential"
                 onValueChange={props.onCredentialChange}
@@ -263,6 +281,8 @@ export interface HappyAgentRepositoryAddDialogProps {
     readonly name: string;
     /** The pinned team git credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE`. */
     readonly credentialId: string;
+    /** Whether the URL is an SSH address, which needs a pinned credential. */
+    readonly ssh: boolean;
     readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
     /** Opens Settings › Secrets, offered when no git credential covers the URL. */
     onSecretsOpen?: () => void;
@@ -328,6 +348,7 @@ export function HappyAgentRepositoryAddDialog(props: HappyAgentRepositoryAddDial
                         value={props.url}
                     />
                     <HappyAgentRepositoryCredentialPicker
+                        ssh={props.ssh}
                         credentialId={props.credentialId}
                         credentials={props.credentials}
                         disabled={props.submitting}
@@ -375,6 +396,8 @@ export interface HappyAgentRepositoryDialogProps {
     readonly branches: readonly string[];
     /** The pinned team git credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE`. */
     readonly credentialId: string;
+    /** Whether the URL is an SSH address, which needs a pinned credential. */
+    readonly ssh: boolean;
     readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
     /** Opens Settings › Secrets, offered when no git credential covers the URL. */
     onSecretsOpen?: () => void;
@@ -474,6 +497,7 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                             />
                             {props.plugin ? null : (
                                 <HappyAgentRepositoryCredentialPicker
+                                    ssh={props.ssh}
                                     credentialId={props.credentialId}
                                     credentials={props.credentials}
                                     disabled={props.saving}
@@ -513,8 +537,9 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                             )}
                         </Box>
                     ) : null}
-                    {/* The missing-credential warning already says why access fails. */}
-                    {props.check.state === "failed" && !props.plugin?.missing ? (
+                    {/* The plugin's warning already says why access fails. */}
+                    {props.check.state === "failed" &&
+                    (props.plugin?.status ?? "active") === "active" ? (
                         <HappyAgentRepositoryCheckView check={props.check} />
                     ) : null}
                     {props.manage ? (
@@ -551,7 +576,7 @@ function HappyAgentRepositoryPluginView(props: { readonly plugin: HappyAgentRepo
             <Box
                 className="happy-agent-repositories__plugin"
                 data-happy-desktop-ui="happy-agent-repository-plugin"
-                data-status={plugin.missing ? "missing" : "active"}
+                data-status={plugin.status}
             >
                 <PluginMark image={plugin.image} size="row" />
                 <Box className="happy-agent-repositories__text">
@@ -570,10 +595,16 @@ function HappyAgentRepositoryPluginView(props: { readonly plugin: HappyAgentRepo
                 {plugin.name} signs in for this repository. Its credential is managed by the plugin
                 and is not shown here.
             </span>
-            {plugin.missing ? (
+            {plugin.status === "missing" ? (
                 <Banner tone="warning" title={`${plugin.name}'s credential is gone`}>
                     The plugin was removed or disconnected, so git access to this repository fails
                     until it is connected again.
+                </Banner>
+            ) : plugin.status === "suspended" ? (
+                <Banner tone="warning" title={`${plugin.name} suspended the app`}>
+                    {plugin.account
+                        ? `${plugin.name} suspended the app's installation for ${plugin.account}; git access fails until it is unsuspended on ${plugin.name}.`
+                        : `${plugin.name} suspended the app's installation; git access fails until it is unsuspended on ${plugin.name}.`}
                 </Banner>
             ) : null}
         </Box>

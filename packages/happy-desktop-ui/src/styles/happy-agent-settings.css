@@ -1293,7 +1293,7 @@
     color: var(--status-error);
 }
 
-.happy-agent-repositories__access[data-access="missing"] {
+.happy-agent-repositories__access[data-access="warning"] {
     color: var(--box-warning-text);
 }
 

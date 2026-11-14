@@ -1,10 +1,11 @@
-import type {
-    HappyAgentPluginsSnapshot,
-    HappyAgentRepositoriesSnapshot,
-    HappyAgentRepositoriesStore,
-    HappyAgentRepository,
-    HappyAgentRepositoryCredential,
-    HappyAgentRepositoryPluginMethod,
+import {
+    happyAgentRepositoryUrlTransport,
+    type HappyAgentPluginsSnapshot,
+    type HappyAgentRepositoriesSnapshot,
+    type HappyAgentRepositoriesStore,
+    type HappyAgentRepository,
+    type HappyAgentRepositoryCredential,
+    type HappyAgentRepositoryPluginMethod,
 } from "happy-desktop-state";
 import {
     HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
@@ -61,7 +62,7 @@ export function AppRepositoriesSettings(props: {
                                   plugin: {
                                       name: plugin.name,
                                       image: plugin.image,
-                                      missing: plugin.missing,
+                                      status: plugin.status,
                                   },
                               }
                             : {}),
@@ -98,6 +99,7 @@ export function AppRepositoriesSettings(props: {
                     onSubmit={() => store.addSubmit()}
                     onUrlChange={(url) => store.addUrlUpdate(url)}
                     submitting={add.submitting}
+                    ssh={happyAgentRepositoryUrlTransport(add.url) === "ssh"}
                     url={add.url}
                 />
             ) : null}
@@ -141,6 +143,7 @@ export function AppRepositoriesSettings(props: {
                     onNameSave={(name) => store.repositoryNameSave(name)}
                     {...(managedBy ? { plugin: managedBy } : {})}
                     saving={open.saving}
+                    ssh={opened.transport === "ssh"}
                     url={opened.url}
                 />
             ) : null}
@@ -188,7 +191,8 @@ function pluginOf(
         name: plugin?.name ?? installation?.name ?? pluginId,
         image: installation?.image ?? plugin?.image ?? null,
         ...(detail ? { detail } : {}),
-        missing: authentication.status === "missing",
+        status: authentication.status,
+        ...(authentication.account ? { account: authentication.account } : {}),
         // Only a plugin this server still offers has a page to open.
         ...(plugin && onPluginOpen ? { onOpen: () => onPluginOpen(pluginId) } : {}),
     };

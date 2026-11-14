@@ -67,7 +67,7 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
         location: "github.com/acme/web",
         defaultBranch: "main",
         access: "reachable",
-        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, missing: false },
+        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, status: "active" },
     },
     {
         id: "api",
@@ -75,7 +75,15 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
         location: "github.com/acme/api",
         defaultBranch: "main",
         access: "failed",
-        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, missing: true },
+        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, status: "missing" },
+    },
+    {
+        id: "docs",
+        name: "docs",
+        location: "github.com/acme/docs",
+        defaultBranch: "main",
+        access: "reachable",
+        plugin: { name: "GitHub", image: GITHUB_PLUGIN_IMAGE, status: "suspended" },
     },
     {
         id: "infra",
@@ -148,6 +156,7 @@ function Add(props: {
         <HappyAgentRepositoryAddDialog
             check={props.check}
             credentialId={props.credentialId ?? HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE}
+            ssh={false}
             credentials={props.none ? [] : credentials}
             {...(props.none ? { onSecretsOpen: noop } : {})}
             {...(props.error ? { error: props.error } : {})}
@@ -165,6 +174,7 @@ function Add(props: {
 }
 
 const detail: HappyAgentRepositoryDialogProps = {
+    ssh: false,
     name: "rig",
     url: "https://github.com/slopus/rig.git",
     defaultBranch: "main",
@@ -187,7 +197,7 @@ const githubApp: HappyAgentRepositoryPlugin = {
     name: "GitHub",
     image: GITHUB_PLUGIN_IMAGE,
     detail: "GitHub App · acme",
-    missing: false,
+    status: "active",
     onOpen: noop,
 };
 
@@ -301,7 +311,7 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Screen
-                detail="an SSH repository: the credential applies; the first checkout proves the rest"
+                detail="an SSH repository: it needs a pinned SSH credential; the first checkout proves the rest"
                 number="06"
                 screen="06-add-ssh"
             >
@@ -312,8 +322,8 @@ export function HappyCloudRepositoriesFlowPage() {
                         summary:
                             "A credential applies. The first checkout confirms access over SSH.",
                     }}
-                    credentialId={HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE}
-                    credentials={credentials}
+                    credentialId="infra-key"
+                    credentials={[{ id: "infra-key", label: "Infra deploy key · gitlab.acme.dev" }]}
                     name="infra"
                     onCheck={noop}
                     onClose={noop}
@@ -322,6 +332,7 @@ export function HappyCloudRepositoriesFlowPage() {
                     onSubmit={noop}
                     onUrlChange={noop}
                     submitting={false}
+                    ssh
                     url="git@gitlab.acme.dev:platform/infra.git"
                 />
             </Screen>
@@ -412,7 +423,7 @@ export function HappyCloudRepositoriesFlowPage() {
                     plugin={{
                         name: "GitHub",
                         image: GITHUB_PLUGIN_IMAGE,
-                        missing: true,
+                        status: "missing",
                         onOpen: noop,
                     }}
                     url="https://github.com/acme/api.git"
@@ -433,7 +444,7 @@ export function HappyCloudRepositoriesFlowPage() {
                         name: "GitHub",
                         image: null,
                         detail: "Personal access token",
-                        missing: false,
+                        status: "active",
                     }}
                 />
             </Screen>
@@ -447,6 +458,24 @@ export function HappyCloudRepositoriesFlowPage() {
                     check={{ state: "unchecked" }}
                     credentialId="acme-deploy"
                     error="Your role can't use this credential. Pick another, or ask whoever manages it in Settings › Secrets to let your role use it."
+                />
+            </Screen>
+            <Screen
+                detail="added by the GitHub plugin, whose installation GitHub suspended"
+                number="16"
+                screen="16-plugin-suspended"
+            >
+                <List manage />
+                <HappyAgentRepositoryDialog
+                    {...managed}
+                    check={{
+                        state: "failed",
+                        title: "Can't reach it",
+                        message: "github.com refused the request.",
+                    }}
+                    name="docs"
+                    plugin={{ ...githubApp, status: "suspended", account: "acme" }}
+                    url="https://github.com/acme/docs.git"
                 />
             </Screen>
         </ComponentPage>
