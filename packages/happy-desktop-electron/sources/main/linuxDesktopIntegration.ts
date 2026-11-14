@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join } from "node:path/posix";
 
 /*
  * An AppImage is a single downloaded file: nothing tells the desktop it exists,
