@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+    HappyAgentSync,
+    HappyAgentSyncInput,
+} from "../happyAgentConnection/happyAgentSync.js";
 import { HappyCloudRequestRefusal } from "./happyAgentProviderCredentials.js";
 import {
     happyAgentRepositoriesStoreCreate,
@@ -54,14 +58,14 @@ function refusal(status: number): HappyCloudRequestRefusal {
  * A server that lists `repositories` and records every request. `routes`
  * answers `METHOD path` before the defaults; an Error is thrown as a refusal.
  */
-function server(repositories: readonly unknown[], routes: Record<string, unknown>) {
+function server(repositories: () => readonly unknown[], routes: Record<string, unknown>) {
     const sent: Sent[] = [];
     const request = vi.fn((method: string, path: string, body?: unknown): Promise<unknown> => {
         sent.push({ method, path, body });
         const routed = routes[`${method} ${path}`];
         if (routed instanceof Error) return Promise.reject(routed);
         if (routed !== undefined) return Promise.resolve(routed);
-        if (path === "v0/repositories") return Promise.resolve({ repositories });
+        if (path === "v0/repositories") return Promise.resolve({ repositories: repositories() });
         if (path === "v0/permissions")
             return Promise.resolve({ granted: ["repositories.manage", "content.write"] });
         if (path.startsWith("v0/git/pinnable")) return Promise.resolve({ credentials: [] });
@@ -73,9 +77,54 @@ function server(repositories: readonly unknown[], routes: Record<string, unknown
 
 const stores: HappyAgentRepositoriesStore[] = [];
 
-async function loaded(repositories: readonly unknown[], routes: Record<string, unknown> = {}) {
-    const fake = server(repositories, routes);
-    const store = happyAgentRepositoriesStoreCreate({ request: fake.request });
+/** A connection whose events the test sends one by one. */
+function connection() {
+    const queue: HappyAgentSyncInput[] = [];
+    let wake: (() => void) | undefined;
+    const followed: string[][] = [];
+    const sync: HappyAgentSync = {
+        async *follow({ signal, events }) {
+            followed.push([...events]);
+            while (!signal.aborted) {
+                const next = queue.shift();
+                if (next) {
+                    yield next;
+                    continue;
+                }
+                await new Promise<void>((resume) => {
+                    wake = resume;
+                    signal.addEventListener("abort", () => resume(), { once: true });
+                });
+            }
+        },
+        health: () => undefined,
+    };
+    return {
+        sync,
+        followed,
+        event(type: string, payload: unknown): void {
+            queue.push({
+                kind: "update",
+                update: { kind: "event", event: { type, payload } } as never,
+            });
+            wake?.();
+        },
+    };
+}
+
+async function loaded(
+    repositories: readonly unknown[] | (() => readonly unknown[]),
+    routes: Record<string, unknown> = {},
+    sync?: HappyAgentSync,
+) {
+    const fake = server(
+        typeof repositories === "function" ? repositories : () => repositories,
+        routes,
+    );
+    const store = happyAgentRepositoriesStoreCreate({
+        request: fake.request,
+        ...(sync ? { sync } : {}),
+    });
     stores.push(store);
     store.subscribe(() => undefined);
     await vi.waitFor(() => expect(store.get().loading).toBe(false));
@@ -133,7 +182,45 @@ describe("repository authentication", () => {
         });
     });
 
-    it("keeps a plugin repository whose method or status this client does not know", async () => {
+    it("reads a plugin repository whose installation GitHub suspended", async () => {
+        const { store } = await loaded([
+            {
+                ...base,
+                id: "web",
+                authentication: {
+                    kind: "plugin",
+                    plugin: { id: "github", installationId: "inst-1" },
+                    method: "github_app",
+                    account: "acme",
+                    status: "suspended",
+                },
+            },
+        ]);
+        expect(store.get().repositories[0]?.authentication).toEqual({
+            kind: "plugin",
+            plugin: { id: "github", installationId: "inst-1" },
+            method: "github_app",
+            account: "acme",
+            status: "suspended",
+        });
+    });
+
+    it("drops a plugin repository whose status this client does not know, and never reads it as healthy", async () => {
+        const plugin = {
+            kind: "plugin",
+            plugin: { id: "github", installationId: "inst-1" },
+            method: "github_app",
+            account: "acme",
+        };
+        const { store } = await loaded([
+            { ...base, id: "revoked", authentication: { ...plugin, status: "revoked" } },
+            { ...base, id: "silent", authentication: plugin },
+            { ...base, id: "web", authentication: { ...plugin, status: "active" } },
+        ]);
+        expect(store.get().repositories.map((repository) => repository.id)).toEqual(["web"]);
+    });
+
+    it("keeps a plugin repository whose method this client does not know", async () => {
         const { store } = await loaded([
             {
                 ...base,
@@ -143,6 +230,7 @@ describe("repository authentication", () => {
                     plugin: { id: "github", installationId: "inst-1" },
                     method: "passkey",
                     account: "",
+                    status: "active",
                 },
             },
         ]);
@@ -153,6 +241,29 @@ describe("repository authentication", () => {
             account: null,
             status: "active",
         });
+    });
+
+    it("reads the list again on repository.updated, so a deleted pinned secret shows as no credential", async () => {
+        const events = connection();
+        let authentication: unknown = { kind: "credential", credentialId: deployToken.id };
+        const { store } = await loaded(
+            () => [{ ...base, id: "web", credentialId: deployToken.id, authentication }],
+            {},
+            events.sync,
+        );
+        expect(store.get().repositories[0]?.authentication).toEqual({
+            kind: "credential",
+            credentialId: deployToken.id,
+        });
+        expect(events.followed).toEqual([["repository.updated"]]);
+        authentication = { kind: "none" };
+        events.event("repository.updated", {
+            repositoryId: "web",
+            changes: { credentialId: null, authentication: { kind: "none" } },
+        });
+        await vi.waitFor(() =>
+            expect(store.get().repositories[0]?.authentication).toEqual({ kind: "none" }),
+        );
     });
 
     it("reads none and credential, and drops a repository without readable authentication", async () => {

@@ -1,6 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { clusterSecretSchema } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
+import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
 import {
     HappyCloudRequestRefusal,
@@ -18,6 +19,8 @@ export interface HappyAgentRepositoryCheck {
     readonly error: { readonly code: string; readonly message: string } | null;
     readonly checkedAt: number;
 }
+
+export type HappyAgentRepositoryPluginStatus = "active" | "suspended" | "missing";
 
 /** How a plugin's credential signs in to the repository's host. */
 export type HappyAgentRepositoryPluginMethod = "github_app" | "token" | "ssh_key" | "password";
@@ -38,8 +41,12 @@ export type HappyAgentRepositoryAuthentication =
           readonly method: HappyAgentRepositoryPluginMethod | null;
           /** The account it signs in as, such as a GitHub organization. */
           readonly account: string | null;
-          /** `missing` once the installation's credential is gone: removed or disconnected. */
-          readonly status: "active" | "missing";
+          /**
+           * `suspended` while the service suspended the installation, and `missing`
+           * once its credential is gone: removed or disconnected, with no method or
+           * account. Git is refused in both.
+           */
+          readonly status: HappyAgentRepositoryPluginStatus;
       };
 
 /** One of the team's repositories on Happy Cloud. */
@@ -220,6 +227,10 @@ function authenticationRead(value: unknown): HappyAgentRepositoryAuthentication 
             )
                 return undefined;
             const method = authentication.method;
+            const status = authentication.status;
+            // A status this client cannot name might refuse git, so it is never read as healthy.
+            if (status !== "active" && status !== "suspended" && status !== "missing")
+                return undefined;
             return {
                 kind: "plugin",
                 plugin: { id: plugin.id, installationId: plugin.installationId },
@@ -228,7 +239,7 @@ function authenticationRead(value: unknown): HappyAgentRepositoryAuthentication 
                         ? (method as HappyAgentRepositoryPluginMethod)
                         : null,
                 account: stringOrNull(authentication.account),
-                status: authentication.status === "missing" ? "missing" : "active",
+                status,
             };
         }
         default:
@@ -272,19 +283,23 @@ function pinnableRead(value: unknown): readonly HappyAgentRepositoryCredential[]
     });
 }
 
-/** Whether a repository URL names a host yet, so there is something to read its credentials for. */
-function hostNamed(url: string): boolean {
+/** How a URL a person typed reaches its repository; `null` until it names a host. */
+export function happyAgentRepositoryUrlTransport(url: string): "https" | "ssh" | null {
     const trimmed = url.trim();
-    if (/^[^@\s]+@[^:/\s]+:/u.test(trimmed)) return true;
+    if (/^[^@\s]+@[^:/\s]+:/u.test(trimmed)) return "ssh";
     try {
-        return new URL(trimmed).hostname !== "";
+        const parsed = new URL(trimmed);
+        if (parsed.hostname === "") return null;
+        return parsed.protocol === "ssh:" ? "ssh" : "https";
     } catch {
-        return false;
+        return null;
     }
 }
 
 export function happyAgentRepositoriesStoreCreate(deps: {
     readonly request: HappyCloudRequest;
+    /** Where `repository.updated` arrives, as a hint to read the list again sooner. */
+    readonly sync?: HappyAgentSync;
 }): HappyAgentRepositoriesStore {
     const store = createStore<HappyAgentRepositoriesSnapshot>()(() => ({
         loading: true,
@@ -297,6 +312,8 @@ export function happyAgentRepositoriesStoreCreate(deps: {
     let disposed = false;
     let reading = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let readAgain = false;
+    let follow: AbortController | undefined;
     /** Counts credential reads so an older URL's answer never lands. */
     let credentialsTicket = 0;
     /** Waits for typing to pause before reading what a URL may pin. */
@@ -338,7 +355,12 @@ export function happyAgentRepositoriesStoreCreate(deps: {
     };
 
     function load(): void {
-        if (disposed || listeners.size === 0 || reading) return;
+        if (disposed || listeners.size === 0) return;
+        // A change heard during a read may have landed after the server answered it.
+        if (reading) {
+            readAgain = true;
+            return;
+        }
         if (timer !== undefined) clearTimeout(timer);
         timer = undefined;
         reading = true;
@@ -368,16 +390,25 @@ export function happyAgentRepositoriesStoreCreate(deps: {
                           })
                         : [],
                 );
-                schedule();
+                settled();
             },
             (error: unknown) => {
                 reading = false;
                 if (disposed) return;
                 if (store.getState().loading)
                     store.setState({ loading: false, error: happyAgentUserError(error) }, false);
-                schedule();
+                settled();
             },
         );
+    }
+
+    function settled(): void {
+        if (!readAgain) {
+            schedule();
+            return;
+        }
+        readAgain = false;
+        load();
     }
 
     /**
@@ -392,7 +423,7 @@ export function happyAgentRepositoriesStoreCreate(deps: {
         const ticket = ++credentialsTicket;
         if (credentialsTimer !== undefined) clearTimeout(credentialsTimer);
         credentialsTimer = undefined;
-        if (!hostNamed(url)) {
+        if (happyAgentRepositoryUrlTransport(url) === null) {
             land([]);
             return;
         }
@@ -465,23 +496,47 @@ export function happyAgentRepositoriesStoreCreate(deps: {
             );
     };
 
+    /**
+     * The event names what changed, such as a pinned secret's deletion setting
+     * `authentication` to `none`; it is a hint, and the list read it starts is
+     * what the store keeps.
+     */
+    const followStart = (): void => {
+        const sync = deps.sync;
+        if (!sync || follow || disposed) return;
+        const active = new AbortController();
+        follow = active;
+        void (async () => {
+            for await (const input of sync.follow({
+                signal: active.signal,
+                events: ["repository.updated"],
+            })) {
+                if (input.kind === "update") load();
+            }
+        })().catch(() => undefined);
+    };
+
     const actions: HappyAgentRepositoriesStore = {
         get: () => store.getState(),
         subscribe(listener) {
             if (disposed) return () => undefined;
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) load();
+            if (listeners.size === 1) {
+                followStart();
+                load();
+            }
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 unsubscribe();
                 listeners.delete(listener);
-                if (listeners.size === 0 && timer !== undefined) {
-                    clearTimeout(timer);
-                    timer = undefined;
-                }
+                if (listeners.size > 0) return;
+                follow?.abort();
+                follow = undefined;
+                if (timer !== undefined) clearTimeout(timer);
+                timer = undefined;
             };
         },
         addOpen() {
@@ -703,6 +758,8 @@ export function happyAgentRepositoriesStoreCreate(deps: {
         },
         [Symbol.dispose]() {
             disposed = true;
+            follow?.abort();
+            follow = undefined;
             if (timer !== undefined) clearTimeout(timer);
             timer = undefined;
             if (credentialsTimer !== undefined) clearTimeout(credentialsTimer);

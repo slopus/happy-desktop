@@ -1212,7 +1212,10 @@ export function happyAgentWorkspaceClientCreate(
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
             if (!request) return undefined;
-            repositoriesStore ??= happyAgentRepositoriesStoreCreate({ request });
+            repositoriesStore ??= happyAgentRepositoriesStoreCreate({
+                request,
+                sync: deps.connection.sync,
+            });
             return repositoriesStore;
         },
         onboardingSettings() {

@@ -40,6 +40,7 @@ export type HappyCloudEventType =
     | "member.removed"
     | "payments.updated"
     | "checkout.updated"
+    | "repository.updated"
     | "checkout.deleted";
 
 /** One connection's transport input. Following it never opens another request or SSE stream. */
