@@ -102,7 +102,7 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             server: "git.acme.dev",
             port: 2222,
             method: { kind: "ssh_key", fingerprint: "SHA256:Yk2v…Qp8" },
-            operations: ["read", "write", "sign"],
+            operations: ["read", "write"],
         },
         uses: ["git"],
         owner: "me",

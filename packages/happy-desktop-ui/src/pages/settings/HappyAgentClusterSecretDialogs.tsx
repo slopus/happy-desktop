@@ -467,12 +467,6 @@ function ShapeFields(props: ShapeFieldsProps) {
                                     shape: {
                                         ...shape,
                                         method,
-                                        operations:
-                                            method === "ssh_key"
-                                                ? shape.operations
-                                                : shape.operations.filter(
-                                                      (operation) => operation !== "sign",
-                                                  ),
                                     },
                                     value: gitValueDraft(method),
                                 });
@@ -526,10 +520,7 @@ function ShapeFields(props: ShapeFieldsProps) {
                             {GIT_OPERATIONS.map((operation) => (
                                 <Checkbox
                                     checked={shape.operations.includes(operation)}
-                                    disabled={
-                                        disabled ||
-                                        (operation === "sign" && shape.method !== "ssh_key")
-                                    }
+                                    disabled={disabled}
                                     key={operation}
                                     label={GIT_OPERATION_TEXT[operation]}
                                     onChange={(checked) =>
@@ -578,11 +569,10 @@ function ShapeFields(props: ShapeFieldsProps) {
 }
 
 const GIT_METHODS: readonly HappyAgentClusterGitMethod[] = ["token", "password", "ssh_key"];
-const GIT_OPERATIONS: readonly HappyAgentClusterGitOperation[] = ["read", "write", "sign"];
+const GIT_OPERATIONS: readonly HappyAgentClusterGitOperation[] = ["read", "write"];
 const GIT_OPERATION_TEXT: Record<HappyAgentClusterGitOperation, string> = {
     read: "Read",
     write: "Write",
-    sign: "Sign commits",
 };
 
 function UsesField(props: {

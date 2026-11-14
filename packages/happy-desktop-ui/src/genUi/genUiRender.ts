@@ -190,7 +190,7 @@ export type GenUiClusterSecretPrefill = GenUiClusterSecretCommon &
                   readonly port?: number;
                   readonly method?: GenUiGitMethod;
                   readonly repos?: readonly string[];
-                  readonly operations?: readonly ("read" | "write" | "sign")[];
+                  readonly operations?: readonly ("read" | "write")[];
               };
           }
         | {
@@ -705,10 +705,9 @@ function clusterSecretPrefill(value: unknown): GenUiClusterSecretPrefill | undef
                               repos: strings(pub.repos, 0, 64),
                               operations: bounded(
                                   pub.operations,
-                                  (operation) =>
-                                      oneOf(operation, ["read", "write", "sign"] as const),
+                                  (operation) => oneOf(operation, ["read", "write"] as const),
                                   1,
-                                  3,
+                                  2,
                               ),
                           })
                         : undefined,

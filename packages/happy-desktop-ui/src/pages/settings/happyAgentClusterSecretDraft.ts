@@ -3,7 +3,7 @@ import type { GenUiClusterSecretPrefill } from "../../genUi/genUiRender";
 export type HappyAgentClusterSecretType = "endpoint" | "ssh_key" | "git_credential" | "environment";
 export type HappyAgentClusterSecretOwner = "me" | "team";
 export type HappyAgentClusterSecretUse = "egress" | "git" | "ssh" | "mcp" | "environment";
-export type HappyAgentClusterGitOperation = "read" | "write" | "sign";
+export type HappyAgentClusterGitOperation = "read" | "write";
 export type HappyAgentClusterGitMethod = "ssh_key" | "password" | "token";
 
 /** A secret's metadata by type, as the cluster publishes it. */
@@ -529,9 +529,7 @@ export function happyAgentClusterSecretCreateInput(
             const git = {
                 server: shape.server.trim(),
                 ...(repos.length === 0 ? {} : { repos }),
-                operations: shape.operations.filter(
-                    (operation) => operation !== "sign" || shape.method === "ssh_key",
-                ),
+                operations: [...shape.operations],
             };
             const username = shape.username.trim();
             if (shape.method === "ssh_key")

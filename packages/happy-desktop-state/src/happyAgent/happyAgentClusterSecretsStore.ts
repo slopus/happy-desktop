@@ -36,12 +36,23 @@ interface HappyAgentClusterSecretFields {
     readonly updatedAt: number;
 }
 
+/**
+ * A git credential's public data. A git credential reads and writes; the
+ * protocol package still names a `sign` operation the server no longer has.
+ */
+export type HappyAgentClusterGitCredentialPublic = Omit<
+    ClusterGitCredentialPublic,
+    "operations"
+> & {
+    readonly operations: readonly ("read" | "write")[];
+};
+
 /** One catalog secret as metadata. Its value is write-only and never enters this shape. */
 export type HappyAgentClusterSecret = HappyAgentClusterSecretFields &
     (
         | { readonly type: "endpoint"; readonly public: ClusterEndpointPublic }
         | { readonly type: "ssh_key"; readonly public: ClusterSshKeyPublic }
-        | { readonly type: "git_credential"; readonly public: ClusterGitCredentialPublic }
+        | { readonly type: "git_credential"; readonly public: HappyAgentClusterGitCredentialPublic }
         | { readonly type: "environment"; readonly public: ClusterEnvironmentPublic }
     );
 
@@ -362,7 +373,16 @@ export function happyAgentClusterSecretProject(secret: ClusterSecret): HappyAgen
         case "ssh_key":
             return { ...fields, type: secret.type, public: secret.public };
         case "git_credential":
-            return { ...fields, type: secret.type, public: secret.public };
+            return {
+                ...fields,
+                type: secret.type,
+                public: {
+                    ...secret.public,
+                    operations: secret.public.operations.filter(
+                        (operation) => operation === "read" || operation === "write",
+                    ),
+                },
+            };
         case "environment":
             return { ...fields, type: secret.type, public: secret.public };
     }
