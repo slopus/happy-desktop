@@ -1618,6 +1618,26 @@
 }
 
 /*
+ * Controls that wait for hover claim their room only while they show, on the
+ * same two conditions that reveal them. At rest the name runs on to the row's
+ * edge; with the pointer on the row only its ellipsis moves, since everything
+ * else in the lane is ranged right and stays where it stands. A lane holding
+ * nothing but the controls also gives back the row's gap at rest, so its name
+ * ends where a row without controls would.
+ */
+.happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps],
+.happy-sidebar__item-trailing[data-swaps]:has(:focus-visible) {
+    min-width: var(--happy-sidebar-item-controls-reserve);
+}
+
+.happy-sidebar__item:not(:hover)
+    .happy-sidebar__item-trailing[data-swaps]:not(:has(:focus-visible)):not(
+        :has(> :not(.happy-sidebar__item-actions))
+    ) {
+    margin-left: -8px;
+}
+
+/*
  * What the controls cover is hidden exactly while they show, on the same two
  * conditions that reveal them: the pointer on the row, or a control focused from
  * the keyboard. A control focused by a click is not shown once the pointer

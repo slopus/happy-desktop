@@ -268,6 +268,12 @@ export const SIDEBAR_CONTROL_GAP = 4;
  * they cover.
  */
 export const SIDEBAR_TRAILING_GAP = 6;
+/**
+ * How far a name may run under the empty side of the first hover control's
+ * cell while the controls show. The glyph is narrower than its cell, so the
+ * ellipsis can come this much closer to the X before the two read as touching.
+ */
+export const SIDEBAR_CONTROL_NAME_INSET = 4;
 /** The width of every menu the sidebar opens, from a row or from a heading control. */
 const SIDEBAR_MENU_WIDTH = 216;
 /** The one control a section heading offers, beside the section's own label. */
@@ -2064,10 +2070,11 @@ function SidebarRow({
             props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined,
         ].filter((shortcut) => shortcut !== undefined);
     /*
-     * How much of the lane the hover controls will need. They are laid over the
-     * lane rather than placed in it, so they contribute no width of their own;
-     * this keeps a row whose delta is narrower than its controls from getting
-     * narrower still the moment the pointer arrives.
+     * How much of the lane the controls will need. They are laid over the lane
+     * rather than placed in it, so they contribute no width of their own. A row
+     * that always shows a control reserves this at rest; a row whose controls
+     * all wait for hover reserves it only while they show (see the stylesheet),
+     * so its name runs to the row's edge until the pointer arrives.
      */
     const trailingLaneMinWidth = (): number => {
         const controls = trailingActions().length;
@@ -2636,7 +2643,19 @@ function SidebarRow({
                             data-swaps={controls && swaps ? "" : undefined}
                             style={{
                                 columnGap: SIDEBAR_TRAILING_GAP,
-                                minWidth: lanes ? 0 : trailingLaneMinWidth(),
+                                ...(lanes
+                                    ? { minWidth: 0 }
+                                    : controls && swaps
+                                      ? ({
+                                            "--happy-sidebar-item-controls-reserve": `${String(
+                                                Math.max(
+                                                    0,
+                                                    trailingLaneMinWidth() -
+                                                        SIDEBAR_CONTROL_NAME_INSET,
+                                                ),
+                                            )}px`,
+                                        } as CSSProperties)
+                                      : { minWidth: trailingLaneMinWidth() }),
                                 ...(item().trailingWidth !== undefined
                                     ? {
                                           width: item().trailingWidth,
