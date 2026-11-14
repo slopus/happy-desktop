@@ -1418,6 +1418,7 @@
 }
 
 .happy-sidebar__item-label {
+    --happy-sidebar-label-fade-inset: 0px;
     display: block;
     flex: 1;
     min-width: 0;
@@ -1425,9 +1426,45 @@
     font-size: 13px;
     font-weight: 500;
     line-height: 16px;
-    text-overflow: ellipsis;
     white-space: nowrap;
+    /* A name too long for its row fades out over its box's last 24px rather
+       than ellipsizing. The box runs to where the name must stop, so a name
+       that fits never reaches the fade. */
+    mask-image: linear-gradient(
+        to left,
+        transparent var(--happy-sidebar-label-fade-inset),
+        #000 calc(var(--happy-sidebar-label-fade-inset) + 24px)
+    );
     transform: translateY(var(--happy-sidebar-label-optical-y, 0px));
+    transition: --happy-sidebar-label-fade-inset 120ms ease;
+}
+
+/* Registered so the fade glides to the controls instead of jumping there. */
+@property --happy-sidebar-label-fade-inset {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
+
+/* While controls that sit alone in the lane show, the name runs under them, so
+   its fade ends where the first control's cell begins. */
+.happy-sidebar__item:is(:hover, :has(> .happy-sidebar__item-trailing :focus-visible)):has(
+        > .happy-sidebar__item-trailing[data-swaps="alone"]
+    )
+    > .happy-sidebar__item-label {
+    --happy-sidebar-label-fade-inset: var(--happy-sidebar-item-controls-reserve);
+}
+
+/* A name sharing its run with the row's marks is sized to its text, so a fade
+   would eat a name that fits: it keeps the ellipsis. */
+.happy-sidebar__item-main > .happy-sidebar__item-label {
+    text-overflow: ellipsis;
+    mask-image: none;
+}
+
+/* A name being edited is never faded: its caret may stand anywhere in it. */
+.happy-sidebar__item-label.happy-sidebar__item-rename {
+    mask-image: none;
 }
 
 .happy-sidebar__item-context-avatar {
@@ -1500,7 +1537,8 @@
 .happy-sidebar__item-label .happy-shimmer-text {
     max-width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
+    /* Fades or ellipsizes as the name around it does. */
+    text-overflow: inherit;
     white-space: nowrap;
     vertical-align: top;
 }
@@ -1618,23 +1656,21 @@
 }
 
 /*
- * Controls that wait for hover claim their room only while they show, on the
- * same two conditions that reveal them. At rest the name runs on to the row's
- * edge; with the pointer on the row only its ellipsis moves, since everything
- * else in the lane is ranged right and stays where it stands. A lane holding
- * nothing but the controls also gives back the row's gap at rest, so its name
- * ends where a row without controls would.
+ * Controls that wait for hover never move a row's name. When they are all the
+ * lane holds, the lane takes no width and gives back the row's gap, so the name
+ * runs on to the row's edge; while they show it fades out before them instead
+ * (see the label's fade). When they cover marks the lane reports at rest, they
+ * claim their room only while they show, on the same two conditions that reveal
+ * them; only the name's fade moves, since everything in the lane is ranged
+ * right and stays where it stands.
  */
-.happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps],
-.happy-sidebar__item-trailing[data-swaps]:has(:focus-visible) {
-    min-width: var(--happy-sidebar-item-controls-reserve);
+.happy-sidebar__item-trailing[data-swaps="alone"] {
+    margin-left: -8px;
 }
 
-.happy-sidebar__item:not(:hover)
-    .happy-sidebar__item-trailing[data-swaps]:not(:has(:focus-visible)):not(
-        :has(> :not(.happy-sidebar__item-actions))
-    ) {
-    margin-left: -8px;
+.happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps="covers"],
+.happy-sidebar__item-trailing[data-swaps="covers"]:has(:focus-visible) {
+    min-width: var(--happy-sidebar-item-controls-reserve);
 }
 
 /*

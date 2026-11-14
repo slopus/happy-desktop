@@ -271,7 +271,7 @@ export const SIDEBAR_TRAILING_GAP = 6;
 /**
  * How far a name may run under the empty side of the first hover control's
  * cell while the controls show. The glyph is narrower than its cell, so the
- * ellipsis can come this much closer to the X before the two read as touching.
+ * name's fade can end this much closer to the X before the two read as touching.
  */
 export const SIDEBAR_CONTROL_NAME_INSET = 4;
 /** The width of every menu the sidebar opens, from a row or from a heading control. */
@@ -2334,6 +2334,13 @@ function SidebarRow({
                     ? { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
                     : {}),
                 ...(props.shift ? { top: props.shift } : {}),
+                ...(!lanes && swapsTrailing()
+                    ? ({
+                          "--happy-sidebar-item-controls-reserve": `${String(
+                              Math.max(0, trailingLaneMinWidth() - SIDEBAR_CONTROL_NAME_INSET),
+                          )}px`,
+                      } as CSSProperties)
+                    : {}),
             }}
             tabIndex={
                 props.rename || props.tabStop === undefined ? undefined : props.tabStop ? 0 : -1
@@ -2640,21 +2647,27 @@ function SidebarRow({
                             className="happy-sidebar__item-trailing"
                             data-happy-desktop-ui="sidebar-item-trailing"
                             data-fixed={item().trailingWidth !== undefined ? "" : undefined}
-                            data-swaps={controls && swaps ? "" : undefined}
+                            /* `alone` when the controls are all the lane holds: it
+                               takes no width, and the name runs under the controls
+                               and fades out before them while they show. `covers`
+                               when they lie over marks the lane reports at rest. */
+                            data-swaps={
+                                controls && swaps
+                                    ? state ||
+                                      stats ||
+                                      count !== undefined ||
+                                      mark !== undefined ||
+                                      item().trailingWidth !== undefined
+                                        ? "covers"
+                                        : "alone"
+                                    : undefined
+                            }
                             style={{
                                 columnGap: SIDEBAR_TRAILING_GAP,
                                 ...(lanes
                                     ? { minWidth: 0 }
                                     : controls && swaps
-                                      ? ({
-                                            "--happy-sidebar-item-controls-reserve": `${String(
-                                                Math.max(
-                                                    0,
-                                                    trailingLaneMinWidth() -
-                                                        SIDEBAR_CONTROL_NAME_INSET,
-                                                ),
-                                            )}px`,
-                                        } as CSSProperties)
+                                      ? {}
                                       : { minWidth: trailingLaneMinWidth() }),
                                 ...(item().trailingWidth !== undefined
                                     ? {
