@@ -1450,6 +1450,15 @@ function presentationProject(
                 port: presentation.port,
                 url: presentation.url,
             };
+        case "checkout":
+            return {
+                type: "checkout",
+                repository: presentation.repository,
+                branch: presentation.branch,
+                folder: presentation.folder,
+                status: presentation.status,
+                ...(presentation.error === undefined ? {} : { error: presentation.error }),
+            };
         case "agent_spawn": {
             // The agent it made, as the window knows it now.
             const agent =

@@ -32,6 +32,7 @@ import type { HappyAgentSync } from "./happyAgentSync.js";
 import type { UserEnvironmentReport } from "./userEnvironment.js";
 import type { UserProfile } from "./userProfiles.js";
 import type { HappyAgentPreview } from "../happyAgent/happyAgentPreviewsStore.js";
+import type { HappyAgentCheckoutResult } from "../happyAgent/happyAgentCheckoutsStore.js";
 
 export type { MutationId };
 
@@ -39,6 +40,7 @@ export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";
 
 export type ToolPresentation =
     | ({ readonly kind: "preview" } & HappyAgentPreview)
+    | ({ readonly kind: "checkout" } & HappyAgentCheckoutResult)
     | {
           kind: "agent_spawn";
           model?: { modelId: string; providerId: string; name: string };

@@ -1,4 +1,5 @@
 import { happyAgentPreviewResultRead } from "../happyAgent/happyAgentPreviewsStore.js";
+import { happyAgentCheckoutResultRead } from "../happyAgent/happyAgentCheckoutsStore.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
@@ -1828,12 +1829,18 @@ function messageElementsProject(
                 block.status === "completed"
                     ? happyAgentPreviewResultRead(block.name, block.result)
                     : undefined;
-            const presentation =
-                block.presentation === undefined
+            // A checkout's result says how it went, failed included.
+            const checkout =
+                block.status === "running"
                     ? undefined
-                    : projectToolPresentation(block.presentation, (index) =>
-                          reader.mediaUrl(reader.agentId, block.id, index),
-                      );
+                    : happyAgentCheckoutResultRead(block.name, block.result);
+            const presentation: ToolPresentation | undefined = checkout
+                ? { kind: "checkout", ...checkout }
+                : block.presentation === undefined
+                  ? undefined
+                  : projectToolPresentation(block.presentation, (index) =>
+                        reader.mediaUrl(reader.agentId, block.id, index),
+                    );
             elements.push({
                 ...base,
                 id,

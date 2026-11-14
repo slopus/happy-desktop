@@ -88,6 +88,47 @@ function accessRead(value: unknown): HappyAgentCheckoutAccess {
     return value === "read_only" ? "readOnly" : "readWrite";
 }
 
+/** The checkout one `checkout_repository` call left behind, as its transcript row tells it. */
+export interface HappyAgentCheckoutResult {
+    readonly repository: string;
+    readonly branch: string;
+    readonly folder: string;
+    readonly status: "pending" | "ready" | "failed";
+    /** The server's words for why a `failed` checkout failed. */
+    readonly error?: string;
+}
+
+/**
+ * Validate only the explicitly named tool's contract: `checkout_repository`
+ * answers with the checkout it added or retried, as `GET …/checkouts` shows
+ * one, failed or not.
+ */
+export function happyAgentCheckoutResultRead(
+    toolName: string,
+    value: unknown,
+): HappyAgentCheckoutResult | undefined {
+    if (toolName !== "checkout_repository") return undefined;
+    const checkout = recordOf(recordOf(value)?.checkout);
+    const repository = textOrNull(recordOf(checkout?.repository)?.name);
+    const branch = textOrNull(checkout?.branch);
+    if (!checkout || repository === null || branch === null) return undefined;
+    const status =
+        checkout.status === "ready" || checkout.status === "failed" ? checkout.status : "pending";
+    return {
+        repository,
+        branch,
+        folder: textOrNull(checkout.folder) ?? "",
+        status,
+        ...(status === "failed"
+            ? {
+                  error:
+                      textOrNull(recordOf(checkout.error)?.message) ??
+                      "The repository could not be checked out.",
+              }
+            : {}),
+    };
+}
+
 /**
  * Reads one agent's checkouts from Happy Cloud. The route is the cluster's own
  * and not in the published client, so its JSON is checked here, at that

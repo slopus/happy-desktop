@@ -17,10 +17,6 @@
     white-space: nowrap;
 }
 
-.happy-repository-chip[data-checkout="failed"] {
-    color: var(--status-error);
-}
-
 .happy-repository-chip__label {
     min-width: 0;
     overflow: hidden;

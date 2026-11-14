@@ -2,13 +2,14 @@ import { ChangeStats } from "./ChangeStats";
 import { changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 
-/** A repository a cloud task's agent checked out, and how that went. */
+/**
+ * A repository a cloud task's agent checked out, or is checking out. A failed
+ * checkout has no chip: its failure is told on the tool call that ran it.
+ */
 export interface RepositoryChipRepository {
     readonly name: string;
     readonly branch: string;
-    readonly checkout: "pending" | "ready" | "failed";
-    /** Why the checkout failed. */
-    readonly error?: string;
+    readonly checkout: "pending" | "ready";
     /** Its picture; the repository glyph stands in without one. */
     readonly avatarUrl?: string;
     /** The agent may read it but not push to it. */
@@ -26,7 +27,6 @@ export type RepositoryChipProps = {
 };
 
 function titleOf(repository: RepositoryChipRepository): string {
-    if (repository.checkout === "failed" && repository.error) return repository.error;
     const where = `Works in ${repository.name}, branch ${repository.branch}`;
     const access = repository.readOnly ? ", read-only" : "";
     const changes = repository.changes;
@@ -38,7 +38,6 @@ function titleOf(repository: RepositoryChipRepository): string {
 function textOf(repository: RepositoryChipRepository): string {
     const where = `${repository.name} · ${repository.branch}`;
     if (repository.checkout === "pending") return `${where} · checking out`;
-    if (repository.checkout === "failed") return `${where} · checkout failed`;
     return where;
 }
 
@@ -46,8 +45,8 @@ function textOf(repository: RepositoryChipRepository): string {
  * C-338 RepositoryChip — one repository a cloud task's agent checked out,
  * beside the compute chip in the composer's control row, one chip each. The
  * agent chooses them, so the chip is read-only: where the work is, whether the
- * agent may push, how its checkout went and the lines it changed there, as a
- * Happy Agent's checkout row shows them. Shown only once one is attached.
+ * agent may push, whether its checkout is done and the lines it changed there,
+ * as a Happy Agent's checkout row shows them. Shown only once one is attached.
  */
 export function RepositoryChip(props: RepositoryChipProps) {
     const repository = props.repository;

@@ -238,6 +238,13 @@ function toolVerb(
     if (status === "stopped") return "Stopped";
     const active = status === "running";
     const lower = name.toLowerCase();
+    // A checkout says how it went, in the server's terms: one queued for the
+    // next command has not been checked out yet.
+    if (presentation?.type === "checkout") {
+        if (status === "failed" || presentation.status === "failed") return "Failed to check out";
+        if (active) return "Checking out";
+        return presentation.status === "ready" ? "Checked out" : "Will check out";
+    }
     if (presentation?.type === "compaction") {
         return status === "failed" ? "Failed" : active ? "Compacting" : "Compacted";
     }
@@ -346,6 +353,7 @@ function toolGlyph(
     if (presentation?.type === "artifact") return { set: "house", name: "package" };
     if (presentation?.type === "page") return { set: "house", name: "globe" };
     if (presentation?.type === "preview") return { set: "house", name: "globe" };
+    if (presentation?.type === "checkout") return { set: "house", name: "repository" };
     if (presentation?.type === "media")
         return presentation.items.some((item) => item.kind === "image")
             ? { set: "house", name: "image" }
@@ -561,6 +569,8 @@ function toolAction(
     references: MessageReferences | undefined,
 ): { verb: string; subject: string } | undefined {
     if (tool.failed || (tool.status !== "running" && tool.status !== "success")) return undefined;
+    // A checkout names its repository and branch, whatever the call called itself.
+    if (presentation?.type === "checkout") return undefined;
     const running = tool.status === "running";
     const said = (done: string, active: string, subject: string) => ({
         verb: running ? active : done,
@@ -955,6 +965,12 @@ function AgentToolActivity(props: {
     } else if (presentation?.type === "preview") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = `preview on port ${String(presentation.port)}`;
+    } else if (presentation?.type === "checkout") {
+        verb = toolVerb(tool.toolName, tool.failed ? "failed" : tool.status, presentation);
+        primaryText = `${presentation.repository} · ${presentation.branch}`;
+        // A transcript row is one line, so a failure says why on that line.
+        if (singleLine && presentation.error !== undefined)
+            primaryText = `${primaryText} — ${presentation.error}`;
     } else if (presentation?.type === "page") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.url;
@@ -1023,7 +1039,12 @@ function AgentToolActivity(props: {
     }
     // Rich bodies retain their data, links, and diff counts; their label still
     // comes from the call's explicit description, including on a failed call.
-    if (!mcp && summary !== undefined && tool.summaryKind === "description") {
+    if (
+        !mcp &&
+        summary !== undefined &&
+        tool.summaryKind === "description" &&
+        presentation?.type !== "checkout"
+    ) {
         primaryText = summary;
         verb =
             tool.status === "stopped"
@@ -1071,6 +1092,7 @@ function AgentToolActivity(props: {
             : undefined;
     const compactionFailure =
         presentation?.type === "compaction" ? presentation.failureReason : undefined;
+    const checkoutFailure = presentation?.type === "checkout" ? presentation.error : undefined;
 
     /* What a reader reaches for the clipboard to get: the subject that scrolled
        out of the row, followed by the output or result the row only shows in
@@ -1095,11 +1117,15 @@ function AgentToolActivity(props: {
               ? presentation.sources?.map((source) => `${source.title}\n${source.url}`).join("\n")
               : presentation?.type === "compaction"
                 ? presentation.failureReason
-                : presentation?.type === "artifact"
-                  ? presentation.title
-                  : presentation === undefined
-                    ? tool.display
-                    : undefined,
+                : presentation?.type === "checkout"
+                  ? singleLine
+                      ? undefined
+                      : presentation.error
+                  : presentation?.type === "artifact"
+                    ? presentation.title
+                    : presentation === undefined
+                      ? tool.display
+                      : undefined,
     ]
         .map((part) => part?.replace(/\n+$/, ""))
         .filter((part): part is string => part !== undefined && part.length > 0)
@@ -1378,6 +1404,10 @@ function AgentToolActivity(props: {
 
             {!singleLine && compactionFailure !== undefined ? (
                 <ChildRow tone="error">{compactionFailure}</ChildRow>
+            ) : null}
+
+            {!singleLine && checkoutFailure !== undefined ? (
+                <ChildRow tone="error">{checkoutFailure}</ChildRow>
             ) : null}
 
             {!singleLine && mcpResult ? (

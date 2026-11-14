@@ -1,6 +1,16 @@
 import { happyLogoBlackUrl } from "../../src/assets";
 import type { ReactNode } from "react";
 import {
+    agentAuthor,
+    happyAgentOwnerAuthor,
+    type ComposerSnapshot,
+    type ConversationAuthor,
+    type ConversationEntry,
+    type ConversationToolCall,
+} from "happy-desktop-state";
+import { ConversationDock } from "../../src/ConversationDock";
+import { ConversationView } from "../../src/ConversationView";
+import {
     ComposerFooterBar,
     ComputeChip,
     ContextMeter,
@@ -224,17 +234,6 @@ const chips: readonly { label: string; repositories: readonly RepositoryChipRepo
         repositories: [{ name: "rig", branch: "juno/fix-login", checkout: "ready" }],
     },
     {
-        label: "failed",
-        repositories: [
-            {
-                name: "rig",
-                branch: "juno/fix-login",
-                checkout: "failed",
-                error: "You have no git credential for github.com/slopus.",
-            },
-        ],
-    },
-    {
         label: "two checkouts: one changed, with its picture, and one read-only",
         repositories: [
             {
@@ -253,6 +252,167 @@ const chips: readonly { label: string; repositories: readonly RepositoryChipRepo
         ],
     },
 ];
+
+/* A checkout that failed is told on the tool call that ran it, in the
+   transcript, and never as a chip: the composer row shows only what is checked
+   out or still checking out. */
+
+const CHECKOUT_ERROR = "The branch, tag or commit to start from does not exist in happy.";
+
+function message(id: string, sender: ConversationAuthor, text: string): ConversationEntry {
+    return {
+        kind: "message",
+        source: "server",
+        delivery: "sent",
+        message: {
+            id,
+            chatId: "checkout",
+            sequence: id,
+            changePts: id,
+            sender,
+            text,
+            ...(sender.kind === "agent" ? { generationStatus: "complete" as const } : {}),
+            attachments: [],
+            reactions: [],
+            createdAt: "2026-11-13T19:34:00.000Z",
+        },
+    };
+}
+
+function checkoutCall(
+    id: string,
+    presentation: Extract<ConversationToolCall["presentation"], { type: "checkout" }>,
+): ConversationEntry {
+    const failed = presentation.status === "failed";
+    return {
+        kind: "agentActivity",
+        id,
+        sequence: id,
+        activity: {
+            kind: "tool",
+            tool: {
+                toolCallId: id,
+                toolName: "checkout_repository",
+                arguments: {
+                    description: "Check out happy",
+                    repository: "happy",
+                    branch: "happy/test-pr-workflow",
+                },
+                status: failed ? "failed" : "success",
+                failed,
+                presentation,
+                summary: "Check out happy",
+                summaryKind: "description",
+            },
+        },
+    };
+}
+
+const FAILED_CHECKOUT = checkoutCall("t1", {
+    type: "checkout",
+    repository: "happy",
+    branch: "happy/test-pr-workflow",
+    folder: "happy",
+    status: "failed",
+    error: CHECKOUT_ERROR,
+});
+
+const FAILED_TRANSCRIPT: readonly ConversationEntry[] = [
+    message(
+        "u1",
+        happyAgentOwnerAuthor,
+        "Check out happy on happy/test-pr-workflow and run its tests.",
+    ),
+    FAILED_CHECKOUT,
+    message(
+        "a1",
+        agentAuthor,
+        "The checkout failed: release, the branch I started from, does not exist in happy. Which branch should it start from?",
+    ),
+];
+
+const RETRIED_TRANSCRIPT: readonly ConversationEntry[] = [
+    ...FAILED_TRANSCRIPT,
+    message("u2", happyAgentOwnerAuthor, "Start it from main."),
+    checkoutCall("t2", {
+        type: "checkout",
+        repository: "happy",
+        branch: "happy/test-pr-workflow",
+        folder: "happy",
+        status: "ready",
+    }),
+    message("a2", agentAuthor, "Checked out at /workspace/happy, from main."),
+];
+
+const composer: ComposerSnapshot = {
+    scopeId: "checkout",
+    text: "",
+    attachments: [],
+    revision: 0,
+    submission: { status: "idle" },
+    focused: false,
+    capabilities: { shellMode: false, commands: [], mentions: true },
+    mentionCandidates: [],
+    agentUserIds: [],
+};
+
+/** A cloud task's chat, its composer row holding the chips for what is checked out. */
+function Transcript(props: {
+    entries: readonly ConversationEntry[];
+    repositories: readonly RepositoryChipRepository[];
+}) {
+    return (
+        <div
+            style={{
+                display: "flex",
+                flex: "1 1 auto",
+                minHeight: 0,
+                background: "var(--surface)",
+            }}
+        >
+            <ConversationView
+                agentAuthor={agentAuthor}
+                conversationId="checkout"
+                dock={
+                    <ConversationDock
+                        composer={composer}
+                        composerFooterControl={
+                            <ComposerFooterBar
+                                leading={<span style={{ fontSize: 12 }}>Auto</span>}
+                                trailing={
+                                    <>
+                                        {props.repositories.map((repository) => (
+                                            <RepositoryChip
+                                                key={repository.name}
+                                                repository={repository}
+                                            />
+                                        ))}
+                                        <ComputeChip
+                                            compute={{
+                                                kind: "computer",
+                                                label: "build-01",
+                                                online: true,
+                                            }}
+                                        />
+                                    </>
+                                }
+                            />
+                        }
+                        composerPlaceholder="Message Happy…"
+                        onComposerSend={noop}
+                        onComposerValueChange={noop}
+                        running={false}
+                    />
+                }
+                entries={props.entries}
+                onRequestAnswer={noop}
+                running={false}
+                style={{ flex: "1 1 auto", minWidth: 0 }}
+                viewerId={happyAgentOwnerAuthor.id}
+            />
+        </div>
+    );
+}
 
 export function HappyCloudRepositoriesFlowPage() {
     return (
@@ -365,7 +525,7 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Specimen
-                detail="checking out · checked out · checkout failed · two checkouts, one with the lines it changed and its picture, one read-only · each beside the compute chip, one chip per checkout"
+                detail="checking out · checked out · two checkouts, one with the lines it changed and its picture, one read-only · each beside the compute chip, one chip per checkout"
                 label="Repository chip in the composer row"
                 number="11"
                 stage="surface"
@@ -478,6 +638,29 @@ export function HappyCloudRepositoriesFlowPage() {
                     url="https://github.com/acme/docs.git"
                 />
             </Screen>
+            <FullScreenSpecimen
+                detail="the tool call that ran it says why; the composer row shows no chip for it"
+                label="A checkout failed, in the transcript"
+                number="17"
+                screen="17-checkout-failed-1100x760"
+                window={WINDOWS[0]}
+            >
+                <Transcript entries={FAILED_TRANSCRIPT} repositories={[]} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="the failed call stays as history; the retry checks it out and its chip appears"
+                label="Retried after a fix"
+                number="18"
+                screen="18-checkout-retried-1100x760"
+                window={WINDOWS[0]}
+            >
+                <Transcript
+                    entries={RETRIED_TRANSCRIPT}
+                    repositories={[
+                        { name: "happy", branch: "happy/test-pr-workflow", checkout: "ready" },
+                    ]}
+                />
+            </FullScreenSpecimen>
         </ComponentPage>
     );
 }

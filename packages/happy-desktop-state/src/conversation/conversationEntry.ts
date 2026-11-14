@@ -344,6 +344,17 @@ export type ConversationActivityPresentation =
           readonly port: number;
           readonly url: string;
       }
+    /** A repository checkout the call ran or queued, and how it went. */
+    | {
+          readonly type: "checkout";
+          readonly repository: string;
+          readonly branch: string;
+          /** Where it is, relative to the workspace root. */
+          readonly folder: string;
+          readonly status: "pending" | "ready" | "failed";
+          /** The server's words for why a `failed` checkout failed. */
+          readonly error?: string;
+      }
     | {
           readonly type: "agentSpawn";
           /** The catalog identity resolved for this spawn, never a live lookup. */

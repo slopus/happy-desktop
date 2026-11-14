@@ -3453,17 +3453,26 @@ interface RepositoryChipEntry {
     readonly repository: RepositoryChipRepository;
 }
 
-/** One checkout as the composer's repository chip draws it. */
-function checkoutChipOf(checkout: HappyAgentCheckout): RepositoryChipEntry {
-    return { id: checkout.id, repository: checkoutChipRepository(checkout) };
+/**
+ * The checkouts the composer's repository chips draw. A failed one has none:
+ * the tool call that ran it tells the failure in the transcript.
+ */
+function checkoutChipsOf(checkouts: readonly HappyAgentCheckout[]): RepositoryChipEntry[] {
+    return checkouts.flatMap((checkout) =>
+        checkout.status === "failed"
+            ? []
+            : [{ id: checkout.id, repository: checkoutChipRepository(checkout, checkout.status) }],
+    );
 }
 
-function checkoutChipRepository(checkout: HappyAgentCheckout): RepositoryChipRepository {
+function checkoutChipRepository(
+    checkout: HappyAgentCheckout,
+    status: RepositoryChipRepository["checkout"],
+): RepositoryChipRepository {
     return {
         name: checkout.repository.name,
         branch: checkout.branch,
-        checkout: checkout.status,
-        ...(checkout.error === null ? {} : { error: checkout.error }),
+        checkout: status,
         ...(checkout.repository.avatar ? { avatarUrl: checkout.repository.avatar.url } : {}),
         ...(checkout.access === "readOnly" ? { readOnly: true } : {}),
         ...(checkout.changes?.comparable
@@ -8258,7 +8267,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 {...(checkouts.status === "ready"
-                    ? { repositories: checkouts.checkouts.map(checkoutChipOf) }
+                    ? { repositories: checkoutChipsOf(checkouts.checkouts) }
                     : {})}
                 inlineEngines={{
                     ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
@@ -10736,11 +10745,17 @@ function HappyAgentConversationSurface(props: {
                                         server without checkouts names one on the agent. */}
                                     {(
                                         props.repositories ??
-                                        (conversation.repository
+                                        (conversation.repository &&
+                                        conversation.repository.checkout !== "failed"
                                             ? [
                                                   {
                                                       id: conversation.repository.repositoryId,
-                                                      repository: conversation.repository,
+                                                      repository: {
+                                                          name: conversation.repository.name,
+                                                          branch: conversation.repository.branch,
+                                                          checkout:
+                                                              conversation.repository.checkout,
+                                                      },
                                                   },
                                               ]
                                             : [])
