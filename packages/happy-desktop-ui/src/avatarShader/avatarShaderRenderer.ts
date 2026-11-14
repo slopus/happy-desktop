@@ -37,7 +37,8 @@ import AvatarShaderWorker from "./avatarShaderWorker?worker";
  * document is hidden or no avatar is visible. Every avatar gets one frame as
  * soon as it mounts, on screen or not, and under reduced motion, on battery,
  * or where the browser draws WebGL in software, that frame — the placeholder
- * at its phase, the still the phone ships — is all it gets.
+ * at its phase, the still the phone ships — is all it gets. Every avatar's
+ * clock is the page's, so mounting one again never restarts its motion.
  * Sizes come from a ResizeObserver, so neither mounting nor scrolling an
  * avatar ever reads layout.
  */
@@ -58,8 +59,6 @@ interface Entry {
     readonly id: number;
     readonly context: CanvasRenderingContext2D;
     readonly index: number;
-    /** When this placeholder first showed; its clock runs from there. */
-    readonly started: number;
     /** CSS pixels across, which sets its speed. */
     side: number;
     /** Device pixels across, which it is drawn at. */
@@ -171,7 +170,6 @@ class AvatarShaderRenderer {
             id: this.#nextId++,
             context,
             index,
-            started: this.#view.performance.now(),
             side,
             pixels: Math.min(
                 AVATAR_SHADER_MAX_PIXELS,
@@ -331,9 +329,10 @@ class AvatarShaderRenderer {
                 id: entry.id,
                 index: entry.index,
                 pixels: entry.pixels,
-                time: this.#animates()
-                    ? ((now - entry.started) / 1000) * avatarShaderSpeed(entry.side)
-                    : 0,
+                // The page's clock, not the avatar's: a placeholder that remounts
+                // (a row re-rendered on selection, a header opened on another
+                // task) picks up where it was rather than starting over.
+                time: this.#animates() ? (now / 1000) * avatarShaderSpeed(entry.side) : 0,
             };
         });
         this.#inFlight = true;
