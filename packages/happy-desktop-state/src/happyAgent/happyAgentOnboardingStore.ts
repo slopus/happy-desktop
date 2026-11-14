@@ -257,8 +257,9 @@ export function happyAgentOnboardingStoreCreate(
         /** The server's plugins, which the plugins gate installs. */
         readonly plugins?: () => HappyAgentPluginsStore | undefined;
         /**
-         * The reader finished a flow that showed them at least one gate, and the
-         * server took the completion; the Chief of Staff opens its first conversation.
+         * The reader finished a flow that showed them at least one gate and
+         * included the admin bot gate, and the server took the completion; the
+         * Chief of Staff opens its first conversation.
          */
         readonly onFinished?: () => void;
     } = {},
@@ -381,7 +382,8 @@ export function happyAgentOnboardingStoreCreate(
     /**
      * Once no gate is left to show, the server is told the reader finished.
      * The call is idempotent, so a reader who had nothing to do sends it too;
-     * only one who walked through gates is taken to the Chief of Staff after.
+     * only one who walked through gates and was sent the admin bot gate is
+     * taken to the Chief of Staff after.
      */
     function gatesSynchronize(): void {
         const flow = snapshot.flow;
@@ -395,10 +397,12 @@ export function happyAgentOnboardingStoreCreate(
             .then(() => {
                 gatesCompleted = true;
                 if (!passed.size) return;
-                // A reader the server says may not talk to the admin bot is not
-                // taken to it; one whose server does not say is, as before.
+                // A reader sent no admin bot gate, as a plain member is, lands
+                // home. One the server says may not talk to the admin bot is
+                // told so; one whose server does not say is taken to it.
                 const adminBot = flow.gates.find((gate) => gate.kind === "adminBot");
-                if (adminBot?.kind === "adminBot" && adminBot.canTalk === false)
+                if (adminBot?.kind !== "adminBot") return;
+                if (adminBot.canTalk === false)
                     publish({ ...snapshot, finale: { botName: adminBot.name } }, true);
                 else options.onFinished?.();
             })

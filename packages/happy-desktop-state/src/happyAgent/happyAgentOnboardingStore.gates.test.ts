@@ -12,7 +12,7 @@ const steps = {
     providers: { done: true, signedIn: [] },
 };
 
-function storeCreate(onboarding: object) {
+function storeCreate(onboarding: object, onFinished?: () => void) {
     const calls: string[] = [];
     const client = {
         endpoint: "https://srv.example/",
@@ -28,9 +28,22 @@ function storeCreate(onboarding: object) {
     const { source, writer } = happyAgentSyncCreate();
     const store = happyAgentOnboardingStoreCreate(client, source, {
         setupActive: true,
+        ...(onFinished ? { onFinished } : {}),
         cloudRequest: async (method, path) => {
             calls.push(`${method} ${path}`);
-            return {};
+            // A skip answers with the onboarding, that gate now skipped.
+            const skipped = /^v0\/onboarding\/gates\/(.+)\/skip$/u.exec(path)?.[1];
+            const { gates } = onboarding as { gates?: readonly { id: string }[] };
+            return {
+                ...onboarding,
+                ...(gates
+                    ? {
+                          gates: gates.map((gate) =>
+                              gate.id === skipped ? { ...gate, status: "skipped" } : gate,
+                          ),
+                      }
+                    : {}),
+            };
         },
     });
     const unsubscribe = store.subscribe(() => undefined);
@@ -122,5 +135,50 @@ it("shows nothing once the server says finished", async () => {
     await settle();
     expect(store.get().flow).toBeDefined();
     expect(store.get().flow?.current).toBeUndefined();
+    unsubscribe();
+});
+
+/* Organization gates, the admin bot among them, are sent only to owners. A
+ * member who walks through their own gates is sent home, never to a Chief of
+ * Staff they cannot talk to, and is not told why. */
+
+it("sends a reader with no admin bot gate home once they finish", async () => {
+    let finished = 0;
+    const { store, calls, unsubscribe } = storeCreate(
+        { finished: false, completed: false, blocking: [], gates: [avatarOpen], steps },
+        () => finished++,
+    );
+    await settle();
+    store.gateContinue("avatar");
+    await settle();
+    expect(calls).toContain("POST v0/onboarding/gates/avatar/skip");
+    expect(calls).toContain("POST v0/onboarding/complete");
+    expect(finished).toBe(0);
+    expect(store.get().finale).toBeUndefined();
+    unsubscribe();
+});
+
+it("takes a reader with an admin bot gate they may talk to to the Chief of Staff", async () => {
+    let finished = 0;
+    const adminBot = {
+        id: "adminBot",
+        scope: "server",
+        requirement: "required",
+        status: "open",
+        blocking: false,
+        canComplete: true,
+        data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
+    };
+    const { store, unsubscribe } = storeCreate(
+        { finished: false, completed: false, blocking: [], gates: [avatarOpen, adminBot], steps },
+        () => finished++,
+    );
+    await settle();
+    store.gateContinue("avatar");
+    await settle();
+    store.gateContinue("adminBot");
+    await settle();
+    expect(finished).toBe(1);
+    expect(store.get().finale).toBeUndefined();
     unsubscribe();
 });
