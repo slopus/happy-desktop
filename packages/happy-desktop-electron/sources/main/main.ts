@@ -22,6 +22,7 @@ import {
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DesktopRuntime } from "./desktopRuntime";
@@ -143,6 +144,7 @@ import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../share
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
 import { credentialImportCreate, credentialImportSend } from "./credentialImport";
 import { happyExternalLinkUrl, happyShareLinkSystemUrl, happyUniversalLinkUrl } from "./happyLink";
+import { linuxDesktopIntegrationInstall } from "./linuxDesktopIntegration";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
     console.error("Happy Place desktop is available only on macOS, Linux, and Windows.");
@@ -566,6 +568,22 @@ function callbackProtocolRegister(protocol: string): void {
           : app.setAsDefaultProtocolClient(protocol);
     if (!registered) console.warn(`Happy could not register the ${protocol}: callback protocol.`);
 }
+// Linux registers protocols for an installed desktop entry, which an AppImage
+// lacks until it installs one; a hidden or gym run leaves the desktop alone.
+const appImagePath = process.env.APPIMAGE;
+if (
+    process.platform === "linux" &&
+    app.isPackaged &&
+    appImagePath &&
+    !desktopWindowsHidden &&
+    !desktopGymActive
+)
+    linuxDesktopIntegrationInstall({
+        appImagePath,
+        environment: process.env,
+        homeDirectory: homedir(),
+        iconPath: applicationIconPath,
+    });
 callbackProtocolRegister(cloudAuthProtocol);
 callbackProtocolRegister(serverOAuthRedirect.protocol.slice(0, -1));
 
