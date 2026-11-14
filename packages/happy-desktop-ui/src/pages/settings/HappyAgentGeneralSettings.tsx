@@ -421,6 +421,7 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                                 props.unavailable !== undefined
                             }
                             fields={["permission"]}
+                            menuAlign="end"
                             menus={props.defaultAccessMenus}
                             onEffortChange={() => undefined}
                             onModelChange={() => undefined}

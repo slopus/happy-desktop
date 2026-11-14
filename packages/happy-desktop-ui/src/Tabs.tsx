@@ -28,6 +28,7 @@ import {
     type TabTransferTarget,
 } from "./tabTransfer";
 import { Ionicon } from "./vectorIcons/VectorIcon";
+import { WindowOverlay } from "./WindowOverlay";
 export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
     id: string;
@@ -889,30 +890,35 @@ export function Tabs(props: TabsProps) {
                 </span>
             ))}
             {tabMenu ? (
-                <div
-                    className="happy-tabs__menu"
-                    data-happy-desktop-ui="tabs-menu"
-                    ref={menuRoot}
-                    style={{ left: tabMenu.left ?? tabMenu.x, top: tabMenu.top ?? tabMenu.y }}
-                >
-                    <Menu
-                        items={tabMenu.items}
-                        onSelect={(actionId) => {
-                            const tab = tabMenu.tab;
-                            setTabMenu(undefined);
-                            if (actionId.startsWith(TRANSFER_MENU_PREFIX)) {
-                                const zone = actionId.slice(TRANSFER_MENU_PREFIX.length);
-                                const target = targets().find(
-                                    (candidate) => candidate.zone === zone,
-                                );
-                                if (target) transferRun(tab, target, true);
-                                return;
-                            }
-                            local.onTabMenuSelect?.(tab, actionId);
-                        }}
-                        width={216}
-                    />
-                </div>
+                // The strip that holds the tabs is a clipping, masked scrollport
+                // one bar tall, so a menu left inside it is cut down to the bar.
+                // It hangs off the window's overlay lane instead.
+                <WindowOverlay>
+                    <div
+                        className="happy-tabs__menu"
+                        data-happy-desktop-ui="tabs-menu"
+                        ref={menuRoot}
+                        style={{ left: tabMenu.left ?? tabMenu.x, top: tabMenu.top ?? tabMenu.y }}
+                    >
+                        <Menu
+                            items={tabMenu.items}
+                            onSelect={(actionId) => {
+                                const tab = tabMenu.tab;
+                                setTabMenu(undefined);
+                                if (actionId.startsWith(TRANSFER_MENU_PREFIX)) {
+                                    const zone = actionId.slice(TRANSFER_MENU_PREFIX.length);
+                                    const target = targets().find(
+                                        (candidate) => candidate.zone === zone,
+                                    );
+                                    if (target) transferRun(tab, target, true);
+                                    return;
+                                }
+                                local.onTabMenuSelect?.(tab, actionId);
+                            }}
+                            width={216}
+                        />
+                    </div>
+                </WindowOverlay>
             ) : null}
         </div>
     );
