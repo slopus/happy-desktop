@@ -25,7 +25,7 @@ const STEPS: Readonly<Record<string, { readonly label: string; readonly descript
 const noopSubscribe = () => () => undefined;
 const noSnapshot = () => undefined;
 
-/** Settings › Onboarding on Happy Cloud, composed from its store. */
+/** Settings › Administration on Happy Cloud, composed from its store. */
 export function AppOnboardingSettings(props: {
     readonly snapshot: HappyAgentOnboardingSettingsSnapshot;
     readonly store: HappyAgentOnboardingSettingsStore;

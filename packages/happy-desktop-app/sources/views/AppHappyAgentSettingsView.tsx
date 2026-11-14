@@ -108,6 +108,7 @@ import {
     type HappyAgentAiProviderConnectionRow,
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderEditDialogProps,
+    HappyAgentDangerSettings,
     HappyAgentMembersSettings,
     type HappyAgentInviteNoticeView,
     type HappyAgentInviteRow,
@@ -175,12 +176,14 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
     // The team's code on a Happy Cloud server; offered only there.
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
-    // What people are asked for when they first open a Happy Cloud server;
-    // listed only where the server reports onboarding settings.
-    { group: "Team", icon: "check-circle", id: "onboarding", label: "Onboarding", tone: "green" },
     // The team's credit and card; listed only where the server takes payments
     // and the reader may manage them.
     { group: "Team", icon: "zap", id: "payments", label: "Payments", tone: "green" },
+    // A Happy Cloud server's own setup, listed only to its owners. Administration
+    // is what people are asked for when they first open the server, listed only
+    // where the server reports onboarding settings.
+    { group: "Admin", icon: "shield", id: "administration", label: "Administration", tone: "blue" },
+    { group: "Admin", icon: "alert", id: "danger", label: "Danger", tone: "red" },
     // How each project's changes are split into tiers in the Changes listing.
     { group: "Advanced", icon: "file-diff", id: "file-tiers", label: "File tiers", tone: "orange" },
     { group: "Advanced", icon: "zap", id: "experimental", label: "Experimental", tone: "purple" },
@@ -189,12 +192,16 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
 
 export const HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY = "general";
 
+/** The Admin group's categories, listed and opened only for a server's owners. */
+const ADMIN_CATEGORIES: ReadonlySet<string> = new Set(["administration", "danger"]);
+
 /** Categories that were folded into another, by their old address. */
 export const HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES: Readonly<Record<string, string>> = {
     surfaces: "sharing",
     tasks: "sharing",
     // Team servers are added and removed by asking the Chief of Staff now.
     servers: "general",
+    onboarding: "administration",
 };
 
 /**
@@ -440,7 +447,8 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     usage: "What each provider account has spent",
     repositories: "The code your team works on",
     compute: "The computers agents run on",
-    onboarding: "What people are asked for when they first open this server",
+    administration: "How this server is set up for everyone on it",
+    danger: "Deleting this server for everyone",
     payments: "Credit, the card on file and what agents spend",
 };
 
@@ -593,7 +601,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const host = hostHappyAgent(directory);
     const happyCloud = host?.happyCloud === true;
-    // Followed while Settings is open: whether Onboarding is listed at all
+    // Followed while Settings is open: whether Administration is listed at all
     // depends on the server reporting onboarding settings.
     const onboardingSettingsStore = host?.session?.onboardingSettings?.();
     const onboardingSettings = useSyncExternalStore(
@@ -628,23 +636,34 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const instructionsReadOnly = happyCloud && instructions.access === "read";
     const securityPolicyReadOnly = happyCloud && securityPolicy.access === "read";
     const paymentsAbsent = !paymentsStore || (!payments.loading && !payments.available);
-    // A link to Onboarding on a server that reports no onboarding settings
+    // A link to Administration on a server that reports no onboarding settings
     // opens the default category, once the server has said so.
     const onboardingAbsent =
         !onboardingSettingsStore || (!onboardingSettings.loading && !onboardingSettings.available);
+    // Followed while Settings is open: the Admin group is listed only once the
+    // server has said the reader is an owner, and a link to it from anyone else
+    // opens the default category.
+    const membersStore = host?.session?.members?.();
+    const members = useSyncExternalStore(
+        (membersStore ?? happyAgentMembersStoreNoop).subscribe,
+        (membersStore ?? happyAgentMembersStoreNoop).get,
+        (membersStore ?? happyAgentMembersStoreNoop).get,
+    );
+    const owner = members.roleId === "owner";
+    const adminAbsent = !membersStore || (!members.loading && !owner);
     const section =
         happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
-        !(props.section === "onboarding" && onboardingAbsent) &&
+        !(ADMIN_CATEGORIES.has(props.section) && adminAbsent) &&
+        !(props.section === "administration" && onboardingAbsent) &&
         !(props.section === "payments" && paymentsAbsent) &&
         !(props.section === "instructions" && happyCloud && instructions.access === "unserved")
             ? props.section
             : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
     const stateOpen = section === "debug";
-    const membersStore = host?.session?.members?.();
     const repositoriesStore = host?.session?.repositories?.();
     const computeStore = host?.session?.compute?.();
     // The plugins step's choices come from the server's plugin catalog.
-    const onboardingPlugins = section === "onboarding" ? host?.session?.plugins?.() : undefined;
+    const onboardingPlugins = section === "administration" ? host?.session?.plugins?.() : undefined;
     // A category the host cannot serve is left out of the list rather than
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
@@ -654,7 +673,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined) &&
-            (category.id !== "onboarding" ||
+            (!ADMIN_CATEGORIES.has(category.id) || owner) &&
+            (category.id !== "administration" ||
                 (onboardingSettingsStore !== undefined && onboardingSettings.available)) &&
             (category.id !== "payments" || (paymentsStore !== undefined && payments.available)),
     );
@@ -792,14 +812,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // looks for nothing until the person asks it to.
     const credentialImportStore =
         section === "providers" ? host?.session?.credentialImport?.() : undefined;
-    // The member list is read, and re-read every few seconds, only while
-    // Members is on screen.
+    // The member list is read, and re-read every few seconds, while Settings
+    // is open on a Happy Cloud server; the reader's role picks the Admin group.
     const membersShown = section === "members" ? membersStore : undefined;
-    const members = useSyncExternalStore(
-        (membersShown ?? happyAgentMembersStoreNoop).subscribe,
-        (membersShown ?? happyAgentMembersStoreNoop).get,
-        (membersShown ?? happyAgentMembersStoreNoop).get,
-    );
     // The repository list is read, and re-read every few seconds, only while
     // Repositories is on screen.
     const repositoriesShown = section === "repositories" ? repositoriesStore : undefined;
@@ -1571,8 +1586,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 repositoriesShown ? (
                     <AppRepositoriesSettings snapshot={repositories} store={repositoriesShown} />
                 ) : null
-            ) : section === "onboarding" ? (
-                onboardingSettingsStore && onboardingSettings.available ? (
+            ) : section === "administration" ? (
+                owner && onboardingSettingsStore && onboardingSettings.available ? (
                     <AppOnboardingSettings
                         {...(onboardingPlugins ? { plugins: onboardingPlugins } : {})}
                         snapshot={onboardingSettings}
@@ -1593,6 +1608,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             ) : section === "compute" ? (
                 computeShown ? (
                     <AppComputeSettings snapshot={compute} store={computeShown} />
+                ) : null
+            ) : section === "danger" ? (
+                owner && membersStore ? (
+                    <HappyAgentDangerSettings
+                        onDelete={(confirm) => membersStore.serverDelete(confirm)}
+                        serverName={members.serverName}
+                    />
                 ) : null
             ) : section === "members" ? (
                 membersShown ? (
@@ -1621,7 +1643,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             saving: member.saving,
                             ...(member.refusal ? { refusal: member.refusal.message } : {}),
                         }))}
-                        onDelete={(confirm) => membersShown.serverDelete(confirm)}
                         onInviteNoticeDismiss={() => membersShown.inviteNoticeDismiss()}
                         onInviteEmailChange={(value) => membersShown.inviteEmailUpdate(value)}
                         onInviteEmailCreate={(roleId) => membersShown.inviteEmailCreate(roleId)}

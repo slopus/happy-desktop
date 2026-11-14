@@ -13,11 +13,23 @@ import type {
     HappyAgentFileTierRow,
     HappyAgentProviderRow,
     HappyAgentSecretRow,
+    HappyAgentSettingsCategory,
     HappyAgentUsageProviderRow,
 } from "../../src";
 import { happyAgentComposerModelControlProps } from "../../src/happyAgentComposerModelControl";
 
 const noop = () => undefined;
+
+/** Settings on a Happy Cloud server as an owner sees it, with the Admin group. */
+export const HAPPY_CLOUD_OWNER_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategory[] = [
+    { icon: "settings", id: "general", label: "General", tone: "gray" },
+    { icon: "users", id: "account", label: "Account", tone: "blue" },
+    { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
+    { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
+    { group: "Team", icon: "zap", id: "payments", label: "Payments", tone: "green" },
+    { group: "Admin", icon: "shield", id: "administration", label: "Administration", tone: "blue" },
+    { group: "Admin", icon: "alert", id: "danger", label: "Danger", tone: "red" },
+];
 
 export const usageAccounts: readonly HappyAgentUsageProviderRow[] = [
     {

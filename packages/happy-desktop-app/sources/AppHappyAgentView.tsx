@@ -740,7 +740,7 @@ export interface AppHappyAgentSession {
     ) => import("happy-desktop-state").HappyAgentCheckoutsStore | undefined;
     /** The Gen UI actions a Happy Cloud server runs, such as secret forms; absent or undefined elsewhere. */
     readonly genUiActions?: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
-    /** Settings › Onboarding, on a Happy Cloud server; absent or undefined elsewhere. */
+    /** Settings › Administration, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly onboardingSettings?: () =>
         | import("happy-desktop-state").HappyAgentOnboardingSettingsStore
         | undefined;

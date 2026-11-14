@@ -1137,6 +1137,10 @@ export {
     type HappyAgentCustomProviderValues,
 } from "./pages/settings/HappyAgentCustomProviderDialog";
 export {
+    HappyAgentDangerSettings,
+    type HappyAgentDangerSettingsProps,
+} from "./pages/settings/HappyAgentDangerSettings";
+export {
     HappyAgentMembersSettings,
     type HappyAgentInviteNoticeView,
     type HappyAgentInviteRow,

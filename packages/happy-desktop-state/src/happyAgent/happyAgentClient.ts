@@ -293,7 +293,7 @@ export interface HappyAgentWorkspaceClient {
     cloudProviders(): HappyAgentCloudProvidersStore | undefined;
     /** Settings › Repositories on Happy Cloud; undefined anywhere else. */
     repositories(): HappyAgentRepositoriesStore | undefined;
-    /** Settings › Onboarding on Happy Cloud; undefined anywhere else. */
+    /** Settings › Administration on Happy Cloud; undefined anywhere else. */
     onboardingSettings(): HappyAgentOnboardingSettingsStore | undefined;
     /**
      * Settings › Payments on Happy Cloud; undefined anywhere else, and while

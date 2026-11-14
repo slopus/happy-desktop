@@ -8,7 +8,7 @@ import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export type HappyAgentOnboardingRequirementChoice = "off" | "optional" | "required";
 
-/** One onboarding step, as Settings › Onboarding lists it. */
+/** One onboarding step, as Settings › Administration lists it. */
 export interface HappyAgentOnboardingStepRow {
     readonly id: string;
     readonly label: string;
@@ -102,7 +102,7 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
             ) : null}
             <HappyAgentSettingsSection
                 description="Optional steps can be skipped. Required ones come before anything else."
-                title="Steps"
+                title="Onboarding steps"
             >
                 {props.steps.map((step) => (
                     <FormRow

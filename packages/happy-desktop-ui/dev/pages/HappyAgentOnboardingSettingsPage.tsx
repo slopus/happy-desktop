@@ -4,6 +4,7 @@ import {
     type HappyAgentOnboardingStepRow,
 } from "../../src/pages/settings/HappyAgentOnboardingSettings";
 import { HappyAgentSettingsShell } from "../../src/pages/settings/HappyAgentSettingsShell";
+import { HAPPY_CLOUD_OWNER_SETTINGS_CATEGORIES } from "./happyAgentSettingsFixtures";
 import { ThemeScope, type ThemeMode } from "../../src/ThemeScope";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
@@ -142,8 +143,8 @@ export function HappyAgentOnboardingSettingsPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Settings › Onboarding on Happy Cloud: each onboarding step off, optional or required, and the plugins the plugins step asks for. Steps the operator set are shown, not offered."
-            title="Onboarding settings"
+            summary="Settings › Administration on Happy Cloud, shown to owners: each onboarding step off, optional or required, and the plugins the plugins step asks for. Steps the operator set are shown, not offered."
+            title="Administration settings"
         >
             {modes.flatMap((mode) =>
                 cases.map((entry, index) => (
@@ -157,33 +158,12 @@ export function HappyAgentOnboardingSettingsPage() {
                     >
                         <ThemeScope mode={mode}>
                             <HappyAgentSettingsShell
-                                activeCategoryId="onboarding"
-                                categories={[
-                                    {
-                                        icon: "settings",
-                                        id: "general",
-                                        label: "General",
-                                        tone: "gray",
-                                    },
-                                    {
-                                        group: "Team",
-                                        icon: "users",
-                                        id: "members",
-                                        label: "Members",
-                                        tone: "orange",
-                                    },
-                                    {
-                                        group: "Team",
-                                        icon: "check-circle",
-                                        id: "onboarding",
-                                        label: "Onboarding",
-                                        tone: "green",
-                                    },
-                                ]}
-                                description="What people are asked for when they first open this server"
+                                activeCategoryId="administration"
+                                categories={HAPPY_CLOUD_OWNER_SETTINGS_CATEGORIES}
+                                description="How this server is set up for everyone on it"
                                 onCategorySelect={noop}
                                 onClose={noop}
-                                title="Onboarding"
+                                title="Administration"
                             >
                                 <HappyAgentOnboardingSettings {...entry.props} />
                             </HappyAgentSettingsShell>

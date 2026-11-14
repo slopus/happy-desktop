@@ -909,7 +909,6 @@ function MembersSpecimen(props: {
                             saving: true,
                         },
                     ]}
-                    onDelete={() => Promise.resolve()}
                     onInviteNoticeDismiss={noop}
                     onInviteEmailChange={inviteEmailSet}
                     onInviteEmailCreate={() => {
@@ -1873,7 +1872,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 />
             </FullScreenSpecimen>
             <MembersSpecimen
-                detail="Happy Cloud members, seen by an owner: roles to change, the invite area's hint, pending email and link invites, past invites folded, and leaving or deleting the server"
+                detail="Happy Cloud members, seen by an owner: roles to change, the invite area's hint, pending email and link invites, past invites folded, and leaving the server"
                 label="Happy Agent settings — members"
                 number="03e"
                 screen="members"

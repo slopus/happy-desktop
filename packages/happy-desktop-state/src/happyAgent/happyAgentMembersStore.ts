@@ -124,7 +124,7 @@ export interface HappyAgentMembersSnapshot {
  * Settings › Members on a Happy Cloud server: who is on it, their roles,
  * invites, and leaving or deleting the server. Members have no realtime
  * channel this client reads yet, so the list is re-read every few seconds
- * while the category is on screen and not at all otherwise.
+ * while Settings is open on the server and not at all otherwise.
  */
 export interface HappyAgentMembersStore {
     get(): HappyAgentMembersSnapshot;

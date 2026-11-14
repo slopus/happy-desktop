@@ -85,14 +85,14 @@ const INVITE_STATUS_LABELS: Record<HappyAgentInviteStatus, string> = {
 export interface HappyAgentMembersSettingsProps {
     readonly loading: boolean;
     readonly error?: string;
-    /** The server's name, which deleting it asks to be typed. */
+    /** The server's name, which leaving it names. */
     readonly serverName: string;
     readonly members: readonly HappyAgentMemberRow[];
     readonly roles: readonly { readonly id: string; readonly name: string }[];
     readonly invites: readonly HappyAgentInviteRow[];
     /** Whether the reader may invite, remove and change roles. */
     readonly manage: boolean;
-    /** Whether the reader is an owner, who alone may delete the server. */
+    /** Whether the reader is an owner, who alone may make another owner. */
     readonly owner: boolean;
     /** The address typed for the next email invite. */
     readonly inviteEmail: string;
@@ -114,19 +114,17 @@ export interface HappyAgentMembersSettingsProps {
     onInviteRevoke: (inviteId: string) => void;
     /** Leaves the server; rejects with the reason to show. */
     onLeave: () => Promise<void>;
-    /** Deletes the server; rejects with the reason to show. */
-    onDelete: (confirm: string) => Promise<void>;
 }
 
 /**
  * Settings › Members on a Happy Cloud server: who is on it and their roles,
- * invites by email or link with their history, and leaving or deleting the
- * server.
+ * invites by email or link with their history, and leaving the server.
+ * Deleting it lives on Settings › Danger.
  */
 export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps) {
     const [inviteRole, setInviteRole] = useState("member");
     const [historyOpen, setHistoryOpen] = useState(props.defaultHistoryOpen ?? false);
-    const [confirming, setConfirming] = useState<"leave" | "delete" | undefined>();
+    const [leaving, setLeaving] = useState(false);
     // Oldest first, so a new invite lands at the end and no pending row moves.
     const pending = props.invites.filter((invite) => invite.status === "pending").reverse();
     const history = props.invites.filter((invite) => invite.status !== "pending");
@@ -341,30 +339,15 @@ export function HappyAgentMembersSettings(props: HappyAgentMembersSettingsProps)
             <Box data-glide-key="leave">
                 <HappyAgentSettingsSection title="Leave">
                     <Box className="happy-agent-members__actions">
-                        <Button
-                            onClick={() => setConfirming("leave")}
-                            size="small"
-                            variant="secondary"
-                        >
+                        <Button onClick={() => setLeaving(true)} size="small" variant="secondary">
                             Leave this server
                         </Button>
-                        {props.owner ? (
-                            <Button
-                                onClick={() => setConfirming("delete")}
-                                size="small"
-                                variant="danger"
-                            >
-                                Delete this server
-                            </Button>
-                        ) : null}
                     </Box>
                 </HappyAgentSettingsSection>
             </Box>
-            {confirming ? (
-                <HappyAgentMembersConfirmDialog
-                    kind={confirming}
-                    onClose={() => setConfirming(undefined)}
-                    onDelete={props.onDelete}
+            {leaving ? (
+                <HappyAgentMembersLeaveDialog
+                    onClose={() => setLeaving(false)}
                     onLeave={props.onLeave}
                     serverName={props.serverName}
                 />
@@ -515,23 +498,18 @@ function HappyAgentInviteRowView(props: {
     );
 }
 
-function HappyAgentMembersConfirmDialog(props: {
-    readonly kind: "leave" | "delete";
+function HappyAgentMembersLeaveDialog(props: {
     readonly serverName: string;
     onClose: () => void;
     onLeave: () => Promise<void>;
-    onDelete: (confirm: string) => Promise<void>;
 }) {
-    const [typed, setTyped] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | undefined>();
-    const deleting = props.kind === "delete";
-    const ready = !deleting || typed === props.serverName;
     const submit = (): void => {
-        if (!ready || busy) return;
+        if (busy) return;
         setBusy(true);
         setError(undefined);
-        void (deleting ? props.onDelete(typed) : props.onLeave()).then(
+        void props.onLeave().then(
             () => props.onClose(),
             (reason: unknown) => {
                 setBusy(false);
@@ -551,36 +529,20 @@ function HappyAgentMembersConfirmDialog(props: {
                         <Button disabled={busy} onClick={props.onClose} variant="ghost">
                             Cancel
                         </Button>
-                        <Button disabled={!ready} loading={busy} onClick={submit} variant="danger">
-                            {deleting ? "Delete server" : "Leave server"}
+                        <Button loading={busy} onClick={submit} variant="danger">
+                            Leave server
                         </Button>
                     </>
                 }
                 onClose={busy ? undefined : props.onClose}
                 size="small"
-                title={deleting ? `Delete @${props.serverName}?` : `Leave @${props.serverName}?`}
+                title={`Leave @${props.serverName}?`}
                 tone="danger"
             >
                 <Box className="happy-agent-members__confirm">
-                    <p>
-                        {deleting
-                            ? "Everyone loses access, and its agents, tasks and files are deleted after a short grace period."
-                            : "You lose access until someone invites you again."}
-                    </p>
-                    {deleting ? (
-                        <TextField
-                            autoFocus
-                            disabled={busy}
-                            fullWidth
-                            label="Type the server's name to confirm"
-                            onSubmit={submit}
-                            onValueChange={setTyped}
-                            placeholder={props.serverName}
-                            value={typed}
-                        />
-                    ) : null}
+                    <p>You lose access until someone invites you again.</p>
                     {error ? (
-                        <Banner tone="danger" title={deleting ? "Not deleted" : "Still a member"}>
+                        <Banner tone="danger" title="Still a member">
                             {error}
                         </Banner>
                     ) : null}

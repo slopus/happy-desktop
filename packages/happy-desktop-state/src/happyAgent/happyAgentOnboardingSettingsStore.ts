@@ -15,7 +15,7 @@ export type HappyAgentOnboardingSettingSource = "default" | "global" | "operator
  */
 export type HappyAgentOnboardingSettingScope = "global" | "per-tenant" | "tenant-editable";
 
-/** One onboarding gate's requirement, as Settings › Onboarding lists it. */
+/** One onboarding gate's requirement, as Settings › Administration lists it. */
 export interface HappyAgentOnboardingGateSetting {
     /** The gate's ID, as `GET /v0/onboarding` names it. */
     readonly id: string;
@@ -50,7 +50,7 @@ export interface HappyAgentOnboardingSettingsSnapshot {
 }
 
 /**
- * Settings › Onboarding on Happy Cloud: which onboarding gates the team asks
+ * Settings › Administration on Happy Cloud: which onboarding gates the team asks
  * for, read from the layered settings in `GET /v0/config`. Followed through
  * `config.updated` and `onboarding.updated` while it is on screen.
  */
