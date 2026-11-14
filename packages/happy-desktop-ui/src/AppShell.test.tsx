@@ -5,6 +5,7 @@ import { server, userEvent } from "vitest/browser";
 import { AppShell } from "./AppShell";
 import { Button } from "./Button";
 import { ChannelHeader } from "./ChannelHeader";
+import { PanelHeader } from "./PanelHeader";
 import { Sidebar } from "./Sidebar";
 import { TabbedPane } from "./TabbedPane";
 import { createRenderer } from "./testing";
@@ -16,6 +17,26 @@ function slot(id: string, style: CSSProperties) {
 function appRegion(element: Element): string {
     const style = getComputedStyle(element);
     return style.getPropertyValue("app-region") || style.getPropertyValue("-webkit-app-region");
+}
+
+/**
+ * Whether the window would take a press at this point as a drag, folded the way
+ * Chromium folds `app-region`: every visible box that declares one, in tree
+ * order, at its full border box — never clipped by a scrollport around it — with
+ * the last box covering the point deciding.
+ */
+function nativeDragAt(x: number, y: number): boolean {
+    let drag = false;
+    for (const element of document.querySelectorAll("*")) {
+        const region = appRegion(element);
+        if (region !== "drag" && region !== "no-drag") continue;
+        const style = getComputedStyle(element);
+        if (style.visibility !== "visible" || style.display === "inline") continue;
+        const box = element.getBoundingClientRect();
+        if (x >= box.left && x < box.right && y >= box.top && y < box.bottom)
+            drag = region === "drag";
+    }
+    return drag;
 }
 
 it("keeps both integrated tab strips underlined across pane focus in light and dark", async () => {
@@ -280,6 +301,90 @@ it("reserves macOS chrome and keeps real desktop header controls clickable", asy
     await userEvent.click(search.element);
     expect(memberClicks).toBe(1);
     expect(searchClicks).toBe(1);
+});
+
+it("keeps the tab bar draggable over controls scrolled out of its pane's body", async () => {
+    const view = createRenderer().render(
+        () => (
+            <AppShell
+                sidebar={
+                    <Sidebar
+                        activeItemId="general"
+                        onItemSelect={() => undefined}
+                        sections={[
+                            {
+                                id: "chats",
+                                items: [{ id: "general", kind: "channel", label: "General" }],
+                            },
+                        ]}
+                    />
+                }
+                windowControls
+            >
+                <TabbedPane
+                    activeId="task"
+                    closePresentation="overlay"
+                    onClose={() => undefined}
+                    onSelect={() => undefined}
+                    size="medium"
+                    tabSizing="content"
+                    tabs={[{ busy: true, id: "task", label: "Running task" }]}
+                    trailing={<Button aria-label="Activity" icon="list" iconOnly size="small" />}
+                >
+                    <PanelHeader>
+                        <Button aria-label="Back" icon="chevron-left" iconOnly size="small" />
+                    </PanelHeader>
+                    {/* A transcript pinned to its latest row, as a running
+                        chat's is: every row above sits out of sight under the
+                        bar, and is still a box Chromium folds into the window's
+                        drag region. */}
+                    <div
+                        ref={(node) => {
+                            if (node) node.scrollTop = node.scrollHeight;
+                        }}
+                        style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto" }}
+                    >
+                        {Array.from({ length: 60 }, (_, row) => (
+                            <p key={row} style={{ display: "flex", gap: 8, margin: 8 }}>
+                                <button style={{ width: 640 }} type="button">
+                                    Tool call {row}
+                                </button>
+                                <a href="#row">Link</a>
+                            </p>
+                        ))}
+                    </div>
+                </TabbedPane>
+            </AppShell>
+        ),
+        { height: 600, width: 900 },
+    );
+
+    await view.ready();
+    if (server.browser !== "chromium") return;
+
+    // Viewport coordinates, the space the region is folded in.
+    const box = (selector: string) => view.$(selector).element.getBoundingClientRect();
+    const bar = box('[data-happy-desktop-ui="tabbed-pane-bar"]');
+    const tab = box('[data-happy-desktop-ui="tab"]');
+    const trailing = box('button[aria-label="Activity"]');
+    const back = box('button[aria-label="Back"]');
+    // The rows really are scrolled up under the bar.
+    const hidden = [...view.container.querySelectorAll("p > button")].filter(
+        (button) => button.getBoundingClientRect().top < bar.y + bar.height,
+    );
+    expect(hidden.length).toBeGreaterThan(0);
+
+    const holes: number[] = [];
+    for (let x = tab.x + tab.width; x < trailing.x; x++)
+        for (const y of [bar.y + 1, bar.y + bar.height / 2, bar.y + bar.height - 1])
+            if (!nativeDragAt(x, y)) holes.push(x);
+    expect(holes).toEqual([]);
+
+    // The bar's own controls, and a header's inside the body, still take presses.
+    expect(nativeDragAt(tab.x + tab.width - 4, bar.y + bar.height / 2)).toBe(false);
+    expect(nativeDragAt(trailing.x + 4, trailing.y + 4)).toBe(false);
+    expect(appRegion(view.$('button[aria-label="Back"]').element)).toBe("no-drag");
+    expect(nativeDragAt(back.x + 4, back.y + 4)).toBe(false);
 });
 
 it("reserves a non-overlapping drag row for a standalone desktop surface", async () => {

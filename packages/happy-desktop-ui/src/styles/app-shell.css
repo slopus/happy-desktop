@@ -478,20 +478,33 @@
    be dragged by any of its chrome for as long as a menu was open. It is a click
    target for the page and nothing to the window, so it declares no region at
    all — `app-region: none` is not an escape hatch, Chromium resolves it to
-   `no-drag`, so the only way out of the region list is to not match here. */
+   `no-drag`, so the only way out of the region list is to not match here.
+
+   The same goes for every control in a tab pane's body. Chromium takes each
+   box's full border box, never clipped by the scrollport around it, so a
+   transcript row scrolled up out of sight still lay over the tab bar above it
+   and punched an undraggable hole there — beside a running chat's tab, whose
+   transcript keeps scrolling. The body sits wholly below its bar, so none of
+   its controls is ever visibly in a drag band — except inside a header or tab
+   bar nested in it, which is a band of its own. */
 .happy-desktop-app-shell[data-window-controls]
-    button:not(
-        .happy-agent-control__backdrop,
-        .happy-composer-model-control__notice-backdrop,
-        .happy-menu-button__backdrop,
-        .happy-context-menu__backdrop,
-        .happy-slot-backdrop
-    ),
-.happy-desktop-app-shell[data-window-controls] a,
-.happy-desktop-app-shell[data-window-controls] input,
-.happy-desktop-app-shell[data-window-controls] select,
-.happy-desktop-app-shell[data-window-controls] textarea,
-.happy-desktop-app-shell[data-window-controls] [contenteditable="true"] {
+    :is(
+        button:not(
+            .happy-agent-control__backdrop,
+            .happy-composer-model-control__notice-backdrop,
+            .happy-menu-button__backdrop,
+            .happy-context-menu__backdrop,
+            .happy-slot-backdrop
+        ),
+        a,
+        input,
+        select,
+        textarea,
+        [contenteditable="true"]
+    ):is(
+        :not(.happy-tabbed-pane__body *),
+        :is(.happy-channel-header, .happy-panel-header, .happy-tabbed-pane__bar) *
+    ) {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
