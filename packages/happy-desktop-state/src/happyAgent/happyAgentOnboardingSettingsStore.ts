@@ -7,23 +7,18 @@ import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js"
 /** Whether a gate is left out, offered, or required before the reader may start. */
 export type HappyAgentOnboardingRequirement = "off" | "optional" | "required";
 
-/** Where a setting's value came from, as the server names its layers. */
-export type HappyAgentOnboardingSettingSource = "default" | "global" | "operator-tenant" | "tenant";
 /**
- * Who may set it: `tenant-editable` lets the team's owner override the
- * operator; `per-tenant` and `global` are the operator's alone.
+ * One gate of the onboarding each joining person goes through, as Settings ›
+ * Administration lists it. Only gates whose layer is `tenant-editable` are
+ * listed: the rest are the operator's alone and belong to organization
+ * onboarding, which Settings does not show.
  */
-export type HappyAgentOnboardingSettingScope = "global" | "per-tenant" | "tenant-editable";
-
-/** One onboarding gate's requirement, as Settings › Administration lists it. */
 export interface HappyAgentOnboardingGateSetting {
     /** The gate's ID, as `GET /v0/onboarding` names it. */
     readonly id: string;
     readonly requirement: HappyAgentOnboardingRequirement;
     /** Whether this reader may change it, as the server decides for them. */
     readonly editable: boolean;
-    readonly source: HappyAgentOnboardingSettingSource;
-    readonly scope: HappyAgentOnboardingSettingScope;
     /** A change the server has not answered yet. */
     readonly saving: boolean;
 }
@@ -32,44 +27,36 @@ export interface HappyAgentOnboardingSettingsSnapshot {
     /** True until the first answer. */
     readonly loading: boolean;
     /**
-     * Whether the server reports onboarding settings at all. A server deployed
-     * before onboarding gates reports none, and Settings leaves the page out.
+     * Whether the server reports any gate the team may set. A server deployed
+     * before onboarding gates, or one whose gates are all the operator's,
+     * reports none, and Settings leaves the page out.
      */
     readonly available: boolean;
-    /** Every gate the server has a setting for, in the server's order. */
+    /** Every gate the team may set, in the server's order. */
     readonly gates: readonly HappyAgentOnboardingGateSetting[];
-    /** The plugins the plugins gate asks for; empty asks for any one. */
-    readonly requiredPlugins: {
-        readonly ids: readonly string[];
-        readonly editable: boolean;
-        readonly saving: boolean;
-    };
     readonly error?: UserError;
     /** Why the last change was not saved; it was put back. */
     readonly saveError?: UserError;
 }
 
 /**
- * Settings › Administration on Happy Cloud: which onboarding gates the team asks
- * for, read from the layered settings in `GET /v0/config`. Followed through
+ * Settings › Administration on Happy Cloud: which onboarding gates each joining
+ * person is asked for, read from the layered settings in `GET /v0/config`. Followed through
  * `config.updated` and `onboarding.updated` while it is on screen.
  */
 export interface HappyAgentOnboardingSettingsStore {
     get(): HappyAgentOnboardingSettingsSnapshot;
     subscribe(listener: () => void): () => void;
     gateRequirementUpdate(gateId: string, requirement: HappyAgentOnboardingRequirement): void;
-    requiredPluginsUpdate(ids: readonly string[]): void;
     [Symbol.dispose](): void;
 }
 
 const GATE_PREFIX = "onboarding.gates.";
-const REQUIRED_PLUGINS = "onboarding.requiredPlugins";
 
 const EMPTY: HappyAgentOnboardingSettingsSnapshot = {
     loading: true,
     available: false,
     gates: [],
-    requiredPlugins: { ids: [], editable: false, saving: false },
 };
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -80,20 +67,6 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
 
 function requirementOf(value: unknown): HappyAgentOnboardingRequirement | undefined {
     return value === "off" || value === "optional" || value === "required" ? value : undefined;
-}
-
-function scopeOf(value: unknown): HappyAgentOnboardingSettingScope {
-    return value === "tenant-editable" || value === "per-tenant" ? value : "global";
-}
-
-function sourceOf(value: unknown): HappyAgentOnboardingSettingSource {
-    return value === "global" || value === "operator-tenant" || value === "tenant"
-        ? value
-        : "default";
-}
-
-function idsOf(value: unknown): readonly string[] {
-    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
 }
 
 export function happyAgentOnboardingSettingsStoreCreate(deps: {
@@ -124,19 +97,18 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
             pending.has(key) ? pending.get(key) : key in settings ? settings[key] : operator[key];
         const gates: HappyAgentOnboardingGateSetting[] = [];
         for (const [key, layer] of Object.entries(layers)) {
-            if (!key.startsWith(GATE_PREFIX)) continue;
+            // `per-tenant` and `global` gates are the operator's alone.
+            if (!key.startsWith(GATE_PREFIX) || recordOf(layer)?.scope !== "tenant-editable")
+                continue;
             const requirement = requirementOf(valueOf(key));
             if (!requirement) continue;
             gates.push({
                 id: key.slice(GATE_PREFIX.length),
                 requirement,
                 editable: recordOf(layer)?.editable === true,
-                source: sourceOf(recordOf(layer)?.source),
-                scope: scopeOf(recordOf(layer)?.scope),
                 saving: pending.has(key),
             });
         }
-        const pluginsLayer = recordOf(layers[REQUIRED_PLUGINS]);
         const current = store.getState();
         const { error: _cleared, ...rest } = current;
         store.setState(
@@ -145,14 +117,6 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
                 loading: false,
                 available: gates.length > 0,
                 gates: referencesPreserve(current.gates, gates),
-                requiredPlugins: {
-                    ids: referencesPreserve(
-                        current.requiredPlugins.ids,
-                        idsOf(valueOf(REQUIRED_PLUGINS)),
-                    ),
-                    editable: pluginsLayer?.editable === true,
-                    saving: pending.has(REQUIRED_PLUGINS),
-                },
             },
             true,
         );
@@ -253,14 +217,6 @@ export function happyAgentOnboardingSettingsStoreCreate(deps: {
                 }),
             );
         },
-        requiredPluginsUpdate(ids) {
-            const snapshot = store.getState();
-            if (disposed || !snapshot.requiredPlugins.editable) return;
-            const next = [...new Set(ids)];
-            save(REQUIRED_PLUGINS, next, () =>
-                set({ requiredPlugins: { ...snapshot.requiredPlugins, ids: next, saving: true } }),
-            );
-        },
         [Symbol.dispose]() {
             disposed = true;
             follow?.abort();
@@ -277,6 +233,5 @@ export const happyAgentOnboardingSettingsStoreNoop: HappyAgentOnboardingSettings
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
     gateRequirementUpdate: () => undefined,
-    requiredPluginsUpdate: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

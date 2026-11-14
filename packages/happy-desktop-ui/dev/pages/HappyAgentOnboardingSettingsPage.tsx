@@ -18,74 +18,17 @@ const steps: readonly HappyAgentOnboardingStepRow[] = [
         description: "Each person adds a profile picture.",
         requirement: "optional",
         editable: true,
-        operator: false,
-        saving: false,
-    },
-    {
-        id: "adminBot",
-        label: "Admin bot",
-        description: "An owner names the admin bot that can change this server.",
-        requirement: "required",
-        editable: true,
-        operator: false,
-        saving: false,
-    },
-    {
-        id: "inference",
-        label: "AI",
-        description: "The team connects an AI account of its own.",
-        requirement: "optional",
-        editable: false,
-        operator: true,
-        saving: false,
-    },
-    {
-        id: "plugins",
-        label: "Plugins",
-        description: "The team connects the tools agents work in.",
-        requirement: "required",
-        editable: true,
-        operator: false,
-        saving: true,
-    },
-    {
-        id: "teammates",
-        label: "Team",
-        description: "Someone invites a teammate.",
-        requirement: "optional",
-        editable: true,
-        operator: false,
         saving: false,
     },
     {
         id: "mobileApp",
         label: "Phone",
         description: "Each person signs in to the mobile app.",
-        requirement: "off",
-        editable: false,
-        operator: true,
-        saving: false,
-    },
-    {
-        id: "paymentMethod",
-        label: "Payment method",
-        description: "The team adds a card.",
-        requirement: "off",
-        editable: false,
-        operator: true,
-        saving: false,
+        requirement: "required",
+        editable: true,
+        saving: true,
     },
 ];
-
-const plugins: HappyAgentOnboardingSettingsProps["plugins"] = {
-    editable: true,
-    saving: false,
-    rows: [
-        { id: "github", name: "GitHub", required: true },
-        { id: "linear", name: "Linear", required: false },
-        { id: "slack", name: "Slack", required: false },
-    ],
-};
 
 const cases: readonly {
     readonly id: string;
@@ -98,9 +41,7 @@ const cases: readonly {
         props: {
             loading: false,
             steps,
-            plugins,
             onStepRequirementChange: noop,
-            onPluginRequiredChange: noop,
         },
     },
     {
@@ -109,9 +50,7 @@ const cases: readonly {
         props: {
             loading: false,
             steps: steps.map((step) => ({ ...step, editable: false })),
-            plugins: { ...plugins, editable: false },
             onStepRequirementChange: noop,
-            onPluginRequiredChange: noop,
         },
     },
     {
@@ -122,7 +61,6 @@ const cases: readonly {
             steps,
             saveError: "Only owners can change onboarding.",
             onStepRequirementChange: noop,
-            onPluginRequiredChange: noop,
         },
     },
     {
@@ -132,7 +70,6 @@ const cases: readonly {
             loading: true,
             steps: [],
             onStepRequirementChange: noop,
-            onPluginRequiredChange: noop,
         },
     },
 ];
@@ -143,7 +80,7 @@ export function HappyAgentOnboardingSettingsPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Settings › Administration on Happy Cloud, shown to owners: each onboarding step off, optional or required, and the plugins the plugins step asks for. Steps the operator set are shown, not offered."
+            summary="Settings › Administration on Happy Cloud, shown to owners: each step a joining person is asked for, off, optional or required. Organization onboarding is the operator's and is not listed."
             title="Administration settings"
         >
             {modes.flatMap((mode) =>

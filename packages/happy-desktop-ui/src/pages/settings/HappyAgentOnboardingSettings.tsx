@@ -3,12 +3,11 @@ import { Box } from "../../Box";
 import { FormRow } from "../../FormRow";
 import { SegmentedControl } from "../../SegmentedControl";
 import { Spinner } from "../../Spinner";
-import { Switch } from "../../Switch";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export type HappyAgentOnboardingRequirementChoice = "off" | "optional" | "required";
 
-/** One onboarding step, as Settings › Administration lists it. */
+/** One step each joining person is asked for, as Settings › Administration lists it. */
 export interface HappyAgentOnboardingStepRow {
     readonly id: string;
     readonly label: string;
@@ -16,16 +15,7 @@ export interface HappyAgentOnboardingStepRow {
     readonly requirement: HappyAgentOnboardingRequirementChoice;
     /** Whether the reader may change it; otherwise it is shown, never offered. */
     readonly editable: boolean;
-    /** The server's operator set it, so no one on the team changes it. */
-    readonly operator: boolean;
     readonly saving: boolean;
-}
-
-/** A plugin the plugins step may ask for. */
-export interface HappyAgentOnboardingPluginRow {
-    readonly id: string;
-    readonly name: string;
-    readonly required: boolean;
 }
 
 export interface HappyAgentOnboardingSettingsProps {
@@ -33,17 +23,10 @@ export interface HappyAgentOnboardingSettingsProps {
     readonly error?: string;
     readonly saveError?: string;
     readonly steps: readonly HappyAgentOnboardingStepRow[];
-    /** The plugins step's list; absent while that step is off. */
-    readonly plugins?: {
-        readonly rows: readonly HappyAgentOnboardingPluginRow[];
-        readonly editable: boolean;
-        readonly saving: boolean;
-    };
     onStepRequirementChange(
         stepId: string,
         requirement: HappyAgentOnboardingRequirementChoice,
     ): void;
-    onPluginRequiredChange(pluginId: string, required: boolean): void;
 }
 
 const CHOICES = [
@@ -59,10 +42,9 @@ const CHOICE_LABEL: Readonly<Record<HappyAgentOnboardingRequirementChoice, strin
 };
 
 /**
- * C-347 HappyAgentOnboardingSettings — what a Happy Cloud server asks of the
- * people who join it: each onboarding step off, optional or required, and
- * the plugins its plugins step asks for. A step the operator set is shown
- * with its value and never offered as a control.
+ * C-347 HappyAgentOnboardingSettings — what a Happy Cloud server asks of each
+ * person who joins it: each step off, optional or required. Organization
+ * onboarding is the operator's and is not listed here.
  */
 export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettingsProps) {
     if (props.loading)
@@ -75,10 +57,7 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
             </HappyAgentSettingsSection>
         );
     // Someone who may change nothing the team sets is told who can.
-    const readOnly =
-        !props.steps.some((step) => step.editable) &&
-        !props.plugins?.editable &&
-        props.steps.some((step) => !step.operator);
+    const readOnly = props.steps.length > 0 && !props.steps.some((step) => step.editable);
     return (
         <>
             {props.error || props.saveError || readOnly ? (
@@ -101,8 +80,8 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                 </Box>
             ) : null}
             <HappyAgentSettingsSection
-                description="Optional steps can be skipped. Required ones come before anything else."
-                title="Onboarding steps"
+                description="What each person does when they first join. Optional steps can be skipped; required ones come first."
+                title="New people"
             >
                 {props.steps.map((step) => (
                     <FormRow
@@ -126,11 +105,6 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                             ) : (
                                 <span className="happy-agent-onboarding-settings__value">
                                     {CHOICE_LABEL[step.requirement]}
-                                    {step.operator ? (
-                                        <span className="happy-agent-onboarding-settings__source">
-                                            Set by your operator
-                                        </span>
-                                    ) : null}
                                 </span>
                             )
                         }
@@ -140,44 +114,6 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                     />
                 ))}
             </HappyAgentSettingsSection>
-            {props.plugins ? (
-                <HappyAgentSettingsSection
-                    description="The plugins step asks for these. With none picked, connecting any one plugin completes it."
-                    title="Plugins to connect"
-                >
-                    {props.plugins.rows.length === 0 ? (
-                        <FormRow
-                            control={null}
-                            description="Plugins appear here once this server offers them."
-                            label="No plugins yet"
-                        />
-                    ) : (
-                        props.plugins.rows.map((plugin) => (
-                            <FormRow
-                                control={
-                                    props.plugins!.editable ? (
-                                        <Switch
-                                            aria-label={`Ask for ${plugin.name}`}
-                                            checked={plugin.required}
-                                            disabled={props.plugins!.saving}
-                                            onChange={(required) =>
-                                                props.onPluginRequiredChange(plugin.id, required)
-                                            }
-                                            size="small"
-                                        />
-                                    ) : (
-                                        <span className="happy-agent-onboarding-settings__value">
-                                            {plugin.required ? "Asked for" : "Not asked for"}
-                                        </span>
-                                    )
-                                }
-                                key={plugin.id}
-                                label={plugin.name}
-                            />
-                        ))
-                    )}
-                </HappyAgentSettingsSection>
-            ) : null}
         </>
     );
 }

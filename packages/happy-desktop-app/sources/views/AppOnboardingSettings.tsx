@@ -1,9 +1,6 @@
-import { useSyncExternalStore } from "react";
 import type {
     HappyAgentOnboardingSettingsSnapshot,
     HappyAgentOnboardingSettingsStore,
-    HappyAgentPluginsSnapshot,
-    HappyAgentPluginsStore,
 } from "happy-desktop-state";
 import { HappyAgentOnboardingSettings, type HappyAgentOnboardingStepRow } from "happy-desktop-ui";
 
@@ -22,52 +19,18 @@ const STEPS: Readonly<Record<string, { readonly label: string; readonly descript
     payment: { label: "Payment", description: "The team adds credit before starting." },
 };
 
-const noopSubscribe = () => () => undefined;
-const noSnapshot = () => undefined;
-
 /** Settings › Administration on Happy Cloud, composed from its store. */
 export function AppOnboardingSettings(props: {
     readonly snapshot: HappyAgentOnboardingSettingsSnapshot;
     readonly store: HappyAgentOnboardingSettingsStore;
-    readonly plugins?: HappyAgentPluginsStore;
 }) {
     const { snapshot, store } = props;
-    const pluginsStep = snapshot.gates.find((gate) => gate.id === "plugins");
-    const pluginsStore =
-        pluginsStep && pluginsStep.requirement !== "off" ? props.plugins : undefined;
-    const plugins: HappyAgentPluginsSnapshot | undefined = useSyncExternalStore(
-        pluginsStore?.subscribe ?? noopSubscribe,
-        pluginsStore?.get ?? noSnapshot,
-        pluginsStore?.get ?? noSnapshot,
-    );
-    const required = snapshot.requiredPlugins.ids;
-    const pluginRows = [
-        ...(plugins?.plugins ?? []).map((plugin) => ({ id: plugin.id, name: plugin.name })),
-        // A required plugin this server no longer offers stays listed, so it can be dropped.
-        ...required
-            .filter((id) => !plugins?.plugins.some((plugin) => plugin.id === id))
-            .map((id) => ({ id, name: id })),
-    ].map((plugin) => ({ ...plugin, required: required.includes(plugin.id) }));
     return (
         <HappyAgentOnboardingSettings
             {...(snapshot.error ? { error: snapshot.error.message } : {})}
             {...(snapshot.saveError ? { saveError: snapshot.saveError.message } : {})}
             loading={snapshot.loading}
-            onPluginRequiredChange={(pluginId, on) =>
-                store.requiredPluginsUpdate(
-                    on ? [...required, pluginId] : required.filter((id) => id !== pluginId),
-                )
-            }
             onStepRequirementChange={store.gateRequirementUpdate}
-            {...(pluginsStore
-                ? {
-                      plugins: {
-                          rows: pluginRows,
-                          editable: snapshot.requiredPlugins.editable,
-                          saving: snapshot.requiredPlugins.saving,
-                      },
-                  }
-                : {})}
             steps={snapshot.gates.map(
                 (gate): HappyAgentOnboardingStepRow => ({
                     id: gate.id,
@@ -75,7 +38,6 @@ export function AppOnboardingSettings(props: {
                     description: STEPS[gate.id]?.description ?? "",
                     requirement: gate.requirement,
                     editable: gate.editable,
-                    operator: gate.scope !== "tenant-editable",
                     saving: gate.saving,
                 }),
             )}

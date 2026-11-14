@@ -180,8 +180,8 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     // and the reader may manage them.
     { group: "Team", icon: "zap", id: "payments", label: "Payments", tone: "green" },
     // A Happy Cloud server's own setup, listed only to its owners. Administration
-    // is what people are asked for when they first open the server, listed only
-    // where the server reports onboarding settings.
+    // is what each person is asked for when they first join, listed only where
+    // the server reports onboarding gates the team may set.
     { group: "Admin", icon: "shield", id: "administration", label: "Administration", tone: "blue" },
     { group: "Admin", icon: "alert", id: "danger", label: "Danger", tone: "red" },
     // How each project's changes are split into tiers in the Changes listing.
@@ -636,8 +636,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const instructionsReadOnly = happyCloud && instructions.access === "read";
     const securityPolicyReadOnly = happyCloud && securityPolicy.access === "read";
     const paymentsAbsent = !paymentsStore || (!payments.loading && !payments.available);
-    // A link to Administration on a server that reports no onboarding settings
-    // opens the default category, once the server has said so.
+    // A link to Administration on a server that reports no onboarding gate the
+    // team may set opens the default category, once the server has said so.
     const onboardingAbsent =
         !onboardingSettingsStore || (!onboardingSettings.loading && !onboardingSettings.available);
     // Followed while Settings is open: the Admin group is listed only once the
@@ -662,8 +662,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const stateOpen = section === "debug";
     const repositoriesStore = host?.session?.repositories?.();
     const computeStore = host?.session?.compute?.();
-    // The plugins step's choices come from the server's plugin catalog.
-    const onboardingPlugins = section === "administration" ? host?.session?.plugins?.() : undefined;
     // A category the host cannot serve is left out of the list rather than
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
@@ -1589,7 +1587,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             ) : section === "administration" ? (
                 owner && onboardingSettingsStore && onboardingSettings.available ? (
                     <AppOnboardingSettings
-                        {...(onboardingPlugins ? { plugins: onboardingPlugins } : {})}
                         snapshot={onboardingSettings}
                         store={onboardingSettingsStore}
                     />

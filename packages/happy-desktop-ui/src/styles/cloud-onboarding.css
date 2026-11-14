@@ -535,12 +535,6 @@
     line-height: 18px;
 }
 
-.happy-agent-onboarding-settings__source {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
 /* The words and what the step asks for read as one block, centred between the
    step bar and the footer, rather than the words floating halfway up. */
 .happy-setup-page.happy-cloud-onboarding[data-placement="centered"]
