@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 
@@ -484,6 +485,18 @@ function ffmpegExecutable(): string {
             : process.platform === "win32"
               ? "ffmpeg-win64.exe"
               : "ffmpeg-linux";
+    // The cache is shared by every Playwright on the machine, and their ffmpeg
+    // builds differ: newer ones encode VP9 only, so the newest folder there is
+    // not necessarily one that can write this VP8. The revision the installed
+    // Playwright pins is the one built for its own recorder; take it first.
+    const pinned = playwrightFfmpegRevision();
+    for (const cache of caches) {
+        if (!cache || !existsSync(cache)) continue;
+        if (pinned !== undefined) {
+            const candidate = join(cache, `ffmpeg-${pinned}`, binary);
+            if (existsSync(candidate)) return candidate;
+        }
+    }
     for (const cache of caches) {
         if (!cache || !existsSync(cache)) continue;
         for (const entry of readdirSync(cache)
@@ -495,4 +508,37 @@ function ffmpegExecutable(): string {
         }
     }
     return "ffmpeg";
+}
+
+/** The ffmpeg revision the installed Playwright downloads for its own recorder. */
+function playwrightFfmpegRevision(): string | undefined {
+    try {
+        const playwright = createRequire(import.meta.url).resolve("playwright/package.json");
+        const core = createRequire(playwright).resolve("playwright-core/package.json");
+        const browsers: unknown = JSON.parse(
+            readFileSync(join(dirname(core), "browsers.json"), "utf8"),
+        );
+        if (
+            typeof browsers !== "object" ||
+            browsers === null ||
+            !("browsers" in browsers) ||
+            !Array.isArray(browsers.browsers)
+        )
+            return undefined;
+        const ffmpeg: unknown = browsers.browsers.find(
+            (entry: unknown) =>
+                typeof entry === "object" &&
+                entry !== null &&
+                "name" in entry &&
+                entry.name === "ffmpeg",
+        );
+        return typeof ffmpeg === "object" &&
+            ffmpeg !== null &&
+            "revision" in ffmpeg &&
+            typeof ffmpeg.revision === "string"
+            ? ffmpeg.revision
+            : undefined;
+    } catch {
+        return undefined;
+    }
 }
