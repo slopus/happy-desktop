@@ -1,4 +1,4 @@
-import { createContext, use, type CSSProperties } from "react";
+import { createContext, use, useCallback, type CSSProperties } from "react";
 import { avatarPlaceholderBackdrops } from "./avatarPlaceholderBackdrops";
 import { avatarShaderAttach } from "./avatarShader/avatarShaderRenderer";
 
@@ -78,15 +78,23 @@ export function AvatarPlaceholder(props: AvatarPlaceholderProps) {
     const side = props.side;
     const className = ["happy-avatar-placeholder", props.className].filter(Boolean).join(" ");
     const style = { background: avatarPlaceholderBackdrops[index], ...props.style };
+    // Memoized by hand for its identity: React calls a new ref's cleanup and
+    // then the new ref, so a ref made fresh on each render would detach the
+    // canvas and attach it again whenever its row re-renders (selecting a
+    // sidebar row does), restarting its frames. React Compiler leaves the JSX
+    // below the `use` unmemoized, so it cannot be relied on to keep it.
+    const canvasRef = useCallback(
+        (canvas: HTMLCanvasElement | null) =>
+            canvas === null ? undefined : avatarShaderAttach(canvas, index, side),
+        [index, side],
+    );
     return use(AvatarsAnimatedContext) ? (
         <canvas
             aria-hidden="true"
             className={className}
             data-happy-desktop-ui="avatar-placeholder"
             data-placeholder-index={index}
-            ref={(canvas) =>
-                canvas === null ? undefined : avatarShaderAttach(canvas, index, side)
-            }
+            ref={canvasRef}
             style={style}
         />
     ) : (
