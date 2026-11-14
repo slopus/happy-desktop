@@ -321,7 +321,7 @@ it("shows a message sent during a stand-in once its transcript arrives", async (
         await view.open("a");
         const standIn = view.workspace.get().conversation;
         expect(standIn.type === "ready" && standIn.value.standIn).toBe(true);
-        view.workspace.composerTextUpdate("Sent while reopening");
+        view.workspace.composerTextUpdate("a", "Sent while reopening");
         view.workspace.composerTextSubmit();
         await view.arrive();
         await vi.waitFor(() => {

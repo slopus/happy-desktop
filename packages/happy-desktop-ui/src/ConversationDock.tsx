@@ -351,6 +351,9 @@ export function ConversationDock(props: ConversationDockProps) {
                     attachmentPreviews={attachmentPreviews}
                     commands={commandItems}
                     disabled={props.disabled}
+                    // One text control per draft, so the window's undo history
+                    // never carries one conversation's typing into another's.
+                    draftId={composer.scopeId}
                     focusOnType={props.composerFocusOnType}
                     {...(props.composerFocusKey === undefined
                         ? {}

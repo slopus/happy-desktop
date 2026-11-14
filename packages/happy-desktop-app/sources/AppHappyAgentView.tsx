@@ -9893,12 +9893,16 @@ function HappyAgentGroupComposer(props: {
                         workspace.composerAttachmentRemove(attachmentId)
                     }
                     onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
-                    onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
+                    onComposerFocusChange={(focused) =>
+                        workspace.composerFocusUpdate(props.composer.get().scopeId, focused)
+                    }
                     onComposerSend={() => {
                         if (!modelsNotConfigured && props.happyAgentOnline())
                             workspace.composerTextSubmit();
                     }}
-                    onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+                    onComposerValueChange={(value) =>
+                        workspace.composerTextUpdate(props.composer.get().scopeId, value)
+                    }
                 />
             }
             entries={NO_ENTRIES}
@@ -10791,12 +10795,16 @@ function HappyAgentConversationSurface(props: {
                         workspace.composerAttachmentRemove(attachmentId)
                     }
                     onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
-                    onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
+                    onComposerFocusChange={(focused) =>
+                        workspace.composerFocusUpdate(conversation.composer.get().scopeId, focused)
+                    }
                     onComposerSend={() => {
                         if (!modelsNotConfigured && props.happyAgentOnline())
                             workspace.composerTextSubmit();
                     }}
-                    onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+                    onComposerValueChange={(value) =>
+                        workspace.composerTextUpdate(conversation.composer.get().scopeId, value)
+                    }
                     running={conversation.running}
                     subagentsRunning={conversation.subagentsRunning}
                 />
