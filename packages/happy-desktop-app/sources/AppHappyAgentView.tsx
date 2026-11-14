@@ -10943,6 +10943,8 @@ function HappyAgentWindowDialogs(props: {
             {workspace.projectClone ? (
                 <HappyAgentProjectCloneDialog
                     repository={workspace.projectClone.repository}
+                    folderOffered={workspace.projectClone.folderOffered === true}
+                    folderNamed={workspace.projectClone.folderNamed === true}
                     submitting={workspace.projectClone.submitting}
                     onClose={() => props.workspace.projectCloneCancel()}
                     onRepositoryChange={(value) => props.workspace.projectRepositoryUpdate(value)}

@@ -742,6 +742,7 @@ export function happyAgentDirectoryStoreCreate(
             happyAgent.entry.remoteId === undefined
                 ? undefined
                 : happyCloudServerNameOf(happyAgent.entry.remoteId);
+        const happyCloud = happyAgent.entry.happyCloud === true || cloudName !== undefined;
         connectionClose(happyAgent);
         happyAgent.reopen = () => connectionOpen(happyAgent, client, hostServicesUrl);
         happyAgent.url = happyAgentHttpUrl;
@@ -755,7 +756,9 @@ export function happyAgentDirectoryStoreCreate(
                 happyAgent.entry.id !== LOCAL_HAPPY_AGENT_ID || deps.localHappyCloud === true,
             host: happyAgent.entry.remoteId
                 ? {
-                      projectSource: "repository",
+                      // Happy Cloud holds no folders of the reader's own; a Happy
+                      // Agent on a computer of theirs opens one already there.
+                      projectSource: happyCloud ? "repository" : "repositoryOrFolder",
                       applicationMenuOpen: host.applicationMenuOpen,
                       directoryPick: async () => undefined,
                   }
@@ -766,7 +769,7 @@ export function happyAgentDirectoryStoreCreate(
             // A Happy Agent on another machine is what this computer's devices
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,
-            ...(happyAgent.entry.happyCloud || cloudName !== undefined ? { happyCloud: true } : {}),
+            ...(happyCloud ? { happyCloud: true } : {}),
             // Only the shell reads this computer's credentials, and only a
             // Happy Cloud server takes them. Leaving or deleting the server
             // takes it out of this window, as removing it from the rail does.

@@ -5,8 +5,13 @@
  * a small closed interface lets Blueprint and tests run the surface standalone.
  */
 export interface HappyAgentHost {
-    /** Remote work is created from a repository, not a folder on the reader's Mac. */
-    readonly projectSource?: "repository";
+    /**
+     * Where remote work comes from, since a folder on the reader's Mac is not on the Happy
+     * Agent's computer: "repository" is a GitHub repository the Happy Agent clones (Happy Cloud
+     * holds no folders of the reader's), and "repositoryOrFolder" is that or a folder already on
+     * the Happy Agent's computer, named by its path. Absent, `directoryPick` chooses the folder.
+     */
+    readonly projectSource?: "repository" | "repositoryOrFolder";
     /** Opens the native application menu (or its dev-server equivalent). */
     applicationMenuOpen(): void;
     /** Prompts for a working directory; resolves to undefined when cancelled. */

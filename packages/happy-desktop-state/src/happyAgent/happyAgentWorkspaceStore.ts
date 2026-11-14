@@ -868,7 +868,10 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly taskBrowseOpen?: true;
     /** Where adding a folder to this machine as a project stands. */
     readonly projectAdd: HappyAgentProjectAddSnapshot;
-    /** GitHub project being cloned onto a peer Happy Agent, while its dialog is open. */
+    /**
+     * Project being added to a peer Happy Agent, while its dialog is open: a GitHub repository
+     * it clones, or a folder already on its computer.
+     */
     readonly projectClone?: HappyAgentProjectCloneSnapshot;
 }
 
@@ -899,9 +902,17 @@ export interface HappyAgentProjectAddSnapshot {
 
 /** Controlled draft for creating one managed project on another Happy Agent. */
 export interface HappyAgentProjectCloneSnapshot {
+    /** What the reader wrote: a GitHub repository or, where one is offered, a folder's path. */
     readonly repository: string;
     readonly submitting: boolean;
     readonly error?: string;
+    /**
+     * Present when the Happy Agent runs on a computer of the reader's own, where the draft may
+     * also name a folder already there by its path, such as `~/Projects/app`.
+     */
+    readonly folderOffered?: true;
+    /** Present when the draft names such a folder, so submitting opens it instead of cloning. */
+    readonly folderNamed?: true;
 }
 
 /**
@@ -1672,6 +1683,10 @@ export interface HappyAgentWorkspaceStore {
      * new worktree already is — as a group holding no conversation, whose
      * composer starts the first one when something is sent into it — so adding a
      * project never leaves an unwanted session behind.
+     *
+     * A Happy Agent on another computer has no picker here, because a folder on
+     * this computer is not on that one. Its host names a `projectSource`, and the
+     * act opens the project dialog instead.
      */
     projectAdd(): void;
     /** Opens the GitHub project dialog for the addressed peer Happy Agent. */
@@ -2227,6 +2242,31 @@ function noOpenConversation(): Promise<never> {
 /** Nothing is being added and nothing was refused: one shared idle value. */
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
 
+/**
+ * The folder a project draft names by its path: from the root (`/srv/app`), from the home
+ * directory (`~/Projects/app`), or on a Windows drive or share. A GitHub repository is never
+ * written that way, so the two readings of one draft cannot overlap.
+ */
+function projectFolderParse(value: string): string | undefined {
+    const path = value.trim();
+    return /^(?:\/|~(?:$|[/\\])|[A-Za-z]:[/\\]|\\\\)/u.test(path) ? path : undefined;
+}
+
+/**
+ * A folder draft as the Happy Agent registers it, which is absolute. A leading `~` is the home
+ * folder of the computer the folder is registered on: the Happy Agent's home project is that
+ * folder, so its path spells `~` out. While the catalog holds no home project, it cannot be.
+ */
+function projectFolderAbsolute(
+    folder: string,
+    projects: readonly { readonly kind: "regular" | "home"; readonly path: string }[] | undefined,
+): string | undefined {
+    if (!folder.startsWith("~")) return folder;
+    const home = projects?.find((project) => project.kind === "home")?.path;
+    if (home === undefined || home.length === 0) return undefined;
+    return home.replace(/[/\\]+$/u, "") + folder.slice(1);
+}
+
 function githubRepositoryParse(
     value: string,
 ): { readonly repository: string; readonly name: string } | undefined {
@@ -2708,6 +2748,18 @@ export function happyAgentWorkspaceStoreCreate(
         { readonly generation: number; readonly repository: string }
     >();
     let projectCloneGeneration = 0;
+    /** A project draft as written, offering a folder wherever this window's host does. */
+    const projectCloneDraft = (repository: string): HappyAgentProjectCloneSnapshot => {
+        if (deps.host?.projectSource !== "repositoryOrFolder") {
+            return { repository, submitting: false };
+        }
+        return {
+            repository,
+            submitting: false,
+            folderOffered: true,
+            ...(projectFolderParse(repository) === undefined ? {} : { folderNamed: true }),
+        };
+    };
     let workspaceFiles: HappyAgentWorkspaceFiles | undefined;
     let workspaceFilesLoading = false;
     let workspaceFilesGroupId: HappyAgentGroupId | undefined;
@@ -6903,8 +6955,7 @@ export function happyAgentWorkspaceStoreCreate(
                 });
                 if (pending.generation === projectCloneGeneration && projectClone === undefined) {
                     projectClone = {
-                        repository: pending.repository,
-                        submitting: false,
+                        ...projectCloneDraft(pending.repository),
                         error: failure.message,
                     };
                 }
@@ -7900,10 +7951,10 @@ export function happyAgentWorkspaceStoreCreate(
         projectAdd() {
             if (disposed || projectAdd.pending) return;
             const host = deps.host;
-            if (host?.projectSource === "repository") {
+            if (host?.projectSource !== undefined) {
                 if (projectClone?.submitting) return;
                 projectCloneGeneration += 1;
-                projectClone = { repository: "", submitting: false };
+                projectClone = projectCloneDraft("");
                 recompute();
                 return;
             }
@@ -7960,12 +8011,12 @@ export function happyAgentWorkspaceStoreCreate(
         projectCloneOpen() {
             if (disposed || projectClone?.submitting) return;
             projectCloneGeneration += 1;
-            projectClone = { repository: "", submitting: false };
+            projectClone = projectCloneDraft("");
             recompute();
         },
         projectRepositoryUpdate(value) {
             if (!projectClone || projectClone.submitting) return;
-            projectClone = { repository: value, submitting: false };
+            projectClone = projectCloneDraft(value);
             recompute();
         },
         projectCloneCancel() {
@@ -7976,11 +8027,63 @@ export function happyAgentWorkspaceStoreCreate(
         projectCloneSubmit() {
             const editor = projectClone;
             if (!editor || editor.submitting) return;
+            const folder = editor.folderOffered ? projectFolderParse(editor.repository) : undefined;
+            if (folder !== undefined) {
+                const projects = list.get().projects;
+                const path = projectFolderAbsolute(
+                    folder,
+                    projects.type === "ready" ? projects.value : undefined,
+                );
+                if (path === undefined) {
+                    projectClone = {
+                        ...editor,
+                        error: "The home folder of this Happy Agent is not known yet. Write the full path, such as /Users/name/Projects/app.",
+                    };
+                    recompute();
+                    return;
+                }
+                // A folder already on the Happy Agent's computer is registered
+                // exactly as a picked folder is on the local one: the daemon
+                // validates it, names the project, and answers an existing
+                // project for a path it already holds.
+                projectClone = { ...editor, submitting: true };
+                recompute();
+                void (async () => {
+                    try {
+                        const projectId = await client.projectAdd(path);
+                        activityRecord({
+                            kind: "projectAdded",
+                            source: "open_folder",
+                            result: HAPPY_AGENT_ACTION_OK,
+                        });
+                        if (disposed) return;
+                        projectClone = undefined;
+                        recompute();
+                        output({ type: "groupOpenRequested", groupId: projectId });
+                    } catch (error) {
+                        activityRecord({
+                            kind: "projectAdded",
+                            source: "open_folder",
+                            result: happyAgentActionFailed(error),
+                        });
+                        if (disposed) return;
+                        projectClone = {
+                            ...editor,
+                            submitting: false,
+                            error: happyAgentUserError(error).message,
+                        };
+                        recompute();
+                    }
+                })();
+                return;
+            }
             const source = githubRepositoryParse(editor.repository);
             if (!source) {
                 projectClone = {
                     ...editor,
-                    error: "Enter a GitHub repository as owner/repository or a GitHub URL.",
+                    error: editor.folderOffered
+                        ? "Enter a folder path such as ~/Projects/app, or a GitHub repository as owner/repository."
+                        : "Enter a GitHub repository as owner/repository or a GitHub URL.",
                 };
                 recompute();
                 return;
