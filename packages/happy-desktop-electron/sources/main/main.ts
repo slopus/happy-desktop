@@ -142,7 +142,7 @@ import { powerSavingInstall } from "./powerSaving";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
 import { credentialImportCreate, credentialImportSend } from "./credentialImport";
-import { happyExternalLinkUrl } from "./happyLink";
+import { happyExternalLinkUrl, happyShareLinkSystemUrl, happyUniversalLinkUrl } from "./happyLink";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
     console.error("Happy Place desktop is available only on macOS, Linux, and Windows.");
@@ -572,15 +572,18 @@ callbackProtocolRegister(serverOAuthRedirect.protocol.slice(0, -1));
 /**
  * Takes one URL the system opened Happy with, from whichever way it was
  * delivered, and brings the window forward. A WorkOS callback and any other
- * `happy://` link each keep their own queue for the window: a link is read by
- * the window's own grammar, never here. A team server's sign-in callback goes
- * to the sign-in that is waiting for it and never reaches the window. Returns
- * whether it was one of them.
+ * `happy://` link or link.happy.page share link each keep their own queue for
+ * the window: a link is read by the window's own grammar, never here. A team
+ * server's sign-in callback goes to the sign-in that is waiting for it and
+ * never reaches the window. Returns whether it was one of them.
  */
 function systemUrlDeliver(candidate: string): boolean {
     const cloud = cloudAuthCallbackRead(candidate, cloudAuthConfiguration.redirectUri);
     const server = cloud ? undefined : serverOAuthCallbackRead(candidate);
-    const link = cloud || server ? undefined : happyExternalLinkUrl(candidate);
+    const link =
+        cloud || server
+            ? undefined
+            : (happyExternalLinkUrl(candidate) ?? happyShareLinkSystemUrl(candidate));
     if (server) serverSessions.callbackReceive(server);
     const taken = cloud ?? link;
     if (taken) {
@@ -612,6 +615,13 @@ app.on("open-url", (event, candidate) => {
 });
 // A first launch by the URL itself carries it in this process's arguments.
 systemUrlFromArguments(process.argv);
+// A link.happy.page share link clicked in Safari, Mail, or Messages arrives as
+// a Universal Link: a browsing activity, both to a running app and at launch,
+// where it waits in the same queue as any other link until the window takes it.
+app.on("continue-activity", (event, type, _userInfo, details) => {
+    const link = happyUniversalLinkUrl(type, details);
+    if (link && systemUrlDeliver(link)) event.preventDefault();
+});
 const unavailableBrowserProxy = "http://127.0.0.1:9";
 let happyAgentRendererSession: HappyAgentRendererSession | undefined;
 /*
