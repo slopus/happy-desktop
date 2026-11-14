@@ -1,6 +1,7 @@
 import { createContext, type CSSProperties, type ReactNode } from "react";
 import type { CustomTheme, ThemeColorRole, ThemeMode } from "happy-desktop-state";
 import { AvatarsAnimatedContext } from "./AvatarPlaceholder";
+import { useDevicePixelRatio } from "./devicePixelRatio";
 
 export type { ThemeMode };
 export type ScrollbarVisibility = "always" | "automatic";
@@ -25,10 +26,16 @@ export type ThemeScopeProps = {
  * retaining the system palette when no explicit override is selected. The
  * custom theme is its base palette's class with the replaced roles declared on
  * the same element, so every descendant inherits them as it would the base.
+ *
+ * The scope also declares the window's device pixel, `--happy-device-pixel`,
+ * kept current through page zoom and screen moves. Tiny geometry that has to
+ * land on whole device pixels at every zoom — the braille spinner's dots, the
+ * close cross and the boxes it is centred in — rounds to it.
  */
 export function ThemeScope(props: ThemeScopeProps) {
     const palette = props.mode === "custom" ? (props.customTheme?.base ?? "midnight") : props.mode;
     const colors = props.mode === "custom" ? props.customTheme?.colors : undefined;
+    const devicePixel = 1 / useDevicePixelRatio();
     return (
         <ThemeAppearanceContext value={palette === "midnight" ? "dark" : palette}>
             <AvatarsAnimatedContext value={props.avatarsAnimated ?? false}>
@@ -40,7 +47,12 @@ export function ThemeScope(props: ThemeScopeProps) {
                     }
                     data-happy-desktop-ui="theme-scope"
                     data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}
-                    style={colors ? themeColorsStyle(colors) : undefined}
+                    style={
+                        {
+                            "--happy-device-pixel": `${devicePixel}px`,
+                            ...(colors ? themeColorsStyle(colors) : null),
+                        } as CSSProperties
+                    }
                 >
                     {props.children}
                 </div>

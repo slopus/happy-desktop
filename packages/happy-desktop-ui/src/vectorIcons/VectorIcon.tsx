@@ -1,5 +1,6 @@
 import { type CSSProperties } from "react";
 import { partitionComponentProps } from "../componentProps";
+import { evenDevicePixels } from "../devicePixelRatio";
 import { ioniconsGlyphs, type IoniconName } from "./ioniconsGlyphs";
 import { octiconsGlyphs, type OcticonName } from "./octiconsGlyphs";
 
@@ -36,7 +37,7 @@ function renderVectorIcon(
     props: VectorIconBaseProps,
 ) {
     const [local] = partitionComponentProps(props, FORWARDED);
-    const size = local.size ?? 16;
+    const size = evenDevicePixels(local.size ?? 16);
     return (
         <span
             aria-hidden={local["aria-label"] ? undefined : "true"}
@@ -48,10 +49,10 @@ function renderVectorIcon(
             data-testid={local["data-testid"]}
             role={local["aria-label"] ? "img" : undefined}
             style={{
-                fontSize: `${size}px`,
+                fontSize: size,
                 lineHeight: 1,
-                width: `${size}px`,
-                height: `${size}px`,
+                width: size,
+                height: size,
                 ...local.style,
                 ...(local.color === undefined ? null : { color: local.color }),
             }}

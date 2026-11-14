@@ -32,6 +32,9 @@
     font-weight: normal;
     font-style: normal;
     font-variant: normal;
+    /* A glyph is one character centred on its own advance; spacing inherited
+       from a label, such as a button's, would widen it on one side only. */
+    letter-spacing: 0;
     text-transform: none;
     font-synthesis: none;
     -webkit-font-smoothing: antialiased;

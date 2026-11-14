@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
+import { evenDevicePixels } from "./devicePixelRatio";
 import { drawnGlyphs, type DrawnGlyphName } from "./drawnGlyphs";
 import { ioniconsGlyphs, type IoniconName } from "./vectorIcons/ioniconsGlyphs";
 import { octiconsGlyphs, type OcticonName } from "./vectorIcons/octiconsGlyphs";
@@ -207,8 +208,7 @@ const glyphs: Record<IconName, IconGlyph> = {
         name: "close-outline",
         opticalScale: 1.1,
         minimumSize: 16,
-        // Keep the painted cross centered when WebKit rounds its baseline on macOS.
-        opticalOffset: { x: 0, y: -0.25 },
+        // WebKit and Gecko lift it a quarter pixel to keep it centred; see icon.css.
     },
     // The whole change read as one thing, rather than one file's diff: the mark
     // for the review stream and nothing else.
@@ -366,7 +366,9 @@ function glyphContent(glyph: IconGlyph) {
      * 2 or 1px. It is resolved in CSS against the font-size the box actually
      * renders at, so a surface that overrides an icon's box is still honoured.
      * An optical offset is declared in pixels at 16 and applied in em, so it
-     * moves with the box; at 16 it is a whole number of device pixels.
+     * moves with the box; at 16 it is a whole number of device pixels. The
+     * minimum is even in device pixels like the box, so the larger drawing
+     * still overhangs it by whole device pixels on each side.
      */
     return (
         <span
@@ -378,7 +380,7 @@ function glyphContent(glyph: IconGlyph) {
                     : { translate: `${offset.x / 16}em ${offset.y / 16}em` }),
                 ...(glyph.minimumSize === undefined
                     ? null
-                    : { fontSize: `max(${glyph.minimumSize}px, 1em)` }),
+                    : { fontSize: `max(${evenDevicePixels(glyph.minimumSize)}, 1em)` }),
             }}
         >
             {character}
@@ -396,7 +398,7 @@ export function Icon(props: IconProps) {
         "style",
     ]);
     const glyph = glyphs[local.name];
-    const size = local.size ?? 16;
+    const size = evenDevicePixels(local.size ?? 16);
     return (
         <span
             aria-hidden={local["aria-label"] ? undefined : "true"}
@@ -410,10 +412,10 @@ export function Icon(props: IconProps) {
             data-testid={local["data-testid"]}
             role={local["aria-label"] ? "img" : undefined}
             style={{
-                fontSize: `${size}px`,
+                fontSize: size,
                 lineHeight: 1,
-                width: `${size}px`,
-                height: `${size}px`,
+                width: size,
+                height: size,
                 ...local.style,
                 ...(local.color === undefined ? null : { color: local.color }),
             }}

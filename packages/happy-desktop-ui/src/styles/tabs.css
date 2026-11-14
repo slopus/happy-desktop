@@ -197,6 +197,10 @@
  * instead of sitting beside it: the reader only ever wants one of the two, and
  * laying them out in a line would leave a permanent second box on every tab that
  * is merely closable.
+ *
+ * Its sides are an even number of device pixels, like the icon box (Icon.tsx),
+ * so the close cross centred in it and the hover square it fills both land on
+ * whole device pixels under page zoom. At 1x and 2x that is exactly 16px.
  */
 .happy-tabs__tab-trailing {
     display: flex;
@@ -204,8 +208,8 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: calc(2 * round(8px, var(--happy-device-pixel, 1px)));
+    height: calc(2 * round(8px, var(--happy-device-pixel, 1px)));
 }
 
 /*
@@ -412,8 +416,8 @@
    tab's ordinary gap, so it reads as belonging to its title. */
 .happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-trailing {
     position: relative;
-    width: 14px;
-    height: 20px;
+    width: calc(2 * round(7px, var(--happy-device-pixel, 1px)));
+    height: calc(2 * round(10px, var(--happy-device-pixel, 1px)));
     margin: 0 0 0 -2px;
     box-sizing: border-box;
 }
@@ -431,20 +435,26 @@
     opacity: 1;
 }
 
-/* The same quiet ink as the strip's "+", darkening only under the pointer. */
+/* The same quiet ink as the strip's "+", darkening only under the pointer.
+   Paint containment draws the control from a whole device pixel: the cross is
+   an untransformed glyph, which engines place at a fraction of a pixel while
+   the hover square beside it snaps, so under page zoom the two parted by up
+   to half a device pixel and the cross blurred. */
 .happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-close {
-    width: 14px;
-    height: 20px;
+    width: 100%;
+    height: 100%;
     color: var(--button-secondary-tint);
     pointer-events: auto;
+    contain: paint;
 }
 
 /* The cross is optically set on the title's text, not centred in its box: the
    glyph's box-centre sits 1px above the title's x-height band, so it drops 1px
    to put its ink on the title's baseline and its top on the x-height (measured
-   at 1x and 2x against the 13px title). */
+   at 1x and 2x against the 13px title). The drop is a whole device pixel at
+   every zoom. */
 .happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-close > .happy-vector-icon {
-    translate: 0 1px;
+    translate: 0 max(var(--happy-device-pixel, 1px), round(1px, var(--happy-device-pixel, 1px)));
 }
 
 /* A keyboard reader on the tab sees the same close the pointer does. */

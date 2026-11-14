@@ -48,18 +48,27 @@
     line-height: 20px;
 }
 
+/*
+ * An icon-only button is a square of an even number of device pixels, like the
+ * icon box (Icon.tsx), so the glyph centred in it lands on whole device pixels
+ * under page zoom instead of half a pixel off its hover square. At 1x and 2x
+ * each side is exactly its contract size.
+ */
 .happy-button[data-icon-only][data-size="small"] {
-    width: 28px;
+    width: calc(2 * round(14px, var(--happy-device-pixel, 1px)));
+    height: calc(2 * round(14px, var(--happy-device-pixel, 1px)));
     padding: 0;
 }
 
 .happy-button[data-icon-only][data-size="medium"] {
-    width: 36px;
+    width: calc(2 * round(18px, var(--happy-device-pixel, 1px)));
+    height: calc(2 * round(18px, var(--happy-device-pixel, 1px)));
     padding: 0;
 }
 
 .happy-button[data-icon-only][data-size="large"] {
-    width: 44px;
+    width: calc(2 * round(22px, var(--happy-device-pixel, 1px)));
+    height: calc(2 * round(22px, var(--happy-device-pixel, 1px)));
     padding: 0;
 }
 

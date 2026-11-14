@@ -128,6 +128,16 @@
  * and every edge asymmetric. The snapped result is an 8 x 14 box containing
  * 2px dots on a 4px pitch. The 16px default keeps its existing 8 x 16 box and
  * 6 x 14 ink geometry.
+ *
+ * Whole CSS pixels are whole device pixels only at 1x and 2x. Under page zoom
+ * a 2px dot is 4.38 device pixels at 110% on a 2x screen, so each dot snapped
+ * to 4 or 5 of them by where it fell and the eight dots of one cell differed
+ * in size and spacing. The dot and the pitch are therefore rounded once more,
+ * to the window's device pixel (`--happy-device-pixel`, from ThemeScope): every
+ * dot is then the same whole number of device pixels and every pitch another,
+ * so the cell snaps as one piece wherever it lands. At 1x and 2x the second
+ * rounding changes nothing. The box keeps its CSS-pixel width, so the spinner
+ * takes the same room in its row at every zoom.
  */
 
 .happy-spinner[data-variant^="braille"] {
@@ -137,8 +147,17 @@
         round(calc(var(--happy-spinner-size) / 4), 1px)
     );
     --happy-spinner-width: calc(var(--happy-spinner-pitch) * 2);
+    --happy-spinner-device-pixel: var(--happy-device-pixel, 1px);
+    --happy-spinner-device-dot: max(
+        var(--happy-spinner-device-pixel),
+        round(var(--happy-spinner-dot), var(--happy-spinner-device-pixel))
+    );
+    --happy-spinner-device-pitch: max(
+        var(--happy-spinner-device-dot) + var(--happy-spinner-device-pixel),
+        round(var(--happy-spinner-pitch), var(--happy-spinner-device-pixel))
+    );
 
-    gap: calc(var(--happy-spinner-pitch) - var(--happy-spinner-dot));
+    gap: calc(var(--happy-spinner-device-pitch) - var(--happy-spinner-device-dot));
 }
 
 .happy-spinner[data-variant^="braille"] .happy-spinner__column {
@@ -146,12 +165,12 @@
     flex-direction: column;
     justify-content: space-between;
     flex: none;
-    height: calc(var(--happy-spinner-pitch) * 3 + var(--happy-spinner-dot));
+    height: calc(var(--happy-spinner-device-pitch) * 3 + var(--happy-spinner-device-dot));
 }
 
 .happy-spinner[data-variant^="braille"] .happy-spinner__dot {
-    width: var(--happy-spinner-dot);
-    height: var(--happy-spinner-dot);
+    width: var(--happy-spinner-device-dot);
+    height: var(--happy-spinner-device-dot);
     opacity: 0.18;
     /*
      * The braille cells are the one family that interpolates instead of using

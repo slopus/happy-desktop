@@ -16,6 +16,9 @@
     font-weight: normal;
     font-style: normal;
     font-variant: normal;
+    /* A glyph is one character centred on its own advance; spacing inherited
+       from a label, such as a button's, would widen it on one side only. */
+    letter-spacing: 0;
     text-transform: none;
     font-synthesis: none;
     -webkit-font-smoothing: antialiased;
@@ -42,6 +45,20 @@
 .happy-icon__glyph {
     display: block;
     flex: none;
+}
+
+/*
+ * The cross is lifted a quarter pixel at 16 where WebKit rounds its baseline on
+ * macOS, and in Gecko, which was measured beside it. Blink snaps a scaled glyph
+ * to whole device pixels, so there the lift either rounds away, as it does at
+ * 2x, or moves the cross a whole device pixel: under page zoom it set the cross
+ * up to two device pixels above its box's centre. Blink, which the desktop app
+ * runs, leaves the cross where its box centres it.
+ */
+@supports (background: -webkit-named-image(i)) or (-moz-appearance: none) {
+    .happy-icon[data-name="close"] > .happy-icon__glyph {
+        translate: 0 calc(-0.25em / 16);
+    }
 }
 
 /*
