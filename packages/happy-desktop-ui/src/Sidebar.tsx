@@ -212,6 +212,13 @@ export type SidebarItem = {
      * go without the sidebar claiming they already went there.
      */
     voiceFocus?: boolean;
+    /**
+     * The reader marked this row's work as priority: a small flag among the
+     * marks that end the row. It reports the reader's own choice and nothing
+     * about the work, so it stands beside the unread and activity marks rather
+     * than replacing either.
+     */
+    priority?: boolean;
     /** A live story, outlined on the mark (accent unseen, grey seen); the mark opens it. */
     story?: "unseen" | "seen";
     /** Its ring's key, and its live and watched stories: an arc each once there are two. */
@@ -332,9 +339,24 @@ export type SidebarSection = {
      * A controlled disclosure of a section's ordered tail. It counts top-level
      * rows: a row's nested children stay with it.
      */
-    tail?: { visibleCount: number; expanded: boolean };
+    tail?: {
+        visibleCount: number;
+        expanded: boolean;
+        /** What the folded tail is called instead of "+N more", such as "6 sleeping". */
+        label?: string;
+    };
     /** Input needed from the reader, visible even while the section is folded. */
     attentionCount?: number;
+    /**
+     * A quiet mark at the heading's trailing edge, before its controls, for
+     * what the section has put away: a count, a few faces.
+     */
+    headingAccessory?: ReactNode;
+    /**
+     * A short note with choices of its own, under the heading until the reader
+     * has dealt with it. Unlike `error` it is not a failure and may be acted on.
+     */
+    notice?: ReactNode;
     action?: SidebarSectionAction;
     /**
      * A second heading control, drawn just before `action` and reported as
@@ -2339,6 +2361,16 @@ function SidebarRow({
                                 <Icon name="mic" size={12} />
                             </span>
                         ) : null}
+                        {item().priority && !item().secondaryAction ? (
+                            <span
+                                aria-label="Priority"
+                                className="happy-sidebar__item-priority"
+                                data-happy-desktop-ui="sidebar-item-priority"
+                                role="img"
+                            >
+                                <Icon name="flag-filled" size={12} />
+                            </span>
+                        ) : null}
                         {props.shortcut && props.shortcutAlwaysVisible ? (
                             <KeyCap
                                 className="happy-sidebar__item-shortcut"
@@ -2445,6 +2477,20 @@ function SidebarRow({
                                     data-happy-desktop-ui="sidebar-item-meta"
                                 >
                                     {item().meta}
+                                </span>
+                            ) : null}
+                            {/* Where the row has a second control, the mark stands in
+                                that control's own slot: the pointer arriving swaps one
+                                flag for the other and moves nothing. */}
+                            {item().priority && item().secondaryAction ? (
+                                <span
+                                    aria-label="Priority"
+                                    className="happy-sidebar__item-priority"
+                                    data-happy-desktop-ui="sidebar-item-priority"
+                                    data-slot=""
+                                    role="img"
+                                >
+                                    <Icon name="flag-filled" size={12} />
                                 </span>
                             ) : null}
                             {count !== undefined ? (
@@ -4657,6 +4703,14 @@ export function Sidebar(props: SidebarProps) {
                                                 />
                                             </button>
                                         ) : null}
+                                        {section.headingAccessory ? (
+                                            <span
+                                                className="happy-sidebar__section-accessory"
+                                                data-happy-desktop-ui="sidebar-section-accessory"
+                                            >
+                                                {section.headingAccessory}
+                                            </span>
+                                        ) : null}
                                         {section.action || section.secondaryAction ? (
                                             // The controls share one lane, a row's
                                             // control gap apart, and the lane rather
@@ -4702,6 +4756,14 @@ export function Sidebar(props: SidebarProps) {
                                     >
                                         {section.error}
                                     </p>
+                                ) : null}
+                                {section.notice ? (
+                                    <div
+                                        className="happy-sidebar__section-notice"
+                                        data-happy-desktop-ui="sidebar-section-notice"
+                                    >
+                                        {section.notice}
+                                    </div>
                                 ) : null}
                                 {!section.headingOnly && !section.collapsed ? (
                                     <div
@@ -4845,6 +4907,7 @@ export function Sidebar(props: SidebarProps) {
                                     <SidebarSectionTail
                                         expanded={section.tail.expanded}
                                         hiddenCount={tailCount}
+                                        label={section.tail.label}
                                         sectionLabel={section.label ?? section.id}
                                         onToggle={() => local.onSectionTailToggle?.(section.id)}
                                     />

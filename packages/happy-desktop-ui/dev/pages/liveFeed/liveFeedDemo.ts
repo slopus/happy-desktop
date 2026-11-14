@@ -34,6 +34,7 @@ export const LIVE_FEED_SEEN_MS: Record<LiveFeedTier, number | null> = {
     card: 12_000,
     post: 16_000,
     mention: null,
+    milestone: 12_000,
 };
 /** How long a leaving item takes to fade before it is dropped. */
 const LEAVE_MS = 650;

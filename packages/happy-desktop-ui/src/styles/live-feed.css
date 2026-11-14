@@ -237,6 +237,12 @@
     color: var(--text-link);
 }
 
+/* Work that got somewhere: the one mark here in the success green. */
+.happy-live-feed-item__done {
+    display: flex;
+    color: var(--success);
+}
+
 .happy-live-feed-item__text {
     display: flex;
     flex: 1 1 auto;

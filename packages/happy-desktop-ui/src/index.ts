@@ -887,6 +887,19 @@ export {
     type LiveFeedPanelProps,
     type LiveFeedTier,
 } from "./LiveFeed";
+export {
+    HappyAgentNewPage,
+    SidebarFloatingMenu,
+    SidebarPinTiles,
+    SidebarPriorityNote,
+    SidebarSleepingCluster,
+    type HappyAgentNewKind,
+    type HappyAgentNewPageProps,
+    type HappyAgentNewSurfaceKind,
+    type SidebarFace,
+    type SidebarPinTile,
+    type SidebarPinTilesProps,
+} from "./FocusedSidebar";
 export { REORDERING_LIST_STATIC, ReorderingList, type ReorderingListProps } from "./ReorderingList";
 export {
     SurfaceAvatar,

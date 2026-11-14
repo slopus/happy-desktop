@@ -677,6 +677,27 @@
     outline-offset: 1px;
 }
 
+/* What the section put away, at the heading's trailing edge. It takes the
+   heading's free space, so controls after it stand a control gap away. */
+.happy-sidebar__section-accessory {
+    display: flex;
+    flex: none;
+    align-items: center;
+    margin-left: auto;
+}
+
+.happy-sidebar__section-accessory + .happy-sidebar__section-actions {
+    margin-left: 4px;
+}
+
+/* A note with its own choices, under the heading. */
+.happy-sidebar__section-notice {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+}
+
 .happy-sidebar__section-error {
     display: block;
     flex: none;
@@ -1593,6 +1614,34 @@
     justify-content: center;
     width: 16px;
     height: 16px;
+}
+
+/* The reader's own priority mark: a 12px flag in a 16px box among the marks
+   that end the row, in the row's own quiet ink so it never competes with the
+   red of an unread dot or a question. */
+.happy-sidebar__item-priority {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+/* On a row with a second control the mark takes that control's slot, one cell
+   and one control gap in from the lane's optical edge, and gives way to the
+   control while the pointer is on the row. */
+.happy-sidebar__item-priority[data-slot] {
+    position: absolute;
+    right: 19px;
+    width: 18px;
+    height: 18px;
+}
+
+.happy-sidebar__item:hover .happy-sidebar__item-priority[data-slot],
+.happy-sidebar__item-trailing:focus-within .happy-sidebar__item-priority[data-slot] {
+    visibility: hidden;
 }
 
 /* Takes the heading's free space so the microphone stands beside the label

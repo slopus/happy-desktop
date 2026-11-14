@@ -1,0 +1,350 @@
+/*
+ * The focused sidebar's own parts (FocusedSidebar.tsx). Everything else in
+ * that sidebar is `Sidebar` and is styled by sidebar.css.
+ *
+ *   pin tile, grid   four to a line across the rows' width, 40px tall, the
+ *                    6px control radius, 6px apart; a 20px mark in the middle
+ *   pin tile, strip  28px squares on one line, 4px apart, the first mark on
+ *                    the column every row's mark is on
+ *   sleeping cluster three 14px faces overlapped by 5px, then a count, in the
+ *                    heading's 24px line
+ *   priority note    one 12/16 line and Cancel, 24px tall, on the rows' inset
+ *
+ * No frames: nothing here draws a border, a card, or a shadow of its own. A
+ * tile's fill is the row hover's own ink at half strength, so a tile reads as
+ * a row that is always a little lit, never as a card.
+ */
+
+.happy-pin-tiles,
+.happy-pin-tiles * {
+    box-sizing: border-box;
+}
+
+.happy-pin-tiles {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.happy-pin-tiles[data-variant="grid"] {
+    gap: 6px;
+}
+
+/* On the rows' leading column: a row's mark starts 6px in, and a 28px tile
+   holds its 20px mark 4px in, so the line starts 2px in. */
+.happy-pin-tiles[data-variant="strip"] {
+    gap: 4px;
+    padding: 2px 2px;
+}
+
+/* The tooltip's wrapper is the flex item; the tile fills it. Four to a line:
+   a quarter of the line less its share of the three 6px gaps. */
+.happy-pin-tiles[data-variant="grid"] > .happy-pin-tiles__slot {
+    display: flex;
+    flex: none;
+    width: calc((100% - 18px) / 4);
+}
+
+.happy-pin-tiles[data-variant="strip"] > .happy-pin-tiles__slot {
+    display: flex;
+    flex: none;
+    width: 28px;
+}
+
+.happy-pin-tile {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+    color: var(--text-secondary);
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-pin-tiles[data-variant="strip"] .happy-pin-tile {
+    height: 28px;
+    background: transparent;
+}
+
+.happy-pin-tile:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-pin-tile[data-active],
+.happy-pin-tiles[data-variant="strip"] .happy-pin-tile[data-active] {
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy-pin-tile:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
+}
+
+/* The mark's own box, which the unread dot hangs off, as a row's lane does. */
+.happy-pin-tile__mark {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+}
+
+/* A count takes the corner the dot would: laid over the tile, so a tile with
+   news is the same size as one without. */
+.happy-pin-tile__badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    height: 14px;
+    min-width: 14px;
+    padding: 0 3px;
+    font-size: 9px;
+    line-height: 14px;
+}
+
+.happy-pin-tiles[data-variant="strip"] .happy-pin-tile__badge {
+    top: -3px;
+    right: -5px;
+    box-shadow: 0 0 0 1.5px var(--groupped-background);
+}
+
+/* ---- Where the tiles stand in the sidebar -------------------------------- */
+
+/* The tiles are the body's accessory: a line under New, then the pins that
+   are rows. The pair reads as one group, so the rows follow a tile gap away
+   rather than a section's 12px. */
+.happy-focused-sidebar .happy-sidebar__compose + .happy-sidebar__body-accessory {
+    margin-top: 8px;
+}
+
+.happy-focused-sidebar .happy-sidebar__body-accessory + .happy-sidebar__section {
+    margin-top: 6px;
+}
+
+.happy-focused-sidebar .happy-sidebar__body-accessory:empty + .happy-sidebar__section {
+    margin-top: 12px;
+}
+
+/* ---- Sleeping ----------------------------------------------------------- */
+
+.happy-sleeping-cluster {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 5px;
+    height: 18px;
+    margin: 0 -4px 0 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-sleeping-cluster:hover,
+.happy-sleeping-cluster[aria-expanded="true"] {
+    color: var(--text);
+}
+
+.happy-sleeping-cluster:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-sleeping-cluster:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
+.happy-sleeping-cluster__faces {
+    display: flex;
+    flex: none;
+    align-items: center;
+    /* Asleep: the faces are there to be counted, not picked out. */
+    opacity: 0.6;
+}
+
+/* Each face after the first tucks 5px under the one before, ringed in the
+   sidebar's own surface so the overlap reads as an edge. */
+.happy-sleeping-cluster__face {
+    /* Positioned, so each face's ring is painted with the face and over the
+       one before it rather than under every face at once. */
+    position: relative;
+    display: flex;
+    flex: none;
+    border-radius: 5px;
+    box-shadow: 0 0 0 1.5px var(--groupped-background);
+}
+
+.happy-sleeping-cluster__face + .happy-sleeping-cluster__face {
+    margin-left: -5px;
+}
+
+.happy-sleeping-cluster:hover .happy-sleeping-cluster__faces,
+.happy-sleeping-cluster[aria-expanded="true"] .happy-sleeping-cluster__faces {
+    opacity: 1;
+}
+
+.happy-sleeping-cluster__count {
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 16px;
+    font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The inline Sleeping row is quieter than the bots above it: it is where the
+   ones with nothing to say went. */
+.happy-focused-sidebar .happy-sidebar__item[data-item-id$="sleeping"] {
+    color: var(--text-secondary);
+}
+
+/* ---- Priority ----------------------------------------------------------- */
+
+.happy-priority-note {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 24px;
+    padding: 0 6px 2px var(--happy-panel-row-padding);
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-priority-note__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-priority-note__name {
+    color: var(--text);
+}
+
+.happy-priority-note__cancel {
+    flex: none;
+    height: 18px;
+    margin: 0;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-weight: 600;
+    line-height: 18px;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-priority-note__cancel:hover {
+    background: var(--happy-hover-fill);
+    color: var(--text);
+}
+
+.happy-priority-note__cancel:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
+/* ---- Floating menu ------------------------------------------------------ */
+
+/* A layer over the whole window that takes the press which puts the menu
+   away; the menu is placed in it at a measured point, which no flow gives. */
+.happy-sidebar-floating-menu {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    outline: none;
+}
+
+.happy-sidebar-floating-menu__menu {
+    position: absolute;
+}
+
+/* ---- New ---------------------------------------------------------------- */
+
+.happy-agent-new,
+.happy-agent-new * {
+    box-sizing: border-box;
+}
+
+.happy-agent-new {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+}
+
+/* The switcher, centred over the surface it switches. */
+.happy-agent-new__switch {
+    display: flex;
+    position: relative;
+    flex: none;
+    justify-content: center;
+    padding: 16px 24px 0;
+}
+
+.happy-agent-new__subswitch {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    left: 0;
+    justify-content: center;
+}
+
+/* A kind with no first message has no composer under it. It keeps the
+   composer's height clear all the same, so its title stands exactly where a
+   task's does and switching kinds moves nothing but the words. */
+.happy-agent-new__body[data-plain] {
+    padding-bottom: var(--happy-agent-new-composer, 155px);
+}
+
+.happy-agent-new__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* The feed stands over the foot of the list. While it is on the list keeps a
+   feed's height clear below its last row, so a full feed never leaves a row
+   that cannot be scrolled into view. The clearance follows only the switch,
+   never the number of items, so no arrival moves a row. */
+.happy-focused-sidebar--feed .happy-sidebar__body-content {
+    padding-bottom: calc(4 * 34px + 8px);
+}
+
+/* The row states its count at the trailing edge, open or shut, so the corner
+   count a shut fold wears on its mark would say it twice. */
+.happy-focused-sidebar .happy-sidebar__item[data-item-id$="sleeping"] .happy-sidebar__item-folded {
+    display: none;
+}

@@ -20,6 +20,8 @@ export function SidebarSectionContext({ text, reserveTwoLines }: SidebarSectionC
 export type SidebarSectionTailProps = {
     expanded: boolean;
     hiddenCount: number;
+    /** What the folded tail is called instead of "+N more". */
+    label?: string;
     sectionLabel: string;
     onToggle: () => void;
 };
@@ -35,7 +37,7 @@ export function SidebarSectionTail(props: SidebarSectionTailProps) {
             onClick={props.onToggle}
             type="button"
         >
-            {props.expanded ? "show less" : `+${props.hiddenCount} more`}
+            {props.expanded ? "show less" : (props.label ?? `+${props.hiddenCount} more`)}
         </button>
     );
 }

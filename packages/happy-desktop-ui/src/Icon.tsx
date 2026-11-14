@@ -87,6 +87,9 @@ export type IconName =
     | "dot"
     | "pulse"
     | "feed"
+    | "flag"
+    | "flag-filled"
+    | "pin"
     | "width-expand"
     | "width-center";
 export type IconProps = {
@@ -319,6 +322,11 @@ const glyphs: Record<IconName, IconGlyph> = {
     pulse: { set: "ionicons", name: "pulse-outline" },
     // What happened on the installation, as a paper reads it: the Feed.
     feed: { set: "ionicons", name: "newspaper-outline" },
+    // The reader's own mark on work that comes first: priority, and nothing else.
+    flag: { set: "ionicons", name: "flag-outline" },
+    "flag-filled": { set: "ionicons", name: "flag" },
+    // Keeping a thing at the top of the sidebar.
+    pin: { set: "ionicons", name: "pin-outline" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];
 function glyphContent(glyph: IconGlyph) {

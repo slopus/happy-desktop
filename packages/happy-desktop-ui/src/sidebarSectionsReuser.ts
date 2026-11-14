@@ -41,11 +41,17 @@ function itemReuse(previous: SidebarItem | undefined, next: SidebarItem): Sideba
     return previous !== undefined && dataEqual(previous, next) ? previous : next;
 }
 
-/** Equality over plain data: primitives, arrays, and objects of them. */
+/**
+ * Equality over plain data: primitives, arrays, and objects of them. A rendered
+ * node a section carries (`headingAccessory`, `notice`) is not data: it is the
+ * same only as the same object, and is never walked — an element leads back to
+ * the tree that made it.
+ */
 function dataEqual(left: unknown, right: unknown): boolean {
     if (Object.is(left, right)) return true;
     if (typeof left !== "object" || typeof right !== "object" || left === null || right === null)
         return false;
+    if ("$$typeof" in left || "$$typeof" in right) return false;
     if (Array.isArray(left) !== Array.isArray(right)) return false;
     const leftKeys = Object.keys(left);
     if (leftKeys.length !== Object.keys(right).length) return false;

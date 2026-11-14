@@ -23,8 +23,10 @@ import { SidebarRowAction } from "./Sidebar";
  *   Play.
  * - `mention`: someone named the reader, looped them in, or replied to them —
  *   an "@" in the mark's place and "Name: what they said"; hover offers Reply.
+ * - `milestone`: work the reader cares about got somewhere — a check in the
+ *   mark's place, what happened, then the task it happened in.
  */
-export type LiveFeedTier = "line" | "card" | "post" | "mention";
+export type LiveFeedTier = "line" | "card" | "post" | "mention" | "milestone";
 
 /** A post's picture or clip. Shape is the owner's, from the media's own size. */
 export interface LiveFeedMedia {
@@ -311,6 +313,18 @@ export function LiveFeedEntry(props: {
                 <span className="happy-live-feed-item__who">{item.actor.name}</span>
                 <span className="happy-live-feed-item__colon">: </span>
                 <span className="happy-live-feed-item__said">{item.detail}</span>
+            </>
+        );
+    } else if (item.tier === "milestone") {
+        lead = (
+            <span className="happy-live-feed-item__done">
+                <Icon name="check-circle" size={16} />
+            </span>
+        );
+        line = (
+            <>
+                <span className="happy-live-feed-item__strong">{item.detail ?? item.verb}</span>
+                {` · ${item.title}`}
             </>
         );
     } else if (item.tier === "card") {
