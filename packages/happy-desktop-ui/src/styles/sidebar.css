@@ -12,6 +12,9 @@
 
 .happy-sidebar {
     --happy-surface-header-height: 56px;
+    /* How long a name too long for its row takes to fade out, at rest and
+       where it slides to while hover controls show. */
+    --happy-sidebar-label-fade: 12px;
     --happy-surface-footer-height: 40px;
     --happy-sidebar-floor: 226px;
     /* The window's device pixel, set by the sidebar from devicePixelRatio,
@@ -1427,13 +1430,14 @@
     font-weight: 500;
     line-height: 16px;
     white-space: nowrap;
-    /* A name too long for its row fades out over its box's last 24px rather
-       than ellipsizing. The box runs to where the name must stop, so a name
-       that fits never reaches the fade. */
+    /* A name too long for its row fades out over its box's last
+       `--happy-sidebar-label-fade` rather than ellipsizing. The box runs to
+       where the name must stop, so a name that fits never reaches the fade.
+       A shimmering name fades with it: the mask is on the label it sits in. */
     mask-image: linear-gradient(
         to left,
         transparent var(--happy-sidebar-label-fade-inset),
-        #000 calc(var(--happy-sidebar-label-fade-inset) + 24px)
+        #000 calc(var(--happy-sidebar-label-fade-inset) + var(--happy-sidebar-label-fade))
     );
     transform: translateY(var(--happy-sidebar-label-optical-y, 0px));
     transition: --happy-sidebar-label-fade-inset 120ms ease;
