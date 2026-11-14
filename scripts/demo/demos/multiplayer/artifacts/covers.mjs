@@ -56,21 +56,17 @@ const reports = {
         kind: "Progress report",
         title: "Team server sign-in",
         owner: "Team Servers · Steve",
-        lead: "Agent sign-in is merged. Desktop sessions are in review; iOS server codes follow once the desktop contract is settled.",
+        lead: "Three workstreams are running in parallel: iOS server codes, desktop sessions, and agent sign-in. Each has its own repository and worktree.",
         body: () => `${table(
             ["Workstream", "Status", "Next step"],
             [
-                ["Agent sign-in", badge("Merged"), "Included on main"],
-                [
-                    "Desktop sessions",
-                    badge("In review", "amber"),
-                    "Resolve session lifetime feedback",
-                ],
-                ["iOS server codes", badge("Next", "muted"), "Use the approved sign-in contract"],
+                ["iOS server codes", badge("Working", "amber"), "happy · ios-server-codes"],
+                ["Desktop sign-in", badge("Working", "amber"), "happy-desktop · desktop-sign-in"],
+                ["Agent sign-in", badge("Working", "amber"), "happy-agent · agent-sign-in"],
             ],
         )}
-            ${section("Since the last update", "The agent now connects with an authenticated session and restores it after reconnecting. The desktop branch handles expired credentials and switching team servers.")}
-            ${section("Current gate", "The desktop review needs a clear lifetime for sessions when a server is removed. Steve is checking that the UI and agent agree before the mobile work starts.")}
+            ${section("Since the last update", "All three subtasks have opened their worktrees and are writing their first changes. The iOS code handles server codes, the desktop code handles sessions, and the agent code handles authentication.")}
+            ${section("Current gate", "Steve is checking that all three implementations agree on session lifetime and reconnect behavior before integration.")}
             <footer>8 updates · Team Servers · implementation in progress</footer>`,
     },
     qa: {
@@ -171,7 +167,7 @@ export const covers = {
     progress: {
         title: "Team server sign-in: progress",
         summary:
-            "The agent's sign-in is merged. The desktop's sessions are next, then iOS server codes.",
+            "iOS server codes, Desktop sign-in, and Agent sign-in are working in three separate repository worktrees.",
         html: () => reportPage("progress"),
     },
     qa: {

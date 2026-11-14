@@ -493,26 +493,36 @@ export class Director {
         const from = { ...this.#pointer };
         const distance = Math.hypot(point.x - from.x, point.y - from.y);
         if (distance < 1.5) return point;
-        const duration = options.duration ?? Math.min(850, 240 + distance * 0.62);
-        // Bow the path perpendicular to the travel, to whichever side keeps the
-        // arc away from the shorter axis of the move.
-        // `straight` keeps a move on its line, where a bow would brush the rows beside it.
+        const duration =
+            (options.duration ?? Math.max(350, Math.min(950, 250 + distance * 0.6))) *
+            (0.85 + this.#random() * 0.3);
         const bow = options.straight
             ? 0
-            : Math.min(distance * 0.16, 90) * (from.x < point.x ? -1 : 1);
+            : distance * (0.03 + this.#random() * 0.04) * (this.#random() < 0.5 ? -1 : 1);
+        const shape = 2.5 + this.#random() * 0.65;
+        const reachEnd = 0.95 + this.#random() * 0.05;
+        const bend = 0.1 + this.#random() * 0.65;
+        const overshoot = distance > 220 && this.#random() < 0.46 ? 6 + this.#random() * 8 : 0;
+        const jitterPhase = this.#random() * Math.PI * 2;
+        const jitterFrequency = 7 + this.#random() * 8;
         const normal = { x: -(point.y - from.y) / distance, y: (point.x - from.x) / distance };
         await this.#render(duration, async (progress) => {
-            // A reach accelerates early, passes its target by a pixel or two,
-            // then settles. The correction vanishes at both endpoints.
-            const eased =
-                easeInOutCubic(Math.min(1, progress / 0.91)) +
-                (distance > 90
-                    ? (Math.sin(Math.PI * Math.max(0, (progress - 0.79) / 0.21)) * 1.8) / distance
-                    : 0);
-            const arc = Math.sin(progress * Math.PI) * bow * (1 - progress * 0.35);
+            // A beta-shaped velocity peaks early, then spends most of the
+            // reach approaching the target. Some reaches overshoot and correct.
+            const phase = Math.min(1, progress / reachEnd);
+            const eased = 1 - (1 - phase) ** shape * (1 + shape * phase);
+            const correction =
+                Math.sin(Math.PI * Math.max(0, (progress - 0.68) / 0.32)) * overshoot;
+            const jitter =
+                Math.sin(progress * jitterFrequency + jitterPhase) *
+                Math.sin(Math.PI * progress) ** 2 *
+                0.3;
+            const arc = Math.sin(eased * Math.PI) * bow * (1 - eased * bend) + jitter;
             this.#pointer.visible = true;
-            this.#pointer.x = from.x + (point.x - from.x) * eased + normal.x * arc;
-            this.#pointer.y = from.y + (point.y - from.y) * eased + normal.y * arc;
+            this.#pointer.x =
+                from.x + (point.x - from.x) * (eased + correction / distance) + normal.x * arc;
+            this.#pointer.y =
+                from.y + (point.y - from.y) * (eased + correction / distance) + normal.y * arc;
             this.#follow();
             await this.#page.mouse.move(this.#pointer.x, this.#pointer.y);
         });
@@ -522,9 +532,11 @@ export class Director {
     /** Glides onto a target, presses it, and lets the ripple play out. */
     async click(target, options = {}) {
         const point = await this.moveTo(target, options);
+        await this.hold(options.before ?? 250 + this.#random() * 450);
         await this.#render(90, (progress) => {
             this.#pointer.press = progress;
         });
+        await options.onPress?.();
         await this.#page.mouse.down({ button: options.button ?? "left" });
         this.#sounds.push({ frame: this.#sink.frames.length, sound: "click" });
         if (!this.#pointerExternal)
@@ -674,6 +686,23 @@ export class Director {
     /** Holds the shot, letting the app's own motion play. */
     async hold(durationMs) {
         await this.#render(durationMs);
+    }
+
+    /** A reading pause may include one tiny, unhurried hand adjustment. */
+    async read(durationMs) {
+        const start = { ...this.#pointer };
+        if (!start.visible || durationMs <= 1500) return this.hold(durationMs);
+        const distance = 10 + this.#random() * 15;
+        const angle = (this.#random() - 0.5) * 0.5;
+        const dx = Math.cos(angle) * distance;
+        const dy = Math.sin(angle) * distance;
+        const begins = 0.2 + this.#random() * 0.35;
+        await this.#render(durationMs, async (progress) => {
+            const drift = easeOutCubic(Math.max(0, (progress - begins) / (1 - begins)));
+            this.#pointer.x = start.x + dx * drift;
+            this.#pointer.y = start.y + dy * drift;
+            await this.#page.mouse.move(this.#pointer.x, this.#pointer.y);
+        });
     }
 
     /** Shows a full-frame title card, with no app content visible in the shot. */

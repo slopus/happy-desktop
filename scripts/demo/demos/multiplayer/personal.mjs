@@ -216,6 +216,11 @@ export async function personalOpen(gym) {
     if (!(await client.getOnboarding()).completed) await client.completeOnboarding();
     await nodeAvatarSet(client, "kirill.jpg", world.seedMode, { errandBot: true });
 
+    // Activity staging can leave this computer unused for ten minutes while
+    // the team works. Keep its isolated daemon active until the browser joins.
+    const keepAlive = setInterval(() => void client.getHealth().catch(() => undefined), 10000);
+    keepAlive.unref();
+
     return {
         client,
         paths: p,
@@ -228,6 +233,7 @@ export async function personalOpen(gym) {
             }),
         },
         async close() {
+            clearInterval(keepAlive);
             await execFile(command, ["stop"], { cwd: root, env, timeout: 15000 }).catch(
                 () => undefined,
             );

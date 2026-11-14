@@ -1,145 +1,170 @@
-/*
- * The video's three chapters, its opening and its closing cards, placed by the
- * takes' own cues so a re-recorded take needs no retiming here. Both cuts use
- * it; each names its stage, where its camera goes, and how it ends.
- *
- * The opening's two lines stand on the backdrop; the window rises under them,
- * then the lines give way to chapter 1's caption and the camera makes one
- * eased move in. Chapter 2 is named by a short card, opens on the working
- * rows for the progress and the badge, and eases out once
- * Activity opens; the moment Activity spends loading after the click is left
- * out. The take holds the top report without scrolling. Chapter 3 opens three
- * shared bot conversations and their inline reports.
- *
- * Takes, by `--take` name, each the multiplayer demo with that MULTIPLAYER_SHOT:
- * aware, activity, bots.
- */
-const move = 0.8;
-
-const opening = [
-    { text: "Today most tasks start as conversations with agents.", at: -0.3 },
-    { text: "Happy is built around this idea.", at: 1.2 },
-];
-const awareTitle = "See who’s working on what";
-const activityTitle = "See the most important updates from the team";
-
-/**
- * @param stage  the frame, window and stage (`stage.mjs`)
- * @param views  `openingTop`: the window's top in the frame once it has risen;
- *               `aware`: chapter 1's close view; `progress`: chapter 2's close
- *               view before the click; `activity`: Activity's view after it;
- *               `bots`: chapter 3's view; `loading`: when, after the click, Activity
- *               starts loading and has drawn its feed
- * @param ending the segments after chapter 3
- * @param cues   the takes' cues by take and name, in take seconds
- */
-export function chapters(stage, views, ending, cues) {
-    const { output, window: frameWindow } = stage;
-    const rest = frameWindow.width / frameWindow.cssWidth;
-    /** The window whole, at rest's scale, with its top at `top` in the frame. */
-    const whole = (top) => ({
-        css: {
-            scale: rest,
-            x: (stage.stage.x - frameWindow.x) / rest,
-            y: (stage.stage.y - top) / rest,
-        },
-    });
-    /** A chapter: its take from `from` to `until`, in take seconds; where the take ends sooner, its last frame holds. */
-    const chapter = (take, from, until, more) => ({
+/* Fable 5.2's cut10 beat sheet, mapped onto the real takes' cue clocks. */
+export function chapters(stage, views, ending, cues, { x = false } = {}) {
+    const square = stage.output.width === stage.output.height;
+    const aware = cues.aware;
+    const repos = cues.repos;
+    const activity = cues.activity;
+    const bots = cues.bots;
+    const skipsBefore = (skips, at) =>
+        skips.reduce((n, [a, b]) => n + Math.max(0, Math.min(at, b) - a), 0);
+    const window = (take, from, seconds, more) => ({
         kind: "window",
         take,
         from,
-        seconds: until - from + (more.freeze ?? 0),
-        tail: Math.max(0, until - cues[take].end),
+        seconds,
         ...more,
     });
-
-    // The intro holds the first recorded frame until the camera has moved in.
-    const aware = cues.aware;
-    const riseFrom = 4.5;
-    const risen = 5.9;
-    const captionFrom = 6.2;
-    const freeze = risen + 0.4 + move;
+    const card = (text, hold) => ({
+        kind: "card",
+        text,
+        seconds: (square ? 1 : 1.2) + hold,
+        entrance: "after-window",
+        textFrom: square ? 0.5 : 0.6,
+        textFade: square ? 0.5 : 0.6,
+    });
+    const freeze = square ? 2.1 : 2.5;
+    const awareSkips = square
+        ? [
+              [
+                  aware["arrival-settled:Desktop Alerts"] + 0.4,
+                  aware["arrival-settled:Desktop Alerts"] + 0.9,
+              ],
+              [
+                  aware["arrival-settled:Offline Drafts"] + 0.4,
+                  aware["arrival-settled:Offline Drafts"] + 0.9,
+              ],
+              [aware["back-open"] + 0.1, aware["back-open"] + 0.6],
+              [aware["leave-menu-click"] + 0.12, aware["leave-menu-click"] + 0.32],
+          ]
+        : [
+              [aware["visit-open"] + 1.4, aware["visit-open"] + 1.9],
+              [aware["back-open"] + 0.1, aware["back-open"] + 0.2333333333],
+          ];
+    if (x) {
+        const from = aware["visit-click"] - 0.8,
+            to = aware["back-open"];
+        for (let i = awareSkips.length - 1; i >= 0; i--)
+            if (awareSkips[i][0] >= from && awareSkips[i][1] <= to) awareSkips.splice(i, 1);
+        awareSkips.push([from, to]);
+    }
+    const awareAt = (at) => freeze + at - skipsBefore(awareSkips, at);
     const lineHeight = Math.round(stage.type.opening * 1.15);
-    const lineGap = Math.round(lineHeight * 0.18);
-    const linesTop = Math.round((views.openingTop - 2 * lineHeight - lineGap) / 2);
-    const lines = opening.map((line, index) => ({
+    const gap = Math.round(lineHeight * 0.18);
+    const lines = [
+        { text: "Today most tasks start as conversations with agents.", at: -0.6, fade: 0.6 },
+        {
+            text: "Happy is built around this idea.",
+            at: square ? 2.2 : 2.4,
+            fade: square ? 0.5 : 0.6,
+        },
+    ].map((line, i) => ({
         ...line,
-        top: linesTop + index * (lineHeight + lineGap),
+        top: Math.round(stage.output.height / 2 - lineHeight - gap / 2 + i * (lineHeight + gap)),
     }));
-    // Both lines stand still for three seconds before the words and window rise.
-    const drop = Math.round(output.height / 2 - lineHeight / 2 - linesTop);
 
-    const activity = cues.activity;
-    // Enter on the working rows, just before List cache finishes. Leave out
-    // the stationary wait after the badge and the loading interval.
-    // The longer card-to-app entrance finishes before List cache reports.
-    const activityFrom = activity.open + 0.4;
-    const click = activity["activity-click"];
-    const skips = [
-        [activity["parent-done"] + 0.1, activity["parent-done"] + 1.6],
-        [click + views.loading[0], click + views.loading[1]],
-    ];
-    const skippedBefore = (at) =>
-        skips.reduce((total, [from, to]) => total + Math.max(0, Math.min(at, to) - from), 0);
-    const onCut = (at) => at - activityFrom - skippedBefore(at);
-    const until = activity["activity-rest-end"] - (output.width === output.height ? 0.6 : 0);
+    const repoSkips = [
+        [repos["repo:agent"] + 0.59, repos["repo:ios:first"] - 0.3],
+        [repos["repo:agent:first"] + 0.2, repos["repo:ios:final"] - 0.4],
+        [repos["repo:ios:final"] + 0.2, repos["repo:agent:final"] - 0.1],
+    ].filter(([a, b]) => b > a);
+    if (square)
+        repoSkips.push(
+            [repos["repo:ios"] + 0.57, repos["repo:desktop-sent"]],
+            [repos["repo:desktop"] + 0.57, repos["repo:agent-sent"]],
+            [repos["repo:ios:first"] + 0.2, repos["repo:agent:first"] - 0.1],
+        );
+    const activityFrom = activity["subtask-released"] - 1.6;
+    const activitySkips = [];
+    const targetClick = square ? 3.4 : 4.1;
+    let excess = activity["activity-click"] - activityFrom - targetClick;
+    const quietTrim = (from, to, maximum = Infinity) => {
+        const seconds = Math.max(0, Math.min(excess, to - from, maximum));
+        if (seconds > 0) activitySkips.push([from, from + seconds]);
+        excess -= seconds;
+    };
+    // Only stationary pauses are shortened; the reach and native click stay intact.
+    quietTrim(activity["parent-done"] + 1 / 60, activity["activity-move"]);
+    if (square && excess > 0.2)
+        quietTrim(activity["subtask-released"] + 0.2, activity["badge-sent"] - 0.15, excess - 0.2);
+    quietTrim(activity["activity-click"] - 0.45, activity["activity-click"] - 0.25, 0.2);
+    const activityClick =
+        activity["activity-click"] -
+        activityFrom -
+        skipsBefore(activitySkips, activity["activity-click"]);
+    const activityMove = square ? 1 : 1.1;
 
+    const botsFrom = bots["releases-click"] - 0.15;
+    const botSkips = [];
+    const alignBot = (key, wanted, previous) => {
+        const excess =
+            bots[`${key}-click`] - botsFrom - skipsBefore(botSkips, bots[`${key}-click`]) - wanted;
+        const end = bots[`${key}-move`];
+        if (excess > 0)
+            botSkips.push([Math.max(bots[`${previous}-open`] + 0.7, end - excess), end]);
+    };
+    alignBot("growth", square ? 4.2 : 5.5, "releases");
+    alignBot("health", square ? 6.55 : 8.7, "growth");
+    const botAt = (at) => at - botsFrom - skipsBefore(botSkips, at);
+    const rest = stage.window.width / stage.window.cssWidth;
+    const whole = {
+        scale: rest,
+        x: (stage.stage.x - stage.window.x) / rest,
+        y: (stage.stage.y - 120) / rest,
+    };
     return {
         ...stage,
         segments: [
-            chapter("aware", 0, aware["leave-settled"] + 0.8, {
+            { kind: "card", seconds: square ? 5.6 : 6.4, opening: { lines } },
+            window("aware", 0, x ? 9.1 : square ? 13.2 : 16.4, {
                 freeze,
-                title: awareTitle,
-                titleFrom: captionFrom,
-                titleTo: freeze + aware["arrival-settled:Offline Drafts"] + 0.9,
+                skips: awareSkips,
+                title: "See who's working on what",
+                titleFrom: square ? 1.7 : 2,
+                titleTo: square ? 6 : 7,
                 captions: [
                     {
                         text: "Not interested? Leave it.",
-                        from: freeze + aware["leave-menu-click"] - 0.15,
-                        to: freeze + aware["leave-settled"] + 0.7,
+                        from: square ? awareAt(aware["leave-menu-click"]) - 1 : 11.9,
+                        to: square ? (x ? 9.3 : 13.4) : 16.6,
                     },
                 ],
-                opening: { lines, rise: [riseFrom, risen], out: captionFrom, drop },
                 camera: [
-                    { at: 0, ...whole(output.height) },
-                    { at: risen, move: risen - riseFrom, ...whole(views.openingTop) },
-                    {
-                        at: captionFrom + 0.4 + move,
-                        move,
-                        css: { scale: stage.push, ...views.aware },
-                    },
-                    // Once both tasks have landed the camera settles on the
-                    // tasks and the conversation: opening a task leaves its
-                    // Activity entry unread, and the badge is not this
-                    // chapter's subject.
-                    {
-                        at: freeze + aware["arrival-settled:Offline Drafts"] + 0.6 + move,
-                        move,
-                        css: views.awareTasks,
-                    },
+                    { at: 0, css: whole },
+                    { at: square ? 1.2 : 1.3, css: whole },
+                    { at: freeze, move: square ? 0.9 : 1.2, css: views.awareTasks },
                 ],
             }),
-            { kind: "card", text: activityTitle, seconds: 2.2, entrance: "after-window" },
-            chapter("activity", activityFrom, until - skippedBefore(until), {
-                skips,
+            window("repos", repos["repo:ios"] - (square ? 1 : 1.2), square ? 4.8 : 5.8, {
+                entrance: "in-app",
+                skips: repoSkips,
+                title: "One task, across all your repos",
+                titleFrom: 0.5,
+                titleTo: square ? 4.8 : 5.8,
+                camera: [
+                    { at: 0, css: views.awareTasks },
+                    { at: 1, move: 1, css: views.repos },
+                ],
+            }),
+            card("See the most important updates from the team", square ? 3 : 3.4),
+            window("activity", activityFrom, square ? 7 : 8.6, {
+                skips: activitySkips,
                 camera: [
                     { at: 0, css: { scale: stage.push, ...views.progress } },
-                    {
-                        at: onCut(activity["activity-open"] + 0.3),
-                        move,
-                        css: views.activity,
-                    },
+                    { at: activityClick + activityMove, move: activityMove, css: views.bots },
                 ],
             }),
-            {
-                kind: "card",
-                text: "Shared bots own the recurring work",
-                seconds: 2.2,
-                entrance: "after-window",
-            },
-            chapter("bots", 0, cues.bots["health-rest-end"], {
-                camera: [{ at: 0, css: views.bots }],
+            card("Shared bots own the recurring work", square ? 2.5 : 2.8),
+            window("bots", botsFrom, x ? 7.05 : square ? 9.6 : 12, {
+                skips: botSkips,
+                ...(x ? { until: bots["health-move"] } : {}),
+                camera: [
+                    { at: 0, css: views.bots },
+                    { at: 3.1, move: 1.2, css: views.botsClose },
+                ],
+                sourceStops: {
+                    growth: botAt(bots["growth-open"]),
+                    health: botAt(bots["health-open"]),
+                },
             }),
             ...ending,
         ],

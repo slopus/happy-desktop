@@ -10,9 +10,8 @@ import { join } from "node:path";
 const sharp = createRequire(import.meta.url)("sharp");
 
 /**
- * The whole app as one window, the team demo's 1133×700, dark. Recorded at 2×
- * (`HAPPY_DEMO_DEVICE_SCALE=2`); the `multiplayer` composition shows the
- * window whole, so nothing is enlarged past what was captured.
+ * The released app as one dark window: 1133×800 wide, 764×800 square.
+ * Captured above the composition's largest camera scale so text remains sharp.
  */
 const requestedViewport = /^(\d+)x(\d+)$/u.exec(process.env.MULTIPLAYER_VIEWPORT ?? "");
 const viewport = requestedViewport
@@ -20,7 +19,7 @@ const viewport = requestedViewport
     : { width: 1133, height: 700 };
 
 /**
- * Which chapter this run films: `aware`, `activity`, `bots` or `step-in`.
+ * Which chapter this run films: `aware`, `repos`, `activity`, `bots` or `step-in`.
  * `explore` writes stills of the world instead.
  */
 const shot = process.env.MULTIPLAYER_SHOT ?? "aware";
@@ -270,6 +269,7 @@ async function publicationsPrepare(clients) {
             continue;
         }
         if (job.live) {
+            if (shot === "repos" || shot === "aware") continue;
             world.release("live:publish");
             await wait(() => world.hasReached("live:coordinator"), "Team Servers' report", 180000);
             process.stdout.write(`    publish   ${world.liveTask.name}\n`);
@@ -362,8 +362,8 @@ async function rehearsalsArchive(client) {
 }
 
 /**
- * Steve's live task, fresh for each take: its agent starts one subtask, which
- * writes its change, and both are still working when the take opens.
+ * Steve's live task, fresh for each take. The awareness/repository takes open
+ * on its plan; later chapters retain the three working repository subtasks.
  */
 async function liveTaskPrepare(client) {
     const { task } = await client.createTask({
@@ -372,10 +372,49 @@ async function liveTaskPrepare(client) {
     });
     await client.sendMessage(task.agent.id, {
         id: cuid(),
-        text: world.liveTask.message,
+        text: shot === "step-in" ? world.liveTask.message : world.repositoryWork.prepare,
         // Chapter 5 shows this task's composer, and its mode under it.
         mode: shot === "step-in" ? world.agentMode : world.seedMode,
     });
+    if (shot !== "step-in") {
+        await wait(() => settled(client, task.agent.id), "Team Servers' repository plan");
+        if (shot !== "aware" && shot !== "repos") {
+            await client.sendMessage(task.agent.id, {
+                id: cuid(),
+                text: world.repositoryWork.start,
+                mode: world.seedMode,
+            });
+            for (const part of world.repositoryWork.parts) {
+                world.release(`repos:create:${part.key}`);
+                world.release(`repos:write:${part.key}:first`);
+                world.release(`repos:write:${part.key}:final`);
+                await wait(
+                    () => world.hasReached(`repos:working:${part.key}`),
+                    `${part.title}'s prepared worktree`,
+                );
+            }
+            world.release("repos:parent");
+            await wait(() => settled(client, task.agent.id), "Team Servers' three delegations");
+            const { agent } = await client.getAgent(task.agent.id);
+            let afterId = null;
+            for (const part of world.repositoryWork.parts) {
+                const child = agent.subtasks.find((entry) => entry.title === part.title);
+                if (!child) throw new Error(`Team Servers is missing ${part.title}.`);
+                await client.reorderSubtask(child.id, { afterId, mutationId: randomUUID() });
+                afterId = child.id;
+            }
+            await client.sendMessage(task.agent.id, {
+                id: cuid(),
+                text: world.repositoryWork.publish,
+                mode: world.seedMode,
+            });
+            await wait(
+                () => world.hasReached("live:publish"),
+                "Team Servers' progress publication",
+            );
+        }
+        return task;
+    }
     await wait(
         () =>
             world.hasReached(shot === "step-in" ? "live:coordinator" : "live:publish") &&
@@ -603,7 +642,8 @@ export default {
         const opening = {
             aware: world.openTask,
             activity: world.openTask,
-            bots: "Activity",
+            bots: world.openTask,
+            repos: world.liveTask.name,
             "step-in": world.stepIn.task,
             explore: world.openTask,
         }[shot];
@@ -621,9 +661,10 @@ export default {
             });
             await server.waitFor({ timeout: 60000 });
             await server.click();
-            await sidebarRow(page, world.liveTask.subtask.title)
-                .filter({ hasText: /\+\d/u })
-                .waitFor({ timeout: 60000 });
+            if (shot !== "repos" && shot !== "aware")
+                await sidebarRow(page, world.liveTask.subtask.title)
+                    .filter({ hasText: /\+\d/u })
+                    .waitFor({ timeout: 60000 });
             await sidebarRow(page, opening).click();
             if (opening === world.openTask) {
                 const opened = world.doneTasks.find((task) => task.name === world.openTask);
@@ -636,9 +677,9 @@ export default {
         await load();
         // Chapter 1's Leave affects Kirill's own membership in later takes too.
         if (shot !== "aware" && shot !== "explore") {
-            await sidebarRow(page, "Android Push Fixes").click({ button: "right" });
+            await sidebarRow(page, "Desktop Alerts").click({ button: "right" });
             await page.getByRole("menuitem", { name: "Leave task", exact: true }).click();
-            await sidebarRow(page, "Android Push Fixes").waitFor({ state: "detached" });
+            await sidebarRow(page, "Desktop Alerts").waitFor({ state: "detached" });
         }
         if (shot === "aware") {
             await page.waitForTimeout(2500);
@@ -745,13 +786,141 @@ export default {
         // title bar, where it hovers nothing, out of every pushed-in view.
         const away = { x: 760, y: 14 };
         /** One curved reach, a short reading pause, then a click. */
-        const choose = async (target, name) => {
-            await demo.hold(180);
-            await demo.moveTo(target);
-            await demo.hold(210);
-            cue(`${name}-click`, demo);
-            await demo.click(target, { after: 0 });
+        const choose = async (target, name, options = {}) => {
+            await demo.click(target, {
+                after: 0,
+                ...options,
+                onPress: () => cue(`${name}-click`, demo),
+            });
         };
+
+        if (shot === "repos") {
+            await kirill.reorderTask(live.id, { afterId: null, mutationId: randomUUID() });
+            await page.waitForTimeout(600);
+            await demo.pointerPlace(rest);
+            cue("open", demo);
+            await demo.read(1500);
+            pending.push(
+                clients[world.liveTask.owner].sendMessage(live.agent.id, {
+                    id: cuid(),
+                    text: world.repositoryWork.start,
+                    mode: world.seedMode,
+                }),
+            );
+            filmed.repositories = [];
+            const facts = async (part) => {
+                const { agent } = await kirill.getAgent(live.agent.id);
+                const child = agent.subtasks.find((entry) => entry.title === part.title);
+                if (!child) return undefined;
+                const { workspace } = await kirill.getWorkspace(child.workspaceId);
+                const { git } = await kirill.getWorkspaceGit(child.workspaceId);
+                if (workspace.projectId !== gym.world.projectIds[part.project])
+                    throw new Error(`${part.title} is in the wrong project`);
+                return {
+                    key: part.key,
+                    title: part.title,
+                    project: part.project,
+                    projectId: workspace.projectId,
+                    agentId: child.id,
+                    workspaceId: workspace.id,
+                    path: workspace.compute.path,
+                    insertions: git.insertions,
+                    deletions: git.deletions,
+                    changedFiles: git.changedFiles,
+                    countsExact: git.countsExact,
+                };
+            };
+            for (const part of world.repositoryWork.parts) {
+                await arrivalFilm(
+                    `repo:${part.key}`,
+                    () => world.release(`repos:create:${part.key}`),
+                    () => sidebarRow(page, part.title).count(),
+                );
+                await demo.hold(180);
+            }
+            for (const part of world.repositoryWork.parts)
+                world.release(`repos:write:${part.key}:first`);
+            for (const part of world.repositoryWork.parts) {
+                await until(
+                    demo,
+                    () => world.hasReached(`repos:write:${part.key}:final`),
+                    `${part.title}'s first Git change`,
+                );
+                // A workspace-created watch can race worktree initialization.
+                // Renew against ready workspaces after the child has started.
+                const { projects, workspaces } = await kirill.getDesktopBootstrap();
+                const active = (entry) => entry.status === "active" && entry.archivedAt === null;
+                await kirill.watchGit({
+                    workspaceIds: [
+                        ...new Set([
+                            ...projects.filter(active).map((entry) => entry.id),
+                            ...workspaces
+                                .filter(
+                                    (entry) =>
+                                        active(entry) && entry.initialization.status === "ready",
+                                )
+                                .map((entry) => entry.id),
+                        ]),
+                    ],
+                });
+                const first = await until(
+                    demo,
+                    async () => {
+                        const value = await facts(part);
+                        return value?.insertions > 0 ? value : undefined;
+                    },
+                    `${part.title}'s live Git counts`,
+                );
+                await until(
+                    demo,
+                    () =>
+                        sidebarRow(page, part.title)
+                            .filter({ hasText: `+${first.insertions}` })
+                            .count(),
+                    `${part.title}'s sidebar count`,
+                );
+                filmed.repositories.push({
+                    ...first,
+                    first: { insertions: first.insertions, deletions: first.deletions },
+                });
+                cue(`repo:${part.key}:first`, demo, await place(sidebarRow(page, part.title)));
+                await demo.read(180);
+            }
+            await demo.read(800);
+            for (const part of world.repositoryWork.parts)
+                world.release(`repos:write:${part.key}:final`);
+            for (const part of world.repositoryWork.parts) {
+                const record = filmed.repositories.find((entry) => entry.key === part.key);
+                await until(
+                    demo,
+                    () => world.hasReached(`repos:working:${part.key}`),
+                    `${part.title}'s second Git change`,
+                );
+                const final = await until(
+                    demo,
+                    async () => {
+                        const value = await facts(part);
+                        return value?.insertions > record.first.insertions ? value : undefined;
+                    },
+                    `${part.title}'s growing Git counts`,
+                );
+                await until(
+                    demo,
+                    () =>
+                        sidebarRow(page, part.title)
+                            .filter({ hasText: `+${final.insertions}` })
+                            .count(),
+                    `${part.title}'s final sidebar count`,
+                );
+                Object.assign(record, final);
+                cue(`repo:${part.key}:final`, demo, await place(sidebarRow(page, part.title)));
+                await demo.read(220);
+            }
+            cue("repos-settled", demo);
+            await demo.read(2200);
+            await choose(sidebarRow(page, "Desktop sign-in"), "repo-visit");
+            await demo.read(1800);
+        }
 
         if (shot === "aware") {
             // Chapter 1, "See who's working on what": Kirill is in his own task
@@ -761,7 +930,7 @@ export default {
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo);
-            const beats = [1300, 900];
+            const beats = [900, 500];
             await demo.hold(Number(process.env.MULTIPLAYER_LEAD_MS ?? 300));
             for (const [index, arrival] of world.arrivals.entries()) {
                 await arrivalFilm(
@@ -772,6 +941,10 @@ export default {
                 cue(`arrival-settled:${arrival.name}`, demo, {
                     rect: await rowRect(page, arrival.name),
                 });
+                await demo.moveTo(
+                    { x: demo.pointer.x - 40, y: demo.pointer.y + 12 },
+                    { duration: 400 },
+                );
                 await demo.hold(beats[index]);
             }
             // Kirill opens Steve's new task, reads its agent's plan, and goes
@@ -784,7 +957,12 @@ export default {
                 "Offline Drafts' plan",
             );
             cue("visit-open", demo);
-            await demo.hold(viewport.width < 1000 ? 1400 : 1900);
+            await demo.hold(400);
+            await demo.moveTo(
+                { x: viewport.width * 0.7, y: viewport.height * 0.45 },
+                { duration: 600 },
+            );
+            await demo.read(viewport.width < 1000 ? 1300 : 2000);
             await choose(sidebarRow(page, world.openTask), "back");
             const opened = world.doneTasks.find((task) => task.name === world.openTask);
             await until(
@@ -794,30 +972,30 @@ export default {
             );
             cue("back-open", demo);
             await demo.hold(600);
-            const leaving = sidebarRow(page, "Android Push Fixes");
+            const leaving = sidebarRow(page, "Desktop Alerts");
             await demo.moveTo(leaving);
             await demo.hold(210);
-            cue("leave-menu-click", demo, { rect: await rowRect(page, "Android Push Fixes") });
+            cue("leave-menu-click", demo, { rect: await rowRect(page, "Desktop Alerts") });
             await demo.click(leaving, { button: "right", after: 0 });
             const leave = page.getByRole("menuitem", { name: "Leave task", exact: true });
             await leave.waitFor();
             cue("leave-menu-open", demo, await place(leave));
-            await choose(leave, "leave");
+            await choose(leave, "leave", { before: 700 });
             await until(
                 demo,
-                async () => (await sidebarRow(page, "Android Push Fixes").count()) === 0,
-                "Android Push Fixes left",
+                async () => (await sidebarRow(page, "Desktop Alerts").count()) === 0,
+                "Desktop Alerts left",
             );
             cue("leave-settled", demo);
-            const ownerTask = await taskFind(clients.scoteezy, "Android Push Fixes");
+            const ownerTask = await taskFind(clients.scoteezy, "Desktop Alerts");
             filmed.leave = {
                 label: "Leave task",
-                task: "Android Push Fixes",
+                task: "Desktop Alerts",
                 removedFromKirillSidebar: true,
                 ownerTaskStillActive: Boolean(ownerTask),
                 ownerTaskId: ownerTask?.id,
             };
-            await demo.hold(1100);
+            await demo.read(viewport.width < 1000 ? 1400 : 1800);
         }
 
         if (shot === "activity") {
@@ -856,13 +1034,17 @@ export default {
                 60000,
             );
             cue("parent-done", demo);
-            await demo.hold(1800);
+            await demo.hold(500);
+            cue("activity-move", demo);
             await choose(row, "activity");
             const first = page.getByText(covers.perf.summary).first();
             await until(demo, () => first.isVisible(), "the Activity page");
             cue("activity-open", demo, await place(first));
-            await demo.moveTo({ x: viewport.width - 38, y: 435 }, { duration: 720 });
-            await demo.hold(2500);
+            await demo.moveTo(page.getByText(covers.perf.title, { exact: true }).first(), {
+                duration: 700,
+            });
+            cue("activity-rest", demo);
+            await demo.read(3800);
             cue("activity-rest-end", demo);
         }
 
@@ -871,8 +1053,9 @@ export default {
             await demo.pointerPlace(rest);
             await page.screenshot({ path: join(output, "opening.png") });
             cue("open", demo);
-            await demo.hold(400);
+            await demo.hold(1600);
             for (const report of botReports) {
+                cue(`${report.key}-move`, demo);
                 await choose(sidebarRow(page, report.name), report.key);
                 await until(
                     demo,
@@ -880,7 +1063,7 @@ export default {
                     `${report.name}'s report`,
                 );
                 cue(`${report.key}-open`, demo);
-                await demo.hold(viewport.width < 1000 ? 1700 : 2350);
+                await demo.read(4500);
                 cue(`${report.key}-rest-end`, demo);
             }
         }

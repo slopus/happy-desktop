@@ -93,6 +93,7 @@ function cubicBezier([x1, y1, x2, y2]) {
 /** The camera's one curve: ease-in-out, no overshoot. */
 const ease = cubicBezier([0.65, 0, 0.35, 1]);
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
+const sine = (value) => (1 - Math.cos(Math.PI * clamp01(value))) / 2;
 
 const svg = (width, height, body, viewBox) =>
     Buffer.from(
@@ -177,7 +178,13 @@ async function wordsDraw(cut) {
     };
     const escape = (value) =>
         value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-    const words = { titles: new Map(), cards: new Map(), lines: new Map(), phones: new Map() };
+    const words = {
+        titles: new Map(),
+        cards: new Map(),
+        lines: new Map(),
+        phones: new Map(),
+        brands: new Map(),
+    };
     const picture = async (file) =>
         `data:image/png;base64,${(await sharp(file).png().toBuffer()).toString("base64")}`;
     const device = async (phone) =>
@@ -188,6 +195,17 @@ async function wordsDraw(cut) {
         return `<div class="closing platforms shade"><div class="platform-copy"><h1>On all platforms</h1><div class="icons">${["logo-apple", "logo-windows", "logo-tux", "logo-android"].map(glyph).join("")}</div></div></div>`;
     };
     for (const segment of cut.segments) {
+        if (segment.layout === "brand") {
+            const markup = await closing(segment);
+            const layers = [];
+            for (const selector of ["h1", "p", ".stars"])
+                layers.push(
+                    await draw(
+                        `${markup}<style>.brand-copy>*{visibility:hidden}.brand-copy>${selector}{visibility:visible}</style>`,
+                    ),
+                );
+            words.brands.set(segment, layers);
+        }
         if (segment.phone) {
             const phoneWidth = 430;
             const phoneHeight = Math.round((phoneWidth * 2822) / 1406);
@@ -219,7 +237,7 @@ async function wordsDraw(cut) {
                     .toBuffer(),
             });
         }
-        // Each opening line on its own layer, where it rests once the window is in.
+        // Fixed opening lines fade independently without changing their position.
         if (segment.opening) {
             const layers = [];
             for (const line of segment.opening.lines)
@@ -647,6 +665,7 @@ const phonePictures = firstPhone?.phone.video
       )
     : undefined;
 let currentBackdrop;
+let lastWindow;
 
 /**
  * How much of a window's caption shows at `t`. Captions arrive after the
@@ -656,12 +675,12 @@ function wordsShown(segment, t, first, last) {
     const handover = cut.dissolve ?? 0;
     const into =
         segment.titleFrom !== undefined
-            ? clamp01((t - segment.titleFrom) / 0.3)
+            ? clamp01((t - segment.titleFrom) / (segment.titleFadeIn ?? 0.5))
             : first
               ? 1
               : clamp01((t - handover) / 0.3);
     const end = Math.min(segment.seconds - 1 / fps, segment.titleTo ?? Infinity);
-    const out = last ? 1 : clamp01((end - t) / 0.15);
+    const out = last ? 1 : clamp01((end - t) / (segment.titleFadeOut ?? 0.5));
     return { into, amount: Math.min(into, out) };
 }
 
@@ -673,25 +692,54 @@ async function* segmentFrames(segment, first, last, start) {
         const phone = words.phones.get(segment);
         const square = width === height;
         for (let index = 0; index < count; index += 1) {
-            // A chapter card waits for the window to dissolve to the backdrop.
+            const t = index / fps;
             const glide =
-                segment.layout === "platforms"
-                    ? ease(clamp01((index / fps - segment.seconds + 0.7) / 0.7))
-                    : 1;
+                segment.layout === "brand"
+                    ? sine((t - segment.glideFrom) / segment.glideSeconds)
+                    : 0;
             const amount =
                 segment.entrance === "after-window"
-                    ? ease(clamp01((index / fps - 0.45) / 0.45))
+                    ? sine((t - segment.textFrom) / segment.textFade)
                     : segment.layout === "platforms"
-                      ? Math.min(ease(clamp01((index / fps - 0.5) / 0.45)), 1 - glide)
-                      : segment.layout === "brand"
-                        ? ease(clamp01(index / fps / 0.35))
-                        : 1;
-            const layers = await translated(
-                amount === 1 ? layer : await fade(layer, amount),
-                { width, height },
-                0,
-                0,
-            );
+                      ? sine((t - segment.textFrom) / segment.textFade)
+                      : 1;
+            const layers = [];
+            if (segment.opening) {
+                for (const [i, line] of segment.opening.lines.entries())
+                    layers.push({
+                        input: await fade(
+                            words.lines.get(segment)[i],
+                            sine((t - line.at) / line.fade),
+                        ),
+                        left: 0,
+                        top: 0,
+                    });
+            } else if (segment.layout === "brand") {
+                for (const [i, input] of words.brands.get(segment).entries())
+                    layers.push({
+                        input: await fade(
+                            input,
+                            sine((t - segment.textTimes[i]) / segment.textFade),
+                        ),
+                        left: 0,
+                        top: 0,
+                    });
+                const platforms = cut.segments.find((entry) => entry.layout === "platforms");
+                if (t < segment.platformsOut)
+                    layers.push({
+                        input: await fade(
+                            words.cards.get(platforms),
+                            1 - sine(t / segment.platformsOut),
+                        ),
+                        left: 0,
+                        top: 0,
+                    });
+            } else
+                layers.push({
+                    input: amount === 1 ? layer : await fade(layer, amount),
+                    left: 0,
+                    top: 0,
+                });
             if (phone) {
                 const centre = (width - phone.width) / 2;
                 const left = Math.round(centre + ((square ? 45 : 245) - centre) * glide);
@@ -734,7 +782,12 @@ async function* segmentFrames(segment, first, last, start) {
                 }
                 layers.push(
                     ...(await translated(
-                        phoneInput,
+                        segment.layout === "platforms"
+                            ? await fade(
+                                  phoneInput,
+                                  sine((t - segment.phoneFrom) / segment.phoneFade),
+                              )
+                            : phoneInput,
                         { width: phone.width, height: phone.height },
                         left,
                         top,
@@ -768,7 +821,12 @@ async function* segmentFrames(segment, first, last, start) {
         for await (const picture of takeOpen(
             source,
             segment.from,
-            count - held - tail + skipped,
+            Math.min(
+                count - held - tail + skipped,
+                segment.until === undefined
+                    ? Infinity
+                    : Math.round((segment.until - segment.from) * fps),
+            ),
             fps,
             size,
         )) {
@@ -782,39 +840,6 @@ async function* segmentFrames(segment, first, last, start) {
         for (; shown < count && lastPicture; shown += 1) yield lastPicture;
     })();
     const frame = { left: 0, top: 0, width, height };
-    /** The opening's lines at `t`: each fades in at its time, all rise with the window, then fade. */
-    const linesAt = async (t) => {
-        const opening = segment.opening;
-        if (!opening) return [];
-        const k = ease(clamp01((t - opening.rise[0]) / (opening.rise[1] - opening.rise[0])));
-        const out = clamp01((opening.out + 0.3 - t) / 0.3);
-        const layers = words.lines.get(segment);
-        const shown = [];
-        for (const [at, line] of opening.lines.entries()) {
-            const amount = Math.min(clamp01((t - line.at) / 0.3), out);
-            if (amount <= 0) continue;
-            shown.push({
-                input: await sharp(
-                    await sharp(await fade(layers[at], amount))
-                        .extend({
-                            top: Math.round((1 - k) * opening.drop),
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            background: { r: 0, g: 0, b: 0, alpha: 0 },
-                        })
-                        .png()
-                        .toBuffer(),
-                )
-                    .extract({ left: 0, top: 0, width, height })
-                    .png()
-                    .toBuffer(),
-                left: 0,
-                top: 0,
-            });
-        }
-        return shown;
-    };
     let index = 0;
     for await (const picture of pictures) {
         const t = index / fps;
@@ -826,16 +851,13 @@ async function* segmentFrames(segment, first, last, start) {
         if (!intersect(rect, frame)) {
             const back = await backdrop.next();
             currentBackdrop = back;
-            yield await sharp(back, raw)
-                .composite(await linesAt(t))
-                .removeAlpha()
-                .raw()
-                .toBuffer();
+            yield await sharp(back, raw).removeAlpha().raw().toBuffer();
             index += 1;
             continue;
         }
         const dims = dimsAt(segment, t);
         const windowOnly = await windowDraw(picture, size, rect, dims);
+        if (index === count - 1) lastWindow = { picture, size, rect, dims };
         // Where the window runs under the caption, the caption sits on its pill.
         const under = title ? intersect(rect, title.pill) : undefined;
         const covered = under
@@ -860,7 +882,6 @@ async function* segmentFrames(segment, first, last, start) {
         yield await sharp(back, raw)
             .composite([
                 ...windowOnly,
-                ...(await linesAt(t)),
                 ...(covered * caption > 0
                     ? [
                           {
@@ -948,26 +969,51 @@ let total = 0;
 let previous;
 for (const [position, segment] of cut.segments.entries()) {
     const start = total;
+    const previousSegment = cut.segments[position - 1];
+    const chapterToApp = segment.kind === "window" && previousSegment?.kind === "card";
+    const seconds =
+        segment.entrance === "in-app" ? 0.6 : chapterToApp ? cut.dissolve + 0.2 : cut.dissolve;
     const dissolve =
-        previous && segment.entrance !== "continuous-phone"
-            ? Math.round((cut.dissolve ?? 0) * fps)
-            : 0;
+        previous && segment.entrance !== "continuous-phone" ? Math.round(seconds * fps) : 0;
     let index = 0;
     const first = position === 0;
     const last = position === cut.segments.length - 1;
     for await (const picture of segmentFrames(segment, first, last, start)) {
-        const previousSegment = cut.segments[position - 1];
-        const chapterToApp = segment.kind === "window" && previousSegment?.kind === "card";
         const t = index / fps;
+        let departing = previous;
+        if (
+            index < dissolve &&
+            segment.kind === "card" &&
+            previousSegment?.kind === "window" &&
+            lastWindow
+        ) {
+            const amount = 1 - 0.015 * sine(t / cut.dissolve);
+            const base = lastWindow.rect;
+            const rect = {
+                ...base,
+                width: Math.round(base.width * amount),
+                height: Math.round(base.height * amount),
+                left: Math.round(base.left + (base.width * (1 - amount)) / 2),
+                top: Math.round(base.top + (base.height * (1 - amount)) / 2),
+                scale: base.scale * amount,
+            };
+            departing = await sharp(currentBackdrop, raw)
+                .composite(
+                    await windowDraw(lastWindow.picture, lastWindow.size, rect, lastWindow.dims),
+                )
+                .removeAlpha()
+                .raw()
+                .toBuffer();
+        }
         const out =
             index < dissolve
                 ? chapterToApp
                     ? blend(
-                          blend(previous, currentBackdrop, ease(clamp01(t / 0.45))),
+                          blend(previous, currentBackdrop, sine(t / (cut.textOut ?? 0.5))),
                           picture,
-                          ease(clamp01((t - 0.25) / 0.45)),
+                          sine((t - 0.2) / cut.dissolve),
                       )
-                    : blend(previous, picture, ease((index + 1) / (dissolve + 1)))
+                    : blend(departing, picture, sine((index + 1) / (dissolve + 1)))
                 : picture;
         await write(out);
         if (stills.has(total)) {

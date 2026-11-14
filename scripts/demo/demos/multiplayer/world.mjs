@@ -183,6 +183,10 @@ function change(path, seed, { base, deleted, added, language }) {
     return {
         path,
         before: fileOf(original),
+        first: fileOf([
+            ...original.slice(0, base - Math.ceil(deleted / 2)),
+            ...codeLines(`${seed}:new`, Math.ceil(added / 2), language),
+        ]),
         after: fileOf([
             ...original.slice(0, base - deleted),
             ...codeLines(`${seed}:new`, added, language),
@@ -191,6 +195,25 @@ function change(path, seed, { base, deleted, added, language }) {
 }
 
 const changes = {
+    iosServer: change(
+        "packages/happy-ios/Sources/HappyCore/ServerSignIn/ServerCode.swift",
+        "ios-server-codes",
+        {
+            base: 60,
+            deleted: 12,
+            added: 190,
+            language: "swift",
+        },
+    ),
+    desktopSignIn: change(
+        "packages/happy-desktop-electron/sources/main/serverSessions.ts",
+        "desktop-sign-in",
+        {
+            base: 140,
+            deleted: 51,
+            added: 268,
+        },
+    ),
     sendFixes: change(
         "packages/happy-ios/Sources/HappyUI/Chat/ChatComposerOverlay.swift",
         "ios-send-fixes",
@@ -199,7 +222,7 @@ const changes = {
     signIn: change(
         "packages/happy-agent-modules/sources/connections/impl/ServerSignIn.ts",
         "agent-sign-in",
-        { base: 120, deleted: 24, added: 398 },
+        { base: 120, deleted: 38, added: 412 },
     ),
 };
 
@@ -219,6 +242,7 @@ export const repository = {
         "README.md": "# Happy\n\nRemote access to your coding agents.\n",
         [barsPath]: barsSource,
         [changes.sendFixes.path]: changes.sendFixes.before,
+        [changes.iosServer.path]: changes.iosServer.before,
     },
 };
 export const backgroundRepositories = [
@@ -228,6 +252,7 @@ export const backgroundRepositories = [
         files: {
             "README.md":
                 "# Happy Desktop\n\nProjects, workspaces, and conversations in one place.\n",
+            [changes.desktopSignIn.path]: changes.desktopSignIn.before,
         },
     },
     {
@@ -447,6 +472,37 @@ export const liveTask = {
     },
 };
 
+/** Three actual project worktrees, with two successive Git changes each. */
+export const repositoryWork = {
+    prepare: "Plan the team server sign-in across our three repositories.",
+    start: "Start all three parts in their own repositories.",
+    publish: "Publish the team server progress report.",
+    plan: "One sign-in, three repositories. I'll open iOS server codes in happy, Desktop sign-in in happy-desktop, and Agent sign-in in happy-agent.",
+    parts: [
+        {
+            key: "ios",
+            title: "iOS server codes",
+            project: "happy",
+            workspace: "ios-server-codes",
+            change: changes.iosServer,
+        },
+        {
+            key: "desktop",
+            title: "Desktop sign-in",
+            project: "happy-desktop",
+            workspace: "desktop-sign-in",
+            change: changes.desktopSignIn,
+        },
+        {
+            key: "agent",
+            title: "Agent sign-in",
+            project: "happy-agent",
+            workspace: "agent-sign-in",
+            change: changes.signIn,
+        },
+    ],
+};
+
 /**
  * What teammates start on camera, through their own sign-ins, in this order.
  * Each stays working for as long as the take runs. `plan` is the agent's first
@@ -455,14 +511,14 @@ export const liveTask = {
 export const arrivals = [
     {
         owner: "scoteezy",
-        name: "Android Push Fixes",
-        message: "Pushes stop on Android after the app sits in the background. Find out why.",
+        name: "Desktop Alerts",
+        message: "Desktop alerts arrive twice after wake. Find out why.",
     },
     {
         owner: "steve",
         name: "Offline Drafts",
-        message: "Keep composer drafts when the app goes offline, on desktop and on phones.",
-        plan: "Drafts will save on the device first and sync when the server is back. I'm reading the composer's state and the sync queue before I change anything.",
+        message: "Keep drafts when the app goes offline.",
+        plan: "I'll save locally and sync after reconnecting.",
     },
 ];
 
@@ -488,8 +544,8 @@ export const stepIn = {
 /** Kirill's sidebar on Happy Core, top to bottom, before anyone starts anything. */
 export const sidebarOrder = [
     "Task List Speed",
-    "Voice waveform",
     "Team Servers",
+    "Voice waveform",
     "Message Retry Queue",
     "Bot Permissions",
     "Sidebar Unread Dots",
@@ -738,6 +794,39 @@ export async function reply(payload) {
         return { content: [text("<title>Working session</title>\n<recap>In progress.</recap>")] };
 
     const turn = turnOf(messages);
+
+    if (turn.text === repositoryWork.prepare) return quick([text(repositoryWork.plan)]);
+    if (turn.text === repositoryWork.publish) {
+        if (turn.answered === 0) await gate("live:publish");
+        const job = publications.find((entry) => entry.live);
+        const call = await publishCall(job.artifacts, turn.answered, resultsOf(turn));
+        if (call) return quick([call]);
+        await gate("live:coordinator");
+        return quick([text("The three repository changes are ready for review.")]);
+    }
+    if (turn.text === repositoryWork.start) {
+        const part = repositoryWork.parts[turn.answered];
+        if (part) {
+            await gate(`repos:create:${part.key}`);
+            return quick([subtaskCall({ ...part, text: `REPOSITORY ${part.key}` })]);
+        }
+        await gate("repos:parent");
+        return quick([text("All three repositories are ready for review.")]);
+    }
+    if (turn.text.startsWith("REPOSITORY ")) {
+        const key = turn.text.slice("REPOSITORY ".length);
+        const part = repositoryWork.parts.find((entry) => entry.key === key);
+        if (!part) throw new Error(`Unknown staged repository work: ${key}`);
+        if (turn.answered < 2) {
+            const final = turn.answered === 1;
+            await gate(`repos:write:${key}:${final ? "final" : "first"}`);
+            const body = final ? part.change.after : part.change.first;
+            const source = await staged(`repos/${key}-${final ? "final" : "first"}.txt`, body);
+            return quick([copyCall(source, part.change.path)]);
+        }
+        await gate(`repos:working:${key}`);
+        return quick([text("Ready for review.")]);
+    }
 
     // Recurring-work reports are real inline media in the bot conversation.
     for (const report of botReports) {

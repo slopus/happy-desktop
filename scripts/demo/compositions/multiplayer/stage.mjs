@@ -39,7 +39,8 @@ export const stage = {
     title: { centerY: 1006, size: 50, lineHeight: 60 },
     type: { ...type, cardWidth: 1400, pictureHeight: 740 },
     /** Seconds one segment dissolves into the next. */
-    dissolve: 0.7,
+    dissolve: 1.1,
+    textOut: 0.5,
     encode: { crf: 16 },
 };
 
@@ -59,6 +60,7 @@ export const square = {
     push: 1.3,
     title: { centerY: 990, size: 44, lineHeight: 54 },
     type: { ...type, card: 68, wordmark: 116, line: 40, small: 25, cardWidth: 900, opening: 37 },
-    dissolve: 0.7,
+    dissolve: 1,
+    textOut: 0.4,
     encode: { crf: 16 },
 };
