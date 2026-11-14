@@ -331,6 +331,54 @@ const FAILED_TRANSCRIPT: readonly ConversationEntry[] = [
     ),
 ];
 
+/* Without compute, the checkout waits for the agent's next command and runs
+   inside it. The command ran fine, so its row still reads as that command; the
+   checkout's failure is told beneath it. */
+const DEFERRED_TRANSCRIPT: readonly ConversationEntry[] = [
+    message(
+        "u1",
+        happyAgentOwnerAuthor,
+        "Check out happy on happy/test-pr-workflow and run its tests.",
+    ),
+    checkoutCall("t1", {
+        type: "checkout",
+        repository: "happy",
+        branch: "happy/test-pr-workflow",
+        folder: "happy",
+        status: "pending",
+    }),
+    {
+        kind: "agentActivity",
+        id: "t2",
+        sequence: "t2",
+        activity: {
+            kind: "tool",
+            tool: {
+                toolCallId: "t2",
+                toolName: "exec_command",
+                arguments: { description: "List the workspace", command: "ls /workspace" },
+                status: "success",
+                failed: false,
+                presentation: { type: "execCommand", command: "ls /workspace", output: "" },
+                summary: "List the workspace",
+                summaryKind: "description",
+                checkoutFailures: [
+                    {
+                        repository: "happy",
+                        branch: "happy/test-pr-workflow",
+                        error: CHECKOUT_ERROR,
+                    },
+                ],
+            },
+        },
+    },
+    message(
+        "a1",
+        agentAuthor,
+        "The checkout failed: release, the branch I started from, does not exist in happy. Which branch should it start from?",
+    ),
+];
+
 const RETRIED_TRANSCRIPT: readonly ConversationEntry[] = [
     ...FAILED_TRANSCRIPT,
     message("u2", happyAgentOwnerAuthor, "Start it from main."),
@@ -648,10 +696,19 @@ export function HappyCloudRepositoriesFlowPage() {
                 <Transcript entries={FAILED_TRANSCRIPT} repositories={[]} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
+                detail="without compute it ran inside the next command, which still reads as itself; the failure is told beneath it"
+                label="A deferred checkout failed, on the command that ran it"
+                number="18"
+                screen="18-checkout-deferred-failed-1100x760"
+                window={WINDOWS[0]}
+            >
+                <Transcript entries={DEFERRED_TRANSCRIPT} repositories={[]} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
                 detail="the failed call stays as history; the retry checks it out and its chip appears"
                 label="Retried after a fix"
-                number="18"
-                screen="18-checkout-retried-1100x760"
+                number="19"
+                screen="19-checkout-retried-1100x760"
                 window={WINDOWS[0]}
             >
                 <Transcript

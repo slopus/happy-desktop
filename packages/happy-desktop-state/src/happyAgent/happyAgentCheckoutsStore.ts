@@ -98,17 +98,26 @@ export interface HappyAgentCheckoutResult {
     readonly error?: string;
 }
 
-/**
- * Validate only the explicitly named tool's contract: `checkout_repository`
- * answers with the checkout it added or retried, as `GET …/checkouts` shows
- * one, failed or not.
- */
-export function happyAgentCheckoutResultRead(
-    toolName: string,
-    value: unknown,
-): HappyAgentCheckoutResult | undefined {
-    if (toolName !== "checkout_repository") return undefined;
-    const checkout = recordOf(recordOf(value)?.checkout);
+/** A checkout a tool call ran, or told the model about, that failed. */
+export interface HappyAgentCheckoutFailure {
+    readonly repository: string;
+    readonly branch: string;
+    /** The server's words for why it failed. */
+    readonly error: string;
+}
+
+/** What a tool call's stored result says about checkouts. */
+export interface HappyAgentToolCheckouts {
+    /** `checkout_repository`'s own checkout, failed or not. */
+    readonly checkout?: HappyAgentCheckoutResult;
+    /** Other checkouts that failed in this call or are reported by it, in the server's order. */
+    readonly failures: readonly HappyAgentCheckoutFailure[];
+}
+
+const CHECKOUT_FAILED = "The repository could not be checked out.";
+
+function checkoutViewRead(value: unknown): HappyAgentCheckoutResult | undefined {
+    const checkout = recordOf(value);
     const repository = textOrNull(recordOf(checkout?.repository)?.name);
     const branch = textOrNull(checkout?.branch);
     if (!checkout || repository === null || branch === null) return undefined;
@@ -120,13 +129,56 @@ export function happyAgentCheckoutResultRead(
         folder: textOrNull(checkout.folder) ?? "",
         status,
         ...(status === "failed"
-            ? {
-                  error:
-                      textOrNull(recordOf(checkout.error)?.message) ??
-                      "The repository could not be checked out.",
-              }
+            ? { error: textOrNull(recordOf(checkout.error)?.message) ?? CHECKOUT_FAILED }
             : {}),
     };
+}
+
+/** The legacy attached repository, whose checkout error is a sentence or `{message}`. */
+function bindingFailureRead(value: unknown): HappyAgentCheckoutFailure | undefined {
+    const binding = recordOf(value);
+    const checkout = recordOf(binding?.checkout);
+    const branch = textOrNull(binding?.branch);
+    const repository = textOrNull(binding?.name) ?? textOrNull(binding?.repositoryId);
+    if (checkout?.status !== "failed" || repository === null || branch === null) return undefined;
+    return {
+        repository,
+        branch,
+        error:
+            textOrNull(checkout.error) ??
+            textOrNull(recordOf(checkout.error)?.message) ??
+            CHECKOUT_FAILED,
+    };
+}
+
+/**
+ * Reads the checkouts a stored tool result carries: `checkout_repository`'s
+ * own under `checkout`, and on any call the checkouts it ran to an end or
+ * reports under `checkouts`, plus a failed legacy binding under `repository`.
+ * A result that was not an object arrives wrapped, with these beside it.
+ */
+export function happyAgentToolCheckoutsRead(
+    toolName: string,
+    value: unknown,
+): HappyAgentToolCheckouts | undefined {
+    const result = recordOf(value);
+    if (!result) return undefined;
+    const checkout =
+        toolName === "checkout_repository" ? checkoutViewRead(result.checkout) : undefined;
+    const failures: HappyAgentCheckoutFailure[] = [];
+    for (const entry of Array.isArray(result.checkouts) ? result.checkouts : []) {
+        const listed = checkoutViewRead(entry);
+        if (listed?.error !== undefined)
+            failures.push({
+                repository: listed.repository,
+                branch: listed.branch,
+                error: listed.error,
+            });
+    }
+    const binding = bindingFailureRead(result.repository);
+    if (binding) failures.push(binding);
+    if (checkout === undefined && failures.length === 0) return undefined;
+    return { ...(checkout ? { checkout } : {}), failures };
 }
 
 /**

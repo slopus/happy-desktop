@@ -6,8 +6,10 @@ import {
     type ConversationMediaItem,
     type ConversationMediaLayout,
     type ConversationRequest,
+    type ConversationToolCall,
     type HappyReference,
 } from "happy-desktop-state";
+import { toolCheckoutFailureLines } from "./toolCheckoutFailures";
 import {
     conversationAgentRowStartsGroup,
     conversationEntryPrecedesActivity,
@@ -535,6 +537,8 @@ function mediaHeight(images: readonly MediaFlowImage[], measure: number, hasBody
  * call's own line.
  */
 const TOOL_MEDIA_GAP = 8;
+/** A failed checkout's line under its call: one 18px line. */
+const CHECKOUT_FAILURE_LINE_HEIGHT = 18;
 /** A file or document presented by a tool is one 64px `ResultCard`. */
 const RESULT_CARD_HEIGHT = 64;
 
@@ -574,8 +578,20 @@ function toolResultHeight(
     mediaPlaced: ReadonlySet<number> | undefined,
 ): number {
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return 0;
+    return (
+        toolCheckoutFailureLines(entry.activity.tool).length * CHECKOUT_FAILURE_LINE_HEIGHT +
+        toolBodyHeight(entry.activity.tool, measure, inlinePage, mediaRun, mediaPlaced)
+    );
+}
+
+function toolBodyHeight(
+    tool: ConversationToolCall,
+    measure: number,
+    inlinePage: InlinePageGeometry | undefined,
+    mediaRun: ConversationMediaRun | undefined,
+    mediaPlaced: ReadonlySet<number> | undefined,
+): number {
     if (inlinePage !== undefined) return TOOL_MEDIA_GAP + inlinePageHeight(inlinePage);
-    const tool = entry.activity.tool;
     const presentation = tool.presentation;
     if (presentation?.type === "media" && presentation.items.length > 0) {
         /* A call in a run draws nothing under its line until the last one,

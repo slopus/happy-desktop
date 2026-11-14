@@ -31,6 +31,7 @@ import { ScrollingText } from "./ScrollingText";
 import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
 import { useFileRevealMenu } from "./FileRevealMenu";
+import { toolCheckoutFailureLines } from "./toolCheckoutFailures";
 import { TypedText } from "./TypedText";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
@@ -804,11 +805,18 @@ function boundedJson(value: ConversationJson): string | undefined {
     return text.length > JSON_BUDGET ? `${text.slice(0, JSON_BUDGET)}\n… truncated` : text;
 }
 
-function ChildRow(props: { tone?: "muted" | "error"; children: React.ReactNode }) {
+function ChildRow(props: {
+    tone?: "muted" | "error";
+    /** Cut to one line, with the whole text on hover. */
+    oneLine?: string;
+    children: React.ReactNode;
+}) {
     return (
         <div
             className="happy-agent-activity__child"
+            data-one-line={props.oneLine ? "" : undefined}
             data-tone={props.tone ?? "muted"}
+            title={props.oneLine}
             data-happy-desktop-ui="agent-activity-child"
         >
             <span aria-hidden="true" className="happy-agent-activity__child-marker">
@@ -968,9 +976,6 @@ function AgentToolActivity(props: {
     } else if (presentation?.type === "checkout") {
         verb = toolVerb(tool.toolName, tool.failed ? "failed" : tool.status, presentation);
         primaryText = `${presentation.repository} · ${presentation.branch}`;
-        // A transcript row is one line, so a failure says why on that line.
-        if (singleLine && presentation.error !== undefined)
-            primaryText = `${primaryText} — ${presentation.error}`;
     } else if (presentation?.type === "page") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.url;
@@ -1092,7 +1097,7 @@ function AgentToolActivity(props: {
             : undefined;
     const compactionFailure =
         presentation?.type === "compaction" ? presentation.failureReason : undefined;
-    const checkoutFailure = presentation?.type === "checkout" ? presentation.error : undefined;
+    const checkoutFailures = toolCheckoutFailureLines(tool);
 
     /* What a reader reaches for the clipboard to get: the subject that scrolled
        out of the row, followed by the output or result the row only shows in
@@ -1117,15 +1122,12 @@ function AgentToolActivity(props: {
               ? presentation.sources?.map((source) => `${source.title}\n${source.url}`).join("\n")
               : presentation?.type === "compaction"
                 ? presentation.failureReason
-                : presentation?.type === "checkout"
-                  ? singleLine
-                      ? undefined
-                      : presentation.error
-                  : presentation?.type === "artifact"
-                    ? presentation.title
-                    : presentation === undefined
-                      ? tool.display
-                      : undefined,
+                : presentation?.type === "artifact"
+                  ? presentation.title
+                  : presentation === undefined
+                    ? tool.display
+                    : undefined,
+        ...checkoutFailures,
     ]
         .map((part) => part?.replace(/\n+$/, ""))
         .filter((part): part is string => part !== undefined && part.length > 0)
@@ -1360,6 +1362,13 @@ function AgentToolActivity(props: {
                 )}
             </div>
 
+            {/* Each on one line, so the transcript can size the row from its count. */}
+            {checkoutFailures.map((failure, index) => (
+                <ChildRow key={index} oneLine={failure} tone="error">
+                    {failure}
+                </ChildRow>
+            ))}
+
             {mediaVisible === undefined ||
             mediaVisible.items.length === 0 ||
             props.mediaRun?.type === "deferred" ? null : props.mediaRun?.type === "end" ? (
@@ -1404,10 +1413,6 @@ function AgentToolActivity(props: {
 
             {!singleLine && compactionFailure !== undefined ? (
                 <ChildRow tone="error">{compactionFailure}</ChildRow>
-            ) : null}
-
-            {!singleLine && checkoutFailure !== undefined ? (
-                <ChildRow tone="error">{checkoutFailure}</ChildRow>
             ) : null}
 
             {!singleLine && mcpResult ? (

@@ -441,6 +441,13 @@ export type ConversationActivityPresentation =
           readonly display: HappyAgentArtifactDisplay | null;
       };
 
+/** A repository checkout that failed, in the server's words. */
+export interface ConversationCheckoutFailure {
+    readonly repository: string;
+    readonly branch: string;
+    readonly error: string;
+}
+
 export interface ConversationActivityFailure {
     readonly kind: "execution_failed" | "interrupted" | "invalid_arguments" | "tool_unavailable";
     readonly message?: string;
@@ -465,6 +472,11 @@ export interface ConversationToolCall {
     readonly failed: boolean;
     readonly failure?: ConversationActivityFailure;
     readonly presentation?: ConversationActivityPresentation;
+    /**
+     * Repository checkouts that failed while this call ran, or whose failure
+     * it reported: each told on the call, beneath what the call itself did.
+     */
+    readonly checkoutFailures?: readonly ConversationCheckoutFailure[];
     readonly review?: ConversationActivityReview;
     /**
      * The few words the call gave about what it does — a command's

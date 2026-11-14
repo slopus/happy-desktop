@@ -263,6 +263,12 @@
     word-break: break-word;
 }
 
+.happy-agent-activity__child[data-one-line] .happy-agent-activity__child-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .happy-agent-activity__child[data-tone="error"] {
     color: var(--status-error);
 }

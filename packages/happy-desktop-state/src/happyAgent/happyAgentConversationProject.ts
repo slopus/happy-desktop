@@ -1296,6 +1296,9 @@ function toolProject(
             : {}),
         failed: element.status === "failed",
         ...presentationEntry(element.presentation, agents),
+        ...(element.checkoutFailures === undefined
+            ? {}
+            : { checkoutFailures: element.checkoutFailures }),
         ...(element.elevated === true ? { elevated: true } : {}),
         ...(summary === undefined ? {} : { summary: summary.text, summaryKind: summary.kind }),
         // A review still running has only the action it is weighing: no

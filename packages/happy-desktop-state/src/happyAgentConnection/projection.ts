@@ -1,5 +1,5 @@
 import { happyAgentPreviewResultRead } from "../happyAgent/happyAgentPreviewsStore.js";
-import { happyAgentCheckoutResultRead } from "../happyAgent/happyAgentCheckoutsStore.js";
+import { happyAgentToolCheckoutsRead } from "../happyAgent/happyAgentCheckoutsStore.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
@@ -1829,13 +1829,13 @@ function messageElementsProject(
                 block.status === "completed"
                     ? happyAgentPreviewResultRead(block.name, block.result)
                     : undefined;
-            // A checkout's result says how it went, failed included.
-            const checkout =
+            // A result tells the checkouts the call ran, failed included.
+            const checkouts =
                 block.status === "running"
                     ? undefined
-                    : happyAgentCheckoutResultRead(block.name, block.result);
-            const presentation: ToolPresentation | undefined = checkout
-                ? { kind: "checkout", ...checkout }
+                    : happyAgentToolCheckoutsRead(block.name, block.result);
+            const presentation: ToolPresentation | undefined = checkouts?.checkout
+                ? { kind: "checkout", ...checkouts.checkout }
                 : block.presentation === undefined
                   ? undefined
                   : projectToolPresentation(block.presentation, (index) =>
@@ -1858,6 +1858,9 @@ function messageElementsProject(
                     : presentation === undefined
                       ? {}
                       : { presentation }),
+                ...(checkouts && checkouts.failures.length > 0
+                    ? { checkoutFailures: checkouts.failures }
+                    : {}),
                 // Only a reviewed call carries elevation, and only the granted
                 // one is worth carrying: "not elevated" is the ordinary case
                 // every unreviewed call is already in.

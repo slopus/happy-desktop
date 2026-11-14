@@ -32,7 +32,10 @@ import type { HappyAgentSync } from "./happyAgentSync.js";
 import type { UserEnvironmentReport } from "./userEnvironment.js";
 import type { UserProfile } from "./userProfiles.js";
 import type { HappyAgentPreview } from "../happyAgent/happyAgentPreviewsStore.js";
-import type { HappyAgentCheckoutResult } from "../happyAgent/happyAgentCheckoutsStore.js";
+import type {
+    HappyAgentCheckoutFailure,
+    HappyAgentCheckoutResult,
+} from "../happyAgent/happyAgentCheckoutsStore.js";
 
 export type { MutationId };
 
@@ -333,6 +336,8 @@ export interface ToolCallElement extends BaseChatElement {
     progress?: string;
     result?: string;
     presentation?: ToolPresentation;
+    /** Repository checkouts that failed in this call, or that it reported to the model. */
+    checkoutFailures?: readonly HappyAgentCheckoutFailure[];
     /**
      * The call crossed the automatic permission-review boundary and its
      * execution was granted temporary Full access. Absent on a call that was
