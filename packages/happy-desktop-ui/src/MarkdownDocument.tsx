@@ -15,7 +15,7 @@ import Markdown, {
     type UrlTransform,
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { happyReferencePlaceholder, isHappyUrl, type HappyReference } from "happy-desktop-state";
+import { happyShareLinkParse, isHappyUrl, type HappyReference } from "happy-desktop-state";
 import { CodeBlock } from "./CodeBlock";
 import {
     fileReferenceFragment,
@@ -30,10 +30,12 @@ import { markdownTableCodeKeepsLine } from "./messageTextLayout";
 import {
     messageFileLinkFromHref,
     messageHrefHere,
+    messageLinkWords,
     messageReferenceFromHref,
     type MessageReferences,
 } from "./messageReferences";
 import { ScrollArea } from "./Scrollbar";
+import { ShimmerText } from "./ShimmerText";
 
 // react-markdown reparses the document when this plugin list changes identity.
 // Keep the product's fixed GFM configuration stable across streaming/store
@@ -133,8 +135,9 @@ export type MarkdownDocumentProps = {
     /**
      * The live side of the `happy://` links to agents, artifacts, workspaces,
      * and the rest of Happy a document carries: what each reads as now, and
-     * where opening one goes. Without it each reads as the label it was
-     * written with, inert.
+     * where opening one goes. A link with a label reads as that label; one
+     * with none, as what the thing is called now. Without it each is inert,
+     * and an unlabelled one reads as a placeholder.
      */
     entities?: MessageReferences;
     /**
@@ -286,40 +289,58 @@ const MarkdownReferencesContext = createContext<MarkdownDocumentReferences | und
 const EntitiesContext = createContext<MessageReferences | undefined>(undefined);
 
 /**
- * A `happy://` link to something in Happy — an agent, an artifact, a
- * workspace. It reads as the live title of what it names, as messages do,
- * and opens it in the app; the label it was written with stands in while
- * that title is being read, and for something this reader cannot look up.
- * An empty label means "fill in the name", so it is never drawn empty.
+ * A Happy link to something in Happy — an agent, an artifact, a workspace —
+ * written as a `happy://` address or a share link, under its label, or with
+ * none what the thing is called now (see `messageLinkWords`). One the reader
+ * can open is a link into the
+ * app, carrying the same travelling band a message link does while the thing
+ * is busy; a share link to something this reader cannot open stays a web
+ * link, which the app routes to its server; anything else is its words.
  */
 function DocumentEntityLink(props: {
     children: ReactNode;
+    href: string;
     reference: HappyReference;
-    written: boolean;
 }) {
     const entities = useContext(EntitiesContext);
     const view = entities?.view(props.reference);
-    const placeholder = happyReferencePlaceholder(props.reference);
     if (view?.type === "link")
         return (
             <button
                 className="happy-markdown-document__link happy-markdown-document__link--file"
+                data-busy={view.busy ? "" : undefined}
                 data-happy-desktop-ui="markdown-document-entity-link"
                 data-reference-kind={props.reference.kind}
                 onClick={() => entities?.open(props.reference)}
                 type="button"
             >
-                {view.reading === true && props.written ? props.children : view.label}
+                {view.busy ? (
+                    <ShimmerText inline sweep="sheen" tone="inherit">
+                        {props.children}
+                    </ShimmerText>
+                ) : (
+                    props.children
+                )}
             </button>
+        );
+    if (happyShareLinkParse(props.href) !== undefined)
+        return (
+            <a
+                className="happy-markdown-document__link"
+                data-happy-desktop-ui="markdown-document-link"
+                href={props.href}
+                rel="noopener noreferrer nofollow"
+                target="_blank"
+            >
+                {props.children}
+            </a>
         );
     return (
         <span
             className="happy-markdown-document__link"
             data-happy-desktop-ui="markdown-document-link"
         >
-            {props.written && (view === undefined || view.label === placeholder)
-                ? props.children
-                : (view?.label ?? placeholder)}
+            {props.children}
         </span>
     );
 }
@@ -334,8 +355,15 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
     const onFileLinkOpen = useContext(FileLinkOpenContext);
     const references = useContext(MarkdownReferencesContext);
     const entities = useContext(EntitiesContext);
-    // A share link to something here reads as the Happy link it carries.
+    // A share link to something here is read as the Happy link it carries.
     const shared = messageHrefHere(href, entities) !== href;
+    // A document is written once and read as written, so a Happy link with a
+    // label reads as that label, as does a bare share link, its address. Only
+    // an empty `[](…)` reads as what the thing is called now.
+    const labelled = (node?.children ?? []).some(
+        (child) => child.type !== "text" || child.value.trim().length > 0,
+    );
+    const words = (labelled ? undefined : messageLinkWords(href, entities)) ?? children;
     const web = shared ? undefined : webHref(href);
     if (web !== undefined)
         return (
@@ -346,7 +374,7 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
                 rel="noopener noreferrer nofollow"
                 target="_blank"
             >
-                {children}
+                {words}
             </a>
         );
     // A link into another workspace's folder names that folder itself, so it
@@ -375,20 +403,8 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
         typeof href === "string" ? messageReferenceFromHref(href, entities) : undefined;
     if (reference !== undefined)
         return (
-            <DocumentEntityLink
-                reference={reference}
-                // A bare share link's words are its address, not a label.
-                written={
-                    (node?.children.length ?? 0) > 0 &&
-                    !(
-                        shared &&
-                        node?.children.length === 1 &&
-                        node.children[0]?.type === "text" &&
-                        node.children[0].value === href
-                    )
-                }
-            >
-                {children}
+            <DocumentEntityLink href={href!} reference={reference}>
+                {words}
             </DocumentEntityLink>
         );
     // Any other Happy address is malformed, or something this build does not
@@ -399,7 +415,7 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
                 className="happy-markdown-document__link"
                 data-happy-desktop-ui="markdown-document-link"
             >
-                {children}
+                {words}
             </span>
         );
     // A document that is one file of a bundle names its neighbours relative to

@@ -1,5 +1,7 @@
 import { type ReactNode } from "react";
+import type { HappyReference } from "happy-desktop-state";
 import { MarkdownDocument } from "../../src/MarkdownDocument";
+import type { MessageReferences, MessageReferenceView } from "../../src/messageReferences";
 import { markdownTableFixtures } from "../../src/fixtures/markdownTables";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -75,9 +77,43 @@ const tables = [
     markdownTableFixtures.tenColumns,
 ].join("\n\n");
 
-function frame(children: ReactNode, height: number, width: number) {
+/** The server this page's links are read on; a share link naming it opens here. */
+const INSTANCE = "k3x9q2m7p0a4b8c1d5e6f7g2";
+const ELSEWHERE = "m8w2r5t1y6u3i9o4p7a0s2d5";
+const share = (rest: string, instance = INSTANCE) =>
+    `https://link.happy.page/#1/${instance}/${rest}`;
+
+const VIEWS: ReadonlyMap<string, MessageReferenceView> = new Map([
+    ["agent:shiptask", { type: "link", label: "Ship the November build", busy: false }],
+    ["agent:releasebot", { type: "link", label: "Release bot", busy: true }],
+    ["artifact:q3report", { type: "link", label: "Q3 revenue report", busy: false }],
+]);
+
+const entities: MessageReferences = {
+    instanceId: INSTANCE,
+    view: (reference: HappyReference) =>
+        VIEWS.get(`${reference.kind}:${reference.id}`) ?? {
+            type: "text",
+            label: `an unavailable ${reference.kind}`,
+        },
+    open: () => undefined,
+};
+
+const happyLinks = `## Release notes
+
+- [The ship task](${share("agents/shiptask?as=task")}) signed off this morning.
+- [Our release bot](${share("agents/releasebot?as=bot")}) is still packaging the installer.
+- The numbers are in [the board deck](${share("artifacts/q3report")}).
+- [Last week's retro](${share("artifacts/retro")}) is not on this server, and [their launch plan](${share("artifacts/plan", ELSEWHERE)}) is on one you are not connected to.
+- Unlabelled: [](${share("agents/releasebot?as=bot")}), [](${share("artifacts/q3report")}), and [](${share("artifacts/retro")}).
+- Bare: ${share("artifacts/q3report")}
+- Legacy: [the old report link](happy://artifacts/q3report)
+`;
+
+function frame(children: ReactNode, height: number, width: number, screen?: string) {
     return (
         <div
+            data-screen={screen}
             style={{
                 background: "var(--surface)",
                 border: "1px solid var(--divider)",
@@ -110,6 +146,20 @@ export function MarkdownDocumentPage() {
                     {frame(<MarkdownDocument onFileOpen={() => {}} text={readme} />, 620, 880)}
                     <DimensionRule label="880 × 620 px region · 768 px measure" />
                 </div>
+            </Specimen>
+
+            <Specimen
+                detail="A Happy link with a label reads as that label, opening in the app when it resolves and shimmering while its agent is busy · one this server cannot open keeps its label and a share link routes to its server · an unlabelled link reads as the current name or a placeholder · a bare share link is its address"
+                label="Happy links"
+                number="01b"
+                stage="surface"
+            >
+                {frame(
+                    <MarkdownDocument entities={entities} text={happyLinks} />,
+                    420,
+                    880,
+                    "artifact-happy-links",
+                )}
             </Specimen>
 
             <Specimen

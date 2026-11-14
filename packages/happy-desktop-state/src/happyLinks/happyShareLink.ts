@@ -186,6 +186,35 @@ export function happyShareLinksRewrite(
     );
 }
 
+// A Markdown link to a share link, `[label](url)` or `[label](url "title")`;
+// an image's `!` is matched so that it can be left alone.
+const SHARE_LINK_IN_TEXT =
+    /(!?)\[((?:[^[\]\\\n]|\\.)*)\](\(\s*)(https:\/\/link\.happy\.page\/#1\/[A-Za-z0-9\-._~!$&'*+,;=:@%/?]+)((?:\s+"[^"\n]*")?\s*\))/gu;
+
+/**
+ * Markdown with the label of every `[label](share link)` outside code replaced
+ * by what `label` returns for it, given the link as written and the label
+ * between its brackets: escaped Markdown, or undefined to keep the label as
+ * written. The destination is never touched, nor is a bare or angle-bracketed
+ * share link, an image, or a URL the share grammar refuses.
+ */
+export function happyShareLinksRelabel(
+    markdown: string,
+    label: (url: string, written: string) => string | undefined,
+): string {
+    if (!markdown.includes(PREFIX)) return markdown;
+    return markdownOutsideCodeMap(markdown, (text) =>
+        text.replace(
+            SHARE_LINK_IN_TEXT,
+            (match, bang: string, written: string, open: string, url: string, close: string) => {
+                if (bang !== "" || happyShareLinkParse(url) === undefined) return match;
+                const relabelled = label(url, written);
+                return relabelled === undefined ? match : `[${relabelled}]${open}${url}${close}`;
+            },
+        ),
+    );
+}
+
 /**
  * Applies `map` to every run of `markdown` outside fenced code and inline
  * code spans, which stay literal as Markdown reads them.

@@ -14,8 +14,8 @@ import {
 
 /*
  * A message read on one server can carry a link that names another
- * installation. What that link names lives there, not here, so it reads as its
- * words and opens nothing; the same link naming this server, or no server,
+ * installation. What that link names lives there, not here, so it reads as a
+ * placeholder and opens nothing; the same link naming this server, or no server,
  * opens here as before.
  */
 
@@ -70,10 +70,10 @@ function messageRender(instanceId: string | undefined) {
     return { view, opened, files, links };
 }
 
-it("opens a link naming this server, and leaves one naming another as its words", () => {
+it("opens a link naming this server, and leaves one naming another as a placeholder", () => {
     const { view, opened, files, links } = messageRender(HERE);
     expect(links()).toEqual(["Review", "Review", "notes"]);
-    expect(view.container.textContent).toContain("Elsewhere: theirs.");
+    expect(view.container.textContent).toContain("Elsewhere: an unavailable agent.");
     expect(view.container.textContent).toContain("A file elsewhere: plan.");
     for (const link of view.container.querySelectorAll("a")) fireEvent.click(link);
     expect(opened).toEqual(["prj_one/ses_one", "prj_one/ses_one"]);
@@ -84,6 +84,6 @@ it("opens a link naming this server, and leaves one naming another as its words"
 it("opens no instance link at all while this server has not said which it is", () => {
     const { view, links } = messageRender(undefined);
     expect(links()).toEqual(["Review", "notes"]);
-    expect(view.container.textContent).toContain("Same server: mine.");
+    expect(view.container.textContent).toContain("Same server: an unavailable agent.");
     view.unmount();
 });

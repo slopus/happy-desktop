@@ -9,6 +9,7 @@ import { expect, it } from "vitest";
 import "./styles.css";
 import { AgentActivityRow } from "./AgentActivityRow";
 import { ConversationEntryView } from "./ConversationEntryView";
+import { MarkdownDocument } from "./MarkdownDocument";
 import { conversationRowHeight, conversationRowHeightCacheCreate } from "./conversationRowHeight";
 import { Message } from "./Message";
 import type { MessageReferences, MessageReferenceView } from "./messageReferences";
@@ -16,11 +17,15 @@ import { createRenderer } from "./testing";
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+const HERE = "aaaaaaaaaaaaaaaaaaaaaaaa";
+const ELSEWHERE = "bbbbbbbbbbbbbbbbbbbbbbbb";
+
 function referencesOf(
     views: Record<string, MessageReferenceView>,
     opened: HappyReference[] = [],
 ): MessageReferences {
     return {
+        instanceId: HERE,
         view: (reference) =>
             views[`${reference.kind}:${reference.id}`] ?? {
                 type: "text",
@@ -35,7 +40,7 @@ function referencesOf(
 const REPORT: MessageReferenceView = { type: "link", label: "Q3 revenue report", busy: false };
 const REPORT_BUSY: MessageReferenceView = { type: "link", label: "Q3 revenue report", busy: true };
 
-it("renders a happy:// link as an underlined link titled with its live label, opening a pinned version", async () => {
+it("renders a Happy link as an underlined link titled with its live label whatever its own, opening a pinned version", async () => {
     const opened: HappyReference[] = [];
     const references = referencesOf({ "artifact:q3": REPORT }, opened);
     const view = createRenderer();
@@ -45,9 +50,7 @@ it("renders a happy:// link as an underlined link titled with its live label, op
                 <Message
                     agent
                     author="Happy"
-                    body={
-                        "See [the report](happy://artifacts/q3) and [the docs](https://example.com).\n\n[](happy://artifacts/q3?version=2)"
-                    }
+                    body={`See [the report](happy://artifacts/q3) and [the docs](https://example.com).\n\n[](happy://artifacts/q3?version=2)\n\nShared as [an old name](https://link.happy.page/#1/${HERE}/artifacts/q3) and https://link.happy.page/#1/${HERE}/artifacts/q3. Theirs: [their plan](https://link.happy.page/#1/${ELSEWHERE}/artifacts/plan).`}
                     references={references}
                 />
             </div>
@@ -57,25 +60,41 @@ it("renders a happy:// link as an underlined link titled with its live label, op
     await view.ready();
     const body = view.$('[data-testid="idle"] [data-happy-desktop-ui="message-body"]').element;
     expect(body.textContent).not.toContain("happy:");
+    expect(body.textContent).not.toContain("an old name");
+    const share = `https://link.happy.page/#1/${HERE}/artifacts/q3`;
     const links = [
         ...body.querySelectorAll<HTMLAnchorElement>(
             '[data-happy-desktop-ui="message-md-reference"]',
         ),
     ];
-    /* The live title wins over the label the writer put on the link. */
+    /* The live title stands in for any label the writer put on the link, and
+       a bare share link reads as its address. Each points where it was
+       written to, so copying it gives what was written. */
     expect(links.map((link) => link.textContent)).toEqual([
         "Q3 revenue report",
         "Q3 revenue report",
+        "Q3 revenue report",
+        share,
     ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
         "happy://artifacts/q3",
         "happy://artifacts/q3?version=2",
+        share,
+        share,
     ]);
     /* A link alone on its line is a paragraph holding one link. */
     expect(links[1]!.parentElement!.tagName).toBe("P");
-    const web = body.querySelector<HTMLAnchorElement>('[data-happy-desktop-ui="message-md-link"]')!;
+    const [web, elsewhere] = body.querySelectorAll<HTMLAnchorElement>(
+        '[data-happy-desktop-ui="message-md-link"]',
+    );
+    /* Another server's share link stays a web link, routed to its server,
+       under a placeholder rather than its label. */
+    expect(elsewhere!.textContent).toBe("an unavailable artifact");
+    expect(elsewhere!.getAttribute("href")).toBe(
+        `https://link.happy.page/#1/${ELSEWHERE}/artifacts/plan`,
+    );
     const linkStyle = getComputedStyle(links[0]!);
-    const webStyle = getComputedStyle(web);
+    const webStyle = getComputedStyle(web!);
     for (const property of [
         "color",
         "text-decoration-line",
@@ -89,11 +108,76 @@ it("renders a happy:// link as an underlined link titled with its live label, op
         );
     expect(linkStyle.textDecorationLine).toBe("underline");
     expect(links[0]!.querySelector(".happy-shimmer-text")).toBeNull();
-    links[0]!.click();
-    links[1]!.click();
+    for (const link of links) link.click();
     expect(opened).toEqual([
         { kind: "artifact", id: "q3" },
         { kind: "artifact", id: "q3", version: 2 },
+        { kind: "artifact", id: "q3" },
+        { kind: "artifact", id: "q3" },
+    ]);
+});
+
+it("reads a Happy link in a document under its label, and an unlabelled one as its live title", async () => {
+    const opened: HappyReference[] = [];
+    const share = (rest: string, instance = HERE) =>
+        `https://link.happy.page/#1/${instance}/${rest}`;
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div data-testid="document">
+                <MarkdownDocument
+                    entities={referencesOf(
+                        {
+                            "artifact:q3": REPORT,
+                            "agent:bot": { type: "link", label: "Release bot", busy: true },
+                        },
+                        opened,
+                    )}
+                    text={[
+                        `[the deck](${share("artifacts/q3")}), [our bot](happy://agents/bot), [](${share("artifacts/q3")}),`,
+                        `[the retro](${share("artifacts/retro")}), [](${share("artifacts/retro")}), [their plan](${share("artifacts/plan", ELSEWHERE)}),`,
+                        `[](${share("artifacts/plan", ELSEWHERE)}), ${share("artifacts/q3")}`,
+                    ].join(" ")}
+                />
+            </div>
+        ),
+        { width: 880, height: 300 },
+    );
+    await view.ready();
+    const root = view.$('[data-testid="document"]').element;
+    const opens = [
+        ...root.querySelectorAll<HTMLButtonElement>(
+            '[data-happy-desktop-ui="markdown-document-entity-link"]',
+        ),
+    ];
+    /* What resolves opens here under its label, or its live title with none;
+       a busy agent shimmers. A bare share link is its address. */
+    expect(opens.map((link) => link.textContent)).toEqual([
+        "the deck",
+        "our bot",
+        "Q3 revenue report",
+        share("artifacts/q3"),
+    ]);
+    expect(opens.map((link) => link.querySelector(".happy-shimmer-text") !== null)).toEqual([
+        false,
+        true,
+        false,
+        false,
+    ]);
+    for (const link of opens) link.click();
+    expect(opened.map((reference) => reference.id)).toEqual(["q3", "bot", "q3", "q3"]);
+    /* What does not resolve keeps its label, or reads as a placeholder with
+       none, and a share link stays a web link routed to its server. */
+    const routed = [
+        ...root.querySelectorAll<HTMLAnchorElement>(
+            '[data-happy-desktop-ui="markdown-document-link"]',
+        ),
+    ];
+    expect(routed.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+        ["the retro", share("artifacts/retro")],
+        ["an unavailable artifact", share("artifacts/retro")],
+        ["their plan", share("artifacts/plan", ELSEWHERE)],
+        ["an unavailable artifact", share("artifacts/plan", ELSEWHERE)],
     ]);
 });
 
@@ -344,12 +428,16 @@ it("reads unknown, deleted, malformed, and unknown-kind references as plain text
     expect(root.querySelector("a")).toBeNull();
     expect(root.textContent).not.toContain("<happy-");
     expect(root.textContent).toContain("Gone: Old deck, missing: an unavailable artifact");
-    /* A label the writer gave says more than a placeholder would. */
-    expect(root.textContent).toContain("named: the old plan");
+    /* A label the writer gave goes stale on a rename, so it is never shown. */
+    expect(root.textContent).toContain("named: an unavailable artifact");
     expect(root.textContent).toContain("odd: an unavailable reference");
-    /* Anything else under happy:// is its label, never a link. */
-    expect(root.textContent).toContain("broken: half a link, mobile: a session,");
-    expect(root.textContent).toContain("Plain an unavailable artifact and the report.");
+    /* Anything else under happy:// is a placeholder, never a link. */
+    expect(root.textContent).toContain(
+        "broken: an unavailable reference, mobile: an unavailable reference,",
+    );
+    expect(root.textContent).toContain(
+        "Plain an unavailable artifact and an unavailable artifact.",
+    );
 });
 
 it("never flashes a partly streamed link or tag and keeps links in code literal", async () => {

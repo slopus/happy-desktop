@@ -7,7 +7,10 @@ import {
     parseHappyUrl,
     happyAgentFileLinkParse,
     happyShareLinkParse,
+    happyShareLinksRelabel,
+    isHappyUrl,
     happyShareLinksRewrite,
+    HAPPY_SHARE_LINK_ORIGIN,
     happyAgentProviderAddPageOf,
     replaceHappyLinks,
     type HappyAgentFileLink,
@@ -110,43 +113,57 @@ function referenceHref(reference: HappyReference): string | undefined {
 }
 
 /**
- * Which words one reference reads as, given the label its writer put on the
- * link. The live title wins whenever there is one; the writer's label stands in
- * while the title is still being read, and for a thing this reader cannot look
- * up at all, where it says more than "an unavailable artifact" would.
+ * The words one Happy link to a thing reads as, whatever label it was written
+ * with: what the references say the thing is called now — its live title, a
+ * person's `@name` — or, for one these references cannot name or that another
+ * server holds, a placeholder such as "an unavailable artifact". A label goes
+ * stale the moment the thing is renamed, so it is never shown.
  */
 function referenceWords(
-    view: MessageReferenceView,
-    reference: HappyReference,
+    link: Extract<HappyLink, { type: "reference" }>,
+    references: MessageReferences | undefined,
+): string {
+    const placeholder = happyReferencePlaceholder(link.reference);
+    if (!linkHere(link, references)) return placeholder;
+    return referenceView(link.reference, references).label.trim() || placeholder;
+}
+
+/**
+ * The plain words a Happy link reads as. A thing it names reads as
+ * `referenceWords`; a file as its label, or its path when it has none; a
+ * settings page as its label, or "Settings"; anything malformed or of a kind
+ * this build does not know as "an unavailable reference".
+ */
+function linkWords(
+    link: HappyLink | undefined,
     written: string,
-): { readonly link: boolean; readonly label: string; readonly written: boolean } {
-    const writtenUsable = written.trim().length > 0;
-    // A person is always named as they are called now.
-    if (view.type === "person") return { link: true, label: view.label, written: false };
-    if (view.type === "link")
-        return view.reading === true && writtenUsable
-            ? { link: true, label: written, written: true }
-            : { link: true, label: view.label, written: false };
-    return view.label === happyReferencePlaceholder(reference) && writtenUsable
-        ? { link: false, label: written, written: true }
-        : { link: false, label: view.label, written: false };
+    references: MessageReferences | undefined,
+): string {
+    const label = labelPlain(written);
+    switch (link?.type) {
+        case "reference":
+            return referenceWords(link, references);
+        case "file":
+            return label || link.file.path;
+        case "settings":
+            return label || "Settings";
+        case undefined:
+            return "an unavailable reference";
+    }
+}
+
+/**
+ * What a share link opens, as a Happy link, or nothing for a URL the share
+ * grammar refuses.
+ */
+function shareLinkParse(url: string): HappyLink | undefined {
+    const target = happyShareLinkParse(url);
+    return target === undefined ? undefined : parseHappyUrl(target.url);
 }
 
 /** Whether a reference reads as something in the body, a link or a person's tag, not as words. */
 export function messageReferenceShown(view: MessageReferenceView | undefined): boolean {
     return view?.type === "link" || view?.type === "person";
-}
-
-/**
- * The body with every share link naming the instance these references read
- * written as the `happy://` link it carries, so it reads and opens as that
- * link. Another server's share link stays a web address.
- */
-function shareLinksHere(text: string, references: MessageReferences | undefined): string {
-    const instanceId = references?.instanceId;
-    return instanceId === undefined
-        ? text
-        : happyShareLinksRewrite(text, (named) => named === instanceId);
 }
 
 /**
@@ -195,6 +212,25 @@ function providerAddLink(match: HappyLinkMatch): string | undefined {
 }
 
 /**
+ * The words a link reads as when it is a Happy link to a thing, a share link
+ * or a `happy://` address, whatever label it was written with: see
+ * `referenceWords`. Nothing for a file or settings link, which keep their
+ * labels, or for anything that is not a Happy link.
+ */
+export function messageLinkWords(
+    href: string | undefined,
+    references: MessageReferences | undefined,
+): string | undefined {
+    if (href === undefined) return undefined;
+    const shared = happyShareLinkParse(href) !== undefined;
+    if (!shared && (!isHappyUrl(href) || happyAgentProviderAddPageOf(href) !== undefined))
+        return undefined;
+    const link = shared ? shareLinkParse(href) : parseHappyUrl(href);
+    if (link?.type === "file" || link?.type === "settings") return undefined;
+    return linkWords(link, "", references);
+}
+
+/**
  * The reference a `happy://` address names here, or nothing for a file link,
  * anything malformed, or a link naming another instance.
  */
@@ -221,18 +257,75 @@ export function messageFileLinkFromHref(
 }
 
 /**
+ * A `[label](happy://…)` link as written with `label` between its brackets,
+ * or nothing when its source is not that shape.
+ */
+function linkRelabel(match: HappyLinkMatch, label: string): string | undefined {
+    const opening = `[${match.label}]`;
+    if (match.syntax !== "link" || match.image || !match.source.startsWith(opening))
+        return undefined;
+    return `[${label}]${match.source.slice(opening.length)}`;
+}
+
+/**
+ * Where a Happy link was written to point, as written; the canonical address
+ * for a legacy tag, which names no destination of its own.
+ */
+function linkHref(match: HappyLinkMatch, reference: HappyReference): string | undefined {
+    if (match.syntax === "link") {
+        const written = /\]\(\s*(\S+?)(?:\s+"[^"]*")?\s*\)$/u.exec(match.source)?.[1];
+        if (written !== undefined) return written;
+    }
+    return referenceHref(reference);
+}
+
+// The end of a streaming body that may still become a share link: a link's
+// label and the start of its destination, `[](https://link.happy.p`.
+const SHARE_LINK_PARTIAL = /\[(?:[^\]\\\n]|\\.)*\]\(([^\s()]*)$/u;
+
+/** `text` without a trailing share link that has only partly arrived. */
+function shareLinkPartialHold(text: string): string {
+    const partial = SHARE_LINK_PARTIAL.exec(text);
+    const destination = partial?.[1];
+    if (partial === null || destination === undefined) return text;
+    const origin = `${HAPPY_SHARE_LINK_ORIGIN}/#`;
+    return origin.startsWith(destination) || destination.startsWith(origin)
+        ? text.slice(0, partial.index)
+        : text;
+}
+
+/**
+ * The label a `[label](share link)` reads under in Markdown, escaped, or
+ * nothing to keep the one it was written with: a file link with a label.
+ */
+function shareLinkLabel(
+    url: string,
+    written: string,
+    references: MessageReferences | undefined,
+): string | undefined {
+    const link = shareLinkParse(url);
+    if (link?.type === "file" && written.trim().length > 0) return undefined;
+    return labelEscape(linkWords(link, written, references));
+}
+
+/**
  * The Markdown a message body is rendered and measured from: every Happy link
- * replaced by what it reads as now.
+ * written with brackets, a share link or a `happy://` address, put under the
+ * words it reads as now.
  *
- * A link to something openable stays an ordinary Markdown link to its
- * canonical `happy://` address, titled with the escaped live title, so it
- * renders and wraps exactly like any other link in the body and the row-height
- * model measures the same words the reader sees. An inert one becomes its
- * words as plain text. A file link, `happy://` or `happy-file://`, stays as
- * written, with its path filled in when the writer left the label empty. The
- * legacy `<happy-KIND id/>` tags older history holds read exactly like their
- * `happy://` forms. While a reply is still streaming, a link that has only partly arrived
- * is held back rather than flashing as raw text. Links in code stay literal.
+ * A link to a thing reads as what that thing is called now, never the label
+ * it was written with, which goes stale on a rename; one these references
+ * cannot name, or that another server holds, reads as a placeholder such as
+ * "an unavailable artifact". Its destination stays exactly as written, so
+ * what is copied is what was written, and the link component decides from it
+ * whether the link opens here. A `happy://` link that does not open here is
+ * its words as plain text; a share link stays a web link, which the app routes
+ * to its server. A bare or angle-bracketed share link is its address, as
+ * written. A file link keeps its label, with its path filled in when it has
+ * none, and a settings link its label. The legacy `<happy-KIND id/>` tags
+ * older history holds read as their `happy://` forms. While a reply is still
+ * streaming, a link that has only partly arrived is held back rather than
+ * flashing as raw text. Links in code stay literal.
  *
  * Rendering and row geometry must both go through this with the same inputs;
  * a body with no Happy link in it comes back unchanged.
@@ -242,21 +335,15 @@ export function messageReferencesResolve(
     references: MessageReferences | undefined,
     streaming: boolean,
 ): string {
-    return replaceHappyLinks(
-        shareLinksHere(text, references),
+    const resolved = replaceHappyLinks(
+        happyShareLinksRelabel(text, (url, written) => shareLinkLabel(url, written, references)),
         (match) => {
             const link = match.link;
             if (link === undefined)
-                return (
-                    providerAddLink(match) ??
-                    (match.label.trim().length > 0
-                        ? match.label
-                        : match.syntax === "legacyTag"
-                          ? "an unavailable reference"
-                          : "")
-                );
+                return providerAddLink(match) ?? labelEscape(linkWords(link, "", references));
             // What another instance holds is not read or opened here.
-            if (!linkHere(link, references)) return foreignWords(match, link);
+            if (!linkHere(link, references))
+                return labelEscape(linkWords(link, match.label, references));
             if (link.type === "file") {
                 if (match.image || match.label.trim().length > 0) return match.source;
                 return `[${labelEscape(link.file.path)}](${formatHappyFileUrl(link.file)})`;
@@ -271,63 +358,21 @@ export function messageReferencesResolve(
                     : `[${label}](${href})`;
             }
             const reference = link.reference;
-            const words = referenceWords(
-                referenceView(reference, references),
-                reference,
-                match.label,
-            );
-            const label =
-                (words.written ? words.label.trim() : labelEscape(words.label)) ||
-                labelEscape(happyReferencePlaceholder(reference));
-            const href = words.link ? referenceHref(reference) : undefined;
-            const shown = href === undefined ? label : `[${label}](${href})`;
+            const view = referenceView(reference, references);
+            const label = labelEscape(referenceWords(link, references));
+            if (messageReferenceShown(view)) {
+                const href = referenceHref(reference);
+                const relabelled = linkRelabel(match, label);
+                if (relabelled !== undefined) return relabelled;
+                if (href !== undefined) return `[${label}](${href})`;
+            }
             // A person a message mentions stands out from the words around them:
             // a tag where the team knows them, their name in bold where not.
-            return reference.kind === "user" && href === undefined ? `**${shown}**` : shown;
+            return reference.kind === "user" ? `**${label}**` : label;
         },
         { streaming },
     );
-}
-
-/** Escaped Markdown words for a link naming another instance: its label, or a placeholder. */
-function foreignWords(match: HappyLinkMatch, link: HappyLink): string {
-    if (match.label.trim().length > 0) return match.label;
-    return labelEscape(linkPlaceholder(link));
-}
-
-/** The words one Happy link in a plain body reads as. */
-function linkPlainWords(match: HappyLinkMatch, references: MessageReferences | undefined): string {
-    const link = match.link;
-    if (link !== undefined && !linkHere(link, references)) {
-        const written = labelPlain(match.label);
-        if (written.length > 0) return written;
-        return linkPlaceholder(link);
-    }
-    if (link?.type === "reference") {
-        const words = referenceWords(
-            referenceView(link.reference, references),
-            link.reference,
-            match.label,
-        );
-        return words.written ? labelPlain(words.label) : words.label;
-    }
-    const written = labelPlain(match.label);
-    if (written.length > 0) return written;
-    if (link?.type === "file") return link.file.path;
-    if (link?.type === "settings") return "Settings";
-    return match.syntax === "legacyTag" ? "an unavailable reference" : "";
-}
-
-/** The words a link with no label of its own reads as. */
-function linkPlaceholder(link: HappyLink): string {
-    switch (link.type) {
-        case "file":
-            return link.file.path;
-        case "settings":
-            return "Settings";
-        case "reference":
-            return happyReferencePlaceholder(link.reference);
-    }
+    return streaming ? shareLinkPartialHold(resolved) : resolved;
 }
 
 /**
@@ -338,9 +383,9 @@ export function messageReferencesPlainText(
     text: string,
     references: MessageReferences | undefined,
 ): string {
-    return replaceHappyLinks(shareLinksHere(text, references), (match) =>
-        linkPlainWords(match, references),
-    );
+    return messagePlainTextSegments(text, references)
+        .map((segment) => (segment.type === "text" ? segment.text : segment.label))
+        .join("");
 }
 
 /** One run of a plain body: its own words, or a reference read as a link. */
@@ -353,41 +398,73 @@ export type MessagePlainTextSegment =
           readonly label: string;
       };
 
+// A share link in plain words, `[label](url)` or bare, up to what its grammar allows.
+const SHARE_LINK_IN_PLAIN_TEXT =
+    /\[((?:[^[\]\\\n]|\\.)*)\]\((https:\/\/link\.happy\.page\/#1\/[A-Za-z0-9\-._~!$&'*+,;=:@%/?]+)\)|https:\/\/link\.happy\.page\/#1\/[A-Za-z0-9\-._~!$&'*+,;=:@%/?]+/gu;
+// What a sentence ends a bare address with, which is not part of it.
+const SHARE_URL_TRAILING = /[?!.,:*_~']+$/u;
+
 /**
- * A plain body split around the references it names, for a person's message
- * shown as typed: each openable reference becomes a link under the label it
- * reads as, and an inert one its label as words. Joined, the runs read
- * exactly as `messageReferencesPlainText` does, which is what its row is
- * measured from.
+ * A plain body split around the Happy links it holds, for a person's message
+ * shown as typed and for one-line summaries: each link with brackets reads as
+ * its words (see `messageReferencesResolve`), a link when it names something
+ * openable here; a bare share link stays its address, a link on the same
+ * terms. Joined, the runs are `messageReferencesPlainText`, which is what its
+ * row is measured from.
  */
 export function messagePlainTextSegments(
     text: string,
     references: MessageReferences | undefined,
 ): readonly MessagePlainTextSegment[] {
     const segments: MessagePlainTextSegment[] = [];
-    const textAdd = (words: string) => {
+    const wordsAdd = (words: string) => {
         if (words.length === 0) return;
         const last = segments.at(-1);
         if (last?.type === "text")
             segments[segments.length - 1] = { type: "text", text: last.text + words };
         else segments.push({ type: "text", text: words });
     };
-    for (const segment of parseHappyLinks(shareLinksHere(text, references))) {
-        if (segment.type === "text") {
-            textAdd(segment.text);
-            continue;
-        }
-        const label = linkPlainWords(segment, references);
-        const link = segment.link;
-        const href =
+    const linkAdd = (link: HappyLink | undefined, href: string | undefined, label: string) => {
+        const reference =
             link?.type === "reference" &&
             linkHere(link, references) &&
             messageReferenceShown(references?.view(link.reference))
-                ? referenceHref(link.reference)
+                ? link.reference
                 : undefined;
-        if (link?.type === "reference" && href !== undefined)
-            segments.push({ type: "reference", reference: link.reference, href, label });
-        else textAdd(label);
+        if (reference !== undefined && href !== undefined)
+            segments.push({ type: "reference", reference, href, label });
+        else wordsAdd(label);
+    };
+    const textAdd = (words: string) => {
+        let cursor = 0;
+        for (const found of words.matchAll(SHARE_LINK_IN_PLAIN_TEXT)) {
+            const written = found[1];
+            const bracketed = found[2];
+            const url = bracketed ?? found[0].replace(SHARE_URL_TRAILING, "");
+            const link = shareLinkParse(url);
+            if (link === undefined) continue;
+            wordsAdd(words.slice(cursor, found.index));
+            linkAdd(
+                link,
+                url,
+                bracketed === undefined ? url : linkWords(link, written ?? "", references),
+            );
+            cursor = found.index + (bracketed === undefined ? url.length : found[0].length);
+        }
+        wordsAdd(words.slice(cursor));
+    };
+    for (const segment of parseHappyLinks(text)) {
+        if (segment.type === "text") textAdd(segment.text);
+        else
+            linkAdd(
+                segment.link,
+                segment.link?.type === "reference"
+                    ? linkHref(segment, segment.link.reference)
+                    : undefined,
+                providerAddLink(segment) === undefined
+                    ? linkWords(segment.link, segment.label, references)
+                    : labelPlain(segment.label) || "Settings",
+            );
     }
     return segments;
 }

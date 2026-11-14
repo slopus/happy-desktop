@@ -153,9 +153,11 @@ export const MessageSettingsLinksContext = createContext<MessageSettingsLinks | 
 );
 /**
  * A Happy reference a message names: an underlined link like any other in the
- * body, reading as the live title of what it names. While that thing is busy
- * the title carries the same travelling band a busy sidebar row or tab does,
- * and nothing else changes — the words wrap where they would without it.
+ * body, reading as what the thing it names is called now and pointing where
+ * it was written to, a share link or a `happy://` address. While that thing
+ * is busy the name carries the same travelling band a busy sidebar row or
+ * tab does, and nothing else changes — the words wrap where they would
+ * without it.
  */
 export const MessageReferenceLink = ({
     children,
@@ -183,10 +185,11 @@ export const MessageReferenceLink = ({
             data-happy-desktop-ui="message-md-reference"
             data-reference-kind={reference.kind}
             href={href}
-            // The href exists so this is a real, focusable link whose address
-            // can be copied. `happy://` belongs to Happy, and the mobile app may
-            // own it on this machine, so no click — plain, modified, or middle —
-            // may hand it to the browser or the OS: every one opens it here.
+            // The href exists so this is a real, focusable link whose address,
+            // as written, can be copied. What it names is open here, and
+            // `happy://` belongs to Happy, which the mobile app may own on this
+            // machine, so no click — plain, modified, or middle — may hand it
+            // to the browser or the OS: every one opens it here.
             onClick={(event) => {
                 event.preventDefault();
                 references.open(reference);
@@ -475,8 +478,10 @@ const MarkdownLink = ({
     // is not a place this product draws.
     const webUrl =
         safe !== undefined && !safe.toLowerCase().startsWith("mailto:") ? safe : undefined;
-    // A share link to another server is not a page to open here or in the
-    // browser: the app opens it on that server, or says it is not connected.
+    // A share link this surface cannot open — another server's, or one naming
+    // something these references do not hold — is not a page to open here or
+    // in the browser: the app routes it to its server, or says it is not
+    // connected.
     const menuOffered =
         onLinkOpen !== undefined &&
         webUrl !== undefined &&
@@ -844,9 +849,10 @@ const messageUrlTransform: UrlTransform = (url, key, node) =>
  * a workspace file into a click that opens Happy's own viewer instead of an
  * inert anchor, and `onFileLinkOpen` does the same for a `happy://` or `happy-file://` file link
  * into another agent's or workspace's folder. `onLinkOpen` gives a web link a context menu offering the
- * machine's browser, the side panel, or copying its destination. `references` resolves the
- * `happy://` links an agent wrote to entities to their live titles; without it each reads as
- * inert text, and a legacy reference tag never shows raw. `layoutRender` draws the
+ * machine's browser, the side panel, or copying its destination. `references` decides which
+ * Happy links an agent wrote, `happy://` or share links, open here, what each is called now,
+ * and which are busy; a label written on one is never shown. Without it each reads as a
+ * placeholder, and a legacy reference tag never shows raw. `layoutRender` draws the
  * layouts a reply placed (see `conversationInlineLayouts`) where their
  * placeholders stand.
  */
