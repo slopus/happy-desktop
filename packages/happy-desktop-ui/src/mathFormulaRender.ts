@@ -79,7 +79,7 @@ export type MathInlineBox = {
  */
 let measureHost: HTMLDivElement | undefined;
 const inlineBoxes = new Map<string, MathInlineBox>();
-const displayHeights = new Map<string, number>();
+const displayBoxes = new Map<string, MathDisplayBox>();
 const MEASURE_CAPACITY = 2_048;
 let fontsRequested = false;
 let measuredBeforeFonts = false;
@@ -125,7 +125,7 @@ function mathFontsRequest(): void {
     void Promise.all(loads).then(() => {
         if (!measuredBeforeFonts) return;
         inlineBoxes.clear();
-        displayHeights.clear();
+        displayBoxes.clear();
         for (const listener of fontListeners) listener();
     });
 }
@@ -139,7 +139,7 @@ export function mathFontsSubscribe(listener: () => void): () => void {
 /** Forgets measured geometry; the text model calls this when body fonts change. */
 export function mathLayoutClear(): void {
     inlineBoxes.clear();
-    displayHeights.clear();
+    displayBoxes.clear();
 }
 
 function bounded<T>(map: Map<string, T>, key: string, value: T): T {
@@ -197,18 +197,34 @@ export function mathInlineBoxMeasure(
 }
 
 /**
- * Height of `html` (a rendered display formula). A display formula never
- * wraps — it scrolls — so its height does not depend on the measure.
+ * A display formula's natural geometry. `reach` is how far right of its box's
+ * left edge anything it lays out ends: KaTeX glyphs and kerns can pass the
+ * box's own edge, and the host's scrollport scrolls once they pass its edge.
  */
-export function mathDisplayHeightMeasure(
+export type MathDisplayBox = {
+    readonly width: number;
+    readonly height: number;
+    readonly reach: number;
+};
+
+/**
+ * Natural box of `html` (a rendered display formula). A display formula never
+ * wraps — it scrolls — so neither dimension depends on the measure.
+ */
+export function mathDisplayBoxMeasure(
     source: string,
     html: string,
     font: { readonly family: string; readonly size: number; readonly lineHeight: number },
-): number {
-    const hit = displayHeights.get(source);
+): MathDisplayBox {
+    const hit = displayBoxes.get(source);
     if (hit !== undefined) return hit;
     const host = measureHostGet();
-    if (!host) return font.lineHeight * Math.max(1, source.split("\n").length);
+    if (!host)
+        return {
+            width: 0,
+            height: font.lineHeight * Math.max(1, source.split("\n").length),
+            reach: 0,
+        };
     mathFontsRequest();
     const block = document.createElement("div");
     Object.assign(block.style, {
@@ -221,7 +237,15 @@ export function mathDisplayHeightMeasure(
     formula.innerHTML = html;
     block.append(formula);
     host.append(block);
-    const height = formula.getBoundingClientRect().height;
+    const bounds = formula.getBoundingClientRect();
+    let right = bounds.right;
+    /* KaTeX's visually hidden MathML is clipped and scrolls nothing. */
+    for (const element of formula.querySelectorAll(".katex-html *"))
+        right = Math.max(right, element.getBoundingClientRect().right);
     block.remove();
-    return bounded(displayHeights, source, height);
+    return bounded(displayBoxes, source, {
+        width: bounds.width,
+        height: bounds.height,
+        reach: right - bounds.left,
+    });
 }

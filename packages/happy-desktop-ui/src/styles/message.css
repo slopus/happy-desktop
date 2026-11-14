@@ -952,7 +952,11 @@
     opacity: 1;
 }
 
+/* As tall as the source lines and their insets, set by `--happy-code-lines`, so
+   the native horizontal bar of a block that scrolls lies over its bottom inset
+   instead of adding a lane the row model never reserved. */
 .happy-message__code-block-viewport {
+    height: calc(var(--happy-code-lines, 1) * 20px + 2 * var(--happy-chat-frame-text-inset));
     overflow-x: auto;
     overflow-y: hidden;
 }

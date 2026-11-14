@@ -20,7 +20,7 @@ import {
     type RichInlineLineRange,
 } from "@chenglou/pretext/rich-inline";
 import {
-    mathDisplayHeightMeasure,
+    mathDisplayBoxMeasure,
     mathFontsSubscribe,
     mathFormulaRender,
     mathInlineBoxMeasure,
@@ -117,6 +117,25 @@ function inlineLayoutUnitMeasure(): void {
                 return;
             }
         }
+    } finally {
+        probe.remove();
+    }
+}
+/**
+ * The lane a native horizontal scrollbar adds below a table or display
+ * formula wider than its scrollport. `styles/scrollbar.css` sizes the bar, but
+ * whether it takes room at all is the engine's choice (an overlay bar, or a
+ * hidden one in headless test browsers, takes none), so it is measured from
+ * the same shared rule rather than read from the stylesheet.
+ */
+let scrollbarLane = 0;
+function scrollbarLaneMeasure(): void {
+    const probe = document.createElement("div");
+    probe.style.cssText =
+        "position:fixed;visibility:hidden;width:32px;height:32px;padding:0;border:0;overflow-x:scroll;overflow-y:hidden;";
+    document.documentElement.append(probe);
+    try {
+        scrollbarLane = probe.offsetHeight - probe.clientHeight;
     } finally {
         probe.remove();
     }
@@ -241,6 +260,7 @@ function watchFonts() {
     if (fontsWatched || typeof document === "undefined" || !document.fonts) return;
     fontsWatched = true;
     inlineLayoutUnitMeasure();
+    scrollbarLaneMeasure();
     inlineLayoutResolutionWatch();
     /* Canvas measurement does not reliably initiate a webfont request. Ask for
        both owned variable faces explicitly; `document.fonts.ready` alone can
@@ -255,6 +275,9 @@ function watchFonts() {
 }
 function fontGenerationAdvance() {
     fontGeneration += 1;
+    /* Stylesheets have applied by the time a face arrives, and a resolution
+       change re-snaps the bar, so the lane is re-read with every generation. */
+    scrollbarLaneMeasure();
     clearCache();
     mathLayoutClear();
     for (const listener of fontListeners) listener();
@@ -1480,7 +1503,8 @@ function mermaidBlockHeight(
     return dimensions === null ? sourceHeight : mermaidDiagramNaturalHeight(dimensions, measure);
 }
 
-/** Source text: one 20px line per source line inside the frame's 9px insets. */
+/** Source text: one 20px line per source line inside the frame's 9px insets.
+ * The block holds that height when it scrolls; its bar lies over the bottom inset. */
 function codeBlock(value: string, codeMargins: boolean): Block {
     const lines = Math.max(1, value.split("\n").length);
     return {
@@ -1546,16 +1570,26 @@ function markdownBlockHeight(
         const rendered = mathFormulaRender(node.value, true);
         /* An unparseable display formula renders as a code block of its source. */
         if (rendered.kind === "failed") return codeBlock(node.value, codeMargins);
+        const box = mathDisplayBoxMeasure(node.value, rendered.html, {
+            family: UI_FAMILY,
+            lineHeight: PARAGRAPH_LINE,
+            size: PARAGRAPH_SIZE,
+        });
+        /* `.katex-display` centres a formula narrower than the body. Once
+           anything it lays out passes the body's edge it scrolls, and its bar
+           adds a lane below. The engine compares the two pixel-snapped. */
+        const reach = Math.max(box.width, (measure + box.width) / 2) + box.reach - box.width;
+        return flow(box.height + (Math.round(reach) > Math.round(measure) ? scrollbarLane : 0));
+    }
+    if (node.type === "table") {
+        const layout = markdownTableLayout(node, measure, cache, footnotes);
+        /* Whole-pixel columns wider than the whole-pixel scrollport scroll, and
+           its bar adds a lane below the rows. */
         return flow(
-            mathDisplayHeightMeasure(node.value, rendered.html, {
-                family: UI_FAMILY,
-                lineHeight: PARAGRAPH_LINE,
-                size: PARAGRAPH_SIZE,
-            }),
+            layout.height +
+                (layout.width > Math.floor(measure + INLINE_MEASURE_EPSILON) ? scrollbarLane : 0),
         );
     }
-    if (node.type === "table")
-        return flow(markdownTableLayout(node, measure, cache, footnotes).height);
     if (node.type === "thematicBreak") return flow(RULE_HEIGHT);
     if (node.type === "blockquote")
         return flow(

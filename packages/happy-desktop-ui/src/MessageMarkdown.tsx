@@ -5,6 +5,7 @@ import {
     useContext,
     useState,
     type ComponentPropsWithoutRef,
+    type CSSProperties,
     type MouseEvent,
     type ReactNode,
 } from "react";
@@ -572,6 +573,14 @@ const MarkdownParagraph = ({
         </p>
     );
 };
+/**
+ * A code block is as tall as its source lines, the height the row model gives
+ * it, whether or not it scrolls: a native horizontal bar takes its lane from
+ * the block's bottom inset rather than adding one below it.
+ */
+function markdownCodeLinesStyle(source: string): CSSProperties {
+    return { "--happy-code-lines": Math.max(1, source.split("\n").length) } as CSSProperties;
+}
 const MarkdownPre = ({
     children,
     node,
@@ -588,7 +597,11 @@ const MarkdownPre = ({
             />
         );
     return (
-        <div className="happy-message__code-block" data-happy-desktop-ui="message-code-block">
+        <div
+            className="happy-message__code-block"
+            data-happy-desktop-ui="message-code-block"
+            style={markdownCodeLinesStyle(fence?.text ?? "")}
+        >
             <ScrollArea axes="horizontal" viewportClassName="happy-message__code-block-viewport">
                 <pre {...props}>{children}</pre>
             </ScrollArea>
@@ -641,6 +654,7 @@ const MarkdownDiv = ({
             axes="horizontal"
             className={failed ? "happy-message__code-block" : "happy-message__math-block"}
             data-happy-desktop-ui={failed ? "message-code-block" : "message-math-block"}
+            style={failed ? markdownCodeLinesStyle(source) : undefined}
             viewportClassName={
                 failed ? "happy-message__code-block-viewport" : "happy-message__math-block-viewport"
             }

@@ -1,0 +1,62 @@
+I opened the Finder folder (`out/thread-attachments`). The files are numbered to match the posts below.
+
+**Tweet 1** (attach `1 tweet 1 - chart.png`)
+```
+I measured real Claude Ultra subscription-adjusted cost per hard coding task from DeepSWE 1.1 (Claude Code, medium effort)
+
+Passed: Opus 12, Fable 13 (of 14)
+Weekly limit per task: 0.05% vs 0.25%
+
+Similar pass rate. ~200 hard tasks a week on Fable vs ~2,000 on Opus
+
+What I use now:
+Opus: server, backend, anything verifiable, hill climbs
+Fable: UX / UI prototypes, talking through designs, comparing results, writing content
+
+Theo has a good related post focusing on raw sub cost / token & turn
+https://x.com/theo/status/2119960608816988596
+```
+
+**Reply 1**
+```
+Theo's chart, from 1.1M real requests: $14,662 of Opus a month vs $3,021 of Fable (4.9x).
+
+Mine, projected from 32 graded runs across 20 tasks on one account: about $7,400 vs $1,700 (4.4x).
+
+Different method, a similar roughly fivefold gap. My dollar figures come out at about half of his.
+
+Claude's weekly meter only shows whole percents (Opus moved 1 point over 20 tasks, Fable 3 over 12), so 5x per task is the estimate; rounding alone allows from 1.7x up.
+```
+
+**Reply 2** (attach `2a` and `2b`)
+```
+Same brief, both models, medium effort: redesign Happy's sidebar on real (anonymised) Happy Core data.
+
+Opus 5.5: $1.31, 5.9 min
+Fable 5.2: $2.38, 7.7 min
+
+Both still look sloppy without extra skills or guidance. Fable's feels a bit less sloppy, and both blind judges preferred it.
+
+Still, "Tasks · task" on every freaking line... what is it doing lol
+```
+
+**Reply 3** (attach `3a` and `3b`)
+```
+Same brief, both models, medium effort: a prototype of Happy's sign-in screen.
+
+Opus 5.5: $1.19, 8.7 min
+Fable 5.2: $2.57, 11.4 min
+
+Both work. Blind judges split.
+```
+
+**Last reply**
+```
+Fable isn't doing more work (6% fewer tokens, 27% fewer turns). Each token costs 2x, and the meter charges it more than that.
+```
+
+The folder also has the two sidebar walkthrough videos (`2c` and `2d`). They still have the old dark caption strip, so I'd leave them out.
+
+Before posting:
+- **Theo's numbers:** $14,662 and $3,021 were copied from the chart you pasted and haven't been checked against his post.
+- **Sign-in image:** the Opus one (`3a`) shows "sam.rivera@gmail.com". Opus made that address up, but it could belong to a real person.

@@ -10,6 +10,22 @@ import { testDepthBrowsers, testDepthRead } from "happy-desktop-gym/test-depth";
 
 const depth = testDepthRead(process.env.HAPPY_TEST_DEPTH);
 const browsers = testDepthBrowsers(depth);
+const testExclude = [...configDefaults.exclude, "eslint/**"];
+/* Playwright launches Chromium with `--hide-scrollbars`, so in the suite a
+ * native bar takes no room, while in the app it takes its lane. Geometry that
+ * depends on that lane is proven in files named `*.scrollbars.test.tsx`, which
+ * run only in a Chromium that draws its bars as the app does. */
+const scrollbarTests = "src/**/*.scrollbars.test.tsx";
+const contextOptions = {
+    deviceScaleFactor: 2,
+    /* Must be >= the tester viewport below: when the browser
+     * window is smaller, vitest CSS-scales the tester iframe
+     * and element captures come out at a fraction of true 2x. */
+    viewport: {
+        height: 1660,
+        width: 1660,
+    },
+};
 
 export default defineConfig({
     define: { "import.meta.env.HAPPY_TEST_DEPTH": JSON.stringify(depth) },
@@ -31,7 +47,7 @@ export default defineConfig({
     },
     test: {
         setupFiles: ["./src/testing/browserSetup.ts"],
-        exclude: [...configDefaults.exclude, "eslint/**"],
+        exclude: testExclude,
         // Optical tests take several black/white Retina captures per fixture.
         // Three browsers run concurrently, so the 15s Vitest default is too
         // tight under ordinary desktop contention even when every assertion
@@ -65,7 +81,21 @@ export default defineConfig({
             },
             enabled: true,
             headless: true,
-            instances: browsers.map((browser) => ({ browser })),
+            instances: [
+                ...browsers.map((browser) => ({
+                    browser,
+                    exclude: [...testExclude, scrollbarTests],
+                })),
+                {
+                    browser: "chromium",
+                    name: "chromium-scrollbars",
+                    include: [scrollbarTests],
+                    provider: playwright({
+                        launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] },
+                        contextOptions,
+                    }),
+                },
+            ],
             provider: playwright({
                 launchOptions: {
                     /* Firefox honours HTTP_PROXY/ALL_PROXY from the environment,
@@ -76,16 +106,7 @@ export default defineConfig({
                      * three behave the same wherever the suite runs. */
                     firefoxUserPrefs: { "network.proxy.type": 0 },
                 },
-                contextOptions: {
-                    deviceScaleFactor: 2,
-                    /* Must be >= the tester viewport below: when the browser
-                     * window is smaller, vitest CSS-scales the tester iframe
-                     * and element captures come out at a fraction of true 2x. */
-                    viewport: {
-                        height: 1660,
-                        width: 1660,
-                    },
-                },
+                contextOptions,
             }),
             ui: false,
             /* Element captures clip to the viewport; keep it larger than any
