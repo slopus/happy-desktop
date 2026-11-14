@@ -413,6 +413,12 @@ export interface HappyAgentSessionListStore {
         sessionId: HappyAgentSessionId,
         afterId: HappyAgentSessionId | null,
     ): Promise<void>;
+    /** Puts away the reason the task's last act was refused, without acting on it again. */
+    taskFailureDismiss(taskId: HappyAgentTaskId): void;
+    /** Puts away the reason the subtask's last act was refused, without acting on it again. */
+    subtaskFailureDismiss(sessionId: HappyAgentSessionId): void;
+    /** Puts away the reason the bot's last archive was refused, without archiving it again. */
+    botFailureDismiss(botId: HappyAgentBotId): void;
     /** Starts one peer-owned managed project and returns its optimistic identity. */
     projectCloneGithub(repository: string, name: string): HappyAgentProjectId;
 
@@ -3152,6 +3158,9 @@ export function happyAgentSessionListStoreCreate(
                 throw failure;
             }
         },
+        taskFailureDismiss: taskFailureWithdraw,
+        subtaskFailureDismiss: subtaskFailureWithdraw,
+        botFailureDismiss: botFailureWithdraw,
         taskRename: (taskId, name) =>
             nameSave("tasks", taskId, name, () => {
                 const mutationId = deps.connectActions.renameTask(taskId, name);

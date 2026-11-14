@@ -371,7 +371,7 @@ it("selects the subtask's row for any address inside its worktree", () => {
     ).toBe("page");
 });
 
-it("states a refused subtask archive under the Bots heading", () => {
+it("states a refused subtask archive in the sidebar's error notice", () => {
     const { container } = view({
         subtaskFailures: new Map([
             [
@@ -380,10 +380,13 @@ it("states a refused subtask archive under the Bots heading", () => {
             ],
         ]),
     });
-    const errors = [
-        ...container.querySelectorAll('[data-happy-desktop-ui="sidebar-section-error"]'),
+    expect(container.querySelector('[data-happy-desktop-ui="sidebar-section-error"]')).toBeNull();
+    const notices = [
+        ...container.querySelectorAll(
+            '[data-happy-desktop-ui="sidebar-error-notice"] .happy-sidebar-error-notice__text',
+        ),
     ].map((node) => node.textContent);
-    expect(errors).toEqual(["Could not archive “Windows console flicker”. The host is busy."]);
+    expect(notices).toEqual(["Could not archive “Windows console flicker”. The host is busy."]);
 });
 
 it("hides and shows the whole Projects list from its heading, kept in the folding record", () => {

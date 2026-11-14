@@ -2190,6 +2190,50 @@
     margin-top: auto;
 }
 
+/* A refused sidebar act, on the same card as the footer marks but as wide as
+   the footer row: the warning glyph, the reason, and the control that puts it
+   away. Even 6px insets keep the dismiss button's corner parallel to the
+   card's. A long reason scrolls inside four lines rather than growing the card
+   over the list. */
+.happy-sidebar-error-notice {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: none;
+    padding: 6px 6px 6px 12px;
+}
+
+.happy-sidebar-error-notice__glyph {
+    display: flex;
+    flex: none;
+    margin-top: 6px;
+    color: var(--box-warning-text);
+}
+
+.happy-sidebar-error-notice__message {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-block: 6px;
+}
+
+.happy-sidebar-error-notice__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-height: 64px;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    user-select: text;
+}
+
+.happy-sidebar-error-notice > .happy-button {
+    flex: none;
+}
+
 /* What is new, above the panel in the same card. The measured height collapses
    to zero when Install is pressed, so the card shrinks back to the panel's
    own size in one glide; the hairline under the notes is where the panel's top

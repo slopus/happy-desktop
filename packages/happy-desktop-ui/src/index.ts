@@ -380,6 +380,7 @@ export {
     SidebarConnectionAction,
     type SidebarConnectionActionProps,
 } from "./SidebarConnectionAction";
+export { SidebarErrorNotice, type SidebarErrorNoticeProps } from "./SidebarErrorNotice";
 export {
     SidebarKeepAwakeMenu,
     type SidebarKeepAwakeMenuProps,

@@ -140,6 +140,7 @@ import type {
     HappyAgentSubtaskRoot,
     HappyAgentTask,
     HappyAgentTaskId,
+    HappyAgentBotId,
     HappyAgentFeedUnreadSnapshot,
     HappyAgentFeedUnreadStore,
     ProjectsVisibilityStore,
@@ -333,6 +334,7 @@ import {
     Sidebar,
     SidebarFooter,
     SidebarConnectionAction,
+    SidebarErrorNotice,
     MenuButton,
     SidebarAgentUpdate,
     SidebarBugReport,
@@ -2641,8 +2643,6 @@ function happyAgentSections(
                   }
                 : {}),
             ...hiddenBotsAction(happyAgent, attention),
-            ...subtaskFailureError(happyAgent, happyAgent.bots),
-            ...botFailureError(happyAgent),
             // With the Projects list left out, what the Happy Agent said when it
             // failed still needs a heading to stand under.
             ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden &&
@@ -2713,10 +2713,6 @@ function happyAgentTasksSection(
             : materialized
               ? { emptyAction: { disabled: offline, icon: "search" as const, label: "Browse" } }
               : {}),
-        ...taskFailureError(happyAgent),
-        ...(taskFailureError(happyAgent).error === undefined
-            ? subtaskFailureError(happyAgent, happyAgent.tasks ?? [])
-            : {}),
     };
 }
 
@@ -3117,63 +3113,50 @@ function rowDestination(
 }
 
 /**
- * The Tasks heading's word on a task act the host refused. A refused leave or
- * move puts the row back where the host has it, and a refused archive leaves
- * it listed, so the reason stands under the heading it is listed in. A
- * refused join names a task that is not listed here at all, and is said in
- * the browse dialog that asked for it instead.
+ * The one sidebar act the host refused that the footer's error notice states:
+ * a task's leave, move, archive, unarchive, or rename, a subtask's archive or
+ * move, or a bot's archive. A refused row is back where the host keeps it, so
+ * only the reason is left to say, and only while the row is still listed. A
+ * refused join names a task that is not listed here at all, and is said in the
+ * browse dialog that asked for it instead.
  */
-function taskFailureError(happyAgent: AppHappyAgentEntry): Pick<SidebarSection, "error"> {
-    const failures = happyAgent.taskFailures;
-    if (failures === undefined || failures.size === 0) return {};
-    for (const task of happyAgent.tasks ?? []) {
-        const failure = failures.get(task.id);
-        if (failure && failure.action !== "join")
-            return {
-                error: `Could not ${taskFailureVerb(failure.action)} “${task.name}”. ${failure.error.message}`,
-            };
+function sidebarMutationFailure(
+    directory: AppHappyAgentDirectorySnapshot,
+): { readonly message: string; readonly dismiss: () => void } | undefined {
+    for (const happyAgent of directory.happyAgents) {
+        const workspace = happyAgent.session?.workspace;
+        for (const task of happyAgent.tasks ?? []) {
+            const failure = happyAgent.taskFailures?.get(task.id);
+            if (failure && failure.action !== "join")
+                return {
+                    message: `Could not ${failure.action === "reorder" ? "move" : failure.action} “${task.name}”. ${failure.error.message}`,
+                    dismiss: () => workspace?.taskFailureDismiss(task.id as HappyAgentTaskId),
+                };
+        }
+        for (const task of happyAgentBotSubtasks([
+            ...happyAgent.bots,
+            ...(happyAgent.tasks ?? []),
+        ])) {
+            const failure = happyAgent.subtaskFailures?.get(task.conversation.id);
+            if (failure)
+                return {
+                    message: `Could not ${failure.action === "archive" ? "archive" : "move"} “${task.conversation.title}”. ${failure.error.message}`,
+                    dismiss: () =>
+                        workspace?.subtaskFailureDismiss(
+                            task.conversation.id as HappyAgentSessionId,
+                        ),
+                };
+        }
+        for (const bot of happyAgent.bots) {
+            const failure = happyAgent.botFailures?.get(bot.id);
+            if (failure)
+                return {
+                    message: `Could not archive “${bot.name}”. ${failure.error.message}`,
+                    dismiss: () => workspace?.botFailureDismiss(bot.id as HappyAgentBotId),
+                };
+        }
     }
-    return {};
-}
-
-function taskFailureVerb(
-    action: "join" | "leave" | "reorder" | "archive" | "unarchive" | "rename",
-): string {
-    if (action === "reorder") return "move";
-    return action;
-}
-
-/**
- * The Bots heading's word on a subtask archive or move the host refused. The task is
- * still in its bot's tree, so the reason stands under the heading it is listed
- * in until the reader asks again; a refusal for a task no longer listed has
- * nothing left to explain.
- */
-function subtaskFailureError(
-    happyAgent: AppHappyAgentEntry,
-    roots: readonly HappyAgentSubtaskRoot[],
-): Pick<SidebarSection, "error"> {
-    const failures = happyAgent.subtaskFailures;
-    if (failures === undefined || failures.size === 0) return {};
-    for (const task of happyAgentBotSubtasks(roots)) {
-        const failure = failures.get(task.conversation.id);
-        if (failure)
-            return {
-                error: `Could not ${failure.action === "archive" ? "archive" : "move"} “${task.conversation.title}”. ${failure.error.message}`,
-            };
-    }
-    return {};
-}
-
-/** The Bots heading's word on a bot archive the host refused, while that bot is listed. */
-function botFailureError(happyAgent: AppHappyAgentEntry): Pick<SidebarSection, "error"> {
-    const failures = happyAgent.botFailures;
-    if (failures === undefined || failures.size === 0) return {};
-    for (const bot of happyAgent.bots) {
-        const failure = failures.get(bot.id);
-        if (failure) return { error: `Could not archive “${bot.name}”. ${failure.error.message}` };
-    }
-    return {};
+    return undefined;
 }
 
 function happyAgentProjectsSection(
@@ -3874,6 +3857,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const restart = outage?.restart;
     // This component stays mounted when the outage clears, so an open card
     // can report Connected until the person dismisses it.
+    const mutationFailure = sidebarMutationFailure(directory);
     const sidebarOutage = (
         <SidebarConnectionAction
             location={`Happy Agent on ${updateHost?.label ?? "this computer"}`}
@@ -4057,6 +4041,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {sidebarOutage}
                     {remoteConnection}
                     {sidebarUpdate}
+                    <SidebarErrorNotice
+                        message={mutationFailure?.message}
+                        onDismiss={() => mutationFailure?.dismiss()}
+                    />
                 </>
             }
             devMenu={

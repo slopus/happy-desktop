@@ -1709,6 +1709,12 @@ export interface HappyAgentWorkspaceStore {
         sessionId: HappyAgentSessionId,
         afterId: HappyAgentSessionId | null,
     ): Promise<void>;
+    /** Puts away the reason the task's last act was refused, without acting on it again. */
+    taskFailureDismiss(taskId: HappyAgentTaskId): void;
+    /** Puts away the reason the subtask's last act was refused, without acting on it again. */
+    subtaskFailureDismiss(sessionId: HappyAgentSessionId): void;
+    /** Puts away the reason the bot's last archive was refused, without archiving it again. */
+    botFailureDismiss(botId: HappyAgentBotId): void;
     /**
      * Archives a project, taking its conversations and its worktrees' checkouts
      * with it, and resolves with the verified outcome. The caller does not
@@ -8018,6 +8024,9 @@ export function happyAgentWorkspaceStoreCreate(
         botReorder: (botId, afterId) => list.botReorder(botId, afterId),
         subtaskArchive: (sessionId) => list.subtaskArchive(sessionId),
         subtaskReorder: (sessionId, afterId) => list.subtaskReorder(sessionId, afterId),
+        taskFailureDismiss: (taskId) => list.taskFailureDismiss(taskId),
+        subtaskFailureDismiss: (sessionId) => list.subtaskFailureDismiss(sessionId),
+        botFailureDismiss: (botId) => list.botFailureDismiss(botId),
         taskJoin: (taskId) => list.taskJoin(taskId),
         taskLeave: (taskId) => list.taskLeave(taskId),
         taskReorder: (taskId, afterId) => list.taskReorder(taskId, afterId),
