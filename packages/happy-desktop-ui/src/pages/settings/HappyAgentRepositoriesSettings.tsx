@@ -47,10 +47,10 @@ export type HappyAgentRepositoryCheck =
     | { readonly state: "partial"; readonly summary: string }
     | { readonly state: "failed"; readonly title: string; readonly message: string };
 
-/** A shared git credential a repository may be pinned to. */
+/** A team git credential from Settings › Secrets a repository may be pinned to. */
 export interface HappyAgentRepositoryCredentialOption {
     readonly id: string;
-    /** Its label and what it covers, for example "slopus deploy token · github.com/slopus". */
+    /** Its name and server, for example "Acme deploy token · github.com". */
     readonly label: string;
 }
 
@@ -67,8 +67,8 @@ export interface HappyAgentRepositoryPlugin {
     onOpen?: () => void;
 }
 
-/** Chooses among the acting person's own and the shared credentials each time. */
-export const HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC = "automatic";
+/** Reaches the repository without a credential, as a public one is. */
+export const HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE = "none";
 
 export interface HappyAgentRepositoriesSettingsProps {
     readonly loading: boolean;
@@ -211,25 +211,61 @@ function HappyAgentRepositoryCheckView(props: { readonly check: HappyAgentReposi
     );
 }
 
-function credentialOptions(credentials: readonly HappyAgentRepositoryCredentialOption[]) {
-    return [
-        {
-            value: HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
-            label: "Each person's own credential",
-        },
-        ...credentials.map((credential) => ({ value: credential.id, label: credential.label })),
-    ];
+/** Picks the team git credential a repository is reached with, or none. */
+function HappyAgentRepositoryCredentialPicker(props: {
+    readonly credentialId: string;
+    readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
+    readonly disabled: boolean;
+    onCredentialChange: (credentialId: string) => void;
+    onSecretsOpen?: () => void;
+}) {
+    const empty = props.credentials.length === 0;
+    return (
+        <Box className="happy-agent-repositories__credential">
+            <Select
+                disabled={props.disabled}
+                fullWidth
+                hint={
+                    empty
+                        ? "No git credential in Settings › Secrets covers this URL. Public repositories work without one."
+                        : "Public repositories work without one. Pin a git credential from Settings › Secrets to reach a private one."
+                }
+                label="Credential"
+                onValueChange={props.onCredentialChange}
+                options={[
+                    { value: HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE, label: "No credential" },
+                    ...props.credentials.map((credential) => ({
+                        value: credential.id,
+                        label: credential.label,
+                    })),
+                ]}
+                value={props.credentialId}
+            />
+            {empty && props.onSecretsOpen ? (
+                <Box className="happy-agent-repositories__credential-action">
+                    <Button
+                        disabled={props.disabled}
+                        icon="lock"
+                        onClick={props.onSecretsOpen}
+                        size="small"
+                        variant="secondary"
+                    >
+                        Add a git credential
+                    </Button>
+                </Box>
+            ) : null}
+        </Box>
+    );
 }
-
-const CREDENTIAL_HINT =
-    "Each person reaches the repository with their own git credential for its host, or a shared one. Pin a shared credential to make everyone use it.";
 
 export interface HappyAgentRepositoryAddDialogProps {
     readonly url: string;
     readonly name: string;
-    /** The pinned shared credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC`. */
+    /** The pinned team git credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE`. */
     readonly credentialId: string;
     readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
+    /** Opens Settings › Secrets, offered when no git credential covers the URL. */
+    onSecretsOpen?: () => void;
     readonly check: HappyAgentRepositoryCheck;
     readonly submitting: boolean;
     /** Why the server refused to add it. */
@@ -291,18 +327,12 @@ export function HappyAgentRepositoryAddDialog(props: HappyAgentRepositoryAddDial
                         placeholder="https://github.com/acme/web.git"
                         value={props.url}
                     />
-                    <Select
+                    <HappyAgentRepositoryCredentialPicker
+                        credentialId={props.credentialId}
+                        credentials={props.credentials}
                         disabled={props.submitting}
-                        fullWidth
-                        hint={
-                            props.credentials.length === 0
-                                ? "This server has no shared git credentials, so each person uses their own."
-                                : CREDENTIAL_HINT
-                        }
-                        label="Credential"
-                        onValueChange={props.onCredentialChange}
-                        options={credentialOptions(props.credentials)}
-                        value={props.credentialId}
+                        onCredentialChange={props.onCredentialChange}
+                        {...(props.onSecretsOpen ? { onSecretsOpen: props.onSecretsOpen } : {})}
                     />
                     <Box className="happy-agent-repositories__check-row">
                         <Button
@@ -343,9 +373,11 @@ export interface HappyAgentRepositoryDialogProps {
     readonly defaultBranch?: string;
     /** The branches the last read found, for choosing the default. */
     readonly branches: readonly string[];
-    /** The pinned shared credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC`. */
+    /** The pinned team git credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE`. */
     readonly credentialId: string;
     readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
+    /** Opens Settings › Secrets, offered when no git credential covers the URL. */
+    onSecretsOpen?: () => void;
     /** The plugin that manages it; replaces the credential picker, which then offers nothing. */
     readonly plugin?: HappyAgentRepositoryPlugin;
     readonly check: HappyAgentRepositoryCheck;
@@ -378,10 +410,10 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
             />
         );
     const credentialLabel =
-        props.credentialId === HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC
-            ? "Each person's own credential"
+        props.credentialId === HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE
+            ? "No credential"
             : (props.credentials.find((credential) => credential.id === props.credentialId)
-                  ?.label ?? "A shared credential");
+                  ?.label ?? "A team git credential");
     return (
         <ModalOverlay onDismiss={props.onClose}>
             <Modal
@@ -441,13 +473,14 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                                     : { placeholder: "Check access to read the branches" })}
                             />
                             {props.plugin ? null : (
-                                <Select
+                                <HappyAgentRepositoryCredentialPicker
+                                    credentialId={props.credentialId}
+                                    credentials={props.credentials}
                                     disabled={props.saving}
-                                    fullWidth
-                                    label="Credential"
-                                    onValueChange={props.onCredentialChange}
-                                    options={credentialOptions(props.credentials)}
-                                    value={props.credentialId}
+                                    onCredentialChange={props.onCredentialChange}
+                                    {...(props.onSecretsOpen
+                                        ? { onSecretsOpen: props.onSecretsOpen }
+                                        : {})}
                                 />
                             )}
                         </>

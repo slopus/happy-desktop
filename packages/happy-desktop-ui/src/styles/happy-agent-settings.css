@@ -1378,6 +1378,16 @@
     color: var(--text);
 }
 
+.happy-agent-repositories__credential {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-repositories__credential-action {
+    display: flex;
+}
+
 .happy-agent-repositories__plugin-section {
     display: flex;
     flex-direction: column;

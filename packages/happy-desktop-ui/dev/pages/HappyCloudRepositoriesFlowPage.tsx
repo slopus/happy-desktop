@@ -4,7 +4,7 @@ import {
     ComposerFooterBar,
     ComputeChip,
     ContextMeter,
-    HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
+    HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
     HappyAgentRepositoriesSettings,
     HappyAgentRepositoryAddDialog,
     HappyAgentRepositoryDeleteDialog,
@@ -86,9 +86,10 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
     },
 ];
 
+/** The team's `git_credential` secrets from Settings › Secrets, labelled by name and server. */
 const credentials = [
-    { id: "ghpat1", label: "slopus deploy token · github.com/slopus" },
-    { id: "ghapp", label: "Acme GitHub app · github.com" },
+    { id: "ghpat1", label: "slopus deploy token · github.com" },
+    { id: "acme-deploy", label: "Acme deploy token · github.com" },
 ];
 
 /** The window Happy opens at, and its minimum. */
@@ -137,12 +138,19 @@ function List(props: { manage: boolean; empty?: boolean }) {
     );
 }
 
-function Add(props: { check: HappyAgentRepositoryCheck; credentialId?: string; none?: boolean }) {
+function Add(props: {
+    check: HappyAgentRepositoryCheck;
+    credentialId?: string;
+    none?: boolean;
+    error?: string;
+}) {
     return (
         <HappyAgentRepositoryAddDialog
             check={props.check}
-            credentialId={props.credentialId ?? HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC}
+            credentialId={props.credentialId ?? HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE}
             credentials={props.none ? [] : credentials}
+            {...(props.none ? { onSecretsOpen: noop } : {})}
+            {...(props.error ? { error: props.error } : {})}
             name="web"
             onCheck={noop}
             onClose={noop}
@@ -188,7 +196,7 @@ const managed: HappyAgentRepositoryDialogProps = {
     ...detail,
     name: "web",
     url: "https://github.com/acme/web.git",
-    credentialId: HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
+    credentialId: HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
     credentials: [],
     plugin: githubApp,
 };
@@ -277,7 +285,7 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Screen
-                detail="no credential applies, and none is shared"
+                detail="no git credential in Settings › Secrets covers the URL"
                 number="05"
                 screen="05-add-no-credential"
             >
@@ -285,9 +293,9 @@ export function HappyCloudRepositoriesFlowPage() {
                 <Add
                     check={{
                         state: "failed",
-                        title: "No credential for github.com",
+                        title: "Can't reach it",
                         message:
-                            "Neither you nor the team has a git credential for github.com/acme. Add one in Settings › Secrets, then check again.",
+                            "github.com asked for a credential: acme/web is private. Add a git credential in Settings › Secrets, then check again.",
                     }}
                     none
                 />
@@ -304,7 +312,7 @@ export function HappyCloudRepositoriesFlowPage() {
                         summary:
                             "A credential applies. The first checkout confirms access over SSH.",
                     }}
-                    credentialId={HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC}
+                    credentialId={HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE}
                     credentials={credentials}
                     name="infra"
                     onCheck={noop}
@@ -427,6 +435,18 @@ export function HappyCloudRepositoriesFlowPage() {
                         detail: "Personal access token",
                         missing: false,
                     }}
+                />
+            </Screen>
+            <Screen
+                detail="adding one pinned to a git credential the reader's role may not use"
+                number="15"
+                screen="15-add-secret-refused"
+            >
+                <List manage />
+                <Add
+                    check={{ state: "unchecked" }}
+                    credentialId="acme-deploy"
+                    error="Your role can't use this credential. Pick another, or ask whoever manages it in Settings › Secrets to let your role use it."
                 />
             </Screen>
         </ComponentPage>

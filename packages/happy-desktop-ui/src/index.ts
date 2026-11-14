@@ -1150,7 +1150,7 @@ export {
     type HappyAgentMembersSettingsProps,
 } from "./pages/settings/HappyAgentMembersSettings";
 export {
-    HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
+    HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
     HappyAgentRepositoriesSettings,
     HappyAgentRepositoryAddDialog,
     HappyAgentRepositoryDeleteDialog,

@@ -1600,6 +1600,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                       props.onPluginOpen?.(host.id, pluginId),
                               }
                             : {})}
+                        onSecretsOpen={() => props.onCategorySelect("secrets")}
                         plugins={repositoryPlugins}
                         snapshot={repositories}
                         store={repositoriesShown}

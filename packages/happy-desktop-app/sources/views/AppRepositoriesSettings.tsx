@@ -1,13 +1,13 @@
 import type {
-    HappyAgentGitCredential,
     HappyAgentPluginsSnapshot,
     HappyAgentRepositoriesSnapshot,
     HappyAgentRepositoriesStore,
     HappyAgentRepository,
+    HappyAgentRepositoryCredential,
     HappyAgentRepositoryPluginMethod,
 } from "happy-desktop-state";
 import {
-    HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
+    HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
     HappyAgentRepositoriesSettings,
     HappyAgentRepositoryAddDialog,
     HappyAgentRepositoryDialog,
@@ -23,8 +23,10 @@ export function AppRepositoriesSettings(props: {
     /** The team's plugins, which name the one managing a repository. */
     readonly plugins: HappyAgentPluginsSnapshot;
     onPluginOpen?: (pluginId: string) => void;
+    /** Opens Settings › Secrets, where the team's git credentials are added. */
+    onSecretsOpen?: () => void;
 }) {
-    const { snapshot, store } = props;
+    const { snapshot, store, onSecretsOpen } = props;
     const add = snapshot.add;
     const open = snapshot.open;
     const opened = open
@@ -75,7 +77,7 @@ export function AppRepositoriesSettings(props: {
                               ? checkView(add.check, undefined)
                               : { state: "unchecked" }
                     }
-                    credentialId={add.credentialId ?? HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC}
+                    credentialId={add.credentialId ?? HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE}
                     credentials={add.credentials.map(credentialOption)}
                     {...(add.error ? { error: add.error.message } : {})}
                     name={add.name}
@@ -84,6 +86,14 @@ export function AppRepositoriesSettings(props: {
                     onCredentialChange={(credentialId) =>
                         store.addCredentialUpdate(credentialIdOf(credentialId))
                     }
+                    {...(onSecretsOpen
+                        ? {
+                              onSecretsOpen: () => {
+                                  store.addClose();
+                                  onSecretsOpen();
+                              },
+                          }
+                        : {})}
                     onNameChange={(name) => store.addNameUpdate(name)}
                     onSubmit={() => store.addSubmit()}
                     onUrlChange={(url) => store.addUrlUpdate(url)}
@@ -103,7 +113,9 @@ export function AppRepositoriesSettings(props: {
                     }
                     checkAllowed={snapshot.checkAllowed}
                     credentialId={
-                        opened.credentialId ?? HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC
+                        opened.authentication.kind === "credential"
+                            ? opened.authentication.credentialId
+                            : HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE
                     }
                     credentials={open.credentials.map(credentialOption)}
                     {...(opened.defaultBranch ? { defaultBranch: opened.defaultBranch } : {})}
@@ -116,6 +128,14 @@ export function AppRepositoriesSettings(props: {
                     onCredentialChange={(credentialId) =>
                         store.repositoryCredentialUpdate(credentialIdOf(credentialId))
                     }
+                    {...(onSecretsOpen
+                        ? {
+                              onSecretsOpen: () => {
+                                  store.repositoryClose();
+                                  onSecretsOpen();
+                              },
+                          }
+                        : {})}
                     onDefaultBranchChange={(branch) => store.repositoryDefaultBranchUpdate(branch)}
                     onDelete={() => store.repositoryDelete()}
                     onNameSave={(name) => store.repositoryNameSave(name)}
@@ -175,19 +195,13 @@ function pluginOf(
 }
 
 function credentialIdOf(value: string): string | null {
-    return value === HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC ? null : value;
+    return value === HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE ? null : value;
 }
 
 function credentialOption(
-    credential: HappyAgentGitCredential,
+    credential: HappyAgentRepositoryCredential,
 ): HappyAgentRepositoryCredentialOption {
-    return {
-        id: credential.id,
-        label:
-            credential.hosts.length > 0
-                ? `${credential.name} · ${credential.hosts.join(", ")}`
-                : credential.name,
-    };
+    return { id: credential.id, label: `${credential.name} · ${credential.server}` };
 }
 
 /** What a check found, in the words the dialogs show. */
