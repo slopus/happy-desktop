@@ -13,6 +13,7 @@ import {
     RepositoryChip,
     type HappyAgentRepositoryCheck,
     type HappyAgentRepositoryDialogProps,
+    type HappyAgentRepositoryPlugin,
     type HappyAgentRepositoryRow,
     type HappyAgentSettingsCategory,
     type RepositoryChipRepository,
@@ -149,6 +150,24 @@ const detail: HappyAgentRepositoryDialogProps = {
     onNameSave: noop,
 };
 
+const githubApp: HappyAgentRepositoryPlugin = {
+    name: "GitHub",
+    image: null,
+    detail: "GitHub App · acme",
+    missing: false,
+    onOpen: noop,
+};
+
+/** A repository the GitHub plugin added and signs in for, with nothing to pick. */
+const managed: HappyAgentRepositoryDialogProps = {
+    ...detail,
+    name: "web",
+    url: "https://github.com/acme/web.git",
+    credentialId: HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
+    credentials: [],
+    plugin: githubApp,
+};
+
 /** A repository's own picture, as the server serves it: Happy's, for its own repository. */
 const REPOSITORY_PICTURE = happyLogoBlackUrl;
 
@@ -197,7 +216,7 @@ export function HappyCloudRepositoriesFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, and the read-only chip for the repository a task's agent attached, beside the compute chip."
+            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, a repository a plugin manages, and the read-only chip for the repository a task's agent attached, beside the compute chip."
             title="Happy Cloud repositories flow"
             width={WINDOWS[0].width + 96}
         >
@@ -335,6 +354,49 @@ export function HappyCloudRepositoriesFlowPage() {
                     ))}
                 </div>
             </Specimen>
+            <Screen
+                detail="added by the GitHub plugin: who signs in, and no credential to pick"
+                number="12"
+                screen="12-plugin-managed"
+            >
+                <List manage />
+                <HappyAgentRepositoryDialog {...managed} />
+            </Screen>
+            <Screen
+                detail="added by the GitHub plugin, whose credential is gone"
+                number="13"
+                screen="13-plugin-missing"
+            >
+                <List manage />
+                <HappyAgentRepositoryDialog
+                    {...managed}
+                    check={{
+                        state: "failed",
+                        title: "Can't reach it",
+                        message: "github.com refused the request: no credential applies.",
+                    }}
+                    plugin={{ ...githubApp, missing: true }}
+                />
+            </Screen>
+            <Screen
+                detail="added by the GitHub plugin, seen by a viewer"
+                number="14"
+                screen="14-plugin-viewer"
+            >
+                <List manage={false} />
+                <HappyAgentRepositoryDialog
+                    {...managed}
+                    check={{ state: "unchecked" }}
+                    checkAllowed={false}
+                    manage={false}
+                    plugin={{
+                        name: "GitHub",
+                        image: null,
+                        detail: "Personal access token",
+                        missing: false,
+                    }}
+                />
+            </Screen>
         </ComponentPage>
     );
 }

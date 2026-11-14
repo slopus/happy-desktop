@@ -929,6 +929,12 @@ function HappyAgentSettingsRoute() {
                 void navigate({ params: { section }, to: "/settings/$section" })
             }
             onClose={() => happyAgentRouterSettingsClose(router)}
+            onPluginOpen={(happyAgentId, pluginId) =>
+                void navigate({
+                    params: { happyAgentId, pluginId },
+                    to: "/plugins/$happyAgentId/$pluginId",
+                })
+            }
             onUserProfileOpen={(happyAgentId, userId) =>
                 void navigate({
                     params: { happyAgentId, userId },

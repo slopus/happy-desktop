@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { HappyAgentPluginImage } from "happy-desktop-state";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
@@ -11,6 +12,7 @@ import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
+import { PluginMark } from "../plugins/pluginPresentation";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** One of the team's repositories, as the list shows it. */
@@ -48,6 +50,19 @@ export interface HappyAgentRepositoryCredentialOption {
     readonly id: string;
     /** Its label and what it covers, for example "slopus deploy token · github.com/slopus". */
     readonly label: string;
+}
+
+/** The plugin that added a repository and signs in for it. Its credential is never shown. */
+export interface HappyAgentRepositoryPlugin {
+    /** The plugin's name, for example "GitHub". */
+    readonly name: string;
+    readonly image: HappyAgentPluginImage | null;
+    /** How it signs in and as whom, for example "GitHub App · acme". */
+    readonly detail?: string;
+    /** Its credential is gone because the plugin was removed or disconnected. */
+    readonly missing: boolean;
+    /** Opens the plugin, where it is connected again. */
+    onOpen?: () => void;
 }
 
 /** Chooses among the acting person's own and the shared credentials each time. */
@@ -317,6 +332,8 @@ export interface HappyAgentRepositoryDialogProps {
     /** The pinned shared credential, or `HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC`. */
     readonly credentialId: string;
     readonly credentials: readonly HappyAgentRepositoryCredentialOption[];
+    /** The plugin that manages it; replaces the credential picker, which then offers nothing. */
+    readonly plugin?: HappyAgentRepositoryPlugin;
     readonly check: HappyAgentRepositoryCheck;
     /** Whether the reader may change and remove it. */
     readonly manage: boolean;
@@ -409,23 +426,30 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                                     ? { value: props.defaultBranch }
                                     : { placeholder: "Check access to read the branches" })}
                             />
-                            <Select
-                                disabled={props.saving}
-                                fullWidth
-                                label="Credential"
-                                onValueChange={props.onCredentialChange}
-                                options={credentialOptions(props.credentials)}
-                                value={props.credentialId}
-                            />
+                            {props.plugin ? null : (
+                                <Select
+                                    disabled={props.saving}
+                                    fullWidth
+                                    label="Credential"
+                                    onValueChange={props.onCredentialChange}
+                                    options={credentialOptions(props.credentials)}
+                                    value={props.credentialId}
+                                />
+                            )}
                         </>
                     ) : (
                         <Box className="happy-agent-repositories__facts">
                             <span>Default branch</span>
                             <span>{props.defaultBranch ?? "Not known yet"}</span>
-                            <span>Credential</span>
-                            <span>{credentialLabel}</span>
+                            {props.plugin ? null : (
+                                <>
+                                    <span>Credential</span>
+                                    <span>{credentialLabel}</span>
+                                </>
+                            )}
                         </Box>
                     )}
+                    {props.plugin ? <HappyAgentRepositoryPluginView plugin={props.plugin} /> : null}
                     {props.checkAllowed ? (
                         <Box className="happy-agent-repositories__check-row">
                             <Button
@@ -468,6 +492,43 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                 </Box>
             </Modal>
         </ModalOverlay>
+    );
+}
+
+/** Who signs in for a plugin's repository, in place of a credential that can be picked. */
+function HappyAgentRepositoryPluginView(props: { readonly plugin: HappyAgentRepositoryPlugin }) {
+    const plugin = props.plugin;
+    return (
+        <Box className="happy-agent-repositories__plugin-section">
+            <Box
+                className="happy-agent-repositories__plugin"
+                data-happy-desktop-ui="happy-agent-repository-plugin"
+                data-status={plugin.missing ? "missing" : "active"}
+            >
+                <PluginMark image={plugin.image} size="row" />
+                <Box className="happy-agent-repositories__text">
+                    <span className="happy-agent-repositories__name">Managed by {plugin.name}</span>
+                    {plugin.detail ? (
+                        <span className="happy-agent-repositories__meta">{plugin.detail}</span>
+                    ) : null}
+                </Box>
+                {plugin.onOpen ? (
+                    <Button onClick={plugin.onOpen} size="small" variant="secondary">
+                        Open plugin
+                    </Button>
+                ) : null}
+            </Box>
+            <span className="happy-agent-repositories__note">
+                {plugin.name} signs in for this repository. Its credential is managed by the plugin
+                and is not shown here.
+            </span>
+            {plugin.missing ? (
+                <Banner tone="warning" title={`${plugin.name}'s credential is gone`}>
+                    The plugin was removed or disconnected, so git access to this repository fails
+                    until it is connected again.
+                </Banner>
+            ) : null}
+        </Box>
     );
 }
 

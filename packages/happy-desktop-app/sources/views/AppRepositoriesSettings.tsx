@@ -1,8 +1,10 @@
 import type {
     HappyAgentGitCredential,
+    HappyAgentPluginsSnapshot,
     HappyAgentRepositoriesSnapshot,
     HappyAgentRepositoriesStore,
     HappyAgentRepository,
+    HappyAgentRepositoryPluginMethod,
 } from "happy-desktop-state";
 import {
     HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
@@ -11,12 +13,16 @@ import {
     HappyAgentRepositoryDialog,
     type HappyAgentRepositoryCheck,
     type HappyAgentRepositoryCredentialOption,
+    type HappyAgentRepositoryPlugin,
 } from "happy-desktop-ui";
 
 /** Settings › Repositories on Happy Cloud, composed from its store. */
 export function AppRepositoriesSettings(props: {
     readonly snapshot: HappyAgentRepositoriesSnapshot;
     readonly store: HappyAgentRepositoriesStore;
+    /** The team's plugins, which name the one managing a repository. */
+    readonly plugins: HappyAgentPluginsSnapshot;
+    onPluginOpen?: (pluginId: string) => void;
 }) {
     const { snapshot, store } = props;
     const add = snapshot.add;
@@ -24,6 +30,7 @@ export function AppRepositoriesSettings(props: {
     const opened = open
         ? snapshot.repositories.find((repository) => repository.id === open.repositoryId)
         : undefined;
+    const managedBy = opened ? pluginOf(opened, props.plugins, props.onPluginOpen) : undefined;
     return (
         <>
             <HappyAgentRepositoriesSettings
@@ -100,6 +107,7 @@ export function AppRepositoriesSettings(props: {
                     onDefaultBranchChange={(branch) => store.repositoryDefaultBranchUpdate(branch)}
                     onDelete={() => store.repositoryDelete()}
                     onNameSave={(name) => store.repositoryNameSave(name)}
+                    {...(managedBy ? { plugin: managedBy } : {})}
                     saving={open.saving}
                     url={opened.url}
                 />
@@ -116,6 +124,42 @@ export function branchesOf(
     const names = snapshot.branches.get(repository.id)?.names ?? [];
     if (names.length > 0) return names;
     return repository.defaultBranch ? [repository.defaultBranch] : [];
+}
+
+const PLUGIN_METHOD_LABEL: Record<HappyAgentRepositoryPluginMethod, string> = {
+    github_app: "GitHub App",
+    token: "Personal access token",
+    ssh_key: "SSH key",
+    password: "Password",
+};
+
+/** The plugin that signs in for a repository, named from the team's plugins; nothing for any other. */
+function pluginOf(
+    repository: HappyAgentRepository,
+    plugins: HappyAgentPluginsSnapshot,
+    onPluginOpen: ((pluginId: string) => void) | undefined,
+): HappyAgentRepositoryPlugin | undefined {
+    const authentication = repository.authentication;
+    if (authentication.kind !== "plugin") return undefined;
+    const pluginId = authentication.plugin.id;
+    const plugin = plugins.plugins.find((candidate) => candidate.id === pluginId);
+    const installation = plugins.installations.find(
+        (candidate) => candidate.id === authentication.plugin.installationId,
+    );
+    const detail = [
+        authentication.method ? PLUGIN_METHOD_LABEL[authentication.method] : undefined,
+        authentication.account ?? undefined,
+    ]
+        .filter(Boolean)
+        .join(" · ");
+    return {
+        name: plugin?.name ?? installation?.name ?? pluginId,
+        image: installation?.image ?? plugin?.image ?? null,
+        ...(detail ? { detail } : {}),
+        missing: authentication.status === "missing",
+        // Only a plugin this server still offers has a page to open.
+        ...(plugin && onPluginOpen ? { onOpen: () => onPluginOpen(pluginId) } : {}),
+    };
 }
 
 function credentialIdOf(value: string): string | null {

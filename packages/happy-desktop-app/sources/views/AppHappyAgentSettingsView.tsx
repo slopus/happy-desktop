@@ -60,6 +60,7 @@ import {
     happyAgentCredentialImportStoreNoop,
     happyAgentCloudProvidersStoreNoop,
     happyAgentRepositoriesStoreNoop,
+    happyAgentPluginsStoreNone,
     happyAgentComputeStoreNoop,
     happyAgentOnboardingSettingsStoreNoop,
     happyAgentPaymentsStoreNoop,
@@ -514,6 +515,8 @@ export interface AppHappyAgentSettingsViewProps {
     onCategorySelect(id: string): void;
     /** Opens a person's profile on a Happy Cloud server. */
     onUserProfileOpen?(happyAgentId: string, userId: string): void;
+    /** Opens one plugin of a Happy Agent, where it is set up and connected. */
+    onPluginOpen?(happyAgentId: string, pluginId: string): void;
     platform?: "desktop" | "web";
     section: string;
     settings: HappyAgentSettingsStore;
@@ -820,6 +823,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (repositoriesShown ?? happyAgentRepositoriesStoreNoop).subscribe,
         (repositoriesShown ?? happyAgentRepositoriesStoreNoop).get,
         (repositoriesShown ?? happyAgentRepositoriesStoreNoop).get,
+    );
+    // Names the plugin that manages a repository, with its picture; read only
+    // while Repositories is on screen.
+    const repositoryPluginsStore = repositoriesShown ? host?.session?.plugins?.() : undefined;
+    const repositoryPlugins = useSyncExternalStore(
+        (repositoryPluginsStore ?? happyAgentPluginsStoreNone).subscribe,
+        (repositoryPluginsStore ?? happyAgentPluginsStoreNone).get,
+        (repositoryPluginsStore ?? happyAgentPluginsStoreNone).get,
     );
     // Pools and machines are read, and re-read every few seconds, only while
     // Compute is on screen.
@@ -1582,7 +1593,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 </>
             ) : section === "repositories" ? (
                 repositoriesShown ? (
-                    <AppRepositoriesSettings snapshot={repositories} store={repositoriesShown} />
+                    <AppRepositoriesSettings
+                        {...(host && repositoryPluginsStore && props.onPluginOpen
+                            ? {
+                                  onPluginOpen: (pluginId: string) =>
+                                      props.onPluginOpen?.(host.id, pluginId),
+                              }
+                            : {})}
+                        plugins={repositoryPlugins}
+                        snapshot={repositories}
+                        store={repositoriesShown}
+                    />
                 ) : null
             ) : section === "administration" ? (
                 owner && onboardingSettingsStore && onboardingSettings.available ? (

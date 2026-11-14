@@ -1161,6 +1161,7 @@ export {
     type HappyAgentRepositoryCredentialOption,
     type HappyAgentRepositoryDeleteDialogProps,
     type HappyAgentRepositoryDialogProps,
+    type HappyAgentRepositoryPlugin,
     type HappyAgentRepositoryRow,
 } from "./pages/settings/HappyAgentRepositoriesSettings";
 export {

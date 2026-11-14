@@ -1364,6 +1364,29 @@
     color: var(--text);
 }
 
+.happy-agent-repositories__plugin-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-repositories__plugin {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 0;
+    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-repositories__note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
 .happy-agent-repositories__danger {
     box-sizing: border-box;
     display: flex;
