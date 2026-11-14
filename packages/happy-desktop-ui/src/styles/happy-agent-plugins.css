@@ -320,18 +320,6 @@
     margin-inline-start: auto;
 }
 
-.happy-agent-plugin-card__meta {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 18px;
-}
-
-.happy-agent-plugin-card__meta code {
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-}
-
 .happy-agent-plugin-setup {
     display: flex;
     flex-direction: column;

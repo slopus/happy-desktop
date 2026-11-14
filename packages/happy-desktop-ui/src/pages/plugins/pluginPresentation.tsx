@@ -67,12 +67,9 @@ export function PluginInstallationStatus(props: {
     );
 }
 
-/** How one installation is named beside its siblings: its label, or its number past the first. */
+/** How one installation is named: the plugin name, with its label when the person gave one. */
 export function pluginInstallationTitle(installation: HappyAgentPluginInstallation): string {
-    if (installation.label) return `${installation.name} · ${installation.label}`;
-    return installation.ordinal > 1
-        ? `${installation.name} ${String(installation.ordinal)}`
-        : installation.name;
+    return installation.label ? `${installation.name} · ${installation.label}` : installation.name;
 }
 
 /**

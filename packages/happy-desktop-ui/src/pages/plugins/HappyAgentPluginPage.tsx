@@ -258,11 +258,6 @@ function InstallationCard(props: {
             {installation.status === "failed" && installation.error ? (
                 <p className="happy-agent-plugin__error">{installation.error}</p>
             ) : null}
-            {installation.toolPrefix === null ? null : (
-                <p className="happy-agent-plugin-card__meta">
-                    Agents call its tools as <code>{installation.toolPrefix}…</code>
-                </p>
-            )}
             {remove.error || disconnect.error ? (
                 <p className="happy-agent-plugin__error">{remove.error ?? disconnect.error}</p>
             ) : null}
