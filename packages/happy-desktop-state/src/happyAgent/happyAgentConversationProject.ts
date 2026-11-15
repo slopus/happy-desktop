@@ -664,12 +664,13 @@ function happyAgentConnectGroupProject(
                 // lifecycle notices and opaque encrypted slots steer the model
                 // but are not dialogue, so they leave no row behind.
                 if (omittedInboundMessageIds.has(element.id)) break;
-                // A message from another agent, the managing one included, is
-                // content, so it keeps a row — but it is that agent working, not
-                // the reader speaking, so it takes the same compact activity row
-                // the rest of the turn's work does.
+                // A message an agent sent — another agent, the managing one
+                // included, or this agent to itself — is content, so it keeps a
+                // row. It is agent work, not the reader speaking, so it takes the
+                // same compact activity row the rest of the turn's work does and
+                // never a bubble in the reader's own words.
                 const collaborator = element.senderAgent;
-                if (collaborator !== undefined && collaborator.relation === "other") {
+                if (collaborator !== undefined) {
                     entries.push({
                         kind: "agentActivity",
                         id: element.id,
@@ -682,6 +683,7 @@ function happyAgentConnectGroupProject(
                             ...(collaborator.explanation === undefined
                                 ? {}
                                 : { explanation: collaborator.explanation }),
+                            ...(collaborator.relation === "self" ? { self: true } : {}),
                             text: element.text,
                         },
                     });
