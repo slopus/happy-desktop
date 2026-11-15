@@ -18,6 +18,7 @@
 @import "./styles/sidebar-bug-report.css";
 @import "./styles/app-shell.css";
 @import "./styles/message.css";
+@import "./styles/message-options.css";
 @import "./styles/agent-run-card.css";
 @import "./styles/approval-card.css";
 @import "./styles/typed-text.css";

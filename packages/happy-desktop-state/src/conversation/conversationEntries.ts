@@ -135,6 +135,7 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
             left.message.id === right.message.id &&
             left.message.sessionId === right.message.sessionId &&
             left.message.text === right.message.text &&
+            optionsEqual(left.message.options, right.message.options) &&
             left.message.generationStatus === right.message.generationStatus &&
             traceEqual(left.message.agentTrace, right.message.agentTrace) &&
             left.message.sender === right.message.sender &&
@@ -504,6 +505,15 @@ function questionEqual(
                 option.description === right.options[index]?.description,
         )
     );
+}
+
+function optionsEqual(
+    left: readonly string[] | undefined,
+    right: readonly string[] | undefined,
+): boolean {
+    if (left === right) return true;
+    if (left === undefined || right === undefined || left.length !== right.length) return false;
+    return left.every((option, index) => option === right[index]);
 }
 
 function attachmentsEqual(

@@ -50,6 +50,7 @@ import {
 } from "./ConversationRequestView";
 import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
+import { MessageOptions } from "./MessageOptions";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
@@ -74,6 +75,11 @@ export type ConversationEntryViewProps = {
     entry: ConversationEntry;
     errorAssistance?: ConversationErrorAssistance;
     onErrorAssistanceRequest?: (entryId: string) => void;
+    /**
+     * Sends a reply an agent's message offered as the reader's next message.
+     * Absent, the offered replies are shown but cannot be chosen.
+     */
+    onMessageOptionSelect?: (option: string) => void;
     /**
      * What a failure card on this row offers and which switch target is
      * picked. Absent, the card shows its message and offers only Ask Chief of
@@ -726,6 +732,15 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     variant="chat"
                 />
             ))}
+            {message.options && message.options.length > 0 ? (
+                <MessageOptions
+                    key="options"
+                    options={message.options}
+                    {...(props.onMessageOptionSelect
+                        ? { onSelect: props.onMessageOptionSelect }
+                        : {})}
+                />
+            ) : null}
         </Message>
     );
 }
