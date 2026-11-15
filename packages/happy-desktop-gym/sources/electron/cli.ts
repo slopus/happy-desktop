@@ -5,6 +5,7 @@ import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
 import { gymBrowserPreviewRun, type GymBrowserRoute } from "./browserPreview.js";
+import { gymCloudBrowserRun } from "./cloudBrowser.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -56,6 +57,26 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         const result = await gymBrowserPreviewRun({
             expectedRoute: routeRead(flags.expect),
             artifactDirectory: flags.artifactDir,
+        });
+        console.log(JSON.stringify({ command, ...result }, null, 2));
+        if (result.status !== "passed") process.exitCode = 1;
+        return;
+    }
+    if (command === "cloud-browser") {
+        const result = await gymCloudBrowserRun({
+            fake: flags.fake === true,
+            ...(flags.serverUrl ? { serverUrl: flags.serverUrl } : {}),
+            ...(flags.workspace ? { workspaceId: flags.workspace } : {}),
+            ...(flags.agent ? { agentId: flags.agent } : {}),
+            ...(flags.pageUrl ? { pageUrl: flags.pageUrl } : {}),
+            ...(flags.tokenCommand ? { tokenCommand: flags.tokenCommand } : {}),
+            ...(flags.accountsUrl ? { accountsUrl: flags.accountsUrl } : {}),
+            ...(flags.serverName ? { serverName: flags.serverName } : {}),
+            ...(flags.computeOffline ? { computeOffline: flags.computeOffline } : {}),
+            ...(flags.computeOnline ? { computeOnline: flags.computeOnline } : {}),
+            ...(flags.computeRelease ? { computeRelease: flags.computeRelease } : {}),
+            ...(flags.computeAttach ? { computeAttach: flags.computeAttach } : {}),
+            ...(flags.artifactDir ? { artifactDirectory: flags.artifactDir } : {}),
         });
         console.log(JSON.stringify({ command, ...result }, null, 2));
         if (result.status !== "passed") process.exitCode = 1;
@@ -130,6 +151,18 @@ function parseFlags(args: readonly string[]): {
     readonly authFile?: string;
     readonly poolDefault?: boolean;
     readonly expect?: string;
+    readonly fake?: boolean;
+    readonly serverUrl?: string;
+    readonly workspace?: string;
+    readonly agent?: string;
+    readonly pageUrl?: string;
+    readonly tokenCommand?: string;
+    readonly accountsUrl?: string;
+    readonly serverName?: string;
+    readonly computeOffline?: string;
+    readonly computeOnline?: string;
+    readonly computeRelease?: string;
+    readonly computeAttach?: string;
 } {
     const result: {
         profile?: string;
@@ -141,6 +174,18 @@ function parseFlags(args: readonly string[]): {
         authFile?: string;
         poolDefault?: boolean;
         expect?: string;
+        fake?: boolean;
+        serverUrl?: string;
+        workspace?: string;
+        agent?: string;
+        pageUrl?: string;
+        tokenCommand?: string;
+        accountsUrl?: string;
+        serverName?: string;
+        computeOffline?: string;
+        computeOnline?: string;
+        computeRelease?: string;
+        computeAttach?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -158,6 +203,27 @@ function parseFlags(args: readonly string[]): {
             result.authFile = requiredValue(value, next, () => index++);
         else if (value === "--pool-default") result.poolDefault = true;
         else if (value === "--expect") result.expect = requiredValue(value, next, () => index++);
+        else if (value === "--fake") result.fake = true;
+        else if (value === "--server-url")
+            result.serverUrl = requiredValue(value, next, () => index++);
+        else if (value === "--workspace")
+            result.workspace = requiredValue(value, next, () => index++);
+        else if (value === "--agent") result.agent = requiredValue(value, next, () => index++);
+        else if (value === "--page-url") result.pageUrl = requiredValue(value, next, () => index++);
+        else if (value === "--token-command")
+            result.tokenCommand = requiredValue(value, next, () => index++);
+        else if (value === "--accounts-url")
+            result.accountsUrl = requiredValue(value, next, () => index++);
+        else if (value === "--server-name")
+            result.serverName = requiredValue(value, next, () => index++);
+        else if (value === "--compute-offline")
+            result.computeOffline = requiredValue(value, next, () => index++);
+        else if (value === "--compute-online")
+            result.computeOnline = requiredValue(value, next, () => index++);
+        else if (value === "--compute-release")
+            result.computeRelease = requiredValue(value, next, () => index++);
+        else if (value === "--compute-attach")
+            result.computeAttach = requiredValue(value, next, () => index++);
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -209,6 +275,10 @@ Commands:
   run [--profile PROFILE] [--root PATH] [--workload WORKLOAD] [--ui-trace]
   smoke
   browser-preview [--expect proxy|direct] [--artifact-dir PATH]
+  cloud-browser --fake | --server-url URL --workspace ID --agent ID --page-url URL
+      [--token-command CMD | --accounts-url URL --server-name NAME]
+      [--compute-offline CMD --compute-online CMD] [--compute-release CMD --compute-attach CMD]
+      [--artifact-dir PATH]   (bearer: HAPPY_GYM_CLOUD_TOKEN, or the options above)
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   clean --root PATH
 

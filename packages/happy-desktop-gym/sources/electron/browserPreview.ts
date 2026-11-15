@@ -265,7 +265,7 @@ async function retry<T>(attempt: () => Promise<T>, timeoutMs = 60_000): Promise<
  * reached as `localhost`, with a real module graph and HMR, a cookie, a
  * redirect into a nested page, and a stylesheet named by absolute address.
  */
-async function previewSiteStart(site: string): Promise<ViteDevServer> {
+export async function previewSiteStart(site: string): Promise<ViteDevServer> {
     await mkdir(join(site, "src"), { recursive: true });
     await mkdir(join(site, "deep"), { recursive: true });
     await Promise.all(
@@ -351,7 +351,7 @@ async function previewSiteStart(site: string): Promise<ViteDevServer> {
     return server;
 }
 
-function viteBase(server: ViteDevServer): string {
+export function viteBase(server: ViteDevServer): string {
     const local = server.resolvedUrls?.local[0];
     if (!local) throw new Error("The preview site has no local address.");
     return local;
@@ -520,7 +520,7 @@ function routeOf(resolved: string): GymBrowserRoute | undefined {
  * A Linux host with no display server runs Chromium's headless platform, and
  * Chromium refuses to run as root inside its own sandbox.
  */
-function linuxHeadlessArguments(): string[] {
+export function linuxHeadlessArguments(): string[] {
     if (process.platform !== "linux") return [];
     return [
         ...(process.env.DISPLAY || process.env.WAYLAND_DISPLAY
@@ -530,7 +530,7 @@ function linuxHeadlessArguments(): string[] {
     ];
 }
 
-function linuxDisplayEnvironment(): Record<string, string> {
+export function linuxDisplayEnvironment(): Record<string, string> {
     if (process.platform !== "linux") return {};
     const passthrough: Record<string, string> = {};
     for (const name of ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR"]) {
