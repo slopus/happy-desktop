@@ -549,56 +549,15 @@
     transform: none;
 }
 
-/* "All accounts" closes the account panel as a small header like a service's,
- * its re-check button on the right. The 14px glyph's arrows ink 12px across,
- * as wide as a ring, and its box is centred where the rings above are: the
- * 20px button reaches 4px past the line's inset, so both end on one edge. */
-.happy-composer-model-control__recheck-button {
-    position: relative;
-    isolation: isolate;
-    display: flex;
+/* "All accounts" heads the account panel, sized like a service's header but
+ * not a target itself: only its re-check button is. That is the composer's
+ * small ghost icon button, 28px square like the header line, with its hover
+ * and focus. Its centre sits where the rings' centres sit, 6px in from the
+ * line's inset, so it reaches 8px past that inset and the 14px glyph's 12px
+ * of arrows end on the rings' right edge. */
+.happy-composer-model-control__recheck > .happy-composer-model-control__recheck-button {
     flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    margin: 0 -4px 0 auto;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: color 120ms ease;
-    appearance: none;
-    -webkit-appearance: none;
-}
-
-.happy-composer-model-control__recheck-button::before {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: 4px;
-    content: "";
-    pointer-events: none;
-    transition: background-color 120ms ease;
-}
-
-.happy-composer-model-control__recheck-button:hover,
-.happy-composer-model-control__recheck-button:focus-visible {
-    color: var(--text);
-}
-
-.happy-composer-model-control__recheck-button:hover::before,
-.happy-composer-model-control__recheck-button:focus-visible::before {
-    background: var(--surface-selected);
-}
-
-.happy-composer-model-control__recheck-button:focus-visible {
-    outline: none;
-}
-
-.happy-composer-model-control__recheck-button:focus-visible::before {
-    box-shadow: inset 0 0 0 2px var(--radio-active);
+    margin: 0 -8px 0 auto;
 }
 
 /* The arrows turn on the compositor, so a busy main thread never stalls them. */

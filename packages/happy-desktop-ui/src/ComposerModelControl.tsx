@@ -339,7 +339,7 @@ function placeAccounts(node: HTMLDivElement | null) {
         node.parentElement!.dataset.side === "right" ? "right" : "left",
     );
     const row = header.getBoundingClientRect();
-    const item = node.querySelector<HTMLElement>("[data-menu-item]");
+    const item = node.querySelector<HTMLElement>(".happy-composer-model-control__account");
     const itemMiddle = item ? node.clientTop + item.offsetTop + item.offsetHeight / 2 : 0;
     const top = Math.max(
         pane.top + SIDE_GAP,
@@ -835,9 +835,10 @@ function failureMessage(error: unknown, fallback: string) {
 }
 
 /**
- * The account panel's last line, a small header like a service's: "All
- * accounts", and the button that re-checks every one of them now. Its arrows
- * turn while the request is on its way or any account is being read.
+ * The account panel's header, sized like a service's: "All accounts", and the
+ * one button on it, which re-checks every account now. The line itself is not
+ * a target. The arrows turn while the request is on its way or any account is
+ * being read.
  */
 function AccountsRecheck(props: { reading: boolean; onRecheck(): Promise<void> }) {
     const [request, setRequest] = useState<{ pending: boolean; error?: string }>({
@@ -851,13 +852,13 @@ function AccountsRecheck(props: { reading: boolean; onRecheck(): Promise<void> }
                 data-happy-desktop-ui="composer-model-control-accounts-recheck"
             >
                 <span className="happy-composer-model-control__service-name">All accounts</span>
-                <button
+                <Button
                     aria-busy={busy}
                     aria-label="Re-check all accounts"
                     className="happy-composer-model-control__recheck-button"
                     data-busy={busy ? "" : undefined}
-                    data-happy-desktop-ui="composer-model-control-accounts-recheck-button"
                     data-menu-item="account"
+                    iconOnly
                     onClick={() => {
                         if (request.pending) return;
                         setRequest({ pending: true });
@@ -870,11 +871,12 @@ function AccountsRecheck(props: { reading: boolean; onRecheck(): Promise<void> }
                                 }),
                         );
                     }}
+                    size="small"
                     title="Re-check all accounts"
-                    type="button"
+                    variant="ghost"
                 >
                     <Octicon name="sync" size={14} />
-                </button>
+                </Button>
             </div>
             {request.error ? (
                 <span className="happy-composer-model-control__footer-error" role="alert">
@@ -1357,6 +1359,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                 role="menu"
             >
                 <div className="happy-composer-model-control__account-list">
+                    {recheck ? <AccountsRecheck onRecheck={recheck} reading={reading} /> : null}
                     {service.accounts.map((account) => {
                         const current = account.id === accountOf(service);
                         return (
@@ -1428,10 +1431,6 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                         usage={shownUsage}
                     />
                 ) : null}
-                {recheck ? (
-                    <div className="happy-composer-model-control__separator" role="separator" />
-                ) : null}
-                {recheck ? <AccountsRecheck onRecheck={recheck} reading={reading} /> : null}
             </div>
         );
     };
