@@ -171,6 +171,7 @@ import type {
     HappyAgentWorkingWait,
     HappyAgentWorktreeId,
     HappyAgentLinkOpenPlacement,
+    HappyAgentBrowserClosure,
     HappyAgentCompute,
     HappyAgentSettingsStore,
     KeepAwakeMode,
@@ -242,6 +243,7 @@ import {
     type AppShellFocusedPane,
     Banner,
     BrowserPanel,
+    type BrowserClosure,
     DevBuildMenu,
     type ArtifactLiveRenderer,
     type BrowserContentRenderer,
@@ -12684,7 +12686,12 @@ function HappyAgentToolBodies(props: {
                     <BrowserPanel
                         active={props.activeId === tab.id}
                         initialUrl={tab.url}
-                        key={tab.id}
+                        // A reopened page is a new page, on the address the
+                        // tab last committed, with a guest of its own.
+                        key={`${tab.id}:${String(tab.reopenings)}`}
+                        {...(tab.closed === undefined
+                            ? {}
+                            : { closed: browserClosureOf(tab.closed) })}
                         onLocationChange={(url) => props.store.browserUpdate(tab.id, { url })}
                         onTitleChange={(title) => props.store.browserUpdate(tab.id, { title })}
                         {...(tab.artifactId === undefined ? {} : { inspectable: true })}
@@ -12881,6 +12888,21 @@ function HappyAgentTerminalScreen(props: {
 }
 
 /** The chip's words for a compute binding: its name, or a short ID when the server sent none. */
+/** What a browser tab closed for its agent's compute says in place of its page. */
+function browserClosureOf(closure: HappyAgentBrowserClosure): BrowserClosure {
+    return closure === "computeDetached"
+        ? {
+              title: "Compute disconnected",
+              description:
+                  "This agent’s compute was disconnected. The page will open again when compute is attached.",
+          }
+        : {
+              title: "Computer offline",
+              description:
+                  "The computer this agent runs on is offline. The page will open again when it is back.",
+          };
+}
+
 function computeChipOf(compute: HappyAgentCompute): ComputeChipCompute {
     if (compute.kind === "none") return { kind: "none" };
     return {

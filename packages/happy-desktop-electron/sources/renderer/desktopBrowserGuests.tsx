@@ -16,6 +16,8 @@ type Entry = {
     observeDispose?: () => void;
     displayLease: number;
     closed?: boolean;
+    /** The tab's page this guest was opened for. */
+    reopenings: number;
 };
 type Owner = { entries: Map<string, Entry>; unsubscribe: () => void };
 
@@ -34,8 +36,9 @@ export class DesktopBrowserGuests {
     ): () => void {
         const retention = props.retention;
         if (!retention) return () => undefined;
-        if (!retention.owner.get().browserTabs.some((tab) => tab.id === retention.id))
-            return () => undefined;
+        const tab = retention.owner.get().browserTabs.find((tab) => tab.id === retention.id);
+        // A closed page has no guest to draw.
+        if (!tab || tab.closed !== undefined) return () => undefined;
         let owner = this.owners.get(retention.owner);
         if (!owner) {
             owner = { entries: new Map(), unsubscribe: () => undefined };
@@ -47,7 +50,14 @@ export class DesktopBrowserGuests {
             const container = slot.ownerDocument.createElement("div");
             container.dataset.happyRetainedBrowser = retention.id;
             host.append(container);
-            entry = { container, host, root: createRoot(container), props, displayLease: 0 };
+            entry = {
+                container,
+                host,
+                root: createRoot(container),
+                props,
+                displayLease: 0,
+                reopenings: tab.reopenings,
+            };
             owner.entries.set(retention.id, entry);
         }
         entry.observeDispose?.();
@@ -98,7 +108,9 @@ export class DesktopBrowserGuests {
         const tabs = source.get().browserTabs;
         for (const [id, entry] of owner.entries) {
             const tab = tabs.find((tab) => tab.id === id);
-            if (!tab) {
+            // A tab closed, or its page closed and opened again as a new page,
+            // ends the guest: nothing of the old page may keep loading.
+            if (!tab || tab.closed !== undefined || tab.reopenings !== entry.reopenings) {
                 entry.closed = true;
                 entry.observeDispose?.();
                 // Store actions can fire during React's commit; dispose after it.

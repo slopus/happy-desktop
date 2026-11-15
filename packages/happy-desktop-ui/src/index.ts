@@ -856,6 +856,7 @@ export { type EmojiItem, EmojiPicker, type EmojiPickerProps } from "./EmojiPicke
 export { TerminalPanel, type TerminalPanelProps } from "./TerminalPanel";
 export {
     BrowserPanel,
+    type BrowserClosure,
     type BrowserContentProps,
     type BrowserContentRenderer,
     type BrowserContentTarget,

@@ -96,7 +96,14 @@ export type BrowserContentTarget =
 /** One authoritative subscription for all browser lifetimes in a workspace. */
 export interface BrowserGuestOwner {
     get(): {
-        readonly browserTabs: readonly { readonly id: string; readonly networkId?: string }[];
+        readonly browserTabs: readonly {
+            readonly id: string;
+            readonly networkId?: string;
+            /** Present while the tab's page is closed; its guest is released. */
+            readonly closed?: string;
+            /** A reopened page is a new page, never the guest of an earlier one. */
+            readonly reopenings: number;
+        }[];
     };
     subscribe(listener: () => void): () => void;
 }
@@ -128,6 +135,12 @@ export interface BrowserPanelProps {
     /** Why Happy Agent-bound browser navigation is unavailable while the guest remains mounted. */
     unavailable?: string;
     /**
+     * The page is closed, for this reason, and no guest is drawn: what served
+     * it went away. The owner opens it again when the reason passes, as a new
+     * panel on the address the tab last committed.
+     */
+    closed?: BrowserClosure;
+    /**
      * The page may be inspected — a live artifact's page — so the toolbar
      * keeps a place for developer tools, usable once the host offers them.
      */
@@ -140,6 +153,12 @@ export interface BrowserPanelProps {
         readonly tools: readonly BrowserStartTool[];
         readonly recent: readonly BrowserStartPage[];
     };
+}
+
+/** Why a browser tab has no page right now, in the reader's words. */
+export interface BrowserClosure {
+    readonly title: string;
+    readonly description: string;
 }
 
 interface BrowserViewState {
@@ -203,11 +222,15 @@ export function BrowserPanel(props: BrowserPanelProps) {
         reloads: 0,
     });
     const framed = props.renderContent === undefined;
+    // A closed page and an unavailable Happy Agent both leave nothing to navigate.
+    const paused = props.unavailable !== undefined || props.closed !== undefined;
+    // A closed page has no guest, so nothing it started is still loading.
+    const loading = view.loading && props.closed === undefined;
     const canGoBack = framed ? frame.index > 0 : view.canGoBack;
     const canGoForward = framed ? frame.index < frame.entries.length - 1 : view.canGoForward;
 
     const load = (url: string) => {
-        if (props.unavailable !== undefined) return;
+        if (paused) return;
         viewSet((current) => ({
             ...current,
             address: url,
@@ -250,13 +273,14 @@ export function BrowserPanel(props: BrowserPanelProps) {
         <section
             className="happy-browser-panel"
             data-unavailable={props.unavailable === undefined ? undefined : ""}
+            data-closed={props.closed === undefined ? undefined : ""}
             data-happy-desktop-ui="browser-panel"
             hidden={!props.active}
         >
             <div className="happy-browser-panel__toolbar" data-happy-desktop-ui="browser-toolbar">
                 <Button
                     aria-label="Back"
-                    disabled={props.unavailable !== undefined || !canGoBack}
+                    disabled={paused || !canGoBack}
                     iconOnly
                     onClick={() => (framed ? frameStep(-1) : controller?.browserBack())}
                     size="small"
@@ -266,7 +290,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 </Button>
                 <Button
                     aria-label="Forward"
-                    disabled={props.unavailable !== undefined || !canGoForward}
+                    disabled={paused || !canGoForward}
                     iconOnly
                     onClick={() => (framed ? frameStep(1) : controller?.browserForward())}
                     size="small"
@@ -275,8 +299,8 @@ export function BrowserPanel(props: BrowserPanelProps) {
                     <Ionicon name="arrow-forward-outline" size={14} />
                 </Button>
                 <Button
-                    aria-label={view.loading ? "Stop loading" : "Reload"}
-                    disabled={props.unavailable !== undefined}
+                    aria-label={loading ? "Stop loading" : "Reload"}
+                    disabled={paused}
                     iconOnly
                     onClick={() => {
                         if (framed) {
@@ -298,7 +322,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                     size="small"
                     variant="ghost"
                 >
-                    <Ionicon name={view.loading ? "close-outline" : "reload-outline"} size={14} />
+                    <Ionicon name={loading ? "close-outline" : "reload-outline"} size={14} />
                 </Button>
                 <TextField
                     aria-label="Address and search"
@@ -318,9 +342,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 {props.inspectable ? (
                     <Button
                         aria-label="Open developer tools"
-                        disabled={
-                            props.unavailable !== undefined || !controller?.browserDevToolsOpen
-                        }
+                        disabled={paused || !controller?.browserDevToolsOpen}
                         iconOnly
                         onClick={() => controller?.browserDevToolsOpen?.()}
                         size="small"
@@ -341,7 +363,22 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 </div>
             ) : null}
             <div className="happy-browser-panel__content" data-happy-desktop-ui="browser-content">
-                {props.renderContent ? (
+                {props.closed ? (
+                    // Nothing is drawn for a page whose server went away: the
+                    // reason takes the whole region until the owner reopens it.
+                    <div
+                        className="happy-browser-panel__error"
+                        data-happy-desktop-ui="browser-closed"
+                        role="status"
+                    >
+                        <EmptyState
+                            description={props.closed.description}
+                            icon="unlink"
+                            size="inline"
+                            title={props.closed.title}
+                        />
+                    </div>
+                ) : props.renderContent ? (
                     props.renderContent({
                         source,
                         visible: !view.failure && !view.fresh,
@@ -405,14 +442,14 @@ export function BrowserPanel(props: BrowserPanelProps) {
                         title={view.address}
                     />
                 ) : null}
-                {props.start && view.fresh && !view.failure ? (
+                {props.start && view.fresh && !view.failure && !props.closed ? (
                     <BrowserStart
                         onPageOpen={load}
                         recent={props.start.recent}
                         tools={props.start.tools}
                     />
                 ) : null}
-                {view.failure
+                {view.failure && !props.closed
                     ? ((page) => (
                           <div
                               className="happy-browser-panel__error"

@@ -166,3 +166,35 @@ it("keeps the guest and synchronizes a network binding that arrives while its sl
     expect(input.dataset.network).toBe("network-a");
     expect(lifecycle.mounts).toBe(1);
 });
+
+it("ends a page's guest when its compute goes away and gives the reopened page a guest of its own", async () => {
+    const f = setup();
+    const online = { kind: "computer", computerId: "node-a", online: true } as const;
+    f.panel.computeApply(agent, online);
+    await act(async () => {
+        f.manager.attach(f.slot(), f.props());
+    });
+    const first = document.querySelector("input")!;
+    expect(lifecycle.mounts).toBe(1);
+
+    await act(async () => {
+        f.panel.computeApply(agent, { kind: "none" });
+    });
+    expect(first.isConnected).toBe(false);
+    expect(lifecycle.unmounts).toBe(1);
+    // A closed page is not given a guest, whoever asks.
+    await act(async () => {
+        f.manager.attach(f.slot(), f.props());
+    });
+    expect(document.querySelector("input")).toBeNull();
+    expect(lifecycle.mounts).toBe(1);
+
+    await act(async () => {
+        f.panel.computeApply(agent, online);
+        f.manager.attach(f.slot(), f.props());
+    });
+    const reopened = document.querySelector("input")!;
+    expect(reopened).not.toBe(first);
+    expect(reopened.value).toBe("page draft");
+    expect(lifecycle.mounts).toBe(2);
+});

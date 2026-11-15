@@ -590,6 +590,37 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         unsubscribe();
     });
 
+    it("closes the conversation's browser pages while its compute is away, and opens them again", async () => {
+        const disk = checkout();
+        const chat = cloudChat(COMPUTER);
+        const { workspace, unsubscribe } = store(disk, storage(), chat);
+        workspace.conversationOpen(SESSION, GROUP);
+        await settle();
+        workspace.panel.browserAdd("http://localhost:5173/");
+        const page = () => workspace.panel.get().browserTabs[0];
+        expect(page()).toMatchObject({ agentId: SESSION, reopenings: 0 });
+        expect(page()).not.toHaveProperty("closed");
+
+        chat.computeUpdate({ kind: "none" });
+        await settle();
+        expect(page()).toMatchObject({ closed: "computeDetached" });
+
+        chat.computeUpdate(COMPUTER);
+        await settle();
+        expect(page()).toMatchObject({ url: "http://localhost:5173/", reopenings: 1 });
+        expect(page()).not.toHaveProperty("closed");
+
+        // Its computer went offline; coming back is only a runner change.
+        chat.computeUpdate({ ...COMPUTER, online: false });
+        await settle();
+        expect(page()).toMatchObject({ closed: "computeOffline" });
+        disk.runnersEmit();
+        await settle();
+        expect(page()).toMatchObject({ reopenings: 2 });
+        expect(page()).not.toHaveProperty("closed");
+        unsubscribe();
+    });
+
     it("says a server without the route has no files, and does not ask it again", async () => {
         const disk = checkout();
         disk.unavailableSet("unsupported");

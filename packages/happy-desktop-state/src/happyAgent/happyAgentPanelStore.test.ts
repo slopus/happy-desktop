@@ -142,6 +142,7 @@ it("opens a live artifact as a browser tab bound to it, and selects that tab aga
             agentId: AGENT,
             networkId: "net_agent",
             artifactId,
+            reopenings: 0,
         },
     ]);
     expect(store.get().open).toBe(true);
@@ -170,4 +171,85 @@ it("opens no artifact tab without a conversation to hold it", () => {
     const live = { url: "http://localhost:5173/", networkId: "net_agent" };
     expect(store.artifactBrowserOpen("art_live" as HappyAgentArtifactId, live, "Page")).toBe(false);
     expect(store.get().tabs).toEqual([]);
+});
+
+it("closes an agent's pages while its compute is away and opens them again where they were", () => {
+    const { store } = panelCreate();
+    store.browserAdd("http://localhost:5173/");
+    const tab = store.get().tabs[0]!;
+    store.browserNetworkBind(tab.id, "net_one" as Parameters<typeof store.browserNetworkBind>[1]);
+    store.browserUpdate(tab.id, { url: "http://localhost:5173/settings" });
+    const online = { kind: "computer", computerId: "cmp_a", online: true } as const;
+
+    // Attached and online: nothing to do, and restating it changes nothing.
+    store.computeApply(AGENT, online);
+    const attached = store.get();
+    store.computeApply(AGENT, online);
+    expect(store.get()).toBe(attached);
+    expect(attached.tabs[0]).toMatchObject({ reopenings: 0, networkId: "net_one" });
+    expect(attached.tabs[0]).not.toHaveProperty("closed");
+
+    // A Happy Agent states no compute; that is not a detachment.
+    store.computeApply(AGENT, undefined);
+    expect(store.get()).toBe(attached);
+
+    // Detached: the page closes and keeps its address and network.
+    store.computeApply(AGENT, { kind: "none" });
+    expect(store.get().tabs[0]).toMatchObject({
+        closed: "computeDetached",
+        url: "http://localhost:5173/settings",
+        networkId: "net_one",
+        reopenings: 0,
+    });
+    expect(store.get().browserTabs[0]).toMatchObject({ closed: "computeDetached" });
+
+    // A page opened while the compute is away opens closed.
+    store.browserAdd("http://localhost:3000/");
+    expect(store.get().tabs[1]).toMatchObject({ closed: "computeDetached" });
+
+    // Attached again: both open again where they were, as new pages, and the
+    // workspace page asks for its network again.
+    store.computeApply(AGENT, online);
+    const reopened = store.get().tabs;
+    expect(reopened[0]).toMatchObject({ url: "http://localhost:5173/settings", reopenings: 1 });
+    expect(reopened[0]).not.toHaveProperty("closed");
+    expect(reopened[0]).not.toHaveProperty("networkId");
+    expect(reopened[1]).toMatchObject({ url: "http://localhost:3000/", reopenings: 1 });
+    store.browserNetworkBind(tab.id, "net_two" as Parameters<typeof store.browserNetworkBind>[1]);
+    expect(store.get().tabs[0]).toMatchObject({ networkId: "net_two" });
+});
+
+it("opens a page closed for an offline computer again when a computer changes, and keeps an artifact's network", () => {
+    const { store } = panelCreate();
+    const artifactId = "art_live" as HappyAgentArtifactId;
+    store.artifactBrowserOpen(
+        artifactId,
+        { url: "http://localhost:5173/", networkId: "net_art" },
+        "Page",
+    );
+    store.browserAdd("http://localhost:3000/");
+    const offline = { kind: "computer", computerId: "cmp_a", online: false } as const;
+    store.computeApply(AGENT, offline);
+    expect(store.get().tabs.map((tab) => tab.kind === "browser" && tab.closed)).toEqual([
+        "computeOffline",
+        "computeOffline",
+    ]);
+
+    // The computer's coming back is not stated on the agent, so a change of
+    // any computer opens the pages again to find out.
+    store.computeRunnersChanged();
+    const [artifact, page] = store.get().tabs;
+    expect(artifact).toMatchObject({ reopenings: 1, networkId: "net_art", artifactId });
+    expect(artifact).not.toHaveProperty("closed");
+    expect(page).toMatchObject({ reopenings: 1 });
+    expect(page).not.toHaveProperty("closed");
+
+    // The same offline compute stated again does not close them a second time.
+    store.computeApply(AGENT, offline);
+    expect(store.get().tabs.every((tab) => tab.kind === "browser" && !tab.closed)).toBe(true);
+
+    // Nothing closed, nothing to open.
+    const before = store.get();
+    store.computeRunnersChanged();
+    expect(store.get()).toBe(before);
 });

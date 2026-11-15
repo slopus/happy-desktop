@@ -5645,10 +5645,12 @@ export function happyAgentWorkspaceStoreCreate(
                 unsubscribeChat = acquired.store.subscribe(() => {
                     reconcileComposer();
                     workspaceFilesComputeReconcile(acquired.store.get().compute);
+                    panel.computeApply(conversationId, acquired.store.get().compute);
                     recompute();
                 });
                 reconcileComposer();
                 workspaceFilesComputeReconcile(acquired.store.get().compute);
+                panel.computeApply(conversationId, acquired.store.get().compute);
                 recompute();
             },
             (error: unknown) => {
@@ -7187,7 +7189,10 @@ export function happyAgentWorkspaceStoreCreate(
         // The tree already listed is where removals are counted from.
         subtasksRemovedApply();
         unsubscribeWorkspaceFiles = client.workspaceFilesSubscribe(workspaceFilesChanged);
-        unsubscribeComputeRunners = client.computeRunnersSubscribe(workspaceFilesRunnersChanged);
+        unsubscribeComputeRunners = client.computeRunnersSubscribe(() => {
+            workspaceFilesRunnersChanged();
+            panel.computeRunnersChanged();
+        });
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.

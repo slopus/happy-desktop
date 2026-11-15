@@ -5,6 +5,7 @@ import type {
 import type { HappyAgentArtifactId, HappyAgentArtifactLive } from "../artifacts/artifactTypes.js";
 import type {
     HappyAgentBrowserNetworkId,
+    HappyAgentCompute,
     HappyAgentGroupId,
     HappyAgentSessionId,
 } from "./happyAgentTypes.js";
@@ -35,6 +36,13 @@ export type HappyAgentPanelTabKind = "terminal" | "browser" | "artifact" | "chat
  */
 export type HappyAgentViewPlacement = "panel" | "main";
 
+/**
+ * Why a browser tab's page is closed: the compute its agent's server runs it
+ * on was detached from the agent, or the computer it is held to went offline.
+ * Only a Happy Cloud agent states compute, so only its pages close this way.
+ */
+export type HappyAgentBrowserClosure = "computeDetached" | "computeOffline";
+
 interface HappyAgentPanelTabSnapshotBase {
     readonly id: HappyAgentPanelTabId;
     /** Tab strip label. A terminal's is its ordinal, not its shell's window title. */
@@ -64,6 +72,18 @@ export type HappyAgentPanelTabSnapshot =
           readonly networkId?: HappyAgentBrowserNetworkId;
           /** Last committed main-frame location, restored if the surface remounts. */
           readonly url: string;
+          /**
+           * Present while the page is closed because its agent's compute went
+           * away. Nothing is loaded for it; it opens again at `url` when the
+           * compute is back.
+           */
+          readonly closed?: HappyAgentBrowserClosure;
+          /**
+           * How many times the page was opened again after a closure. A
+           * reopened page is a new page with its own guest, so this is part of
+           * its identity.
+           */
+          readonly reopenings: number;
           /**
            * The live artifact this page is. Its traffic leaves only through
            * that artifact's own restricted proxy, on the network the artifact
@@ -365,6 +385,23 @@ export interface HappyAgentPanelStore {
         terminalRefusal?: string,
     ): void;
 
+    /**
+     * Applies the compute one agent's server states for it. This is
+     * authoritative input from the panel's owner, like `scopeApply`: when the
+     * compute is detached or its computer goes offline, every page opened for
+     * that agent closes; when it is attached and online again, they open again
+     * where they were. A reopened workspace page asks its agent for the
+     * network again, since compute attached anew may leave from another one.
+     * Undefined says nothing: a Happy Agent states no compute.
+     */
+    computeApply(agentId: HappyAgentSessionId, compute: HappyAgentCompute | undefined): void;
+    /**
+     * A computer serving the server's agents changed. An agent's compute is
+     * not stated again when its computer comes back online, so a page closed
+     * for an offline computer opens again to find out.
+     */
+    computeRunnersChanged(): void;
+
     [Symbol.dispose](): void;
 }
 
@@ -399,6 +436,10 @@ interface Tab {
     readonly artifactId?: HappyAgentArtifactId;
     readonly version?: number;
     placement: HappyAgentViewPlacement;
+    /** A browser page closed until its agent's compute is back. */
+    closed?: HappyAgentBrowserClosure;
+    /** How many times a closed browser page was opened again. */
+    reopenings?: number;
 }
 
 const NO_TABS: readonly HappyAgentPanelTabSnapshot[] = [];
@@ -429,7 +470,9 @@ function tabSame(
             before.workspaceId === next.workspaceId &&
             before.agentId === next.agentId &&
             before.networkId === next.networkId &&
-            before.artifactId === next.artifactId
+            before.artifactId === next.artifactId &&
+            before.closed === next.closed &&
+            before.reopenings === next.reopenings
         );
     if (before.kind === "artifact")
         return (
@@ -488,6 +531,12 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     /** A group whose Files tab is shown when it is next addressed. */
     let filesArrivalGroupId: HappyAgentGroupId | undefined;
     let nextTabNumber = 1;
+    /**
+     * The closure each agent's last stated compute calls for, or undefined
+     * while it is attached and online. Pages follow changes of it, never a
+     * restatement of the same compute.
+     */
+    const computeClosures = new Map<HappyAgentSessionId, HappyAgentBrowserClosure | undefined>();
     let disposed = false;
     let snapshot: HappyAgentPanelSnapshot = {
         activeViewId: "files",
@@ -531,6 +580,8 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                               url: tab.url ?? "about:blank",
                               workspaceId: tab.groupId,
                               agentId: tab.agentId,
+                              reopenings: tab.reopenings ?? 0,
+                              ...(tab.closed === undefined ? {} : { closed: tab.closed }),
                               ...(tab.networkId === undefined ? {} : { networkId: tab.networkId }),
                               ...(tab.artifactId === undefined
                                   ? {}
@@ -551,6 +602,8 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                                   url: tab.url ?? "about:blank",
                                   workspaceId: tab.groupId,
                                   agentId: tab.agentId,
+                                  reopenings: tab.reopenings ?? 0,
+                                  ...(tab.closed === undefined ? {} : { closed: tab.closed }),
                                   ...(tab.networkId === undefined
                                       ? {}
                                       : { networkId: tab.networkId }),
@@ -706,6 +759,18 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         activeViewId = id;
     };
 
+    /**
+     * Opens a closed page again where it was. A workspace page asks its agent
+     * for the network again: compute attached anew may leave from another
+     * network, and a page never keeps one its agent no longer names. A live
+     * artifact's network is the artifact's, so it stays.
+     */
+    const browserReopen = (tab: Tab): void => {
+        tab.closed = undefined;
+        tab.reopenings = (tab.reopenings ?? 0) + 1;
+        if (tab.artifactId === undefined) tab.networkId = undefined;
+    };
+
     const browserTabAdd = (
         group: HappyAgentGroupId,
         agent: HappyAgentSessionId,
@@ -726,6 +791,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             agentId: agent,
             ...(network === undefined ? {} : { networkId: network }),
             ...(artifactId === undefined ? {} : { artifactId }),
+            ...((closed) => (closed === undefined ? {} : { closed }))(computeClosures.get(agent)),
             placement: "panel",
             url,
         });
@@ -1128,6 +1194,9 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                     agentId: agent,
                     networkId: live.networkId as HappyAgentBrowserNetworkId,
                     artifactId,
+                    ...((closed) => (closed === undefined ? {} : { closed }))(
+                        computeClosures.get(agent),
+                    ),
                     placement: "panel",
                     url,
                 }),
@@ -1303,6 +1372,41 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             recompute();
         },
 
+        computeApply(agentId, compute) {
+            if (disposed || compute === undefined) return;
+            const closure: HappyAgentBrowserClosure | undefined =
+                compute.kind === "none"
+                    ? "computeDetached"
+                    : compute.online === false
+                      ? "computeOffline"
+                      : undefined;
+            const known = computeClosures.has(agentId);
+            if (known && computeClosures.get(agentId) === closure) return;
+            computeClosures.set(agentId, closure);
+            let changed = false;
+            for (const tab of tabs) {
+                if (tab.kind !== "browser" || tab.agentId !== agentId) continue;
+                if (closure !== undefined) {
+                    if (tab.closed === closure) continue;
+                    tab.closed = closure;
+                    changed = true;
+                } else if (tab.closed !== undefined) {
+                    browserReopen(tab);
+                    changed = true;
+                }
+            }
+            if (changed) recompute();
+        },
+        computeRunnersChanged() {
+            if (disposed) return;
+            let changed = false;
+            for (const tab of tabs) {
+                if (tab.kind !== "browser" || tab.closed !== "computeOffline") continue;
+                browserReopen(tab);
+                changed = true;
+            }
+            if (changed) recompute();
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;

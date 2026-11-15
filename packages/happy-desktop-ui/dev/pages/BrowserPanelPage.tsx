@@ -191,9 +191,28 @@ export function BrowserPanelPage() {
                 </div>
             </Specimen>
             <Specimen
+                detail="the page's compute went away · no guest is drawn · it reopens on its own"
+                label="Compute disconnected"
+                number="06"
+                stage="app"
+            >
+                <div style={frame}>
+                    <BrowserPanel
+                        active
+                        closed={{
+                            title: "Compute disconnected",
+                            description:
+                                "This agent’s compute was disconnected. The page will open again when it is back.",
+                        }}
+                        initialUrl="http://localhost:5173/settings"
+                        renderContent={BrowserPreview}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
                 detail="a native page stays in one frame while its display slot changes; hiding preserves its DOM"
                 label="Retained guest placement"
-                number="06"
+                number="07"
                 stage="app"
             >
                 {/* The transform makes this specimen the fixed frame's containing
