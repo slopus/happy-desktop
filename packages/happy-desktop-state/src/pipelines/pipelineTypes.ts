@@ -25,9 +25,7 @@ export type PipelineSchema =
           /** The only values it takes, when it is an enumeration. */
           readonly values: readonly PipelineSchemaLiteral[] | null;
       }
-    | { readonly type: "null" }
-    /** A pointer into the definition, such as `#/input`. */
-    | { readonly type: "ref"; readonly ref: string };
+    | { readonly type: "null" };
 
 export type PipelineSchemaLiteral = string | number | boolean | null;
 

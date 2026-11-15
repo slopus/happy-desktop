@@ -89,8 +89,6 @@ export function pipelineSchemaText(schema: PipelineSchema, indent = ""): string 
     const nullable = (text: string, isNullable: boolean): string =>
         isNullable ? `${text} | null` : text;
     switch (schema.type) {
-        case "ref":
-            return schema.ref === "#/input" ? "pipeline input" : schema.ref;
         case "null":
             return "null";
         case "array": {

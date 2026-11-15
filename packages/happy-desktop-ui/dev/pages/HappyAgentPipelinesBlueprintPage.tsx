@@ -56,7 +56,17 @@ const checkout: PipelineNode = {
     ...shared,
     id: "checkout",
     kind: "code",
-    input: { type: "ref", ref: "#/input" },
+    input: {
+        type: "object",
+        nullable: false,
+        properties: [
+            {
+                name: "sha",
+                schema: { type: "string", nullable: false, values: null },
+                required: true,
+            },
+        ],
+    },
     output: {
         type: "object",
         nullable: false,

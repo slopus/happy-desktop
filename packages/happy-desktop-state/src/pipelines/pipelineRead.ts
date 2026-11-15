@@ -86,7 +86,6 @@ function literalOf(value: unknown): PipelineSchemaLiteral | undefined {
 export function pipelineSchemaRead(value: unknown): PipelineSchema | undefined {
     const schema = recordOf(value);
     if (!schema) return undefined;
-    if (typeof schema.$ref === "string") return { type: "ref", ref: schema.$ref };
     let nullable = false;
     let name: SchemaTypeName | undefined;
     if (Array.isArray(schema.type)) {

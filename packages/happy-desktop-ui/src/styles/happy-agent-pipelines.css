@@ -527,6 +527,12 @@
     font-size: 12px;
 }
 
+/* Code never wraps: a long line scrolls sideways inside the block. */
+.happy-pipeline-detail__source > * {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .happy-pipeline-detail__facts {
     display: flex;
     flex-direction: column;

@@ -220,7 +220,7 @@ export function PipelineNodeDetail(props: PipelineNodeDetailProps) {
                     {node.kind === "code" ? (
                         <PipelineDetailSection title="Source">
                             <div className="happy-pipeline-detail__source">
-                                <CodeBlock lang="python" text={node.source} wrap />
+                                <CodeBlock lang="python" text={node.source} />
                             </div>
                         </PipelineDetailSection>
                     ) : null}
