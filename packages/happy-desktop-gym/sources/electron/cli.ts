@@ -4,6 +4,7 @@ import { gymRunClean, gymRunsRootResolve } from "./paths.js";
 import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
+import { gymBrowserPreviewRun, type GymBrowserRoute } from "./browserPreview.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -49,6 +50,15 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     if (command === "smoke") {
         const result = await gymSmokeRun();
         console.log(JSON.stringify({ command, ...result }, null, 2));
+        return;
+    }
+    if (command === "browser-preview") {
+        const result = await gymBrowserPreviewRun({
+            expectedRoute: routeRead(flags.expect),
+            artifactDirectory: flags.artifactDir,
+        });
+        console.log(JSON.stringify({ command, ...result }, null, 2));
+        if (result.status !== "passed") process.exitCode = 1;
         return;
     }
     if (command === "live-voice") {
@@ -119,6 +129,7 @@ function parseFlags(args: readonly string[]): {
     readonly repository?: string;
     readonly authFile?: string;
     readonly poolDefault?: boolean;
+    readonly expect?: string;
 } {
     const result: {
         profile?: string;
@@ -129,6 +140,7 @@ function parseFlags(args: readonly string[]): {
         repository?: string;
         authFile?: string;
         poolDefault?: boolean;
+        expect?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -145,6 +157,7 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--auth-file")
             result.authFile = requiredValue(value, next, () => index++);
         else if (value === "--pool-default") result.poolDefault = true;
+        else if (value === "--expect") result.expect = requiredValue(value, next, () => index++);
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -174,6 +187,13 @@ function workloadRead(value: string | undefined): GymWorkloadName {
     return workload as GymWorkloadName;
 }
 
+function routeRead(value: string | undefined): GymBrowserRoute {
+    const route = value ?? "proxy";
+    if (route !== "direct" && route !== "proxy")
+        throw new Error(`Unknown route '${route}'. Choose direct or proxy.`);
+    return route;
+}
+
 function required(flags: { readonly root?: string }, name: "root"): string {
     const value = flags[name];
     if (value === undefined) throw new Error(`--${name} is required.`);
@@ -188,6 +208,7 @@ Commands:
   attach-repository --root PATH --repository ABSOLUTE_LOCAL_CHECKOUT
   run [--profile PROFILE] [--root PATH] [--workload WORKLOAD] [--ui-trace]
   smoke
+  browser-preview [--expect proxy|direct] [--artifact-dir PATH]
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   clean --root PATH
 
