@@ -3,6 +3,7 @@ import {
     pipelineRunAbortable,
     type PipelineDefinition,
     type PipelineRun,
+    type PipelineRunRelative,
 } from "happy-desktop-state";
 import { Icon } from "../../Icon";
 import {
@@ -12,13 +13,13 @@ import {
     PIPELINE_NODE_STATE_TONE,
     pipelineDurationOf,
     pipelineFailureTitle,
+    pipelineRunRelativeProgress,
     type PipelineLabels,
 } from "./pipelinePresentation";
 import {
     PIPELINE_TIMELINE,
     pipelineTimelineLayout,
     pipelineTimelineNowX,
-    pipelineTimelineRowTop,
     type PipelineTimelineEdge,
     type PipelineTimelineLayout,
     type PipelineTimelineX,
@@ -27,6 +28,8 @@ import {
 export interface PipelineTimelineProps {
     readonly definition: PipelineDefinition;
     readonly run: PipelineRun;
+    /** The child runs its pipeline nodes wait on, by ID, as far as they have been read. */
+    readonly relatives: ReadonlyMap<string, PipelineRunRelative>;
     /** The app's clock; between its ticks the timeline moves on by itself. */
     readonly now: number;
     readonly labels: PipelineLabels;
@@ -564,6 +567,12 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
         now: props.now,
     });
     const kinds = new Map(props.definition.nodes.map((node) => [node.id, node.kind]));
+    /** How a pipeline node's child run stands, once it has one and it has been read. */
+    const childOf = (id: string) => {
+        const childRunId = runNodes.get(id)?.childRunId ?? null;
+        const child = childRunId === null ? undefined : props.relatives.get(childRunId);
+        return child === undefined ? null : { child, ...pipelineRunRelativeProgress(child) };
+    };
     const [following, followingSet] = useState(true);
     const engine = useRef<TimelineEngine | null>(null);
     const track = useRef<HTMLDivElement | null>(null);
@@ -586,11 +595,15 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
     const label = (id: string) => {
         const node = runNodes.get(id);
         const state = node?.state ?? "pending";
+        const child = childOf(id);
         return [
             id,
             PIPELINE_KIND_LABEL[kinds.get(id) ?? "code"],
             PIPELINE_NODE_STATE_LABEL[state],
-        ].join(", ");
+            child ? `child run ${child.text}` : null,
+        ]
+            .filter(Boolean)
+            .join(", ");
     };
     return (
         <div className="happy-pipeline-timeline" data-happy-desktop-ui="pipeline-timeline">
@@ -689,6 +702,7 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                 </span>
                             );
                             const pressed = props.selectedNodeId === item.id;
+                            const child = childOf(item.id);
                             if (item.mode === "past" || item.mode === "skipped") {
                                 const width =
                                     item.mode === "past"
@@ -723,6 +737,7 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                             node?.failure
                                                 ? pipelineFailureTitle(node.failure.code)
                                                 : null,
+                                            child?.short ?? null,
                                             duration,
                                         ]
                                             .filter(Boolean)
@@ -744,7 +759,13 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                 );
                             }
                             if (item.mode === "live") {
-                                const progress = node?.status?.progress ?? null;
+                                // A pipeline node says where its child run is, unless it
+                                // said something itself.
+                                const status =
+                                    node?.status?.text ??
+                                    child?.short ??
+                                    PIPELINE_NODE_STATE_LABEL[state];
+                                const progress = node?.status?.progress ?? child?.progress ?? null;
                                 return [
                                     <span
                                         aria-hidden
@@ -778,15 +799,18 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                         key={`head-${item.id}`}
                                         onClick={() => select(item.id)}
                                         style={{ "--rel": "0" } as CSSProperties}
-                                        title={node?.status?.text ?? item.id}
+                                        title={node?.status?.text ?? child?.text ?? status}
                                         type="button"
                                     >
                                         {glyph}
                                         <span className="happy-pipeline-timeline__name">
                                             {item.id}
                                         </span>
-                                        <span className="happy-pipeline-timeline__status">
-                                            {node?.status?.text ?? PIPELINE_NODE_STATE_LABEL[state]}
+                                        <span
+                                            className="happy-pipeline-timeline__status"
+                                            data-child-state={child?.child.state}
+                                        >
+                                            {status}
                                         </span>
                                         <span className="happy-pipeline-timeline__meta">
                                             {pipelineDurationOf(

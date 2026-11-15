@@ -952,6 +952,120 @@
     width: 64px;
 }
 
+/* ---- A parent or child run -------------------------------------------- */
+
+.happy-pipeline-relatives {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-inline: -8px;
+}
+
+.happy-pipeline-relative {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-relative:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-pipeline-relative:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-pipeline-relative__glyph {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-relative__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-pipeline-relative__head,
+.happy-pipeline-relative__state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-pipeline-relative__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-relative__duration {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-pipeline-relative__via,
+.happy-pipeline-relative__note {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-relative__state > .happy-pipeline-relative__note {
+    flex: 1 1 auto;
+}
+
+.happy-pipeline-relative__progress {
+    display: flex;
+    height: 2px;
+    margin-top: 2px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.happy-pipeline-relative__progress[data-empty] {
+    background: transparent;
+}
+
+.happy-pipeline-relative__progress-fill {
+    flex: none;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--text-link);
+    transform-origin: left center;
+}
+
 .happy-pipeline-runs__more {
     display: flex;
 }

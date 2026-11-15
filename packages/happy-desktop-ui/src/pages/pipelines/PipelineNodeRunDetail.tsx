@@ -3,9 +3,10 @@ import type {
     PipelineModelUsage,
     PipelineNode,
     PipelineNodeRun,
+    PipelineRunRelative,
 } from "happy-desktop-state";
-import { Button } from "../../Button";
 import { PipelineDetailSection, PipelineFacts } from "./PipelineNodeDetail";
+import { PipelineRunRelativeRow } from "./PipelineRunRelativeRow";
 import {
     pipelineCostText,
     pipelineFailureTitle,
@@ -101,6 +102,10 @@ export interface PipelineNodeRunFactsProps {
     /** Every lease of the run; those this node held or names are shown. */
     readonly leases: readonly PipelineLease[];
     readonly labels: PipelineLabels;
+    /** The run's parent and child runs by ID, as far as they have been read. */
+    readonly relatives: ReadonlyMap<string, PipelineRunRelative>;
+    /** Now, for how long a running child has taken so far. */
+    readonly now: number;
     readonly onRunOpen: (runId: string) => void;
 }
 
@@ -123,16 +128,23 @@ export function PipelineNodeRunFacts(props: PipelineNodeRunFactsProps) {
     return (
         <>
             {node.childRunId !== null ? (
-                <div className="happy-pipeline-detail__actions">
-                    <Button
-                        icon="pipeline"
-                        onClick={() => props.onRunOpen(node.childRunId!)}
-                        size="small"
-                        variant="secondary"
-                    >
-                        Open child run
-                    </Button>
-                </div>
+                <PipelineDetailSection title="Child run">
+                    <div className="happy-pipeline-relatives">
+                        <PipelineRunRelativeRow
+                            labels={props.labels}
+                            now={props.now}
+                            onRunOpen={props.onRunOpen}
+                            pipelineId={
+                                props.definition?.kind === "pipeline"
+                                    ? props.definition.pipelineId
+                                    : null
+                            }
+                            relative={props.relatives.get(node.childRunId) ?? null}
+                            runId={node.childRunId}
+                            via={null}
+                        />
+                    </div>
+                </PipelineDetailSection>
             ) : null}
             {node.failure ? (
                 <PipelineDetailSection title="Failure">

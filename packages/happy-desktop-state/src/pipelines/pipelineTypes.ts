@@ -275,9 +275,109 @@ export interface PipelineRun extends PipelineRunEntry {
     readonly childRunIds: readonly string[];
 }
 
+/**
+ * A run beside the one on screen, its parent or a child, as far as a run page
+ * shows it: what it runs, how it stands, and how far through its nodes it is.
+ */
+export interface PipelineRunRelative {
+    readonly id: string;
+    readonly pipelineId: string;
+    readonly version: number;
+    readonly state: PipelineRunState;
+    readonly startedAt: number | null;
+    readonly endedAt: number | null;
+    /** Nodes that have ended, whatever their outcome. */
+    readonly nodesEnded: number;
+    readonly nodesRunning: number;
+    /** The nodes its version defines; null until that version is read. */
+    readonly nodesTotal: number | null;
+    /** The newest status line among its running nodes. */
+    readonly status: PipelineStatusLine | null;
+}
+
 /** Whether a run in this state can still be aborted. */
 export function pipelineRunAbortable(state: PipelineRunState): boolean {
     return state === "queued" || state === "running";
+}
+
+/** Whether a run has reached the end it keeps: nothing about it changes after. */
+export function pipelineRunEnded(state: PipelineRunState): boolean {
+    return !pipelineRunAbortable(state);
+}
+
+/**
+ * The runs a run's pipeline nodes made or joined, each once, oldest first. A
+ * batch run several of its nodes joined is one run; a node's child shows from
+ * the moment the node names it.
+ */
+export function pipelineRunChildIds(run: PipelineRun): string[] {
+    return [
+        ...new Set([
+            ...run.childRunIds,
+            ...run.nodes.flatMap((node) => (node.childRunId === null ? [] : [node.childRunId])),
+        ]),
+    ];
+}
+
+/** The runs a run page reads beside its own: its parent, then its children. */
+export function pipelineRunRelativeIds(run: PipelineRun): string[] {
+    return [
+        ...new Set([
+            ...(run.parentRunId === null ? [] : [run.parentRunId]),
+            ...pipelineRunChildIds(run),
+        ]),
+    ];
+}
+
+/** A read run as a run page shows it beside another. */
+export function pipelineRunRelativeOf(
+    run: PipelineRun,
+    nodesTotal: number | null,
+): PipelineRunRelative {
+    const running = run.nodes.filter((node) => node.state === "running");
+    const status =
+        running
+            .flatMap((node) => (node.status === null ? [] : [node.status]))
+            .sort((left, right) => right.at - left.at)[0] ?? null;
+    return {
+        id: run.id,
+        pipelineId: run.pipelineId,
+        version: run.version,
+        state: run.state,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        nodesEnded: run.nodes.filter((node) => node.state !== "pending" && node.state !== "running")
+            .length,
+        nodesRunning: running.length,
+        nodesTotal,
+        status,
+    };
+}
+
+/** Whether two reads of a relative show the same, so the first can stay. */
+export function pipelineRunRelativeSame(
+    left: PipelineRunRelative,
+    right: PipelineRunRelative,
+): boolean {
+    return (
+        left.id === right.id &&
+        left.pipelineId === right.pipelineId &&
+        left.version === right.version &&
+        left.state === right.state &&
+        left.startedAt === right.startedAt &&
+        left.endedAt === right.endedAt &&
+        left.nodesEnded === right.nodesEnded &&
+        left.nodesRunning === right.nodesRunning &&
+        left.nodesTotal === right.nodesTotal &&
+        left.status?.text === right.status?.text &&
+        left.status?.progress === right.status?.progress &&
+        left.status?.at === right.status?.at
+    );
+}
+
+/** The nodes of a run that wait on one child run; several when they joined one batch run. */
+export function pipelineRunChildNodes(run: PipelineRun, childRunId: string): PipelineNodeRun[] {
+    return run.nodes.filter((node) => node.childRunId === childRunId);
 }
 
 /**

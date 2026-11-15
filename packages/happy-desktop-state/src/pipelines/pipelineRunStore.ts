@@ -9,13 +9,19 @@ import { UserError } from "../types.js";
 import { pipelineFollowCreate } from "./pipelineFollow.js";
 import {
     pipelineDefinitionLoad,
+    pipelineDefinitionRead,
     pipelineRunRead,
     pipelineVersionDefinitionRead,
 } from "./pipelineRead.js";
 import {
     pipelineRunAbortable,
+    pipelineRunEnded,
+    pipelineRunRelativeIds,
+    pipelineRunRelativeOf,
+    pipelineRunRelativeSame,
     type PipelineDefinitionLoad,
     type PipelineRun,
+    type PipelineRunRelative,
 } from "./pipelineTypes.js";
 
 /** The reader's abort, from the press until the server answers. */
@@ -32,6 +38,11 @@ export interface PipelineRunSnapshot {
     readonly missing: boolean;
     /** The graph of the version the run pinned; null until the run is read. */
     readonly definition: PipelineDefinitionLoad | null;
+    /**
+     * Its parent and child runs by ID, as far as they have been read; one the
+     * server would not give yet is absent.
+     */
+    readonly relatives: ReadonlyMap<string, PipelineRunRelative>;
     /** The node whose execution is open. */
     readonly nodeSelected: string | null;
     readonly abort: PipelineRunAbort;
@@ -43,6 +54,8 @@ export interface PipelineRunSnapshot {
  * One run, live: read once on screen and again on every `pipeline.run.updated`
  * and `pipeline.node.updated`, so node states, status lines and progress move
  * as the server records them. The graph of the version it pinned is read once.
+ * Its parent and children are read beside it on the same hints, each until it
+ * ends.
  */
 export interface PipelineRunStore {
     get(): PipelineRunSnapshot;
@@ -66,6 +79,7 @@ export function pipelineRunStoreCreate(deps: {
         run: null,
         missing: false,
         definition: null,
+        relatives: new Map(),
         nodeSelected: null,
         abort: { state: "idle" },
     }));
@@ -98,6 +112,56 @@ export function pipelineRunStoreCreate(deps: {
             );
     };
 
+    // Versions never change, so each one's node count is read once.
+    const nodeTotals = new Map<string, number>();
+    const nodeTotalRead = async (run: PipelineRun): Promise<number | null> => {
+        const path = `v0/pipelines/${encodeURIComponent(run.pipelineId)}/versions/${String(run.version)}`;
+        const known = nodeTotals.get(path);
+        if (known !== undefined) return known;
+        const definition = pipelineDefinitionRead(
+            pipelineVersionDefinitionRead(await deps.request("GET", path)),
+        );
+        if (!definition) return null;
+        nodeTotals.set(path, definition.nodes.length);
+        return definition.nodes.length;
+    };
+
+    const relativeRead = async (
+        id: string,
+        kept: PipelineRunRelative | undefined,
+    ): Promise<PipelineRunRelative | undefined> => {
+        // An ended run never changes again.
+        if (kept && pipelineRunEnded(kept.state) && kept.nodesTotal !== null) return kept;
+        try {
+            const run = pipelineRunRead(
+                await deps.request("GET", `v0/pipeline-runs/${encodeURIComponent(id)}`),
+            );
+            if (!run) return kept;
+            const read = pipelineRunRelativeOf(run, await nodeTotalRead(run));
+            return kept && pipelineRunRelativeSame(kept, read) ? kept : read;
+        } catch {
+            // A relative is beside the run, not the run: one that cannot be
+            // read now keeps what was shown, and the next hint tries again.
+            return kept;
+        }
+    };
+
+    const relativesRead = async (run: PipelineRun): Promise<void> => {
+        const known = store.getState().relatives;
+        const ids = pipelineRunRelativeIds(run);
+        const read = await Promise.all(ids.map((id) => relativeRead(id, known.get(id))));
+        if (disposed) return;
+        const relatives = new Map<string, PipelineRunRelative>();
+        ids.forEach((id, index) => {
+            const relative = read[index];
+            if (relative) relatives.set(id, relative);
+        });
+        const same =
+            relatives.size === known.size &&
+            [...relatives].every(([id, relative]) => known.get(id) === relative);
+        if (!same) store.setState({ relatives });
+    };
+
     const follow = pipelineFollowCreate({
         sync: deps.sync,
         events: ["pipeline.run.updated", "pipeline.node.updated"],
@@ -125,6 +189,7 @@ export function pipelineRunStoreCreate(deps: {
             store.setState({ ...rest, loading: false, missing: false, run }, true);
             if (current.definition === null || current.definition.state === "failed")
                 definitionRead(run);
+            await relativesRead(run);
         },
         failed: (error) => {
             store.setState({ loading: false, error: happyAgentUserError(error) });
