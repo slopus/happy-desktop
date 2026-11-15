@@ -237,7 +237,15 @@ it("says which compute refusal ended or refused a tunnel, in the new codes and t
     cloud.computeOffline();
     await expect(ended).resolves.toMatchObject({ refusal: "computeOffline" });
     await expect(open()).rejects.toMatchObject({ statusCode: 503, refusal: "computeOffline" });
+    cloud.computeAttach();
+    const kept = await open();
+    const detached = new Promise<unknown>((resolve) => kept.once("error", resolve));
     cloud.computeRelease();
+    await expect(detached).resolves.toMatchObject({
+        statusCode: 409,
+        code: "no_compute",
+        refusal: "computeDetached",
+    });
     await expect(open()).rejects.toMatchObject({ statusCode: 409, refusal: "computeDetached" });
     cloud.computeAttach();
     (await open()).destroy();

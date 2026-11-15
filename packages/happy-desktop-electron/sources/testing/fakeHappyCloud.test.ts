@@ -131,7 +131,7 @@ it("refuses while compute is released or offline, closes open tunnels, and keeps
     const released = tunnelHold(cloud, port);
     await expect.poll(() => cloud.tunnelsOpened()).toBe(1);
     cloud.computeRelease();
-    await expect(released).resolves.toMatchObject({ code: 1001, reason: "compute_offline" });
+    await expect(released).resolves.toMatchObject({ code: 1001, reason: "no_compute" });
     await expect(networkRead(cloud)).resolves.toMatchObject({
         status: 409,
         body: { code: "no_compute" },

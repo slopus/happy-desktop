@@ -16,8 +16,9 @@ import { WebSocketServer, type WebSocket } from "ws";
  * Like a cluster behind an ordinary ingress, it does not carry `CONNECT`.
  *
  * The agent's network stays the same for its whole life, while its compute
- * comes and goes: released, every answer is `409 no_compute`; offline, every
- * answer is `503 compute_offline`, and the tunnels already open close with
+ * comes and goes: released, every answer is `409 no_compute` and the tunnels
+ * already open close with `1001 no_compute`; offline, every answer is
+ * `503 compute_offline`, and the tunnels already open close with
  * `1001 compute_offline`. Lost, the compute has stopped answering before the
  * cloud has noticed: tunnels still open and stay open, but whatever they ask
  * for is refused with `503 compute_offline`, as a nested `CONNECT` is in the
@@ -131,10 +132,10 @@ export async function fakeHappyCloudStart(
         openings.push(now);
         return undefined;
     };
-    const computeAway = (): void => {
+    const computeAway = (reason: "no_compute" | "compute_offline"): void => {
         for (const websocket of live)
             if (options.legacy) websocket.close(1008);
-            else websocket.close(1001, "compute_offline");
+            else websocket.close(1001, reason);
     };
 
     const server = createServer((request, response) => {
@@ -205,11 +206,11 @@ export async function fakeHappyCloudStart(
         tunnelsLive: () => live.size,
         computeRelease() {
             compute = "released";
-            computeAway();
+            computeAway("no_compute");
         },
         computeOffline() {
             compute = "offline";
-            computeAway();
+            computeAway("compute_offline");
         },
         computeLost() {
             compute = "lost";

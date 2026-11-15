@@ -294,8 +294,9 @@ function twinOpen(
 /**
  * One twin as the byte stream it carries: every message is binary, and an
  * empty one ends its direction as a TCP half-close does. The server closing
- * the twin because the agent's compute went away fails the stream with that
- * refusal; any other close before both directions ended fails it plainly.
+ * the twin because the agent's compute went offline or was detached fails the
+ * stream with that refusal; any other close before both directions ended
+ * fails it plainly.
  *
  * It answers the socket calls an HTTP agent makes on a pooled connection,
  * including an idle timeout, which only carried bytes put off.
@@ -330,6 +331,16 @@ export class TwinStream extends Duplex {
                         503,
                         "This agent's compute went offline.",
                         "compute_offline",
+                    ),
+                );
+                return;
+            }
+            if (code === 1001 && why === "no_compute") {
+                this.destroy(
+                    new HappyCloudBrowserError(
+                        409,
+                        "This agent's compute was detached.",
+                        "no_compute",
                     ),
                 );
                 return;
