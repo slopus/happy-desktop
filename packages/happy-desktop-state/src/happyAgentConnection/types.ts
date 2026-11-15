@@ -1316,12 +1316,8 @@ export interface HappyAgentConnection {
      * Without a name the host calls it "New Task" and names it from its first
      * message. The task id doubles as the retry key.
      *
-     * The task, the caller's membership at the top of their list, and its one
-     * agent are listed in this call stack, before the host is asked, the way
-     * `createSession` lists its agent: the row stands where the host will put
-     * it and the conversation can be opened and written into at once, its
-     * draft and first message queued behind the creation and running on
-     * `mode`. A refusal withdraws all three before `task` rejects.
+     * Publishes the task, membership and agent synchronously. Writes wait for
+     * creation and use `mode`; a refusal removes the placeholder before rejection.
      */
     createTask(name?: string, mode?: CreateTaskMode): TaskCreationRequest;
     /** Renames a task for everyone, guarded by its version; ends automatic naming. */

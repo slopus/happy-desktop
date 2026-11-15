@@ -258,23 +258,11 @@ export interface HappyAgentTaskCreation {
     readonly location: HappyAgentSessionLocation;
 }
 
-/**
- * What `taskCreate` answers with, in the caller's own call stack: the task and
- * its address, already listed at the top of the reader's own list and open to
- * be written into, and the host's two answers about it.
- */
+/** An immediately addressable task, followed by host confirmation and mode setup. */
 export interface HappyAgentTaskCreating extends HappyAgentTaskCreation {
-    /**
-     * Settles once the host holds the task and this list carries it: the row
-     * that has stood since the call is the host's own from then on. Rejects
-     * with a displayable reason when it was not made, the row withdrawn.
-     */
+    /** Confirms creation, even if the reader already closed the row. */
     readonly created: Promise<void>;
-    /**
-     * Settles once its conversation is also confirmed to run on the selection
-     * it was asked with. Rejects with `created`'s reason, or with one saying
-     * the task was made but its setup was not confirmed.
-     */
+    /** Confirms creation and initial mode saves; rejects with a displayable error. */
     readonly ready: Promise<void>;
 }
 
@@ -1090,8 +1078,6 @@ export function happyAgentSessionListStoreCreate(
         readonly reject: (error: Error) => void;
     }
     const botWaiters = new Map<HappyAgentBotId, HappyAgentBotWaiter[]>();
-    /** Callers waiting for this list to carry a task it was just told about. */
-    const taskWaiters = new Map<HappyAgentTaskId, HappyAgentBotWaiter[]>();
     /** Takes every waiter on one worktree out of the registry, ready to settle. */
     const worktreeWaitersTake = (
         worktreeId: HappyAgentWorktreeId,
@@ -1877,6 +1863,10 @@ export function happyAgentSessionListStoreCreate(
                     subtaskOrdersApply(botAvatarIntentsApply(snapshot.catalog.bots)),
                 );
                 const tasks = nameIntentsApply(subtaskOrdersApply(snapshot.catalog.tasks));
+                const previousCatalog = internal.getState().snapshot?.catalog;
+                const rootsChanged =
+                    !deepEqual(previousCatalog?.bots, snapshot.catalog.bots) ||
+                    !deepEqual(previousCatalog?.tasks, snapshot.catalog.tasks);
                 internal.setState({
                     archivedSessions,
                     catalog:
@@ -1942,7 +1932,8 @@ export function happyAgentSessionListStoreCreate(
                 authoritativeArchivedObserved = observedArchivedSessions;
                 if (
                     authoritative !== authoritativeProjects ||
-                    archived !== authoritativeArchivedSessions
+                    archived !== authoritativeArchivedSessions ||
+                    rootsChanged
                 ) {
                     internal.setState((state) => ({
                         authoritativeArchivedSessions: archived,
@@ -1953,7 +1944,6 @@ export function happyAgentSessionListStoreCreate(
                 publish(projected, archivedSessions);
                 worktreesSettle();
                 botsSettle();
-                tasksSettle();
                 projectArchivesConfirmAbsent();
                 worktreeArchivesConfirmAbsent();
             }
@@ -2013,29 +2003,6 @@ export function happyAgentSessionListStoreCreate(
             botWaiters.delete(bot.id);
             for (const waiter of waiting) waiter.resolve();
         }
-    };
-
-    /** Settles everyone waiting on a joined task this list now carries. */
-    const tasksSettle = (): void => {
-        if (taskWaiters.size === 0) return;
-        for (const task of store.getState().tasks) {
-            const waiting = taskWaiters.get(task.id);
-            if (!waiting) continue;
-            taskWaiters.delete(task.id);
-            for (const waiter of waiting) waiter.resolve();
-        }
-    };
-
-    /** Resolves once the reader's own list carries the task, as `botListed` does for a bot. */
-    const taskListed = (taskId: HappyAgentTaskId): Promise<void> => {
-        if (store.getState().tasks.some((task) => task.id === taskId)) return Promise.resolve();
-        return new Promise<void>((resolve, reject) => {
-            const waiting = taskWaiters.get(taskId);
-            const waiter: HappyAgentBotWaiter = { resolve, reject };
-            if (waiting) waiting.push(waiter);
-            else taskWaiters.set(taskId, [waiter]);
-            void reconcile();
-        });
     };
 
     /**
@@ -3139,23 +3106,9 @@ export function happyAgentSessionListStoreCreate(
             store.setState({ ...store.getState(), mutationError: undefined });
             const name = input.name?.trim();
             const selection = input.selection;
-            // The connection lists the task, its place at the top of the
-            // reader's list, and its agent in this call stack, so the row is
-            // up and the conversation open to words before the request has
-            // left. The first message rides on the selection by itself.
             const request = deps.connectActions.createTask(
                 name === undefined || name.length === 0 ? undefined : name,
-                selection === undefined
-                    ? undefined
-                    : {
-                          providerId: selection.providerId,
-                          modelId: selection.modelId,
-                          ...(selection.effort === undefined ? {} : { effort: selection.effort }),
-                          permissionMode: selection.permissionMode,
-                          ...(selection.serviceTier === undefined
-                              ? {}
-                              : { serviceTier: selection.serviceTier }),
-                      },
+                selection,
             );
             const taskId = request.taskId as HappyAgentTaskId;
             const subject = name ? `“${name}”` : "The new task";
@@ -3164,7 +3117,7 @@ export function happyAgentSessionListStoreCreate(
                 return failure;
             };
             const created = request.task.then(
-                () => taskListed(taskId),
+                () => undefined,
                 (error: unknown) => {
                     throw failed(
                         new UserError(
@@ -3173,17 +3126,18 @@ export function happyAgentSessionListStoreCreate(
                     );
                 },
             );
-            // What the composer showed while the first message was written is
-            // what the conversation runs with, kept on the agent the way a new
-            // bot's is once the host holds it.
+            // Queue initial mode saves before the conversation can accept newer choices.
+            const saved = Promise.all(
+                selection === undefined
+                    ? []
+                    : botSelectionApply(request.agentId, selection).map((id) =>
+                          deps.connectActions.sessionModeSaveWait(id),
+                      ),
+            );
+            void saved.catch(() => undefined);
             const ready = created.then(async () => {
-                if (selection === undefined) return;
                 try {
-                    await Promise.all(
-                        botSelectionApply(request.agentId, selection).map((id) =>
-                            deps.connectActions.sessionModeSaveWait(id),
-                        ),
-                    );
+                    await saved;
                 } catch (error) {
                     throw failed(
                         new UserError(
@@ -3397,9 +3351,8 @@ export function happyAgentSessionListStoreCreate(
             worktreeWaiters.clear();
             for (const waiter of waiters) waiter.reject(cancelled);
             for (const mutationId of removalWaiters.keys()) removalSettle(mutationId, false);
-            const botWaiting = [...botWaiters.values(), ...taskWaiters.values()].flat();
+            const botWaiting = [...botWaiters.values()].flat();
             botWaiters.clear();
-            taskWaiters.clear();
             for (const waiter of botWaiting) waiter.reject(cancelled);
             for (const mutationId of projectArchiveWaiters.keys()) {
                 projectArchiveSettle(mutationId, {

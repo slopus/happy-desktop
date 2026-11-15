@@ -289,7 +289,7 @@ it("joins once, marking the task as joining until the host lists the membership"
     expect(harness.list.get().tasksJoining.size).toBe(0);
 });
 
-it("creates a task, addressing its conversation at once and confirming it once listed", async () => {
+it("creates a task, addressing its conversation at once and confirming the host's answer", async () => {
     using harness = listCreate([task("a", { orderKey: "a1" })]);
     await vi.waitFor(() => expect(harness.list.get().tasks).toHaveLength(1));
     harness.actions.createTask.mockImplementation(() => ({
@@ -308,10 +308,10 @@ it("creates a task, addressing its conversation at once and confirming it once l
     });
     let settled = false;
     void creation.created.then(() => (settled = true));
-    // Not confirmed until the list carries it.
+    // Confirmation is independent of whether the reader has already closed its row.
     await Promise.resolve();
     await Promise.resolve();
-    expect(settled).toBe(false);
+    expect(settled).toBe(true);
 
     harness.hostAnswers([task("new", { orderKey: "a0" }), task("a", { orderKey: "a1" })]);
     await expect(creation.created).resolves.toBeUndefined();

@@ -513,11 +513,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionCreations = new Map<string, Promise<void>>();
-    /**
-     * Tasks asked for and not yet answered for, as they are listed meanwhile.
-     * A bootstrap read while one is out describes the host before it, and the
-     * row laid back over it keeps standing rather than blinking out and back.
-     */
+    /** Pending creations survive catalog reloads until the host answers. */
     const taskCreations = new Map<string, TaskCreation>();
     const sessionMutationCounts = new Map<string, number>();
     const gitStates = new RevisedMap<string, GitSnapshotState>();
@@ -2736,7 +2732,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         let laidTasks = tasks;
         let laidMemberships = taskMemberships;
         for (const creation of taskCreations.values()) {
-            if (tasks.some((task) => task.id === creation.task.id)) continue;
+            if (tasks.some((task) => task.id === creation.task.id)) {
+                creation.membershipObserved = true;
+                continue;
+            }
+            if (taskOf(creation.task.id) !== creation.task) continue;
             laidTasks = [...laidTasks, creation.task];
             laidMemberships = taskMembershipsReplace(laidMemberships, creation.membership);
         }
@@ -2755,7 +2755,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const adoptTask =
             latest === undefined ||
             // One this window listed ahead of the host carries no host version.
-            latest.version === latest.id ||
+            latest === taskCreations.get(task.id)?.task ||
             latest.version.localeCompare(task.version) <= 0 ||
             (latest.canArchive === undefined && task.canArchive !== undefined);
         groupsStore.setState((state) => ({
@@ -2770,6 +2770,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     const taskMembershipAdopt = (membership: TaskMembership): void => {
+        const creation = taskCreations.get(membership.taskId);
+        if (creation !== undefined) creation.membershipObserved = true;
         groupsStore.setState((state) => ({
             taskMemberships: taskMembershipsReplace(state.taskMemberships, membership),
         }));
@@ -2777,6 +2779,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     const taskMembershipRemove = (taskId: string): void => {
+        const creation = taskCreations.get(taskId);
+        if (creation !== undefined) creation.membershipObserved = true;
         if (!groupsStore.getState().taskMemberships.some((entry) => entry.taskId === taskId))
             return;
         groupsStore.setState((state) => ({
@@ -4578,7 +4582,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         sessionId?: string,
         queueKey = mutationId,
     ): string => {
-        const queued = (mutationQueues.get(queueKey) ?? Promise.resolve()).then(request);
+        const creating = sessionId === undefined ? undefined : sessionCreations.get(sessionId);
+        const queued = (mutationQueues.get(queueKey) ?? Promise.resolve()).then(async () => {
+            await creating;
+            return request();
+        });
         const settled = queued.then(
             () => undefined,
             () => undefined,
@@ -6318,11 +6326,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             const workspaceId = nextId();
             const agentId = nextId();
             const createdAt = now();
-            // Listed before the host is asked, as the host will list it, so
-            // its row stands where it is going and its conversation opens and
-            // takes words at once. Its version is its id, which is what marks
-            // it as this window's own until the host's answer replaces it.
+            // Publish all three identities before requesting creation.
             const optimistic: TaskCreation = {
+                membershipObserved: false,
                 task: {
                     agent: {
                         id: agentId,
@@ -6398,55 +6404,62 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     },
                     { signal: rootController.signal },
                 )
-                .then(
-                    (response) => {
-                        taskCreations.delete(taskId);
-                        unannouncedAgents.delete(agentId);
-                        // The task and the caller's place at the top of their list
-                        // take the listed ones' place under the same ids, so the
-                        // row stays where it stood.
-                        taskResponseAdopt(response);
-                        adoptAgent(response.task.agent);
-                        // A reader who has been in it since before it existed gets
-                        // its real transcript without having asked for one.
-                        const entry = sessions.get(agentId);
-                        if (entry !== undefined) background(requestSessionLoad(entry));
-                        return response.task;
-                    },
-                    (error: unknown) => {
-                        taskCreations.delete(taskId);
-                        unannouncedAgents.delete(agentId);
-                        intendedModes.delete(agentId);
-                        agentModes.delete(agentId);
-                        agentDrafts.delete(agentId);
-                        draftRevisions.delete(agentId);
-                        draftSaveCancel(agentId);
-                        // Only what is still this window's own goes: an answer that
-                        // was lost after the host made the task leaves the host's
-                        // record, which an event may already have brought.
-                        if (taskOf(taskId)?.version === taskId) {
-                            groupsStore.setState((state) => ({
-                                tasks: state.tasks.filter((entry) => entry.id !== taskId),
-                                taskMemberships: state.taskMemberships.filter(
-                                    (entry) => entry.taskId !== taskId,
-                                ),
-                            }));
-                            publishGroups();
-                        }
-                        throw error;
-                    },
-                );
-            // Its draft, its mode, and its first message wait for the creation
-            // the way a session's do; only a send learns that it was refused.
+                .catch((error: unknown) => {
+                    const confirmed = taskOf(taskId);
+                    if (confirmed !== undefined && confirmed !== optimistic.task)
+                        return {
+                            task: confirmed,
+                            membership:
+                                groupsStore
+                                    .getState()
+                                    .taskMemberships.find((entry) => entry.taskId === taskId) ??
+                                null,
+                        };
+                    taskCreations.delete(taskId);
+                    unannouncedAgents.delete(agentId);
+                    intendedModes.delete(agentId);
+                    agentModes.delete(agentId);
+                    agentDrafts.delete(agentId);
+                    draftRevisions.delete(agentId);
+                    draftSaveCancel(agentId);
+                    if (taskOf(taskId) === optimistic.task) {
+                        groupsStore.setState((state) => ({
+                            tasks: state.tasks.filter((entry) => entry.id !== taskId),
+                            taskMemberships: state.taskMemberships.filter(
+                                (entry) => entry.taskId !== taskId,
+                            ),
+                        }));
+                        publishGroups();
+                    }
+                    throw error;
+                })
+                .then((response) => {
+                    unannouncedAgents.delete(agentId);
+                    // Membership events received while creating outrank this response.
+                    taskResponseAdopt({
+                        ...response,
+                        membership: optimistic.membershipObserved
+                            ? (groupsStore
+                                  .getState()
+                                  .taskMemberships.find((entry) => entry.taskId === taskId) ?? null)
+                            : response.membership,
+                    });
+                    taskCreations.delete(taskId);
+                    adoptAgent(response.task.agent);
+                    const entry = sessions.get(agentId);
+                    if (entry !== undefined) background(requestSessionLoad(entry));
+                    return response.task;
+                });
+            // Both task actions and agent writes depend on successful creation.
             const created = task.then(() => undefined);
-            void created.catch(() => undefined);
             sessionCreations.set(agentId, created);
-            const queueKey = `agent:${agentId}`;
             const settled = created.catch(() => undefined);
-            mutationQueues.set(queueKey, settled);
+            const queueKeys = [`agent:${agentId}`, `task:${taskId}`];
+            for (const key of queueKeys) mutationQueues.set(key, created);
             void settled.finally(() => {
                 if (sessionCreations.get(agentId) === created) sessionCreations.delete(agentId);
-                if (mutationQueues.get(queueKey) === settled) mutationQueues.delete(queueKey);
+                for (const key of queueKeys)
+                    if (mutationQueues.get(key) === created) mutationQueues.delete(key);
             });
             return { agentId, task, taskId, workspaceId };
         },
@@ -7023,6 +7036,7 @@ function workspaceActivity(workspace: Workspace): number {
 interface TaskCreation {
     readonly task: Task;
     readonly membership: TaskMembership;
+    membershipObserved: boolean;
 }
 
 /** The key at the top of the caller's own list, or null when it is empty. */

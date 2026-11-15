@@ -389,6 +389,88 @@ it("rejects a refused create with the host's reason and lists nothing", async ()
     expect(watch.tasks).toHaveLength(0);
 });
 
+it("does not send queued mode changes to a refused task", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "existing", joinedKey: "a1" });
+    const { connection, rejections, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    daemon.failOnce("createTask", new Error("Refused"));
+    const release = daemon.pause("createTask");
+    const creation = connection.createTask();
+    connection.setEffort(creation.agentId, "high");
+    connection.setPermissionMode(creation.agentId, "read_only");
+    release();
+    await expect(creation.task).rejects.toThrow("Refused");
+    await vi.waitFor(() => expect(rejections).toHaveLength(2));
+    expect(daemon.callCount("saveAgentDraft")).toBe(0);
+});
+
+it("keeps a confirmed task when its create response is lost", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const create = daemon.client.createTask.bind(daemon.client);
+    vi.spyOn(daemon.client, "createTask").mockImplementation(async (...args) => {
+        const response = await create(...args);
+        await vi.waitFor(() =>
+            expect(taskIn(watch.tasks, response.task.id)?.path).toBe(
+                `/tmp/tasks/${response.task.id}`,
+            ),
+        );
+        throw new Error("Response lost");
+    });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+    const creation = connection.createTask();
+    await expect(creation.task).resolves.toMatchObject({ id: creation.taskId });
+    expect(taskIn(watch.tasks, creation.taskId)?.membership).toBeDefined();
+});
+
+it("does not rejoin a task left remotely before its create response arrives", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const create = daemon.client.createTask.bind(daemon.client);
+    let releaseResponse!: () => void;
+    const responseGate = new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+    });
+    vi.spyOn(daemon.client, "createTask").mockImplementation(async (...args) => {
+        const response = await create(...args);
+        await responseGate;
+        return response;
+    });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+    const creation = connection.createTask();
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, creation.taskId)?.path).toBe(`/tmp/tasks/${creation.taskId}`),
+    );
+    await daemon.client.leaveTask(creation.taskId, { mutationId: "remote-leave" });
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, creation.taskId)?.membership).toBeUndefined(),
+    );
+    releaseResponse();
+    await creation.task;
+    expect(taskIn(watch.tasks, creation.taskId)?.membership).toBeUndefined();
+});
+
+it("preserves a pending task through a catalog reload, then removes it on refusal", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "existing", joinedKey: "a1" });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    daemon.failOnce("createTask", new Error("Refused"));
+    const release = daemon.pause("createTask");
+    const creation = connection.createTask();
+    const bootstraps = daemon.callCount("getDesktopBootstrap");
+    daemon.gapOnNextStream();
+    daemon.streamDropAll();
+    await vi.waitFor(() =>
+        expect(daemon.callCount("getDesktopBootstrap")).toBeGreaterThan(bootstraps),
+    );
+    expect(taskIn(watch.tasks, creation.taskId)).toBeDefined();
+    release();
+    await expect(creation.task).rejects.toThrow("Refused");
+    expect(watch.tasks.map((task) => task.id)).toEqual(["existing"]);
+});
+
 it("renames against the task's version and says so when the version moved", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.taskSeed({ id: "task_a", name: "Alpha", joinedKey: "a1" });

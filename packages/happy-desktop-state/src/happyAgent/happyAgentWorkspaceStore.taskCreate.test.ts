@@ -159,7 +159,7 @@ function store(
     return { workspace, outputs, unsubscribe };
 }
 
-it("opens a task draft of its own, and Create turns the window to the new task", async () => {
+it("opens a task draft of its own, and sending turns the window to the new task", async () => {
     const taskCreate = vi.fn(() => creating());
     const { workspace, outputs, unsubscribe } = store(taskCreate);
 
@@ -169,7 +169,8 @@ it("opens a task draft of its own, and Create turns the window to the new task",
     expect(workspace.get().botCreate).toBeUndefined();
 
     workspace.taskCreateNameUpdate("Invoice rounding");
-    await workspace.taskCreateSubmit();
+    workspace.taskCreateMessageUpdate("Fix rounding");
+    workspace.taskCreateMessageSend();
 
     expect(taskCreate).toHaveBeenCalledWith({ name: "Invoice rounding" });
     expect(outputs).toContainEqual({
@@ -289,11 +290,9 @@ it("turns the window to the new task and sends its first message before the host
     unsubscribe();
 });
 
-it("brings the draft back and moves the reader off the task when the host refuses it", async () => {
+it("brings the draft back with the host's refusal", async () => {
     const host = deferred();
-    const { workspace, outputs, messageSend, unsubscribe } = sendingStore(() =>
-        creating(host.promise),
-    );
+    const { workspace, messageSend, unsubscribe } = sendingStore(() => creating(host.promise));
 
     workspace.taskCreateOpen();
     workspace.taskCreateNameUpdate("Invoice rounding");
@@ -303,9 +302,7 @@ it("brings the draft back and moves the reader off the task when the host refuse
     expect(workspace.get().taskCreate).toBeUndefined();
 
     host.reject(new Error("The task's folder could not be created."));
-    await vi.waitFor(() =>
-        expect(outputs).toContainEqual({ type: "groupRemoved", groupId: "ws_new" }),
-    );
+    await vi.waitFor(() => expect(workspace.get().taskCreate).toBeDefined());
     // Back as it was sent, with the host's reason on its composer.
     expect(workspace.get().taskCreate).toMatchObject({ name: "Invoice rounding" });
     await vi.waitFor(() =>
@@ -394,14 +391,15 @@ it("keeps the draft with the host's reason when the task could not be made", asy
 
     workspace.taskCreateOpen();
     workspace.taskCreateNameUpdate("Invoice rounding");
-    await workspace.taskCreateSubmit();
+    workspace.taskCreateMessageUpdate("Fix rounding");
+    workspace.taskCreateMessageSend();
+    await vi.waitFor(() => expect(workspace.get().taskCreate).toBeDefined());
 
     expect(workspace.get().taskCreate).toMatchObject({
         name: "Invoice rounding",
         submitting: false,
-        error: "The task's folder could not be created.",
     });
-    expect(outputs.some((event) => event.type === "conversationOpenRequested")).toBe(false);
+    expect(outputs.some((event) => event.type === "conversationOpenRequested")).toBe(true);
     unsubscribe();
 });
 
@@ -477,7 +475,8 @@ it("opens the next task on the model, effort, and account the last one started o
     });
     workspace.taskCreateModelUpdate({ providerId: "other-provider", modelId: "second-model" });
     workspace.taskCreateEffortUpdate("xhigh");
-    await workspace.taskCreateSubmit();
+    workspace.taskCreateMessageUpdate("Hello");
+    workspace.taskCreateMessageSend();
 
     expect(taskCreate).toHaveBeenCalledWith({
         selection: expect.objectContaining({

@@ -109,6 +109,7 @@ import {
     HAPPY_AGENT_ACTION_OK,
     happyAgentActionFailed,
     happyAgentUserError,
+    deepEqual,
 } from "./happyAgentSupport.js";
 import type {
     HappyAgentActivity,
@@ -1428,16 +1429,7 @@ export type HappyAgentWorkspaceOutput =
       }
     /** A group to address before it holds a conversation, such as a new worktree. */
     | { readonly type: "groupOpenRequested"; readonly groupId: HappyAgentGroupId }
-    /**
-     * The reader closed a group from this window — left or archived a task,
-     * archived a bot or a worktree — and its row has already gone from the
-     * list. The owner takes it out of its navigation now, in the same call
-     * stack as the act, exactly as it would for `groupRemoved`: a reader
-     * standing in it is moved at once instead of whenever the host's catalog
-     * catches up, and the `groupRemoved` that follows finds nothing left to
-     * move. A refusal brings the row back with its reason; the reader stays
-     * where they went.
-     */
+    /** Close navigation with the optimistic row removal; a refusal restores only the row. */
     | { readonly type: "groupCloseRequested"; readonly groupId: HappyAgentGroupId }
     /**
      * A group is gone from the host's own catalog: a project archived, here or
@@ -2147,8 +2139,6 @@ export interface HappyAgentWorkspaceStore {
      * this surface with the reason on its composer.
      */
     taskCreateMessageSend(): void;
-    /** Makes the task without saying anything to it, as `botCreateSubmit` does a bot. */
-    taskCreateSubmit(): Promise<void>;
     /** Opens the name dialog for a task. Any member may rename it. */
     taskRenameOpen(taskId: HappyAgentTaskId): void;
     /**
@@ -2688,6 +2678,7 @@ export function happyAgentWorkspaceStoreCreate(
         readonly name: string;
         readonly submitting: boolean;
         readonly error?: string;
+        readonly initialSelection?: HappyAgentSelection;
     }
     /** A whole draft held off the surface: its own parts, its composer, and its pickers. */
     interface CreateDraftHeld {
@@ -5736,12 +5727,7 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
-    /**
-     * Runs an act that takes a group's row out of the list under the reader's
-     * hand, and when the row did go, has the owner move the reader off it
-     * before returning. An act that changed nothing — a task the reader may not
-     * archive, one already left — moves nobody.
-     */
+    /** Navigate only when the action synchronously removed a listed row. */
     const groupCloseRun = <Answer>(
         groupId: HappyAgentGroupId | undefined,
         act: () => Promise<Answer>,
@@ -6090,6 +6076,10 @@ export function happyAgentWorkspaceStoreCreate(
                         client.models.effortRemembered(providerId, modelId),
                 });
                 botCreateSessionDraft = owned.store;
+                botCreateDraft = {
+                    ...botCreateDraft,
+                    initialSelection: owned.store.get().selection,
+                };
                 botCreateSessionDraftWriter = owned.writer;
                 unsubscribeBotCreateSessionDraft = draftSelectionFollow(owned.store);
                 recompute();
@@ -6143,11 +6133,7 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
-    /**
-     * Takes the open draft off the surface whole, leaving the surface empty.
-     * Unlike `botCreateRelease`, nothing is let go of: the draft can be put
-     * back as it was.
-     */
+    /** Detach a draft without releasing it, so a failed creation can restore it. */
     const createDraftHold = (draft: BotCreateDraft, composer: ComposerStore): CreateDraftHeld => {
         const held: CreateDraftHeld = {
             draft,
@@ -6178,17 +6164,13 @@ export function happyAgentWorkspaceStoreCreate(
         return (
             botCreateDraft !== undefined &&
             botCreateDraft.name.trim().length === 0 &&
+            deepEqual(botCreateDraft.initialSelection, botCreateSessionDraft?.get().selection) &&
             (composerState === undefined ||
                 (composerState.text.trim().length === 0 && composerState.attachments.length === 0))
         );
     };
 
-    /**
-     * Puts back a task draft whose task the host refused, so the reader finds
-     * it on the New task page as they sent it. One they have started writing
-     * there since is theirs and stays; one of another kind keeps the surface,
-     * and this waits beside it as the other purpose's draft does.
-     */
+    /** Restore a failed draft without overwriting newer edits or another purpose's draft. */
     const createDraftReturn = (
         purpose: HappyAgentTaskCreatePurpose,
         held: CreateDraftHeld,
@@ -6208,18 +6190,7 @@ export function happyAgentWorkspaceStoreCreate(
         recompute();
     };
 
-    /**
-     * Makes a task from the draft and says `message` to it with nothing the
-     * reader sees waiting on the host. The row is at the top of their list and
-     * the window on its conversation in the call that sent it, and the message
-     * is in the transcript the moment the conversation holds it, queued behind
-     * the creation; only files to place beside it wait for the task to exist.
-     *
-     * The draft is held, not put down, until the host answers. When the host
-     * refuses, the row goes, the reader is moved off the task, and the draft
-     * comes back to the New task page as it was sent, its composer reporting
-     * the reason and offering to try again.
-     */
+    /** Open immediately, queue the first send, and retain the draft until creation settles. */
     const taskCreateRun = async (
         pending: BotCreateDraft,
         message: BotCreateMessage,
@@ -6256,14 +6227,12 @@ export function happyAgentWorkspaceStoreCreate(
             (error: unknown) => {
                 activityRecord({ kind: "taskCreated", result: happyAgentActionFailed(error) });
                 if (createDraftsSent.delete(held) && !disposed) {
-                    // Put back before the reader is moved, so the New task
-                    // page they step back onto opens on it.
                     createDraftReturn(purpose, held);
-                    output({ type: "groupRemoved", groupId: location.groupId });
                 }
                 throw happyAgentUserError(error);
             },
         );
+        void created.catch(() => undefined);
         try {
             // A file copied or uploaded beside the message needs the task's
             // folder, or its agent, to exist; the words and images do not.
@@ -6290,11 +6259,7 @@ export function happyAgentWorkspaceStoreCreate(
                 steering: false,
             });
         } catch (error) {
-            // A refused task is answered above, its draft back where it was
-            // sent from. A task that exists while its first message did not go
-            // keeps the message in its conversation, the one place the reader
-            // is looking, for them to send again: another attempt from the New
-            // task page would ask for a second task.
+            // Retry a failed send in its existing task, without creating another task.
             await created;
             if (!disposed) await conversationDraftCarry(location.sessionId, message);
             throw error;
@@ -6327,12 +6292,10 @@ export function happyAgentWorkspaceStoreCreate(
         // file too large to carry, found out once the bot exists, would leave
         // a bot behind that nobody asked for.
         if (message !== undefined) happyAgentComposerAttachmentsValidate(message.attachments);
-        if (
-            kind === "task" &&
-            message !== undefined &&
-            (message.text.trim().length > 0 || message.attachments.length > 0)
-        )
+        if (kind === "task") {
+            if (message === undefined) throw new Error("Write a first message to create a task.");
             return taskCreateRun(pending, message);
+        }
         const name = pending.name.trim();
         const selection = botCreateSessionDraft?.get().selection;
         botCreateDraft = { ...pending, submitting: true, error: undefined };
@@ -6341,42 +6304,22 @@ export function happyAgentWorkspaceStoreCreate(
         try {
             // Blank is left out, not sent: an absent name is what asks the
             // host to name it from its first message.
-            if (kind === "task") {
-                // Nothing is said to it, so the window waits for the host
-                // before carrying the draft over: a draft carried into a task
-                // the host then refused would be carried nowhere. Its row is
-                // up meanwhile.
-                const creating = list.taskCreate({
-                    ...(name.length === 0 ? {} : { name }),
-                    ...(selection === undefined ? {} : { selection }),
-                });
-                await creating.created;
-                created = creating;
-            } else
-                created = await list.botCreate({
-                    ...(name.length === 0 ? {} : { name }),
-                    ...(selection === undefined ? {} : { selection }),
-                });
+            created = await list.botCreate({
+                ...(name.length === 0 ? {} : { name }),
+                ...(selection === undefined ? {} : { selection }),
+            });
         } catch (error) {
-            activityRecord(
-                kind === "bot"
-                    ? {
-                          kind: "botCreated",
-                          source: "sidebar",
-                          result: happyAgentActionFailed(error),
-                      }
-                    : { kind: "taskCreated", result: happyAgentActionFailed(error) },
-            );
+            activityRecord({
+                kind: "botCreated",
+                source: "sidebar",
+                result: happyAgentActionFailed(error),
+            });
             if (disposed) return;
             botCreateDraft = { ...pending, submitting: false };
             recompute();
             throw happyAgentUserError(error);
         }
-        activityRecord(
-            kind === "bot"
-                ? { kind: "botCreated", source: "sidebar", result: HAPPY_AGENT_ACTION_OK }
-                : { kind: "taskCreated", result: HAPPY_AGENT_ACTION_OK },
-        );
+        activityRecord({ kind: "botCreated", source: "sidebar", result: HAPPY_AGENT_ACTION_OK });
         if (disposed) return;
         // The next new session starts the way this one did.
         if (selection) client.models.selectionStarted(selection);
@@ -6432,7 +6375,7 @@ export function happyAgentWorkspaceStoreCreate(
             activityRecord({
                 kind: "messageSent",
                 // A bot made from here is always the reader's own, never a system bot.
-                target: kind === "bot" ? "bot" : "session",
+                target: "bot",
                 botSystemKey: null,
                 taskDepth: 0,
                 source: "new_session",
@@ -9005,9 +8948,6 @@ export function happyAgentWorkspaceStoreCreate(
         taskCreateMessageSend() {
             if (!createKindTask(createKind) || botCreateDraft?.submitting) return;
             botCreateComposer?.getState().textSubmit();
-        },
-        async taskCreateSubmit() {
-            if (createKindTask(createKind)) await createDraftSubmit();
         },
         taskRenameOpen(taskId) {
             if (projectArchive?.submitting) return;
