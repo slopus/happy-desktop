@@ -780,9 +780,6 @@ function HappyAgentWorkspaceLayout() {
                     to: "/pipeline-runs/$happyAgentId/$runId",
                 })
             }
-            onPipelineAgentOpen={(happyAgentId, agentId) =>
-                happyAgentRouterHappyLinkOpen(router, `happy://agents/${agentId}`, happyAgentId)
-            }
             onPipelinesOpen={(happyAgentId) =>
                 void navigate({ params: { happyAgentId }, to: "/pipelines/$happyAgentId" })
             }

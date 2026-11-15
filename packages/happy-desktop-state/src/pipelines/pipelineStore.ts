@@ -22,8 +22,6 @@ import type {
     PipelineVersion,
 } from "./pipelineTypes.js";
 
-export type PipelinePanel = "overview" | "runs";
-
 /** The pipeline's runs, newest first, as far as they have been paged in. */
 export interface PipelineRuns {
     /** True until the first page answers. */
@@ -49,8 +47,6 @@ export interface PipelineSnapshot {
     readonly definitions: ReadonlyMap<number, PipelineDefinitionLoad>;
     /** The node whose details are open, in whichever version is on screen. */
     readonly nodeSelected: string | null;
-    /** What the inspector shows while no node is open. */
-    readonly panel: PipelinePanel;
     readonly runs: PipelineRuns;
     /** Why the last read failed; what is shown is the last one read. */
     readonly error?: UserError;
@@ -71,7 +67,6 @@ export interface PipelineStore {
     versionSelect(number: number | null): void;
     /** Opens one node's details, or closes them with null. */
     nodeSelect(nodeId: string | null): void;
-    panelSelect(panel: PipelinePanel): void;
     /** Reads the next older page of runs. */
     runsMore(): void;
     [Symbol.dispose](): void;
@@ -105,7 +100,6 @@ export function pipelineStoreCreate(deps: {
         versionSelected: null,
         definitions: new Map(),
         nodeSelected: null,
-        panel: "overview",
         runs: { loading: true, entries: [], nextCursor: null, loadingMore: false },
     }));
     const base = `v0/pipelines/${encodeURIComponent(deps.pipelineId)}`;
@@ -251,10 +245,6 @@ export function pipelineStoreCreate(deps: {
         nodeSelect(nodeId) {
             if (disposed || store.getState().nodeSelected === nodeId) return;
             store.setState({ nodeSelected: nodeId });
-        },
-        panelSelect(panel) {
-            if (disposed || store.getState().panel === panel) return;
-            store.setState({ panel });
         },
         runsMore() {
             const runs = store.getState().runs;

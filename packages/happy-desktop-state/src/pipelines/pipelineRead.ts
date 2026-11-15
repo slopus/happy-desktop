@@ -9,6 +9,8 @@ import type {
     PipelineGrant,
     PipelineLease,
     PipelineLeaseAcquire,
+    PipelineLogEntry,
+    PipelineLogPage,
     PipelineNode,
     PipelineNodeRun,
     PipelineNodeRunState,
@@ -480,5 +482,87 @@ export function pipelineRunRead(answer: unknown): PipelineRun | undefined {
         nodes: listOf(run.nodes, nodeRunRead),
         leases: listOf(run.leases, leaseRead),
         childRunIds: texts(run.childRunIds),
+    };
+}
+
+function logEntryRead(value: unknown): PipelineLogEntry | undefined {
+    const entry = recordOf(value);
+    const seq = numberOrNull(entry?.seq);
+    if (!entry || seq === null) return undefined;
+    const at = numberOrNull(entry.at) ?? 0;
+    const text = typeof entry.text === "string" ? entry.text : "";
+    switch (entry.kind) {
+        case "output":
+            return {
+                seq,
+                at,
+                kind: "output",
+                stream: entry.stream === "stderr" ? "stderr" : "stdout",
+                text,
+            };
+        case "message":
+            return { seq, at, kind: "message", text };
+        case "status": {
+            const progress = numberOrNull(entry.progress);
+            return {
+                seq,
+                at,
+                kind: "status",
+                text,
+                progress: progress === null ? null : Math.min(1, Math.max(0, progress)),
+            };
+        }
+        case "command": {
+            const state = (["running", "exited", "aborted"] as const).find(
+                (s) => s === entry.state,
+            );
+            if (typeof entry.id !== "string" || typeof entry.command !== "string" || !state)
+                return undefined;
+            return {
+                seq,
+                at,
+                kind: "command",
+                id: entry.id,
+                command: entry.command,
+                cwd: textOrNull(entry.cwd),
+                lease: textOrNull(entry.lease),
+                state,
+                exitCode: numberOrNull(entry.exitCode),
+                durationMs: numberOrNull(entry.durationMs),
+                output: typeof entry.output === "string" ? entry.output : "",
+                outputTruncated: entry.outputTruncated === true,
+            };
+        }
+        case "tool": {
+            const state = (["running", "ok", "error"] as const).find((s) => s === entry.state);
+            if (typeof entry.id !== "string" || typeof entry.name !== "string" || !state)
+                return undefined;
+            return {
+                seq,
+                at,
+                kind: "tool",
+                id: entry.id,
+                name: entry.name,
+                summary: typeof entry.summary === "string" ? entry.summary : "",
+                state,
+                durationMs: numberOrNull(entry.durationMs),
+                error: textOrNull(entry.error),
+            };
+        }
+        default:
+            // A kind this app does not know yet is left out rather than guessed at.
+            return undefined;
+    }
+}
+
+/** `GET /v0/pipeline-runs/:runId/nodes/:nodeId/log?after=&limit=` → `{ entries, nextAfter, dropped, changed }`. */
+export function pipelineLogPageRead(answer: unknown, after: number): PipelineLogPage {
+    const page = recordOf(answer);
+    const entries = listOf(page?.entries, logEntryRead);
+    return {
+        entries,
+        nextAfter: numberOrNull(page?.nextAfter) ?? entries.at(-1)?.seq ?? after,
+        dropped: numberOrNull(page?.dropped) ?? 0,
+        changed: listOf(page?.changed, logEntryRead),
     };
 }

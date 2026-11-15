@@ -1,22 +1,18 @@
 import type { CSSProperties, ReactNode } from "react";
-import type {
-    PipelineDefinition,
-    PipelinePanel,
-    PipelineSnapshot,
-    PipelineVersion,
-} from "happy-desktop-state";
+import type { PipelineDefinition, PipelineSnapshot, PipelineVersion } from "happy-desktop-state";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
 import { ScrollArea } from "../../Scrollbar";
-import { SegmentedControl } from "../../SegmentedControl";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
 import { PipelineGraph, PipelineGraphLegend } from "./PipelineGraph";
 import {
     PipelineDetailSection,
     PipelineFacts,
-    PipelineNodeDetail,
+    PipelineNodeFacts,
+    PipelineNodeHeading,
+    PipelineNodeWork,
     PipelineTypeText,
 } from "./PipelineNodeDetail";
 import { pipelineNodeSummary, type PipelineLabels } from "./pipelinePresentation";
@@ -29,7 +25,6 @@ export interface HappyAgentPipelinePageProps {
     /** Shows one version's graph; null shows the latest. */
     readonly onVersionSelect: (number: number | null) => void;
     readonly onNodeSelect: (nodeId: string | null) => void;
-    readonly onPanelSelect: (panel: PipelinePanel) => void;
     readonly onRunOpen: (runId: string) => void;
     readonly onRunsMore: () => void;
     /** Now, for how long a running run has taken so far. */
@@ -46,9 +41,11 @@ const CONCURRENCY_TEXT = {
 } as const;
 
 /**
- * HappyAgentPipelinePage — one pipeline: the graph of the version on screen,
- * beside either that pipeline's overview and history or the node picked in
- * the graph. Picking an older version in the history draws its graph.
+ * HappyAgentPipelinePage — one pipeline, laid out as its runs are: a strip on
+ * top draws the graph of the version on screen, each node one row. Below it
+ * the main column lists the pipeline's runs, or shows the picked node's source
+ * or instructions, beside a narrow column of the pipeline's overview and
+ * history, or that node's facts. Picking an older version draws its graph.
  */
 export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
     const snapshot = props.pipeline;
@@ -107,8 +104,8 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
                     />
                 </div>
             ) : (
-                <div className="happy-pipeline-page__body">
-                    <div className="happy-pipeline-page__main">
+                <div className="happy-pipeline-page__stack">
+                    <div className="happy-pipeline-page__strip">
                         <div className="happy-pipeline-page__bar">
                             <span className="happy-pipeline-page__version">
                                 {shown === pipeline.head.number
@@ -142,69 +139,62 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
                                 selectedNodeId={node ? node.id : null}
                             />
                         ) : (
-                            <div className="happy-pipeline-page__empty">
-                                <EmptyState
-                                    description={
-                                        load?.state === "failed"
-                                            ? load.error.message
-                                            : "Reading this version's graph."
-                                    }
-                                    icon={load?.state === "failed" ? "alert" : "clock"}
-                                    size="panel"
-                                    title={
-                                        load?.state === "failed"
-                                            ? "Graph unavailable"
-                                            : "Loading graph…"
-                                    }
-                                />
-                            </div>
+                            <p className="happy-pipeline-page__strip-note">
+                                {load?.state === "failed"
+                                    ? `The graph is unavailable: ${load.error.message}`
+                                    : "Reading this version's graph…"}
+                            </p>
                         )}
                     </div>
-                    <aside className="happy-pipeline-page__inspector">
-                        {node && definition ? (
-                            <PipelineNodeDetail
-                                incoming={
-                                    definition.edges.filter((edge) => edge.to === node.id).length
-                                }
-                                labels={props.labels}
-                                node={node}
-                                onClose={() => props.onNodeSelect(null)}
-                            />
-                        ) : (
-                            <>
-                                <div className="happy-pipeline-page__panel-switch">
-                                    <SegmentedControl
-                                        aria-label="Show"
-                                        fullWidth
-                                        onChange={(value) =>
-                                            props.onPanelSelect(
-                                                value === "runs" ? "runs" : "overview",
-                                            )
-                                        }
-                                        segments={[
-                                            { value: "overview", label: "Overview" },
-                                            { value: "runs", label: "Runs" },
-                                        ]}
-                                        size="small"
-                                        value={snapshot.panel}
+                    <div className="happy-pipeline-page__lower">
+                        <section className="happy-pipeline-pane">
+                            {node ? (
+                                <>
+                                    <PipelineNodeHeading
+                                        id={node.id}
+                                        kind={node.kind}
+                                        onClose={() => props.onNodeSelect(null)}
                                     />
-                                </div>
-                                <ScrollArea
-                                    className="happy-pipeline-page__inspector-scroll"
-                                    viewportClassName="happy-pipeline-page__inspector-viewport"
-                                >
-                                    {snapshot.panel === "runs" ? (
-                                        <div className="happy-pipeline-detail__body">
-                                            <PipelineRunsList
-                                                labels={props.labels}
-                                                now={props.now}
-                                                onRunOpen={props.onRunOpen}
-                                                onRunsMore={props.onRunsMore}
-                                                runs={snapshot.runs}
-                                            />
-                                        </div>
+                                    <PipelineNodeWork labels={props.labels} node={node} />
+                                </>
+                            ) : (
+                                <>
+                                    <header className="happy-pipeline-pane__header">
+                                        <span className="happy-pipeline-pane__title">Runs</span>
+                                    </header>
+                                    <ScrollArea
+                                        className="happy-pipeline-pane__scroll"
+                                        viewportClassName="happy-pipeline-pane__viewport"
+                                    >
+                                        <PipelineRunsList
+                                            labels={props.labels}
+                                            now={props.now}
+                                            onRunOpen={props.onRunOpen}
+                                            onRunsMore={props.onRunsMore}
+                                            runs={snapshot.runs}
+                                        />
+                                    </ScrollArea>
+                                </>
+                            )}
+                        </section>
+                        <aside className="happy-pipeline-page__side">
+                            <ScrollArea
+                                className="happy-pipeline-page__inspector-scroll"
+                                viewportClassName="happy-pipeline-page__inspector-viewport"
+                            >
+                                <div className="happy-pipeline-detail__body">
+                                    {node && definition ? (
+                                        <PipelineNodeFacts
+                                            incoming={
+                                                definition.edges.filter(
+                                                    (edge) => edge.to === node.id,
+                                                ).length
+                                            }
+                                            labels={props.labels}
+                                            node={node}
+                                        />
                                     ) : (
-                                        <div className="happy-pipeline-detail__body">
+                                        <>
                                             {snapshot.error ? (
                                                 <Banner
                                                     tone="danger"
@@ -230,12 +220,12 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
                                                     versions={snapshot.versions}
                                                 />
                                             </PipelineDetailSection>
-                                        </div>
+                                        </>
                                     )}
-                                </ScrollArea>
-                            </>
-                        )}
-                    </aside>
+                                </div>
+                            </ScrollArea>
+                        </aside>
+                    </div>
                 </div>
             )}
         </div>

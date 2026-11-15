@@ -756,6 +756,11 @@ export interface AppHappyAgentSession {
     readonly pipelineRun?: (
         runId: string,
     ) => import("happy-desktop-state").PipelineRunStore | undefined;
+    /** One node's log in one run, live; undefined wherever `pipelines` is. */
+    readonly pipelineNodeLog?: (
+        runId: string,
+        nodeId: string,
+    ) => import("happy-desktop-state").PipelineNodeLogStore | undefined;
     /** Everyone on the team, which names the people and agents pipelines credit. */
     readonly team?: () => import("happy-desktop-state").HappyAgentTeamRoster;
     /** The repositories one cloud agent checked out; absent or undefined anywhere but Happy Cloud. */
@@ -1098,11 +1103,6 @@ export interface AppHappyAgentViewProps {
     pipelineRunId?: string;
     /** Addresses one pipeline run on one server. */
     onPipelineRunOpen?(happyAgentId: string, runId: string): void;
-    /**
-     * Opens the conversation of the agent that ran a pipeline node, where the
-     * reader may read it. Opens nothing where it may not.
-     */
-    onPipelineAgentOpen?(happyAgentId: string, agentId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
     /** The person whose profile the URL opens, on the addressed Happy Agent. */
@@ -5056,7 +5056,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <HappyAgentPipelinesSurface
                     key={props.pipelineRunId ?? props.pipelineId}
                     clock={session.clock}
-                    onAgentOpen={(agentId) => props.onPipelineAgentOpen?.(active.id, agentId)}
+                    {...(session.pipelineNodeLog ? { nodeLog: session.pipelineNodeLog } : {})}
                     onPipelineOpen={(pipelineId) => props.onPipelineOpen?.(active.id, pipelineId)}
                     onPipelinesOpen={() => props.onPipelinesOpen?.(active.id)}
                     onRunOpen={(runId) => props.onPipelineRunOpen?.(active.id, runId)}

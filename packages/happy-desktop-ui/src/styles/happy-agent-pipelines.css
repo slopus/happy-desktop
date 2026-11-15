@@ -1,11 +1,12 @@
 /*
- * P-047 Happy Agent pipelines: the list of a server's pipelines, and one
- * pipeline's page with its graph beside its overview, history, or one node.
+ * P-047 Happy Agent pipelines: the list of a server's pipelines, one
+ * pipeline's page, and one run's page.
  *
  * The list reads down the content column under the shared surface header, as
- * the plugins catalog does. A pipeline's page is two-dimensional, so it takes
- * the whole lane: the graph fills it and an inspector the width of the app's
- * own sits at its trailing edge. Colors, radii, and type come only from theme
+ * the plugins catalog does. A pipeline's page and a run's page share one
+ * dense layout across the whole lane: a strip as tall as the graph on top, and
+ * below it a main column (the runs, a node's source, or a node's log) beside
+ * a narrow side column of facts. Colors, radii, and type come only from theme
  * roles.
  */
 
@@ -89,6 +90,7 @@
 
 .happy-pipeline-row:focus-visible,
 .happy-pipeline-version:focus-visible,
+.happy-pipeline-run-row:focus-visible,
 .happy-pipeline-node:focus-visible {
     outline: 2px solid var(--text-link);
     outline-offset: -2px;
@@ -183,21 +185,24 @@
     background: var(--status-error);
 }
 
-/* ---- Pipeline page ----------------------------------------------------- */
+/* ---- Pipeline and run page --------------------------------------------- */
 
-.happy-pipeline-page__body {
+.happy-pipeline-page__stack {
     display: flex;
     flex: 1 1 auto;
+    flex-direction: column;
     min-height: 0;
     border-top: 1px solid var(--divider);
 }
 
-.happy-pipeline-page__main {
+/* The graph strip: as tall as the drawing, up to a share of the page. */
+.happy-pipeline-page__strip {
     display: flex;
-    flex: 1 1 auto;
+    flex: none;
     flex-direction: column;
-    min-width: 0;
+    max-height: 45%;
     min-height: 0;
+    border-bottom: 1px solid var(--divider);
     background: var(--groupped-background);
 }
 
@@ -207,19 +212,34 @@
     align-items: center;
     gap: 8px;
     box-sizing: border-box;
-    height: 48px;
+    height: 32px;
     padding-inline: 16px;
 }
 
 .happy-pipeline-page__version {
     color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 18px;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
 }
 
 .happy-pipeline-page__bar-end {
     display: flex;
     margin-inline-start: auto;
+}
+
+.happy-pipeline-page__strip-note {
+    margin: 0;
+    padding: 4px 16px 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-pipeline-page__lower {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .happy-pipeline-page__empty {
@@ -228,16 +248,16 @@
     align-items: center;
     justify-content: center;
     min-height: 0;
+    border-top: 1px solid var(--divider);
 }
 
-.happy-pipeline-page__inspector {
+.happy-pipeline-page__side {
     display: flex;
     flex: none;
     flex-direction: column;
-    width: clamp(250px, 30vw, 360px);
+    width: clamp(240px, 26vw, 300px);
     min-height: 0;
     border-inline-start: 1px solid var(--divider);
-    background: var(--surface);
 }
 
 .happy-pipeline-page__inspector-scroll {
@@ -252,12 +272,99 @@
     overflow-y: auto;
 }
 
+/* ---- Main column ------------------------------------------------------- */
+
+.happy-pipeline-pane {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-pipeline-pane__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: 36px;
+    padding-inline: 16px 8px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-pipeline-pane__kind {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-pane__title {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-pane__subtitle {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-pipeline-pane__end {
+    display: flex;
+    margin-inline-start: auto;
+}
+
+.happy-pipeline-pane__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-pipeline-pane__viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-pipeline-pane__prose {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 12px 16px 24px;
+}
+
+.happy-pipeline-pane__source {
+    display: flex;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+}
+
+/* Code never wraps: a long line scrolls sideways inside the block. */
+.happy-pipeline-pane__source > * {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 /* ---- Legend ------------------------------------------------------------ */
 
 .happy-pipeline-legend {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
@@ -270,7 +377,7 @@
 }
 
 .happy-pipeline-legend__stroke {
-    width: 20px;
+    width: 18px;
     height: 0;
     border-top: 1.5px solid var(--text-secondary);
 }
@@ -282,8 +389,9 @@
 
 /* ---- Graph ------------------------------------------------------------- */
 
+/* As tall as the drawing; the strip's cap shrinks it, and it scrolls. */
 .happy-pipeline-graph {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     min-height: 0;
     width: 100%;
@@ -294,7 +402,7 @@
     overflow: auto;
 }
 
-/* Centres the drawing while it fits; grows past the pane to scroll when it doesn't. */
+/* Centres the drawing while it fits; grows past the strip to scroll when it doesn't. */
 .happy-pipeline-graph__stage {
     display: flex;
     flex: 1 0 auto;
@@ -311,7 +419,7 @@
 }
 
 .happy-pipeline-graph__edges {
-    /* Not flex: the edge drawing lies under the node cards at the canvas origin, sharing their coordinate space. */
+    /* Not flex: the edge drawing lies under the node rows at the canvas origin, sharing their coordinate space. */
     position: absolute;
     inset: 0;
     overflow: visible;
@@ -321,12 +429,12 @@
 .happy-pipeline-graph__edge {
     fill: none;
     stroke: var(--text-secondary);
-    stroke-width: 1.5;
+    stroke-width: 1.25;
 }
 
 .happy-pipeline-graph__edge[data-on="failure"] {
     stroke: color-mix(in srgb, var(--status-error) 60%, var(--text-secondary));
-    stroke-dasharray: 5 4;
+    stroke-dasharray: 4 3;
 }
 
 .happy-pipeline-graph__arrow path {
@@ -344,24 +452,23 @@
 .happy-pipeline-graph__entry path {
     fill: none;
     stroke: var(--text);
-    stroke-width: 1.5;
+    stroke-width: 1.25;
 }
 
-/* ---- Node -------------------------------------------------------------- */
+/* ---- Node: one dense row ----------------------------------------------- */
 
 .happy-pipeline-node {
     /* Not flex: a node sits at the column and row the layered layout computed, a two-dimensional placement flexbox cannot express. */
     position: absolute;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
+    align-items: center;
+    gap: 6px;
     box-sizing: border-box;
     margin: 0;
-    padding: 0 12px;
+    padding: 0 10px 0 8px;
     overflow: hidden;
     border: 1px solid var(--divider);
-    border-radius: 10px;
+    border-radius: 7px;
     background: var(--surface);
     box-shadow: var(--shadow-subtle);
     color: var(--text);
@@ -379,33 +486,30 @@
     box-shadow: 0 0 0 1px var(--text-link);
 }
 
-.happy-pipeline-node__head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-}
-
 .happy-pipeline-node__kind {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     color: var(--text-secondary);
 }
 
 .happy-pipeline-node__name {
+    flex: 0 0 auto;
+    max-width: 55%;
     overflow: hidden;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    line-height: 18px;
+    line-height: 16px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .happy-pipeline-node__detail {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 12px;
@@ -414,373 +518,36 @@
     white-space: nowrap;
 }
 
-/* ---- Inspector detail -------------------------------------------------- */
-
-.happy-pipeline-detail {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-}
-
-.happy-pipeline-detail__header {
-    display: flex;
+.happy-pipeline-node__state {
     flex: none;
-    align-items: center;
-    gap: 10px;
-    box-sizing: border-box;
-    height: 56px;
-    padding-inline: 16px 12px;
-    border-bottom: 1px solid var(--divider);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-secondary);
 }
 
-.happy-pipeline-detail__kind {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: var(--surface-high);
-    color: var(--text-secondary);
-}
-
-.happy-pipeline-detail__heading {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.happy-pipeline-detail__name {
-    overflow: hidden;
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-pipeline-detail__subtitle {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-.happy-pipeline-detail__body {
-    display: flex;
-    flex: 1 0 auto;
-    flex-direction: column;
-    gap: 20px;
-    box-sizing: border-box;
-    padding: 16px 16px 32px;
-}
-
-.happy-pipeline-detail__section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-}
-
-.happy-pipeline-detail__title {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 16px;
-}
-
-.happy-pipeline-detail__note,
-.happy-pipeline-detail__prose {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 18px;
-}
-
-.happy-pipeline-detail__prose {
-    color: var(--text);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-}
-
-.happy-pipeline-detail__code {
-    margin: 0;
-    padding: 8px 10px;
-    border-radius: 6px;
-    background: var(--surface-high);
-    color: var(--text);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    line-height: 18px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-}
-
-.happy-pipeline-detail__source {
-    display: flex;
-    overflow: hidden;
-    border: 1px solid var(--divider);
-    border-radius: 6px;
-    font-size: 12px;
-}
-
-/* Code never wraps: a long line scrolls sideways inside the block. */
-.happy-pipeline-detail__source > * {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.happy-pipeline-detail__facts {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin: 0;
-}
-
-.happy-pipeline-detail__fact {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-    font-size: 13px;
-    line-height: 18px;
-}
-
-.happy-pipeline-detail__fact dt {
-    flex: none;
-    width: 112px;
-    color: var(--text-secondary);
-}
-
-.happy-pipeline-detail__fact dd {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin: 0;
-    color: var(--text);
-    overflow-wrap: anywhere;
-}
-
-/* ---- Versions ---------------------------------------------------------- */
-
-.happy-pipeline-versions {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-inline: -8px;
-}
-
-.happy-pipeline-versions__item {
-    display: flex;
-    border-radius: 8px;
-}
-
-.happy-pipeline-versions__item:hover {
-    background: var(--surface-pressed);
-}
-
-.happy-pipeline-version {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    gap: 2px;
-    box-sizing: border-box;
-    min-width: 0;
-    margin: 0;
-    padding: 8px;
-    border: 0;
-    border-radius: 8px;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-}
-
-.happy-pipeline-version[aria-current="true"] {
-    background: var(--surface-selected);
-}
-
-.happy-pipeline-version__head {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.happy-pipeline-version__number {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 18px;
-}
-
-.happy-pipeline-version__tag {
-    color: var(--text-link);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
-}
-
-.happy-pipeline-version__message {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 13px;
-    line-height: 18px;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
-
-.happy-pipeline-version__meta {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-/* ---- Inspector panels and runs ----------------------------------------- */
-
-.happy-pipeline-page__panel-switch {
-    display: flex;
-    flex: none;
-    align-items: center;
-    box-sizing: border-box;
-    height: 48px;
-    padding-inline: 16px;
-    border-bottom: 1px solid var(--divider);
-}
-
-.happy-pipeline-runs {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-}
-
-.happy-pipeline-detail__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.happy-pipeline-detail__state {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.happy-pipeline-detail__status {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.happy-pipeline-detail__failure {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 10px;
-    border: 1px solid var(--box-error-border);
-    border-radius: 6px;
-    background: var(--box-error-background);
-}
-
-.happy-pipeline-detail__failure-code {
-    color: var(--box-error-text);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 16px;
-}
-
-/* A value keeps its lines and scrolls both ways; the padding is the text's. */
-.happy-pipeline-detail__value {
-    display: flex;
-    max-height: 240px;
-    overflow: auto;
-    border-radius: 6px;
-    background: var(--surface-high);
-}
-
-.happy-pipeline-detail__value-text {
-    flex: 1 0 auto;
-    margin: 0;
-    padding: 8px 10px;
-    color: var(--text);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    line-height: 18px;
-    white-space: pre;
-}
-
-.happy-pipeline-statuses {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.happy-pipeline-statuses__item {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-    font-size: 13px;
-    line-height: 18px;
-}
-
-.happy-pipeline-statuses__text {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-.happy-pipeline-statuses__time {
-    flex: none;
-    color: var(--text-secondary);
-    font-size: 12px;
-}
-
-/* ---- Progress ---------------------------------------------------------- */
-
-.happy-pipeline-progress,
+/* The progress lane runs along the row's foot, kept whether or not it is painted. */
 .happy-pipeline-node__progress {
+    /* Not flex: the lane is drawn over the row's bottom edge, outside the row's line of glyph, name and state. */
+    position: absolute;
+    inset-inline: 8px;
+    bottom: 3px;
     display: flex;
-    flex: none;
-    height: 3px;
+    height: 2px;
     overflow: hidden;
     border-radius: 999px;
     background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
-.happy-pipeline-progress__fill,
+.happy-pipeline-node__progress[data-empty] {
+    background: transparent;
+}
+
 .happy-pipeline-node__progress-fill {
     flex: none;
     height: 100%;
     border-radius: 999px;
     background: var(--text-link);
-}
-
-/* Its lane is kept, so a bar appearing moves nothing; it is painted only with progress. */
-.happy-pipeline-progress[data-empty],
-.happy-pipeline-node__progress[data-empty] {
-    background: transparent;
-}
-
-/* ---- A node in a run --------------------------------------------------- */
-
-.happy-pipeline-node[data-variant="run"] {
-    gap: 4px;
-}
-
-.happy-pipeline-node__state {
-    flex: none;
-    width: 8px;
-    height: 8px;
-    margin-inline-start: auto;
-    border-radius: 50%;
-    background: var(--text-secondary);
 }
 
 .happy-pipeline-node[data-tone="active"] {
@@ -808,12 +575,663 @@
 }
 
 .happy-pipeline-node[data-muted] {
+    border-style: dashed;
     background: transparent;
     box-shadow: none;
-    border-style: dashed;
 }
 
-.happy-pipeline-node[data-muted] .happy-pipeline-node__head,
+.happy-pipeline-node[data-muted] .happy-pipeline-node__kind,
+.happy-pipeline-node[data-muted] .happy-pipeline-node__name,
 .happy-pipeline-node[data-muted] .happy-pipeline-node__detail {
     opacity: 0.6;
+}
+
+/* ---- Side column detail ------------------------------------------------ */
+
+.happy-pipeline-detail__body {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 16px;
+    box-sizing: border-box;
+    padding: 12px 14px 24px;
+}
+
+.happy-pipeline-detail__group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-pipeline-detail__group-title {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-pipeline-detail__section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-pipeline-detail__title {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-pipeline-detail__note,
+.happy-pipeline-detail__prose {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 17px;
+}
+
+.happy-pipeline-detail__prose {
+    color: var(--text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-detail__code {
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--surface-high);
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 11.5px;
+    line-height: 17px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-detail__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+}
+
+.happy-pipeline-detail__fact {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 17px;
+}
+
+.happy-pipeline-detail__fact dt {
+    flex: none;
+    width: 92px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-detail__fact dd {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-detail__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.happy-pipeline-detail__failure {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--box-error-border);
+    border-radius: 6px;
+    background: var(--box-error-background);
+}
+
+.happy-pipeline-detail__failure-code {
+    color: var(--box-error-text);
+    font-family: var(--happy-font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* A value keeps its lines and scrolls both ways; the padding is the text's. */
+.happy-pipeline-detail__value {
+    display: flex;
+    max-height: 200px;
+    overflow: auto;
+    border-radius: 6px;
+    background: var(--surface-high);
+}
+
+.happy-pipeline-detail__value-text {
+    flex: 1 0 auto;
+    margin: 0;
+    padding: 6px 8px;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 11.5px;
+    line-height: 17px;
+    white-space: pre;
+}
+
+.happy-pipeline-statuses {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-pipeline-statuses__item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 17px;
+}
+
+.happy-pipeline-statuses__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-statuses__time {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+}
+
+/* ---- Versions ---------------------------------------------------------- */
+
+.happy-pipeline-versions {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-inline: -6px;
+}
+
+.happy-pipeline-versions__item {
+    display: flex;
+    border-radius: 6px;
+}
+
+.happy-pipeline-versions__item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-pipeline-version {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 5px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-version[aria-current="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-pipeline-version__head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.happy-pipeline-version__number {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 17px;
+}
+
+.happy-pipeline-version__tag {
+    color: var(--text-link);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-pipeline-version__message {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-version__meta {
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 16px;
+}
+
+/* ---- Runs list --------------------------------------------------------- */
+
+.happy-pipeline-runs {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 4px 8px 16px;
+}
+
+.happy-pipeline-runs > .happy-pipeline-detail__note {
+    padding: 8px;
+}
+
+.happy-pipeline-runs__list {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-pipeline-runs__item {
+    display: flex;
+    border-radius: 6px;
+}
+
+.happy-pipeline-runs__item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-pipeline-run-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 32px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-run-row__state {
+    display: flex;
+    flex: none;
+    width: 104px;
+}
+
+.happy-pipeline-run-row__version {
+    flex: none;
+    width: 32px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-pipeline-run-row__trigger {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-run-row__time,
+.happy-pipeline-run-row__duration {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    white-space: nowrap;
+}
+
+.happy-pipeline-run-row__time {
+    width: 96px;
+}
+
+.happy-pipeline-run-row__duration {
+    width: 64px;
+}
+
+.happy-pipeline-runs__more {
+    display: flex;
+}
+
+/* ---- Node log ---------------------------------------------------------- */
+
+.happy-pipeline-log {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.happy-pipeline-log__error {
+    flex: none;
+    margin: 0;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-destructive);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-pipeline-log__empty {
+    margin: 0;
+    padding: 14px 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-pipeline-log__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-pipeline-log__viewport {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.happy-pipeline-log__rows {
+    /* The coordinate space the drawn rows are placed in, as tall as every row together. */
+    position: relative;
+    flex: none;
+    width: 100%;
+    margin-block: 6px;
+}
+
+.happy-pipeline-log__row {
+    /* Not flex: only the rows on screen are drawn, each at the offset the virtualizer measured for it. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    box-sizing: border-box;
+    min-width: 100%;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy-pipeline-log__gutter {
+    /* Not flex: the time gutter stays at the leading edge while long lines scroll sideways. */
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    flex: none;
+    box-sizing: border-box;
+    width: 52px;
+    padding-inline: 12px 10px;
+    background: var(--surface);
+    color: color-mix(in srgb, var(--text-secondary) 70%, transparent);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    user-select: none;
+}
+
+/* Each gutter time sits on the first line of its row, whatever that line's height. */
+.happy-pipeline-log__row[data-kind="command"] .happy-pipeline-log__gutter {
+    padding-top: 5px;
+}
+
+.happy-pipeline-log__row[data-kind="tool"] .happy-pipeline-log__gutter,
+.happy-pipeline-log__row[data-kind="status"] .happy-pipeline-log__gutter {
+    padding-top: 2px;
+}
+
+.happy-pipeline-log__row[data-kind="message"] .happy-pipeline-log__gutter {
+    padding-top: 9px;
+}
+
+.happy-pipeline-log__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    padding-inline-end: 16px;
+}
+
+.happy-pipeline-log__text {
+    margin: 0;
+    color: inherit;
+    font: inherit;
+    white-space: pre;
+}
+
+.happy-pipeline-log__text[data-stream="stderr"] {
+    color: color-mix(in srgb, var(--status-error) 70%, var(--text));
+}
+
+.happy-pipeline-log__aside {
+    flex: none;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.happy-pipeline-log__chevron {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-log__duration,
+.happy-pipeline-log__command-state {
+    flex: none;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.happy-pipeline-log__command-state {
+    margin-inline-start: auto;
+}
+
+.happy-pipeline-log__duration {
+    width: 52px;
+    text-align: end;
+}
+
+/* A command: its line, and its output folding under it. */
+.happy-pipeline-log__command {
+    display: flex;
+    flex-direction: column;
+    margin-block: 2px;
+}
+
+.happy-pipeline-log__command-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 24px;
+    margin: 0;
+    padding: 0 6px 0 0;
+    border: 0;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-log__command-head:hover:not(:disabled) {
+    background: var(--surface-pressed);
+}
+
+.happy-pipeline-log__command-head:disabled {
+    cursor: default;
+}
+
+.happy-pipeline-log__command-head:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-pipeline-log__prompt {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-log__command-text {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.happy-pipeline-log__command[data-state="running"] .happy-pipeline-log__command-state {
+    color: var(--text-link);
+}
+
+.happy-pipeline-log__command[data-failed] .happy-pipeline-log__command-head {
+    background: var(--box-error-background);
+}
+
+.happy-pipeline-log__command[data-failed] .happy-pipeline-log__prompt,
+.happy-pipeline-log__command[data-failed] .happy-pipeline-log__command-text,
+.happy-pipeline-log__command[data-failed] .happy-pipeline-log__command-state {
+    color: var(--box-error-text);
+}
+
+.happy-pipeline-log__command-output {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-inline-start: 6px;
+    padding: 4px 0 4px 14px;
+    border-inline-start: 2px solid var(--divider);
+}
+
+.happy-pipeline-log__command[data-failed] .happy-pipeline-log__command-output {
+    border-inline-start-color: color-mix(in srgb, var(--status-error) 55%, var(--divider));
+}
+
+/* A tool call: one line, and its error under it when it failed. */
+.happy-pipeline-log__tool {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-pipeline-log__tool-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding-inline-end: 6px;
+}
+
+.happy-pipeline-log__tool-glyph {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-log__tool-name {
+    flex: none;
+    font-weight: 600;
+}
+
+.happy-pipeline-log__tool-summary {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.happy-pipeline-log__tool[data-state="running"] .happy-pipeline-log__command-state {
+    color: var(--text-link);
+}
+
+.happy-pipeline-log__tool[data-state="error"] .happy-pipeline-log__tool-glyph,
+.happy-pipeline-log__tool[data-state="error"] .happy-pipeline-log__tool-name,
+.happy-pipeline-log__tool[data-state="error"] .happy-pipeline-log__command-state {
+    color: var(--box-error-text);
+}
+
+.happy-pipeline-log__tool > .happy-pipeline-log__text {
+    padding-inline-start: 20px;
+}
+
+/* An agent's message reads as prose, not as log lines. */
+.happy-pipeline-log__message {
+    display: flex;
+    flex-direction: column;
+    max-width: 720px;
+    padding-block: 6px;
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 19px;
+    white-space: normal;
+}
+
+.happy-pipeline-log__status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding-inline-start: 20px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+}
+
+.happy-pipeline-log__status-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-log__jump {
+    /* Not flex: the way back to the end floats over the log's corner, fixed while the log scrolls. */
+    position: absolute;
+    right: 16px;
+    bottom: 12px;
+    display: flex;
 }

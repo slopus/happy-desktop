@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import {
     pipelineRunAbortable,
+    type PipelineNodeLogSnapshot,
     type PipelineNodeRun,
     type PipelineRunSnapshot,
 } from "happy-desktop-state";
@@ -11,8 +12,9 @@ import { ScrollArea } from "../../Scrollbar";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
 import { PipelineGraph, PipelineGraphLegend, type PipelineGraphNode } from "./PipelineGraph";
-import { PipelineDetailSection, PipelineFacts } from "./PipelineNodeDetail";
-import { PipelineNodeRunDetail, PipelineValue } from "./PipelineNodeRunDetail";
+import { PipelineDetailSection, PipelineFacts, PipelineNodeHeading } from "./PipelineNodeDetail";
+import { PipelineNodeLog } from "./PipelineNodeLog";
+import { PipelineNodeRunFacts, PipelineValue } from "./PipelineNodeRunDetail";
 import {
     PIPELINE_NODE_STATE_LABEL,
     PIPELINE_NODE_STATE_TONE,
@@ -28,14 +30,17 @@ import {
 
 export interface HappyAgentPipelineRunPageProps {
     readonly run: PipelineRunSnapshot;
+    /**
+     * The log the page shows, and whose: the node the reader picked, or the one
+     * working now (or that failed). Absent before any node has run.
+     */
+    readonly log?: { readonly nodeId: string; readonly snapshot: PipelineNodeLogSnapshot };
     readonly labels: PipelineLabels;
     /** Now, for how long running work has taken so far. */
     readonly now: number;
     readonly onBack?: () => void;
     readonly onNodeSelect: (nodeId: string | null) => void;
     readonly onAbort: () => void;
-    /** Opens the transcript of the agent that ran an agent node. */
-    readonly onAgentOpen: (agentId: string) => void;
     /** Opens another run: a child, or the parent that started this one. */
     readonly onRunOpen: (runId: string) => void;
     readonly onPipelineOpen: (pipelineId: string) => void;
@@ -44,7 +49,7 @@ export interface HappyAgentPipelineRunPageProps {
     readonly style?: CSSProperties;
 }
 
-/** What a node's card says on its second line in a run. */
+/** What a node's row says beside its name in a run. */
 function nodeLine(node: PipelineNodeRun | undefined, fallback: string): string {
     if (node === undefined) return fallback;
     if (node.failure) return `${node.failure.code}: ${node.failure.message}`;
@@ -53,10 +58,12 @@ function nodeLine(node: PipelineNodeRun | undefined, fallback: string): string {
 }
 
 /**
- * HappyAgentPipelineRunPage — one run of a pipeline, live: the graph of the
- * version it pinned with each node in its state, saying what it last reported
- * and how far along it is, beside the run's overview or one node's execution.
- * Abort is the only control, live while the run is queued or running.
+ * HappyAgentPipelineRunPage — one run of a pipeline, live. A strip on top
+ * draws the graph of the version it pinned, each node one row in its state.
+ * Below it the shown node's log takes most of the page, beside a narrow column
+ * of the run's facts and that node's input, output or failure, status history
+ * and computers. Abort is the only control, live while the run is queued or
+ * running.
  */
 export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps) {
     const snapshot = props.run;
@@ -64,8 +71,9 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
     const definition =
         snapshot.definition?.state === "loaded" ? snapshot.definition.definition : undefined;
     const nodeRuns = new Map(run?.nodes.map((node) => [node.nodeId, node]));
-    const selected =
-        snapshot.nodeSelected === null ? undefined : nodeRuns.get(snapshot.nodeSelected);
+    const shownId = props.log?.nodeId ?? snapshot.nodeSelected;
+    const shown = shownId === null ? undefined : nodeRuns.get(shownId);
+    const shownDefinition = definition?.nodes.find((entry) => entry.id === shownId);
     const abortable = run !== null && pipelineRunAbortable(run.state);
     const back = props.onBack ? (
         <Button
@@ -94,6 +102,7 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
             progress: node?.state === "running" ? (node.status?.progress ?? null) : null,
         };
     });
+    const shownKind = shown?.kind ?? shownDefinition?.kind;
     return (
         <div
             className={["happy-pipeline-page", props.className].filter(Boolean).join(" ")}
@@ -147,8 +156,8 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                     />
                 </div>
             ) : (
-                <div className="happy-pipeline-page__body">
-                    <div className="happy-pipeline-page__main">
+                <div className="happy-pipeline-page__stack">
+                    <div className="happy-pipeline-page__strip">
                         <div className="happy-pipeline-page__bar">
                             <PipelineStateMark
                                 label={PIPELINE_RUN_STATE_LABEL[run.state]}
@@ -171,47 +180,70 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                 aria-label={`Run of ${props.labels.pipeline(run.pipelineId)}`}
                                 edges={definition.edges}
                                 nodes={graphNodes}
-                                onNodeSelect={props.onNodeSelect}
+                                onNodeSelect={(nodeId) => {
+                                    // The node already shown by default stays shown when pressed.
+                                    if (nodeId === null && snapshot.nodeSelected === null) return;
+                                    props.onNodeSelect(nodeId);
+                                }}
                                 root={definition.root}
-                                selectedNodeId={selected ? selected.nodeId : null}
+                                selectedNodeId={shownId}
                                 variant="run"
                             />
                         ) : (
-                            <div className="happy-pipeline-page__empty">
-                                <EmptyState
-                                    description={
-                                        snapshot.definition?.state === "failed"
-                                            ? snapshot.definition.error.message
-                                            : "Reading the version this run pinned."
-                                    }
-                                    icon={
-                                        snapshot.definition?.state === "failed" ? "alert" : "clock"
-                                    }
-                                    size="panel"
-                                    title={
-                                        snapshot.definition?.state === "failed"
-                                            ? "Graph unavailable"
-                                            : "Loading graph…"
-                                    }
-                                />
-                            </div>
+                            <p className="happy-pipeline-page__strip-note">
+                                {snapshot.definition?.state === "failed"
+                                    ? `The graph is unavailable: ${snapshot.definition.error.message}`
+                                    : "Reading the version this run pinned…"}
+                            </p>
                         )}
                     </div>
-                    <aside className="happy-pipeline-page__inspector">
-                        {selected ? (
-                            <PipelineNodeRunDetail
-                                definition={definition?.nodes.find(
-                                    (entry) => entry.id === selected.nodeId,
-                                )}
-                                labels={props.labels}
-                                leases={run.leases}
-                                node={selected}
-                                now={props.now}
-                                onAgentOpen={props.onAgentOpen}
-                                onClose={() => props.onNodeSelect(null)}
-                                onRunOpen={props.onRunOpen}
-                            />
-                        ) : (
+                    <div className="happy-pipeline-page__lower">
+                        <section className="happy-pipeline-pane">
+                            {shownId !== null && shownKind !== undefined ? (
+                                <PipelineNodeHeading
+                                    id={shownId}
+                                    kind={shownKind}
+                                    {...(snapshot.nodeSelected === null
+                                        ? {}
+                                        : { onClose: () => props.onNodeSelect(null) })}
+                                >
+                                    <PipelineStateMark
+                                        label={PIPELINE_NODE_STATE_LABEL[shown?.state ?? "pending"]}
+                                        tone={PIPELINE_NODE_STATE_TONE[shown?.state ?? "pending"]}
+                                    />
+                                    <span className="happy-pipeline-pane__subtitle">
+                                        {shown
+                                            ? (pipelineDurationOf(
+                                                  shown.startedAt,
+                                                  shown.endedAt,
+                                                  props.now,
+                                              ) ?? "")
+                                            : ""}
+                                    </span>
+                                </PipelineNodeHeading>
+                            ) : null}
+                            {props.log &&
+                            shown?.state !== "pending" &&
+                            shown?.state !== "skipped" ? (
+                                <PipelineNodeLog
+                                    aria-label={`Log of ${props.log.nodeId}`}
+                                    // A new node's log is a new reading position.
+                                    key={props.log.nodeId}
+                                    live={shown?.state === "running"}
+                                    log={props.log.snapshot}
+                                    startedAt={shown?.startedAt ?? null}
+                                />
+                            ) : (
+                                <p className="happy-pipeline-log__empty">
+                                    {shown?.state === "skipped"
+                                        ? "This node was skipped; it did nothing."
+                                        : shown?.state === "pending"
+                                          ? "This node has not started."
+                                          : "No node has started yet."}
+                                </p>
+                            )}
+                        </section>
+                        <aside className="happy-pipeline-page__side">
                             <ScrollArea
                                 className="happy-pipeline-page__inspector-scroll"
                                 viewportClassName="happy-pipeline-page__inspector-viewport"
@@ -235,15 +267,8 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                                     "Started by",
                                                     pipelineTriggerText(run.trigger, props.labels),
                                                 ],
-                                                ["Version", String(run.version)],
                                                 ["Group", run.group ?? ""],
                                                 ["Queued", props.labels.time(run.createdAt)],
-                                                [
-                                                    "Started",
-                                                    run.startedAt === null
-                                                        ? ""
-                                                        : props.labels.time(run.startedAt),
-                                                ],
                                                 [
                                                     "Ended",
                                                     run.endedAt === null
@@ -273,55 +298,64 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                             ) : null}
                                         </div>
                                     </PipelineDetailSection>
-                                    <PipelineDetailSection title="Input">
-                                        <PipelineValue value={run.input} />
-                                    </PipelineDetailSection>
-                                    {run.result ? (
-                                        <PipelineDetailSection title="Result">
-                                            <PipelineValue value={run.result.outputs} />
-                                        </PipelineDetailSection>
-                                    ) : null}
-                                    {run.leases.length > 0 ? (
-                                        <PipelineDetailSection title="Computers">
-                                            <PipelineFacts
-                                                empty=""
-                                                facts={run.leases.map((lease) => [
-                                                    lease.name,
-                                                    `${lease.computerId} · ${lease.releasedAt === null ? "held" : "released"}`,
-                                                ])}
+                                    {shown ? (
+                                        <div className="happy-pipeline-detail__group">
+                                            <h3 className="happy-pipeline-detail__group-title">
+                                                {shown.nodeId}
+                                            </h3>
+                                            <PipelineNodeRunFacts
+                                                definition={shownDefinition}
+                                                labels={props.labels}
+                                                leases={run.leases}
+                                                node={shown}
+                                                onRunOpen={props.onRunOpen}
                                             />
-                                        </PipelineDetailSection>
+                                        </div>
                                     ) : null}
-                                    {run.childRunIds.length > 0 ? (
-                                        <PipelineDetailSection title="Child runs">
-                                            <div className="happy-pipeline-detail__actions">
-                                                {run.childRunIds.map((childRunId) => {
-                                                    const parentNode = run.nodes.find(
-                                                        (node) => node.childRunId === childRunId,
-                                                    );
-                                                    return (
-                                                        <Button
-                                                            key={childRunId}
-                                                            icon="pipeline"
-                                                            onClick={() =>
-                                                                props.onRunOpen(childRunId)
-                                                            }
-                                                            size="small"
-                                                            variant="secondary"
-                                                        >
-                                                            {parentNode
-                                                                ? `From ${parentNode.nodeId}`
-                                                                : "Child run"}
-                                                        </Button>
-                                                    );
-                                                })}
-                                            </div>
+                                    <div className="happy-pipeline-detail__group">
+                                        <h3 className="happy-pipeline-detail__group-title">
+                                            The run
+                                        </h3>
+                                        <PipelineDetailSection title="Input">
+                                            <PipelineValue value={run.input} />
                                         </PipelineDetailSection>
-                                    ) : null}
+                                        {run.result ? (
+                                            <PipelineDetailSection title="Result">
+                                                <PipelineValue value={run.result.outputs} />
+                                            </PipelineDetailSection>
+                                        ) : null}
+                                        {run.childRunIds.length > 0 ? (
+                                            <PipelineDetailSection title="Child runs">
+                                                <div className="happy-pipeline-detail__actions">
+                                                    {run.childRunIds.map((childRunId) => {
+                                                        const parentNode = run.nodes.find(
+                                                            (node) =>
+                                                                node.childRunId === childRunId,
+                                                        );
+                                                        return (
+                                                            <Button
+                                                                icon="pipeline"
+                                                                key={childRunId}
+                                                                onClick={() =>
+                                                                    props.onRunOpen(childRunId)
+                                                                }
+                                                                size="small"
+                                                                variant="secondary"
+                                                            >
+                                                                {parentNode
+                                                                    ? `From ${parentNode.nodeId}`
+                                                                    : "Child run"}
+                                                            </Button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </PipelineDetailSection>
+                                        ) : null}
+                                    </div>
                                 </div>
                             </ScrollArea>
-                        )}
-                    </aside>
+                        </aside>
+                    </div>
                 </div>
             )}
         </div>

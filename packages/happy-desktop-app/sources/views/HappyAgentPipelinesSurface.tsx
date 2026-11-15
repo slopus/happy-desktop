@@ -4,10 +4,12 @@ import type {
     HappyAgentTeamRoster,
     HappyAgentWorkspaceStore,
     PipelineAuthor,
+    PipelineNodeLogStore,
     PipelineRunStore,
     PipelineStore,
     PipelinesStore,
 } from "happy-desktop-state";
+import { pipelineRunNodeShown } from "happy-desktop-state";
 import {
     HappyAgentPipelinePage,
     HappyAgentPipelineRunPage,
@@ -42,7 +44,8 @@ export function HappyAgentPipelinesSurface(props: {
     onPipelineOpen(pipelineId: string): void;
     onPipelinesOpen(): void;
     onRunOpen(runId: string): void;
-    onAgentOpen(agentId: string): void;
+    /** One node's log in one run; absent where the server keeps none. */
+    readonly nodeLog?: (runId: string, nodeId: string) => PipelineNodeLogStore | undefined;
 }) {
     const list = useSyncExternalStore(
         props.pipelines.subscribe,
@@ -80,7 +83,7 @@ export function HappyAgentPipelinesSurface(props: {
             <HappyAgentPipelineRunSurface
                 labels={labels}
                 now={now}
-                onAgentOpen={props.onAgentOpen}
+                {...(props.nodeLog ? { nodeLog: props.nodeLog } : {})}
                 onPipelineOpen={props.onPipelineOpen}
                 onRunOpen={props.onRunOpen}
                 store={props.run}
@@ -120,7 +123,6 @@ function HappyAgentPipelineSurface(props: {
             now={props.now}
             onBack={props.onBack}
             onNodeSelect={store.nodeSelect}
-            onPanelSelect={store.panelSelect}
             onRunOpen={props.onRunOpen}
             onRunsMore={store.runsMore}
             onVersionSelect={store.versionSelect}
@@ -129,23 +131,39 @@ function HappyAgentPipelineSurface(props: {
     );
 }
 
+const LOG_NONE = {
+    subscribe: () => () => undefined,
+    get: () => undefined,
+} as const;
+
 function HappyAgentPipelineRunSurface(props: {
     readonly store: PipelineRunStore;
     readonly labels: PipelineLabels;
     readonly now: number;
-    onAgentOpen(agentId: string): void;
+    readonly nodeLog?: (runId: string, nodeId: string) => PipelineNodeLogStore | undefined;
     onPipelineOpen(pipelineId: string): void;
     onRunOpen(runId: string): void;
 }) {
     const store = props.store;
     const snapshot = useSyncExternalStore(store.subscribe, store.get, store.get);
     const pipelineId = snapshot.run?.pipelineId;
+    const logNodeId =
+        snapshot.run === null ? null : pipelineRunNodeShown(snapshot.run, snapshot.nodeSelected);
+    // The shown node's log, which changes store as the shown node changes.
+    const logStore =
+        snapshot.run === null || logNodeId === null
+            ? undefined
+            : props.nodeLog?.(snapshot.run.id, logNodeId);
+    const logSource = logStore ?? LOG_NONE;
+    const log = useSyncExternalStore(logSource.subscribe, logSource.get, logSource.get);
     return (
         <HappyAgentPipelineRunPage
             labels={props.labels}
+            {...(log !== undefined && logNodeId !== null
+                ? { log: { nodeId: logNodeId, snapshot: log } }
+                : {})}
             now={props.now}
             onAbort={store.runAbort}
-            onAgentOpen={props.onAgentOpen}
             {...(pipelineId === undefined
                 ? {}
                 : { onBack: () => props.onPipelineOpen(pipelineId) })}
