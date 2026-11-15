@@ -83,11 +83,6 @@ export const PIPELINE_NODE_STATE_TONE: Record<PipelineNodeRunState, PipelineTone
     aborted: "neutral",
 };
 
-/** Whether a node in this state never did anything, so its card recedes. */
-export function pipelineNodeStateMuted(state: PipelineNodeRunState): boolean {
-    return state === "pending" || state === "skipped";
-}
-
 /** How long something took, or has taken so far while it runs. */
 export function pipelineDurationOf(
     startedAt: number | null,

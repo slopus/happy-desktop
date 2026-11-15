@@ -2,7 +2,6 @@ import type { CSSProperties } from "react";
 import {
     pipelineRunAbortable,
     type PipelineNodeLogSnapshot,
-    type PipelineNodeRun,
     type PipelineRunSnapshot,
 } from "happy-desktop-state";
 import { Banner } from "../../Banner";
@@ -11,10 +10,11 @@ import { EmptyState } from "../../EmptyState";
 import { ScrollArea } from "../../Scrollbar";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
-import { PipelineGraph, PipelineGraphLegend, type PipelineGraphNode } from "./PipelineGraph";
+import { PipelineGraphLegend } from "./PipelineGraph";
 import { PipelineDetailSection, PipelineFacts, PipelineNodeHeading } from "./PipelineNodeDetail";
 import { PipelineNodeLog } from "./PipelineNodeLog";
 import { PipelineNodeRunFacts, PipelineValue } from "./PipelineNodeRunDetail";
+import { PipelineTimeline } from "./PipelineTimeline";
 import {
     PIPELINE_NODE_STATE_LABEL,
     PIPELINE_NODE_STATE_TONE,
@@ -22,8 +22,6 @@ import {
     PIPELINE_RUN_STATE_TONE,
     PipelineStateMark,
     pipelineDurationOf,
-    pipelineNodeStateMuted,
-    pipelineNodeSummary,
     pipelineTriggerText,
     type PipelineLabels,
 } from "./pipelinePresentation";
@@ -49,17 +47,10 @@ export interface HappyAgentPipelineRunPageProps {
     readonly style?: CSSProperties;
 }
 
-/** What a node's row says beside its name in a run. */
-function nodeLine(node: PipelineNodeRun | undefined, fallback: string): string {
-    if (node === undefined) return fallback;
-    if (node.failure) return `${node.failure.code}: ${node.failure.message}`;
-    if (node.status) return node.status.text;
-    return node.state === "pending" ? fallback : PIPELINE_NODE_STATE_LABEL[node.state];
-}
-
 /**
- * HappyAgentPipelineRunPage — one run of a pipeline, live. A strip on top
- * draws the graph of the version it pinned, each node one row in its state.
+ * HappyAgentPipelineRunPage — one run of a pipeline, live. A timeline on top
+ * lays the run out in time around "now": what finished, what is working on
+ * the now line, and what can still run ahead of it.
  * Below it the shown node's log takes most of the page, beside a narrow column
  * of the run's facts and that node's input, output or failure, status history
  * and computers. Abort is the only control, live while the run is queued or
@@ -87,21 +78,6 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
             <Ionicon name="arrow-back" size={14} />
         </Button>
     ) : undefined;
-    const graphNodes: PipelineGraphNode[] = (definition?.nodes ?? []).map((entry) => {
-        const node = nodeRuns.get(entry.id);
-        const state = node?.state ?? "pending";
-        return {
-            id: entry.id,
-            kind: entry.kind,
-            detail: nodeLine(node, pipelineNodeSummary(entry, props.labels)),
-            state: {
-                tone: PIPELINE_NODE_STATE_TONE[state],
-                label: PIPELINE_NODE_STATE_LABEL[state],
-                muted: pipelineNodeStateMuted(state),
-            },
-            progress: node?.state === "running" ? (node.status?.progress ?? null) : null,
-        };
-    });
     const shownKind = shown?.kind ?? shownDefinition?.kind;
     return (
         <div
@@ -176,18 +152,18 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                             </span>
                         </div>
                         {definition ? (
-                            <PipelineGraph
-                                aria-label={`Run of ${props.labels.pipeline(run.pipelineId)}`}
-                                edges={definition.edges}
-                                nodes={graphNodes}
+                            <PipelineTimeline
+                                aria-label={`Timeline of this run of ${props.labels.pipeline(run.pipelineId)}`}
+                                definition={definition}
+                                labels={props.labels}
+                                now={props.now}
                                 onNodeSelect={(nodeId) => {
                                     // The node already shown by default stays shown when pressed.
                                     if (nodeId === null && snapshot.nodeSelected === null) return;
                                     props.onNodeSelect(nodeId);
                                 }}
-                                root={definition.root}
+                                run={run}
                                 selectedNodeId={shownId}
-                                variant="run"
                             />
                         ) : (
                             <p className="happy-pipeline-page__strip-note">
