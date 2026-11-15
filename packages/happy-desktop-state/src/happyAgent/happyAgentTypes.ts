@@ -844,6 +844,12 @@ export interface HappyAgentSessionSummary {
      * the turn that started it has ended.
      */
     readonly activeProcessCount: number;
+    /**
+     * Set when the session reads as running only because background processes
+     * that it or its subtasks started are alive. Rows show it as running;
+     * keeping this computer awake does not count it.
+     */
+    readonly backgroundOnly?: true;
     /** Present when the catalog carries interactive child conversations. */
     readonly subtaskActivity?: HappyAgentSubtaskActivity;
     /** Present while the agent is inside a scheduled `wait`/`wait_until`. */
