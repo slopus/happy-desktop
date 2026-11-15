@@ -1,6 +1,7 @@
 import {
     happyAgentChiefOfStaffRequestText,
     happyAgentServiceName,
+    type HappyAgentAccountSwitch,
     type HappyAgentChiefOfStaffRequest,
     type HappyAgentMenusSnapshot,
     type HappyAgentModelOption,
@@ -76,6 +77,11 @@ function accountNoticeOf(
  * that is switched off or gone gets a red notice that can ask the Chief of
  * Staff for help. A pool lists the accounts it routes through under it, hidden
  * ones included.
+ *
+ * A conversation on a spent account shows the account its next message
+ * moves to as the selection, with a line above the pill saying why, though
+ * the session still holds the spent one: picking that one again keeps it. A
+ * disabled pill shows what the session runs and no switch.
  */
 export function happyAgentComposerModelControlProps(
     menus: HappyAgentMenusSnapshot,
@@ -90,8 +96,13 @@ export function happyAgentComposerModelControlProps(
         readonly onChiefOfStaffAsk?: (request: HappyAgentChiefOfStaffRequest) => Promise<void>;
         /** The Chief of Staff bot's live name, while this Happy Agent lists one. */
         readonly chiefOfStaffName?: string;
+        /** The account the next message moves to, when it is not the one last run on. */
+        readonly accountSwitch?: HappyAgentAccountSwitch;
     },
 ): ComposerModelControlProps {
+    const accountSwitch = handlers.disabled ? undefined : handlers.accountSwitch;
+    /* The account the pill shows as selected. */
+    const accountShown = accountSwitch?.providerId ?? menus.currentProviderId;
     const services: (ComposerModelService & { accounts: ComposerModelAccount[] })[] = [];
     for (const option of menus.modelOptions) {
         let service = services.find((candidate) => candidate.id === option.providerType);
@@ -121,7 +132,7 @@ export function happyAgentComposerModelControlProps(
             };
             service.accounts.push(account);
         }
-        if (option.providerId === menus.currentProviderId) service.account = option.providerId;
+        if (option.providerId === accountShown) service.account = option.providerId;
         account.models = [...account.models, choiceOf(option)];
     }
     const listed = menus.modelOptions.some(
@@ -130,7 +141,11 @@ export function happyAgentComposerModelControlProps(
             option.modelId === menus.currentModelId,
     );
     const current = menus.currentOption;
-    const accountNotice = accountNoticeOf(menus, handlers.sessionId, handlers.onChiefOfStaffAsk);
+    // The account the notice is about is the one being moved away from.
+    const accountNotice =
+        accountSwitch !== undefined
+            ? undefined
+            : accountNoticeOf(menus, handlers.sessionId, handlers.onChiefOfStaffAsk);
     const ask = handlers.onChiefOfStaffAsk;
     return {
         disabled: handlers.disabled,
@@ -141,9 +156,19 @@ export function happyAgentComposerModelControlProps(
             ? {}
             : { chiefOfStaffName: handlers.chiefOfStaffName }),
         ...(ask === undefined ? {} : { onAccountsManage: () => ask({ kind: "accountsManage" }) }),
+        ...(accountSwitch === undefined
+            ? {}
+            : {
+                  accountSwitch: {
+                      from: accountSwitch.fromProviderId,
+                      ...(accountSwitch.fromResetsAt === undefined
+                          ? {}
+                          : { resets: localDayTime(accountSwitch.fromResetsAt, Date.now()) }),
+                  },
+              }),
         selection: {
             service: current?.providerType ?? menus.currentProviderId,
-            account: menus.currentProviderId,
+            account: accountShown,
             model: menus.currentModelId,
             effort: menus.currentEffort ?? current?.defaultEffort,
         },
@@ -156,10 +181,7 @@ export function happyAgentComposerModelControlProps(
                         option.modelId === selection.model,
                 )
                 ?.efforts.find((candidate) => candidate.level === selection.effort)?.level;
-            if (
-                selection.account === menus.currentProviderId &&
-                selection.model === menus.currentModelId
-            )
+            if (selection.account === accountShown && selection.model === menus.currentModelId)
                 handlers.onEffortChange(effort);
             else
                 handlers.onModelChange({

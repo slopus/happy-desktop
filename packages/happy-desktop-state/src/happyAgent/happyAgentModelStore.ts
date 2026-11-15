@@ -130,6 +130,8 @@ export interface HappyAgentModelStore {
      * It changes no session that already exists.
      */
     providerPicked(providerId: string): void;
+    /** The provider picked last anywhere on this Happy Agent, which new sessions start on. */
+    providerPickedLast(): string | undefined;
     /**
      * Records what a new session was just started on. Its provider becomes the
      * one new sessions start on and its model's effort and speed are remembered
@@ -438,6 +440,7 @@ export function happyAgentModelStoreCreate(
             if (snapshot.type !== "ready" || document.lastPickedProviderId === providerId) return;
             documentWrite({ ...document, lastPickedProviderId: providerId });
         },
+        providerPickedLast: () => document.lastPickedProviderId,
         selectionStarted(selection) {
             if (snapshot.type !== "ready") return;
             const follows = document.newSessionStart !== "default";

@@ -104,6 +104,7 @@ import type {
     HappyAgentGroupId,
     HappyAgentMenusSnapshot,
     HappyAgentModelStore,
+    HappyAgentAccountSwitch,
     HappyAgentModelSelection,
     HappyAgentNavigationOrderStore,
     HappyAgentSidebarCollapseStore,
@@ -10550,24 +10551,30 @@ function HappyAgentConversationSurface(props: {
     const activityTotal = activeActivity.agents + activeActivity.terminals;
     const openImage = conversation.openImage;
     /* The model pill and a failure card's switch read one set of props, so the
-       card offers the accounts, models, and usage the pill does, live. */
-    const modelControl = conversation.menus
-        ? happyAgentComposerModelControlProps(conversation.menus, {
-              usageWatch: props.modelUsageWatch,
-              sessionId: conversation.conversationId as HappyAgentSessionId,
-              ...(props.chiefOfStaffName === undefined
-                  ? {}
-                  : { chiefOfStaffName: props.chiefOfStaffName }),
-              onChiefOfStaffAsk: (request) => workspace.chiefOfStaffDraftAppend(request),
-              disabled: !configurable || conversation.modelLocked,
-              onEffortChange: (effort?: HappyAgentThinkingLevel) => {
-                  if (props.happyAgentOnline()) workspace.sessionEffortUpdate(effort);
-              },
-              onModelChange: (selection: HappyAgentModelSelection) => {
-                  if (props.happyAgentOnline()) workspace.sessionModelUpdate(selection);
-              },
-          })
-        : undefined;
+       card offers the accounts, models, and usage the pill does, live. Only the
+       pill shows an account switch: the card offers moves from the account the
+       session holds. */
+    const modelControlOf = (accountSwitch?: HappyAgentAccountSwitch) =>
+        conversation.menus
+            ? happyAgentComposerModelControlProps(conversation.menus, {
+                  ...(accountSwitch === undefined ? {} : { accountSwitch }),
+                  usageWatch: props.modelUsageWatch,
+                  sessionId: conversation.conversationId as HappyAgentSessionId,
+                  ...(props.chiefOfStaffName === undefined
+                      ? {}
+                      : { chiefOfStaffName: props.chiefOfStaffName }),
+                  onChiefOfStaffAsk: (request) => workspace.chiefOfStaffDraftAppend(request),
+                  disabled: !configurable || conversation.modelLocked,
+                  onEffortChange: (effort?: HappyAgentThinkingLevel) => {
+                      if (props.happyAgentOnline()) workspace.sessionEffortUpdate(effort);
+                  },
+                  onModelChange: (selection: HappyAgentModelSelection) => {
+                      if (props.happyAgentOnline()) workspace.sessionModelUpdate(selection);
+                  },
+              })
+            : undefined;
+    const modelControl = modelControlOf();
+    const modelPill = modelControlOf(conversation.accountSwitch);
     const references = messageReferencesCreate({
         instanceId: props.instanceId,
         titles,
@@ -10697,7 +10704,7 @@ function HappyAgentConversationSurface(props: {
                               composerPlaceholder(undefined)
                     }
                     composerControls={
-                        <>{modelControl ? <ComposerModelControl {...modelControl} /> : null}</>
+                        <>{modelPill ? <ComposerModelControl {...modelPill} /> : null}</>
                     }
                     composerFooterControl={
                         <ComposerFooterBar

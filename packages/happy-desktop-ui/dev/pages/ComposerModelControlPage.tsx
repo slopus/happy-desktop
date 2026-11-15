@@ -4,6 +4,7 @@ import { Composer } from "../../src/Composer";
 import {
     ComposerModelControl,
     type ComposerModelAccountNotice,
+    type ComposerModelAccountSwitch,
     type ComposerModelAccountUsage,
     type ComposerModelChoice,
     type ComposerModelControlPreview,
@@ -450,6 +451,7 @@ function Picker(props: {
     selection?: ComposerModelSelection;
     selectionModel?: ComposerModelChoice;
     accountNotice?: ComposerModelAccountNotice;
+    accountSwitch?: ComposerModelAccountSwitch;
     services?: readonly ComposerModelService[];
     usageWatch?: ComposerModelUsageWatch;
 }) {
@@ -457,6 +459,7 @@ function Picker(props: {
     return (
         <ComposerModelControl
             accountNotice={props.accountNotice}
+            accountSwitch={props.accountSwitch}
             onAccountsManage={chiefOfStaffAsk}
             onSelect={selectionSet}
             preview={props.preview}
@@ -517,6 +520,9 @@ const OPUS_MEDIUM: ComposerModelSelection = {
 };
 
 const OPUS_EXTRA: ComposerModelSelection = { ...OPUS_MEDIUM, account: "claude_extra" };
+
+/** work@example.com is spent until Thursday, so the conversation moves off it. */
+const EXTRA_SPENT: ComposerModelAccountSwitch = { from: "claude_extra", resets: "Thu 6:00 PM" };
 
 /** Claude on an account whose id is longer than the model list is wide. */
 const LONG_ACCOUNT = "claude_kirill_for_sms_gmail";
@@ -609,6 +615,53 @@ export function ComposerModelControlPage() {
                         onValueChange={() => undefined}
                         placeholder="Message Happy…"
                         value=""
+                    />
+                </div>
+            </Specimen>
+            <Specimen
+                number="01b"
+                label="Switching accounts"
+                detail="The conversation's Claude account, work@example.com, is spent, so its next message moves to Current CLI on the same model: the pill shows that account, which has room, and a quiet line over the pill says the next message switches accounts. Hovering or focusing the line says why, when the spent account starts over, and how to keep it (shown open above). The line hangs in the space between the draft and the pill, so it moves nothing, and a full draft still clears it."
+                stage="surface"
+            >
+                <div
+                    data-screen="account-switching"
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 24,
+                        width: 800,
+                        // Room for the open explanation, which rises out of the composer.
+                        paddingTop: 48,
+                    }}
+                >
+                    <Composer
+                        mentions={[]}
+                        modelControl={
+                            <Picker
+                                accountSwitch={EXTRA_SPENT}
+                                preview={{ accountSwitchOpen: true }}
+                                selection={OPUS_MEDIUM}
+                            />
+                        }
+                        onAttachmentsSelect={() => undefined}
+                        onSend={() => undefined}
+                        onValueChange={() => undefined}
+                        placeholder="Message Happy…"
+                        value=""
+                    />
+                    <Composer
+                        mentions={[]}
+                        modelControl={
+                            <Picker accountSwitch={EXTRA_SPENT} selection={OPUS_MEDIUM} />
+                        }
+                        onAttachmentsSelect={() => undefined}
+                        onSend={() => undefined}
+                        onValueChange={() => undefined}
+                        placeholder="Message Happy…"
+                        value={
+                            "The release notes still name the old account.\nCould you check the usage page renders the reset in local time,\nand that the picker keeps the effort after the switch?"
+                        }
                     />
                 </div>
             </Specimen>

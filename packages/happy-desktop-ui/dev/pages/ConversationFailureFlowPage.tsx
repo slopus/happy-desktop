@@ -10,6 +10,7 @@ import {
 } from "happy-desktop-state";
 import {
     ComposerModelControl,
+    type ComposerModelAccountSwitch,
     type ComposerModelAccountUsage,
     type ComposerModelChoice,
     type ComposerModelControlPreview,
@@ -230,6 +231,8 @@ type Screen = {
     readonly olderDaemon?: boolean;
     /** The composer's model picker, seeded open beside the card. */
     readonly picker?: ComposerModelControlPreview;
+    /** The conversation's account is spent, so the pill moves to another one and says why. */
+    readonly accountSwitch?: { readonly to: string; readonly from: ComposerModelAccountSwitch };
     readonly preview?: { readonly target?: string; readonly menu?: { readonly active?: string } };
 };
 
@@ -279,6 +282,19 @@ const screens: readonly Screen[] = [
         label: "Usage limit · codex picked",
         entries: [...before, failed(usageLimit)],
         preview: { target: CODEX_KEY },
+    },
+    {
+        id: "usage-limit-switch-suggested",
+        label: "Usage limit · reopened: the pill moves to Current CLI and says why",
+        entries: [
+            ...before,
+            failed({
+                ...usageLimit,
+                provider: { ...CLAUDE, id: "claude_team", label: "team@example.com" },
+            }),
+        ],
+        accountSwitch: { to: "claude", from: { from: "claude_team", resets: "3:40 PM" } },
+        picker: { accountSwitchOpen: true },
     },
     {
         id: "usage-limit-resolved",
@@ -421,8 +437,15 @@ function conversation(screen: Screen): ReactNode {
                     composerControls={
                         <ComposerModelControl
                             onSelect={noop}
-                            selection={SELECTION}
+                            selection={
+                                screen.accountSwitch
+                                    ? { ...SELECTION, account: screen.accountSwitch.to }
+                                    : SELECTION
+                            }
                             services={SERVICES}
+                            {...(screen.accountSwitch
+                                ? { accountSwitch: screen.accountSwitch.from }
+                                : {})}
                             usageWatch={(screen.source ?? SOURCE).usageWatch}
                             {...(screen.picker ? { preview: screen.picker } : {})}
                         />

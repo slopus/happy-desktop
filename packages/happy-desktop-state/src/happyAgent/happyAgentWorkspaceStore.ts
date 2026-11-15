@@ -3,6 +3,7 @@ import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happy
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
 import type { HappyAgentToolMediaDocumentStore } from "./happyAgentToolMediaDocumentStore.js";
+import type { HappyAgentAccountSwitch } from "./happyAgentAccountSwitch.js";
 import type { HappyAgentPreviewsStore } from "./happyAgentPreviewsStore.js";
 import type { HappyAgentGlobalSkill } from "./happyAgentGlobalSkillsStore.js";
 import { createStore } from "zustand/vanilla";
@@ -345,6 +346,8 @@ export interface HappyAgentConversationSnapshot {
      * letting a choice be made that the next message would fail to apply.
      */
     readonly modelLocked: boolean;
+    /** The account the next message moves to, when it is not the one last run on. */
+    readonly accountSwitch?: HappyAgentAccountSwitch;
     /** Whether a failure card may offer switching to another account and model. */
     readonly failureSwitchSupported: boolean;
     /**
@@ -3143,6 +3146,7 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
             modelLocked: chat.modelLocked,
+            ...(chat.accountSwitch ? { accountSwitch: chat.accountSwitch } : {}),
             failureSwitchSupported: chat.failureSwitchSupported,
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }

@@ -1415,6 +1415,8 @@ export function happyAgentWorkspaceClientCreate(
                         connectMutationSubscribe: deps.connectMutationSubscribe,
                         selectionUsed: (selection) => models.selectionUsed(selection),
                         providerPicked: (providerId) => models.providerPicked(providerId),
+                        providerUsage: disposed ? undefined : workspace.providerUsage(),
+                        providerPickedLast: () => models.providerPickedLast(),
                         modelSelect: (current, input) => models.modelSelect(current, input),
                         effortRemembered: (providerId, modelId) =>
                             models.effortRemembered(providerId, modelId),
