@@ -97,11 +97,17 @@ export function desktopGptLiveRuntimeCreate(options: {
     const current = () => {
         if (!bridge.liveWindowId || !bridge.liveMicrophoneStart || !bridge.liveMicrophoneRevoke)
             return undefined;
-        const local = directory
-            .get()
-            .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID);
-        if (local?.status !== "connected" || !local.session) return undefined;
-        return local.session.gptLiveRuntimeCreate({
+        const snapshot = directory.get();
+        const activeId = snapshot.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+        const active =
+            snapshot.happyAgents.find((entry) => entry.id === activeId) ??
+            (activeId === LOCAL_HAPPY_AGENT_ID
+                ? snapshot.happyAgents.find(
+                      (entry) => entry.status === "connected" && entry.session,
+                  )
+                : undefined);
+        if (active?.status !== "connected" || !active.session) return undefined;
+        return active.session.gptLiveRuntimeCreate({
             windowId: bridge.liveWindowId,
             source,
             permissionStart: (input) => bridge.liveMicrophoneStart!(input),
