@@ -49,6 +49,12 @@ https://github.com/user-attachments/assets/b3580704-f9e0-441e-80be-3f83f6a08ab5
 | [slopus/happy-agent](https://github.com/slopus/happy-agent)                           | Happy Agent, the open-source agent runtime the desktop app runs on         |
 | [slopus/slopus.github.io](https://github.com/slopus/slopus.github.io)                 | The website and docs at happy.engineering                                  |
 
+## Development
+
+Building from source requires Node.js 24 or newer and pnpm 10.28.1 or newer.
+See the [development guide](DEVELOPMENT.md) for the full prerequisites, local
+setup, and validation commands.
+
 ## Original Happy CLI
 
 The original CLI wraps the Claude Code and Codex harnesses directly in your
