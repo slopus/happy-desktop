@@ -26,7 +26,9 @@ import {
     type WorkspaceResponse,
     type WriteFileRequest,
     type WriteFileResponse,
-    workspaceAgentNetworkResponseSchema,
+    agentNetworkKindSchema,
+    networkIdSchema,
+    type AgentNetworkKind,
 } from "@slopus/happy-agent-client";
 import { Value } from "@sinclair/typebox/value";
 import { WebSocket, createWebSocketStream } from "ws";
@@ -605,14 +607,15 @@ export class HappyAgentDaemonClient {
 
     /**
      * `GET /v0/workspaces/:workspaceId/agents/:agentId/proxy`: the network that
-     * agent's traffic leaves from. Agents sharing a network get the same answer.
-     * Protocol 28 introduced the route, so an older Happy Agent is not asked.
+     * agent's traffic leaves from, and which kind of network it is. Agents
+     * sharing a network get the same answer. Protocol 28 introduced the route,
+     * so an older Happy Agent is not asked.
      */
     async getWorkspaceAgentNetwork(
         workspaceId: string,
         agentId: string,
         signal?: AbortSignal,
-    ): Promise<string> {
+    ): Promise<HappyAgentNetworkAnswer> {
         const { version } = await this.health(signal);
         if (version.protocol < BROWSER_NETWORK_PROTOCOL)
             throw new Error(
@@ -623,9 +626,7 @@ export class HappyAgentDaemonClient {
             agentId as Cuid2,
             signal ? { signal } : undefined,
         );
-        if (!Value.Check(workspaceAgentNetworkResponseSchema, response))
-            throw new Error("Happy Agent described an invalid browser network.");
-        return response.networkId;
+        return happyAgentNetworkAnswerRead(response);
     }
 
     /**
@@ -1186,4 +1187,31 @@ async function unixSocketFetch(
         outgoing.once("error", reject);
         outgoing.end(body);
     });
+}
+
+/** The network an agent's traffic leaves from, as its Happy Agent names it. */
+export interface HappyAgentNetworkAnswer {
+    readonly networkId: string;
+    /**
+     * Which kind of network it is. Absent when the Happy Agent did not say, or
+     * named a kind this app does not know; either way the network is reached
+     * only through its tunnel.
+     */
+    readonly kind?: AgentNetworkKind;
+}
+
+/**
+ * Reads a network answer. The network is required; its kind is optional and
+ * open-ended, so an unknown kind reads as unstated rather than as an error.
+ */
+export function happyAgentNetworkAnswerRead(response: unknown): HappyAgentNetworkAnswer {
+    const answer =
+        typeof response === "object" && response !== null
+            ? (response as { readonly networkId?: unknown; readonly kind?: unknown })
+            : {};
+    if (!Value.Check(networkIdSchema, answer.networkId))
+        throw new Error("Happy Agent described an invalid browser network.");
+    return Value.Check(agentNetworkKindSchema, answer.kind)
+        ? { networkId: answer.networkId, kind: answer.kind }
+        : { networkId: answer.networkId };
 }

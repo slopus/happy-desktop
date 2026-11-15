@@ -8,17 +8,21 @@ import { desktopBrowserCommandValidate } from "./happyAgentIpcValidation";
 
 const NETWORK = "net_0123456789abcdefghijklmn";
 
-/** A profile session that routes every address through the proxy it was given. */
-function profileSession(): Session {
+/** A profile session that routes every address the way it was last told to. */
+function profileSession(): Session & { readonly proxyMode: () => string | undefined } {
     let rules = "";
+    let mode: string | undefined;
     return {
         webRequest: { onBeforeRequest: () => undefined },
-        setProxy: async (config: { proxyRules: string }) => {
-            rules = config.proxyRules;
+        setProxy: async (config: { mode?: string; proxyRules?: string }) => {
+            mode = config.mode;
+            rules = config.proxyRules ?? "";
         },
         closeAllConnections: async () => undefined,
-        resolveProxy: async () => `PROXY ${rules.replace("http://", "")}`,
-    } as unknown as Session;
+        resolveProxy: async () =>
+            mode === "direct" ? "DIRECT" : `PROXY ${rules.replace("http://", "")}`,
+        proxyMode: () => mode,
+    } as unknown as Session & { readonly proxyMode: () => string | undefined };
 }
 
 /** A page's or window's contents, recording whether its developer tools were opened. */
@@ -122,5 +126,40 @@ describe("developer tools for a browser page", () => {
             "The browser tab is unavailable.",
         );
         expect(guest.opened).toEqual([]);
+    });
+});
+
+describe("a profile on this computer's own network", () => {
+    it("has its own partition, apart from the tunnelled one", () => {
+        const network = { connectionId: null, networkId: "host" } as const;
+        const direct = HappyAgentBrowser.partition(network, true);
+        expect(direct).toMatch(/^persist:happy-browser-direct-[0-9a-f]{64}$/u);
+        expect(direct).not.toBe(HappyAgentBrowser.partition(network));
+    });
+
+    it("loads pages directly, with no proxy to log in to", async () => {
+        const session = profileSession();
+        const opened = vi.fn();
+        const browser = await HappyAgentBrowser.create(
+            session,
+            { connectionId: null, networkId: "host" },
+            { openHttpProxy: opened } as unknown as DesktopRuntime,
+            vi.fn(),
+            true,
+        );
+        expect(session.proxyMode()).toBe("direct");
+        expect(browser.proxy).toBeUndefined();
+        expect(opened).not.toHaveBeenCalled();
+        browser.close();
+    });
+
+    it("is never another connection's network or a live artifact's", async () => {
+        for (const network of [
+            { connectionId: "server-one", networkId: "host" },
+            { connectionId: null, networkId: "host", artifactId: "art_one" },
+        ])
+            await expect(
+                HappyAgentBrowser.create(profileSession(), network, runtime, vi.fn(), true),
+            ).rejects.toThrow("Only this computer's own network is reached directly.");
     });
 });

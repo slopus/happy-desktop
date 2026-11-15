@@ -8,6 +8,7 @@ import { Value } from "@sinclair/typebox/value";
 import type {
     DesktopBrowserCommand,
     DesktopBrowserNetwork,
+    DesktopBrowserProfileRequest,
     DesktopBrowserProxyTarget,
 } from "../shared/desktopContract";
 
@@ -78,6 +79,30 @@ export function desktopBrowserNetworkValidate(value: unknown): DesktopBrowserNet
         connectionId,
         networkId: network.networkId,
         artifactId: boundedString(artifactId, "The live artifact", 128),
+    };
+}
+
+/** A network's profile to open, and the agent a workspace tab was opened for. */
+export function desktopBrowserProfileRequestValidate(value: unknown): DesktopBrowserProfileRequest {
+    const network = desktopBrowserNetworkValidate(value);
+    const agent = (value as { readonly agent?: unknown }).agent;
+    if (agent === undefined) return network;
+    // A live artifact's network is fixed when it is made; no agent is asked.
+    if (network.artifactId !== undefined)
+        throw new Error("The Happy Agent browser network is invalid.");
+    if (typeof agent !== "object" || agent === null)
+        throw new Error("The Happy Agent browser target is invalid.");
+    const asked = agent as { readonly workspaceId?: unknown; readonly agentId?: unknown };
+    return {
+        ...network,
+        agent: {
+            workspaceId: boundedString(
+                asked.workspaceId,
+                "The Happy Agent browser workspace identity",
+                256,
+            ),
+            agentId: boundedString(asked.agentId, "The Happy Agent browser agent identity", 256),
+        },
     };
 }
 

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type {
     DesktopBrowserNetwork,
+    DesktopBrowserProfileRequest,
     DesktopBrowserProxyTarget,
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
@@ -103,6 +104,12 @@ export class DesktopRuntime implements AsyncDisposable {
         readonly client: HappyAgentClient;
     };
     private happyAgentProxy?: HappyAgentHttpProxyHandle;
+    /**
+     * Whether each network the local Happy Agent named is this computer's own,
+     * as it said when asked. Local mode's Happy Agent runs on this computer,
+     * so its own network is reached without it.
+     */
+    private readonly localNetworksDirect = new Map<string, boolean>();
     private settings?: DesktopSettings;
     private snapshotValue: DesktopRuntimeSnapshot;
     private readonly connector: LocalHappyAgentConnector;
@@ -280,13 +287,38 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     /** Asks the agent's own connection which network its traffic leaves from. */
-    browserNetworkResolve(
+    async browserNetworkResolve(
         target: DesktopBrowserProxyTarget,
         signal?: AbortSignal,
     ): Promise<string> {
         const host = this.browserHost();
         const client = target.connectionId === null ? host : host.connection(target.connectionId);
-        return client.getWorkspaceAgentNetwork(target.workspaceId, target.agentId, signal);
+        const answer = await client.getWorkspaceAgentNetwork(
+            target.workspaceId,
+            target.agentId,
+            signal,
+        );
+        if (target.connectionId === null)
+            this.localNetworksDirect.set(answer.networkId, answer.kind === "host");
+        return answer.networkId;
+    }
+
+    /**
+     * Whether a profile loads its pages directly from this computer instead of
+     * through its network's tunnel: only a workspace tab's, on the network the
+     * local Happy Agent said is this computer's own. A network not asked about
+     * in this run is asked about through the tab's agent; an answer naming
+     * another network says nothing about this one, which then keeps its tunnel.
+     */
+    async browserNetworkDirect(
+        request: DesktopBrowserProfileRequest,
+        signal?: AbortSignal,
+    ): Promise<boolean> {
+        if (request.connectionId !== null || request.artifactId !== undefined) return false;
+        const known = this.localNetworksDirect.get(request.networkId);
+        if (known !== undefined || request.agent === undefined) return known === true;
+        await this.browserNetworkResolve({ connectionId: null, ...request.agent }, signal);
+        return this.localNetworksDirect.get(request.networkId) === true;
     }
 
     /** Opens a browser tunnel into one network through its owning connection. */

@@ -66,7 +66,7 @@ import {
     liveWindowArgument,
     mediaPreviewView,
     type DesktopBrowserPopup,
-    type DesktopBrowserNetwork,
+    type DesktopBrowserProfileRequest,
     type DesktopBrowserNetworkMissing,
     type DesktopBrowserStatus,
     type DesktopBrowserTunnelFailure,
@@ -100,7 +100,7 @@ import { LocalOnboarding } from "./localOnboarding";
 import { WindowsSandbox } from "./windowsSandbox";
 import {
     desktopBrowserCommandValidate,
-    desktopBrowserNetworkValidate,
+    desktopBrowserProfileRequestValidate,
     desktopBrowserProxyTargetValidate,
 } from "./happyAgentIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
@@ -817,9 +817,13 @@ function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
     return next;
 }
 
-function browserProxyApply(network: DesktopBrowserNetwork): Promise<string> {
+async function browserProxyApply(request: DesktopBrowserProfileRequest): Promise<string> {
+    const { agent: _agent, ...network } = request;
+    // Whether the network is this computer's own is settled before the profile
+    // is chosen: a direct profile and a tunnelled one never share a partition.
+    const direct = await runtime.browserNetworkDirect(request, AbortSignal.timeout(10_000));
     return browserProxySerial(async () => {
-        const partition = HappyAgentBrowser.partition(network);
+        const partition = HappyAgentBrowser.partition(network, direct);
         if (browserProxies.has(partition)) return partition;
         if (browserProxies.size >= 128)
             throw new Error("Too many workspace browser profiles are open.");
@@ -827,13 +831,19 @@ function browserProxyApply(network: DesktopBrowserNetwork): Promise<string> {
         await browserSessionConfigure(browserSession);
         let candidate: HappyAgentBrowser | undefined;
         try {
-            candidate = await HappyAgentBrowser.create(browserSession, network, runtime, () => {
-                const window = windowLifecycle.get();
-                if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
-                window.webContents.send(desktopIpc.browserNetworkMissing, {
-                    partition,
-                } satisfies DesktopBrowserNetworkMissing);
-            });
+            candidate = await HappyAgentBrowser.create(
+                browserSession,
+                network,
+                runtime,
+                () => {
+                    const window = windowLifecycle.get();
+                    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+                    window.webContents.send(desktopIpc.browserNetworkMissing, {
+                        partition,
+                    } satisfies DesktopBrowserNetworkMissing);
+                },
+                direct,
+            );
             browserProxies.set(partition, candidate);
             return partition;
         } catch (error) {
@@ -999,10 +1009,10 @@ app.on("login", (event, _webContents, _details, authInfo, callback) => {
     // Only a guest in the owning workspace profile receives loopback proxy login.
     // The daemon's authentication stays behind this local network boundary.
     for (const browser of browserProxies.values()) {
-        if (authInfo.port !== browser.proxy.port) continue;
+        const proxy = browser.proxy;
+        if (!proxy || authInfo.port !== proxy.port) continue;
         event.preventDefault();
-        if (_webContents && browser.owns(_webContents))
-            callback(browser.proxy.username, browser.proxy.password);
+        if (_webContents && browser.owns(_webContents)) callback(proxy.username, proxy.password);
         else callback();
         return;
     }
@@ -1127,7 +1137,7 @@ function browserGuestAttach(window: BrowserWindow): void {
         });
         guest.on("did-fail-load", (_failure, errorCode, _description, url, isMainFrame) => {
             if (!isMainFrame || errorCode !== -111 || window.isDestroyed()) return;
-            const message = browser.proxy.tunnelFailure(url, navigationStartedAt);
+            const message = browser.proxy?.tunnelFailure(url, navigationStartedAt);
             if (!message) return;
             window.webContents.send(desktopIpc.browserTunnelFailed, {
                 guestId: guest.id,
@@ -2291,7 +2301,7 @@ void app
             desktopDaemonSenderRequire(event.sender);
             if (event.senderFrame !== event.sender.mainFrame)
                 throw new Error("Only Happy can configure a browser profile.");
-            return browserProxyApply(desktopBrowserNetworkValidate(network));
+            return browserProxyApply(desktopBrowserProfileRequestValidate(network));
         });
         ipcMain.handle(
             desktopIpc.guestFitMeasure,

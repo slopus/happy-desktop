@@ -440,11 +440,20 @@ export class DesktopBrowserGuest extends Component<
             failed(new Error("Only a live artifact can be shown inline."));
             return;
         }
+        // A workspace tab names its agent, which main asks whether the network
+        // is this computer's own when it has not asked in this run.
+        const target = this.props.target;
         void window.happyDesktop
             ?.browserNetworkProfileOpen?.(
-                artifactId === undefined
-                    ? { connectionId, networkId }
-                    : { connectionId, networkId, artifactId },
+                artifactId !== undefined
+                    ? { connectionId, networkId, artifactId }
+                    : target && target.artifactId === undefined
+                      ? {
+                            connectionId,
+                            networkId,
+                            agent: { workspaceId: target.workspaceId, agentId: target.agentId },
+                        }
+                      : { connectionId, networkId },
             )
             .then((partition) => {
                 if (generation === this.proxyGeneration) this.setState({ partition });

@@ -909,6 +909,19 @@ export interface DesktopBrowserNetwork {
 }
 
 /**
+ * A request to open a network's profile. A workspace tab names the agent it
+ * was opened for, so a network this run has not resolved yet can be asked
+ * about: whether the network is this computer's own decides whether the
+ * profile loads its pages directly.
+ */
+export interface DesktopBrowserProfileRequest extends DesktopBrowserNetwork {
+    readonly agent?: {
+        readonly workspaceId: string;
+        readonly agentId: string;
+    };
+}
+
+/**
  * Happy Agent refused a profile's network as not found (404). A network can be
  * missing only until its agent is asked for it again, as a container's is after
  * a restart, so the tabs on this partition may ask once and retry.
@@ -1067,7 +1080,7 @@ export interface HappyDesktopBridge {
      */
     browserNetworkResolve?(target: DesktopBrowserProxyTarget): Promise<string>;
     /** Returns the partition of a network's profile, opening it the first time. */
-    browserNetworkProfileOpen?(network: DesktopBrowserNetwork): Promise<string>;
+    browserNetworkProfileOpen?(network: DesktopBrowserProfileRequest): Promise<string>;
     /**
      * Resolves with an inline guest's content height once it differs from
      * `previous`, measured in a world of its own that the page's scripts cannot

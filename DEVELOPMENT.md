@@ -147,6 +147,12 @@ so `http://localhost:PORT` is the agent's own localhost, wherever the agent
 runs. Tabs on one network share its cookies and storage. A live artifact's page
 uses its own restricted proxy and its own profile instead.
 
+When the local Happy Agent says the network is this computer's own (`kind:
+"host"`), the tab loads pages directly, in a profile of its own, without the
+tunnel, and keeps working while the daemon restarts. A remote connection's
+`host` network is that server's computer and keeps the tunnel, as does any
+network whose kind is missing or unknown.
+
 ## Troubleshooting
 
 **Portless was installed as a startup service.** Happy's development commands
