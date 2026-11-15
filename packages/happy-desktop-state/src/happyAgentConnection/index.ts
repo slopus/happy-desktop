@@ -11,6 +11,10 @@ export {
     type ConversationTextSegment,
 } from "./conversationTextLayouts.js";
 export {
+    conversationTextOptions,
+    type ConversationTextOptions,
+} from "./conversationTextOptions.js";
+export {
     CHECKING_SERVER_COMPATIBILITY,
     MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
     MINIMUM_HAPPY_AGENT_VERSION,

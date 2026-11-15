@@ -90,6 +90,7 @@ import {
     type MessageInlineLayouts,
 } from "./conversationInlineLayouts";
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
+import { MESSAGE_OPTION_GAP, MESSAGE_OPTION_HEIGHT } from "./MessageOptions";
 import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
 /** The same footer geometry for the live row and the room a queued turn will need. */
@@ -1526,6 +1527,14 @@ export function conversationRowHeight(
                 (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
                 cards * ATTACHMENT_CARD_HEIGHT +
                 (cards - 1) * ATTACHMENT_CARD_GAP;
+        /* The offered replies are one more child of the attachment slot: one
+           line each, so as tall as their count says. */
+        const options = message.options?.length ?? 0;
+        if (options > 0)
+            height +=
+                (cards > 0 ? ATTACHMENT_CARD_GAP : hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+                options * MESSAGE_OPTION_HEIGHT +
+                (options - 1) * MESSAGE_OPTION_GAP;
         if (!own && !grouped && entry.contextNote) height += 21;
         return height;
     });
