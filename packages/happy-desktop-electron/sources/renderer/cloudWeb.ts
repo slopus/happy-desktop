@@ -1,6 +1,7 @@
 import { cloudWebLocked, cloudWebRefreshCreate, cloudWebStorageErase } from "./cloudWebRefresh";
 
 declare const __HAPPY_CLOUD_WEB__: boolean;
+declare const __HAPPY_CLOUD_WEB_PICKER_URL__: string;
 
 /**
  * Whether this renderer was built as the cloud web app (`HAPPY_TARGET=cloud-web`):
@@ -16,8 +17,15 @@ const REFRESH_PATH = "/auth/refresh";
 const SESSION_PATH = "/auth/session";
 const LOGOUT_PATH = "/auth/logout";
 const PASSWORD_PATH = "/auth/password";
-/** Where a person signs out to and switches servers from. */
-export const CLOUD_WEB_PICKER_URL = "https://happybases.com/";
+/**
+ * Where a person signs out to and switches servers from: the hosted server
+ * picker, or a self-hosted domain's own sign-in page
+ * (`HAPPY_CLOUD_WEB_PICKER_URL` at build time).
+ */
+export const CLOUD_WEB_PICKER_URL: string =
+    typeof __HAPPY_CLOUD_WEB_PICKER_URL__ !== "undefined"
+        ? __HAPPY_CLOUD_WEB_PICKER_URL__
+        : "https://happybases.com/";
 
 /** Sends the page to sign in, coming back to where it is now. */
 export function cloudWebSignIn(): void {

@@ -80,6 +80,11 @@ export default defineConfig({
         __HAPPY_ALLOW_SOURCE_AGENT__: JSON.stringify(process.env.HAPPY_ALLOW_SOURCE_AGENT === "1"),
         __HAPPY_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
         __HAPPY_CLOUD_WEB__: JSON.stringify(cloudWeb),
+        // Where the cloud web app goes after signing out: the hosted server
+        // picker, or a self-hosted domain's own sign-in page.
+        __HAPPY_CLOUD_WEB_PICKER_URL__: JSON.stringify(
+            process.env.HAPPY_CLOUD_WEB_PICKER_URL || "https://happybases.com/",
+        ),
         __HAPPY_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
         __HAPPY_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
         // The version this renderer was built as, which is what analytics
