@@ -111,6 +111,7 @@ import {
     type ArtifactSiteHandle,
 } from "./artifactSite";
 import { happyCloudArtifactClient } from "./happyCloudArtifacts";
+import { happyCloudBrowserCreate } from "./happyCloudBrowser";
 import { artifactNetworkProxyCreate, type ArtifactNetworkProxyHandle } from "./artifactNetwork";
 import { deviceBridgeHostCreate } from "./deviceBridgeHost";
 import {
@@ -831,19 +832,32 @@ async function browserProxyApply(request: DesktopBrowserProfileRequest): Promise
         await browserSessionConfigure(browserSession);
         let candidate: HappyAgentBrowser | undefined;
         try {
-            candidate = await HappyAgentBrowser.create(
-                browserSession,
-                network,
-                runtime,
-                () => {
-                    const window = windowLifecycle.get();
-                    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
-                    window.webContents.send(desktopIpc.browserNetworkMissing, {
-                        partition,
-                    } satisfies DesktopBrowserNetworkMissing);
-                },
+            const windowSend = (send: (window: BrowserWindow) => void) => {
+                const window = windowLifecycle.get();
+                if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+                send(window);
+            };
+            candidate = await HappyAgentBrowser.create(browserSession, network, runtime, {
+                networkMissing: () =>
+                    windowSend((window) =>
+                        window.webContents.send(desktopIpc.browserNetworkMissing, {
+                            partition,
+                        } satisfies DesktopBrowserNetworkMissing),
+                    ),
+                // The agent's compute is away: every page on the network hears
+                // it, so its tab closes until the compute is back.
+                refused: (refusal, message) =>
+                    windowSend((window) => {
+                        for (const guest of browserProxies.get(partition)?.guests() ?? [])
+                            window.webContents.send(desktopIpc.browserTunnelFailed, {
+                                guestId: guest.id,
+                                url: guest.getURL(),
+                                message,
+                                refusal,
+                            } satisfies DesktopBrowserTunnelFailure);
+                    }),
                 direct,
-            );
+            });
             browserProxies.set(partition, candidate);
             return partition;
         } catch (error) {
@@ -1883,6 +1897,11 @@ void app
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
                 ...(artifactSites ? { artifactSite: artifactSites } : {}),
                 deviceBridges,
+                // Happy Cloud servers' pages need no Happy Agent, only the
+                // person's sign-in, which stays here.
+                ...(happyCloud
+                    ? { happyCloudBrowser: happyCloudBrowserCreate({ remote: serverSessions }) }
+                    : {}),
                 ...(desktopDebugEnabled ? { debug: desktopDebugLog } : {}),
             },
         );

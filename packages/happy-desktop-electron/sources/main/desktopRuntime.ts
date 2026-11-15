@@ -44,6 +44,8 @@ import type { DeviceBridgeHost } from "./deviceBridgeHost";
 import { happyAgentRendererOrigin, type HappyAgentRendererProxy } from "./happyAgentRendererProxy";
 import { happyAgentHttpProxyCreate, type HappyAgentHttpProxyHandle } from "./happyAgentHttpProxy";
 import type { Duplex } from "node:stream";
+import type { HappyCloudBrowser } from "./happyCloudBrowser";
+import { happyCloudServerNameOf } from "../shared/happyCloud";
 
 export type HappyAgentHttpProxyStart = (
     connection: LocalHappyAgentConnection,
@@ -83,6 +85,8 @@ export interface DesktopRuntimeOptions {
     readonly artifactSite?: ArtifactSiteHandle;
     /** The app's bridges, which every daemon connection this runtime makes serves. */
     readonly deviceBridges?: DeviceBridgeHost;
+    /** Happy Cloud servers' networks, reached without the host Happy Agent. */
+    readonly happyCloudBrowser?: HappyCloudBrowser;
     readonly debug?: (message: string) => void;
 }
 
@@ -110,6 +114,7 @@ export class DesktopRuntime implements AsyncDisposable {
      * so its own network is reached without it.
      */
     private readonly localNetworksDirect = new Map<string, boolean>();
+    private readonly happyCloudBrowser: HappyCloudBrowser | undefined;
     private settings?: DesktopSettings;
     private snapshotValue: DesktopRuntimeSnapshot;
     private readonly connector: LocalHappyAgentConnector;
@@ -122,6 +127,7 @@ export class DesktopRuntime implements AsyncDisposable {
         options: DesktopRuntimeOptions,
     ) {
         this.settings = settings;
+        this.happyCloudBrowser = options.happyCloudBrowser;
         this.rendererHttpUrl = options.rendererProxy ? happyAgentRendererOrigin : undefined;
         this.connector = options.localHappyAgentConnector ?? localHappyAgentConnectorCreate();
         this.proxyStart =
@@ -291,6 +297,8 @@ export class DesktopRuntime implements AsyncDisposable {
         target: DesktopBrowserProxyTarget,
         signal?: AbortSignal,
     ): Promise<string> {
+        if (this.browserNetworkCloud(target.connectionId))
+            return await this.happyCloudBrowserRequire().networkResolve(target, signal);
         const host = this.browserHost();
         const client = target.connectionId === null ? host : host.connection(target.connectionId);
         const answer = await client.getWorkspaceAgentNetwork(
@@ -321,8 +329,41 @@ export class DesktopRuntime implements AsyncDisposable {
         return this.localNetworksDirect.get(request.networkId) === true;
     }
 
+    /**
+     * Whether a connection is a Happy Cloud server, whose networks are reached
+     * from here rather than through the host Happy Agent, and whose tunnels
+     * are counted and limited.
+     */
+    browserNetworkCloud(connectionId: string | null): boolean {
+        return connectionId !== null && happyCloudServerNameOf(connectionId) !== undefined;
+    }
+
+    /**
+     * Has a profile's unused kept tunnels given back when an opening for the
+     * same server waits for one; nothing to do for a network not on Happy Cloud.
+     */
+    browserTunnelsReclaimRegister(network: DesktopBrowserNetwork, reclaim: () => void): () => void {
+        if (!this.browserNetworkCloud(network.connectionId) || !this.happyCloudBrowser)
+            return () => undefined;
+        return this.happyCloudBrowser.idleReclaimRegister(network.connectionId!, reclaim);
+    }
+
+    private happyCloudBrowserRequire(): HappyCloudBrowser {
+        if (!this.happyCloudBrowser) throw new Error("This desktop cannot open Happy Cloud pages.");
+        return this.happyCloudBrowser;
+    }
+
     /** Opens a browser tunnel into one network through its owning connection. */
     async openHttpProxy(network: DesktopBrowserNetwork, signal?: AbortSignal): Promise<Duplex> {
+        if (this.browserNetworkCloud(network.connectionId)) {
+            if (network.artifactId !== undefined)
+                throw new Error("A live artifact's page cannot open from Happy Cloud yet.");
+            return await this.happyCloudBrowserRequire().tunnelOpen(
+                network.connectionId!,
+                network.networkId,
+                signal ?? AbortSignal.timeout(10_000),
+            );
+        }
         const host = this.browserHost();
         const client = network.connectionId === null ? host : host.connection(network.connectionId);
         try {

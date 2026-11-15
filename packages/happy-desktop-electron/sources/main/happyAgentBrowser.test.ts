@@ -39,6 +39,8 @@ function contents(id: number, session: Session) {
 
 const runtime = {
     openHttpProxy: () => Promise.reject(new Error("No tunnel in this test.")),
+    browserNetworkCloud: () => false,
+    browserTunnelsReclaimRegister: () => () => undefined,
 } as unknown as DesktopRuntime;
 
 describe("developer tools for a browser page", () => {
@@ -49,7 +51,9 @@ describe("developer tools for a browser page", () => {
 
     async function profile(network: DesktopBrowserNetwork) {
         const session = profileSession();
-        const browser = await HappyAgentBrowser.create(session, network, runtime, vi.fn());
+        const browser = await HappyAgentBrowser.create(session, network, runtime, {
+            networkMissing: vi.fn(),
+        });
         browsers.push(browser);
         return { browser, session };
     }
@@ -143,9 +147,12 @@ describe("a profile on this computer's own network", () => {
         const browser = await HappyAgentBrowser.create(
             session,
             { connectionId: null, networkId: "host" },
-            { openHttpProxy: opened } as unknown as DesktopRuntime,
-            vi.fn(),
-            true,
+            {
+                openHttpProxy: opened,
+                browserNetworkCloud: () => false,
+                browserTunnelsReclaimRegister: () => () => undefined,
+            },
+            { networkMissing: vi.fn(), direct: true },
         );
         expect(session.proxyMode()).toBe("direct");
         expect(browser.proxy).toBeUndefined();
@@ -159,7 +166,10 @@ describe("a profile on this computer's own network", () => {
             { connectionId: null, networkId: "host", artifactId: "art_one" },
         ])
             await expect(
-                HappyAgentBrowser.create(profileSession(), network, runtime, vi.fn(), true),
+                HappyAgentBrowser.create(profileSession(), network, runtime, {
+                    networkMissing: vi.fn(),
+                    direct: true,
+                }),
             ).rejects.toThrow("Only this computer's own network is reached directly.");
     });
 });

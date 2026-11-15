@@ -950,8 +950,14 @@ export interface DesktopBrowserTunnelFailure {
      * compute is away, from the refusal's own code; the tab then closes
      * instead of showing a failed page.
      */
-    readonly refusal?: "computeDetached" | "computeOffline";
+    readonly refusal?: DesktopBrowserRefusal;
 }
+
+/**
+ * Why an agent's server refused its network's tunnels: the agent's compute
+ * was detached, or the computer it runs on is offline.
+ */
+export type DesktopBrowserRefusal = "computeDetached" | "computeOffline";
 
 /** User-initiated navigation; guest pages never receive this bridge. */
 export type DesktopBrowserCommand =

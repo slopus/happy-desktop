@@ -1,12 +1,26 @@
 import { createHash } from "node:crypto";
 import type { Session, WebContents } from "electron";
-import type { DesktopBrowserCommand, DesktopBrowserNetwork } from "../shared/desktopContract";
+import type {
+    DesktopBrowserCommand,
+    DesktopBrowserNetwork,
+    DesktopBrowserRefusal,
+} from "../shared/desktopContract";
 import {
     happyAgentBrowserProxyCreate,
     type HappyAgentBrowserProxyHandle,
 } from "./happyAgentBrowserProxy";
 import type { DesktopRuntime } from "./desktopRuntime";
 import { HappyAgentDaemonHttpError } from "./happyAgentDaemonClient";
+import { HappyCloudBrowserError } from "./happyCloudBrowser";
+
+export interface HappyAgentBrowserEvents {
+    /** Happy Agent does not know the network (404); its tabs may ask their agent again. */
+    readonly networkMissing: () => void;
+    /** The network's server refused it because the agent's compute is away. */
+    readonly refused?: (refusal: DesktopBrowserRefusal, message: string) => void;
+    /** The network is this computer's own: pages load without a proxy. */
+    readonly direct?: boolean;
+}
 
 /**
  * Chromium stays local; all network traffic exits through one compute network.
@@ -17,6 +31,7 @@ import { HappyAgentDaemonHttpError } from "./happyAgentDaemonClient";
 export class HappyAgentBrowser {
     readonly #guests = new Map<number, WebContents>();
     #closed = false;
+    #reclaimEnd?: () => void;
 
     /**
      * A tab's profile is kept on disk and shared by every tab on its network. An
@@ -49,12 +64,19 @@ export class HappyAgentBrowser {
     static async create(
         session: Session,
         network: DesktopBrowserNetwork,
-        runtime: DesktopRuntime,
-        /** Happy Agent does not know the network (404); its tabs may ask their agent again. */
-        networkMissing: () => void,
-        /** The network is this computer's own: pages load without a proxy. */
-        direct = false,
+        runtime: Pick<
+            DesktopRuntime,
+            "openHttpProxy" | "browserNetworkCloud" | "browserTunnelsReclaimRegister"
+        >,
+        events: HappyAgentBrowserEvents,
     ): Promise<HappyAgentBrowser> {
+        const direct = events.direct === true;
+        // A refusal for compute closes every page on the network, whether it
+        // came while opening a tunnel or ended one already open.
+        const refusalNotice = (error: unknown) => {
+            if (error instanceof HappyCloudBrowserError && error.refusal !== undefined)
+                events.refused?.(error.refusal, error.message);
+        };
         if (direct) {
             if (network.connectionId !== null || network.artifactId !== undefined)
                 throw new Error("Only this computer's own network is reached directly.");
@@ -80,15 +102,26 @@ export class HappyAgentBrowser {
             // Resolve the current connection on each request so reconnecting does
             // not replace the profile or its guests. An ended network rejects.
             openHttpProxy: (signal) =>
-                runtime.openHttpProxy(network, signal).catch((error: unknown) => {
-                    // Every refusal is reported; each tab asks at most once per
-                    // navigation, however many of its tunnels were refused.
-                    if (error instanceof HappyAgentDaemonHttpError && error.statusCode === 404)
-                        networkMissing();
-                    throw error;
-                }),
+                runtime.openHttpProxy(network, signal).then(
+                    (tunnel) => {
+                        tunnel.once("error", refusalNotice);
+                        return tunnel;
+                    },
+                    (error: unknown) => {
+                        // Every refusal is reported; each tab asks at most once per
+                        // navigation, however many of its tunnels were refused.
+                        if (error instanceof HappyAgentDaemonHttpError && error.statusCode === 404)
+                            events.networkMissing();
+                        refusalNotice(error);
+                        throw error;
+                    },
+                ),
+            pooled: runtime.browserNetworkCloud(network.connectionId),
         });
         const browser = new HappyAgentBrowser(session, proxy, network.artifactId !== undefined);
+        browser.#reclaimEnd = runtime.browserTunnelsReclaimRegister(network, () =>
+            proxy.idleClose(),
+        );
         try {
             browser.requestGuardInstall();
             const route = `PROXY 127.0.0.1:${proxy.port}`;
@@ -142,6 +175,11 @@ export class HappyAgentBrowser {
         guest.once("destroyed", () => this.#guests.delete(guest.id));
     }
 
+    /** The pages this profile shows now. */
+    guests(): readonly WebContents[] {
+        return [...this.#guests.values()].filter((guest) => !guest.isDestroyed());
+    }
+
     owns(guest: WebContents): boolean {
         return this.#guests.get(guest.id) === guest;
     }
@@ -177,6 +215,7 @@ export class HappyAgentBrowser {
 
     close(): void {
         this.#closed = true;
+        this.#reclaimEnd?.();
         this.proxy?.close();
         this.#guests.clear();
         // Keep the request guard installed: retired profiles must stay closed.

@@ -20,13 +20,32 @@ export interface HappyAgentBrowserProxyHandle {
      * reports every refused tunnel as the same bare engine error.
      */
     tunnelFailure(url: string, since: number): string | undefined;
+    /** Ends the kept connections no request is using, giving their tunnels back. */
+    idleClose(): void;
     connectionsClose(): void;
     close(): void;
 }
 
 export interface HappyAgentBrowserProxyOptions {
     readonly openHttpProxy: (signal: AbortSignal) => Promise<Duplex>;
+    /**
+     * Keep plain `http://` connections open between requests: each one is a
+     * tunnel holding a nested `CONNECT` to its destination, with keep-alive
+     * HTTP inside, up to `POOL_SOCKETS` per destination. For a network whose
+     * tunnels are counted and limited, so a page of many requests opens a few
+     * tunnels instead of one each. Otherwise every request opens its own.
+     */
+    readonly pooled?: boolean;
 }
+
+/** Kept-alive connections to one destination, as a browser keeps to one host. */
+const POOL_SOCKETS = 6;
+/**
+ * How long a kept connection may sit unused. Below the 60 seconds after which
+ * a Happy Cloud server ends an idle tunnel, so one is never reused after the
+ * server has let it go.
+ */
+const POOL_IDLE_MS = 50_000;
 
 /**
  * Gives Chromium an ordinary authenticated loopback HTTP proxy and carries every
@@ -52,8 +71,11 @@ export function happyAgentBrowserProxyCreate(
     };
     let closed = false;
     let generation = 0;
+    const pools = new Map<string, Pool>();
     const connectionsClose = () => {
         generation += 1;
+        for (const pool of pools.values()) pool.agent.destroy();
+        pools.clear();
         for (const operation of operations) operation.abort();
         for (const socket of sockets) socket.destroy();
         sockets.clear();
@@ -92,9 +114,43 @@ export function happyAgentBrowserProxyCreate(
                 proxyAuthenticationRequired(response);
                 return;
             }
-            void proxyRequest(openHttpProxy, request, response, sockets);
+            if (options.pooled) proxyPooledRequest(poolGet, request, response);
+            else void proxyRequest(openHttpProxy, request, response, sockets);
         },
     );
+    const poolGet = (authority: string): Pool => {
+        const existing = pools.get(authority);
+        if (existing) return existing;
+        const agent = new Agent({
+            keepAlive: true,
+            maxSockets: POOL_SOCKETS,
+            maxFreeSockets: POOL_SOCKETS,
+            timeout: POOL_IDLE_MS,
+            scheduling: "lifo",
+        });
+        // Node takes a connection created later through the callback.
+        (
+            agent as unknown as {
+                createConnection: (
+                    options: { readonly timeout?: number },
+                    created: (error: Error | null, socket?: Duplex) => void,
+                ) => undefined;
+            }
+        ).createConnection = (connection, created) => {
+            void nestedOpen(openHttpProxy, authority, sockets).then(
+                (socket) => {
+                    (socket as Socket).setTimeout?.(connection.timeout ?? POOL_IDLE_MS);
+                    created(null, socket);
+                },
+                (error: unknown) =>
+                    created(error instanceof Error ? error : new Error(String(error))),
+            );
+            return undefined;
+        };
+        const pool = { agent, slots: new PoolSlots(POOL_SOCKETS) };
+        pools.set(authority, pool);
+        return pool;
+    };
     server.on("connect", (request, client, head) => {
         // An upgraded socket has left the HTTP server's own error handling, so it
         // must carry a handler from the first moment: Chromium abandoning a tunnel
@@ -128,6 +184,11 @@ export function happyAgentBrowserProxyCreate(
                     const authority = tunnelAuthority(url);
                     const failure = authority === undefined ? undefined : failures.get(authority);
                     return failure && failure.at >= since ? failure.message : undefined;
+                },
+                idleClose() {
+                    for (const pool of pools.values())
+                        for (const free of Object.values(pool.agent.freeSockets))
+                            for (const socket of free ?? []) socket.destroy();
                 },
                 connectionsClose,
                 close() {
@@ -270,6 +331,169 @@ async function proxyConnect(
             error instanceof Error ? error.message : "The Happy Agent browser tunnel failed.",
         );
     }
+}
+
+/**
+ * Carries one plain `http://` request over a kept-alive connection to its
+ * destination. A request that fails on a connection kept from before, with no
+ * answer yet, is sent once more on a new one when it can be: the connection
+ * may have been ended while it sat unused.
+ */
+/** Kept connections to one destination, and the requests allowed on them at once. */
+interface Pool {
+    readonly agent: Agent;
+    readonly slots: PoolSlots;
+}
+
+/**
+ * Turns for requests to one destination. Node's agent does not count a
+ * connection it is still opening, so a burst of requests would each open one;
+ * holding requests to as many as there may be connections keeps it to that.
+ */
+class PoolSlots {
+    #busy = 0;
+    readonly #waiting: (() => void)[] = [];
+
+    constructor(private readonly size: number) {}
+
+    take(): Promise<() => void> {
+        return new Promise((resolve) => {
+            const grant = () => {
+                this.#busy += 1;
+                let released = false;
+                resolve(() => {
+                    if (released) return;
+                    released = true;
+                    this.#busy -= 1;
+                    this.#waiting.shift()?.();
+                });
+            };
+            if (this.#busy < this.size) grant();
+            else this.#waiting.push(grant);
+        });
+    }
+}
+
+function proxyPooledRequest(
+    poolGet: (authority: string) => Pool,
+    request: IncomingMessage,
+    response: ServerResponse,
+): void {
+    let target: URL;
+    try {
+        target = new URL(request.url ?? "");
+    } catch {
+        response.writeHead(400).end();
+        return;
+    }
+    if (target.protocol !== "http:") {
+        response.writeHead(400).end();
+        return;
+    }
+    const port = target.port || "80";
+    const authority = `${target.hostname}:${port}`;
+    const bodiless =
+        request.headers["content-length"] === undefined &&
+        request.headers["transfer-encoding"] === undefined;
+    const replayable = bodiless && ["GET", "HEAD", "OPTIONS"].includes(request.method ?? "GET");
+    const pool = poolGet(authority);
+    const send = (again: boolean): void => {
+        let answered = false;
+        const upstream = httpRequest(
+            {
+                agent: pool.agent,
+                host: target.hostname.replace(/^\[(.*)\]$/u, "$1"),
+                port: Number(port),
+                headers: forwardedHeaders(request.headers),
+                method: request.method,
+                path: `${target.pathname}${target.search}`,
+            },
+            (upstreamResponse) => {
+                answered = true;
+                response.writeHead(
+                    upstreamResponse.statusCode ?? 502,
+                    forwardedHeaders(upstreamResponse.headers),
+                );
+                upstreamResponse.once("close", () => {
+                    if (!upstreamResponse.complete) response.destroy();
+                });
+                upstreamResponse.pipe(response);
+            },
+        );
+        upstream.once("error", (error) => {
+            if (!answered && !again && replayable && upstream.reusedSocket) {
+                send(true);
+                return;
+            }
+            if (!response.headersSent) response.writeHead(502);
+            response.end(error.message);
+        });
+        response.once("close", () => {
+            if (!response.writableFinished) upstream.destroy();
+        });
+        if (bodiless) {
+            request.resume();
+            upstream.end();
+        } else {
+            request.on("error", () => upstream.destroy());
+            request.pipe(upstream);
+        }
+    };
+    void pool.slots.take().then((release) => {
+        if (response.destroyed || response.writableFinished) {
+            release();
+            return;
+        }
+        response.once("close", release);
+        send(false);
+    });
+}
+
+/**
+ * Opens a tunnel holding a nested `CONNECT` to `authority`, resolving with the
+ * stream into the destination.
+ */
+async function nestedOpen(
+    openHttpProxy: (signal: AbortSignal) => Promise<Duplex>,
+    authority: string,
+    sockets: Set<Duplex>,
+): Promise<Duplex> {
+    const tunnel = await openHttpProxy(AbortSignal.timeout(10_000));
+    sockets.add(tunnel);
+    tunnel.once("close", () => sockets.delete(tunnel));
+    tunnel.on("error", () => tunnel.destroy());
+    return await new Promise<Duplex>((resolve, reject) => {
+        const failed = (message: string) => {
+            tunnel.destroy();
+            reject(new Error(message));
+        };
+        const nested = httpRequest({
+            agent: singleSocketAgent(tunnel),
+            headers: { host: authority },
+            method: "CONNECT",
+            path: authority,
+        });
+        nested.once("connect", (answer, upstream, head) => {
+            if (answer.statusCode !== 200) {
+                failed(
+                    `The agent's network could not open ${authority} (${String(answer.statusCode)}).`,
+                );
+                return;
+            }
+            if (head.length > 0) upstream.unshift(head);
+            resolve(upstream);
+        });
+        nested.once("response", (answer) => {
+            answer.resume();
+            failed(
+                `The agent's network answered ${authority} without opening it (${String(answer.statusCode)}).`,
+            );
+        });
+        nested.once("error", (error) =>
+            failed(`The agent's network closed before opening ${authority} (${error.message}).`),
+        );
+        nested.end();
+    });
 }
 
 /** Notes why one tunnel to `authority` failed, stamped with when it was asked for. */
