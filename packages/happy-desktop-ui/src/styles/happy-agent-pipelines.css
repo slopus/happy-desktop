@@ -719,7 +719,10 @@
 }
 
 .happy-pipeline-usage__spend {
+    overflow: hidden;
     color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     line-height: 16px;
@@ -1540,6 +1543,13 @@
     border-inline-end: 0;
     border-radius: 6px 0 0 6px;
     background: color-mix(in srgb, var(--text-link) 12%, var(--surface));
+}
+
+/* While its card is in view, a working node's trail does not name it again. */
+.happy-pipeline-timeline__track[data-now-in-view]
+    .happy-pipeline-timeline__trail
+    > .happy-pipeline-timeline__label {
+    visibility: hidden;
 }
 
 /* Heads ride the now line: a working node's card, and the nodes still ahead. */

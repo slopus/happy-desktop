@@ -25,18 +25,17 @@ export function PipelineValue(props: { readonly value: unknown }) {
     );
 }
 
-/** Tokens in and out, and from the cache when there were any. */
-function tokensText(usage: Omit<PipelineModelUsage, "provider" | "model" | "costUsd">): string {
-    return [
-        `${pipelineTokensText(usage.input)} in`,
-        `${pipelineTokensText(usage.output)} out`,
-        usage.cacheRead + usage.cacheWrite > 0
-            ? `${pipelineTokensText(usage.cacheRead + usage.cacheWrite)} cached`
-            : "",
-        usage.reasoning > 0 ? `${pipelineTokensText(usage.reasoning)} reasoning` : "",
-    ]
-        .filter(Boolean)
-        .join(" · ");
+type Tokens = Omit<PipelineModelUsage, "provider" | "model" | "costUsd">;
+
+/** Tokens in and out. */
+function tokensText(usage: Tokens): string {
+    return `${pipelineTokensText(usage.input)} in · ${pipelineTokensText(usage.output)} out`;
+}
+
+/** Tokens read from or written to the cache, when there were any. */
+function cachedText(usage: Tokens): string {
+    const cached = usage.cacheRead + usage.cacheWrite;
+    return cached > 0 ? pipelineTokensText(cached) : "";
 }
 
 /** What an agent node's agent spent: in total, and by model when it used several. */
@@ -65,6 +64,8 @@ export function PipelineUsage(props: { readonly usage: readonly PipelineModelUsa
                             : `${pipelineCostText(cost)}${priced.length < props.usage.length ? " (some unpriced)" : ""}`,
                     ],
                     ["Tokens", tokensText(total)],
+                    ["Cached", cachedText(total)],
+                    ["Reasoning", total.reasoning > 0 ? pipelineTokensText(total.reasoning) : ""],
                     ["Model", single ? `${single.provider}/${single.model}` : ""],
                 ]}
             />
@@ -82,6 +83,7 @@ export function PipelineUsage(props: { readonly usage: readonly PipelineModelUsa
                                 {[
                                     entry.costUsd === null ? "" : pipelineCostText(entry.costUsd),
                                     tokensText(entry),
+                                    cachedText(entry) ? `${cachedText(entry)} cached` : "",
                                 ]
                                     .filter(Boolean)
                                     .join(" · ")}

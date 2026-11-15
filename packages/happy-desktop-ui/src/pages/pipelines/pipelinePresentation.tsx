@@ -192,6 +192,12 @@ const PIPELINE_FAILURE_TITLE: Readonly<Record<string, string>> = {
     no_output: "Ended without an output",
     agent_error: "The agent's turn failed",
     model_unavailable: "Model unavailable",
+    child_failed: "Its child run failed",
+    child_aborted: "Its child run was aborted",
+    child_superseded: "Its child run was superseded",
+    child_unavailable: "Child run unavailable",
+    cycle: "Would run a pipeline already running above it",
+    too_deep: "Child runs nested too deep",
 };
 
 /**

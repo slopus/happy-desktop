@@ -475,6 +475,15 @@ class TimelineEngine {
             fade.set(id, clear ** 1.6);
         }
         const heights = this.fold(model.layout, now, fade, perf);
+        // A working node's card names it while the now line is in view.
+        const nowInView =
+            model.layout.live !== null &&
+            now >= this.scrollX - this.width / 2 &&
+            now <= this.scrollX + this.width / 2;
+        if (nowInView !== (track.dataset.nowInView !== undefined)) {
+            if (nowInView) track.dataset.nowInView = "";
+            else delete track.dataset.nowInView;
+        }
         // Rows stack in order; a folded row takes no room, and what is in it
         // fades with it.
         const tops = new Map<number, number>();
