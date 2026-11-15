@@ -709,6 +709,17 @@
     line-height: 16px;
 }
 
+.happy-pipeline-detail__failure-text {
+    max-height: 200px;
+    margin: 0;
+    overflow: auto;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 11.5px;
+    line-height: 16px;
+    white-space: pre;
+}
+
 /* A value keeps its lines and scrolls both ways; the padding is the text's. */
 .happy-pipeline-detail__value {
     display: flex;

@@ -263,21 +263,20 @@ export function pipelineRunAbortable(state: PipelineRunState): boolean {
 
 /**
  * Which node's log a run page shows: the one the reader picked, else the one
- * working now, else the one that failed, else the last one that ran.
+ * working longest now, else the last one that failed, else the last one that ran.
  */
 export function pipelineRunNodeShown(run: PipelineRun, nodeSelected: string | null): string | null {
     if (nodeSelected !== null) return nodeSelected;
-    const running = run.nodes.find((node) => node.state === "running");
-    if (running) return running.nodeId;
-    const ran = run.nodes.filter((node) => node.startedAt !== null);
-    const latest = (nodes: readonly PipelineNodeRun[]) =>
-        nodes.reduce<PipelineNodeRun | undefined>(
-            (last, node) =>
-                last === undefined || (node.startedAt ?? 0) >= (last.startedAt ?? 0) ? node : last,
-            undefined,
-        );
+    // The server lists nodes by id, so every pick is by time, ties by id.
+    const byStart = (left: PipelineNodeRun, right: PipelineNodeRun) =>
+        (left.startedAt ?? 0) - (right.startedAt ?? 0) || left.nodeId.localeCompare(right.nodeId);
+    // The node working longest stays shown while others start beside it; a
+    // run that already failed may still have one finishing.
+    const running = run.nodes.filter((node) => node.state === "running").sort(byStart);
+    if (running.length > 0) return running[0]!.nodeId;
+    const ran = run.nodes.filter((node) => node.startedAt !== null).sort(byStart);
     return (
-        latest(ran.filter((node) => node.state === "failed"))?.nodeId ?? latest(ran)?.nodeId ?? null
+        ran.filter((node) => node.state === "failed").at(-1)?.nodeId ?? ran.at(-1)?.nodeId ?? null
     );
 }
 

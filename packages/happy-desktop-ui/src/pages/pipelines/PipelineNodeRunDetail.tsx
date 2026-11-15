@@ -60,9 +60,16 @@ export function PipelineNodeRunFacts(props: PipelineNodeRunFactsProps) {
                         <span className="happy-pipeline-detail__failure-code">
                             {node.failure.code}
                         </span>
-                        <p className="happy-pipeline-detail__prose">
-                            {node.failure.message || "No message."}
-                        </p>
+                        {node.failure.message.includes("\n") ? (
+                            // A traceback: its lines and their alignment are the message.
+                            <pre className="happy-pipeline-detail__failure-text">
+                                {node.failure.message}
+                            </pre>
+                        ) : (
+                            <p className="happy-pipeline-detail__prose">
+                                {node.failure.message || "No message."}
+                            </p>
+                        )}
                     </div>
                 </PipelineDetailSection>
             ) : null}
