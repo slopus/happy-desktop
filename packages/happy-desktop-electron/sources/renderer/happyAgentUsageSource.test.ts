@@ -467,3 +467,33 @@ it("asks the daemon to refresh accounts older than five minutes and ignores a re
     expect(unhandled).not.toHaveBeenCalled();
     expect(daemon.callCount("refreshProviderUsage")).toBe(3);
 });
+
+it("re-checks every account by force from protocol 36, and as a minute-old refresh before it", async () => {
+    for (const [protocol, request] of [
+        [36, { force: true }],
+        [35, { olderThanMs: 60_000 }],
+    ] as const) {
+        const daemon = fakeHappyAgentDaemonCreate();
+        daemon.healthSet({ protocol });
+        usageSet(daemon, [entry({ providerId: "claude", refreshedAt: 1_700_000_000_000 })]);
+        const h = harness(daemon);
+        await vi.waitFor(() => expect(h.claude()).toBeDefined());
+
+        await h.source.recheck();
+        expect(
+            daemon.calls
+                .filter((call) => call.method === "refreshProviderUsage")
+                .map((call) => call.args[0]),
+        ).toEqual([request]);
+    }
+});
+
+it("rejects a re-check the daemon refused, so the picker can say so", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    usageSet(daemon, [entry({ providerId: "claude", refreshedAt: 1_700_000_000_000 })]);
+    const h = harness(daemon);
+    await vi.waitFor(() => expect(h.claude()).toBeDefined());
+
+    daemon.usageRefreshSupportedSet(false);
+    await expect(h.source.recheck()).rejects.toThrow();
+});

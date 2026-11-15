@@ -21,6 +21,10 @@ const LEGACY_POLL_MS = 60_000;
 const TOKENS_READ_MS = 10_000;
 /** An account the daemon read more recently than this is not read again on request. */
 const REFRESH_OLDER_THAN_MS = 300_000;
+/** From protocol 36 a re-check asks the daemon to read every account it can, however recent. */
+const RECHECK_FORCE_PROTOCOL_VERSION = 36;
+/** An older daemon re-checks through an ordinary refresh, at the shortest age it accepts. */
+const RECHECK_LEGACY_OLDER_THAN_MS = 60_000;
 
 /**
  * What can change the usage surface: an account's reading, the configured
@@ -89,6 +93,15 @@ export function happyAgentUsageSourceCreate(
                     olderThanMs: REFRESH_OLDER_THAN_MS,
                 })
                 .catch(() => undefined);
+        },
+        async recheck() {
+            if (legacy) return;
+            // An older daemon answers `force` with 400, so it is only sent to one that knows it.
+            const forced = (sync.health()?.version.protocol ?? 0) >= RECHECK_FORCE_PROTOCOL_VERSION;
+            // The pinned client's request type predates protocol 36's `force`.
+            const request: happyAgentProtocol.ProviderUsageRefreshRequest & { force?: boolean } =
+                forced ? { force: true } : { olderThanMs: RECHECK_LEGACY_OLDER_THAN_MS };
+            await client.refreshProviderUsage(request);
         },
         subscribe(listener) {
             const controller = new AbortController();

@@ -307,6 +307,7 @@ const cases: readonly BenchmarkCase[] = [
                         return () => undefined;
                     },
                     refresh: () => undefined,
+                    recheck: () => Promise.resolve(),
                     tokensFollow: () => () => undefined,
                 },
             });

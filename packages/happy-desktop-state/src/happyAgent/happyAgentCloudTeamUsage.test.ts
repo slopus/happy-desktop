@@ -45,6 +45,7 @@ function sourceCreate() {
     const source: HappyAgentProviderUsageSource = {
         subscribe,
         refresh,
+        recheck: () => Promise.resolve(),
         tokensFollow: () => () => undefined,
     };
     return { source, subscribe, refresh };

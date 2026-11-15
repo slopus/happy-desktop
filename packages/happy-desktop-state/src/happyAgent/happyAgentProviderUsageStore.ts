@@ -133,6 +133,13 @@ export interface HappyAgentProviderUsageSource {
      */
     refresh(providerIds?: readonly string[]): void;
     /**
+     * Someone asked to re-check every account now, however recently each was
+     * read. The daemon still skips an account blocked until a reset that has
+     * not come, one the vendor asked it to wait on, and one being read. Settles
+     * once the daemon has answered; the readings arrive through `subscribe`.
+     */
+    recheck(): Promise<void>;
+    /**
      * A surface shows token counts until the returned release. They move with
      * every finished run, which no account event carries, so only while one is
      * followed does a finished run make the source read the whole list again;
@@ -163,6 +170,12 @@ export interface HappyAgentProviderUsageStore {
      * claims they are already on the way.
      */
     usageRefresh(providerIds?: readonly string[]): void;
+    /**
+     * Someone asked to re-check every account now. Resolves once the daemon has
+     * taken the request and rejects with a displayable error when it could not
+     * be asked; what each read finds arrives as ordinary snapshots.
+     */
+    usageRecheck(): Promise<void>;
     /**
      * Someone shows token counts until the returned release, so finished runs
      * read them again. Account readings are followed without it.
@@ -313,6 +326,14 @@ export function happyAgentProviderUsageStoreCreate(
             if (disposed || access === "forbidden" || providerIds?.length === 0) return;
             deps.source.refresh(providerIds);
         },
+        async usageRecheck() {
+            if (disposed || access === "forbidden") return;
+            try {
+                await deps.source.recheck();
+            } catch (error) {
+                throw happyAgentUserError(error);
+            }
+        },
         tokensFollow() {
             if (disposed || access === "forbidden") return () => undefined;
             return deps.source.tokensFollow();
@@ -351,6 +372,7 @@ const INERT_SNAPSHOT: HappyAgentProviderUsageSnapshot = { providers: [], loading
 export const happyAgentProviderUsageStoreNoop: HappyAgentProviderUsageStore = {
     get: () => INERT_SNAPSHOT,
     usageRefresh: () => undefined,
+    usageRecheck: () => Promise.resolve(),
     tokensFollow: () => () => undefined,
     subscribe: () => () => undefined,
     [Symbol.dispose]: () => undefined,

@@ -29,6 +29,7 @@ function sourceCreate() {
             return () => listeners.delete(listener);
         },
         refresh,
+        recheck: () => Promise.resolve(),
         tokensFollow,
     };
     return {
