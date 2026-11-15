@@ -18,6 +18,7 @@ import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHe
 import type {
     HappyAgentConnection,
     HappyAgentTeammate,
+    HappyAgentTeamRoster,
     SidebarReadAheadRows,
 } from "../happyAgentConnection/index.js";
 import {
@@ -393,6 +394,8 @@ export interface HappyAgentWorkspaceClient {
     surfaces(): HappyAgentSurfaces;
     /** The other people on the team `@` offers, held since the connection's bootstrap. */
     teammates(): readonly HappyAgentTeammate[];
+    /** Everyone on the team, the reader included, held since the connection's bootstrap. */
+    team(): HappyAgentTeamRoster;
     /**
      * What this Happy Agent's search finds for the command palette's
      * query. Materialized on first access; a daemon without search
@@ -1065,6 +1068,7 @@ export function happyAgentWorkspaceClientCreate(
             return feedOf();
         },
         teammates: () => deps.connection.teammates(),
+        team: () => deps.connection.team(),
         surfaces() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             surfaces ??= happyAgentSurfacesCreate({

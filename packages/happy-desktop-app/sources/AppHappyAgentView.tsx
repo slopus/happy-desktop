@@ -756,6 +756,8 @@ export interface AppHappyAgentSession {
     readonly pipelineRun?: (
         runId: string,
     ) => import("happy-desktop-state").PipelineRunStore | undefined;
+    /** Everyone on the team, which names the people and agents pipelines credit. */
+    readonly team?: () => import("happy-desktop-state").HappyAgentTeamRoster;
     /** The repositories one cloud agent checked out; absent or undefined anywhere but Happy Cloud. */
     readonly checkouts?: (
         agentId: string,
@@ -5061,6 +5063,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {...(pipeline ? { pipeline } : {})}
                     {...(run ? { run } : {})}
                     pipelines={pipelines}
+                    {...(session.team ? { team: session.team() } : {})}
+                    workspace={session.workspace}
                 />
             );
         }
