@@ -268,7 +268,7 @@ export function pipelineDefinitionRead(value: unknown): PipelineDefinition | und
 function authorRead(value: unknown): PipelineAuthor | null {
     const author = recordOf(value);
     if (author?.kind === "agent" && typeof author.agentId === "string")
-        return { kind: "agent", agentId: author.agentId };
+        return { kind: "agent", agentId: author.agentId, userId: textOrNull(author.userId) };
     if (author?.kind === "user" && typeof author.userId === "string")
         return { kind: "user", userId: author.userId };
     return null;

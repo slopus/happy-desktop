@@ -210,7 +210,7 @@ const versions: PipelineVersion[] = [
         digest: "d4",
         parent: 3,
         message: "Fail over to notify when checkout fails",
-        author: { kind: "agent", agentId: "a1" },
+        author: { kind: "agent", agentId: "a1", userId: null },
         createdAt: NOW - 40 * MINUTE,
     },
     {
@@ -218,7 +218,7 @@ const versions: PipelineVersion[] = [
         digest: "d3",
         parent: 2,
         message: "Run the end-to-end suite beside unit tests and release only when both pass",
-        author: { kind: "agent", agentId: "a1" },
+        author: { kind: "agent", agentId: "a1", userId: null },
         createdAt: NOW - 26 * 60 * MINUTE,
     },
     {

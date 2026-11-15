@@ -124,9 +124,9 @@ export interface PipelineDefinition {
     readonly edges: readonly PipelineEdge[];
 }
 
-/** Who published a version. */
+/** Who published a version: a member, or an agent and the member it acted for, if any. IDs only. */
 export type PipelineAuthor =
-    | { readonly kind: "agent"; readonly agentId: string }
+    | { readonly kind: "agent"; readonly agentId: string; readonly userId: string | null }
     | { readonly kind: "user"; readonly userId: string };
 
 /** One entry in a pipeline's history: a commit of its definition. */
