@@ -10546,6 +10546,24 @@ function HappyAgentConversationSurface(props: {
         conversation.menus.currentAccount !== "hidden";
     const composerDisabled = props.readOnly || modelsNotConfigured;
     const configurable = !composerDisabled && sendRefusal === undefined;
+    const panelSnapshot = useSyncExternalStore(
+        workspace.panel.subscribe,
+        workspace.panel.get,
+        workspace.panel.get,
+    );
+    const commandRunRefusal = !props.happyAgentOnline()
+        ? "Happy Agent is offline"
+        : props.unavailable !== undefined
+          ? props.unavailable
+          : props.restarting
+            ? "Happy Agent is restarting"
+            : panelSnapshot.terminalRefusal !== undefined
+              ? panelSnapshot.terminalRefusal
+              : props.writeRefusal !== undefined
+                ? props.writeRefusal
+                : props.readOnly
+                  ? (props.readOnlyReason ?? "Workspace is read-only")
+                  : undefined;
     const activeActivity = happyAgentActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
     const openImage = conversation.openImage;
@@ -10645,6 +10663,11 @@ function HappyAgentConversationSurface(props: {
             : undefined;
     return (
         <ConversationView
+            onCommandRun={(command) => workspace.terminalRun(command)}
+            commandRunDisabled={commandRunRefusal !== undefined}
+            {...(commandRunRefusal !== undefined
+                ? { commandRunDisabledReason: commandRunRefusal }
+                : {})}
             references={references}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
@@ -12501,6 +12524,11 @@ function HappyAgentPanelChatSurface(props: {
 }) {
     const chat = props.store.chat(props.tabId) ?? happyAgentPanelChatNone;
     const snapshot = useSyncExternalStore(chat.subscribe, chat.get, chat.get);
+    const panelSnapshot = useSyncExternalStore(
+        props.store.subscribe,
+        props.store.get,
+        props.store.get,
+    );
     const chatSnapshot = snapshot.type === "ready" ? snapshot.chat : undefined;
     const previewBindings = useConversationPreviews({
         workspace: props.previewContext.workspace,
@@ -12519,6 +12547,11 @@ function HappyAgentPanelChatSurface(props: {
         );
     return (
         <ConversationView
+            onCommandRun={(command) => props.store.terminalRun(command)}
+            commandRunDisabled={panelSnapshot.terminalRefusal !== undefined}
+            {...(panelSnapshot.terminalRefusal !== undefined
+                ? { commandRunDisabledReason: panelSnapshot.terminalRefusal }
+                : {})}
             {...(previews
                 ? {
                       inlinePages: {

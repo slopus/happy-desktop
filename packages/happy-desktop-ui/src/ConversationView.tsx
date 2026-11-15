@@ -330,6 +330,15 @@ export type ConversationViewProps = {
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault?: LinkOpenPlacement;
     /**
+     * Runs a shell command from a fenced code block in a workspace terminal.
+     * Absent leaves the run action out of fenced shell blocks entirely.
+     */
+    onCommandRun?: (command: string) => void;
+    /** Whether running a shell command is currently disabled. */
+    commandRunDisabled?: boolean;
+    /** Why running a shell command is disabled, shown as an explanation/tooltip. */
+    commandRunDisabledReason?: string;
+    /**
      * What the Happy references agents name read as right now, and where
      * opening one goes. Supplied by the owner of the live stores behind them;
      * a new value re-renders the references and re-sizes the rows naming them.
@@ -1366,6 +1375,18 @@ export function ConversationView(props: ConversationViewProps) {
                                     {...(props.references ? { references: props.references } : {})}
                                     {...(props.linkOpenDefault
                                         ? { linkOpenDefault: props.linkOpenDefault }
+                                        : {})}
+                                    {...(props.onCommandRun
+                                        ? { onCommandRun: props.onCommandRun }
+                                        : {})}
+                                    {...(props.commandRunDisabled !== undefined
+                                        ? { commandRunDisabled: props.commandRunDisabled }
+                                        : {})}
+                                    {...(props.commandRunDisabledReason !== undefined
+                                        ? {
+                                              commandRunDisabledReason:
+                                                  props.commandRunDisabledReason,
+                                          }
                                         : {})}
                                     onTraceToggle={props.onTraceToggle}
                                     /* Either kind of row can be the one a turn hung
