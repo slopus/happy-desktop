@@ -136,25 +136,16 @@ pnpm --dir packages/happy-desktop-gym gym:electron:clean    # remove gym state
 These are not part of everyday validation; reach for them only when measuring
 or verifying the built desktop itself.
 
-## Workspace service browsing
+## Workspace browser
 
 Happy opens web content and rendered HTML in its built-in browser instead of
-bouncing to an external one. Workspace service browsing keeps Chromium on your
-machine and sends only a selected service's traffic through its owning Happy
-Agent connection. Ask the agent to start a remote server with `service_start`,
-then open `http://localhost:PORT` in that remote workspace. In local
-workspaces, ordinary localhost URLs stay direct and do not require the service
-API or a registered service. An exact sandboxed service, local or remote, can
-be opened as `http://service-SERVICE_ID.localhost`; the browser switches to a
-private, workspace-specific origin. Ordinary internet traffic stays direct.
-This does not expose ordinary shell listeners or create a public sharing link.
-The first service release requires the updated Nightly native host and Agent
-preview, and the service host must support strict Linux sandboxing and
-delegated resource controllers. Cross-origin pages and redirects cannot
-silently gain access to a private service. Private pages currently use plain
-HTTP under `.happy.invalid`; secure-context-only browser features are not
-enabled. A dev server with a Host allowlist must allow this private suffix (for
-Vite, `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=.happy.invalid`).
+bouncing to an external one. Chromium stays on your machine; a workspace tab's
+traffic leaves from its agent's network. The tab asks its agent's Happy Agent
+which network that is (`GET /v0/workspaces/:workspaceId/agents/:agentId/proxy`)
+and then carries every request through `CONNECT /v0/networks/:networkId/proxy`,
+so `http://localhost:PORT` is the agent's own localhost, wherever the agent
+runs. Tabs on one network share its cookies and storage. A live artifact's page
+uses its own restricted proxy and its own profile instead.
 
 ## Troubleshooting
 
