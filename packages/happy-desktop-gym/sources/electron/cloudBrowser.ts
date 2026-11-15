@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { ElectronApplication, Page } from "playwright";
+import type { ElectronApplication } from "playwright";
 import { build as viteBuild, type ViteDevServer } from "vite";
 import {
     fakeHappyCloudStart,
@@ -50,6 +50,11 @@ export interface GymCloudBrowserOptions {
     /** Shell commands that release the agent's compute and attach it again. */
     readonly computeRelease?: string;
     readonly computeAttach?: string;
+    /**
+     * Paths, relative to the page, to navigate through one after another
+     * after the first load, as a reader moves around the app.
+     */
+    readonly navigate?: readonly string[];
     readonly artifactDirectory?: string;
 }
 
@@ -99,6 +104,7 @@ interface HappyCloudBrowserRefusalRecord {
 interface HappyCloudBrowserStats {
     readonly tunnelsAsked: number;
     readonly tunnelsOpened: number;
+    readonly tunnelsLive: number;
     readonly tunnelFailures: readonly string[];
     readonly console: readonly string[];
 }
@@ -121,6 +127,7 @@ export async function gymCloudBrowserRun(
     let networkId: string | undefined;
     let refusals: readonly HappyCloudBrowserRefusalRecord[] = [];
     let stats: HappyCloudBrowserStats | undefined;
+    let navigate = options.navigate;
     try {
         let target: CloudTarget;
         let compute: ComputeControl;
@@ -135,6 +142,7 @@ export async function gymCloudBrowserRun(
                 agentId: "a-fake",
                 pageUrl: viteBase(site),
             };
+            navigate ??= ["deep/page.html", "r", "", "r"];
             compute = {
                 offline: async () => cloud.computeOffline(),
                 online: async () => cloud.computeAttach(),
@@ -194,7 +202,33 @@ export async function gymCloudBrowserRun(
         // A page loads over a few kept tunnels plus its WebSocket's, far
         // within the server's eight a person may have open.
         check("tunnelsWithinLimits", afterLoad.tunnelsOpened <= 8, afterLoad);
-        await screenshot(app, join(paths.artifacts, "cloud-page.png"));
+
+        if (navigate && navigate.length > 0) {
+            // Every page keeps loading and reconnecting for hot updates; the
+            // tunnels the previous page held are given back, not left open.
+            const steps: unknown[] = [];
+            let allLoaded = true;
+            let mostLive = 0;
+            for (const path of navigate) {
+                const url = new URL(path, target.pageUrl).href;
+                const step = await pageLoad(harness, url);
+                const after = await harness.call("stats");
+                mostLive = Math.max(mostLive, after.tunnelsLive);
+                allLoaded &&= step.loaded && step.hmr;
+                steps.push({
+                    url,
+                    loaded: step.loaded,
+                    hmr: step.hmr,
+                    status: step.load.status,
+                    ms: step.load.ms,
+                    tunnelsOpened: after.tunnelsOpened,
+                    tunnelsLive: after.tunnelsLive,
+                    tunnelFailures: after.tunnelFailures.length,
+                });
+            }
+            check("navigations", allLoaded, steps);
+            check("navigationsWithinLimits", mostLive <= 8, { mostLive });
+        }
 
         if (compute.offline && compute.online) {
             const before = (await harness.call("refusals")).length;
@@ -446,6 +480,8 @@ interface PageLoaded {
     readonly hmr: boolean;
     readonly load: HappyCloudBrowserLoad;
     readonly title?: unknown;
+    /** The start of the page's text, as a reader would see it. */
+    readonly text?: unknown;
     readonly console: readonly string[];
 }
 
@@ -465,6 +501,9 @@ async function pageLoad(harness: HarnessHandle, url: string): Promise<PageLoaded
         await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
     }
     const title = await harness.call("evaluate", "document.title").catch(() => undefined);
+    const text = await harness
+        .call("evaluate", "document.body ? document.body.innerText.slice(0, 200) : ''")
+        .catch(() => undefined);
     const filled = await harness
         .call("evaluate", "document.body !== null && document.body.innerHTML.trim().length > 0")
         .catch(() => false);
@@ -473,6 +512,7 @@ async function pageLoad(harness: HarnessHandle, url: string): Promise<PageLoaded
         hmr: lines.some((line) => line.includes("[vite] connected")),
         load,
         title,
+        text,
         console: lines,
     };
 }
@@ -525,9 +565,4 @@ async function loadUntilRefused(
         await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000));
     }
     return undefined;
-}
-
-async function screenshot(app: ElectronApplication, path: string): Promise<void> {
-    const page: Page | undefined = app.windows()[0];
-    await page?.screenshot({ path }).catch(() => undefined);
 }

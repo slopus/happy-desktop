@@ -3,6 +3,7 @@ import type { Duplex } from "node:stream";
 import type { DesktopBrowserRefusal } from "../shared/desktopContract.js";
 import { HappyAgentBrowser } from "../main/happyAgentBrowser.js";
 import { happyCloudBrowserCreate } from "../main/happyCloudBrowser.js";
+import { hiddenWindowsInstall } from "../main/hiddenWindows.js";
 
 /**
  * A test-only Electron main process for the workspace browser's Happy Cloud
@@ -45,6 +46,8 @@ export interface HappyCloudBrowserRefusalRecord {
 export interface HappyCloudBrowserStats {
     readonly tunnelsAsked: number;
     readonly tunnelsOpened: number;
+    /** Tunnels open now. */
+    readonly tunnelsLive: number;
     readonly tunnelFailures: readonly string[];
     readonly console: readonly string[];
 }
@@ -77,6 +80,7 @@ async function harnessCreate(): Promise<HappyCloudBrowserHarness> {
     const tunnelFailures: string[] = [];
     let tunnelsAsked = 0;
     let tunnelsOpened = 0;
+    let tunnelsLive = 0;
     let browser: HappyAgentBrowser | undefined;
     let window: BrowserWindow | undefined;
 
@@ -120,6 +124,8 @@ async function harnessCreate(): Promise<HappyCloudBrowserHarness> {
                                 signal ?? AbortSignal.timeout(10_000),
                             );
                             tunnelsOpened += 1;
+                            tunnelsLive += 1;
+                            tunnel.once("close", () => (tunnelsLive -= 1));
                             return tunnel;
                         } catch (error) {
                             tunnelFailures.push(
@@ -144,6 +150,7 @@ async function harnessCreate(): Promise<HappyCloudBrowserHarness> {
                 height: 800,
                 webPreferences: {
                     partition,
+                    backgroundThrottling: false,
                     contextIsolation: true,
                     nodeIntegration: false,
                     sandbox: true,
@@ -186,12 +193,15 @@ async function harnessCreate(): Promise<HappyCloudBrowserHarness> {
         stats: () => ({
             tunnelsAsked,
             tunnelsOpened,
+            tunnelsLive,
             tunnelFailures: [...tunnelFailures],
             console: [...consoleLines],
         }),
     };
 }
 
+// The app's own hidden-window mode: windows render for real and are never shown.
+hiddenWindowsInstall();
 void app.whenReady().then(async () => {
     (
         globalThis as { happyCloudBrowserHarness?: HappyCloudBrowserHarness }

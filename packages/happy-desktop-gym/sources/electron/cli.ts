@@ -76,6 +76,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             ...(flags.computeOnline ? { computeOnline: flags.computeOnline } : {}),
             ...(flags.computeRelease ? { computeRelease: flags.computeRelease } : {}),
             ...(flags.computeAttach ? { computeAttach: flags.computeAttach } : {}),
+            ...(flags.navigate === undefined ? {} : { navigate: flags.navigate.split(",") }),
             ...(flags.artifactDir ? { artifactDirectory: flags.artifactDir } : {}),
         });
         console.log(JSON.stringify({ command, ...result }, null, 2));
@@ -163,6 +164,7 @@ function parseFlags(args: readonly string[]): {
     readonly computeOnline?: string;
     readonly computeRelease?: string;
     readonly computeAttach?: string;
+    readonly navigate?: string;
 } {
     const result: {
         profile?: string;
@@ -186,6 +188,7 @@ function parseFlags(args: readonly string[]): {
         computeOnline?: string;
         computeRelease?: string;
         computeAttach?: string;
+        navigate?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -224,6 +227,8 @@ function parseFlags(args: readonly string[]): {
             result.computeRelease = requiredValue(value, next, () => index++);
         else if (value === "--compute-attach")
             result.computeAttach = requiredValue(value, next, () => index++);
+        else if (value === "--navigate")
+            result.navigate = requiredValue(value, next, () => index++);
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -278,7 +283,7 @@ Commands:
   cloud-browser --fake | --server-url URL --workspace ID --agent ID --page-url URL
       [--token-command CMD | --accounts-url URL --server-name NAME]
       [--compute-offline CMD --compute-online CMD] [--compute-release CMD --compute-attach CMD]
-      [--artifact-dir PATH]   (bearer: HAPPY_GYM_CLOUD_TOKEN, or the options above)
+      [--navigate PATH,PATH,...] [--artifact-dir PATH]   (bearer: HAPPY_GYM_CLOUD_TOKEN, or the options above)
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   clean --root PATH
 
