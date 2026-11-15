@@ -376,6 +376,26 @@ describe("the router the window actually renders", () => {
         expect(router.state.location.pathname).toBe("/settings/general");
     });
 
+    // Closing a task here forgets it at once; the host's catalog drops the same
+    // group seconds later, by which time the reader has moved on.
+    it("does not move a reader again when the host confirms a group they closed", async () => {
+        const { history, router } = await routerAt(
+            "/chats/local/prj_one/ses_one",
+            "/chats/local/ws_task/ses_task",
+        );
+
+        happyAgentRouterGroupForget(router, "local", "ws_task");
+        await router.load();
+        expect(router.state.location.pathname).toBe("/chats/local/prj_one/ses_one");
+
+        history.push("/chats/local/prj_two/ses_two");
+        await router.load();
+        happyAgentRouterGroupForget(router, "local", "ws_task");
+        await router.load();
+
+        expect(router.state.location.pathname).toBe("/chats/local/prj_two/ses_two");
+    });
+
     it("does not move anyone when another machine's group is archived", async () => {
         const { router } = await routerAt("/chats/local/prj_one/ses_one");
 

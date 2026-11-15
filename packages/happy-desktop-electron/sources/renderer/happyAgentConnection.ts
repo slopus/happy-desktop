@@ -199,9 +199,9 @@ export interface HappyAgentSessionDeps {
     readonly conversationOpen: (location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (groupId: string) => void;
     /**
-     * Takes a group gone from the host's catalog out of this window's
-     * navigation. Every remembered place inside it goes too, so no Back returns
-     * to a row that no longer exists.
+     * Takes a group gone from the host's catalog, or closed by the reader here,
+     * out of this window's navigation. Every remembered place inside it goes
+     * too, so no Back returns to a row that no longer exists.
      */
     readonly groupForget: (groupId: string) => void;
     /** Takes bot subtasks the host stopped listing out of this window's navigation. */
@@ -661,6 +661,9 @@ export function happyAgentConnectionOpen(input: {
                         case "groupOpenRequested":
                             input.deps.groupOpen(event.groupId);
                             return;
+                        // Closed here, the reader leaves in the same frame;
+                        // the host's later confirmation finds nothing to move.
+                        case "groupCloseRequested":
                         case "groupRemoved":
                             input.deps.groupForget(event.groupId);
                             return;

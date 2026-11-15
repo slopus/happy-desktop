@@ -1,10 +1,12 @@
 import { expect, it } from "vitest";
 import type { HappyAgentWorkspaceClient } from "./happyAgentClient.js";
+import type { HappyAgentProjectGroup } from "./happyAgentProjectGroupProject.js";
 import type { HappyAgentSessionListSnapshot } from "./happyAgentSessionListStore.js";
 import type {
     HappyAgentBot,
     HappyAgentBotId,
     HappyAgentGroupId,
+    HappyAgentProjectId,
     HappyAgentSessionId,
     HappyAgentTask,
     HappyAgentTaskId,
@@ -64,6 +66,22 @@ const task = (name: string, archived = false): HappyAgentTask => ({
     ...(archived ? {} : { membership: { orderKey: "a" } }),
 });
 
+const project = (worktreeIds: readonly string[]): HappyAgentProjectGroup =>
+    ({
+        id: "prj_one" as HappyAgentProjectId,
+        kind: "regular",
+        name: "one",
+        conversations: [],
+        worktrees: worktreeIds.map((id) => ({
+            id: id as HappyAgentWorktreeId,
+            name: id,
+            conversations: [],
+        })),
+    }) as unknown as HappyAgentProjectGroup;
+
+const projectsOf = (list: HappyAgentSessionListSnapshot): readonly HappyAgentProjectGroup[] =>
+    list.projects.type === "ready" ? list.projects.value : [];
+
 function inert(): unknown {
     return new Proxy(() => undefined, {
         get: (_target, property) =>
@@ -94,6 +112,10 @@ function store(bots: readonly HappyAgentBot[]) {
         taskFailures: new Map(),
     } as unknown as HappyAgentSessionListSnapshot;
     const listeners = new Set<() => void>();
+    const rowsTake = (next: Partial<HappyAgentSessionListSnapshot>) => {
+        list = { ...list, ...next };
+        for (const listener of listeners) listener();
+    };
     const loading = { type: "loading" } as const;
     const client = new Proxy(
         {
@@ -106,7 +128,37 @@ function store(bots: readonly HappyAgentBot[]) {
                 new Proxy(
                     {
                         get: () => list,
-                        taskArchive: () => Promise.resolve(true),
+                        // Each removal takes its row at once, the way the real
+                        // list does, without a host answer.
+                        taskArchive: (taskId: HappyAgentTaskId) => {
+                            const found = list.tasks.find((entry) => entry.id === taskId);
+                            if (!found?.canArchive) return Promise.resolve(false);
+                            rowsTake({ tasks: list.tasks.filter((entry) => entry !== found) });
+                            return Promise.resolve(true);
+                        },
+                        taskLeave: (taskId: HappyAgentTaskId) => {
+                            rowsTake({ tasks: list.tasks.filter((entry) => entry.id !== taskId) });
+                            return Promise.resolve(true);
+                        },
+                        worktreeArchive: (_projectId: string, worktreeId: string) => {
+                            rowsTake({
+                                projects: {
+                                    type: "ready",
+                                    value: projectsOf(list).map((project) => ({
+                                        ...project,
+                                        worktrees: project.worktrees.filter(
+                                            (entry) => entry.id !== worktreeId,
+                                        ),
+                                    })),
+                                },
+                            });
+                            // The checkout's removal takes the host a while.
+                            return new Promise(() => undefined);
+                        },
+                        botArchive: (botId: HappyAgentBotId) => {
+                            rowsTake({ bots: list.bots.filter((entry) => entry.id !== botId) });
+                            return Promise.resolve(true);
+                        },
                         subscribe: (listener: () => void) => {
                             listeners.add(listener);
                             return () => listeners.delete(listener);
@@ -132,6 +184,8 @@ function store(bots: readonly HappyAgentBot[]) {
         workspace,
         unsubscribe,
         removed: () => outputs.flatMap((event) => (event.type === "groupRemoved" ? [event] : [])),
+        closed: () =>
+            outputs.flatMap((event) => (event.type === "groupCloseRequested" ? [event] : [])),
         hostAnswers(next: Partial<HappyAgentSessionListSnapshot>) {
             list = { ...list, ...next, catalogRevision: list.catalogRevision + 1 };
             for (const listener of listeners) listener();
@@ -195,6 +249,70 @@ it("never reports a group the host has not listed yet", () => {
     hostAnswers({ bots: [bot("a")] });
     hostAnswers({ bots: [bot("a")] });
 
+    expect(removed()).toEqual([]);
+    unsubscribe();
+});
+
+/**
+ * Closing a group here moves the reader off it in the same call stack as the
+ * act. Waiting for the host's catalog — seconds, for a worktree's checkout —
+ * left them on a row that had already gone, until it teleported them away.
+ */
+it("moves the reader off a task they leave before the host answers", () => {
+    const { workspace, unsubscribe, removed, closed, hostAnswers } = store([bot("a")]);
+    workspace.conversationOpen("ses_t" as HappyAgentSessionId, "ws_t" as HappyAgentGroupId);
+    hostAnswers({ tasks: [task("t")] });
+
+    void workspace.taskLeave("task_t" as HappyAgentTaskId);
+    expect(closed()).toEqual([{ type: "groupCloseRequested", groupId: "ws_t" }]);
+    expect(removed()).toEqual([]);
+
+    // The host's confirmation is still reported, for the owner to find
+    // nothing left of it.
+    hostAnswers({ tasks: [] });
+    expect(removed()).toEqual([{ type: "groupRemoved", groupId: "ws_t" }]);
+    expect(closed()).toHaveLength(1);
+    unsubscribe();
+});
+
+it("moves the reader off a task they archive, or a bot, before the host answers", () => {
+    const { workspace, unsubscribe, removed, closed, hostAnswers } = store([bot("a"), bot("b")]);
+    workspace.conversationOpen("ses_t" as HappyAgentSessionId, "ws_t" as HappyAgentGroupId);
+    hostAnswers({ tasks: [task("t")] });
+
+    void workspace.taskArchive("task_t" as HappyAgentTaskId);
+    void workspace.botArchive("bot_b" as HappyAgentBotId);
+    expect(closed()).toEqual([
+        { type: "groupCloseRequested", groupId: "ws_t" },
+        { type: "groupCloseRequested", groupId: "ws_b" },
+    ]);
+    expect(removed()).toEqual([]);
+    unsubscribe();
+});
+
+it("moves nobody when closing changed nothing", () => {
+    const { workspace, unsubscribe, closed, hostAnswers } = store([bot("a")]);
+    workspace.conversationOpen("ses_t" as HappyAgentSessionId, "ws_t" as HappyAgentGroupId);
+    hostAnswers({ tasks: [{ ...task("t"), canArchive: false }] });
+
+    // The reader may not archive it, so the row stays and so do they.
+    void workspace.taskArchive("task_t" as HappyAgentTaskId);
+    // Nothing listed by that id: nothing went.
+    void workspace.taskLeave("task_gone" as HappyAgentTaskId);
+    expect(closed()).toEqual([]);
+    unsubscribe();
+});
+
+it("moves the reader off a worktree they archive while the host is still removing its checkout", () => {
+    const { workspace, unsubscribe, removed, closed, hostAnswers } = store([bot("a")]);
+    workspace.conversationOpen("ses_wt" as HappyAgentSessionId, "wt_one" as HappyAgentGroupId);
+    hostAnswers({ projects: { type: "ready", value: [project(["wt_one", "wt_two"])] } });
+
+    void workspace.worktreeArchive(
+        "prj_one" as HappyAgentProjectId,
+        "wt_one" as HappyAgentWorktreeId,
+    );
+    expect(closed()).toEqual([{ type: "groupCloseRequested", groupId: "wt_one" }]);
     expect(removed()).toEqual([]);
     unsubscribe();
 });

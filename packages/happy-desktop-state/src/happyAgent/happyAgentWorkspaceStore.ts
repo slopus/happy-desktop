@@ -1429,6 +1429,17 @@ export type HappyAgentWorkspaceOutput =
     /** A group to address before it holds a conversation, such as a new worktree. */
     | { readonly type: "groupOpenRequested"; readonly groupId: HappyAgentGroupId }
     /**
+     * The reader closed a group from this window — left or archived a task,
+     * archived a bot or a worktree — and its row has already gone from the
+     * list. The owner takes it out of its navigation now, in the same call
+     * stack as the act, exactly as it would for `groupRemoved`: a reader
+     * standing in it is moved at once instead of whenever the host's catalog
+     * catches up, and the `groupRemoved` that follows finds nothing left to
+     * move. A refusal brings the row back with its reason; the reader stays
+     * where they went.
+     */
+    | { readonly type: "groupCloseRequested"; readonly groupId: HappyAgentGroupId }
+    /**
      * A group is gone from the host's own catalog: a project archived, here or
      * from another window or another machine's Happy, with its worktrees; a bot
      * archived; a task left or closed. Every such group is reported, addressed
@@ -1686,18 +1697,25 @@ export interface HappyAgentWorkspaceStore {
     ): Promise<void>;
     /**
      * Archives a bot, preserving its dedicated folder for a later restore. Its
-     * row goes at once; resolves `false` if the host refused and it is back.
+     * row goes at once, reported as `groupCloseRequested`; resolves `false` if
+     * the host refused and it is back.
      */
     botArchive(botId: HappyAgentBotId): Promise<boolean>;
     /** Moves one bot after `afterId`, or to the front of the bot list when null. */
     botReorder(botId: HappyAgentBotId, afterId: HappyAgentBotId | null): Promise<void>;
     /** Joins a task; the host puts it at the top of the reader's own list. */
     taskJoin(taskId: HappyAgentTaskId): Promise<void>;
-    /** Leaves a task, taking it out of the reader's list. It never archives the task. */
+    /**
+     * Leaves a task, taking it out of the reader's list at once and reporting
+     * `groupCloseRequested`. It never archives the task.
+     */
     taskLeave(taskId: HappyAgentTaskId): Promise<boolean>;
     /** Moves one joined task after `afterId` in the reader's list, or first when null. */
     taskReorder(taskId: HappyAgentTaskId, afterId: HappyAgentTaskId | null): Promise<void>;
-    /** Archives a task for everyone, when the host says the reader may. */
+    /**
+     * Archives a task for everyone, when the host says the reader may. Its row
+     * goes at once and `groupCloseRequested` reports it.
+     */
     taskArchive(taskId: HappyAgentTaskId): Promise<boolean>;
     /** Opens the list of every task this Happy Agent holds, to join one. */
     taskBrowseOpen(): void;
@@ -1728,7 +1746,10 @@ export interface HappyAgentWorkspaceStore {
      * the host has prepared its checkout.
      */
     worktreeCreate(projectId: HappyAgentProjectId): Promise<void>;
-    /** Archives a worktree, removing it and its checkout. */
+    /**
+     * Archives a worktree, removing it and its checkout. Its row goes at once
+     * and `groupCloseRequested` reports it; the answer waits for the host.
+     */
     worktreeArchive(
         projectId: HappyAgentProjectId,
         worktreeId: HappyAgentWorktreeId,
@@ -5695,6 +5716,36 @@ export function happyAgentWorkspaceStoreCreate(
         acquireConversation(conversationId);
     };
 
+    /** Whether the reader's list carries a row for this group: a worktree, a bot, or a joined task. */
+    const groupRowListed = (groupId: HappyAgentGroupId): boolean => {
+        const snapshot = list.get();
+        return (
+            snapshot.bots.some((bot) => bot.workspaceId === groupId) ||
+            snapshot.tasks.some((task) => task.workspaceId === groupId) ||
+            (snapshot.projects.type === "ready" &&
+                snapshot.projects.value.some((project) =>
+                    project.worktrees.some((worktree) => worktree.id === groupId),
+                ))
+        );
+    };
+
+    /**
+     * Runs an act that takes a group's row out of the list under the reader's
+     * hand, and when the row did go, has the owner move the reader off it
+     * before returning. An act that changed nothing — a task the reader may not
+     * archive, one already left — moves nobody.
+     */
+    const groupCloseRun = <Answer>(
+        groupId: HappyAgentGroupId | undefined,
+        act: () => Promise<Answer>,
+    ): Promise<Answer> => {
+        if (groupId === undefined) return act();
+        const listed = groupRowListed(groupId);
+        const answer = act();
+        if (listed && !groupRowListed(groupId)) output({ type: "groupCloseRequested", groupId });
+        return answer;
+    };
+
     /** What starting a conversation in an addressed group takes, from the list. */
     /**
      * Why this group cannot take new work, in the phase's own words, or
@@ -8043,7 +8094,10 @@ export function happyAgentWorkspaceStoreCreate(
             }
         },
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
-        botArchive: (botId) => list.botArchive(botId),
+        botArchive: (botId) =>
+            groupCloseRun(list.get().bots.find((bot) => bot.id === botId)?.workspaceId, () =>
+                list.botArchive(botId),
+            ),
         botReorder: (botId, afterId) => list.botReorder(botId, afterId),
         subtaskArchive: (sessionId) => list.subtaskArchive(sessionId),
         subtaskReorder: (sessionId, afterId) => list.subtaskReorder(sessionId, afterId),
@@ -8051,11 +8105,17 @@ export function happyAgentWorkspaceStoreCreate(
         subtaskFailureDismiss: (sessionId) => list.subtaskFailureDismiss(sessionId),
         botFailureDismiss: (botId) => list.botFailureDismiss(botId),
         taskJoin: (taskId) => list.taskJoin(taskId),
-        taskLeave: (taskId) => list.taskLeave(taskId),
+        taskLeave: (taskId) =>
+            groupCloseRun(list.get().tasks.find((task) => task.id === taskId)?.workspaceId, () =>
+                list.taskLeave(taskId),
+            ),
         taskReorder: (taskId, afterId) => list.taskReorder(taskId, afterId),
         taskArchive: (taskId) => {
             tasksArchivedHere.add(taskId);
-            return list.taskArchive(taskId).then((taken) => {
+            return groupCloseRun(
+                list.get().tasks.find((task) => task.id === taskId)?.workspaceId,
+                () => list.taskArchive(taskId),
+            ).then((taken) => {
                 if (!taken) tasksArchivedHere.delete(taskId);
                 return taken;
             });
@@ -8108,7 +8168,8 @@ export function happyAgentWorkspaceStoreCreate(
             if (disposed || prompt === undefined || prompt.trim().length === 0) return;
             await withAddressedChat(location.sessionId, (store) => store.messageSend(prompt, []));
         },
-        worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
+        worktreeArchive: (projectId, worktreeId) =>
+            groupCloseRun(worktreeId, () => list.worktreeArchive(projectId, worktreeId)),
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 

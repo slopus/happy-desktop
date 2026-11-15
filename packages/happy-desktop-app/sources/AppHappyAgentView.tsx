@@ -4456,9 +4456,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const task = happyAgent.tasks?.find((entry) => entry.workspaceId === row.id);
                 if (task) {
-                    // No navigation either way: the task leaves the list when
-                    // the host's own catalog stops listing it, and the
-                    // workspace follows that, so a refusal strands nobody.
+                    // No navigation here either way: the row goes at once, and
+                    // the workspace reports that so the reader leaves with it.
                     if (actionId === ROW_MENU_LEAVE)
                         void workspace.taskLeave(task.id).catch(() => undefined);
                     if (actionId === ROW_MENU_ARCHIVE && task.canArchive)
@@ -4478,12 +4477,11 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (actionId !== ROW_MENU_ARCHIVE) return;
-                // Deliberately no navigation here. An archive that the host
-                // refuses would have ejected the reader from a project that is
-                // still there, and an archive performed from another window or
-                // another machine would not have moved them at all. Leaving the
-                // addressed group is one thing, driven by the host's own catalog
-                // no longer holding it, and the workspace reports that.
+                // Deliberately no navigation here. A worktree's row goes at
+                // once and the workspace reports its closing, so the reader
+                // leaves with it; a project stays until the host's catalog no
+                // longer holds it, which is reported the same way as an
+                // archive performed from another window or machine.
                 void (
                     owner.worktreeId
                         ? workspace.worktreeArchive(owner.project.id, owner.worktreeId)
