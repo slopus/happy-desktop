@@ -100,7 +100,7 @@ const reading = (week: number, session: number, limit?: string): ComposerModelAc
     },
     session: { label: "Session", usedPercent: session, resets: "resets 5:50 PM" },
     updatedAt: NOW - 20 * 1_000,
-    ...(limit === undefined ? {} : { limit: { resets: limit } }),
+    ...(limit === undefined ? {} : { limit: { state: "blocked", resets: limit } }),
 });
 const USAGE: ReadonlyMap<string, ComposerModelAccountUsage> = new Map([
     ["claude", reading(50, 12)],

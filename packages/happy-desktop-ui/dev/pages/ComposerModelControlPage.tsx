@@ -161,7 +161,8 @@ const USAGE: ReadonlyMap<string, ComposerModelAccountUsage> = new Map([
 /**
  * A usage feed holding a reading from earlier in the session: it answers at
  * once, as the provider-usage store does with its held reading, holds nothing
- * open, and has nobody to ask for a refresh.
+ * open, and has nobody to ask for a refresh. A re-check is taken and changes
+ * nothing.
  */
 function heldUsage(usage: ReadonlyMap<string, ComposerModelAccountUsage>): ComposerModelUsageWatch {
     return {
@@ -170,6 +171,7 @@ function heldUsage(usage: ReadonlyMap<string, ComposerModelAccountUsage>): Compo
             return () => undefined;
         },
         refresh: () => undefined,
+        recheck: () => Promise.resolve(),
     };
 }
 
@@ -202,9 +204,31 @@ const claudeExtraSpent = usageWith("claude_extra", {
     week: { label: "Week", usedPercent: 100, resets: "resets Wed 6:00 PM", blocking: true },
     session: { label: "Session", usedPercent: 0, resets: "resets 11:10 PM" },
     updatedAt: NOW - 18 * MINUTE,
-    limit: { resets: "Wed 6:00 PM" },
+    limit: { state: "blocked", resets: "Wed 6:00 PM" },
 });
 const claudeNeverRead = usageWith("claude", { refreshing: true });
+
+/*
+ * claude_extra spent its week until 2:00 PM and was last read at midnight.
+ * It is 3:00 PM: the week has started over by the clock, but no reading since
+ * says so, so the 100% is from the week before.
+ */
+const EXTRA_UNCONFIRMED: ComposerModelAccountUsage = {
+    week: { label: "Week", usedPercent: 100, resets: "reset 2:00 PM", lapsed: true },
+    session: { label: "Session", usedPercent: 0, resets: "resets 11:10 PM" },
+    updatedAt: NOW - 15 * 60 * MINUTE,
+    limit: { state: "unconfirmed", reset: "2:00 PM" },
+};
+const claudeExtraUnconfirmed = usageWith("claude_extra", EXTRA_UNCONFIRMED);
+const claudeExtraRechecking = usageWith("claude_extra", {
+    ...EXTRA_UNCONFIRMED,
+    refreshing: true,
+});
+const claudeExtraWaiting = usageWith("claude_extra", {
+    ...EXTRA_UNCONFIRMED,
+    refreshError: "Claude answered 429: too many usage requests.",
+    retryAt: NOW + 25 * MINUTE,
+});
 
 /*
  * Codex through a pool that takes turns between the Current CLI and a hidden
@@ -290,7 +314,7 @@ const manyAccountsUsage = heldUsage(
                 },
                 session: { label: "Session", usedPercent: 0, resets: "resets 11:10 PM" },
                 updatedAt: NOW - 18 * MINUTE,
-                limit: { resets: "Wed 6:00 PM" },
+                limit: { state: "blocked", resets: "Wed 6:00 PM" },
             },
         ],
         [
@@ -546,7 +570,7 @@ const claudeBothLow = usageWith("claude", {
 const claudeWeekSpent = usageWith("claude", {
     ...CLAUDE,
     week: { label: "Week", usedPercent: 100, resets: "resets Thu 6:00 PM", blocking: true },
-    limit: { resets: "Thu 6:00 PM" },
+    limit: { state: "blocked", resets: "Thu 6:00 PM" },
 });
 
 /** The closed pill on Opus, with room above it for its label. */
@@ -949,13 +973,52 @@ export function ComposerModelControlPage() {
             <Specimen
                 number="26"
                 label="Spent account"
-                detail="claude_extra has used its whole week: its ring is empty and red, in the list and below it. The red line says when the limit lifts; once the daemon reads the account again after that, it goes without anyone asking."
+                detail="claude_extra has used its whole week until Wednesday: its ring is empty and red, in the list and below it, and the red line says when the limit lifts. The daemon does not read it before then."
                 stage="surface"
             >
                 <Open
                     preview={{ accounts: "claude", accountHover: "claude_extra" }}
                     selection={OPUS_EXTRA}
                     usageWatch={claudeExtraSpent}
+                    width={1140}
+                />
+            </Specimen>
+            <Specimen
+                number="26b"
+                label="Reset passed, not confirmed"
+                detail="claude_extra's week started over at 2:00 PM, but nothing has read it since: the clock alone never makes it usable. Its row shows a dash beside an empty ring, the week says it reset rather than resets and drops its old 100%, and the yellow line says the reset is not confirmed yet."
+                stage="surface"
+            >
+                <Open
+                    preview={{ accounts: "claude", accountHover: "claude_extra" }}
+                    selection={OPUS_EXTRA}
+                    usageWatch={claudeExtraUnconfirmed}
+                    width={1140}
+                />
+            </Specimen>
+            <Specimen
+                number="26c"
+                label="Re-checking"
+                detail="The same account while the daemon reads it: Updating… under the yellow line, and the arrows of All accounts turn, since an account is being read."
+                stage="surface"
+            >
+                <Open
+                    preview={{ accounts: "claude", accountHover: "claude_extra" }}
+                    selection={OPUS_EXTRA}
+                    usageWatch={claudeExtraRechecking}
+                    width={1140}
+                />
+            </Specimen>
+            <Specimen
+                number="26d"
+                label="Re-check deferred"
+                detail="Claude refused the read and asked to wait: the failed refresh is named, with why on hover, and the next line says when the account is read next."
+                stage="surface"
+            >
+                <Open
+                    preview={{ accounts: "claude", accountHover: "claude_extra" }}
+                    selection={OPUS_EXTRA}
+                    usageWatch={claudeExtraWaiting}
                     width={1140}
                 />
             </Specimen>
@@ -1017,6 +1080,17 @@ export function ComposerModelControlPage() {
                 stage="surface"
             >
                 <Pill usageWatch={claudeWeekSpent} />
+            </Specimen>
+            <Specimen
+                number="32b"
+                label="Pill, reset not confirmed"
+                detail="The spent week reset at 2:00 PM, but no reading since says the account is usable: a grey empty ring, never no ring at all. Its label says the reset is not confirmed yet."
+                stage="surface"
+            >
+                <Pill
+                    preview={{ usageWarningOpen: true }}
+                    usageWatch={usageWith("claude", EXTRA_UNCONFIRMED)}
+                />
             </Specimen>
             <Specimen
                 number="33"

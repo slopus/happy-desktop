@@ -98,7 +98,10 @@ export function conversationSwitchTargets(
             const accountUsage: ComposerModelAccountUsage | undefined = limitedHere
                 ? {
                       ...read,
-                      limit: resetsAt === null ? {} : { resets: localDayTime(resetsAt, now) },
+                      limit:
+                          resetsAt === null
+                              ? { state: "blocked" }
+                              : { state: "blocked", resets: localDayTime(resetsAt, now) },
                   }
                 : read;
             return [

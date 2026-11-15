@@ -88,7 +88,7 @@ const week = (usedPercent: number, limit = false): ComposerModelAccountUsage => 
     week: { label: "Week", usedPercent, resets: "resets Thu 8:00 PM" },
     session: { label: "Session", usedPercent: 10, resets: "resets 5:50 PM" },
     updatedAt: NOW,
-    ...(limit ? { limit: {} } : {}),
+    ...(limit ? { limit: { state: "blocked" } } : {}),
 });
 const USAGE: ComposerModelUsage = {
     accounts: new Map([
@@ -812,7 +812,10 @@ it("never offers back the account that failed, and ranks one a usage limit stopp
         conversationSwitchTargets(unread, USAGE, later, NOW).find(
             (target) => target.providerId === "claude_work",
         )?.usage?.limit,
-    ).toEqual({ resets: `${localWeekdayShort(weekly)} ${localClockTime(weekly)}` });
+    ).toEqual({
+        state: "blocked",
+        resets: `${localWeekdayShort(weekly)} ${localClockTime(weekly)}`,
+    });
 });
 
 /**

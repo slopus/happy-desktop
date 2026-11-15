@@ -119,7 +119,7 @@ const USAGE: ComposerModelUsage = {
             {
                 week: { label: "Week", usedPercent: 100, resets: "resets Thu 8:00 PM" },
                 updatedAt: NOW,
-                limit: {},
+                limit: { state: "blocked" },
             },
         ],
         [

@@ -4,6 +4,7 @@ import { userEvent } from "vitest/browser";
 import type {
     HappyAgentProviderUsageEntry,
     HappyAgentProviderUsageSnapshot,
+    HappyAgentProviderUsageStore,
 } from "happy-desktop-state";
 import "./theme.css";
 import "./styles/button.css";
@@ -12,13 +13,17 @@ import "./styles/icon.css";
 import "./styles/tooltip.css";
 import {
     ComposerModelControl,
+    type ComposerModelAccountLimit,
     type ComposerModelAccountUsage,
     type ComposerModelSelection,
     type ComposerModelService,
     type ComposerModelUsage,
     type ComposerModelUsageWatch,
 } from "./ComposerModelControl";
-import { happyAgentComposerModelUsageProject } from "./happyAgentComposerModelControl";
+import {
+    happyAgentComposerModelUsageProject,
+    happyAgentComposerModelUsageWatch,
+} from "./happyAgentComposerModelControl";
 import { createRenderer } from "./testing";
 
 /* The picker's usage, projected from the provider-usage store: each account's
@@ -125,9 +130,7 @@ it("says when a spent account's limit lifts, and drops it once the account is us
         },
     };
     const blocked = happyAgentComposerModelUsageProject(snapshot([spent]), NOW).get("claude");
-    expect(blocked?.limit?.resets).toBe(
-        new Date(2026, 9, 19, 15, 5).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-    );
+    expect(blocked?.limit).toEqual({ state: "blocked", resets: "3:05 PM" });
 
     // The daemon reads the account again once the window starts over.
     const reset: HappyAgentProviderUsageEntry = {
@@ -164,9 +167,7 @@ it("waits on the latest reset when every window is full, and on a blocked accoun
         ]),
         NOW,
     ).get("claude");
-    expect(bothFull?.limit?.resets).toContain(
-        new Date(later).toLocaleDateString([], { weekday: "short" }),
-    );
+    expect(bothFull?.limit).toEqual({ state: "blocked", resets: "Thu 3:00 PM" });
 
     const rejected = happyAgentComposerModelUsageProject(
         snapshot([
@@ -182,7 +183,139 @@ it("waits on the latest reset when every window is full, and on a blocked accoun
         ]),
         NOW,
     ).get("claude");
-    expect(rejected?.limit).toEqual({});
+    expect(rejected?.limit).toEqual({ state: "blocked" });
+});
+
+/*
+ * The reported bug: a week spent until 4:00 PM, read at 8:30 AM and not read
+ * again since. Past 4:00 PM the old reading still says 100%, and the picker
+ * said "0% left · Limit resets 4:00 PM" at 11:30 PM. A reset passing only says
+ * the account should be usable; nothing but a new reading may say it is.
+ */
+const RESET = new Date(2026, 9, 19, 16, 0).getTime();
+const SPENT_WEEK: HappyAgentProviderUsageEntry = {
+    providerId: "claude",
+    refreshedAt: RESET - 450 * MINUTE,
+    usage: {
+        capturedAt: RESET - 450 * MINUTE,
+        exhausted: true,
+        fiveHour: { usedPercent: 0, resetsAt: RESET + 900 * MINUTE },
+        weekly: { usedPercent: 100, resetsAt: RESET },
+    },
+};
+
+function spentWeekAt(now: number, entry: HappyAgentProviderUsageEntry = SPENT_WEEK) {
+    return happyAgentComposerModelUsageProject(snapshot([entry]), now).get("claude");
+}
+
+it("holds a spent account blocked until its reset, and unconfirmed once the reset has passed", () => {
+    expect(spentWeekAt(RESET - MINUTE)).toEqual({
+        week: { label: "Week", usedPercent: 100, resets: "resets 4:00 PM", blocking: true },
+        session: { label: "Session", usedPercent: 0, resets: "resets Tue 7:00 AM" },
+        updatedAt: RESET - 450 * MINUTE,
+        limit: { state: "blocked", resets: "4:00 PM" },
+    });
+
+    // At the reset and long after it, the 100% is from the week before.
+    const lapsed = {
+        week: { label: "Week", usedPercent: 100, resets: "reset 4:00 PM", lapsed: true },
+        session: { label: "Session", usedPercent: 0, resets: "resets Tue 7:00 AM" },
+        updatedAt: RESET - 450 * MINUTE,
+        limit: { state: "unconfirmed", reset: "4:00 PM" },
+    };
+    expect(spentWeekAt(RESET)).toEqual(lapsed);
+    expect(spentWeekAt(RESET + 450 * MINUTE)).toEqual(lapsed);
+
+    // Being read, or failing to be, changes nothing about what is known.
+    expect(
+        spentWeekAt(RESET + 450 * MINUTE, {
+            ...SPENT_WEEK,
+            refreshing: true,
+            refreshError: "Claude answered 429.",
+        })?.limit,
+    ).toEqual({ state: "unconfirmed", reset: "4:00 PM" });
+});
+
+it("lifts an unconfirmed limit only on a reading taken after the reset", () => {
+    const readAfter: HappyAgentProviderUsageEntry = {
+        ...SPENT_WEEK,
+        refreshedAt: RESET + 2 * MINUTE,
+        usage: {
+            capturedAt: RESET + 2 * MINUTE,
+            exhausted: false,
+            fiveHour: { usedPercent: 0, resetsAt: RESET + 900 * MINUTE },
+            weekly: { usedPercent: 3, resetsAt: RESET + 7 * 1_440 * MINUTE },
+        },
+    };
+    expect(spentWeekAt(RESET + 5 * MINUTE, readAfter)).toEqual({
+        week: { label: "Week", usedPercent: 3, resets: "resets Mon 4:00 PM" },
+        session: { label: "Session", usedPercent: 0, resets: "resets Tue 7:00 AM" },
+        updatedAt: RESET + 2 * MINUTE,
+    });
+
+    // The service can still say the account is spent, until a later reset.
+    const stillSpent: HappyAgentProviderUsageEntry = {
+        ...readAfter,
+        usage: {
+            ...readAfter.usage!,
+            exhausted: true,
+            weekly: { usedPercent: 100, resetsAt: RESET + 1_440 * MINUTE },
+        },
+    };
+    expect(spentWeekAt(RESET + 5 * MINUTE, stillSpent)?.limit).toEqual({
+        state: "blocked",
+        resets: "Tue 4:00 PM",
+    });
+});
+
+it("keeps a spent account blocked while any of its full windows has yet to reset", () => {
+    const both: HappyAgentProviderUsageEntry = {
+        ...SPENT_WEEK,
+        usage: {
+            ...SPENT_WEEK.usage!,
+            fiveHour: { usedPercent: 100, resetsAt: RESET - 60 * MINUTE },
+        },
+    };
+    expect(spentWeekAt(RESET - 30 * MINUTE, both)).toEqual({
+        week: { label: "Week", usedPercent: 100, resets: "resets 4:00 PM", blocking: true },
+        session: { label: "Session", usedPercent: 100, resets: "reset 3:00 PM", lapsed: true },
+        updatedAt: RESET - 450 * MINUTE,
+        limit: { state: "blocked", resets: "4:00 PM" },
+    });
+});
+
+it("says when the service asked to be read again, only while that is still ahead", () => {
+    const waiting = { ...SPENT_WEEK, retryAt: RESET + 10 * MINUTE };
+    expect(spentWeekAt(RESET + 5 * MINUTE, waiting)?.retryAt).toBe(RESET + 10 * MINUTE);
+    expect(spentWeekAt(RESET + 10 * MINUTE, waiting)?.retryAt).toBeUndefined();
+});
+
+it("projects the held reading again as the clock passes a reset, with no new snapshot", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    try {
+        vi.setSystemTime(RESET - 10_000);
+        const held = snapshot([SPENT_WEEK]);
+        const store: HappyAgentProviderUsageStore = {
+            get: () => held,
+            subscribe: () => () => undefined,
+            usageRefresh: () => undefined,
+            usageRecheck: () => Promise.resolve(),
+            tokensFollow: () => () => undefined,
+            [Symbol.dispose]: () => undefined,
+        };
+        const seen: (ComposerModelAccountLimit | undefined)[] = [];
+        const release = happyAgentComposerModelUsageWatch(store).subscribe((usage) =>
+            seen.push(usage.accounts.get("claude")?.limit),
+        );
+        vi.advanceTimersByTime(15_000);
+        release();
+        expect(seen).toEqual([
+            { state: "blocked", resets: "4:00 PM" },
+            { state: "unconfirmed", reset: "4:00 PM" },
+        ]);
+    } finally {
+        vi.useRealTimers();
+    }
 });
 
 const MODELS = [{ id: "opus", label: "Opus 5.5", efforts: [] }];

@@ -14,12 +14,12 @@ import {
 } from "happy-desktop-state";
 import type {
     ComposerModelAccount,
+    ComposerModelAccountLimit,
     ComposerModelAccountNotice,
     ComposerModelAccountUsage,
     ComposerModelChoice,
     ComposerModelControlProps,
     ComposerModelService,
-    ComposerModelUsage,
     ComposerModelUsageWatch,
     ComposerModelUsageWindow,
 } from "./ComposerModelControl";
@@ -171,7 +171,11 @@ export function happyAgentComposerModelControlProps(
     };
 }
 
-/** A reported window, its reset told in the viewer's local time. */
+/**
+ * A reported window, its reset told in the viewer's local time. One whose reset
+ * has passed is lapsed: what it says was spent belongs to the window before,
+ * and it holds nothing back until a new reading says so.
+ */
 function usageWindow(
     label: string,
     window: HappyAgentProviderUsageWindow | undefined,
@@ -179,14 +183,15 @@ function usageWindow(
     now: number,
 ): ComposerModelUsageWindow | undefined {
     if (window === undefined) return undefined;
+    const lapsed = window.resetsAt !== undefined && window.resetsAt <= now;
     return {
         label,
         usedPercent: window.usedPercent,
         ...(window.resetsAt === undefined
             ? {}
-            : { resets: `resets ${localDayTime(window.resetsAt, now)}` }),
+            : { resets: `${lapsed ? "reset" : "resets"} ${localDayTime(window.resetsAt, now)}` }),
         ...(window.capturedAt === undefined ? {} : { capturedAt: window.capturedAt }),
-        ...(blocking.includes(window) ? { blocking: true } : {}),
+        ...(lapsed ? { lapsed: true } : blocking.includes(window) ? { blocking: true } : {}),
     };
 }
 
@@ -206,12 +211,27 @@ function blockingWindows(reading: HappyAgentProviderUsageReading) {
         : [...windows].sort((left, right) => right.usedPercent - left.usedPercent).slice(0, 1);
 }
 
-/** When a spent account can be used again: the latest reset among the windows holding it back. */
-function limitResetsAt(blocking: readonly HappyAgentProviderUsageWindow[]): number | undefined {
+/**
+ * Whether a spent account is still held back. It is blocked until the latest
+ * reset among the windows holding it, and stays blocked with no time when the
+ * service gave none. Once that reset has passed, only a new reading can say
+ * the account is usable again; until one arrives it is unconfirmed, never
+ * usable by the clock alone.
+ */
+function accountLimit(
+    reading: HappyAgentProviderUsageReading,
+    blocking: readonly HappyAgentProviderUsageWindow[],
+    now: number,
+): ComposerModelAccountLimit | undefined {
+    if (reading.exhausted !== true) return undefined;
     const resets = blocking.flatMap((window) =>
         window.resetsAt === undefined ? [] : [window.resetsAt],
     );
-    return resets.length === 0 ? undefined : Math.max(...resets);
+    if (resets.length === 0) return { state: "blocked" };
+    const resetsAt = Math.max(...resets);
+    return resetsAt > now
+        ? { state: "blocked", resets: localDayTime(resetsAt, now) }
+        : { state: "unconfirmed", reset: localDayTime(resetsAt, now) };
 }
 
 /**
@@ -243,7 +263,7 @@ export function happyAgentComposerModelUsageProject(
         const session = hasPlan
             ? usageWindow("Session", reading.fiveHour, blocking, now)
             : undefined;
-        const limitResets = limitResetsAt(blocking);
+        const limit = hasPlan ? accountLimit(reading, blocking, now) : undefined;
         usage.set(entry.providerId, {
             ...(week === undefined ? {} : { week }),
             ...(session === undefined ? {} : { session }),
@@ -251,20 +271,19 @@ export function happyAgentComposerModelUsageProject(
             ...(entry.refreshing ? { refreshing: true } : {}),
             ...(refreshError === undefined ? {} : { refreshError }),
             ...(signedOut ? { signedOut: true } : {}),
-            ...(hasPlan && reading.exhausted === true
-                ? {
-                      limit:
-                          limitResets === undefined
-                              ? {}
-                              : { resets: localDayTime(limitResets, now) },
-                  }
+            ...(limit === undefined ? {} : { limit }),
+            ...(entry.retryAt !== undefined && entry.retryAt > now
+                ? { retryAt: entry.retryAt }
                 : {}),
         });
     }
     return usage;
 }
 
-/** Ages are told again this often while the picker is mounted, so "3 min ago" keeps counting. */
+/**
+ * Ages and passed resets are told again this often while the picker is
+ * mounted, so "3 min ago" keeps counting and a reset that passes is seen.
+ */
 const USAGE_AGE_TICK_MS = 15_000;
 
 /**
@@ -282,19 +301,19 @@ export function happyAgentComposerModelUsageWatch(
     return {
         subscribe(listener) {
             let last: HappyAgentProviderUsageSnapshot | undefined;
-            let usage: ComposerModelUsage | undefined;
+            const project = (snapshot: HappyAgentProviderUsageSnapshot) => {
+                const now = Date.now();
+                listener({ accounts: happyAgentComposerModelUsageProject(snapshot, now), now });
+            };
             const emit = () => {
                 const snapshot = store.get();
                 if (snapshot === last) return;
                 last = snapshot;
-                const now = Date.now();
-                usage = { accounts: happyAgentComposerModelUsageProject(snapshot, now), now };
-                listener(usage);
+                project(snapshot);
             };
+            // A reset passing is a change of its own, so the clock projects the reading again.
             const tick = () => {
-                if (usage === undefined) return;
-                usage = { accounts: usage.accounts, now: Date.now() };
-                listener(usage);
+                if (last !== undefined) project(last);
             };
             const unsubscribe = store.subscribe(emit);
             emit();
@@ -305,5 +324,6 @@ export function happyAgentComposerModelUsageWatch(
             };
         },
         refresh: (accounts) => store.usageRefresh(accounts),
+        recheck: () => store.usageRecheck(),
     };
 }

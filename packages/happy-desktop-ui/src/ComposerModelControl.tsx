@@ -33,7 +33,10 @@ export type ComposerModelUsageWindow = {
     label: string;
     /** The share already spent, 0–100. The picker shows what is left. */
     usedPercent: number;
-    /** Already-formatted local reset moment, such as "resets 4:10 PM". */
+    /**
+     * Already-formatted local reset moment, such as "resets 4:10 PM", or
+     * "reset 4:10 PM" once it has passed.
+     */
     resets?: string;
     /**
      * When the service last reported this window, in milliseconds. A window
@@ -42,7 +45,21 @@ export type ComposerModelUsageWindow = {
     capturedAt?: number;
     /** The account cannot be used until this window starts over. */
     blocking?: boolean;
+    /**
+     * The window has started over since it was read, so `usedPercent` is from
+     * the window before and says nothing about what is left now.
+     */
+    lapsed?: boolean;
 };
+/**
+ * Why an account that spent its limit cannot be counted on. It is `blocked`
+ * until `resets`, such as "3:05 PM", when the service says. Once that moment
+ * has passed with no reading since, it is `unconfirmed`: the service has not
+ * yet said the account is usable again, and `reset` says when it should have.
+ */
+export type ComposerModelAccountLimit =
+    | { state: "blocked"; resets?: string }
+    | { state: "unconfirmed"; reset: string };
 export type ComposerModelAccountUsage = {
     /** The weekly window, the one each account's row shows. Absent when the service has not reported it. */
     week?: ComposerModelUsageWindow;
@@ -54,11 +71,10 @@ export type ComposerModelAccountUsage = {
     refreshing?: boolean;
     /** Why the last read failed; whatever the windows show is from an earlier one. */
     refreshError?: string;
-    /**
-     * The account has spent its limit. `resets` is the already-formatted moment
-     * it is usable again, such as "3:05 PM", when the service says.
-     */
-    limit?: { resets?: string };
+    /** The account has spent its limit, and whether that still holds. */
+    limit?: ComposerModelAccountLimit;
+    /** The service asked not to be read again before this moment, in milliseconds. */
+    retryAt?: number;
     /** The account's sign-in is missing or was refused, so nothing can be sent to it. */
     signedOut?: boolean;
 };
@@ -130,6 +146,12 @@ export type ComposerModelAccountNotice =
 export type ComposerModelUsageWatch = {
     subscribe(listener: (usage: ComposerModelUsage) => void): () => void;
     refresh(accounts: readonly string[]): void;
+    /**
+     * Re-checks every account now, however recently it was read. Settles once
+     * the owner has taken the request; a rejection's message is shown under
+     * the button. Without it the account panel offers no re-check.
+     */
+    recheck?(): Promise<void>;
 };
 /** The menu's own two rows, and the list each of them opens beside it. */
 export type ComposerModelPanel = "main" | "model" | "effort";
@@ -390,9 +412,25 @@ const USAGE_WINDOW_NAMES: Record<UsageWindowKind, string> = { week: "Weekly", se
  * whatever its number says.
  */
 function usageWarning(usage: ComposerModelAccountUsage | undefined) {
+    // A spent account whose reset passed unread is not counted on: its window
+    // warns with the empty ring of a number not known, never as having room.
+    const limit = usage?.limit;
+    if (limit?.state === "unconfirmed") {
+        const kind = usage?.week?.lapsed ? "week" : usage?.session?.lapsed ? "session" : undefined;
+        const window = kind === undefined ? undefined : usage?.[kind];
+        if (kind !== undefined && window !== undefined)
+            return {
+                kind,
+                window,
+                left: undefined,
+                tone: "ample" as const,
+                label: `${USAGE_WINDOW_NAMES[kind]} limit reset ${limit.reset} · not confirmed yet`,
+            };
+    }
     const candidates = (["week", "session"] as const).flatMap((kind) => {
         const window = usage?.[kind];
-        if (window === undefined) return [];
+        // A lapsed window's number is from before it started over, so it warns of nothing.
+        if (window === undefined || window.lapsed) return [];
         const left = usageLeft(window);
         const tone = usageRingTone(left, window.blocking === true);
         return tone === "ample" ? [] : [{ kind, window, left, tone }];
@@ -414,23 +452,33 @@ function usageWarning(usage: ComposerModelAccountUsage | undefined) {
  * The share of a window left, as the native menu bar draws it: the number,
  * then a small ring that drains as the window is spent. It turns yellow when
  * little is left, and red when almost nothing is or the account is blocked.
+ * A window whose number is no longer current reads as a dash beside the empty
+ * track: nothing measured, not nothing left.
  */
 function UsageGauge(props: {
     window: ComposerModelUsageWindow;
     blocked: boolean;
-    text: string;
+    /** What follows the number, such as "% left". */
+    unit: string;
+    /** The number is not current, whatever the window says. */
+    unknown?: boolean;
     title?: string;
 }) {
-    const tone = usageRingTone(usageLeft(props.window), props.blocked);
+    const unknown = props.unknown === true || props.window.lapsed === true;
+    const left = usageLeft(props.window);
+    const tone = unknown ? "ample" : usageRingTone(left, props.blocked);
     return (
         <span
             className="happy-composer-model-control__usage-gauge"
             data-happy-desktop-ui="composer-model-control-usage-gauge"
             data-tone={tone}
+            data-unknown={unknown ? "" : undefined}
             title={props.title}
         >
-            <span className="happy-composer-model-control__usage-value">{props.text}</span>
-            <UsageRing left={usageLeft(props.window)} tone={tone} />
+            <span className="happy-composer-model-control__usage-value">
+                {unknown ? "—" : `${String(left)}${props.unit}`}
+            </span>
+            <UsageRing left={unknown ? undefined : left} tone={tone} />
         </span>
     );
 }
@@ -456,11 +504,20 @@ export function ComposerModelAccountGauge(props: { usage: ComposerModelAccountUs
         );
     const window = usage?.week ?? usage?.session;
     if (usage === undefined || window === undefined) return null;
+    // A spent account whose reset has passed is not counted on until a reading says so.
+    const unconfirmed = usage.limit?.state === "unconfirmed";
     return (
         <UsageGauge
-            blocked={usage.limit !== undefined}
-            text={`${String(usageLeft(window))}%`}
-            title={`${window.label}: ${String(usageLeft(window))}% left`}
+            blocked={usage.limit?.state === "blocked"}
+            title={
+                unconfirmed
+                    ? "Limit reset, not confirmed yet"
+                    : window.lapsed
+                      ? `${window.label}: started over, not read since`
+                      : `${window.label}: ${String(usageLeft(window))}% left`
+            }
+            unit="%"
+            unknown={unconfirmed}
             window={window}
         />
     );
@@ -494,7 +551,10 @@ function usageDetailsHeight(
     const freshness = usage && now !== undefined ? usageFreshnessLines(usage, now) : undefined;
     if (freshness) {
         const count =
-            (freshness.limit ? 1 : 0) + (freshness.updated ? 1 : 0) + freshness.behind.length;
+            (freshness.limit ? 1 : 0) +
+            (freshness.updated ? 1 : 0) +
+            (freshness.retry ? 1 : 0) +
+            freshness.behind.length;
         lines.push(count * USAGE_LINE + (count - 1) * USAGE_FRESHNESS_GAP);
     }
     return (
@@ -604,11 +664,7 @@ function UsageLine(props: { window: ComposerModelUsageWindow; primary?: boolean 
         >
             <span className="happy-composer-model-control__usage-label">{window.label}</span>
             <span className="happy-composer-model-control__usage-resets">{window.resets}</span>
-            <UsageGauge
-                blocked={window.blocking === true}
-                text={`${String(usageLeft(window))}% left`}
-                window={window}
-            />
+            <UsageGauge blocked={window.blocking === true} unit="% left" window={window} />
         </div>
     );
 }
@@ -631,7 +687,7 @@ function HeaderUsage(props: { usage: ComposerModelAccountUsage | undefined }) {
             <Tooltip label={warning.label} placement="bottom">
                 <UsageGauge
                     blocked={warning.window.blocking === true}
-                    text={`${String(warning.left)}%`}
+                    unit="%"
                     window={warning.window}
                 />
             </Tooltip>
@@ -681,15 +737,31 @@ function usageFreshnessLines(usage: ComposerModelAccountUsage, now: number) {
           : usage.updatedAt === undefined
             ? undefined
             : `Updated ${usageAge(usage.updatedAt, now)}`;
+    const retry =
+        !usage.refreshing && usage.retryAt !== undefined && usage.retryAt > now
+            ? `Next check ${clockTime(usage.retryAt, now)}`
+            : undefined;
     if (
         updated === undefined &&
+        retry === undefined &&
         behind.length === 0 &&
         usage.limit === undefined &&
         usage.signedOut !== true
     )
         return undefined;
     /* A signed-out account says so on the line a spent one names its reset. */
-    return { behind, limit: usage.limit !== undefined || usage.signedOut === true, updated };
+    return {
+        behind,
+        limit: usage.limit !== undefined || usage.signedOut === true,
+        updated,
+        retry,
+    };
+}
+
+/** The line a spent account leads its caption with: when it lifts, or that it lifted unconfirmed. */
+function limitText(limit: ComposerModelAccountLimit) {
+    if (limit.state === "unconfirmed") return `Reset ${limit.reset} · not confirmed yet`;
+    return limit.resets ? `Limit resets ${limit.resets}` : "Limit reached";
 }
 
 /**
@@ -697,13 +769,15 @@ function usageFreshnessLines(usage: ComposerModelAccountUsage, now: number) {
  * long ago it was read, that it is being read now, or when it was last read
  * and that the latest attempt failed. A window left behind from an earlier
  * reading than the rest is named with its own time, so an old number is never
- * read as a new one. A spent account leads with when its limit lifts.
+ * read as a new one. A spent account leads with when its limit lifts, or, once
+ * that has passed with no reading since, that it is not confirmed yet. When the
+ * service asked to wait, the caption says when the account is read next.
  */
 function UsageFreshness(props: { usage: ComposerModelAccountUsage; now: number }) {
     const { usage, now } = props;
     const lines = usageFreshnessLines(usage, now);
     if (lines === undefined) return null;
-    const { behind, updated } = lines;
+    const { behind, updated, retry } = lines;
     return (
         <div
             className="happy-composer-model-control__usage-freshness"
@@ -720,8 +794,9 @@ function UsageFreshness(props: { usage: ComposerModelAccountUsage; now: number }
                 <span
                     className="happy-composer-model-control__usage-limit"
                     data-happy-desktop-ui="composer-model-control-usage-limit"
+                    data-state={usage.limit.state}
                 >
-                    {usage.limit.resets ? `Limit resets ${usage.limit.resets}` : "Limit reached"}
+                    {limitText(usage.limit)}
                 </span>
             ) : null}
             {updated === undefined ? null : (
@@ -732,6 +807,14 @@ function UsageFreshness(props: { usage: ComposerModelAccountUsage; now: number }
                     title={usage.refreshError}
                 >
                     {updated}
+                </span>
+            )}
+            {retry === undefined ? null : (
+                <span
+                    className="happy-composer-model-control__usage-updated"
+                    data-happy-desktop-ui="composer-model-control-usage-retry"
+                >
+                    {retry}
                 </span>
             )}
             {behind.map((window) => (
@@ -749,6 +832,57 @@ function UsageFreshness(props: { usage: ComposerModelAccountUsage; now: number }
 
 function failureMessage(error: unknown, fallback: string) {
     return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/**
+ * The account panel's last line, a small header like a service's: "All
+ * accounts", and the button that re-checks every one of them now. Its arrows
+ * turn while the request is on its way or any account is being read.
+ */
+function AccountsRecheck(props: { reading: boolean; onRecheck(): Promise<void> }) {
+    const [request, setRequest] = useState<{ pending: boolean; error?: string }>({
+        pending: false,
+    });
+    const busy = request.pending || props.reading;
+    return (
+        <>
+            <div
+                className="happy-composer-model-control__service-header happy-composer-model-control__recheck"
+                data-happy-desktop-ui="composer-model-control-accounts-recheck"
+            >
+                <span className="happy-composer-model-control__service-name">All accounts</span>
+                <button
+                    aria-busy={busy}
+                    aria-label="Re-check all accounts"
+                    className="happy-composer-model-control__recheck-button"
+                    data-busy={busy ? "" : undefined}
+                    data-happy-desktop-ui="composer-model-control-accounts-recheck-button"
+                    data-menu-item="account"
+                    onClick={() => {
+                        if (request.pending) return;
+                        setRequest({ pending: true });
+                        props.onRecheck().then(
+                            () => setRequest({ pending: false }),
+                            (error: unknown) =>
+                                setRequest({
+                                    pending: false,
+                                    error: failureMessage(error, "Could not re-check accounts."),
+                                }),
+                        );
+                    }}
+                    title="Re-check all accounts"
+                    type="button"
+                >
+                    <Octicon name="sync" size={14} />
+                </button>
+            </div>
+            {request.error ? (
+                <span className="happy-composer-model-control__footer-error" role="alert">
+                    {request.error}
+                </span>
+            ) : null}
+        </>
+    );
 }
 
 /**
@@ -1129,6 +1263,11 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
     };
 
     const usageOf = (account: ComposerModelAccount) => liveUsage?.accounts.get(account.id);
+    const recheck = usageWatch?.recheck ? () => usageWatch.recheck!() : undefined;
+    /** Whether any account, on any service, is being read now. */
+    const reading = [...(liveUsage?.accounts.values() ?? [])].some(
+        (usage) => usage.refreshing === true,
+    );
     /** An account says that it is one: the service's own is its default, any other is its id. */
     const accountName = (account: ComposerModelAccount) =>
         account.default ? "Default account" : account.label;
@@ -1289,6 +1428,10 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                         usage={shownUsage}
                     />
                 ) : null}
+                {recheck ? (
+                    <div className="happy-composer-model-control__separator" role="separator" />
+                ) : null}
+                {recheck ? <AccountsRecheck onRecheck={recheck} reading={reading} /> : null}
             </div>
         );
     };

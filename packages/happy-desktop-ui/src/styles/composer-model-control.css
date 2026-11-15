@@ -549,6 +549,77 @@
     transform: none;
 }
 
+/* "All accounts" closes the account panel as a small header like a service's,
+ * its re-check button on the right. The 14px glyph's arrows ink 12px across,
+ * as wide as a ring, and its box is centred where the rings above are: the
+ * 20px button reaches 4px past the line's inset, so both end on one edge. */
+.happy-composer-model-control__recheck-button {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0 -4px 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 120ms ease;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.happy-composer-model-control__recheck-button::before {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 4px;
+    content: "";
+    pointer-events: none;
+    transition: background-color 120ms ease;
+}
+
+.happy-composer-model-control__recheck-button:hover,
+.happy-composer-model-control__recheck-button:focus-visible {
+    color: var(--text);
+}
+
+.happy-composer-model-control__recheck-button:hover::before,
+.happy-composer-model-control__recheck-button:focus-visible::before {
+    background: var(--surface-selected);
+}
+
+.happy-composer-model-control__recheck-button:focus-visible {
+    outline: none;
+}
+
+.happy-composer-model-control__recheck-button:focus-visible::before {
+    box-shadow: inset 0 0 0 2px var(--radio-active);
+}
+
+/* The arrows turn on the compositor, so a busy main thread never stalls them. */
+.happy-composer-model-control__recheck-button[data-busy] .happy-vector-icon {
+    animation: happy-composer-model-control-recheck 1s linear infinite;
+}
+
+/* Without motion, a busy button says so by dimming its arrows instead. */
+@media (prefers-reduced-motion: reduce) {
+    .happy-composer-model-control__recheck-button[data-busy] .happy-vector-icon {
+        animation: none;
+        opacity: 0.48;
+    }
+}
+
+@keyframes happy-composer-model-control-recheck {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* A box-centred chevron sits on the cap-height middle, but the header is mostly
  * lowercase, so its ink centroid is 0.65px lower in Chromium. One device pixel
  * down at 2x puts the chevron within 0.15px of it. */
@@ -756,7 +827,7 @@
 }
 
 .happy-composer-model-control__usage-window[data-primary]
-    .happy-composer-model-control__usage-gauge:not([data-tone="critical"]) {
+    .happy-composer-model-control__usage-gauge:not([data-tone="critical"], [data-unknown]) {
     color: var(--text);
 }
 
@@ -807,6 +878,16 @@
     color: var(--warning-critical);
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* A reset that passed with no reading since is a warning, never the all-clear. */
+.happy-composer-model-control__usage-limit[data-state="unconfirmed"] {
+    color: var(--box-warning-text);
+}
+
+/* A number that is no longer current reads quietly, beside its empty ring. */
+.happy-composer-model-control__usage-gauge[data-unknown] {
+    color: var(--text-secondary);
 }
 
 .happy-composer-model-control__usage-updated {

@@ -55,7 +55,7 @@ const USAGE: ReadonlyMap<string, ComposerModelAccountUsage> = new Map([
             week: { label: "Week", usedPercent: 100, resets: "resets Thu 8:00 PM", blocking: true },
             session: { label: "Session", usedPercent: 10, resets: "resets 5:50 PM" },
             updatedAt: NOW,
-            limit: { resets: "Thu 8:00 PM" },
+            limit: { state: "blocked", resets: "Thu 8:00 PM" },
         },
     ],
     ["claude_work", { week: { label: "Week", usedPercent: 38, resets: "resets Thu" } }],
