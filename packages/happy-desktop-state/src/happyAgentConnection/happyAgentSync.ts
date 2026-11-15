@@ -41,7 +41,10 @@ export type HappyCloudEventType =
     | "payments.updated"
     | "checkout.updated"
     | "repository.updated"
-    | "checkout.deleted";
+    | "checkout.deleted"
+    | "pipeline.updated"
+    | "pipeline.run.updated"
+    | "pipeline.node.updated";
 
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {

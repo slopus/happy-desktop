@@ -156,6 +156,8 @@ import {
     happyAgentComputeStoreCreate,
     type HappyAgentComputeStore,
 } from "./happyAgentComputeStore.js";
+import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
+import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
 import {
     happyAgentPreviewsStoreCreate,
     type HappyAgentPreviewsStore,
@@ -313,6 +315,13 @@ export interface HappyAgentWorkspaceClient {
     genUiActions(): HappyAgentGenUiActions | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
+    /**
+     * The team's pipelines on Happy Cloud. Undefined anywhere else, and while
+     * the server's health does not say it serves pipelines.
+     */
+    pipelines(): PipelinesStore | undefined;
+    /** One pipeline's page; materialized per pipeline and kept. Undefined where `pipelines()` is. */
+    pipeline(pipelineId: string): PipelineStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
     previews(): HappyAgentPreviewsStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
@@ -792,6 +801,8 @@ export function happyAgentWorkspaceClientCreate(
     let pluginsStore: HappyAgentPluginsStore | undefined;
     let genUiActions: HappyAgentGenUiActions | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
+    let pipelinesStore: PipelinesStore | undefined;
+    const pipelineStores = new Map<string, PipelineStore>();
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
@@ -1274,6 +1285,28 @@ export function happyAgentWorkspaceClientCreate(
             computeStore ??= happyAgentComputeStoreCreate({ request, sync: deps.connection.sync });
             return computeStore;
         },
+        pipelines() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "pipelines"))
+                return undefined;
+            pipelinesStore ??= pipelinesStoreCreate({ request, sync: deps.connection.sync });
+            return pipelinesStore;
+        },
+        pipeline(pipelineId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "pipelines"))
+                return undefined;
+            let store = pipelineStores.get(pipelineId);
+            if (!store) {
+                store = pipelineStoreCreate({ pipelineId, request, sync: deps.connection.sync });
+                pipelineStores.set(pipelineId, store);
+            }
+            return store;
+        },
         previews() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1552,6 +1585,10 @@ export function happyAgentWorkspaceClientCreate(
             pluginsStore = undefined;
             computeStore?.[Symbol.dispose]();
             computeStore = undefined;
+            pipelinesStore?.[Symbol.dispose]();
+            pipelinesStore = undefined;
+            for (const store of pipelineStores.values()) store[Symbol.dispose]();
+            pipelineStores.clear();
             previewsStore?.[Symbol.dispose]();
             previewsStore = undefined;
             dailyUsageStore?.[Symbol.dispose]();

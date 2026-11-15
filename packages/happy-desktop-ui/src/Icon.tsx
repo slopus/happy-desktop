@@ -82,6 +82,7 @@ export type IconName =
     | "bug"
     | "unlink"
     | "plugin"
+    | "pipeline"
     | "package"
     | "dice"
     | "calendar"
@@ -223,6 +224,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     // A locally installed plugin's own contribution: the piece that was added to
     // this window rather than shipped in it.
     plugin: { set: "ionicons", name: "extension-puzzle-outline" },
+    // A pipeline: a fixed graph of steps the server runs on its own, branching
+    // and joining. The network of nodes, not a chat or a single task.
+    pipeline: { set: "ionicons", name: "git-network-outline" },
     // The shipped thing a contribution arrives in: a version of some code that
     // can be installed, updated, or removed. Distinct from the puzzle piece on
     // purpose, so managing packages never wears the glyph of using one.

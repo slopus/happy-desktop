@@ -55,6 +55,10 @@ export type HappyAgentRoute =
     | { readonly kind: "plugins"; readonly happyAgentId: string }
     /** One plugin on one machine, with its installations. */
     | { readonly kind: "plugin"; readonly happyAgentId: string; readonly pluginId: string }
+    /** The pipelines a Happy Cloud server runs. */
+    | { readonly kind: "pipelines"; readonly happyAgentId: string }
+    /** One pipeline on one server: its graph and history. */
+    | { readonly kind: "pipeline"; readonly happyAgentId: string; readonly pipelineId: string }
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
     | { readonly kind: "settingsSection"; readonly section: string }
@@ -114,6 +118,10 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/plugins/${part(route.happyAgentId)}`;
         case "plugin":
             return `/plugins/${part(route.happyAgentId)}/${part(route.pluginId)}`;
+        case "pipelines":
+            return `/pipelines/${part(route.happyAgentId)}`;
+        case "pipeline":
+            return `/pipelines/${part(route.happyAgentId)}/${part(route.pipelineId)}`;
         case "happyAgent":
             return `/chats/${part(route.happyAgentId)}`;
         case "settings":
@@ -225,6 +233,11 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             return second === undefined
                 ? { kind: "plugins", happyAgentId: first }
                 : { kind: "plugin", happyAgentId: first, pluginId: second };
+        case "pipelines":
+            if (first === undefined || segments.length > 3) return undefined;
+            return second === undefined
+                ? { kind: "pipelines", happyAgentId: first }
+                : { kind: "pipeline", happyAgentId: first, pipelineId: second };
         case "people":
             return first !== undefined && second !== undefined && segments.length === 3
                 ? { kind: "userProfile", happyAgentId: first, userId: second }
@@ -312,6 +325,17 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
             const pluginId = fieldOf(record, "pluginId");
             return happyAgentId && pluginId
                 ? { kind: "plugin", happyAgentId, pluginId }
+                : undefined;
+        }
+        case "pipelines": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "pipelines", happyAgentId } : undefined;
+        }
+        case "pipeline": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const pipelineId = fieldOf(record, "pipelineId");
+            return happyAgentId && pipelineId
+                ? { kind: "pipeline", happyAgentId, pipelineId }
                 : undefined;
         }
         case "file": {
