@@ -177,3 +177,44 @@ export function pipelineDurationText(seconds: number): string {
     if (seconds % 60 === 0) return `${String(seconds / 60)} min`;
     return `${String(seconds)} s`;
 }
+
+/** What the cluster's failure codes mean, in a few words. */
+const PIPELINE_FAILURE_TITLE: Readonly<Record<string, string>> = {
+    exception: "Raised an exception",
+    type_error: "Didn't fit its type",
+    invalid_output: "Returned an invalid output",
+    output_too_large: "Output over 1 MiB",
+    timeout: "Ran out of time",
+    compute_unavailable: "Computer unavailable",
+    permission_denied: "Not permitted",
+    unsupported: "Not supported on this cluster",
+    internal_error: "The cluster failed",
+    no_output: "Ended without an output",
+    agent_error: "The agent's turn failed",
+    model_unavailable: "Model unavailable",
+};
+
+/**
+ * A failure code in words. Agent nodes may fail with a code of their own,
+ * which reads as its words: `tests_failed` is "Tests failed".
+ */
+export function pipelineFailureTitle(code: string): string {
+    const known = PIPELINE_FAILURE_TITLE[code];
+    if (known) return known;
+    const words = code.replaceAll("_", " ").trim();
+    return words ? words[0]!.toUpperCase() + words.slice(1) : "Failed";
+}
+
+/** A token count at a glance: `840`, `12.4k`, `3.1M`. */
+export function pipelineTokensText(count: number): string {
+    if (count < 1_000) return String(Math.round(count));
+    if (count < 1_000_000) return `${(count / 1_000).toFixed(count < 10_000 ? 1 : 0)}k`;
+    return `${(count / 1_000_000).toFixed(1)}M`;
+}
+
+/** US dollars to the cent, and a hint below a cent. */
+export function pipelineCostText(usd: number): string {
+    if (usd === 0) return "$0.00";
+    if (usd < 0.01) return "< $0.01";
+    return `$${usd.toFixed(2)}`;
+}

@@ -232,6 +232,24 @@ export interface PipelineNodeRun {
     readonly childRunId: string | null;
     readonly startedAt: number | null;
     readonly endedAt: number | null;
+    /**
+     * What an agent node's agent spent so far, one entry per provider and
+     * model, in that order; null on other nodes and before the first inference.
+     */
+    readonly usage: readonly PipelineModelUsage[] | null;
+}
+
+/** Tokens and cost one model spent on one node. */
+export interface PipelineModelUsage {
+    readonly provider: string;
+    readonly model: string;
+    readonly input: number;
+    readonly output: number;
+    readonly cacheRead: number;
+    readonly cacheWrite: number;
+    readonly reasoning: number;
+    /** In US dollars; null when the provider did not price it. */
+    readonly costUsd: number | null;
 }
 
 /** A named computer a run holds, handed from node to node. */

@@ -639,11 +639,89 @@
     background: var(--box-error-background);
 }
 
-.happy-pipeline-detail__failure-code {
+.happy-pipeline-detail__failure-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+}
+
+.happy-pipeline-detail__failure-name {
     color: var(--box-error-text);
-    font-family: var(--happy-font-mono);
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-pipeline-detail__failure-code {
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    line-height: 16px;
+}
+
+/* A batch run's inputs, numbered oldest first. */
+.happy-pipeline-batch {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-pipeline-batch__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-pipeline-batch__item > .happy-pipeline-detail__value {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy-pipeline-batch__number {
+    flex: none;
+    min-width: 14px;
+    padding-top: 7px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-align: end;
+}
+
+/* Several models: one line each, its name and what it spent. */
+.happy-pipeline-usage {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-pipeline-usage__model {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-pipeline-usage__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-usage__spend {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
     line-height: 16px;
 }
 
@@ -1258,6 +1336,7 @@
     /* Not flex: the plane's origin sits half a view in, where the track's first moment is drawn. */
     position: absolute;
     top: 0;
+    bottom: 0;
     left: 50cqw;
     contain: layout style;
 }
@@ -1316,6 +1395,8 @@
     /* Not flex: the edges lie under the bars, sharing the plane's coordinates. */
     position: absolute;
     inset: 0;
+    width: 100%;
+    height: 100%;
     overflow: visible;
     pointer-events: none;
 }
@@ -1329,6 +1410,8 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    /* Its row's y, written as rows fold; a bar's x is its offset, a head's its own transform. */
+    transform: translateY(calc(var(--y, 0) * 1px));
     box-sizing: border-box;
     height: 24px;
     margin: 0;
@@ -1442,7 +1525,16 @@
     top: 0;
     left: 0;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
     width: calc((var(--now-x, 0) - var(--x0, 0)) * 1px);
+    padding-inline-start: 7px;
+    overflow: clip;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+    transform: translateY(calc(var(--y, 0) * 1px));
     height: 24px;
     border: 1px solid color-mix(in srgb, var(--text-link) 40%, var(--divider));
     border-inline-end: 0;
@@ -1452,7 +1544,10 @@
 
 /* Heads ride the now line: a working node's card, and the nodes still ahead. */
 .happy-pipeline-timeline__head {
-    transform: translateX(calc((var(--now-x, 0) + var(--rel, 0) + var(--glide, 0)) * 1px));
+    transform: translate(
+        calc((var(--now-x, 0) + var(--rel, 0) + var(--glide, 0)) * 1px),
+        calc(var(--y, 0) * 1px)
+    );
     will-change: transform;
 }
 
