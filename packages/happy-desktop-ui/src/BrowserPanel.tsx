@@ -33,6 +33,12 @@ export interface BrowserFailure {
     readonly url?: string;
 }
 
+/**
+ * Why the page's server refused its traffic: the agent's compute was detached,
+ * or the computer it runs on went offline. The tab closes until it is back.
+ */
+export type BrowserRefusal = "computeDetached" | "computeOffline";
+
 export interface BrowserContentProps {
     /** A host can retain a guest beyond the displaying component's lifetime. */
     readonly retention?: {
@@ -50,6 +56,8 @@ export interface BrowserContentProps {
     browserLocationChanged(url: string, canGoBack: boolean, canGoForward: boolean): void;
     browserTitleChanged(title: string): void;
     browserFailed(failure: BrowserFailure): void;
+    /** The agent's server refused the page because its compute is away. */
+    browserRefused?(refusal: BrowserRefusal): void;
     /** The tab's agent named its network; the tab is bound to it from now on. */
     browserNetworkResolved?(networkId: string): void;
     /** The page asked to open another page, which belongs on the same network. */

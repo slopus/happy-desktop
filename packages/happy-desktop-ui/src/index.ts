@@ -863,6 +863,7 @@ export {
     type BrowserController,
     type BrowserFailure,
     type BrowserPanelProps,
+    type BrowserRefusal,
     type BrowserGuestOwner,
     type BrowserStartPage,
     type BrowserStartTool,

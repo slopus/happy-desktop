@@ -39,7 +39,9 @@ export type HappyAgentViewPlacement = "panel" | "main";
 /**
  * Why a browser tab's page is closed: the compute its agent's server runs it
  * on was detached from the agent, or the computer it is held to went offline.
- * Only a Happy Cloud agent states compute, so only its pages close this way.
+ * Only a Happy Cloud agent has compute, so only its pages close this way. The
+ * server says so in the agent's stated compute, or by refusing a page's
+ * tunnel.
  */
 export type HappyAgentBrowserClosure = "computeDetached" | "computeOffline";
 
@@ -401,6 +403,15 @@ export interface HappyAgentPanelStore {
      * for an offline computer opens again to find out.
      */
     computeRunnersChanged(): void;
+    /**
+     * The agent's server refused a page's tunnel because the agent's compute
+     * is away. This is authoritative input too, and reaches an agent whose
+     * stated compute the panel never sees: every page opened for that agent
+     * closes. Unless its stated compute says when it is back, the pages open
+     * again on a timer to ask, waiting longer each time the asking is refused
+     * at once.
+     */
+    browserTunnelRefused(tabId: HappyAgentPanelTabId, closure: HappyAgentBrowserClosure): void;
 
     [Symbol.dispose](): void;
 }
@@ -446,6 +457,21 @@ const NO_TABS: readonly HappyAgentPanelTabSnapshot[] = [];
 const NO_RECENT: readonly HappyAgentBrowserRecent[] = [];
 /** How many visited pages a group's new tab offers. */
 const BROWSER_RECENT_LIMIT = 8;
+/** How long pages closed by a refused tunnel wait to ask again, by refusals in a row. */
+const BROWSER_REPROBE_MS = [5_000, 15_000, 30_000, 60_000] as const;
+/** A refusal this soon after the pages opened again to ask is the asking refused. */
+const BROWSER_REPROBE_REFUSED_WITHIN_MS = 30_000;
+
+/** Pages of one agent closed by a refused tunnel, and when they ask again. */
+interface BrowserTunnelRefusal {
+    /** Present while the pages are closed; absent once they opened again to ask. */
+    closure?: HappyAgentBrowserClosure;
+    /** Refusals in a row, each one soon after the pages asked again. */
+    refusals: number;
+    timer?: ReturnType<typeof setTimeout>;
+    /** When the pages last opened again to ask. */
+    probedAt?: number;
+}
 
 /**
  * Whether a rebuilt tab says exactly what the one already in the snapshot says.
@@ -537,6 +563,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
      * restatement of the same compute.
      */
     const computeClosures = new Map<HappyAgentSessionId, HappyAgentBrowserClosure | undefined>();
+    /** Agents whose pages a refused tunnel closed; stated compute supersedes it. */
+    const tunnelRefusals = new Map<HappyAgentSessionId, BrowserTunnelRefusal>();
+    /** The closure a page newly opened for an agent starts with. */
+    const agentClosure = (agent: HappyAgentSessionId): HappyAgentBrowserClosure | undefined =>
+        computeClosures.get(agent) ?? tunnelRefusals.get(agent)?.closure;
     let disposed = false;
     let snapshot: HappyAgentPanelSnapshot = {
         activeViewId: "files",
@@ -771,6 +802,33 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         if (tab.artifactId === undefined) tab.networkId = undefined;
     };
 
+    const tunnelRefusalForget = (agent: HappyAgentSessionId): void => {
+        clearTimeout(tunnelRefusals.get(agent)?.timer);
+        tunnelRefusals.delete(agent);
+    };
+
+    /**
+     * Opens an agent's pages closed by a refused tunnel again, so they ask its
+     * server whether the compute is back. A refusal soon after counts against
+     * the next wait.
+     */
+    const tunnelRefusalProbe = (agent: HappyAgentSessionId): void => {
+        const refusal = tunnelRefusals.get(agent);
+        if (disposed || !refusal) return;
+        clearTimeout(refusal.timer);
+        refusal.timer = undefined;
+        refusal.closure = undefined;
+        refusal.probedAt = Date.now();
+        let changed = false;
+        for (const tab of tabs) {
+            if (tab.kind !== "browser" || tab.agentId !== agent || tab.closed === undefined)
+                continue;
+            browserReopen(tab);
+            changed = true;
+        }
+        if (changed) recompute();
+    };
+
     const browserTabAdd = (
         group: HappyAgentGroupId,
         agent: HappyAgentSessionId,
@@ -791,7 +849,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             agentId: agent,
             ...(network === undefined ? {} : { networkId: network }),
             ...(artifactId === undefined ? {} : { artifactId }),
-            ...((closed) => (closed === undefined ? {} : { closed }))(computeClosures.get(agent)),
+            ...((closed) => (closed === undefined ? {} : { closed }))(agentClosure(agent)),
             placement: "panel",
             url,
         });
@@ -1194,9 +1252,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                     agentId: agent,
                     networkId: live.networkId as HappyAgentBrowserNetworkId,
                     artifactId,
-                    ...((closed) => (closed === undefined ? {} : { closed }))(
-                        computeClosures.get(agent),
-                    ),
+                    ...((closed) => (closed === undefined ? {} : { closed }))(agentClosure(agent)),
                     placement: "panel",
                     url,
                 }),
@@ -1383,6 +1439,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             const known = computeClosures.has(agentId);
             if (known && computeClosures.get(agentId) === closure) return;
             computeClosures.set(agentId, closure);
+            // Compute first stated as present says nothing new about pages a
+            // refused tunnel closed: it may be the same compute the server
+            // just refused, not yet stated as gone. Those pages keep asking.
+            if (!known && closure === undefined) return;
+            tunnelRefusalForget(agentId);
             let changed = false;
             for (const tab of tabs) {
                 if (tab.kind !== "browser" || tab.agentId !== agentId) continue;
@@ -1402,10 +1463,44 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             let changed = false;
             for (const tab of tabs) {
                 if (tab.kind !== "browser" || tab.closed !== "computeOffline") continue;
+                const refusal =
+                    tab.agentId === undefined ? undefined : tunnelRefusals.get(tab.agentId);
+                if (refusal?.closure !== undefined) {
+                    // Asking now stands in for the timer's asking.
+                    clearTimeout(refusal.timer);
+                    refusal.timer = undefined;
+                    refusal.closure = undefined;
+                    refusal.probedAt = Date.now();
+                }
                 browserReopen(tab);
                 changed = true;
             }
             if (changed) recompute();
+        },
+        browserTunnelRefused(tabId, closure) {
+            if (disposed) return;
+            const refused = tabs.find(
+                (candidate) => candidate.id === tabId && candidate.kind === "browser",
+            );
+            const agent = refused?.agentId;
+            if (!refused || refused.closed !== undefined || agent === undefined) return;
+            const previous = tunnelRefusals.get(agent);
+            clearTimeout(previous?.timer);
+            const refusals =
+                previous?.probedAt !== undefined &&
+                Date.now() - previous.probedAt < BROWSER_REPROBE_REFUSED_WITHIN_MS
+                    ? previous.refusals + 1
+                    : 0;
+            const refusal: BrowserTunnelRefusal = { closure, refusals };
+            tunnelRefusals.set(agent, refusal);
+            for (const tab of tabs)
+                if (tab.kind === "browser" && tab.agentId === agent && tab.closed === undefined)
+                    tab.closed = closure;
+            refusal.timer = setTimeout(
+                () => tunnelRefusalProbe(agent),
+                BROWSER_REPROBE_MS[Math.min(refusals, BROWSER_REPROBE_MS.length - 1)],
+            );
+            recompute();
         },
         [Symbol.dispose]() {
             if (disposed) return;
@@ -1415,6 +1510,8 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                 tab.chat?.[Symbol.dispose]();
             }
             recompute();
+            for (const refusal of tunnelRefusals.values()) clearTimeout(refusal.timer);
+            tunnelRefusals.clear();
             activeByGroup.clear();
             chromeByGroup.clear();
             listeners.clear();

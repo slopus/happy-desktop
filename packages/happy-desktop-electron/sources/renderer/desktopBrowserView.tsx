@@ -268,6 +268,10 @@ export class DesktopBrowserGuest extends Component<
             (failure) => {
                 if (!this.initialized) return;
                 if (failure.guestId !== this.element?.getWebContentsId()) return;
+                if (failure.refusal !== undefined && this.props.browserRefused) {
+                    this.props.browserRefused(failure.refusal);
+                    return;
+                }
                 this.tunnelFailure = failure;
                 this.props.browserFailed({
                     code: -111,

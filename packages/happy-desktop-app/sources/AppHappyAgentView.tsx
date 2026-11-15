@@ -12714,6 +12714,11 @@ function HappyAgentToolBodies(props: {
                                             props.browserContent!({
                                                 ...browserProps,
                                                 retention: { id: tab.id, owner: props.store },
+                                                browserRefused: (refusal) =>
+                                                    props.store.browserTunnelRefused(
+                                                        tab.id,
+                                                        refusal,
+                                                    ),
                                                 target: {
                                                     connectionId: props.browserConnectionId,
                                                     artifactId: tab.artifactId,
@@ -12735,6 +12740,11 @@ function HappyAgentToolBodies(props: {
                                                         ? {}
                                                         : { networkId: tab.networkId }),
                                                 },
+                                                browserRefused: (refusal) =>
+                                                    props.store.browserTunnelRefused(
+                                                        tab.id,
+                                                        refusal,
+                                                    ),
                                                 browserNetworkResolved: (networkId) =>
                                                     props.store.browserNetworkBind(
                                                         tab.id,

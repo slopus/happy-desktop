@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { HappyAgentTerminalHandle } from "./happyAgentTerminalStore.js";
 import { happyAgentPanelStoreCreate, type HappyAgentPanelStore } from "./happyAgentPanelStore.js";
 import type { HappyAgentGroupId, HappyAgentSessionId } from "./happyAgentTypes.js";
@@ -217,6 +217,94 @@ it("closes an agent's pages while its compute is away and opens them again where
     expect(reopened[1]).toMatchObject({ url: "http://localhost:3000/", reopenings: 1 });
     store.browserNetworkBind(tab.id, "net_two" as Parameters<typeof store.browserNetworkBind>[1]);
     expect(store.get().tabs[0]).toMatchObject({ networkId: "net_two" });
+});
+
+afterEach(() => {
+    vi.useRealTimers();
+});
+
+it("closes an agent's pages when its server refuses a tunnel, and asks again later, waiting longer each time it is refused at once", () => {
+    vi.useFakeTimers();
+    const { store } = panelCreate();
+    store.browserAdd("http://localhost:5173/");
+    store.browserAdd("http://localhost:3000/");
+    const [first] = store.get().tabs;
+    store.browserNetworkBind(
+        first!.id,
+        "net_one" as Parameters<typeof store.browserNetworkBind>[1],
+    );
+    const closures = () => store.get().tabs.map((tab) => tab.kind === "browser" && tab.closed);
+    const reopenings = () =>
+        store.get().tabs.map((tab) => tab.kind === "browser" && tab.reopenings);
+
+    // One refused page closes every page of its agent, and one opened now opens closed.
+    store.browserTunnelRefused(first!.id, "computeOffline");
+    store.browserAdd("http://localhost:8080/");
+    expect(closures()).toEqual(["computeOffline", "computeOffline", "computeOffline"]);
+
+    // Compute stated for the first time as present may be the compute just
+    // refused, so the pages keep waiting to ask.
+    store.computeApply(AGENT, { kind: "computer", computerId: "cmp_a", online: true });
+    vi.advanceTimersByTime(4_999);
+    expect(closures()).toEqual(["computeOffline", "computeOffline", "computeOffline"]);
+    vi.advanceTimersByTime(1);
+    expect(closures()).toEqual([undefined, undefined, undefined]);
+    expect(reopenings()).toEqual([1, 1, 1]);
+    expect(store.get().tabs[0]).not.toHaveProperty("networkId");
+
+    // Refused again as soon as they ask: the next wait is longer.
+    store.browserTunnelRefused(first!.id, "computeDetached");
+    expect(closures()).toEqual(["computeDetached", "computeDetached", "computeDetached"]);
+    vi.advanceTimersByTime(14_999);
+    expect(reopenings()).toEqual([1, 1, 1]);
+    vi.advanceTimersByTime(1);
+    expect(reopenings()).toEqual([2, 2, 2]);
+
+    // A refusal long after the pages last asked starts the waiting over.
+    vi.advanceTimersByTime(60_000);
+    store.browserTunnelRefused(first!.id, "computeOffline");
+    vi.advanceTimersByTime(5_000);
+    expect(reopenings()).toEqual([3, 3, 3]);
+
+    // A computer changing asks at once, in place of the timer.
+    store.browserTunnelRefused(first!.id, "computeOffline");
+    store.computeRunnersChanged();
+    expect(closures()).toEqual([undefined, undefined, undefined]);
+    expect(reopenings()).toEqual([4, 4, 4]);
+    expect(vi.getTimerCount()).toBe(0);
+});
+
+it("lets stated compute take over pages a refused tunnel closed", () => {
+    vi.useFakeTimers();
+    const { store } = panelCreate();
+    store.browserAdd("http://localhost:5173/");
+    const tab = store.get().tabs[0]!;
+    const online = { kind: "computer", computerId: "cmp_a", online: true } as const;
+    store.computeApply(AGENT, online);
+
+    // A page already closed is not refused again.
+    store.browserTunnelRefused(tab.id, "computeOffline");
+    const refused = store.get();
+    store.browserTunnelRefused(tab.id, "computeDetached");
+    expect(store.get()).toBe(refused);
+
+    // Stated as detached, the page follows the stated compute and stops asking.
+    store.computeApply(AGENT, { kind: "none" });
+    expect(store.get().tabs[0]).toMatchObject({ closed: "computeDetached", reopenings: 0 });
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(120_000);
+    expect(store.get().tabs[0]).toMatchObject({ closed: "computeDetached" });
+
+    // Stated as attached again, it opens.
+    store.computeApply(AGENT, online);
+    expect(store.get().tabs[0]).toMatchObject({ reopenings: 1 });
+    expect(store.get().tabs[0]).not.toHaveProperty("closed");
+
+    // A disposed panel leaves no timer behind.
+    store.browserTunnelRefused(tab.id, "computeOffline");
+    expect(vi.getTimerCount()).toBe(1);
+    store[Symbol.dispose]();
+    expect(vi.getTimerCount()).toBe(0);
 });
 
 it("opens a page closed for an offline computer again when a computer changes, and keeps an artifact's network", () => {

@@ -932,6 +932,12 @@ export interface DesktopBrowserTunnelFailure {
     readonly guestId: number;
     readonly url: string;
     readonly message: string;
+    /**
+     * Present when the agent's server refused the tunnel because the agent's
+     * compute is away, from the refusal's own code; the tab then closes
+     * instead of showing a failed page.
+     */
+    readonly refusal?: "computeDetached" | "computeOffline";
 }
 
 /** User-initiated navigation; guest pages never receive this bridge. */
