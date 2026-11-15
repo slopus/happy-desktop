@@ -209,7 +209,10 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
                                                 </p>
                                             ) : null}
                                             {definition ? (
-                                                <PipelineOverview definition={definition} />
+                                                <PipelineOverview
+                                                    definition={definition}
+                                                    labels={props.labels}
+                                                />
                                             ) : null}
                                             <PipelineDetailSection title="Versions">
                                                 <PipelineVersions
@@ -232,7 +235,10 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
     );
 }
 
-function PipelineOverview(props: { readonly definition: PipelineDefinition }): ReactNode {
+function PipelineOverview(props: {
+    readonly definition: PipelineDefinition;
+    readonly labels: PipelineLabels;
+}): ReactNode {
     const definition = props.definition;
     const concurrency = definition.concurrency;
     return (
@@ -244,7 +250,12 @@ function PipelineOverview(props: { readonly definition: PipelineDefinition }): R
                 <PipelineFacts
                     empty=""
                     facts={[
-                        ["Started by", definition.triggerAgents.join(", ") || "Nobody yet"],
+                        [
+                            "Started by",
+                            definition.triggerAgents
+                                .map((agentId) => props.labels.agent(agentId))
+                                .join(", ") || "Nobody yet",
+                        ],
                         ["Concurrency", CONCURRENCY_TEXT[concurrency.mode]],
                         ["Grouped by", concurrency.group ?? ""],
                         [

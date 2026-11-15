@@ -11,6 +11,7 @@ import {
     PIPELINE_NODE_STATE_LABEL,
     PIPELINE_NODE_STATE_TONE,
     pipelineDurationOf,
+    pipelineFailureTitle,
     type PipelineLabels,
 } from "./pipelinePresentation";
 import {
@@ -44,24 +45,36 @@ const FADE_FROM = 0.72;
 const FADE_TO = 1;
 /** Below this, a change of row at one moment drops from the bar instead of curving. */
 const ELBOW_BELOW = 28;
+/** How far out of the view a row's last mark must be before the row folds away. */
+const FOLD_MARGIN = 160;
 
 const ease = (p: number) => 1 - (1 - p) ** 3;
-const rowMiddle = (row: number) => pipelineTimelineRowTop(row) + T.barHeight / 2;
 
-/** A smooth left-to-right path; level runs stay straight. */
+/** Where an edge into a node turns toward its row, just before the node. */
+const TRUNK = 14;
+/** The radius of an edge's turns. */
+const TURN = 6;
+
+/**
+ * An edge drawn in straight runs with rounded turns. Level edges stay
+ * straight. Otherwise the edge leaves along its source's row and turns toward
+ * the target's row just before the target, so every edge into one node shares
+ * one vertical run: a fan-in reads as one bus, not a sheaf of curves. A
+ * change of row at one moment drops from the source bar instead.
+ */
 function edgePath(sx: number, sy: number, tx: number, ty: number): string {
-    if (sy === ty) return `M ${String(sx)} ${String(sy)} L ${String(tx)} ${String(ty)}`;
+    const n = (value: number) => String(Math.round(value * 10) / 10);
+    if (Math.abs(sy - ty) < 0.5) return `M ${n(sx)} ${n(sy)} L ${n(tx)} ${n(ty)}`;
+    const down = ty > sy ? 1 : -1;
     if (tx - sx < ELBOW_BELOW) {
-        // A fan-out at one moment: down (or up) from the source bar's edge
-        // just before its end, then a short turn into the target's start.
-        const down = ty > sy ? 1 : -1;
-        const x = sx - 14;
+        const x = sx - TRUNK;
         const y0 = sy + (down * T.barHeight) / 2;
-        const r = 6;
-        return `M ${String(x)} ${String(y0)} L ${String(x)} ${String(ty - down * r)} Q ${String(x)} ${String(ty)}, ${String(x + r)} ${String(ty)} L ${String(tx)} ${String(ty)}`;
+        const r = Math.min(TURN, Math.abs(ty - y0));
+        return `M ${n(x)} ${n(y0)} L ${n(x)} ${n(ty - down * r)} Q ${n(x)} ${n(ty)}, ${n(x + r)} ${n(ty)} L ${n(tx)} ${n(ty)}`;
     }
-    const bend = Math.max(14, (tx - sx) / 2);
-    return `M ${String(sx)} ${String(sy)} C ${String(sx + bend)} ${String(sy)}, ${String(tx - bend)} ${String(ty)}, ${String(tx)} ${String(ty)}`;
+    const x = tx - TRUNK;
+    const r = Math.min(TURN, Math.abs(ty - sy) / 2);
+    return `M ${n(sx)} ${n(sy)} L ${n(x - r)} ${n(sy)} Q ${n(x)} ${n(sy)}, ${n(x)} ${n(sy + down * r)} L ${n(x)} ${n(ty - down * r)} Q ${n(x)} ${n(ty)}, ${n(x + r)} ${n(ty)} L ${n(tx)} ${n(ty)}`;
 }
 
 interface Model {
@@ -91,8 +104,16 @@ class TimelineEngine {
     private nowGlide: Glide | null = null;
     private readonly headGlides = new Map<string, Glide>();
     private heads = new Map<string, { element: HTMLElement; rel: number; future: boolean }>();
-    private dynamic: { element: SVGPathElement; edge: PipelineTimelineEdge }[] = [];
-    private ahead: { element: SVGPathElement; node: string }[] = [];
+    private edges: { element: SVGPathElement; edge: PipelineTimelineEdge }[] = [];
+    /** Every element drawn in a row, by row, with the opacity last written to it. */
+    private rowElements = new Map<number, { element: HTMLElement; opacity: number }[]>();
+    /** Rows with something in or near the view; the rest fold away. */
+    private shown = new Set<number>();
+    private readonly rowGlides = new Map<number, { from: number; to: number; start: number }>();
+    /** Where the reader was when rows were last folded. */
+    private foldedAt = 0;
+    private folded = false;
+    private height = 0;
     private scrollX = 0;
     private width = 0;
     private frame = 0;
@@ -149,7 +170,11 @@ class TimelineEngine {
             if ((event.target as Element).closest("[data-timeline-node]")) return;
             this.release();
             // The bars of the viewport's own scrollbars drag natively.
-            if (event.offsetY >= viewport.clientHeight || event.offsetX >= viewport.clientWidth)
+            const box = viewport.getBoundingClientRect();
+            if (
+                event.clientY - box.top >= viewport.clientTop + viewport.clientHeight ||
+                event.clientX - box.left >= viewport.clientLeft + viewport.clientWidth
+            )
                 return;
             this.drag = {
                 x: event.clientX,
@@ -240,27 +265,24 @@ class TimelineEngine {
         }
         this.heads = heads;
         const byIndex = new Map(layout.edges.map((edge) => [edge.index, edge]));
-        this.dynamic = [];
-        this.ahead = [];
+        this.edges = [];
         for (const element of plane.querySelectorAll<SVGPathElement>("[data-timeline-edge]")) {
             const edge = byIndex.get(Number(element.dataset.timelineEdge));
-            if (!edge) continue;
-            if (!("fixed" in edge.from && "fixed" in edge.to)) this.dynamic.push({ element, edge });
-            if (edge.ahead !== null) this.ahead.push({ element, node: edge.ahead });
-            else element.style.opacity = "";
+            if (edge) this.edges.push({ element, edge });
         }
+        const rowElements = new Map<number, { element: HTMLElement; opacity: number }[]>();
+        for (const element of plane.querySelectorAll<HTMLElement>("[data-timeline-row]")) {
+            const row = Number(element.dataset.timelineRow);
+            const old = this.rowElements.get(row)?.find((entry) => entry.element === element);
+            rowElements.set(row, [
+                ...(rowElements.get(row) ?? []),
+                { element, opacity: old?.opacity ?? Number.NaN },
+            ]);
+        }
+        this.rowElements = rowElements;
         this.model = next;
         this.track = track;
-        if (!previous) {
-            this.scrollX = this.viewport.scrollLeft;
-            // A run taller than the view opens with its first working row at the
-            // top, once; after that only the reader moves it up and down.
-            const working = layout.items.filter((item) => item.mode === "live");
-            if (working.length > 0 && this.viewport.scrollHeight > this.viewport.clientHeight) {
-                const first = Math.min(...working.map((item) => item.row));
-                this.viewport.scrollTop = pipelineTimelineRowTop(first) - T.axisHeight - T.padding;
-            }
-        }
+        if (!previous) this.scrollX = this.viewport.scrollLeft;
         this.schedule();
         this.paint(perf);
     }
@@ -272,11 +294,13 @@ class TimelineEngine {
     }
 
     private animating(perf: number): boolean {
-        const busy = (glide: Glide | null) => glide !== null && perf - glide.start < GLIDE_MS;
+        const busy = (glide: { readonly start: number } | null) =>
+            glide !== null && perf - glide.start < GLIDE_MS;
         return (
             this.returning !== null ||
             busy(this.nowGlide) ||
-            [...this.headGlides.values()].some(busy)
+            [...this.headGlides.values()].some(busy) ||
+            [...this.rowGlides.values()].some(busy)
         );
     }
 
@@ -326,16 +350,91 @@ class TimelineEngine {
     private target(model: Model, now: number): number {
         const layout = model.layout;
         if (layout.live) return now;
-        const end = layout.endX ?? layout.width;
+        // The run's last mark (a stub skipped at its end included) at the view's edge.
         return layout.width <= this.width
             ? layout.width / 2
-            : Math.max(0, end - this.width / 2 + 48);
+            : Math.max(0, layout.width - this.width / 2);
     }
 
     private point(spot: PipelineTimelineX, now: number, perf: number): number {
         if ("fixed" in spot) return spot.fixed;
         const glide = spot.node ? this.glideOf(this.headGlides.get(spot.node) ?? null, perf) : 0;
         return now + spot.now + glide;
+    }
+
+    /**
+     * Which rows are open, and how far: a row stays open while anything in it
+     * is in or near the view, and folds away once it is well out of it. While
+     * the view follows now, rows that finished long ago fold, and scrolling
+     * back opens them again. A parked reader's rows only fold when they move
+     * the view themselves; something new coming into view still opens its row.
+     */
+    private fold(
+        layout: PipelineTimelineLayout,
+        now: number,
+        fade: ReadonlyMap<string, number>,
+        perf: number,
+    ): Map<number, number> {
+        const left = this.scrollX - this.width / 2;
+        const right = left + this.width;
+        const spans = new Map<number, [number, number][]>();
+        const add = (row: number, x0: number, x1: number) =>
+            spans.set(row, [...(spans.get(row) ?? []), [x0, x1]]);
+        for (const item of layout.items) {
+            if (item.mode === "past") add(item.row, item.x0, item.x1);
+            else if (item.mode === "skipped") add(item.row, item.x0, item.x0 + item.width);
+            else if (item.mode === "live") add(item.row, item.x0, now + T.cardWidth);
+            else if ((fade.get(item.id) ?? 1) >= 0.01) {
+                const glide = this.glideOf(this.headGlides.get(item.id) ?? null, perf);
+                add(item.row, now + item.offset + glide, now + item.offset + glide + T.futureWidth);
+            }
+        }
+        const near = (row: number, margin: number) =>
+            (spans.get(row) ?? []).some(([x0, x1]) => x1 >= left - margin && x0 <= right + margin);
+        const moved = Math.abs(this.scrollX - this.foldedAt) > 0.5;
+        const mayFold = !this.folded || this.following || this.returning !== null || moved;
+        this.foldedAt = this.scrollX;
+        const shown = new Set<number>();
+        for (let row = 0; row < layout.rows; row++) {
+            // Following, the view only moves on, so a row folds as soon as it
+            // leaves; a reader moving back and forth gets some slack.
+            const margin = this.following && this.returning === null ? 0 : FOLD_MARGIN;
+            const keep = this.shown.has(row) && (!mayFold || near(row, margin));
+            if (near(row, 0) || keep) shown.add(row);
+        }
+        // An empty view keeps the rows it had rather than folding to nothing.
+        const next = shown.size > 0 ? shown : this.shown.size > 0 ? this.shown : new Set([0]);
+        const first = !this.folded;
+        this.folded = true;
+        const heights = new Map<number, number>();
+        for (let row = 0; row < layout.rows; row++) {
+            const to = next.has(row) ? T.rowHeight : 0;
+            const glide = this.rowGlides.get(row);
+            if (first || this.still) {
+                this.rowGlides.delete(row);
+                heights.set(row, to);
+                continue;
+            }
+            const at = glide
+                ? this.rowHeightOf(glide, perf)
+                : this.shown.has(row)
+                  ? T.rowHeight
+                  : 0;
+            if (glide ? glide.to !== to : Math.abs(at - to) > 0.5) {
+                this.rowGlides.set(row, { from: at, to, start: perf });
+                heights.set(row, at);
+                continue;
+            }
+            if (glide && perf - glide.start >= GLIDE_MS) this.rowGlides.delete(row);
+            heights.set(row, glide ? this.rowHeightOf(glide, perf) : to);
+        }
+        this.shown = next;
+        return heights;
+    }
+
+    private rowHeightOf(glide: { from: number; to: number; start: number }, perf: number): number {
+        const p = Math.min(1, Math.max(0, (perf - glide.start) / GLIDE_MS));
+        return glide.from + (glide.to - glide.from) * ease(p);
     }
 
     private paint(perf: number): void {
@@ -363,16 +462,6 @@ class TimelineEngine {
             this.viewport.scrollLeft = left;
             this.scrollX = left;
         }
-        for (const { element, edge } of this.dynamic)
-            element.setAttribute(
-                "d",
-                edgePath(
-                    this.point(edge.from, now, perf),
-                    rowMiddle(edge.fromRow),
-                    this.point(edge.to, now, perf),
-                    rowMiddle(edge.toRow),
-                ),
-            );
         // What is ahead fades toward the view's trailing edge, so scrolling
         // forward brings it out.
         const fade = new Map<string, number>();
@@ -383,13 +472,63 @@ class TimelineEngine {
             const from = this.width * FADE_FROM;
             const to = this.width * FADE_TO;
             const clear = Math.min(1, Math.max(0, (to - lead) / Math.max(1, to - from)));
-            const opacity = clear ** 1.6;
-            fade.set(id, opacity);
-            head.element.style.opacity = opacity.toFixed(3);
-            head.element.style.visibility = opacity < 0.01 ? "hidden" : "";
+            fade.set(id, clear ** 1.6);
         }
-        for (const { element, node } of this.ahead)
-            element.style.opacity = (fade.get(node) ?? 1).toFixed(3);
+        const heights = this.fold(model.layout, now, fade, perf);
+        // A working node's card names it while the now line is in view.
+        const nowInView =
+            model.layout.live !== null &&
+            now >= this.scrollX - this.width / 2 &&
+            now <= this.scrollX + this.width / 2;
+        if (nowInView !== (track.dataset.nowInView !== undefined)) {
+            if (nowInView) track.dataset.nowInView = "";
+            else delete track.dataset.nowInView;
+        }
+        // Rows stack in order; a folded row takes no room, and what is in it
+        // fades with it.
+        const tops = new Map<number, number>();
+        let y = T.axisHeight + T.padding;
+        for (let row = 0; row < model.layout.rows; row++) {
+            tops.set(row, y + (T.rowHeight - T.barHeight) / 2);
+            y += heights.get(row) ?? 0;
+        }
+        const height = Math.ceil(y + T.padding);
+        if (height !== this.height) {
+            this.height = height;
+            track.style.height = `${String(height)}px`;
+        }
+        const openness = (row: number) => (heights.get(row) ?? 0) / T.rowHeight;
+        for (const [row, entries] of this.rowElements) {
+            const top = tops.get(row) ?? 0;
+            for (const entry of entries) {
+                entry.element.style.setProperty("--y", String(top));
+                const node = entry.element.dataset.timelineNode ?? "";
+                const opacity =
+                    openness(row) *
+                    (entry.element.dataset.timelineHead === "future" ? (fade.get(node) ?? 1) : 1);
+                const rounded = Math.round(opacity * 1000) / 1000;
+                if (rounded === entry.opacity) continue;
+                entry.opacity = rounded;
+                entry.element.style.opacity = rounded >= 1 ? "" : String(rounded);
+                entry.element.style.visibility = rounded < 0.01 ? "hidden" : "";
+            }
+        }
+        for (const { element, edge } of this.edges) {
+            const middle = (row: number) => (tops.get(row) ?? 0) + T.barHeight / 2;
+            element.setAttribute(
+                "d",
+                edgePath(
+                    this.point(edge.from, now, perf),
+                    middle(edge.fromRow),
+                    this.point(edge.to, now, perf),
+                    middle(edge.toRow),
+                ),
+            );
+            const opacity =
+                Math.min(openness(edge.fromRow), openness(edge.toRow)) *
+                (edge.ahead === null ? 1 : (fade.get(edge.ahead) ?? 1));
+            element.style.opacity = opacity >= 1 ? "" : opacity.toFixed(3);
+        }
     }
 }
 
@@ -443,15 +582,7 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
         if (engine.current && track.current && plane.current)
             engine.current.update(layout, props.now, track.current, plane.current);
     });
-    const nowAtRender = layout.live
-        ? pipelineTimelineNowX(layout.live, props.now)
-        : (layout.endX ?? 0);
     const select = (id: string) => props.onNodeSelect(props.selectedNodeId === id ? null : id);
-    const staticEdges = layout.edges.filter((edge) => "fixed" in edge.from && "fixed" in edge.to);
-    const movingEdges = layout.edges.filter(
-        (edge) => !("fixed" in edge.from && "fixed" in edge.to),
-    );
-    const at = (spot: PipelineTimelineX) => ("fixed" in spot ? spot.fixed : nowAtRender + spot.now);
     const label = (id: string) => {
         const node = runNodes.get(id);
         const state = node?.state ?? "pending";
@@ -473,10 +604,8 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                     className="happy-pipeline-timeline__track"
                     data-live={layout.live ? "" : undefined}
                     ref={track}
-                    style={{
-                        width: `calc(100cqw + ${String(layout.width)}px)`,
-                        height: layout.height,
-                    }}
+                    // Its height is the engine's: the open rows'.
+                    style={{ width: `calc(100cqw + ${String(layout.width)}px)` }}
                 >
                     <div aria-hidden className="happy-pipeline-timeline__axis">
                         <div className="happy-pipeline-timeline__axis-plane">
@@ -507,7 +636,7 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                     <div
                         className="happy-pipeline-timeline__plane"
                         ref={plane}
-                        style={{ width: layout.width, height: layout.height }}
+                        style={{ width: layout.width }}
                     >
                         {layout.ticks.map((tick) => (
                             <span
@@ -517,12 +646,7 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                 style={{ transform: `translateX(${String(tick.x)}px)` }}
                             />
                         ))}
-                        <svg
-                            aria-hidden
-                            className="happy-pipeline-timeline__edges"
-                            height={layout.height}
-                            width={layout.width}
-                        >
+                        <svg aria-hidden className="happy-pipeline-timeline__edges">
                             <defs>
                                 {(["success", "failure"] as const).map((outcome) => (
                                     <marker
@@ -541,17 +665,12 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                     </marker>
                                 ))}
                             </defs>
-                            {[...staticEdges, ...movingEdges].map((edge) => {
+                            {layout.edges.map((edge) => {
                                 const on = props.definition.edges[edge.index]!.on;
                                 return (
+                                    // Its path is drawn by the engine, which knows where rows are.
                                     <path
                                         className="happy-pipeline-graph__edge"
-                                        d={edgePath(
-                                            at(edge.from),
-                                            rowMiddle(edge.fromRow),
-                                            at(edge.to),
-                                            rowMiddle(edge.toRow),
-                                        )}
                                         data-on={on}
                                         data-timeline-edge={edge.index}
                                         key={edge.index}
@@ -564,7 +683,6 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                             const node = runNodes.get(item.id);
                             const kind = kinds.get(item.id) ?? "code";
                             const state = node?.state ?? "pending";
-                            const top = pipelineTimelineRowTop(item.row);
                             const glyph = (
                                 <span className="happy-pipeline-timeline__glyph">
                                     <Icon name={PIPELINE_KIND_ICON[kind]} size={12} />
@@ -591,13 +709,22 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                         className="happy-pipeline-timeline__bar"
                                         data-mode={item.mode}
                                         data-timeline-node={item.id}
+                                        data-timeline-row={item.row}
                                         data-tone={PIPELINE_NODE_STATE_TONE[state]}
                                         key={`bar-${item.id}`}
                                         onClick={() => select(item.id)}
-                                        // Placed by offsets, not a transform: a bar never moves, and
-                                        // its sticky label measures from where layout puts it.
-                                        style={{ left: item.x0, top, width }}
-                                        title={[item.id, PIPELINE_NODE_STATE_LABEL[state], duration]
+                                        // Placed in time by its offset, not a transform: its sticky
+                                        // label measures from where layout puts it. Its row's y
+                                        // is the engine's, as rows fold.
+                                        style={{ left: item.x0, width }}
+                                        title={[
+                                            item.id,
+                                            PIPELINE_NODE_STATE_LABEL[state],
+                                            node?.failure
+                                                ? pipelineFailureTitle(node.failure.code)
+                                                : null,
+                                            duration,
+                                        ]
                                             .filter(Boolean)
                                             .join(" · ")}
                                         type="button"
@@ -622,14 +749,23 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                     <span
                                         aria-hidden
                                         className="happy-pipeline-timeline__trail"
+                                        data-timeline-row={item.row}
                                         key={`bar-${item.id}`}
                                         style={
                                             {
                                                 "--x0": String(item.x0),
-                                                transform: `translate(${String(item.x0)}px, ${String(top)}px)`,
+                                                left: item.x0,
                                             } as CSSProperties
                                         }
-                                    />,
+                                    >
+                                        {/* Its name, for a reader scrolled back far from its card. */}
+                                        <span className="happy-pipeline-timeline__label">
+                                            {glyph}
+                                            <span className="happy-pipeline-timeline__name">
+                                                {item.id}
+                                            </span>
+                                        </span>
+                                    </span>,
                                     <button
                                         aria-label={label(item.id)}
                                         aria-pressed={pressed}
@@ -638,9 +774,10 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                         data-rel="0"
                                         data-timeline-head="live"
                                         data-timeline-node={item.id}
+                                        data-timeline-row={item.row}
                                         key={`head-${item.id}`}
                                         onClick={() => select(item.id)}
-                                        style={{ "--rel": "0", top } as CSSProperties}
+                                        style={{ "--rel": "0" } as CSSProperties}
                                         title={node?.status?.text ?? item.id}
                                         type="button"
                                     >
@@ -682,9 +819,10 @@ export function PipelineTimeline(props: PipelineTimelineProps) {
                                     data-rel={item.offset}
                                     data-timeline-head="future"
                                     data-timeline-node={item.id}
+                                    data-timeline-row={item.row}
                                     key={`head-${item.id}`}
                                     onClick={() => select(item.id)}
-                                    style={{ "--rel": String(item.offset), top } as CSSProperties}
+                                    style={{ "--rel": String(item.offset) } as CSSProperties}
                                     title={`${item.id} · Waiting`}
                                     type="button"
                                 >

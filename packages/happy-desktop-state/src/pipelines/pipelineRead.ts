@@ -11,6 +11,7 @@ import type {
     PipelineLeaseAcquire,
     PipelineLogEntry,
     PipelineLogPage,
+    PipelineModelUsage,
     PipelineNode,
     PipelineNodeRun,
     PipelineNodeRunState,
@@ -426,6 +427,40 @@ function statusRead(value: unknown): PipelineStatusLine | undefined {
     };
 }
 
+/** `{ [provider]: { [model]: { input, output, cacheRead, cacheWrite, reasoning, costUsd? } } }`. */
+function usageRead(value: unknown): PipelineModelUsage[] | null {
+    const providers = recordOf(value);
+    if (!providers) return null;
+    const count = (field: unknown) => {
+        const number = numberOrNull(field);
+        return number === null || number < 0 ? 0 : number;
+    };
+    const usage = Object.entries(providers).flatMap(([provider, models]) =>
+        Object.entries(recordOf(models) ?? {}).flatMap(([model, spent]) => {
+            const fields = recordOf(spent);
+            if (!fields) return [];
+            const cost = numberOrNull(fields.costUsd);
+            return [
+                {
+                    provider,
+                    model,
+                    input: count(fields.input),
+                    output: count(fields.output),
+                    cacheRead: count(fields.cacheRead),
+                    cacheWrite: count(fields.cacheWrite),
+                    reasoning: count(fields.reasoning),
+                    costUsd: cost === null || cost < 0 ? null : cost,
+                },
+            ];
+        }),
+    );
+    usage.sort(
+        (left, right) =>
+            left.provider.localeCompare(right.provider) || left.model.localeCompare(right.model),
+    );
+    return usage.length > 0 ? usage : null;
+}
+
 function nodeRunRead(value: unknown): PipelineNodeRun | undefined {
     const node = recordOf(value);
     const state = NODE_RUN_STATES.find((entry) => entry === node?.state);
@@ -451,6 +486,7 @@ function nodeRunRead(value: unknown): PipelineNodeRun | undefined {
         childRunId: textOrNull(node.childRunId),
         startedAt: numberOrNull(node.startedAt),
         endedAt: numberOrNull(node.endedAt),
+        usage: usageRead(node.usage),
     };
 }
 

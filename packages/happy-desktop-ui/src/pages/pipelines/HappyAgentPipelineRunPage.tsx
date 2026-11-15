@@ -244,6 +244,13 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                                     pipelineTriggerText(run.trigger, props.labels),
                                                 ],
                                                 ["Group", run.group ?? ""],
+                                                [
+                                                    "Batch",
+                                                    definition?.concurrency.batch &&
+                                                    Array.isArray(run.input)
+                                                        ? `${String(run.input.length)} ${run.input.length === 1 ? "input" : "inputs"}, below`
+                                                        : "",
+                                                ],
                                                 ["Queued", props.labels.time(run.createdAt)],
                                                 [
                                                     "Ended",
@@ -292,9 +299,37 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                         <h3 className="happy-pipeline-detail__group-title">
                                             The run
                                         </h3>
-                                        <PipelineDetailSection title="Input">
-                                            <PipelineValue value={run.input} />
-                                        </PipelineDetailSection>
+                                        {definition?.concurrency.batch &&
+                                        Array.isArray(run.input) ? (
+                                            <PipelineDetailSection
+                                                title={`Inputs · ${String(run.input.length)}`}
+                                            >
+                                                <p className="happy-pipeline-detail__note">
+                                                    {run.input.length === 1
+                                                        ? "A batch of one: no other trigger joined this run."
+                                                        : `${String(run.input.length)} triggers joined this run while its group was busy; their inputs, oldest first. Started by names the first.`}
+                                                </p>
+                                                <ol className="happy-pipeline-batch">
+                                                    {run.input.map((input: unknown, order) => (
+                                                        <li
+                                                            className="happy-pipeline-batch__item"
+                                                            // A batch only grows at its end, so
+                                                            // a position is a stable identity.
+                                                            key={order}
+                                                        >
+                                                            <span className="happy-pipeline-batch__number">
+                                                                {order + 1}
+                                                            </span>
+                                                            <PipelineValue value={input} />
+                                                        </li>
+                                                    ))}
+                                                </ol>
+                                            </PipelineDetailSection>
+                                        ) : (
+                                            <PipelineDetailSection title="Input">
+                                                <PipelineValue value={run.input} />
+                                            </PipelineDetailSection>
+                                        )}
                                         {run.result ? (
                                             <PipelineDetailSection title="Result">
                                                 <PipelineValue value={run.result.outputs} />

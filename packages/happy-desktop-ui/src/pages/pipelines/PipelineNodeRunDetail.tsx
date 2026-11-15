@@ -1,7 +1,18 @@
-import type { PipelineLease, PipelineNode, PipelineNodeRun } from "happy-desktop-state";
+import type {
+    PipelineLease,
+    PipelineModelUsage,
+    PipelineNode,
+    PipelineNodeRun,
+} from "happy-desktop-state";
 import { Button } from "../../Button";
 import { PipelineDetailSection, PipelineFacts } from "./PipelineNodeDetail";
-import { pipelineValueText, type PipelineLabels } from "./pipelinePresentation";
+import {
+    pipelineCostText,
+    pipelineFailureTitle,
+    pipelineTokensText,
+    pipelineValueText,
+    type PipelineLabels,
+} from "./pipelinePresentation";
 
 /** A JSON value in a block that scrolls both ways rather than wrapping. */
 export function PipelineValue(props: { readonly value: unknown }) {
@@ -11,6 +22,75 @@ export function PipelineValue(props: { readonly value: unknown }) {
                 {pipelineValueText(props.value)}
             </pre>
         </div>
+    );
+}
+
+type Tokens = Omit<PipelineModelUsage, "provider" | "model" | "costUsd">;
+
+/** Tokens in and out. */
+function tokensText(usage: Tokens): string {
+    return `${pipelineTokensText(usage.input)} in · ${pipelineTokensText(usage.output)} out`;
+}
+
+/** Tokens read from or written to the cache, when there were any. */
+function cachedText(usage: Tokens): string {
+    const cached = usage.cacheRead + usage.cacheWrite;
+    return cached > 0 ? pipelineTokensText(cached) : "";
+}
+
+/** What an agent node's agent spent: in total, and by model when it used several. */
+export function PipelineUsage(props: { readonly usage: readonly PipelineModelUsage[] }) {
+    const sum = (field: "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning") =>
+        props.usage.reduce((total, entry) => total + entry[field], 0);
+    const priced = props.usage.filter((entry) => entry.costUsd !== null);
+    const cost = priced.reduce((total, entry) => total + entry.costUsd!, 0);
+    const total = {
+        input: sum("input"),
+        output: sum("output"),
+        cacheRead: sum("cacheRead"),
+        cacheWrite: sum("cacheWrite"),
+        reasoning: sum("reasoning"),
+    };
+    const single = props.usage.length === 1 ? props.usage[0]! : null;
+    return (
+        <>
+            <PipelineFacts
+                empty=""
+                facts={[
+                    [
+                        "Cost",
+                        priced.length === 0
+                            ? "Not priced"
+                            : `${pipelineCostText(cost)}${priced.length < props.usage.length ? " (some unpriced)" : ""}`,
+                    ],
+                    ["Tokens", tokensText(total)],
+                    ["Cached", cachedText(total)],
+                    ["Reasoning", total.reasoning > 0 ? pipelineTokensText(total.reasoning) : ""],
+                    ["Model", single?.model ?? ""],
+                ]}
+            />
+            {single ? null : (
+                <ul className="happy-pipeline-usage">
+                    {props.usage.map((entry) => (
+                        <li
+                            className="happy-pipeline-usage__model"
+                            key={`${entry.provider}/${entry.model}`}
+                        >
+                            <span className="happy-pipeline-usage__name">{entry.model}</span>
+                            <span className="happy-pipeline-usage__spend">
+                                {[
+                                    entry.costUsd === null ? "" : pipelineCostText(entry.costUsd),
+                                    tokensText(entry),
+                                    cachedText(entry) ? `${cachedText(entry)} cached` : "",
+                                ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </>
     );
 }
 
@@ -57,8 +137,13 @@ export function PipelineNodeRunFacts(props: PipelineNodeRunFactsProps) {
             {node.failure ? (
                 <PipelineDetailSection title="Failure">
                     <div className="happy-pipeline-detail__failure">
-                        <span className="happy-pipeline-detail__failure-code">
-                            {node.failure.code}
+                        <span className="happy-pipeline-detail__failure-title">
+                            <span className="happy-pipeline-detail__failure-name">
+                                {pipelineFailureTitle(node.failure.code)}
+                            </span>
+                            <span className="happy-pipeline-detail__failure-code">
+                                {node.failure.code}
+                            </span>
                         </span>
                         {node.failure.message.includes("\n") ? (
                             // A traceback: its lines and their alignment are the message.
@@ -71,6 +156,15 @@ export function PipelineNodeRunFacts(props: PipelineNodeRunFactsProps) {
                             </p>
                         )}
                     </div>
+                </PipelineDetailSection>
+            ) : null}
+            {node.usage ? (
+                <PipelineDetailSection title="Usage">
+                    <PipelineUsage usage={node.usage} />
+                </PipelineDetailSection>
+            ) : node.kind === "agent" && node.state !== "pending" && node.state !== "skipped" ? (
+                <PipelineDetailSection title="Usage">
+                    <p className="happy-pipeline-detail__note">No inference yet.</p>
                 </PipelineDetailSection>
             ) : null}
             {node.output !== null ? (

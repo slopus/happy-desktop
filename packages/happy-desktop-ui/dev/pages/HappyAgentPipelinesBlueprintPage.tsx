@@ -312,6 +312,7 @@ const nodeRun = (
     childRunId: null,
     startedAt: null,
     endedAt: null,
+    usage: null,
     ...extra,
 });
 
@@ -356,6 +357,18 @@ const liveRun: PipelineRun = {
             input: { dir: "src" },
             agentId: "agent_e2e",
             startedAt: NOW - 1 * MINUTE,
+            usage: [
+                {
+                    provider: "anthropic",
+                    model: "anthropic/opus-5-5",
+                    input: 48_210,
+                    output: 3_904,
+                    cacheRead: 212_480,
+                    cacheWrite: 18_032,
+                    reasoning: 0,
+                    costUsd: 0.4187,
+                },
+            ],
         }),
         nodeRun("release", "code", "pending"),
         nodeRun("notify", "pipeline", "pending"),
@@ -604,6 +617,88 @@ const finishingRun: PipelineRun = {
     ],
 };
 
+/** A run whose Windows build lost its computer, and whose agent ended without an answer. */
+const lostRun: PipelineRun = {
+    ...wideRun,
+    id: "run_12",
+    rootRunId: "run_12",
+    state: "failed",
+    endedAt: NOW - MINUTE,
+    nodes: ci.nodes.map((node) => {
+        if (node.id === "checkout")
+            return nodeRun("checkout", "code", "succeeded", {
+                startedAt: NOW - 9 * MINUTE,
+                endedAt: NOW - 6 * MINUTE,
+            });
+        if (node.id === "unit")
+            return nodeRun("unit", "code", "failed", {
+                failure: {
+                    code: "compute_unavailable",
+                    message:
+                        "The computer ci-runner-07 (lease box) went offline for over 60 seconds while a command waited on it; it was not revoked.",
+                },
+                input: { dir: "src" },
+                status: { text: "building the installer", progress: 0.2, at: NOW - 6 * MINUTE },
+                statuses: [{ text: "building the installer", progress: 0.2, at: NOW - 6 * MINUTE }],
+                startedAt: NOW - 6 * MINUTE,
+                endedAt: NOW - MINUTE,
+            });
+        if (node.id === "e2e")
+            return nodeRun("e2e", "agent", "failed", {
+                failure: {
+                    code: "no_output",
+                    message: "The agent ended its turn twice without finish_node or fail_node.",
+                },
+                input: { dir: "src" },
+                agentId: "agent_e2e",
+                startedAt: NOW - 6 * MINUTE,
+                endedAt: NOW - 2 * MINUTE,
+                usage: [
+                    {
+                        provider: "anthropic",
+                        model: "anthropic/opus-5-5",
+                        input: 131_877,
+                        output: 9_214,
+                        cacheRead: 1_402_118,
+                        cacheWrite: 61_550,
+                        reasoning: 0,
+                        costUsd: 1.9342,
+                    },
+                    {
+                        provider: "openai",
+                        model: "openai/gpt-5.2-mini",
+                        input: 22_410,
+                        output: 1_806,
+                        cacheRead: 0,
+                        cacheWrite: 0,
+                        reasoning: 640,
+                        costUsd: null,
+                    },
+                ],
+            });
+        if (node.id === "notify")
+            return nodeRun("notify", "pipeline", "skipped", { endedAt: NOW - MINUTE });
+        return nodeRun(node.id, node.kind, "skipped", { endedAt: NOW - MINUTE });
+    }),
+    leases: [{ name: "box", computerId: "ci-runner-07", holders: [], releasedAt: NOW - MINUTE }],
+};
+
+/** Triggers that arrived while the group was busy, gathered into one batch run. */
+const batched: PipelineDefinition = {
+    ...ci,
+    concurrency: { group: "{{input.branch}}", mode: "queue", batch: true },
+};
+const batchRun: PipelineRun = {
+    ...liveRun,
+    id: "run_13",
+    rootRunId: "run_13",
+    input: [
+        { sha: "9f2c1e7", branch: "main", channel: "preview" },
+        { sha: "41b0d2a", branch: "main", channel: "preview" },
+        { sha: "c07e9f3", branch: "main", channel: null },
+    ],
+};
+
 /** One node, working. */
 const single: PipelineDefinition = {
     ...ci,
@@ -802,6 +897,44 @@ const e2eLiveLog = logOf(
 );
 
 const emptyLog = logOf(NOW, []);
+
+/**
+ * A code node whose worker restarted mid-command: the same `sh` call logged
+ * twice, then its computer went offline and the node failed.
+ */
+const offlineLog = logOf(NOW - 6 * MINUTE, [
+    [0, { kind: "status", text: "building the installer", progress: 0.2 }],
+    [
+        2,
+        {
+            kind: "command",
+            id: "sh-1",
+            command: "pnpm electron-builder --win",
+            cwd: "src",
+            lease: "box",
+            state: "aborted",
+            exitCode: null,
+            durationMs: 94_000,
+            output: "  • electron-builder  version=25.1.8 os=10.0.22631\n  • loaded configuration  file=electron-builder.yml\n  • packaging       platform=win32 arch=x64\n",
+            outputTruncated: false,
+        },
+    ],
+    [
+        110,
+        {
+            kind: "command",
+            id: "sh-1",
+            command: "pnpm electron-builder --win",
+            cwd: "src",
+            lease: "box",
+            state: "aborted",
+            exitCode: null,
+            durationMs: 182_000,
+            output: "  • electron-builder  version=25.1.8 os=10.0.22631\n  • loaded configuration  file=electron-builder.yml\n  • packaging       platform=win32 arch=x64\n  • building        target=nsis file=dist/Happy Setup.exe\n",
+            outputTruncated: false,
+        },
+    ],
+]);
 
 const runSnapshot = (
     run: PipelineRun,
@@ -1053,7 +1186,7 @@ export function HappyAgentPipelinesBlueprintPage() {
                 <HappyAgentPipelineRunPage {...runPage} run={runSnapshot(liveRun, "release")} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A wide run of 30 nodes: shards, suites and platforms in parallel rows that never change, seven working on the now line, the rest still ahead fading out. The rows scroll under a fixed time axis."
+                detail="A wide run of 30 nodes, following now: seven working on the now line and what comes next ahead. Rows that finished well out of view fold away, and open again as the reader scrolls back to them; edges into one node share one vertical run."
                 label="Run, 30 nodes"
                 number="13"
                 screen="13-run-wide-1100x760"
@@ -1089,6 +1222,45 @@ export function HappyAgentPipelinesBlueprintPage() {
                     {...runPage}
                     log={{ nodeId: "fallback", snapshot: emptyLog }}
                     run={runSnapshot(finishingRun, null, checks)}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A code node that lost its computer. A worker restart logged the same command twice, both shown; the failure reads as words, its code beside them, and the message names the computer."
+                label="Run, computer unavailable"
+                number="16"
+                screen="16-run-computer-unavailable-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "unit", snapshot: offlineLog }}
+                    run={runSnapshot(lostRun, "unit")}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An agent node that ended without an output, with what its agent spent: the total, then each model it used; one model's provider did not price it."
+                label="Run, agent usage"
+                number="17"
+                screen="17-run-agent-usage-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "e2e", snapshot: emptyLog }}
+                    run={runSnapshot(lostRun, "e2e")}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A batch run: three triggers joined it while its group was busy, so its input is their three inputs, numbered oldest first."
+                label="Run, batch"
+                number="18"
+                screen="18-run-batch-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "unit", snapshot: unitLiveLog }}
+                    run={runSnapshot(batchRun, null, batched)}
                 />
             </FullScreenSpecimen>
         </ComponentPage>
