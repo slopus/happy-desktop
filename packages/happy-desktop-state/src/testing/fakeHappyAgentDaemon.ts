@@ -41,7 +41,7 @@ import {
     type Workspace,
 } from "@slopus/happy-agent-client";
 import { MINIMUM_HAPPY_AGENT_VERSION } from "../happyAgentConnection/compatibility.js";
-import { generateKeyBetween } from "../utils/fractionalIndexing.js";
+import { orderKeyDecimalBetween } from "../utils/orderKeyDecimal.js";
 
 /**
  * A programmable in-memory Happy Agent daemon for state-package tests.
@@ -625,7 +625,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         const first = membershipsOrdered()[0];
         const membership: TaskMembership = {
             joinedAt: 1,
-            orderKey: generateKeyBetween(null, first?.orderKey ?? null),
+            orderKey: orderKeyDecimalBetween(null, first?.orderKey ?? null),
             taskId: id,
             userId: profile.userId ?? null,
         };
@@ -1044,7 +1044,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             const first = membershipsOrdered()[0];
             const membership: TaskMembership = {
                 joinedAt: 1,
-                orderKey: generateKeyBetween(null, first?.orderKey ?? null),
+                orderKey: orderKeyDecimalBetween(null, first?.orderKey ?? null),
                 taskId,
                 userId: profile.userId ?? null,
             };
@@ -1078,7 +1078,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                     : others.findIndex((entry) => entry.taskId === request.afterId);
             const membership: TaskMembership = {
                 ...current,
-                orderKey: generateKeyBetween(
+                orderKey: orderKeyDecimalBetween(
                     others[index]?.orderKey ?? null,
                     others[index + 1]?.orderKey ?? null,
                 ),

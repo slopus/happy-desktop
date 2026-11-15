@@ -51,7 +51,7 @@ import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentDraftAppended } from "../happyAgent/happyAgentChatDraftAppend.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
-import { generateKeyBetween } from "../utils/fractionalIndexing.js";
+import { orderKeyDecimalBetween } from "../utils/orderKeyDecimal.js";
 import {
     agentWorkRunning,
     applyChanges,
@@ -6367,7 +6367,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 // The host joins the maker at the top of their own list.
                 membership: {
                     joinedAt: createdAt,
-                    orderKey: generateKeyBetween(
+                    orderKey: orderKeyDecimalBetween(
                         null,
                         taskMembershipFirstKey(groupsStore.getState().taskMemberships),
                     ),

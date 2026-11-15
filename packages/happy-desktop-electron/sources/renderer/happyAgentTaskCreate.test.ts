@@ -19,7 +19,7 @@ afterEach(() => {
 async function windowOpen() {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.profileSet({ userId: "reader", name: "Reader" });
-    daemon.taskSeed({ id: "task_old", name: "Old", joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_old", name: "Old", joinedKey: "05" });
     const opened: HappyAgentSessionLocation[] = [];
     const forgotten: string[] = [];
     const handle = happyAgentConnectionOpen({

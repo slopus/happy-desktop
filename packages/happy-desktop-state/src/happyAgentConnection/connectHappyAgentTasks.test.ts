@@ -56,7 +56,7 @@ const taskIn = (tasks: readonly TaskGroup[], id: string) => tasks.find((task) =>
 
 it("lists every task from the bootstrap with the viewer's membership and archive right", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_joined", name: "Launch", canArchive: true, joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_joined", name: "Launch", canArchive: true, joinedKey: "5" });
     daemon.taskSeed({ id: "task_other", name: "Docs" });
     const { watch } = harnessOpen(daemon);
 
@@ -65,7 +65,7 @@ it("lists every task from the bootstrap with the viewer's membership and archive
         name: "Launch",
         canArchive: true,
         archived: false,
-        membership: { orderKey: "a1" },
+        membership: { orderKey: "5" },
         workspaceId: "taskws-task_joined",
     });
     expect(taskIn(watch.tasks, "task_other")?.membership).toBeUndefined();
@@ -83,9 +83,9 @@ it("gives a team task its owner's name and photo route, read through getUsers", 
         version: "u1",
     });
     daemon.userSeed({ id: "usr_bo", name: "Bo", photo: null, updatedAt: 1, version: "u1" });
-    daemon.taskSeed({ id: "task_ann", ownerUserId: "usr_ann", joinedKey: "a1" });
-    daemon.taskSeed({ id: "task_bo", ownerUserId: "usr_bo", joinedKey: "a2" });
-    daemon.taskSeed({ id: "task_nobody", ownerUserId: null, joinedKey: "a3" });
+    daemon.taskSeed({ id: "task_ann", ownerUserId: "usr_ann", joinedKey: "5" });
+    daemon.taskSeed({ id: "task_bo", ownerUserId: "usr_bo", joinedKey: "6" });
+    daemon.taskSeed({ id: "task_nobody", ownerUserId: null, joinedKey: "7" });
     const { watch } = harnessOpen(daemon);
 
     await vi.waitFor(() =>
@@ -113,7 +113,7 @@ it("gives a team task its owner's name and photo route, read through getUsers", 
 it("shows no owner for a standalone task, since every task there is the viewer's own", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.profileSet({ name: "Steve", photo: { thumbhash: "me-hash" } });
-    daemon.taskSeed({ id: "task_mine", ownerUserId: null, joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_mine", ownerUserId: null, joinedKey: "5" });
     const { watch } = harnessOpen(daemon);
 
     await vi.waitFor(() => expect(taskIn(watch.tasks, "task_mine")).toBeDefined());
@@ -125,8 +125,8 @@ it("shows no owner for a standalone task, since every task there is the viewer's
 
 it("keeps tasks and memberships current from the realtime events", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", name: "Alpha", joinedKey: "a1" });
-    daemon.taskSeed({ id: "task_b", name: "Beta", joinedKey: "a2" });
+    daemon.taskSeed({ id: "task_a", name: "Alpha", joinedKey: "5" });
+    daemon.taskSeed({ id: "task_b", name: "Beta", joinedKey: "6" });
     const { watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(2));
     await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
@@ -156,17 +156,17 @@ it("keeps tasks and memberships current from the realtime events", async () => {
 
     // Joined, reordered, left: the viewer's own list, member-scoped events.
     daemon.eventEmit("task.joined", {
-        membership: { joinedAt: 2, orderKey: "a0", taskId: "task_c", userId: null },
+        membership: { joinedAt: 2, orderKey: "2", taskId: "task_c", userId: null },
     });
     await vi.waitFor(() =>
-        expect(taskIn(watch.tasks, "task_c")?.membership).toEqual({ orderKey: "a0", joinedAt: 2 }),
+        expect(taskIn(watch.tasks, "task_c")?.membership).toEqual({ orderKey: "2", joinedAt: 2 }),
     );
     daemon.eventEmit("task.reordered", {
-        membership: { joinedAt: 1, orderKey: "a9", taskId: "task_a", userId: null },
+        membership: { joinedAt: 1, orderKey: "9", taskId: "task_a", userId: null },
     });
-    await vi.waitFor(() => expect(taskIn(watch.tasks, "task_a")?.membership?.orderKey).toBe("a9"));
+    await vi.waitFor(() => expect(taskIn(watch.tasks, "task_a")?.membership?.orderKey).toBe("9"));
     daemon.eventEmit("task.left", {
-        membership: { joinedAt: 1, orderKey: "a2", taskId: "task_b", userId: null },
+        membership: { joinedAt: 1, orderKey: "6", taskId: "task_b", userId: null },
     });
     await vi.waitFor(() => expect(taskIn(watch.tasks, "task_b")?.membership).toBeUndefined());
     // Leaving takes the task off the viewer's list, not out of the catalog.
@@ -178,7 +178,7 @@ it("stays read after opening a task the bootstrap listed as unread for the viewe
     const task = daemon.taskSeed({
         id: "task_unread",
         name: "Launch",
-        joinedKey: "a1",
+        joinedKey: "5",
         joinedUnread: { reason: "turn_finished", since: 5, count: 2 },
     });
     const { connection, watch } = harnessOpen(daemon);
@@ -198,24 +198,24 @@ it("stays read after opening a task the bootstrap listed as unread for the viewe
     await vi.waitFor(() =>
         expect(taskIn(watch.tasks, "task_unread")?.session.unread).toBeUndefined(),
     );
-    expect(taskIn(watch.tasks, "task_unread")?.membership).toEqual({ orderKey: "a1", joinedAt: 1 });
+    expect(taskIn(watch.tasks, "task_unread")?.membership).toEqual({ orderKey: "5", joinedAt: 1 });
 });
 
 it("joins, moves, and leaves through the task routes, putting a join at the top", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
-    daemon.taskSeed({ id: "task_b", joinedKey: "a2" });
+    daemon.taskSeed({ id: "task_a", joinedKey: "5" });
+    daemon.taskSeed({ id: "task_b", joinedKey: "6" });
     daemon.taskSeed({ id: "task_new" });
     const { connection, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(3));
 
     connection.joinTask("task_new");
     await vi.waitFor(() => expect(taskIn(watch.tasks, "task_new")?.membership).toBeDefined());
-    expect(taskIn(watch.tasks, "task_new")!.membership!.orderKey < "a1").toBe(true);
+    expect(taskIn(watch.tasks, "task_new")!.membership!.orderKey < "5").toBe(true);
 
     connection.reorderTask("task_new", "task_b");
     await vi.waitFor(() =>
-        expect(taskIn(watch.tasks, "task_new")!.membership!.orderKey > "a2").toBe(true),
+        expect(taskIn(watch.tasks, "task_new")!.membership!.orderKey > "6").toBe(true),
     );
     expect(daemon.calls.find((call) => call.method === "reorderTask")?.args[1]).toMatchObject({
         afterId: "task_b",
@@ -227,8 +227,8 @@ it("joins, moves, and leaves through the task routes, putting a join at the top"
 
 it("archives against the task's version and states a refusal or a stale version plainly", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_owned", name: "Owned", canArchive: true, joinedKey: "a1" });
-    daemon.taskSeed({ id: "task_theirs", name: "Theirs", joinedKey: "a2" });
+    daemon.taskSeed({ id: "task_owned", name: "Owned", canArchive: true, joinedKey: "5" });
+    daemon.taskSeed({ id: "task_theirs", name: "Theirs", joinedKey: "6" });
     const { connection, rejections, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(2));
 
@@ -258,9 +258,38 @@ it("archives against the task's version and states a refusal or a stale version 
     expect(rejections).toHaveLength(2);
 });
 
+it.each(["5", "05"])(
+    "creates ahead of decimal task key %s without moving on confirmation",
+    async (firstKey) => {
+        const daemon = fakeHappyAgentDaemonCreate();
+        daemon.taskSeed({ id: "existing", joinedKey: firstKey });
+        const { connection, watch } = harnessOpen(daemon);
+        await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+        const release = daemon.pause("createTask");
+
+        const creation = connection.createTask("Decimal order");
+        const optimisticKey = taskIn(watch.tasks, creation.taskId)!.membership!.orderKey;
+        expect(optimisticKey).toMatch(/^[0-9]+$/);
+        expect(optimisticKey < firstKey).toBe(true);
+        const orderedIds = () =>
+            [...watch.tasks]
+                .sort((left, right) =>
+                    left.membership!.orderKey < right.membership!.orderKey ? -1 : 1,
+                )
+                .map((task) => task.id);
+        expect(orderedIds()).toEqual([creation.taskId, "existing"]);
+
+        release();
+        await creation.task;
+        expect(daemon.taskMembershipGet(creation.taskId)?.orderKey).toBe(optimisticKey);
+        expect(taskIn(watch.tasks, creation.taskId)!.membership!.orderKey).toBe(optimisticKey);
+        expect(orderedIds()).toEqual([creation.taskId, "existing"]);
+    },
+);
+
 it("creates a task under the ids it chose, joined at the top of the viewer's list", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_a", joinedKey: "5" });
     const { connection, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
 
@@ -281,7 +310,7 @@ it("creates a task under the ids it chose, joined at the top of the viewer's lis
         workspaceId: creation.workspaceId,
     });
     await vi.waitFor(() => expect(taskIn(watch.tasks, creation.taskId)?.membership).toBeDefined());
-    expect(taskIn(watch.tasks, creation.taskId)!.membership!.orderKey < "a1").toBe(true);
+    expect(taskIn(watch.tasks, creation.taskId)!.membership!.orderKey < "5").toBe(true);
 
     // Without a name the host gives one, and names it again from its first message.
     const unnamed = connection.createTask();
@@ -293,7 +322,7 @@ it("creates a task under the ids it chose, joined at the top of the viewer's lis
 
 it("lists a task at the top of the viewer's list before the host answers, then the host's own in its place", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_a", joinedKey: "5" });
     const { connection, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
     const release = daemon.pause("createTask");
@@ -306,7 +335,7 @@ it("lists a task at the top of the viewer's list before the host answers, then t
         workspaceId: creation.workspaceId,
         session: { id: creation.agentId },
     });
-    expect(listed!.membership!.orderKey < "a1").toBe(true);
+    expect(listed!.membership!.orderKey < "5").toBe(true);
     const order = (tasks: readonly TaskGroup[]) =>
         tasks
             .filter((task) => task.membership !== undefined)
@@ -330,7 +359,7 @@ it("lists a task at the top of the viewer's list before the host answers, then t
 
 it("sends a first message written before the host answered once the task exists", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_a", joinedKey: "5" });
     const { connection, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
     const release = daemon.pause("createTask");
@@ -360,7 +389,7 @@ it("sends a first message written before the host answered once the task exists"
 
 it("withdraws a refused task's row, and sends nothing to its agent", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_a", joinedKey: "5" });
     const { connection, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
     daemon.failOnce("createTask", new Error("The task's folder could not be created."));
@@ -391,7 +420,7 @@ it("rejects a refused create with the host's reason and lists nothing", async ()
 
 it("does not send queued mode changes to a refused task", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "existing", joinedKey: "a1" });
+    daemon.taskSeed({ id: "existing", joinedKey: "5" });
     const { connection, rejections, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
     daemon.failOnce("createTask", new Error("Refused"));
@@ -453,7 +482,7 @@ it("does not rejoin a task left remotely before its create response arrives", as
 
 it("preserves a pending task through a catalog reload, then removes it on refusal", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "existing", joinedKey: "a1" });
+    daemon.taskSeed({ id: "existing", joinedKey: "5" });
     const { connection, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
     daemon.failOnce("createTask", new Error("Refused"));
@@ -473,7 +502,7 @@ it("preserves a pending task through a catalog reload, then removes it on refusa
 
 it("renames against the task's version and says so when the version moved", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.taskSeed({ id: "task_a", name: "Alpha", joinedKey: "a1" });
+    daemon.taskSeed({ id: "task_a", name: "Alpha", joinedKey: "5" });
     const { connection, rejections, watch } = harnessOpen(daemon);
     await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
 
@@ -583,7 +612,7 @@ it("keeps an Antigravity task's selected model before and after a first agent-ro
             id: "task_ag_draft",
             name: "Antigravity Task With Draft",
             ownerUserId: teamMode ? "usr_me" : null,
-            joinedKey: "a1",
+            joinedKey: "5",
         });
         const draftAgentId = taskWithDraft.agent.id;
         daemon.modeSeed(draftAgentId, null);
@@ -600,7 +629,7 @@ it("keeps an Antigravity task's selected model before and after a first agent-ro
             id: "task_ag_nodraft",
             name: "Antigravity Task Without Draft",
             ownerUserId: teamMode ? "usr_me" : null,
-            joinedKey: "a2",
+            joinedKey: "6",
         });
         const noDraftAgentId = taskWithoutDraft.agent.id;
         daemon.modeSeed(noDraftAgentId, null);
@@ -757,7 +786,7 @@ it("keeps an Antigravity task's selected model before and after a first agent-ro
 it("re-reads stored mode via getAgentMode on non-user acceptance and never overwrites stored mode or routing aliases from configuration blocks or stale mode reads", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     antigravityCatalogSeed(daemon);
-    const task = daemon.taskSeed({ id: "task_cfg_isolation", joinedKey: "a1" });
+    const task = daemon.taskSeed({ id: "task_cfg_isolation", joinedKey: "5" });
     const agentId = task.agent.id;
     daemon.modeSeed(agentId, null);
     daemon.draftSeed(agentId, { value: null, updatedAt: null });
@@ -923,17 +952,17 @@ it("re-reads stored mode via getAgentMode on non-user acceptance and never overw
 it("holds a pre-bootstrap draft save past the 300ms debounce window while loading, flushes on bootstrap failure + view close or drain recovery, and sends the reconciled creation mode", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     antigravityCatalogSeed(daemon);
-    const task = daemon.taskSeed({ id: "task_draft_race", joinedKey: "a1" });
+    const task = daemon.taskSeed({ id: "task_draft_race", joinedKey: "5" });
     const agentId = task.agent.id;
     daemon.modeSeed(agentId, null);
     daemon.draftSeed(agentId, {
         value: { ...ANTIGRAVITY_FLASH_MODE, text: "" },
         updatedAt: 100,
     });
-    const failedTask = daemon.taskSeed({ id: "task_draft_fail", joinedKey: "a2" });
+    const failedTask = daemon.taskSeed({ id: "task_draft_fail", joinedKey: "6" });
     const failedAgentId = failedTask.agent.id;
     daemon.modeSeed(failedAgentId, null);
-    const retryTask = daemon.taskSeed({ id: "task_draft_retry", joinedKey: "a3" });
+    const retryTask = daemon.taskSeed({ id: "task_draft_retry", joinedKey: "7" });
     const retryAgentId = retryTask.agent.id;
     daemon.modeSeed(retryAgentId, null);
     daemon.draftSeed(retryAgentId, {

@@ -28,7 +28,7 @@ const refusal = () =>
 
 async function opened() {
     const daemon = fakeHappyAgentDaemonCreate();
-    const task = daemon.taskSeed({ id: "task_mode", name: "Mode", joinedKey: "a1" });
+    const task = daemon.taskSeed({ id: "task_mode", name: "Mode", joinedKey: "5" });
     const agentId = task.agent.id;
     daemon.modeSeed(agentId, SAVED);
     daemon.draftSeed(agentId, { value: { ...SAVED, text: "" }, updatedAt: 100 });

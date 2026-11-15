@@ -159,6 +159,27 @@ function store(
     return { workspace, outputs, unsubscribe };
 }
 
+it("keeps the draft and its text when optimistic creation throws synchronously", async () => {
+    const { workspace, outputs, unsubscribe } = store(() => {
+        throw new Error("Creation refused before publication");
+    });
+    workspace.taskCreateOpen();
+    workspace.taskCreateMessageUpdate("Keep this first message");
+    workspace.taskCreateMessageSend();
+    await vi.waitFor(() =>
+        expect(workspace.get().taskCreate?.composer.get().submission).toMatchObject({
+            status: "failed",
+            error: { message: "Creation refused before publication" },
+        }),
+    );
+    expect(workspace.get().taskCreate?.composer.get().text).toBe("Keep this first message");
+    expect(outputs).not.toContainEqual(
+        expect.objectContaining({ type: "conversationOpenRequested" }),
+    );
+    expect(workspace.get().list.tasks.map((task) => task.id)).toEqual([TASK.id]);
+    unsubscribe();
+});
+
 it("opens a task draft of its own, and sending turns the window to the new task", async () => {
     const taskCreate = vi.fn(() => creating());
     const { workspace, outputs, unsubscribe } = store(taskCreate);
