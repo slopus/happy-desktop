@@ -603,15 +603,20 @@ function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeIn
     const unix = unixSystemsText(install.systems);
     const windows = install.systems.length === 0 || install.systems.includes("windows");
     const agents = `${String(install.concurrency)} ${install.concurrency === 1 ? "agent" : "agents"}`;
-    const what =
+    const joins =
         install.access === "shared"
-            ? `Run this on the computer. It installs the Happy supervisor with sudo and joins the computer for the whole team, taking up to ${agents} at once.`
-            : `Run this on your own computer, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account, and the computer joins as yours, taking up to ${agents} at once.`;
+            ? `joins the computer for the whole team, taking up to ${agents} at once`
+            : `joins the computer as yours, taking up to ${agents} at once`;
+    // Without a published installer, the supervisor is set up by hand with the address and token.
+    const what =
+        commands === null
+            ? `This server publishes no install command. Set up the Happy supervisor on the computer${install.access === "private" ? " under your own account" : ""} and give it this server address and join token; it ${joins}. The token works once. ${install.expires}.`
+            : install.access === "shared"
+              ? `Run this on the computer. It installs the Happy supervisor with sudo and ${joins}. The command works once. ${install.expires}.`
+              : `Run this on your own computer, signed in as yourself. It needs no sudo: the Happy supervisor runs on your own account and ${joins}. The command works once. ${install.expires}.`;
     return (
         <>
-            <p className="happy-agent-compute__note">
-                {`${what} The command works once. ${install.expires}.`}
-            </p>
+            <p className="happy-agent-compute__note">{what}</p>
             {install.notice ? (
                 <Banner tone="info" title="Not every system yet">
                     {install.notice}

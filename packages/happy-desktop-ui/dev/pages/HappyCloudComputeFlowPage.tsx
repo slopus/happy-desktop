@@ -322,6 +322,17 @@ export function HappyCloudComputeFlowPage() {
                     }}
                 />
             </Screen>
+            <Screen
+                detail="a server that publishes no installer"
+                number="13"
+                screen="13-install-no-installer"
+            >
+                <List add="private" />
+                <Add
+                    accesses="private"
+                    stage={{ step: "install", install: { ...install("private"), commands: null } }}
+                />
+            </Screen>
         </ComponentPage>
     );
 }
