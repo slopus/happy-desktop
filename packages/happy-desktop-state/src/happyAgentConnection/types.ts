@@ -1014,6 +1014,12 @@ export interface CreateSessionInput {
     workspaceId?: string;
 }
 
+/** What a new task's conversation runs on, named the way a session's creation names it. */
+export type CreateTaskMode = Pick<
+    CreateSessionInput,
+    "effort" | "modelId" | "permissionMode" | "providerId" | "serviceTier"
+>;
+
 export interface CreateWorkspaceInput {
     baseRef?: string;
     name: string;
@@ -1309,8 +1315,15 @@ export interface HappyAgentConnection {
      * Creates a task owned by the caller and joined at the top of their list.
      * Without a name the host calls it "New Task" and names it from its first
      * message. The task id doubles as the retry key.
+     *
+     * The task, the caller's membership at the top of their list, and its one
+     * agent are listed in this call stack, before the host is asked, the way
+     * `createSession` lists its agent: the row stands where the host will put
+     * it and the conversation can be opened and written into at once, its
+     * draft and first message queued behind the creation and running on
+     * `mode`. A refusal withdraws all three before `task` rejects.
      */
-    createTask(name?: string): TaskCreationRequest;
+    createTask(name?: string, mode?: CreateTaskMode): TaskCreationRequest;
     /** Renames a task for everyone, guarded by its version; ends automatic naming. */
     renameTask(taskId: string, name: string): MutationId;
     close(): void;

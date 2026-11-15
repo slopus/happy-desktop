@@ -252,14 +252,30 @@ export interface HappyAgentBotCreateInput {
     readonly selection?: HappyAgentSelection;
 }
 
-/**
- * What `taskCreate` answers with: the task, and the address of its one
- * conversation. The list carries the task, at the top of the reader's own list,
- * by the time this is handed back.
- */
+/** A task and the address of its one conversation. */
 export interface HappyAgentTaskCreation {
     readonly taskId: HappyAgentTaskId;
     readonly location: HappyAgentSessionLocation;
+}
+
+/**
+ * What `taskCreate` answers with, in the caller's own call stack: the task and
+ * its address, already listed at the top of the reader's own list and open to
+ * be written into, and the host's two answers about it.
+ */
+export interface HappyAgentTaskCreating extends HappyAgentTaskCreation {
+    /**
+     * Settles once the host holds the task and this list carries it: the row
+     * that has stood since the call is the host's own from then on. Rejects
+     * with a displayable reason when it was not made, the row withdrawn.
+     */
+    readonly created: Promise<void>;
+    /**
+     * Settles once its conversation is also confirmed to run on the selection
+     * it was asked with. Rejects with `created`'s reason, or with one saying
+     * the task was made but its setup was not confirmed.
+     */
+    readonly ready: Promise<void>;
 }
 
 /**
@@ -369,10 +385,11 @@ export interface HappyAgentSessionListStore {
     botReorder(botId: HappyAgentBotId, afterId: HappyAgentBotId | null): Promise<void>;
     /**
      * Creates a task owned by the reader, which the host puts at the top of
-     * their own list. Resolves once this list carries it, with the address of
-     * its conversation; rejects with a displayable reason when the host refuses.
+     * their own list. The row stands there before the host is asked, and its
+     * conversation can be opened and written into at once: its draft and first
+     * message wait for the host on their own. A refusal withdraws the row.
      */
-    taskCreate(input: HappyAgentTaskCreateInput): Promise<HappyAgentTaskCreation>;
+    taskCreate(input: HappyAgentTaskCreateInput): HappyAgentTaskCreating;
     /**
      * Renames a task for everyone. The row wears the new name at once and
      * keeps it through any read that predates the rename; resolves `true` once
@@ -3118,45 +3135,74 @@ export function happyAgentSessionListStoreCreate(
                 publish();
                 connectMutationTrack(deps.connectActions.reorderBot(botId, afterId));
             }),
-        taskCreate: async (input) => {
+        taskCreate: (input) => {
             store.setState({ ...store.getState(), mutationError: undefined });
             const name = input.name?.trim();
+            const selection = input.selection;
+            // The connection lists the task, its place at the top of the
+            // reader's list, and its agent in this call stack, so the row is
+            // up and the conversation open to words before the request has
+            // left. The first message rides on the selection by itself.
             const request = deps.connectActions.createTask(
                 name === undefined || name.length === 0 ? undefined : name,
+                selection === undefined
+                    ? undefined
+                    : {
+                          providerId: selection.providerId,
+                          modelId: selection.modelId,
+                          ...(selection.effort === undefined ? {} : { effort: selection.effort }),
+                          permissionMode: selection.permissionMode,
+                          ...(selection.serviceTier === undefined
+                              ? {}
+                              : { serviceTier: selection.serviceTier }),
+                      },
             );
             const taskId = request.taskId as HappyAgentTaskId;
-            let created = false;
-            try {
-                const task = await request.task;
-                created = true;
-                // What the composer showed while the first message was written
-                // is what the conversation runs with, applied the way a new
-                // bot's is.
-                if (input.selection !== undefined)
+            const subject = name ? `“${name}”` : "The new task";
+            const failed = (failure: UserError): UserError => {
+                if (!disposed) store.setState({ ...store.getState(), mutationError: failure });
+                return failure;
+            };
+            const created = request.task.then(
+                () => taskListed(taskId),
+                (error: unknown) => {
+                    throw failed(
+                        new UserError(
+                            `${subject} may not have been created: ${happyAgentUserError(error).message} Check the task list before trying again.`,
+                        ),
+                    );
+                },
+            );
+            // What the composer showed while the first message was written is
+            // what the conversation runs with, kept on the agent the way a new
+            // bot's is once the host holds it.
+            const ready = created.then(async () => {
+                if (selection === undefined) return;
+                try {
                     await Promise.all(
-                        botSelectionApply(task.agent.id, input.selection).map((id) =>
+                        botSelectionApply(request.agentId, selection).map((id) =>
                             deps.connectActions.sessionModeSaveWait(id),
                         ),
                     );
-                await taskListed(taskId);
-                return {
-                    taskId,
-                    location: {
-                        groupId: task.workspaceId as HappyAgentGroupId,
-                        sessionId: task.agent.id as HappyAgentSessionId,
-                    },
-                };
-            } catch (error) {
-                const failure = created
-                    ? new UserError(
-                          `${name ? `“${name}”` : "The new task"} was created, but its setup was not confirmed: ${happyAgentUserError(error).message} Check the task before trying again.`,
-                      )
-                    : new UserError(
-                          `${name ? `“${name}”` : "The new task"} may not have been created: ${happyAgentUserError(error).message} Check the task list before trying again.`,
-                      );
-                if (!disposed) store.setState({ ...store.getState(), mutationError: failure });
-                throw failure;
-            }
+                } catch (error) {
+                    throw failed(
+                        new UserError(
+                            `${subject} was created, but its setup was not confirmed: ${happyAgentUserError(error).message} Check the task before trying again.`,
+                        ),
+                    );
+                }
+            });
+            void created.catch(() => undefined);
+            void ready.catch(() => undefined);
+            return {
+                taskId,
+                location: {
+                    groupId: request.workspaceId as HappyAgentGroupId,
+                    sessionId: request.agentId as HappyAgentSessionId,
+                },
+                created,
+                ready,
+            };
         },
         taskFailureDismiss: taskFailureWithdraw,
         subtaskFailureDismiss: subtaskFailureWithdraw,

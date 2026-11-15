@@ -105,7 +105,7 @@ function listCreate(initial: readonly HappyAgentTask[]) {
 const ids = (tasks: readonly HappyAgentTask[]) => tasks.map((entry) => entry.id);
 
 it.each([false, true])(
-    "waits for task model setup and preserves partial creation on refusal (%s)",
+    "is ready once task model setup is confirmed, and keeps a made task on refusal (%s)",
     async (refused) => {
         using harness = listCreate([]);
         await vi.waitFor(() => expect(harness.list.get().projects.type).toBe("ready"));
@@ -117,49 +117,47 @@ it.each([false, true])(
         }));
         let resolve!: () => void;
         let reject!: (error: Error) => void;
-        const gate = {
-            promise: new Promise<void>((done, fail) => {
-                resolve = done;
-                reject = fail;
-            }),
-            resolve: () => resolve(),
-            reject: (error: Error) => reject(error),
-        };
-        harness.actions.sessionModeSaveWait.mockImplementation(() => gate.promise);
-        let settled = false;
-        const creation = harness.list
-            .taskCreate({
-                name: "New",
-                selection: {
-                    providerId: "codex",
-                    modelId: "sol",
-                    effort: "low",
-                    serviceTier: "priority",
-                    permissionMode: "read_only",
-                },
-            })
-            .then((value) => {
-                settled = true;
-                return value;
-            });
-        const outcome = refused
-            ? expect(creation).rejects.toThrow(
-                  /“New” was created.*setup was not confirmed.*Check the task before trying again/,
-              )
-            : expect(creation).resolves.toMatchObject({ taskId: "new" });
+        const gate = new Promise<void>((done, fail) => {
+            resolve = done;
+            reject = fail;
+        });
+        harness.actions.sessionModeSaveWait.mockImplementation(() => gate);
+        const selection = {
+            providerId: "codex",
+            modelId: "sol",
+            effort: "low",
+            serviceTier: "priority",
+            permissionMode: "read_only",
+        } as const;
+        const creation = harness.list.taskCreate({ name: "New", selection });
+        // The connection is told what the conversation runs on with the
+        // creation itself, so its first words already run on it.
+        expect(harness.actions.createTask).toHaveBeenCalledWith("New", selection);
+        let ready = false;
+        void creation.ready.then(
+            () => (ready = true),
+            () => undefined,
+        );
+        harness.hostAnswers([task("new", { orderKey: "a0" })]);
+        await expect(creation.created).resolves.toBeUndefined();
         await vi.waitFor(() =>
             expect(harness.actions.sessionModeSaveWait).toHaveBeenCalledTimes(4),
         );
-        harness.hostAnswers([task("new", { orderKey: "a0" })]);
-        await vi.waitFor(() => expect(harness.list.get().tasks).toHaveLength(1));
-        expect(settled).toBe(false);
+        expect(ready).toBe(false);
         expect(harness.actions.switchModel).toHaveBeenCalledWith("ses_new", {
             providerId: "codex",
             modelId: "sol",
         });
-        if (refused) gate.reject(new Error("Model save refused."));
-        else gate.resolve();
-        await outcome;
+        if (refused) {
+            reject(new Error("Model save refused."));
+            await expect(creation.ready).rejects.toThrow(
+                /“New” was created.*setup was not confirmed.*Check the task before trying again/,
+            );
+        } else {
+            resolve();
+            await expect(creation.ready).resolves.toBeUndefined();
+        }
+        expect(ids(harness.list.get().tasks)).toEqual(["new"]);
         expect(harness.actions.createTask).toHaveBeenCalledTimes(1);
     },
 );
@@ -291,7 +289,7 @@ it("joins once, marking the task as joining until the host lists the membership"
     expect(harness.list.get().tasksJoining.size).toBe(0);
 });
 
-it("creates a task, answering with its conversation once the host lists it at the top", async () => {
+it("creates a task, addressing its conversation at once and confirming it once listed", async () => {
     using harness = listCreate([task("a", { orderKey: "a1" })]);
     await vi.waitFor(() => expect(harness.list.get().tasks).toHaveLength(1));
     harness.actions.createTask.mockImplementation(() => ({
@@ -301,23 +299,23 @@ it("creates a task, answering with its conversation once the host lists it at th
         task: Promise.resolve({ id: "new", workspaceId: "ws_new", agent: { id: "ses_new" } }),
     }));
 
-    let settled = false;
-    const creation = harness.list.taskCreate({ name: "  Invoice rounding  " }).then((value) => {
-        settled = true;
-        return value;
+    const creation = harness.list.taskCreate({ name: "  Invoice rounding  " });
+    expect(harness.actions.createTask).toHaveBeenCalledWith("Invoice rounding", undefined);
+    // Its address is known in the call: the connection named every id.
+    expect(creation).toMatchObject({
+        taskId: "new",
+        location: { groupId: "ws_new", sessionId: "ses_new" },
     });
-    expect(harness.actions.createTask).toHaveBeenCalledWith("Invoice rounding");
-    // Not answered until the list carries it: the window must not turn to a
-    // conversation the sidebar does not have yet.
+    let settled = false;
+    void creation.created.then(() => (settled = true));
+    // Not confirmed until the list carries it.
     await Promise.resolve();
     await Promise.resolve();
     expect(settled).toBe(false);
 
     harness.hostAnswers([task("new", { orderKey: "a0" }), task("a", { orderKey: "a1" })]);
-    await expect(creation).resolves.toEqual({
-        taskId: "new",
-        location: { groupId: "ws_new", sessionId: "ses_new" },
-    });
+    await expect(creation.created).resolves.toBeUndefined();
+    await expect(creation.ready).resolves.toBeUndefined();
     expect(ids(harness.list.get().tasks)).toEqual(["new", "a"]);
 
     // A blank name is left out, for the host to name the task from its first message.
@@ -327,10 +325,10 @@ it("creates a task, answering with its conversation once the host lists it at th
         agentId: "ses_other",
         task: Promise.reject(new Error("The task's folder could not be created.")),
     }));
-    await expect(harness.list.taskCreate({ name: "   " })).rejects.toThrow(
-        "The task's folder could not be created.",
-    );
-    expect(harness.actions.createTask).toHaveBeenLastCalledWith(undefined);
+    const refused = harness.list.taskCreate({ name: "   " });
+    await expect(refused.created).rejects.toThrow("The task's folder could not be created.");
+    await expect(refused.ready).rejects.toThrow("The task's folder could not be created.");
+    expect(harness.actions.createTask).toHaveBeenLastCalledWith(undefined, undefined);
     expect(harness.list.get().mutationError?.message).toContain(
         "The task's folder could not be created.",
     );

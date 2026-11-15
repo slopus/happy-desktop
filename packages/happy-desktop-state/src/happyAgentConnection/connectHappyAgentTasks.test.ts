@@ -291,6 +291,92 @@ it("creates a task under the ids it chose, joined at the top of the viewer's lis
     ).not.toHaveProperty("name");
 });
 
+it("lists a task at the top of the viewer's list before the host answers, then the host's own in its place", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    const release = daemon.pause("createTask");
+
+    const creation = connection.createTask("Invoice rounding");
+    // In the call: the row stands first, under the ids the host will keep.
+    const listed = taskIn(watch.tasks, creation.taskId);
+    expect(listed).toMatchObject({
+        name: "Invoice rounding",
+        workspaceId: creation.workspaceId,
+        session: { id: creation.agentId },
+    });
+    expect(listed!.membership!.orderKey < "a1").toBe(true);
+    const order = (tasks: readonly TaskGroup[]) =>
+        tasks
+            .filter((task) => task.membership !== undefined)
+            .sort((left, right) =>
+                left.membership!.orderKey < right.membership!.orderKey ? -1 : 1,
+            )
+            .map((task) => task.id);
+    expect(order(watch.tasks)).toEqual([creation.taskId, "task_a"]);
+
+    release();
+    await creation.task;
+    await vi.waitFor(() => expect(daemon.callCount("getTask")).toBeGreaterThan(0));
+    // The host's record takes its place: one row, still first, never gone.
+    expect(watch.tasks.filter((task) => task.id === creation.taskId)).toHaveLength(1);
+    expect(order(watch.tasks)).toEqual([creation.taskId, "task_a"]);
+    expect(taskIn(watch.tasks, creation.taskId)).toMatchObject({
+        name: "Invoice rounding",
+        path: `/tmp/tasks/${creation.taskId}`,
+    });
+});
+
+it("sends a first message written before the host answered once the task exists", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    const release = daemon.pause("createTask");
+
+    const creation = connection.createTask(undefined, {
+        providerId: "test-provider",
+        modelId: "test-model",
+        permissionMode: "read_only",
+    });
+    expect(taskIn(watch.tasks, creation.taskId)?.name).toBe("New Task");
+    connection.sendMessage(creation.agentId, "Fix the invoice rounding");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Nothing is said to an agent the host has not made.
+    expect(daemon.callCount("sendMessage")).toBe(0);
+
+    release();
+    await creation.task;
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
+    const methods = daemon.calls.map((call) => call.method);
+    expect(methods.indexOf("createTask")).toBeLessThan(methods.indexOf("sendMessage"));
+    // The words run on what the composer showed when they were written.
+    expect(daemon.calls.find((call) => call.method === "sendMessage")?.args[1]).toMatchObject({
+        text: "Fix the invoice rounding",
+        mode: { modelId: "test-model", permissionMode: "read_only" },
+    });
+});
+
+it("withdraws a refused task's row, and sends nothing to its agent", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    daemon.failOnce("createTask", new Error("The task's folder could not be created."));
+    const release = daemon.pause("createTask");
+
+    const creation = connection.createTask("Nope");
+    expect(taskIn(watch.tasks, creation.taskId)).toBeDefined();
+    connection.sendMessage(creation.agentId, "Hello");
+
+    release();
+    await expect(creation.task).rejects.toThrow("The task's folder could not be created.");
+    expect(watch.tasks.map((task) => task.id)).toEqual(["task_a"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(daemon.callCount("sendMessage")).toBe(0);
+});
+
 it("rejects a refused create with the host's reason and lists nothing", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.failOnce("createTask", new Error("The task's folder could not be created."));

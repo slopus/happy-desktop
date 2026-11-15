@@ -51,6 +51,7 @@ import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentDraftAppended } from "../happyAgent/happyAgentChatDraftAppend.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
+import { generateKeyBetween } from "../utils/fractionalIndexing.js";
 import {
     agentWorkRunning,
     applyChanges,
@@ -82,6 +83,7 @@ import type {
     BotGroup,
     ConnectHappyAgentOptions,
     CreateSessionInput,
+    CreateTaskMode,
     DraftUpdate,
     GroupDelta,
     GroupsChanges,
@@ -511,6 +513,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionCreations = new Map<string, Promise<void>>();
+    /**
+     * Tasks asked for and not yet answered for, as they are listed meanwhile.
+     * A bootstrap read while one is out describes the host before it, and the
+     * row laid back over it keeps standing rather than blinking out and back.
+     */
+    const taskCreations = new Map<string, TaskCreation>();
     const sessionMutationCounts = new Map<string, number>();
     const gitStates = new RevisedMap<string, GitSnapshotState>();
     const processOwners = new Map<string, string>();
@@ -2321,8 +2329,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 bots: bootstrap.bots ?? [],
                 projects: owners.projects,
                 // The same for tasks: absent together on a daemon that predates them.
-                taskMemberships: bootstrap.taskMemberships ?? [],
-                tasks: bootstrap.tasks ?? [],
+                ...taskCreationsOver(bootstrap.tasks ?? [], bootstrap.taskMemberships ?? []),
                 workspaces: owners.workspaces,
             });
             taskOwnersEnsure(bootstrap.tasks ?? []);
@@ -2721,6 +2728,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 .then(taskResponseAdopt),
         );
 
+    /** The host's tasks and memberships, with every task still being created laid over them. */
+    const taskCreationsOver = (
+        tasks: readonly Task[],
+        taskMemberships: readonly TaskMembership[],
+    ): { readonly tasks: readonly Task[]; readonly taskMemberships: readonly TaskMembership[] } => {
+        let laidTasks = tasks;
+        let laidMemberships = taskMemberships;
+        for (const creation of taskCreations.values()) {
+            if (tasks.some((task) => task.id === creation.task.id)) continue;
+            laidTasks = [...laidTasks, creation.task];
+            laidMemberships = taskMembershipsReplace(laidMemberships, creation.membership);
+        }
+        return { tasks: laidTasks, taskMemberships: laidMemberships };
+    };
+
     /** Adopts a task route's answer: the task, and the caller's place in it or none. */
     const taskResponseAdopt = ({
         task,
@@ -2732,6 +2754,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const latest = taskOf(task.id);
         const adoptTask =
             latest === undefined ||
+            // One this window listed ahead of the host carries no host version.
+            latest.version === latest.id ||
             latest.version.localeCompare(task.version) <= 0 ||
             (latest.canArchive === undefined && task.canArchive !== undefined);
         groupsStore.setState((state) => ({
@@ -6286,15 +6310,83 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         unarchiveTask(taskId) {
             return taskArchivalSet(taskId, false);
         },
-        createTask(name) {
+        createTask(name, mode) {
             // As with a bot, all three identities are named here, and the task
             // id doubles as the mutation key so a request repeated after a
             // dropped answer settles on the task already made.
             const taskId = nextId();
             const workspaceId = nextId();
             const agentId = nextId();
-            const task = (async () => {
-                const response = await client.createTask(
+            const createdAt = now();
+            // Listed before the host is asked, as the host will list it, so
+            // its row stands where it is going and its conversation opens and
+            // takes words at once. Its version is its id, which is what marks
+            // it as this window's own until the host's answer replaces it.
+            const optimistic: TaskCreation = {
+                task: {
+                    agent: {
+                        id: agentId,
+                        workspaceId,
+                        parentAgentId: null,
+                        // The host titles a task's agent with the task's name.
+                        title: name ?? "New Task",
+                        titleStatus: "idle",
+                        status: "idle",
+                        subagents: { total: 0, running: 0 },
+                        processes: { running: 0 },
+                        pendingQuestionId: null,
+                        unread: null,
+                        orderKey: agentId,
+                        lastCursor: cursor ?? "",
+                        version: agentId,
+                        createdAt,
+                        updatedAt: createdAt,
+                        archivedAt: null,
+                    },
+                    archivedAt: null,
+                    // Where the folder is, the host decides; nothing is placed
+                    // in it before the host has answered.
+                    compute: { type: "host", path: "" },
+                    createdAt,
+                    creatorAgentId: null,
+                    folderName: "",
+                    id: taskId,
+                    name: name ?? "New Task",
+                    ownerUserId: currentUserId ?? null,
+                    status: "active",
+                    updatedAt: createdAt,
+                    version: taskId,
+                    workspaceId,
+                },
+                // The host joins the maker at the top of their own list.
+                membership: {
+                    joinedAt: createdAt,
+                    orderKey: generateKeyBetween(
+                        null,
+                        taskMembershipFirstKey(groupsStore.getState().taskMemberships),
+                    ),
+                    taskId,
+                    unread: null,
+                    userId: currentUserId ?? null,
+                },
+            };
+            taskCreations.set(taskId, optimistic);
+            if (config !== undefined) {
+                const intended = modeFromInput(mode ?? {}, config);
+                intendedModes.set(agentId, intended);
+                agentModes.set(agentId, intended);
+            }
+            unannouncedAgents.add(agentId);
+            groupsStore.setState((state) => ({
+                tasks: replaceResource(state.tasks, optimistic.task),
+                taskMemberships: taskMembershipsReplace(
+                    state.taskMemberships,
+                    optimistic.membership,
+                ),
+            }));
+            publishGroups();
+            const task = client
+                .createTask(
                     {
                         agentId,
                         id: taskId,
@@ -6305,12 +6397,57 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         workspaceId,
                     },
                     { signal: rootController.signal },
+                )
+                .then(
+                    (response) => {
+                        taskCreations.delete(taskId);
+                        unannouncedAgents.delete(agentId);
+                        // The task and the caller's place at the top of their list
+                        // take the listed ones' place under the same ids, so the
+                        // row stays where it stood.
+                        taskResponseAdopt(response);
+                        adoptAgent(response.task.agent);
+                        // A reader who has been in it since before it existed gets
+                        // its real transcript without having asked for one.
+                        const entry = sessions.get(agentId);
+                        if (entry !== undefined) background(requestSessionLoad(entry));
+                        return response.task;
+                    },
+                    (error: unknown) => {
+                        taskCreations.delete(taskId);
+                        unannouncedAgents.delete(agentId);
+                        intendedModes.delete(agentId);
+                        agentModes.delete(agentId);
+                        agentDrafts.delete(agentId);
+                        draftRevisions.delete(agentId);
+                        draftSaveCancel(agentId);
+                        // Only what is still this window's own goes: an answer that
+                        // was lost after the host made the task leaves the host's
+                        // record, which an event may already have brought.
+                        if (taskOf(taskId)?.version === taskId) {
+                            groupsStore.setState((state) => ({
+                                tasks: state.tasks.filter((entry) => entry.id !== taskId),
+                                taskMemberships: state.taskMemberships.filter(
+                                    (entry) => entry.taskId !== taskId,
+                                ),
+                            }));
+                            publishGroups();
+                        }
+                        throw error;
+                    },
                 );
-                // The task and the caller's place at the top of their list,
-                // adopted now so the caller about to open it finds it listed.
-                taskResponseAdopt(response);
-                return response.task;
-            })();
+            // Its draft, its mode, and its first message wait for the creation
+            // the way a session's do; only a send learns that it was refused.
+            const created = task.then(() => undefined);
+            void created.catch(() => undefined);
+            sessionCreations.set(agentId, created);
+            const queueKey = `agent:${agentId}`;
+            const settled = created.catch(() => undefined);
+            mutationQueues.set(queueKey, settled);
+            void settled.finally(() => {
+                if (sessionCreations.get(agentId) === created) sessionCreations.delete(agentId);
+                if (mutationQueues.get(queueKey) === settled) mutationQueues.delete(queueKey);
+            });
             return { agentId, task, taskId, workspaceId };
         },
         renameTask(taskId, name) {
@@ -6757,7 +6894,7 @@ function resolveWorkspaceId(
     )?.id;
 }
 
-function modeFromInput(input: CreateSessionInput, config: DaemonConfig): MessageMode {
+function modeFromInput(input: CreateTaskMode, config: DaemonConfig): MessageMode {
     const defaults = defaultMode(config);
     return {
         effort: input.effort ?? defaults.effort,
@@ -6880,6 +7017,20 @@ function workspaceActivity(workspace: Workspace): number {
     for (const agent of workspace.agents)
         if (agent.archivedAt === null && agent.updatedAt > newest) newest = agent.updatedAt;
     return newest;
+}
+
+/** A task listed ahead of the host's answer, with the caller's place in it. */
+interface TaskCreation {
+    readonly task: Task;
+    readonly membership: TaskMembership;
+}
+
+/** The key at the top of the caller's own list, or null when it is empty. */
+function taskMembershipFirstKey(memberships: readonly TaskMembership[]): string | null {
+    let first: string | null = null;
+    for (const membership of memberships)
+        if (first === null || membership.orderKey < first) first = membership.orderKey;
+    return first;
 }
 
 /**

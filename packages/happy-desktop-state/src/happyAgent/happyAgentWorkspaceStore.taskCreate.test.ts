@@ -12,7 +12,7 @@ import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import type {
     HappyAgentSessionListSnapshot,
     HappyAgentTaskCreateInput,
-    HappyAgentTaskCreation,
+    HappyAgentTaskCreating,
 } from "./happyAgentSessionListStore.js";
 import type {
     HappyAgentGroupId,
@@ -28,8 +28,8 @@ import {
 
 /**
  * A task is made the way a bot is: a draft with a name, over a composer of its
- * own. Create makes it and turns the window to its conversation; a refusal
- * keeps the draft with the host's reason on it.
+ * own. Sending its first message turns the window to the task at once, before
+ * the host answers; a refusal brings the draft back with the host's reason.
  */
 
 function inert(): unknown {
@@ -66,8 +66,43 @@ const TASK = {
     membership: { orderKey: "a1" },
 } as HappyAgentTask;
 
+/** What the list answers a creation with: its address at once, the host's answers later. */
+function creating(
+    created: Promise<void> = Promise.resolve(),
+    ids: { taskId: string; groupId: string; sessionId: string } = {
+        taskId: "task_new",
+        groupId: "ws_new",
+        sessionId: "ses_new",
+    },
+): HappyAgentTaskCreating {
+    void created.catch(() => undefined);
+    return {
+        taskId: ids.taskId as HappyAgentTaskId,
+        location: {
+            groupId: ids.groupId as HappyAgentGroupId,
+            sessionId: ids.sessionId as HappyAgentSessionId,
+        },
+        created,
+        ready: created,
+    };
+}
+
+function deferred(): {
+    promise: Promise<void>;
+    resolve: () => void;
+    reject: (error: Error) => void;
+} {
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<void>((done, fail) => {
+        resolve = done;
+        reject = fail;
+    });
+    return { promise, resolve, reject };
+}
+
 function store(
-    taskCreate: (input: HappyAgentTaskCreateInput) => Promise<HappyAgentTaskCreation>,
+    taskCreate: (input: HappyAgentTaskCreateInput) => HappyAgentTaskCreating,
     taskRename: (taskId: HappyAgentTaskId, name: string) => Promise<void> = () => Promise.resolve(),
     models?: HappyAgentModelStore,
     overrides: Record<PropertyKey, unknown> = {},
@@ -125,15 +160,7 @@ function store(
 }
 
 it("opens a task draft of its own, and Create turns the window to the new task", async () => {
-    const taskCreate = vi.fn(() =>
-        Promise.resolve({
-            taskId: "task_new" as HappyAgentTaskId,
-            location: {
-                groupId: "ws_new" as HappyAgentGroupId,
-                sessionId: "ses_new" as HappyAgentSessionId,
-            },
-        }),
-    );
+    const taskCreate = vi.fn(() => creating());
     const { workspace, outputs, unsubscribe } = store(taskCreate);
 
     workspace.taskCreateOpen();
@@ -158,13 +185,7 @@ it("uploads a Happy Cloud task's first file once the task exists, then sends it"
     const order: string[] = [];
     const taskCreate = vi.fn(() => {
         order.push("taskCreate");
-        return Promise.resolve({
-            taskId: "task_new" as HappyAgentTaskId,
-            location: {
-                groupId: "ws_new" as HappyAgentGroupId,
-                sessionId: "ses_new" as HappyAgentSessionId,
-            },
-        });
+        return creating();
     });
     const attachmentUpload = vi.fn((agentId: string, attachment: { readonly name: string }) => {
         order.push(`upload:${agentId}`);
@@ -211,12 +232,102 @@ it("uploads a Happy Cloud task's first file once the task exists, then sends it"
     unsubscribe();
 });
 
+/** A store whose chats take every message, recording each send. */
+function sendingStore(taskCreate: (input: HappyAgentTaskCreateInput) => HappyAgentTaskCreating) {
+    const messageSend = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const opened = store(taskCreate, undefined, undefined, {
+        chat: () =>
+            Promise.resolve({
+                store: new Proxy({ messageSend } as Record<PropertyKey, unknown>, {
+                    get: (target, property) => (property in target ? target[property] : inert()),
+                }),
+                [Symbol.dispose]: () => undefined,
+            }),
+    });
+    return { ...opened, messageSend };
+}
+
+it("turns the window to the new task and sends its first message before the host answers", async () => {
+    const host = deferred();
+    const taskCreate = vi.fn(() => creating(host.promise));
+    const { workspace, outputs, messageSend, unsubscribe } = sendingStore(taskCreate);
+
+    workspace.taskCreateOpen();
+    workspace.taskCreateMessageUpdate("Fix the invoice rounding");
+    workspace.taskCreateMessageSend();
+
+    // In the call that sent it: asked for, turned to, and the surface put away.
+    expect(taskCreate).toHaveBeenCalledTimes(1);
+    expect(outputs).toEqual([
+        {
+            type: "conversationOpenRequested",
+            location: { groupId: "ws_new", sessionId: "ses_new" },
+        },
+    ]);
+    expect(workspace.get().taskCreate).toBeUndefined();
+    // The words go to the conversation without waiting for the host.
+    await vi.waitFor(() => expect(messageSend).toHaveBeenCalledTimes(1));
+    expect(messageSend.mock.calls[0]?.[0]).toBe("Fix the invoice rounding");
+
+    host.resolve();
+    await vi.waitFor(() =>
+        expect(outputs).toContainEqual({
+            type: "activityRecorded",
+            activity: { kind: "taskCreated", result: { ok: true } },
+        }),
+    );
+    // The host's answer moves nothing: no second turn, no removal, no surface.
+    expect(
+        outputs.filter(
+            (event) => event.type === "conversationOpenRequested" || event.type === "groupRemoved",
+        ),
+    ).toHaveLength(1);
+    expect(workspace.get().taskCreate).toBeUndefined();
+    // The next arrival on the New task page meets a fresh draft.
+    workspace.taskCreateOpen();
+    expect(workspace.get().taskCreate?.composer.get().text).toBe("");
+    unsubscribe();
+});
+
+it("brings the draft back and moves the reader off the task when the host refuses it", async () => {
+    const host = deferred();
+    const { workspace, outputs, messageSend, unsubscribe } = sendingStore(() =>
+        creating(host.promise),
+    );
+
+    workspace.taskCreateOpen();
+    workspace.taskCreateNameUpdate("Invoice rounding");
+    workspace.taskCreateMessageUpdate("Fix the invoice rounding");
+    workspace.taskCreateMessageSend();
+    await vi.waitFor(() => expect(messageSend).toHaveBeenCalledTimes(1));
+    expect(workspace.get().taskCreate).toBeUndefined();
+
+    host.reject(new Error("The task's folder could not be created."));
+    await vi.waitFor(() =>
+        expect(outputs).toContainEqual({ type: "groupRemoved", groupId: "ws_new" }),
+    );
+    // Back as it was sent, with the host's reason on its composer.
+    expect(workspace.get().taskCreate).toMatchObject({ name: "Invoice rounding" });
+    await vi.waitFor(() =>
+        expect(workspace.get().taskCreate?.composer.get().submission).toMatchObject({
+            status: "failed",
+            error: { message: "The task's folder could not be created." },
+        }),
+    );
+    expect(workspace.get().taskCreate?.composer.get().text).toBe("Fix the invoice rounding");
+    // The page the reader steps back onto opens on that draft, not a new one.
+    workspace.taskCreateOpen();
+    expect(workspace.get().taskCreate).toMatchObject({ name: "Invoice rounding" });
+    expect(workspace.get().taskCreate?.composer.get().text).toBe("Fix the invoice rounding");
+    unsubscribe();
+});
+
 it("puts up a Happy Cloud file that could not be downloaded, under its name and the reason", async () => {
     const attachmentDownload = vi.fn(() =>
         Promise.reject(new UserError("No such attachment.", "not_found")),
     );
     const { workspace, unsubscribe } = store(
-        () => new Promise(() => undefined),
+        () => creating(new Promise(() => undefined)),
         undefined,
         undefined,
         {
@@ -246,7 +357,7 @@ it("takes down a Happy Cloud file's failure once that file arrives, and on dismi
         .mockRejectedValueOnce(new UserError("No such attachment.", "not_found"))
         .mockResolvedValueOnce(blob);
     const { workspace, unsubscribe } = store(
-        () => new Promise(() => undefined),
+        () => creating(new Promise(() => undefined)),
         undefined,
         undefined,
         {
@@ -278,7 +389,7 @@ it("takes down a Happy Cloud file's failure once that file arrives, and on dismi
 
 it("keeps the draft with the host's reason when the task could not be made", async () => {
     const { workspace, outputs, unsubscribe } = store(() =>
-        Promise.reject(new Error("The task's folder could not be created.")),
+        creating(Promise.reject(new Error("The task's folder could not be created."))),
     );
 
     workspace.taskCreateOpen();
@@ -296,7 +407,10 @@ it("keeps the draft with the host's reason when the task could not be made", asy
 
 it("renames a task through the same dialog a bot uses", async () => {
     const taskRename = vi.fn(() => Promise.resolve());
-    const { workspace, unsubscribe } = store(() => new Promise(() => undefined), taskRename);
+    const { workspace, unsubscribe } = store(
+        () => creating(new Promise(() => undefined)),
+        taskRename,
+    );
 
     workspace.taskRenameOpen(TASK.id);
     expect(workspace.get().rename).toMatchObject({
@@ -352,15 +466,7 @@ it("opens the next task on the model, effort, and account the last one started o
         },
     });
     await models.load();
-    const taskCreate = vi.fn(() =>
-        Promise.resolve({
-            taskId: "task_new" as HappyAgentTaskId,
-            location: {
-                groupId: "ws_new" as HappyAgentGroupId,
-                sessionId: "ses_new" as HappyAgentSessionId,
-            },
-        }),
-    );
+    const taskCreate = vi.fn(() => creating());
     const { workspace, unsubscribe } = store(taskCreate, undefined, models);
 
     workspace.taskCreateOpen();
