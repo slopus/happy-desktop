@@ -1,17 +1,26 @@
+import { UserError } from "../types.js";
 import type {
     PipelineAuthor,
     PipelineCompute,
     PipelineDefinition,
+    PipelineDefinitionLoad,
     PipelineDetail,
     PipelineEdge,
     PipelineGrant,
+    PipelineLease,
     PipelineLeaseAcquire,
     PipelineNode,
+    PipelineNodeRun,
+    PipelineNodeRunState,
     PipelinePermissions,
+    PipelineRun,
+    PipelineRunEntry,
     PipelineRunState,
     PipelineRunSummary,
+    PipelineRunTrigger,
     PipelineSchema,
     PipelineSchemaLiteral,
+    PipelineStatusLine,
     PipelineSummary,
     PipelineVersion,
 } from "./pipelineTypes.js";
@@ -265,6 +274,14 @@ export function pipelineDefinitionRead(value: unknown): PipelineDefinition | und
     };
 }
 
+const UNREADABLE = new UserError("This version is written in a form this app cannot read yet.");
+
+/** A definition as its page holds it: read, or refused with the reason to show. */
+export function pipelineDefinitionLoad(value: unknown): PipelineDefinitionLoad {
+    const definition = pipelineDefinitionRead(value);
+    return definition ? { state: "loaded", definition } : { state: "failed", error: UNREADABLE };
+}
+
 function authorRead(value: unknown): PipelineAuthor | null {
     const author = recordOf(value);
     if (author?.kind === "agent" && typeof author.agentId === "string")
@@ -346,4 +363,122 @@ export function pipelineVersionsRead(answer: unknown): PipelineVersion[] {
 /** `GET /v0/pipelines/:id/versions/:number` → `{ version: { ..., definition } }`. */
 export function pipelineVersionDefinitionRead(answer: unknown): unknown {
     return recordOf(recordOf(answer)?.version)?.definition;
+}
+
+function triggerRead(value: unknown): PipelineRunTrigger | null {
+    const trigger = recordOf(value);
+    if (trigger?.kind === "agent" && typeof trigger.agentId === "string")
+        return { kind: "agent", agentId: trigger.agentId };
+    if (
+        trigger?.kind === "pipeline" &&
+        typeof trigger.runId === "string" &&
+        typeof trigger.nodeId === "string"
+    )
+        return { kind: "pipeline", runId: trigger.runId, nodeId: trigger.nodeId };
+    return null;
+}
+
+function runEntryRead(value: unknown): PipelineRunEntry | undefined {
+    const run = recordOf(value);
+    const state = pipelineRunStateRead(run?.state);
+    const version = numberOrNull(run?.version);
+    if (!run || typeof run.id !== "string" || !state || version === null) return undefined;
+    return {
+        id: run.id,
+        version,
+        state,
+        trigger: triggerRead(run.trigger),
+        parentRunId: textOrNull(run.parentRunId),
+        createdAt: numberOrNull(run.createdAt) ?? 0,
+        startedAt: numberOrNull(run.startedAt),
+        endedAt: numberOrNull(run.endedAt),
+    };
+}
+
+/** `GET /v0/pipelines/:id/runs?cursor=` → `{ runs: [...], nextCursor }`, newest first. */
+export function pipelineRunsRead(answer: unknown): {
+    readonly runs: PipelineRunEntry[];
+    readonly nextCursor: string | null;
+} {
+    const page = recordOf(answer);
+    return { runs: listOf(page?.runs, runEntryRead), nextCursor: textOrNull(page?.nextCursor) };
+}
+
+const NODE_RUN_STATES: readonly PipelineNodeRunState[] = [
+    "pending",
+    "running",
+    "succeeded",
+    "failed",
+    "skipped",
+    "aborted",
+];
+
+function statusRead(value: unknown): PipelineStatusLine | undefined {
+    const status = recordOf(value);
+    if (!status || typeof status.text !== "string") return undefined;
+    const progress = numberOrNull(status.progress);
+    return {
+        text: status.text,
+        progress: progress === null ? null : Math.min(1, Math.max(0, progress)),
+        at: numberOrNull(status.at) ?? 0,
+    };
+}
+
+function nodeRunRead(value: unknown): PipelineNodeRun | undefined {
+    const node = recordOf(value);
+    const state = NODE_RUN_STATES.find((entry) => entry === node?.state);
+    const kind = (["code", "agent", "pipeline"] as const).find((entry) => entry === node?.kind);
+    if (!node || typeof node.nodeId !== "string" || !state || !kind) return undefined;
+    const failure = recordOf(node.failure);
+    return {
+        nodeId: node.nodeId,
+        kind,
+        state,
+        status: statusRead(node.status) ?? null,
+        statuses: listOf(node.statuses, statusRead),
+        input: node.input ?? null,
+        output: node.output ?? null,
+        failure:
+            failure && typeof failure.code === "string"
+                ? {
+                      code: failure.code,
+                      message: typeof failure.message === "string" ? failure.message : "",
+                  }
+                : null,
+        agentId: textOrNull(node.agentId),
+        childRunId: textOrNull(node.childRunId),
+        startedAt: numberOrNull(node.startedAt),
+        endedAt: numberOrNull(node.endedAt),
+    };
+}
+
+function leaseRead(value: unknown): PipelineLease | undefined {
+    const lease = recordOf(value);
+    if (!lease || typeof lease.name !== "string" || typeof lease.computerId !== "string")
+        return undefined;
+    return {
+        name: lease.name,
+        computerId: lease.computerId,
+        holders: texts(lease.holders),
+        releasedAt: numberOrNull(lease.releasedAt),
+    };
+}
+
+/** `GET /v0/pipeline-runs/:runId` → `{ run: PipelineRun }`. */
+export function pipelineRunRead(answer: unknown): PipelineRun | undefined {
+    const run = recordOf(recordOf(answer)?.run);
+    const entry = runEntryRead(run);
+    if (!run || !entry || typeof run.pipelineId !== "string") return undefined;
+    const result = recordOf(run.result);
+    return {
+        ...entry,
+        pipelineId: run.pipelineId,
+        rootRunId: textOrNull(run.rootRunId) ?? entry.id,
+        group: textOrNull(run.group),
+        input: run.input ?? null,
+        result: result ? { outputs: recordOf(result.outputs) ?? {} } : null,
+        nodes: listOf(run.nodes, nodeRunRead),
+        leases: listOf(run.leases, leaseRead),
+        childRunIds: texts(run.childRunIds),
+    };
 }

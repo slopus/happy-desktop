@@ -1,3 +1,5 @@
+import type { UserError } from "../types.js";
+
 /*
  * Pipelines on Happy Cloud: a fixed, versioned graph of work the cluster runs
  * to completion. Desktop reads them and nothing else; agents author and
@@ -124,6 +126,12 @@ export interface PipelineDefinition {
     readonly edges: readonly PipelineEdge[];
 }
 
+/** One version's definition, as far as it has been read. Versions never change, so a read one is kept. */
+export type PipelineDefinitionLoad =
+    | { readonly state: "loading" }
+    | { readonly state: "loaded"; readonly definition: PipelineDefinition }
+    | { readonly state: "failed"; readonly error: UserError };
+
 /** Who published a version: a member, or an agent and the member it acted for, if any. IDs only. */
 export type PipelineAuthor =
     | { readonly kind: "agent"; readonly agentId: string; readonly userId: string | null }
@@ -172,4 +180,83 @@ export interface PipelineDetail {
     readonly description: string | null;
     readonly enabled: boolean;
     readonly head: PipelineVersion;
+}
+
+/** How a run came to be: an agent's `run_pipeline`, or a `pipeline` node of a parent run. */
+export type PipelineRunTrigger =
+    | { readonly kind: "agent"; readonly agentId: string }
+    | { readonly kind: "pipeline"; readonly runId: string; readonly nodeId: string };
+
+/** One entry in a pipeline's runs, newest first. */
+export interface PipelineRunEntry {
+    readonly id: string;
+    readonly version: number;
+    readonly state: PipelineRunState;
+    readonly trigger: PipelineRunTrigger | null;
+    readonly parentRunId: string | null;
+    readonly createdAt: number;
+    readonly startedAt: number | null;
+    readonly endedAt: number | null;
+}
+
+export type PipelineNodeRunState =
+    | "pending"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "skipped"
+    | "aborted";
+
+/** What a node said about itself last: a line of text and, optionally, how far along it is. */
+export interface PipelineStatusLine {
+    readonly text: string;
+    /** From 0 to 1, when the node said. */
+    readonly progress: number | null;
+    readonly at: number;
+}
+
+/** One node's execution inside a run. Values are JSON as the node produced or received them. */
+export interface PipelineNodeRun {
+    readonly nodeId: string;
+    readonly kind: PipelineNodeKind;
+    readonly state: PipelineNodeRunState;
+    readonly status: PipelineStatusLine | null;
+    /** The last 50, oldest first as the server keeps them. */
+    readonly statuses: readonly PipelineStatusLine[];
+    readonly input: unknown;
+    readonly output: unknown;
+    readonly failure: { readonly code: string; readonly message: string } | null;
+    /** The agent that ran an `agent` node. */
+    readonly agentId: string | null;
+    /** The child run a `pipeline` node started. */
+    readonly childRunId: string | null;
+    readonly startedAt: number | null;
+    readonly endedAt: number | null;
+}
+
+/** A named computer a run holds, handed from node to node. */
+export interface PipelineLease {
+    readonly name: string;
+    readonly computerId: string;
+    /** The nodes holding it now. */
+    readonly holders: readonly string[];
+    readonly releasedAt: number | null;
+}
+
+/** One run, with every node's execution, its leases, and the child runs it started. */
+export interface PipelineRun extends PipelineRunEntry {
+    readonly pipelineId: string;
+    readonly rootRunId: string;
+    readonly group: string | null;
+    readonly input: unknown;
+    /** By node, the outputs of the leaves the run reached; null until it ends. */
+    readonly result: { readonly outputs: Readonly<Record<string, unknown>> } | null;
+    readonly nodes: readonly PipelineNodeRun[];
+    readonly leases: readonly PipelineLease[];
+    readonly childRunIds: readonly string[];
+}
+
+/** Whether a run in this state can still be aborted. */
+export function pipelineRunAbortable(state: PipelineRunState): boolean {
+    return state === "queued" || state === "running";
 }

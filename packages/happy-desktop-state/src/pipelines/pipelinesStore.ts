@@ -1,7 +1,8 @@
 import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type { HappyCloudRequest } from "../happyAgent/happyAgentProviderCredentials.js";
-import { happyAgentUserError, referencesPreserve } from "../happyAgent/happyAgentSupport.js";
+import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
+import { entitiesSettle } from "../happyAgentConnection/projection.js";
 import type { UserError } from "../types.js";
 import { pipelineFollowCreate } from "./pipelineFollow.js";
 import { pipelineSummariesRead } from "./pipelineRead.js";
@@ -46,7 +47,7 @@ export function pipelinesStoreCreate(deps: {
             store.setState(
                 {
                     loading: false,
-                    pipelines: referencesPreserve(current.pipelines, pipelines),
+                    pipelines: entitiesSettle(current.pipelines, pipelines),
                 },
                 true,
             );

@@ -158,6 +158,7 @@ import {
 } from "./happyAgentComputeStore.js";
 import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
 import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
+import { pipelineRunStoreCreate, type PipelineRunStore } from "../pipelines/pipelineRunStore.js";
 import {
     happyAgentPreviewsStoreCreate,
     type HappyAgentPreviewsStore,
@@ -322,6 +323,8 @@ export interface HappyAgentWorkspaceClient {
     pipelines(): PipelinesStore | undefined;
     /** One pipeline's page; materialized per pipeline and kept. Undefined where `pipelines()` is. */
     pipeline(pipelineId: string): PipelineStore | undefined;
+    /** One run of any pipeline, live; materialized per run and kept. Undefined where `pipelines()` is. */
+    pipelineRun(runId: string): PipelineRunStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
     previews(): HappyAgentPreviewsStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
@@ -803,6 +806,7 @@ export function happyAgentWorkspaceClientCreate(
     let computeStore: HappyAgentComputeStore | undefined;
     let pipelinesStore: PipelinesStore | undefined;
     const pipelineStores = new Map<string, PipelineStore>();
+    const pipelineRunStores = new Map<string, PipelineRunStore>();
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
@@ -1307,6 +1311,19 @@ export function happyAgentWorkspaceClientCreate(
             }
             return store;
         },
+        pipelineRun(runId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "pipelines"))
+                return undefined;
+            let store = pipelineRunStores.get(runId);
+            if (!store) {
+                store = pipelineRunStoreCreate({ runId, request, sync: deps.connection.sync });
+                pipelineRunStores.set(runId, store);
+            }
+            return store;
+        },
         previews() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1589,6 +1606,8 @@ export function happyAgentWorkspaceClientCreate(
             pipelinesStore = undefined;
             for (const store of pipelineStores.values()) store[Symbol.dispose]();
             pipelineStores.clear();
+            for (const store of pipelineRunStores.values()) store[Symbol.dispose]();
+            pipelineRunStores.clear();
             previewsStore?.[Symbol.dispose]();
             previewsStore = undefined;
             dailyUsageStore?.[Symbol.dispose]();

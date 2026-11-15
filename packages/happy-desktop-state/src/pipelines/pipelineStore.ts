@@ -1,5 +1,6 @@
 import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
+import { entitiesSettle } from "../happyAgentConnection/projection.js";
 import {
     HappyCloudRequestRefusal,
     type HappyCloudRequest,
@@ -8,18 +9,31 @@ import { happyAgentUserError, referencesPreserve } from "../happyAgent/happyAgen
 import { UserError } from "../types.js";
 import { pipelineFollowCreate } from "./pipelineFollow.js";
 import {
-    pipelineDefinitionRead,
+    pipelineDefinitionLoad,
     pipelineDetailRead,
+    pipelineRunsRead,
     pipelineVersionDefinitionRead,
     pipelineVersionsRead,
 } from "./pipelineRead.js";
-import type { PipelineDefinition, PipelineDetail, PipelineVersion } from "./pipelineTypes.js";
+import type {
+    PipelineDefinitionLoad,
+    PipelineDetail,
+    PipelineRunEntry,
+    PipelineVersion,
+} from "./pipelineTypes.js";
 
-/** One version's definition, as far as it has been read. Versions never change, so a read one is kept. */
-export type PipelineDefinitionLoad =
-    | { readonly state: "loading" }
-    | { readonly state: "loaded"; readonly definition: PipelineDefinition }
-    | { readonly state: "failed"; readonly error: UserError };
+export type PipelinePanel = "overview" | "runs";
+
+/** The pipeline's runs, newest first, as far as they have been paged in. */
+export interface PipelineRuns {
+    /** True until the first page answers. */
+    readonly loading: boolean;
+    readonly entries: readonly PipelineRunEntry[];
+    /** Where the next older page starts; null when every run is in. */
+    readonly nextCursor: string | null;
+    readonly loadingMore: boolean;
+    readonly error?: UserError;
+}
 
 export interface PipelineSnapshot {
     /** True until the first answer. */
@@ -35,15 +49,20 @@ export interface PipelineSnapshot {
     readonly definitions: ReadonlyMap<number, PipelineDefinitionLoad>;
     /** The node whose details are open, in whichever version is on screen. */
     readonly nodeSelected: string | null;
+    /** What the inspector shows while no node is open. */
+    readonly panel: PipelinePanel;
+    readonly runs: PipelineRuns;
     /** Why the last read failed; what is shown is the last one read. */
     readonly error?: UserError;
 }
 
 /**
- * One pipeline's page: the pipeline, its version history, and the graph of
- * whichever version the reader picked. The pipeline and its history are read
- * again on every `pipeline.updated`; a version's definition is read once,
- * since versions are immutable.
+ * One pipeline's page: the pipeline, its version history, its runs, and the
+ * graph of whichever version the reader picked. The pipeline and its history
+ * are read again on every `pipeline.updated`; a version's definition is read
+ * once, since versions are immutable. Its runs are read again on every
+ * `pipeline.run.updated`, the newest page only, so older pages already read
+ * stay as they were.
  */
 export interface PipelineStore {
     get(): PipelineSnapshot;
@@ -52,14 +71,25 @@ export interface PipelineStore {
     versionSelect(number: number | null): void;
     /** Opens one node's details, or closes them with null. */
     nodeSelect(nodeId: string | null): void;
+    panelSelect(panel: PipelinePanel): void;
+    /** Reads the next older page of runs. */
+    runsMore(): void;
     [Symbol.dispose](): void;
 }
 
-const UNREADABLE = new UserError("This version is written in a form this app cannot read yet.");
-
-function loadOf(definition: unknown): PipelineDefinitionLoad {
-    const read = pipelineDefinitionRead(definition);
-    return read ? { state: "loaded", definition: read } : { state: "failed", error: UNREADABLE };
+/**
+ * A fresh newest page in front of the older pages already read. Runs that
+ * page holds replace their old copies; older ones keep their place.
+ */
+function runsMerge(
+    previous: readonly PipelineRunEntry[],
+    page: readonly PipelineRunEntry[],
+    pageComplete: boolean,
+): PipelineRunEntry[] {
+    if (pageComplete) return [...page];
+    const fresh = new Set(page.map((run) => run.id));
+    const oldest = page.at(-1)?.createdAt ?? Number.POSITIVE_INFINITY;
+    return [...page, ...previous.filter((run) => !fresh.has(run.id) && run.createdAt <= oldest)];
 }
 
 export function pipelineStoreCreate(deps: {
@@ -75,15 +105,23 @@ export function pipelineStoreCreate(deps: {
         versionSelected: null,
         definitions: new Map(),
         nodeSelected: null,
+        panel: "overview",
+        runs: { loading: true, entries: [], nextCursor: null, loadingMore: false },
     }));
     const base = `v0/pipelines/${encodeURIComponent(deps.pipelineId)}`;
     let disposed = false;
     let listeners = 0;
+    /** Whether the reader has paged past the first page, so a refresh keeps the rest. */
+    let pagedPastFirst = false;
 
     const definitionSet = (number: number, load: PipelineDefinitionLoad): void => {
         const definitions = new Map(store.getState().definitions);
         definitions.set(number, load);
         store.setState({ definitions });
+    };
+
+    const runsSet = (change: Partial<PipelineRuns>): void => {
+        store.setState({ runs: { ...store.getState().runs, ...change } });
     };
 
     const follow = pipelineFollowCreate({
@@ -113,7 +151,7 @@ export function pipelineStoreCreate(deps: {
             const definitions = new Map(current.definitions);
             const head = detail.pipeline.head.number;
             if (definitions.get(head)?.state !== "loaded")
-                definitions.set(head, loadOf(detail.definition));
+                definitions.set(head, pipelineDefinitionLoad(detail.definition));
             const { error: _cleared, ...rest } = current;
             store.setState(
                 {
@@ -138,19 +176,49 @@ export function pipelineStoreCreate(deps: {
         },
     });
 
+    const runsFollow = pipelineFollowCreate({
+        sync: deps.sync,
+        events: ["pipeline.run.updated"],
+        read: async () => {
+            const page = pipelineRunsRead(await deps.request("GET", `${base}/runs`));
+            if (disposed) return;
+            const current = store.getState().runs;
+            const entries = runsMerge(current.entries, page.runs, !pagedPastFirst);
+            const { error: _cleared, ...rest } = current;
+            store.setState({
+                runs: {
+                    ...rest,
+                    loading: false,
+                    // Matched by id: a new run in front shifts every row down one.
+                    entries: entitiesSettle(current.entries, entries),
+                    // Paged past the first page, the cursor already points past what is kept.
+                    nextCursor: pagedPastFirst ? current.nextCursor : page.nextCursor,
+                },
+            });
+        },
+        failed: (error) => {
+            runsSet({ loading: false, error: happyAgentUserError(error) });
+        },
+    });
+
     return {
         get: () => store.getState(),
         subscribe(listener) {
             const unsubscribe = store.subscribe(listener);
             listeners += 1;
-            if (listeners === 1 && !disposed) follow.start();
+            if (listeners === 1 && !disposed) {
+                follow.start();
+                runsFollow.start();
+            }
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 unsubscribe();
                 listeners -= 1;
-                if (listeners === 0) follow.stop();
+                if (listeners > 0) return;
+                follow.stop();
+                runsFollow.stop();
             };
         },
         versionSelect(number) {
@@ -166,7 +234,10 @@ export function pipelineStoreCreate(deps: {
             void deps.request("GET", `${base}/versions/${String(selected)}`).then(
                 (answer) => {
                     if (!disposed)
-                        definitionSet(selected, loadOf(pipelineVersionDefinitionRead(answer)));
+                        definitionSet(
+                            selected,
+                            pipelineDefinitionLoad(pipelineVersionDefinitionRead(answer)),
+                        );
                 },
                 (error: unknown) => {
                     if (!disposed)
@@ -181,9 +252,45 @@ export function pipelineStoreCreate(deps: {
             if (disposed || store.getState().nodeSelected === nodeId) return;
             store.setState({ nodeSelected: nodeId });
         },
+        panelSelect(panel) {
+            if (disposed || store.getState().panel === panel) return;
+            store.setState({ panel });
+        },
+        runsMore() {
+            const runs = store.getState().runs;
+            if (disposed || runs.loadingMore || runs.nextCursor === null) return;
+            const cursor = runs.nextCursor;
+            runsSet({ loadingMore: true });
+            void deps.request("GET", `${base}/runs?cursor=${encodeURIComponent(cursor)}`).then(
+                (answer) => {
+                    if (disposed) return;
+                    const page = pipelineRunsRead(answer);
+                    const current = store.getState().runs;
+                    const known = new Set(current.entries.map((run) => run.id));
+                    pagedPastFirst = true;
+                    const { error: _cleared, ...rest } = current;
+                    store.setState({
+                        runs: {
+                            ...rest,
+                            loadingMore: false,
+                            entries: [
+                                ...current.entries,
+                                ...page.runs.filter((run) => !known.has(run.id)),
+                            ],
+                            nextCursor: page.nextCursor,
+                        },
+                    });
+                },
+                (error: unknown) => {
+                    if (!disposed)
+                        runsSet({ loadingMore: false, error: happyAgentUserError(error) });
+                },
+            );
+        },
         [Symbol.dispose]() {
             disposed = true;
             follow.stop();
+            runsFollow.stop();
         },
     };
 }
