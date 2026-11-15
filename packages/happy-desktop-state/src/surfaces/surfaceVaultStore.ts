@@ -45,6 +45,7 @@ import {
     vaultNameFree,
     vaultNameKey,
     vaultPath,
+    happyAgentVaultRows,
 } from "./surfaceVaultTree.js";
 import { happyAgentVaultUploadSend } from "./happyAgentVaultUploadSend.js";
 import type {
@@ -100,8 +101,9 @@ export interface HappyAgentVaultStore {
     /** Brings a Trash item back where it was, or to the root when that folder is gone. */
     trashRestore(itemId: HappyAgentVaultItemId): void;
     /**
-     * Sends files into a folder, `null` being the root, recreating the
-     * folders of a dropped folder. A file whose name is taken there becomes
+     * Sends files into a folder, `null` being the root, making the folders
+     * of a dropped folder at once so its files are drawn inside it while
+     * they are sent. A file whose name is taken there becomes
      * that file's new version. A `.artifact` file becomes an artifact, or
      * the new version of the artifact with its name.
      */
@@ -111,7 +113,7 @@ export interface HappyAgentVaultStore {
     ): void;
     /** Sends a failed upload again. */
     uploadRetry(uploadId: string): void;
-    /** Takes a finished or failed upload off the list; one still sending is cancelled. */
+    /** Takes a failed upload off the list; one still going is cancelled. */
     uploadDismiss(uploadId: string): void;
     retentionUpdate(retention: HappyAgentVaultRetention): void;
     failureDismiss(): void;
@@ -219,14 +221,17 @@ interface QueuedOp {
 
 /** One upload, with what only this store needs: the bytes, and where it stands. */
 interface UploadRecord {
+    /** Its `itemId` is the item a new file is made as, so a repeated placement makes it once. */
     view: HappyAgentVaultUpload;
     readonly file: File;
+    /** The folder it was dropped on, `null` being the root. */
+    readonly dropFolderId: HappyAgentVaultItemId | null;
     /** The folders between the drop's folder and the file, for a dropped folder. */
     readonly folders: readonly string[];
+    /** Whether the Happy Agent took the folders made for it when it was dropped. */
+    readonly foldersMade: Promise<boolean>;
     /** The Happy Agent's upload, once it has one. */
     uploadId?: string;
-    /** The item a new file is made as, so a repeated placement makes it once. */
-    readonly itemId: HappyAgentVaultItemId;
     readonly mutationId: string;
     /**
      * The upload as one operation: every attempt at making it a new version,
@@ -377,6 +382,10 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
     let queueRunning = false;
     let uploads: UploadRecord[] = [];
     let uploadsRunning = false;
+    /** The folder shown's items, which `snapshot.rows` draws the uploads among. */
+    let listing: readonly HappyAgentVaultItem[] = [];
+    /** Folders made for dropped folders, until the Happy Agent answers each. */
+    const foldersMaking = new Map<HappyAgentVaultItemId, Promise<boolean>>();
     let settingsVersion: string | undefined;
     let following: AbortController | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -408,7 +417,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         children: NO_CHILDREN,
         location: { kind: "folder", folderId: null },
         crumbs: [{ id: null, name: ROOT_NAME }],
-        listing: [],
+        rows: [],
         trash: { status: "loading" },
         uploads: [],
         settings: { status: "loading" },
@@ -523,7 +532,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             location = { kind: "folder", folderId: id };
         }
         const folderId = location.kind === "folder" ? location.folderId : null;
-        const listing = location.kind === "folder" ? (children.get(folderId) ?? []) : [];
+        listing = location.kind === "folder" ? (children.get(folderId) ?? []) : [];
         let preview = snapshot.preview;
         if (preview !== undefined) {
             const entry = all.get(preview.itemId);
@@ -549,9 +558,9 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 location.kind === "folder"
                     ? vaultCrumbs(all, folderId, ROOT_NAME)
                     : [{ id: null, name: ROOT_NAME }],
-            listing,
             ...(preview === undefined ? {} : { preview }),
         };
+        snapshot = { ...snapshot, ...uploadsView() };
         if (selectedId === undefined) {
             const { selectedId: _selected, ...rest } = snapshot;
             snapshot = rest;
@@ -1387,8 +1396,26 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
 
     // ---- Uploads -------------------------------------------------------------------------
 
+    /** The uploads, and the rows of the folder shown drawn with them, as they stand. */
+    function uploadsView(): Pick<HappyAgentVaultSnapshot, "uploads" | "rows"> {
+        const location = snapshot.location;
+        const sending = uploads.map((record) => record.view);
+        return {
+            uploads: sending,
+            rows:
+                location.kind === "folder"
+                    ? happyAgentVaultRows(
+                          snapshot.items,
+                          location.folderId,
+                          listing,
+                          [...sending].reverse(),
+                      )
+                    : [],
+        };
+    }
+
     const uploadsPublish = (): void => {
-        snapshot = { ...snapshot, uploads: uploads.map((record) => record.view) };
+        snapshot = { ...snapshot, ...uploadsView() };
         notify();
     };
 
@@ -1400,18 +1427,41 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         uploadsPublish();
     };
 
-    /** The folder `name` inside `parentId`, made when it is not there. */
-    const folderEnsure = async (
+    /**
+     * The folder `name` inside `parentId`, made at once when it is not there,
+     * and whether the Happy Agent took it; one already there was.
+     */
+    const folderMake = (
         parentId: HappyAgentVaultItemId | null,
         name: string,
-    ): Promise<HappyAgentVaultItemId> => {
+    ): { readonly itemId: HappyAgentVaultItemId; readonly made: Promise<boolean> } => {
         const held = nameTaken(parentId, name);
-        if (held?.kind === "folder") return held.id;
+        if (held?.kind === "folder")
+            return { itemId: held.id, made: foldersMaking.get(held.id) ?? Promise.resolve(true) };
         const itemId = idCreate() as HappyAgentVaultItemId;
         const free = held === undefined ? name : vaultNameFree(siblingsOf(parentId), name);
-        const taken = await enqueue({ kind: "create", itemId, parentId, name: free, at: now() });
-        if (!taken) throw new UserError(`The folder “${free}” could not be made.`);
-        return itemId;
+        const made = enqueue({ kind: "create", itemId, parentId, name: free, at: now() });
+        foldersMaking.set(itemId, made);
+        void made.then(() => foldersMaking.delete(itemId));
+        return { itemId, made };
+    };
+
+    /** The folders of a dropped folder's file, made under `parentId` from the top one down. */
+    const foldersMake = (
+        parentId: HappyAgentVaultItemId | null,
+        names: readonly string[],
+    ): { readonly folderId: HappyAgentVaultItemId | null; readonly made: Promise<boolean> } => {
+        let folderId = parentId;
+        const made: Promise<boolean>[] = [];
+        for (const name of names) {
+            const folder = folderMake(folderId, name);
+            folderId = folder.itemId;
+            made.push(folder.made);
+        }
+        return {
+            folderId,
+            made: Promise.all(made).then((taken) => taken.every(Boolean)),
+        };
     };
 
     /** Places a received upload: a new version of the file or artifact with its name, or a new one. */
@@ -1426,7 +1476,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         for (let attempt = 0; attempt < CONFLICT_RETRIES + 2; attempt += 1) {
             const held = nameTaken(folderId, name);
             try {
-                if (held?.kind === kind && held.id !== record.itemId) {
+                if (held?.kind === kind && held.id !== record.view.itemId) {
                     const response = await client.createVaultVersion(
                         surfaceId,
                         held.id,
@@ -1442,14 +1492,14 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     return held.id;
                 }
                 const placed =
-                    held === undefined || held.id === record.itemId
+                    held === undefined || held.id === record.view.itemId
                         ? name
                         : vaultNameFree(siblingsOf(folderId), name);
                 // The name decides the kind: a `.artifact` name makes an artifact.
                 const response = await client.createVaultFile(
                     surfaceId,
                     {
-                        id: record.itemId,
+                        id: record.view.itemId,
                         parentId: folderId,
                         name: placed,
                         uploadId,
@@ -1458,7 +1508,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     { signal },
                 );
                 entryAdopt(happyAgentVaultFileProject(response.file));
-                return record.itemId;
+                return record.view.itemId;
             } catch (error) {
                 const current = conflictItem(error) ?? nameTakenItem(error);
                 if (current === undefined) throw error;
@@ -1498,10 +1548,22 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     );
                     uploadView(record, { phase: "placing" });
                     let folderId = record.view.folderId;
-                    for (const name of record.folders)
-                        folderId = await folderEnsure(folderId, name);
-                    const itemId = await uploadPlace(record, uploadId, folderId, signal);
-                    uploadView(record, { phase: "done", itemId, sent: record.view.size });
+                    if (
+                        !(await record.foldersMade) ||
+                        (folderId !== null && !snapshot.items.has(folderId))
+                    ) {
+                        // The folders made at the drop were refused or have gone: make them again.
+                        const folders = foldersMake(record.dropFolderId, record.folders);
+                        folderId = folders.folderId;
+                        uploadView(record, { phase: "placing", folderId });
+                        if (!(await folders.made))
+                            throw new UserError(
+                                `The folder “${record.folders.join("/")}” could not be made.`,
+                            );
+                    }
+                    await uploadPlace(record, uploadId, folderId, signal);
+                    // Gone from the list in the same change that draws its item.
+                    uploads = uploads.filter((candidate) => candidate !== record);
                     republish();
                 } catch (error) {
                     if (disposed || signal.aborted) continue;
@@ -1847,19 +1909,24 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             if (folderId !== null && !snapshot.items.has(folderId)) return;
             const added = files.map((picked): UploadRecord => {
                 const name = picked.file.name.normalize("NFC");
+                const names = foldersOf(picked.relativePath);
+                const folders = foldersMake(folderId, names);
                 return {
                     view: {
                         id: idCreate(),
                         name,
                         kind: happyAgentVaultArtifactNamed(name) ? "artifact" : "file",
-                        folderId,
+                        mediaType: picked.file.type,
+                        folderId: folders.folderId,
+                        itemId: idCreate() as HappyAgentVaultItemId,
                         size: picked.file.size,
                         sent: 0,
                         phase: "waiting",
                     },
                     file: picked.file,
-                    folders: foldersOf(picked.relativePath),
-                    itemId: idCreate() as HappyAgentVaultItemId,
+                    dropFolderId: folderId,
+                    folders: names,
+                    foldersMade: folders.made,
                     mutationId: idCreate(),
                     operationId: idCreate(),
                     controller: new AbortController(),
@@ -1881,7 +1948,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             const record = uploads.find((candidate) => candidate.view.id === uploadId);
             if (disposed || record === undefined) return;
             record.controller.abort();
-            if (record.uploadId !== undefined && record.view.phase !== "done")
+            if (record.uploadId !== undefined)
                 void client.cancelVaultUpload(record.uploadId).catch(() => undefined);
             uploads = uploads.filter((candidate) => candidate !== record);
             uploadsPublish();

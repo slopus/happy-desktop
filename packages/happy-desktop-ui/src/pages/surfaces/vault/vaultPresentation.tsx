@@ -1,6 +1,6 @@
 import type {
     HappyAgentVaultActor,
-    HappyAgentVaultItem,
+    HappyAgentVaultFolderRole,
     HappyAgentVaultUploadFile,
 } from "happy-desktop-state";
 import { FileTreeFamilyIcon, fileTreeFamily, type FileTreeFamily } from "../../../FileTree";
@@ -54,11 +54,20 @@ export function vaultTimeText(at: number, now: number, zone: LocalTimeZone): str
 }
 
 /**
+ * What a tile is drawn from: an item, or a file still being sent, which
+ * wears the tile its item will.
+ */
+export type VaultTileSubject =
+    | { readonly kind: "folder"; readonly role: HappyAgentVaultFolderRole | null }
+    | { readonly kind: "artifact" }
+    | { readonly kind: "file"; readonly name: string; readonly mediaType: string };
+
+/**
  * The colour family an entry wears. A folder and a file take the file tree's
  * own; an artifact is an app whatever it is written in, so every one wears
  * the same family.
  */
-export function vaultItemFamily(entry: HappyAgentVaultItem): FileTreeFamily {
+export function vaultItemFamily(entry: VaultTileSubject): FileTreeFamily {
     if (entry.kind === "folder") return "directory";
     if (entry.kind === "artifact") return "code";
     return fileTreeFamily({ kind: "file", name: entry.name });
@@ -97,7 +106,7 @@ export type VaultTileTint =
     | "green"
     | "neutral";
 
-export function vaultItemTint(entry: HappyAgentVaultItem): VaultTileTint {
+export function vaultItemTint(entry: VaultTileSubject): VaultTileTint {
     if (entry.kind === "folder") return entry.role === "skills" ? "indigo" : "blue";
     if (entry.kind === "artifact") return "teal";
     if (entry.mediaType === "application/pdf") return "red";
@@ -124,7 +133,7 @@ export function vaultItemTint(entry: HappyAgentVaultItem): VaultTileTint {
  * An item's mark in a card row: its glyph on a softly tinted 36px tile, or a
  * picture's own thumbnail filling the tile.
  */
-export function VaultItemTile(props: { item: HappyAgentVaultItem; thumbnail?: string }) {
+export function VaultItemTile(props: { item: VaultTileSubject; thumbnail?: string }) {
     const family = vaultItemFamily(props.item);
     return (
         <span

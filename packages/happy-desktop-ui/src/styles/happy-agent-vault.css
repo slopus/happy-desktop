@@ -269,7 +269,7 @@
     outline: none;
 }
 
-/* The column: the notices, the card, then the uploads, 12px apart. */
+/* The column: the notices, then the card, 12px apart. */
 .happy-vault-list__content {
     display: flex;
     flex: 1 0 auto;
@@ -420,105 +420,45 @@
     white-space: nowrap;
 }
 
-/* ---- Uploads ------------------------------------------------------------ */
+/* ---- Uploads in their rows ---------------------------------------------- */
 
-/* A section under the folder's card: a small heading over a card of its own,
-   one row per file. */
-.happy-vault-uploads {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    gap: 7px;
+/* A file still being sent stands in the row its item will take, dimmed until
+   it lands; the dimming fades out rather than snapping as the item takes the row
+   over. Only the tile and the name dim: the progress line reads at full strength. */
+.happy-vault-card-row .happy-vault-tile,
+.happy-vault-card-row__name {
+    transition: opacity 200ms ease-out;
 }
 
-.happy-vault-uploads__heading {
-    margin: 0;
-    padding: 0 16px;
-    color: var(--groupped-section-title);
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 18px;
+.happy-vault-card-row[data-pending] {
+    cursor: default;
 }
 
-.happy-vault-uploads__list {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    border-radius: var(--happy-radius-md);
+.happy-vault-card-row[data-pending]:hover {
     background: var(--surface);
-    list-style: none;
 }
 
-.happy-vault-upload {
-    position: relative;
+.happy-vault-card-row[data-pending] .happy-vault-tile,
+.happy-vault-card-row[data-pending] .happy-vault-card-row__name {
+    opacity: 0.5;
+}
+
+/* The detail line with a bar: the bar on one fixed width, then the words. It
+   keeps the line's one height, so a row with progress is as tall as any. */
+.happy-vault-card-row__detail[data-progress] {
     display: flex;
     align-items: center;
-    gap: 12px;
-    min-height: 52px;
-    padding: 0 12px 0 16px;
-}
-
-.happy-vault-upload:not(:last-child)::after {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 44px;
-    height: 1px;
-    background: var(--divider);
-    content: "";
-    pointer-events: none;
-}
-
-.happy-vault-upload__glyph {
-    width: 16px;
-    height: 16px;
-}
-
-.happy-vault-upload__text {
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-}
-
-.happy-vault-upload__line {
-    display: flex;
-    align-items: baseline;
     gap: 8px;
-    min-width: 0;
 }
 
-.happy-vault-upload__name {
-    flex: 1 1 0%;
-    min-width: 0;
-    overflow: hidden;
-    font-size: 13px;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-vault-upload__phase {
-    flex: 0 4 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-vault-upload[data-phase="failed"] .happy-vault-upload__phase {
+.happy-vault-card-row__detail[data-failed] {
     color: var(--text-destructive);
 }
 
-.happy-vault-upload__bar {
+.happy-vault-card-row__bar {
     display: flex;
+    flex: none;
+    width: 96px;
     height: 4px;
     overflow: hidden;
     border-radius: var(--happy-radius-pill);
@@ -526,22 +466,25 @@
 }
 
 /* Grows by transform from its leading edge, so progress never relays out the row. */
-.happy-vault-upload__fill {
+.happy-vault-card-row__fill {
     flex: 1 1 0%;
     background: var(--radio-active);
     transform-origin: left center;
     transition: transform 160ms linear;
 }
 
-.happy-vault-upload[data-phase="done"] .happy-vault-upload__fill {
-    background: var(--success);
-}
-
-.happy-vault-upload[data-phase="failed"] .happy-vault-upload__fill {
+.happy-vault-card-row[data-upload="failed"] .happy-vault-card-row__fill {
     background: var(--text-destructive);
 }
 
-.happy-vault-upload__actions {
+.happy-vault-card-row__status {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-card-row__actions {
     display: flex;
     flex: none;
     align-items: center;

@@ -202,6 +202,7 @@ export {
     happyAgentVaultNameShown,
     happyAgentVaultNameStored,
     happyAgentVaultPathShown,
+    happyAgentVaultRows,
 } from "./surfaces/surfaceVaultTree.js";
 export type { HappyAgentSurfaces } from "./surfaces/surfaces.js";
 export type {

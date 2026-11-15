@@ -192,22 +192,30 @@ export type HappyAgentVaultTrash =
       }
     | { readonly status: "failed"; readonly error: UserError };
 
-/** One file this window is sending, from its first byte to its place in the vault. */
+/**
+ * One file this window is sending, from its first byte until it is in the
+ * vault; once placed it leaves the list, its item standing where it was drawn.
+ */
 export type HappyAgentVaultUpload = {
     /** This window's own key for it. */
     readonly id: string;
     readonly name: string;
     /** What it becomes, by its name: a `.artifact` file is an artifact, anything else a file. */
     readonly kind: "file" | "artifact";
-    /** The folder it goes into; `null` is the root. */
+    /** The media type the computer gave the file, empty when it gave none. */
+    readonly mediaType: string;
+    /**
+     * The folder it goes into; `null` is the root. A file from a dropped
+     * folder goes into that folder's copy, made when it was dropped.
+     */
     readonly folderId: HappyAgentVaultItemId | null;
+    /** The ID it is made with when it becomes a new item rather than a new version. */
+    readonly itemId: HappyAgentVaultItemId;
     readonly size: number;
     /** Bytes the Happy Agent has received. */
     readonly sent: number;
 } & (
     | { readonly phase: "waiting" | "sending" | "placing" }
-    /** It is in the vault: a new file, or a new version of the one that had its name. */
-    | { readonly phase: "done"; readonly itemId: HappyAgentVaultItemId }
     /**
      * It stopped. `retryable` is whether sending it again could go otherwise:
      * not when the daemon refused the file itself, as it does a `.artifact`
@@ -215,6 +223,42 @@ export type HappyAgentVaultUpload = {
      */
     | { readonly phase: "failed"; readonly error: UserError; readonly retryable: boolean }
 );
+
+/** The uploads going into a folder or anywhere beneath it, as its row tells them. */
+export interface HappyAgentVaultRowUploads {
+    /** How many are waiting, sending, or being placed. */
+    readonly going: number;
+    readonly failed: number;
+    /** Bytes received, and to be sent, of the ones still going. */
+    readonly sent: number;
+    readonly size: number;
+}
+
+/**
+ * One row of the folder shown, in the listing's order: folders first, then
+ * by name. An upload is drawn where its item will stand, under the ID and
+ * name it will have, so placing it changes the row in place: nothing moves
+ * and nothing is drawn twice.
+ */
+export type HappyAgentVaultRow =
+    | {
+          readonly kind: "item";
+          readonly id: HappyAgentVaultItemId;
+          readonly item: HappyAgentVaultItem;
+          /** Sending a new version of this file or app, or placing it as this item. */
+          readonly upload?: HappyAgentVaultUpload;
+          /** For a folder, the uploads going somewhere inside it. */
+          readonly within?: HappyAgentVaultRowUploads;
+      }
+    | {
+          /** A file not in the vault yet. */
+          readonly kind: "upload";
+          /** The ID its item will have. */
+          readonly id: HappyAgentVaultItemId;
+          /** The name it will have: its own, or the next free one when an item of another kind holds it. */
+          readonly name: string;
+          readonly upload: HappyAgentVaultUpload;
+      };
 
 /** What the preview shows for the version on screen. */
 export type HappyAgentVaultContent =
@@ -331,14 +375,17 @@ export interface HappyAgentVaultSnapshot {
     readonly location: HappyAgentVaultLocation;
     /** From the root to the folder shown; just the root in the Trash. */
     readonly crumbs: readonly HappyAgentVaultCrumb[];
-    /** The folder's contents: its folders, then its files, each by name. */
-    readonly listing: readonly HappyAgentVaultItem[];
+    /**
+     * The folder's contents: its folders, then its files, each by name, with
+     * the files being sent into it standing where they will be. Empty in the Trash.
+     */
+    readonly rows: readonly HappyAgentVaultRow[];
     /** The item picked in the listing or the Trash. */
     readonly selectedId?: HappyAgentVaultItemId;
     /** Read while the Trash is shown. */
     readonly trash: HappyAgentVaultTrash;
     readonly preview?: HappyAgentVaultPreview;
-    /** Newest first; finished ones stay until dismissed. */
+    /** Every folder's, newest first, until each is placed or dismissed. */
     readonly uploads: readonly HappyAgentVaultUpload[];
     readonly settings: HappyAgentVaultSettings;
     /**

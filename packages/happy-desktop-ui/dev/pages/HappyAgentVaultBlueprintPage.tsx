@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
     HAPPY_AGENT_VAULT_RETENTION_PRESETS,
+    happyAgentVaultRows,
     UserError,
     type HappyAgentSurfaceId,
     type HappyAgentVaultActivity,
@@ -254,14 +255,14 @@ function vaultOf(
     overrides: Partial<HappyAgentVaultSnapshot> = {},
 ): HappyAgentVaultSnapshot {
     const folder = folderId === null ? null : id(folderId);
-    return {
+    const vault: HappyAgentVaultSnapshot = {
         surfaceId: SURFACE_ID,
         status: "ready",
         items: ITEM_MAP,
         children: CHILDREN,
         location: { kind: "folder", folderId: folder },
         crumbs: crumbsOf(folder),
-        listing: CHILDREN.get(folder) ?? [],
+        rows: [],
         trash: { status: "loading" },
         uploads: [],
         settings: {
@@ -276,6 +277,16 @@ function vaultOf(
         ]),
         agents: new Map([["agent-research", "Research agent"]]),
         ...overrides,
+    };
+    // The rows are the store's: the folder's items with its uploads among them.
+    return {
+        ...vault,
+        rows: happyAgentVaultRows(
+            vault.items,
+            folder,
+            vault.children.get(folder) ?? [],
+            [...vault.uploads].reverse(),
+        ),
     };
 }
 
@@ -416,76 +427,74 @@ const TRASH_ITEMS = [
     { item: trashed(item("launch"), NOW - 12 * DAY), path: "/Sites/launch.artifact" },
 ];
 
+/** A file sent into Reports, as the store holds it, newest first in `uploads`. */
+function upload(
+    itemId: string,
+    name: string,
+    size: number,
+    state:
+        | { phase: "waiting" | "sending" | "placing"; sent: number }
+        | { phase: "failed"; sent: number; error: string; retryable: boolean },
+    folderId = "reports",
+): HappyAgentVaultUpload {
+    const base = {
+        id: `up-${itemId}`,
+        itemId: id(itemId),
+        name,
+        kind: name.endsWith(".artifact") ? ("artifact" as const) : ("file" as const),
+        mediaType: name.endsWith(".pdf") ? "application/pdf" : "",
+        folderId: id(folderId),
+        size,
+        sent: state.sent,
+    };
+    return state.phase === "failed"
+        ? {
+              ...base,
+              phase: "failed",
+              error: new UserError(state.error),
+              retryable: state.retryable,
+          }
+        : { ...base, phase: state.phase };
+}
+
+/**
+ * Uploads into Reports in every phase, each in the row its item will take:
+ * new files, a new version on its file's own row, failures, and one into Q3
+ * counted on Q3's row.
+ */
 const UPLOADS: readonly HappyAgentVaultUpload[] = [
-    {
-        id: "up-1",
-        kind: "file",
-        name: "storyboard.mov",
-        folderId: null,
-        size: 84_000_000,
-        sent: 31_500_000,
-        phase: "sending",
-    },
-    {
-        id: "up-2",
-        kind: "file",
-        name: "IMG_5001.jpg",
-        folderId: null,
-        size: 3_100_000,
-        sent: 0,
-        phase: "waiting",
-    },
-    {
-        id: "up-3",
-        kind: "file",
-        name: "contract.pdf",
-        folderId: null,
-        size: 412_000,
-        sent: 412_000,
-        phase: "placing",
-    },
-    {
-        id: "up-4",
-        kind: "file",
-        name: "minutes.md",
-        folderId: null,
-        size: 2_200,
-        sent: 2_200,
-        phase: "done",
-        itemId: id("notes"),
-    },
-    {
-        id: "up-5",
-        kind: "file",
-        name: "raw-footage.zip",
-        folderId: null,
-        size: 920_000_000,
-        sent: 120_000_000,
+    upload("up-forecast", "forecast.xlsx", 2_400_000, { phase: "sending", sent: 900_000 }, "q3"),
+    upload("up-plan", "Q4 plan.artifact", 1_840_000, {
         phase: "failed",
-        error: new UserError("The connection to the Happy Agent was lost."),
-        retryable: true,
-    },
-    {
-        id: "up-6",
-        kind: "artifact",
-        name: "launch.artifact",
-        folderId: id("sites"),
-        size: 1_840_000,
         sent: 1_840_000,
-        phase: "placing",
-    },
-    {
-        id: "up-7",
-        kind: "artifact",
-        name: "photos.artifact",
-        folderId: null,
-        size: 12_000_000,
-        sent: 12_000_000,
-        phase: "failed",
-        error: new UserError("The artifact has no artifact.json at its root."),
+        error: "The artifact has no artifact.json at its root.",
         retryable: false,
-    },
+    }),
+    upload("up-footage", "raw-footage.zip", 920_000_000, {
+        phase: "failed",
+        sent: 120_000_000,
+        error: "The connection to the Happy Agent was lost.",
+        retryable: true,
+    }),
+    upload("up-summary", "Q3 summary.pdf", 1_310_000, { phase: "sending", sent: 520_000 }),
+    upload("up-agenda", "agenda.docx", 64_000, { phase: "waiting", sent: 0 }),
+    upload("up-contract", "contract.pdf", 412_000, { phase: "placing", sent: 412_000 }),
+    upload("up-minutes", "board-minutes.pdf", 84_000_000, { phase: "sending", sent: 31_500_000 }),
 ];
+
+/** The same uploads once all but the failed ones have landed, each item in its upload's row. */
+const LANDED_ITEMS: readonly HappyAgentVaultItem[] = [
+    ...ITEMS.map((entry) =>
+        entry.id === id("summary") && entry.kind === "file"
+            ? { ...entry, size: 1_310_000, updatedAt: NOW - 60_000, latestVersion: 3 }
+            : entry,
+    ),
+    file("up-forecast", "forecast.xlsx", "q3", 2_400_000, "application/octet-stream", NOW),
+    file("up-agenda", "agenda.docx", "reports", 64_000, "application/octet-stream", NOW),
+    file("up-contract", "contract.pdf", "reports", 412_000, "application/pdf", NOW),
+    file("up-minutes", "board-minutes.pdf", "reports", 84_000_000, "application/pdf", NOW),
+];
+const LANDED_UPLOADS = UPLOADS.filter((entry) => entry.phase === "failed");
 
 const noop = () => undefined;
 const handlers: Omit<HappyAgentVaultSurfacePageProps, "surface" | "vault" | "now"> = {
@@ -749,13 +758,29 @@ export function HappyAgentVaultBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="Uploads in every phase: sending, waiting, finishing, done, and failed with Retry."
+                detail="Uploads in the rows their items will take, dimmed, with progress on the row: sending, waiting, finishing, a new version on its file's own row, failed with Retry, and a folder with an upload inside it."
                 label="Uploads"
                 number="12"
                 screen="12-uploads-1100x760"
                 window={WINDOW}
             >
-                <Page vault={vaultOf(null, { uploads: UPLOADS })} />
+                <Page vault={vaultOf("reports", { uploads: UPLOADS })} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same folder once the uploads landed: each item stands in its upload's row; only the failed ones are still drawn as uploads."
+                label="Uploaded"
+                number="12b"
+                screen="12b-uploaded-1100x760"
+                window={WINDOW}
+            >
+                <Page
+                    vault={vaultOf("reports", {
+                        items: new Map(LANDED_ITEMS.map((entry) => [entry.id, entry])),
+                        children: childrenOf(LANDED_ITEMS),
+                        uploads: LANDED_UPLOADS,
+                    })}
+                />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
@@ -882,7 +907,6 @@ export function HappyAgentVaultBlueprintPage() {
                         status: "loading",
                         items: new Map(),
                         children: new Map(),
-                        listing: [],
                     })}
                 />
             </FullScreenSpecimen>
@@ -894,9 +918,7 @@ export function HappyAgentVaultBlueprintPage() {
                 screen="19-empty-1100x760"
                 window={WINDOW}
             >
-                <Page
-                    vault={vaultOf(null, { items: new Map(), children: new Map(), listing: [] })}
-                />
+                <Page vault={vaultOf(null, { items: new Map(), children: new Map() })} />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

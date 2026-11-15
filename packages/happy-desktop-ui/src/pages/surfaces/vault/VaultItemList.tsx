@@ -5,12 +5,21 @@ import {
     happyAgentVaultPathShown,
     type HappyAgentVaultItem,
     type HappyAgentVaultItemId,
+    type HappyAgentVaultRow,
+    type HappyAgentVaultRowUploads,
+    type HappyAgentVaultUpload,
 } from "happy-desktop-state";
 import { Badge } from "../../../Badge";
 import { Button } from "../../../Button";
 import type { LocalTimeZone } from "../../../localTime";
 import { ScrollArea } from "../../../Scrollbar";
-import { VaultItemTile, vaultParentPath, vaultSizeText, vaultTimeText } from "./vaultPresentation";
+import {
+    VaultItemTile,
+    vaultParentPath,
+    vaultSizeText,
+    vaultTimeText,
+    type VaultTileSubject,
+} from "./vaultPresentation";
 
 /**
  * One row of the card, as the feed's: a 36px tile, the name, and a line
@@ -26,7 +35,8 @@ export type VaultItemListMode =
 
 export interface VaultItemListProps {
     mode: VaultItemListMode;
-    items: readonly HappyAgentVaultItem[];
+    /** The folder's rows, uploads among its items where they will stand; the Trash's items. */
+    rows: readonly HappyAgentVaultRow[];
     selectedId?: HappyAgentVaultItemId;
     /**
      * The folder a drop on the list's own space lands in, `null` being the
@@ -37,8 +47,6 @@ export interface VaultItemListProps {
     empty: ReactNode;
     /** Drawn over the card, inside the scrollport: the Trash's note. */
     lead?: ReactNode;
-    /** Drawn under the card, inside the scrollport: the uploads. */
-    trail?: ReactNode;
     label: string;
     now: number;
     zone: LocalTimeZone;
@@ -48,6 +56,10 @@ export interface VaultItemListProps {
     onMenu: (entry: HappyAgentVaultItem, x: number, y: number) => void;
     onDelete: (itemId: HappyAgentVaultItemId) => void;
     onRestore: (itemId: HappyAgentVaultItemId) => void;
+    /** Sends a failed upload again. */
+    onUploadRetry?: (uploadId: string) => void;
+    /** Cancels an upload still going, or takes a failed one off its row. */
+    onUploadDismiss?: (uploadId: string) => void;
 }
 
 /** What a row says under its name: when, and how big or what it is. */
@@ -65,12 +77,77 @@ function rowDetail(props: VaultItemListProps, entry: HappyAgentVaultItem): strin
     return `${when} · ${vaultSizeText(entry.size)}`;
 }
 
+/** Where an upload stands, in words. */
+function uploadText(upload: HappyAgentVaultUpload): string {
+    switch (upload.phase) {
+        case "waiting":
+            return "Waiting";
+        case "sending":
+            return `${vaultSizeText(upload.sent)} of ${vaultSizeText(upload.size)}`;
+        case "placing":
+            return upload.kind === "artifact" ? "Reading the app" : "Finishing";
+        case "failed":
+            return upload.error.message;
+    }
+}
+
+/** How far an upload has gone, from 0 to 1: placing, every byte is there. */
+function uploadProgress(upload: HappyAgentVaultUpload): number {
+    if (upload.phase === "placing") return 1;
+    return upload.size === 0 ? 0 : Math.min(1, upload.sent / upload.size);
+}
+
+/** What a folder's row says about the uploads going somewhere inside it. */
+function withinText(within: HappyAgentVaultRowUploads): string {
+    const going =
+        within.going === 0
+            ? undefined
+            : `Uploading ${String(within.going)} ${within.going === 1 ? "file" : "files"}`;
+    const failed =
+        within.failed === 0
+            ? undefined
+            : `${String(within.failed)} ${within.failed === 1 ? "upload" : "uploads"} failed`;
+    return [going, failed].filter(Boolean).join(" · ");
+}
+
+/** A thin bar on a row's detail line; it fills by transform, so progress never relays out the row. */
+function RowProgress(props: { label: string; value: number }) {
+    return (
+        <span
+            aria-label={props.label}
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={Math.round(props.value * 100)}
+            className="happy-vault-card-row__bar"
+            role="progressbar"
+        >
+            <span
+                className="happy-vault-card-row__fill"
+                style={{ transform: `scaleX(${String(props.value)})` }}
+            />
+        </span>
+    );
+}
+
+/** The tile a file still being sent wears: the one its item will. */
+function uploadSubject(upload: HappyAgentVaultUpload, name: string): VaultTileSubject {
+    return upload.kind === "artifact"
+        ? { kind: "artifact" }
+        : { kind: "file", name, mediaType: upload.mediaType };
+}
+
 /**
  * A folder's contents, or the Trash's items, as one inset grouped card: the
  * folders, then the files, each a row with its tile, its name, and when it
  * changed, the way the phone's vault draws them. A row opens on a click: a
  * folder goes in, a file opens. Only the rows on screen exist, so a folder of
  * thousands scrolls as lightly as one of ten.
+ *
+ * A file being sent is drawn in the row its item will take, dimmed, with its
+ * progress on its detail line and a way to cancel it; when it lands, that row
+ * becomes the item's in place, keeping its key, its slot and its height. A
+ * new version being sent draws its progress on the file's own row, and a
+ * folder with uploads going inside it says so on its row.
  *
  * The listing is one tab stop. The arrow keys move the selection, Enter opens
  * it, and Command-Backspace or Delete moves it to the Trash; the selected row
@@ -84,9 +161,9 @@ export function VaultItemList(props: VaultItemListProps) {
     // this leaf outside compiler memoization, as FileTree does.
     // eslint-disable-next-line react-hooks/incompatible-library
     const virtualizer = useVirtualizer({
-        count: props.items.length,
+        count: props.rows.length,
         estimateSize: () => ROW_HEIGHT,
-        getItemKey: (index) => props.items[index]?.id ?? index,
+        getItemKey: (index) => props.rows[index]?.id ?? index,
         getScrollElement: () => viewport.current,
         initialRect: { width: 0, height: 480 },
         overscan: 6,
@@ -95,11 +172,22 @@ export function VaultItemList(props: VaultItemListProps) {
     const selectedIndex =
         props.selectedId === undefined
             ? -1
-            : props.items.findIndex((entry) => entry.id === props.selectedId);
+            : props.rows.findIndex((row) => row.id === props.selectedId);
+    /** The item `index` stands for, and none for a file still being sent: it cannot be picked. */
+    const itemAt = (index: number): HappyAgentVaultItem | undefined => {
+        const row = props.rows[index];
+        return row?.kind === "item" ? row.item : undefined;
+    };
+    /** The nearest item from `index` on in `direction`, past the uploads, or `undefined`. */
+    const itemFrom = (index: number, direction: 1 | -1): number | undefined => {
+        for (let at = index; at >= 0 && at < props.rows.length; at += direction)
+            if (itemAt(at) !== undefined) return at;
+        return undefined;
+    };
     const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         if (event.target !== event.currentTarget) return;
-        const count = props.items.length;
-        const selected = props.items[selectedIndex];
+        const count = props.rows.length;
+        const selected = itemAt(selectedIndex);
         if ((event.key === "Backspace" && event.metaKey) || event.key === "Delete") {
             if (selected && mode.kind !== "trash") {
                 event.preventDefault();
@@ -120,63 +208,103 @@ export function VaultItemList(props: VaultItemListProps) {
             props.onSelect(undefined);
             return;
         }
-        const step: Record<string, number> = { ArrowUp: -1, ArrowDown: 1 };
+        const step: Record<string, 1 | -1> = { ArrowUp: -1, ArrowDown: 1 };
         let next: number | undefined;
-        if (event.key in step)
+        if (event.key in step) {
+            const direction = step[event.key]!;
             next =
                 selectedIndex === -1
-                    ? 0
-                    : Math.min(count - 1, Math.max(0, selectedIndex + step[event.key]!));
-        else if (event.key === "Home") next = 0;
-        else if (event.key === "End") next = count - 1;
+                    ? itemFrom(0, 1)
+                    : (itemFrom(selectedIndex + direction, direction) ?? selectedIndex);
+        } else if (event.key === "Home") next = itemFrom(0, 1);
+        else if (event.key === "End") next = itemFrom(count - 1, -1);
         if (next === undefined || count === 0) return;
         event.preventDefault();
-        const entry = props.items[next];
+        const entry = itemAt(next);
         if (!entry) return;
         props.onSelect(entry.id);
         virtualizer.scrollToIndex(next, { align: "auto" });
     };
     const optionId = (itemId: HappyAgentVaultItemId) => `${baseId}-${itemId}`;
-    const last = props.items.length - 1;
-    const row = (entry: HappyAgentVaultItem, index: number): ReactNode => {
-        const name = happyAgentVaultNameShown(entry.name);
-        const thumbnail = props.thumbnailOf?.(entry);
+    const last = props.rows.length - 1;
+    const row = (entry: HappyAgentVaultRow, index: number): ReactNode => {
+        // One element tree for an item and an upload alike, so the row an
+        // upload is drawn in is the one its item takes over when it lands.
+        const item = entry.kind === "item" ? entry.item : undefined;
+        const upload = entry.upload;
+        const within = entry.kind === "item" ? entry.within : undefined;
+        const name = happyAgentVaultNameShown(
+            item?.name ?? (entry.kind === "upload" ? entry.name : ""),
+        );
+        const thumbnail = item ? props.thumbnailOf?.(item) : undefined;
+        const going = upload !== undefined && upload.phase !== "failed";
+        const detail = upload ? (
+            <>
+                <RowProgress
+                    label={`${name}: ${uploadText(upload)}`}
+                    value={uploadProgress(upload)}
+                />
+                <span className="happy-vault-card-row__status" title={uploadText(upload)}>
+                    {uploadText(upload)}
+                </span>
+            </>
+        ) : within && within.going > 0 ? (
+            <>
+                <RowProgress
+                    label={`${name}: ${withinText(within)}`}
+                    value={within.size === 0 ? 0 : Math.min(1, within.sent / within.size)}
+                />
+                <span className="happy-vault-card-row__status">{withinText(within)}</span>
+            </>
+        ) : within ? (
+            withinText(within)
+        ) : item ? (
+            rowDetail(props, item)
+        ) : null;
         return (
             // The listbox owns focus and keys through aria-activedescendant; a
             // focusable option would take focus on click and strand the keys.
             // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus
             <div
+                aria-disabled={item ? undefined : true}
                 aria-selected={entry.id === props.selectedId}
                 className="happy-vault-card-row"
                 data-first={index === 0 ? "" : undefined}
                 data-happy-desktop-ui={mode.kind === "trash" ? "vault-trash-row" : "vault-row"}
                 data-last={index === last ? "" : undefined}
+                data-pending={item ? undefined : ""}
                 data-selected={entry.id === props.selectedId ? "" : undefined}
-                data-vault-entry={entry.id}
+                data-upload={upload?.phase}
+                data-vault-entry={item?.id}
                 // A folder in the Trash cannot be opened, so it takes no drop either.
-                {...(entry.kind === "folder" && mode.kind !== "trash"
-                    ? { "data-vault-drop": entry.id }
+                {...(item?.kind === "folder" && mode.kind !== "trash"
+                    ? { "data-vault-drop": item.id }
                     : {})}
-                draggable={mode.kind !== "trash"}
+                draggable={item !== undefined && mode.kind !== "trash"}
                 id={optionId(entry.id)}
                 onClick={() => {
-                    props.onSelect(entry.id);
-                    props.onOpen(entry);
+                    if (!item) return;
+                    props.onSelect(item.id);
+                    props.onOpen(item);
                 }}
                 onContextMenu={(event: MouseEvent) => {
                     event.preventDefault();
-                    props.onSelect(entry.id);
-                    props.onMenu(entry, event.clientX, event.clientY);
+                    if (!item) return;
+                    props.onSelect(item.id);
+                    props.onMenu(item, event.clientX, event.clientY);
                 }}
                 role="option"
             >
-                <VaultItemTile item={entry} {...(thumbnail ? { thumbnail } : {})} />
+                <VaultItemTile
+                    item={item ?? (upload ? uploadSubject(upload, name) : { kind: "artifact" })}
+                    {...(thumbnail ? { thumbnail } : {})}
+                />
                 <span className="happy-vault-card-row__text">
                     <span className="happy-vault-card-row__title">
                         <span className="happy-vault-card-row__name" title={name}>
                             {name}
                         </span>
-                        {entry.kind === "folder" && entry.role === "skills" ? (
+                        {item?.kind === "folder" && item.role === "skills" ? (
                             <Badge
                                 className="happy-vault-card-row__badge"
                                 label="Skills"
@@ -184,13 +312,28 @@ export function VaultItemList(props: VaultItemListProps) {
                             />
                         ) : null}
                     </span>
-                    <span className="happy-vault-card-row__detail">{rowDetail(props, entry)}</span>
+                    <span
+                        className="happy-vault-card-row__detail"
+                        data-failed={
+                            upload?.phase === "failed" ||
+                            (within !== undefined && within.going === 0)
+                                ? ""
+                                : undefined
+                        }
+                        data-progress={
+                            upload !== undefined || (within !== undefined && within.going > 0)
+                                ? ""
+                                : undefined
+                        }
+                    >
+                        {detail}
+                    </span>
                 </span>
-                {mode.kind === "trash" ? (
+                {mode.kind === "trash" && item ? (
                     <Button
                         onClick={(event) => {
                             event.stopPropagation();
-                            props.onRestore(entry.id);
+                            props.onRestore(item.id);
                         }}
                         size="small"
                         tabIndex={-1}
@@ -198,6 +341,35 @@ export function VaultItemList(props: VaultItemListProps) {
                     >
                         Restore
                     </Button>
+                ) : upload ? (
+                    <span className="happy-vault-card-row__actions">
+                        {upload.phase === "failed" && upload.retryable ? (
+                            <Button
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    props.onUploadRetry?.(upload.id);
+                                }}
+                                size="small"
+                                tabIndex={-1}
+                                variant="ghost"
+                            >
+                                Retry
+                            </Button>
+                        ) : null}
+                        <Button
+                            aria-label={going ? `Cancel ${name}` : `Dismiss ${name}`}
+                            icon="close"
+                            iconOnly
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                props.onUploadDismiss?.(upload.id);
+                            }}
+                            size="small"
+                            tabIndex={-1}
+                            title={going ? "Cancel upload" : "Dismiss"}
+                            variant="ghost"
+                        />
+                    </span>
                 ) : null}
             </div>
         );
@@ -221,7 +393,7 @@ export function VaultItemList(props: VaultItemListProps) {
         >
             <div className="happy-vault-list__content">
                 {props.lead}
-                {props.items.length === 0 ? (
+                {props.rows.length === 0 ? (
                     <div className="happy-vault-list__empty">{props.empty}</div>
                 ) : (
                     // The rows leave the flow so the card is as tall as all of
@@ -232,7 +404,7 @@ export function VaultItemList(props: VaultItemListProps) {
                         style={{ height: `${String(virtualizer.getTotalSize())}px` }}
                     >
                         {virtualizer.getVirtualItems().map((item) => {
-                            const entry = props.items[item.index];
+                            const entry = props.rows[item.index];
                             return entry ? (
                                 <div
                                     className="happy-vault-list__slot"
@@ -249,7 +421,6 @@ export function VaultItemList(props: VaultItemListProps) {
                         })}
                     </div>
                 )}
-                {props.trail}
             </div>
         </ScrollArea>
     );

@@ -3,6 +3,9 @@ import type {
     HappyAgentVaultCrumb,
     HappyAgentVaultItem,
     HappyAgentVaultItemId,
+    HappyAgentVaultRow,
+    HappyAgentVaultRowUploads,
+    HappyAgentVaultUpload,
 } from "./surfaceVaultTypes.js";
 
 type Entries = ReadonlyMap<HappyAgentVaultItemId, HappyAgentVaultItem>;
@@ -162,7 +165,11 @@ export function happyAgentVaultNameProblem(
 
 /** `name`, or `name 2.ext`, `name 3.ext`, …, the first one no sibling holds. */
 export function vaultNameFree(siblings: readonly HappyAgentVaultItem[], name: string): string {
-    const taken = new Set(siblings.map((entry) => vaultNameKey(entry.name)));
+    return nameFreeOf(new Set(siblings.map((entry) => vaultNameKey(entry.name))), name);
+}
+
+/** `name`, or the first `name N.ext` whose key `taken` does not hold. */
+function nameFreeOf(taken: ReadonlySet<string>, name: string): string {
     if (!taken.has(vaultNameKey(name))) return name;
     const dot = name.lastIndexOf(".");
     const stem = dot > 0 ? name.slice(0, dot) : name;
@@ -171,4 +178,110 @@ export function vaultNameFree(siblings: readonly HappyAgentVaultItem[], name: st
         const candidate = `${stem} ${String(count)}${extension}`;
         if (!taken.has(vaultNameKey(candidate))) return candidate;
     }
+}
+
+function rowName(row: HappyAgentVaultRow): string {
+    return row.kind === "item" ? row.item.name : row.name;
+}
+
+function rowKind(row: HappyAgentVaultRow): HappyAgentVaultItem["kind"] {
+    return row.kind === "item" ? row.item.kind : row.upload.kind;
+}
+
+/** The listing's order, uploads among items: folders first, then by name. */
+function rowCompare(left: HappyAgentVaultRow, right: HappyAgentVaultRow): number {
+    return (
+        Number(rowKind(right) === "folder") - Number(rowKind(left) === "folder") ||
+        collator.compare(
+            happyAgentVaultNameShown(rowName(left)),
+            happyAgentVaultNameShown(rowName(right)),
+        ) ||
+        (left.id < right.id ? -1 : 1)
+    );
+}
+
+/**
+ * The rows of folder `folderId`: its `listing`, with each upload into it
+ * drawn where its item will stand.
+ *
+ * An upload is drawn as the store's `uploadPlace` places it: as a new
+ * version of the file or app of its kind holding its name, on that item's
+ * row, or else as a new item under `upload.itemId`, renamed past a name an
+ * item of another kind holds. Once that item is in the listing the upload is
+ * drawn on its row, so the row neither moves nor doubles as it lands.
+ * `uploads` are in the order they are sent: an earlier one claims a name
+ * first, and a later one of the same name and kind becomes its next version.
+ * An upload into a folder deeper down is counted on the row of the folder
+ * here that holds it.
+ */
+export function happyAgentVaultRows(
+    live: Entries,
+    folderId: HappyAgentVaultItemId | null,
+    listing: readonly HappyAgentVaultItem[],
+    uploads: readonly HappyAgentVaultUpload[],
+): readonly HappyAgentVaultRow[] {
+    const rows: HappyAgentVaultRow[] = listing.map((item) => ({ kind: "item", id: item.id, item }));
+    if (uploads.length === 0) return rows;
+    const at = new Map(rows.map((row, index) => [row.id, index]));
+    const named = new Map(rows.map((row, index) => [vaultNameKey(rowName(row)), index]));
+    const within = new Map<HappyAgentVaultItemId, HappyAgentVaultRowUploads>();
+    let added = false;
+    for (const upload of uploads) {
+        if (upload.folderId !== folderId) {
+            const holder = holderOf(live, folderId, upload.folderId);
+            if (holder === undefined || !at.has(holder)) continue;
+            const counted = within.get(holder) ?? { going: 0, failed: 0, sent: 0, size: 0 };
+            within.set(
+                holder,
+                upload.phase === "failed"
+                    ? { ...counted, failed: counted.failed + 1 }
+                    : {
+                          ...counted,
+                          going: counted.going + 1,
+                          sent: counted.sent + upload.sent,
+                          size: counted.size + upload.size,
+                      },
+            );
+            continue;
+        }
+        let index = at.get(upload.itemId);
+        if (index === undefined) {
+            const held = named.get(vaultNameKey(upload.name));
+            if (held !== undefined && rowKind(rows[held]!) === upload.kind) index = held;
+        }
+        if (index !== undefined) {
+            const row = rows[index]!;
+            // The first one sent is the one drawn; the rest follow it as its later versions.
+            if (row.kind === "item" && row.upload === undefined) rows[index] = { ...row, upload };
+            continue;
+        }
+        const name = nameFreeOf(new Set(named.keys()), upload.name);
+        index = rows.length;
+        rows.push({ kind: "upload", id: upload.itemId, name, upload });
+        at.set(upload.itemId, index);
+        named.set(vaultNameKey(name), index);
+        added = true;
+    }
+    for (const [holder, counted] of within) {
+        const index = at.get(holder)!;
+        const row = rows[index]!;
+        if (row.kind === "item") rows[index] = { ...row, within: counted };
+    }
+    return added ? rows.sort(rowCompare) : rows;
+}
+
+/** The folder in `folderId` that `inside` is or lies beneath, if it lies beneath one. */
+function holderOf(
+    live: Entries,
+    folderId: HappyAgentVaultItemId | null,
+    inside: HappyAgentVaultItemId | null,
+): HappyAgentVaultItemId | undefined {
+    let id = inside;
+    for (let depth = 0; id !== null && depth < 128; depth += 1) {
+        const entry = live.get(id);
+        if (entry === undefined) return undefined;
+        if (entry.parentId === folderId) return id;
+        id = entry.parentId;
+    }
+    return undefined;
 }

@@ -26,7 +26,6 @@ import type { GenUiInlineHost } from "../../artifacts/ArtifactInlineContent";
 import { VaultMoveDialog, VaultNameDialog, VaultSettingsDialog } from "./VaultDialogs";
 import { VaultItemList } from "./VaultItemList";
 import { VaultPreviewPane } from "./VaultPreviewPane";
-import { VaultUploads } from "./VaultUploads";
 import {
     VAULT_ENTRY_DRAG_TYPE,
     VAULT_SKILLS_NOTE,
@@ -291,13 +290,6 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
               ? "Items stay in the Trash until they are restored."
               : `Items are removed for good after ${String(trashDays)} ${trashDays === 1 ? "day" : "days"}.`;
 
-    const uploads = (
-        <VaultUploads
-            onDismiss={props.onUploadDismiss}
-            onRetry={props.onUploadRetry}
-            uploads={vault.uploads}
-        />
-    );
     const notices =
         vault.failure || vault.error || downloadFailure ? (
             <div className="happy-vault__notices">
@@ -361,7 +353,11 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                             title="The Trash is empty"
                         />
                     }
-                    items={trash.items.map((held) => held.item)}
+                    rows={trash.items.map((held) => ({
+                        kind: "item" as const,
+                        id: held.item.id,
+                        item: held.item,
+                    }))}
                     label="Trash"
                     lead={
                         <>
@@ -397,7 +393,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                         title={folderId === null ? "This vault is empty" : "This folder is empty"}
                     />
                 }
-                items={vault.listing}
+                rows={vault.rows}
                 label={vault.crumbs.at(-1)?.name ?? props.surface.name}
                 lead={
                     folder?.kind === "folder" && folder.role === "skills" ? (
@@ -418,7 +414,8 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                 onSelect={props.onItemSelect}
                 {...(vault.selectedId === undefined ? {} : { selectedId: vault.selectedId })}
                 {...(props.thumbnailOf ? { thumbnailOf: props.thumbnailOf } : {})}
-                trail={uploads}
+                onUploadDismiss={props.onUploadDismiss}
+                onUploadRetry={props.onUploadRetry}
                 zone={zone}
             />
         );
