@@ -14,7 +14,7 @@
     --happy-surface-header-height: 56px;
     /* How long a name too long for its row takes to fade out, at rest and
        where it slides to while hover controls show. */
-    --happy-sidebar-label-fade: 12px;
+    --happy-sidebar-label-fade: 14px;
     --happy-surface-footer-height: 40px;
     --happy-sidebar-floor: 226px;
     /* The window's device pixel, set by the sidebar from devicePixelRatio,
