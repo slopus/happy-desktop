@@ -399,6 +399,16 @@
     border-bottom: 1px solid var(--divider);
 }
 
+/* Back to what the node stands in for, with a rule between it and the node. */
+.happy-pipeline-pane__back {
+    display: flex;
+    flex: none;
+    align-items: center;
+    margin-inline-start: -8px;
+    padding-inline-end: 8px;
+    border-inline-end: 1px solid var(--divider);
+}
+
 .happy-pipeline-pane__kind {
     display: flex;
     flex: none;

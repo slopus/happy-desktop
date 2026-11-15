@@ -66,7 +66,10 @@ export interface PipelineStore {
     subscribe(listener: () => void): () => void;
     /** Shows one version's graph; null, or the head's number, follows the head. */
     versionSelect(number: number | null): void;
-    /** Opens one node's details, or closes them with null. */
+    /**
+     * Opens one node's details in place of the runs, or closes them with null.
+     * The pick lasts while the page is on screen; leaving it lets go.
+     */
     nodeSelect(nodeId: string | null): void;
     /** Reads the next older page of runs. */
     runsMore(): void;
@@ -203,6 +206,10 @@ export function pipelineStoreCreate(deps: {
                 if (listeners > 0) return;
                 follow.stop();
                 runsFollow.stop();
+                // Leaving the page lets go of the node picked on it, so the
+                // next visit opens on the runs instead of that node's details;
+                // cleared now, so that visit never draws the old pick first.
+                if (store.getState().nodeSelected !== null) store.setState({ nodeSelected: null });
             };
         },
         versionSelect(number) {
