@@ -205,10 +205,11 @@ it("waits its turn within the person's tunnels, and backs off when the server sa
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(cloud.tunnelsOpened()).toBe(1);
     first.destroy();
-    const opened = await second;
+    // Either waiting opening may take the turn; the other opens once it ends.
+    const opened = await Promise.race([second, third]);
     expect(cloud.tunnelsOpened()).toBe(2);
     opened.destroy();
-    (await third).destroy();
+    for (const tunnel of await Promise.all([second, third])) tunnel.destroy();
     expect(cloud.tunnelsOpened()).toBe(3);
     void origin;
 });
