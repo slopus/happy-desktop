@@ -2040,6 +2040,11 @@ export interface HappyAgentWorkspaceStore {
     activityPanelOpen(): void;
     activityPanelToggle(): void;
     activityPanelClose(): void;
+    /**
+     * Runs a shell command in a workspace terminal for the open conversation,
+     * bringing the terminal panel into view.
+     */
+    terminalRun(command: string): void;
     reasoningToggle(): void;
     /** Opens one transcript image of the open conversation full size. */
     imageOpen(messageId: string, attachmentId: string): void;
@@ -8892,6 +8897,7 @@ export function happyAgentWorkspaceStoreCreate(
             chatStore?.activityPanelClose();
             panel.activityClose();
         },
+        terminalRun: (command) => panel.terminalRun(command),
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         toolImageOpen: (entryId, index) => chatStore?.toolImageOpen(entryId, index),

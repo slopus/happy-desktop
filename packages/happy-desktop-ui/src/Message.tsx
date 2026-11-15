@@ -281,6 +281,15 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      */
     time?: string;
     tone?: ToneName;
+    /**
+     * Runs a shell command from a fenced code block in a workspace terminal.
+     * Absent leaves the run action out of fenced shell blocks entirely.
+     */
+    onCommandRun?: (command: string) => void;
+    /** Whether running a shell command is currently disabled. */
+    commandRunDisabled?: boolean;
+    /** Why running a shell command is disabled, shown as an explanation/tooltip. */
+    commandRunDisabledReason?: string;
 };
 function deriveInitials(author: string) {
     return author
@@ -417,6 +426,9 @@ export function Message(props: MessageProps) {
         "style",
         "time",
         "tone",
+        "onCommandRun",
+        "commandRunDisabled",
+        "commandRunDisabledReason",
     ]);
     const attachments = local.children;
     const body = useRef<HTMLDivElement>(null);
@@ -603,6 +615,13 @@ export function Message(props: MessageProps) {
                             local.references,
                             local.onFileLinkOpen,
                             local.layoutRender,
+                            local.onCommandRun
+                                ? {
+                                      onCommandRun: local.onCommandRun,
+                                      commandRunDisabled: local.commandRunDisabled,
+                                      commandRunDisabledReason: local.commandRunDisabledReason,
+                                  }
+                                : undefined,
                         )
                       : null}
                 {local.bodyFold ? (

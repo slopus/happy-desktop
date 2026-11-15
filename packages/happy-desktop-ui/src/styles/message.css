@@ -926,30 +926,86 @@
     background: var(--surface-pressed);
 }
 
-/* Overlay the action on the frame so source geometry and scrolling stay native.
+/* Overlay the actions on the frame so source geometry and scrolling stay native.
    The 20px button sits on the first 20px line at the code's own inset, so a
    one-line block holds it centred, with the same gap above, below and right. */
+.happy-message__code-actions {
+    position: absolute;
+    top: var(--happy-chat-frame-text-inset);
+    right: var(--happy-chat-frame-text-inset);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 1;
+}
+
 .happy-message__code-copy {
     position: absolute;
     top: var(--happy-chat-frame-text-inset);
     right: var(--happy-chat-frame-text-inset);
 }
 
+.happy-message__code-actions .happy-message__code-copy {
+    position: static;
+}
+
 /* The compound selector overrides the shared copy button's transparent fill.
    The frame-coloured spread, as wide as the inset, masks the code around the
    button out to the frame's edge. */
-.happy-message__code-block > .happy-message__code-copy {
+.happy-message__code-block > .happy-message__code-copy,
+.happy-message__code-block .happy-message__code-actions > .happy-message__code-copy,
+.happy-message__code-block .happy-message__code-action {
     background: var(--surface-pressed);
     box-shadow: 0 0 0 var(--happy-chat-frame-text-inset) var(--surface-pressed);
 }
 
-.happy-message__code-block > .happy-message__code-copy:hover {
+.happy-message__code-block > .happy-message__code-copy:hover,
+.happy-message__code-block .happy-message__code-actions > .happy-message__code-copy:hover,
+.happy-message__code-block .happy-message__code-action:hover:not(:disabled) {
     background-image: linear-gradient(var(--surface-ripple), var(--surface-ripple));
 }
 
 .happy-message__code-block:hover > .happy-message__code-copy,
-.happy-message__code-block:focus-within > .happy-message__code-copy {
+.happy-message__code-block:focus-within > .happy-message__code-copy,
+.happy-message__code-block:hover .happy-message__code-actions > .happy-message__code-copy,
+.happy-message__code-block:focus-within .happy-message__code-actions > .happy-message__code-copy,
+.happy-message__code-block:hover .happy-message__code-action:not(:disabled),
+.happy-message__code-block:focus-within .happy-message__code-action:not(:disabled) {
     opacity: 1;
+}
+
+.happy-message__code-action {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    color: var(--text-secondary);
+    appearance: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy-message__code-action:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy-message__code-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+
+.happy-message__code-block:hover .happy-message__code-action:disabled,
+.happy-message__code-block:focus-within .happy-message__code-action:disabled {
+    opacity: 0.35;
 }
 
 /* As tall as the source lines and their insets, set by `--happy-code-lines`, so

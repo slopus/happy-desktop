@@ -14,9 +14,10 @@ import Markdown, { type Components, type ExtraProps, type UrlTransform } from "r
 import type { Processor } from "unified";
 import { FileRevealContext, LinkContextMenu } from "./LinkContextMenu";
 import { CopyButton } from "./CopyButton";
+import { Icon } from "./Icon";
 import { filePreviewKind } from "./FilePreview";
 import { type MenuItem } from "./Menu";
-import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
+import { markdownFence, markdownFenceIsMermaid, markdownFenceIsShell } from "./markdownFence";
 import { type FileLinkOpenHandler, type FileOpenHandler } from "./fileReference";
 import { markdownDocumentLinkTarget, markdownFileUrlTransform } from "./MarkdownDocument";
 import { MathFormula } from "./MathFormula";
@@ -235,6 +236,14 @@ function remarkSizedTree(this: Processor, cache: MessageTextLayoutCache | undefi
  */
 export type MessageLayoutRender = (key: string) => ReactNode;
 const MarkdownLayoutRenderContext = createContext<MessageLayoutRender | undefined>(undefined);
+
+/** Options for running shell command blocks in chat. */
+export interface MessageCommandRunOptions {
+    readonly onCommandRun?: (command: string) => void;
+    readonly commandRunDisabled?: boolean;
+    readonly commandRunDisabledReason?: string;
+}
+const MarkdownCommandRunContext = createContext<MessageCommandRunOptions | undefined>(undefined);
 /**
  * A top-level placeholder block becomes an element that names its layout, so
  * it survives `skipHtml` and `MarkdownDiv` can draw the layout in its place.
@@ -588,6 +597,7 @@ const MarkdownPre = ({
 }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => {
     const fence = markdownFence(node);
     const generationStatus = useContext(MarkdownGenerationStatusContext);
+    const commandRun = useContext(MarkdownCommandRunContext);
     if (markdownFenceIsMermaid(fence))
         return (
             <MermaidDiagram
@@ -596,6 +606,13 @@ const MarkdownPre = ({
                 variant="message"
             />
         );
+    const isShell = markdownFenceIsShell(fence);
+    const showRun = isShell && commandRun?.onCommandRun !== undefined;
+    const runDisabled = commandRun?.commandRunDisabled ?? false;
+    const runTitle = runDisabled
+        ? (commandRun?.commandRunDisabledReason ?? "Command execution unavailable")
+        : "Run command";
+
     return (
         <div
             className="happy-message__code-block"
@@ -605,11 +622,31 @@ const MarkdownPre = ({
             <ScrollArea axes="horizontal" viewportClassName="happy-message__code-block-viewport">
                 <pre {...props}>{children}</pre>
             </ScrollArea>
-            <CopyButton
-                className="happy-message__code-copy"
-                label="Copy code"
-                text={fence?.text ?? ""}
-            />
+            <div className="happy-message__code-actions">
+                {showRun ? (
+                    <button
+                        aria-label={runTitle}
+                        className="happy-message__code-action happy-message__code-run"
+                        data-happy-desktop-ui="message-code-run"
+                        disabled={runDisabled}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            if (!runDisabled && fence?.text) {
+                                commandRun.onCommandRun?.(fence.text);
+                            }
+                        }}
+                        title={runTitle}
+                        type="button"
+                    >
+                        <Icon name="play" size={14} />
+                    </button>
+                ) : null}
+                <CopyButton
+                    className="happy-message__code-copy"
+                    label="Copy code"
+                    text={fence?.text ?? ""}
+                />
+            </div>
         </div>
     );
 };
@@ -880,6 +917,7 @@ export function renderMessageMarkdown(
     references?: MessageReferences,
     onFileLinkOpen?: FileLinkOpenHandler,
     layoutRender?: MessageLayoutRender,
+    commandRun?: MessageCommandRunOptions,
 ): ReactNode {
     const text = messageReferencesResolve(source, references, generationStatus === "streaming");
     return (
@@ -898,7 +936,9 @@ export function renderMessageMarkdown(
                                 <MarkdownLinkOpenContext.Provider value={onLinkOpen}>
                                     <MarkdownLinkDefaultContext.Provider value={linkOpenDefault}>
                                         <MarkdownLayoutRenderContext.Provider value={layoutRender}>
-                                            <SizedMarkdown>{text}</SizedMarkdown>
+                                            <MarkdownCommandRunContext.Provider value={commandRun}>
+                                                <SizedMarkdown>{text}</SizedMarkdown>
+                                            </MarkdownCommandRunContext.Provider>
                                         </MarkdownLayoutRenderContext.Provider>
                                     </MarkdownLinkDefaultContext.Provider>
                                 </MarkdownLinkOpenContext.Provider>

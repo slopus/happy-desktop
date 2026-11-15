@@ -339,6 +339,7 @@ export {
     MessageSettingsLinksContext,
     type LinkOpenHandler,
     type LinkOpenPlacement,
+    type MessageCommandRunOptions,
     type MessageGenerationStatus,
     type MessageSettingsLinks,
 } from "./MessageMarkdown";

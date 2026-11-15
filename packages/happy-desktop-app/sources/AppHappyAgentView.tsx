@@ -10546,6 +10546,43 @@ function HappyAgentConversationSurface(props: {
         conversation.menus.currentAccount !== "hidden";
     const composerDisabled = props.readOnly || modelsNotConfigured;
     const configurable = !composerDisabled && sendRefusal === undefined;
+    const panelSnapshot = useSyncExternalStore(
+        workspace.panel.subscribe,
+        workspace.panel.get,
+        workspace.panel.get,
+    );
+    const commandRunRefusal = !props.happyAgentOnline()
+        ? "Happy Agent is offline"
+        : props.unavailable !== undefined
+          ? props.unavailable
+          : props.restarting
+            ? "Happy Agent is restarting"
+            : panelSnapshot.terminalRefusal !== undefined
+              ? panelSnapshot.terminalRefusal
+              : props.writeRefusal !== undefined
+                ? props.writeRefusal
+                : props.readOnly
+                  ? (props.readOnlyReason ?? "Workspace is read-only")
+                  : undefined;
+    const panelSnapshot = useSyncExternalStore(
+        workspace.panel.subscribe,
+        workspace.panel.get,
+        workspace.panel.get,
+    );
+    const commandRunRefusal =
+        !props.happyAgentOnline()
+            ? "Happy Agent is offline"
+            : props.unavailable !== undefined
+              ? props.unavailable
+              : props.restarting
+                ? "Happy Agent is restarting"
+                : panelSnapshot.terminalRefusal !== undefined
+                  ? panelSnapshot.terminalRefusal
+                  : props.writeRefusal !== undefined
+                    ? props.writeRefusal
+                    : props.readOnly
+                      ? (props.readOnlyReason ?? "Workspace is read-only")
+                      : undefined;
     const activeActivity = happyAgentActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
     const openImage = conversation.openImage;
@@ -10645,6 +10682,11 @@ function HappyAgentConversationSurface(props: {
             : undefined;
     return (
         <ConversationView
+            onCommandRun={(command) => workspace.terminalRun(command)}
+            commandRunDisabled={commandRunRefusal !== undefined}
+            {...(commandRunRefusal !== undefined
+                ? { commandRunDisabledReason: commandRunRefusal }
+                : {})}
             references={references}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
@@ -10730,21 +10772,6 @@ function HappyAgentConversationSurface(props: {
                                     />
                                 </>
                             }
-                            /* How much of the window this session has spent, at the far
-                               end of the same row as the access mode and the speed: the
-                               reader is about to type one more message, and this is
-                               where they find out whether it still fits and when to
-                               compact. Before the provider's first measurement, the
-                               declared window still appears with an empty-state count
-                               so the context surface is discoverable. */
-                            trailing={
-                                <>
-                                    {/* The repositories the agent checked out, read-only. A
-                                        server without checkouts names one on the agent. */}
-                                    {(
-                                        props.repositories ??
-                                        (conversation.repository &&
-                                        conversation.repository.checkout !== "failed"
                                             ? [
                                                   {
                                                       id: conversation.repository.repositoryId,
@@ -12501,6 +12528,11 @@ function HappyAgentPanelChatSurface(props: {
 }) {
     const chat = props.store.chat(props.tabId) ?? happyAgentPanelChatNone;
     const snapshot = useSyncExternalStore(chat.subscribe, chat.get, chat.get);
+    const panelSnapshot = useSyncExternalStore(
+        props.store.subscribe,
+        props.store.get,
+        props.store.get,
+    );
     const chatSnapshot = snapshot.type === "ready" ? snapshot.chat : undefined;
     const previewBindings = useConversationPreviews({
         workspace: props.previewContext.workspace,
@@ -12519,6 +12551,11 @@ function HappyAgentPanelChatSurface(props: {
         );
     return (
         <ConversationView
+            onCommandRun={(command) => props.store.terminalRun(command)}
+            commandRunDisabled={panelSnapshot.terminalRefusal !== undefined}
+            {...(panelSnapshot.terminalRefusal !== undefined
+                ? { commandRunDisabledReason: panelSnapshot.terminalRefusal }
+                : {})}
             {...(previews
                 ? {
                       inlinePages: {

@@ -294,6 +294,11 @@ export interface HappyAgentPanelStore {
      */
     terminalAdd(replacing?: HappyAgentPanelTabId): void;
     /**
+     * Adds a terminal tab to the open group, selects it, opens the panel, and
+     * writes the command to the shell. Multiline commands are preserved.
+     */
+    terminalRun(command: string): void;
+    /**
      * Adds a browser tab to the open group, optionally at one safe web URL, and
      * selects it. The page uses the open conversation's agent, so without one
      * nothing is added.
@@ -1086,6 +1091,20 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             open = true;
             remember();
             recompute();
+        },
+        terminalRun(command) {
+            if (disposed || !groupId || !conversationId || terminalRefusal !== undefined) return;
+            terminalTabAdd(groupId, conversationId);
+            open = true;
+            remember();
+            recompute();
+            const tab = tabs.find(
+                (candidate) => candidate.id === activeViewId && candidate.kind === "terminal",
+            );
+            if (tab?.terminal) {
+                const line = command.endsWith("\n") ? command : `${command}\n`;
+                tab.terminal.terminalWrite?.(line);
+            }
         },
         browserAdd(url) {
             if (disposed || !groupId || !conversationId) return;

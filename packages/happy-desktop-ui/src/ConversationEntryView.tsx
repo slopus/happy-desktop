@@ -143,6 +143,12 @@ export type ConversationEntryViewProps = {
     onLinkOpen?: LinkOpenHandler;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault?: LinkOpenPlacement;
+    /** Runs a shell command from a fenced code block in a workspace terminal. */
+    onCommandRun?: (command: string) => void;
+    /** Whether running a shell command is currently disabled. */
+    commandRunDisabled?: boolean;
+    /** Why running a shell command is disabled, shown as an explanation/tooltip. */
+    commandRunDisabledReason?: string;
     /** What the Happy references a message names read as, and where opening one goes. */
     references?: MessageReferences;
     /** The page this row's tool call shows inline, when its owner shows one. */
@@ -644,6 +650,13 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.onFileLinkOpen ? { onFileLinkOpen: props.onFileLinkOpen } : {})}
             {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
             {...(props.linkOpenDefault ? { linkOpenDefault: props.linkOpenDefault } : {})}
+            {...(props.onCommandRun ? { onCommandRun: props.onCommandRun } : {})}
+            {...(props.commandRunDisabled !== undefined
+                ? { commandRunDisabled: props.commandRunDisabled }
+                : {})}
+            {...(props.commandRunDisabledReason !== undefined
+                ? { commandRunDisabledReason: props.commandRunDisabledReason }
+                : {})}
             {...(props.references ? { references: props.references } : {})}
             own={own}
             ownActions={

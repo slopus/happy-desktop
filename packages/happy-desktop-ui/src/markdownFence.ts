@@ -36,3 +36,35 @@ export function markdownFence(node: ExtraProps["node"]): MarkdownFence | undefin
 export function markdownFenceIsMermaid(fence: MarkdownFence | undefined): boolean {
     return fence?.label?.trim().toLowerCase() === "mermaid";
 }
+
+const SHELL_LANGUAGES = new Set<string>([
+    "bash",
+    "sh",
+    "zsh",
+    "shell",
+    "shellscript",
+    "console",
+    "terminal",
+    "powershell",
+    "pwsh",
+    "cmd",
+    "dos",
+    "bat",
+]);
+
+/**
+ * Whether a fenced code block holds a runnable shell command.
+ * Matches common POSIX and Windows shell identifiers.
+ */
+export function markdownFenceIsShell(fence: MarkdownFence | undefined): boolean {
+    if (!fence) return false;
+    for (const raw of [fence.lang, fence.label]) {
+        if (!raw) continue;
+        const normalized = raw
+            .trim()
+            .toLowerCase()
+            .split(/[\s,:{]/)[0];
+        if (normalized && SHELL_LANGUAGES.has(normalized)) return true;
+    }
+    return false;
+}
