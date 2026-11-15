@@ -18,6 +18,7 @@ import type {
     PipelinePermissions,
     PipelineRun,
     PipelineRunEntry,
+    PipelineRunListEntry,
     PipelineRunState,
     PipelineRunSummary,
     PipelineRunTrigger,
@@ -405,6 +406,32 @@ export function pipelineRunsRead(answer: unknown): {
 } {
     const page = recordOf(answer);
     return { runs: listOf(page?.runs, runEntryRead), nextCursor: textOrNull(page?.nextCursor) };
+}
+
+/**
+ * `GET /v0/pipeline-runs?cursor=` → `{ runs: [...], nextCursor }`, newest first
+ * across every pipeline, child runs and archived pipelines' runs included, each
+ * a runs entry with its `pipelineId`, `pipelineName` and `pipelineArchived`.
+ */
+export function pipelineRunListRead(answer: unknown): {
+    readonly runs: PipelineRunListEntry[];
+    readonly nextCursor: string | null;
+} {
+    const page = recordOf(answer);
+    return {
+        runs: listOf(page?.runs, (value) => {
+            const run = recordOf(value);
+            const entry = runEntryRead(run);
+            if (!run || !entry || typeof run.pipelineId !== "string") return undefined;
+            return {
+                ...entry,
+                pipelineId: run.pipelineId,
+                pipelineName: textOrNull(run.pipelineName) ?? run.pipelineId,
+                pipelineArchived: run.pipelineArchived === true,
+            };
+        }),
+        nextCursor: textOrNull(page?.nextCursor),
+    };
 }
 
 const NODE_RUN_STATES: readonly PipelineNodeRunState[] = [

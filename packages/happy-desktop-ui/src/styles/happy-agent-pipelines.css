@@ -30,40 +30,53 @@
     padding-inline: var(--happy-content-inline);
 }
 
-.happy-pipelines__scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    width: 100%;
+.happy-pipelines__banner {
+    flex: none;
+    padding: 0 16px 8px;
 }
 
-.happy-pipelines__scroll-viewport {
+.happy-pipelines__empty {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+/* The pipelines on top, as tall as their rows up to a share of the page; the runs fill the rest. */
+.happy-pipelines__stack {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-pipelines__strip {
+    flex: 0 1 auto;
+    max-height: 40%;
+    min-height: 0;
+    border-bottom: 1px solid var(--divider);
+    background: var(--groupped-background);
+}
+
+.happy-pipelines__strip-viewport {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-}
-
-.happy-pipelines__content {
-    display: flex;
-    flex: 1 0 auto;
-    flex-direction: column;
-    gap: 16px;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: var(--happy-content-measure);
-    margin-inline: auto;
-    padding: 4px var(--happy-content-gutter) 48px;
 }
 
 .happy-pipelines__list {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    padding: 6px 8px;
 }
 
 .happy-pipelines__item {
     display: flex;
     min-width: 0;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 .happy-pipelines__item:hover {
@@ -74,16 +87,19 @@
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     box-sizing: border-box;
     min-width: 0;
+    height: 32px;
     margin: 0;
-    padding: 8px;
+    padding: 0 8px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     background: none;
     color: inherit;
     font: inherit;
+    font-size: 13px;
+    line-height: 18px;
     text-align: start;
     cursor: pointer;
 }
@@ -96,60 +112,150 @@
     outline-offset: -2px;
 }
 
-.happy-pipeline-row__mark {
+.happy-pipeline-row__glyph {
     display: flex;
     flex: none;
     align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--divider);
-    border-radius: 8px;
-    background: var(--surface-high);
     color: var(--text-secondary);
-}
-
-.happy-pipeline-row__text {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
 }
 
 .happy-pipeline-row__name {
+    flex: 0 1 auto;
+    min-width: 0;
     overflow: hidden;
-    font-size: 14px;
     font-weight: 600;
-    line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy-pipeline-row__meta {
-    overflow: hidden;
+.happy-pipeline-row__version {
+    flex: none;
     color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-pipeline-row__disabled {
+    flex: none;
+    padding: 0 6px;
+    border: 1px solid var(--divider);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 16px;
 }
 
 .happy-pipeline-row__run {
     display: flex;
     flex: none;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
+    align-items: center;
+    gap: 12px;
+    margin-inline-start: auto;
 }
 
 .happy-pipeline-row__time,
 .happy-pipeline-row__never {
+    width: 96px;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
+    text-align: end;
     white-space: nowrap;
+}
+
+/* ---- Runs across pipelines ---------------------------------------------- */
+
+.happy-pipeline-run-across {
+    /* Not flex-only: the open button lies across the whole row beneath its cells. */
+    position: relative;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-pipeline-run-across__open {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+}
+
+.happy-pipeline-run-across__open:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+/* Cells let a press through to the row, but the pipeline's name takes its own. */
+.happy-pipeline-run-across > span {
+    pointer-events: none;
+}
+
+.happy-pipeline-run-across__pipeline {
+    display: flex;
+    flex: 0 1 180px;
+    min-width: 0;
+}
+
+.happy-pipeline-run-across__pipeline-name {
+    position: relative;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.happy-pipeline-run-across__pipeline-name:hover {
+    color: var(--text-link);
+    text-decoration: underline;
+}
+
+.happy-pipeline-run-across__pipeline-name:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--text-link);
+}
+
+.happy-pipeline-run-across[data-live] .happy-pipeline-run-row__duration {
+    color: var(--text-link);
+}
+
+.happy-pipeline-run-across__child {
+    display: flex;
+    flex: none;
+    align-items: center;
+    margin-inline: 4px 6px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-run-across[data-child] .happy-pipeline-run-across__pipeline-name {
+    font-weight: 500;
+}
+
+/* A run of an archived pipeline still opens; its pipeline no longer does. */
+.happy-pipeline-run-across[data-archived] > span {
+    opacity: 0.55;
+}
+
+.happy-pipeline-run-across[data-archived] .happy-pipeline-run-across__pipeline-name {
+    cursor: inherit;
+    pointer-events: none;
 }
 
 /* ---- State mark -------------------------------------------------------- */

@@ -199,6 +199,30 @@ export interface PipelineRunEntry {
     readonly endedAt: number | null;
 }
 
+/** One run among every pipeline's runs: its entry, and which pipeline it ran. */
+export interface PipelineRunListEntry extends PipelineRunEntry {
+    readonly pipelineId: string;
+    readonly pipelineName: string;
+    /** Its pipeline was archived: the run still reads, the pipeline's page does not. */
+    readonly pipelineArchived: boolean;
+}
+
+/**
+ * A page of runs read again on top of what is already kept, newest first. A
+ * reader who paged past the first page keeps the older runs they read, below
+ * the fresh page; one who did not takes the page as it is.
+ */
+export function pipelineRunsMerge<T extends PipelineRunEntry>(
+    previous: readonly T[],
+    page: readonly T[],
+    pageComplete: boolean,
+): T[] {
+    if (pageComplete) return [...page];
+    const fresh = new Set(page.map((run) => run.id));
+    const oldest = page.at(-1)?.createdAt ?? Number.POSITIVE_INFINITY;
+    return [...page, ...previous.filter((run) => !fresh.has(run.id) && run.createdAt <= oldest)];
+}
+
 export type PipelineNodeRunState =
     | "pending"
     | "running"
