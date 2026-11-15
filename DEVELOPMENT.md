@@ -153,6 +153,12 @@ tunnel, and keeps working while the daemon restarts. A remote connection's
 `host` network is that server's computer and keeps the tunnel, as does any
 network whose kind is missing or unknown.
 
+A Happy Cloud agent's network is asked for at the cloud server itself, and its
+tunnels are WebSocket twins (`/v0/networks/:networkId/proxy/websocket`) opened
+from the main process with the person's sign-in, within the server's per-person
+tunnel limits. While the agent's compute is detached or offline, its tabs close
+and open again when it is back.
+
 ## Troubleshooting
 
 **Portless was installed as a startup service.** Happy's development commands
