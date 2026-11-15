@@ -307,6 +307,37 @@ it("lets stated compute take over pages a refused tunnel closed", () => {
     expect(vi.getTimerCount()).toBe(0);
 });
 
+it("closes a page whose tunnel failed without a compute refusal once its compute is stated detached", () => {
+    vi.useFakeTimers();
+    const { store } = panelCreate();
+    store.browserAdd("http://localhost:5173/");
+    const tab = store.get().tabs[0]!;
+    store.browserNetworkBind(tab.id, "net_one" as Parameters<typeof store.browserNetworkBind>[1]);
+    const online = { kind: "computer", computerId: "cmp_a", online: true } as const;
+    store.computeApply(AGENT, online);
+
+    // A tunnel refused as a missing network fails only the page, which the
+    // panel draws; the store hears nothing and keeps the page open.
+    const failed = store.get();
+    expect(failed.tabs[0]).not.toHaveProperty("closed");
+    expect(vi.getTimerCount()).toBe(0);
+
+    // The stated detachment closes it all the same, and nothing asks again.
+    store.computeApply(AGENT, { kind: "none" });
+    expect(store.get().tabs[0]).toMatchObject({ closed: "computeDetached", reopenings: 0 });
+    expect(vi.getTimerCount()).toBe(0);
+    // A refusal that comes after it changes nothing.
+    const closed = store.get();
+    store.browserTunnelRefused(tab.id, "computeOffline");
+    expect(store.get()).toBe(closed);
+
+    // Attached again, it opens as a new page that asks for its network again.
+    store.computeApply(AGENT, online);
+    expect(store.get().tabs[0]).toMatchObject({ reopenings: 1 });
+    expect(store.get().tabs[0]).not.toHaveProperty("closed");
+    expect(store.get().tabs[0]).not.toHaveProperty("networkId");
+});
+
 it("opens a page closed for an offline computer again when a computer changes, and keeps an artifact's network", () => {
     const { store } = panelCreate();
     const artifactId = "art_live" as HappyAgentArtifactId;
