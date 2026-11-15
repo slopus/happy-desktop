@@ -898,6 +898,27 @@ export {
     type HappyAgentPluginSetupRefusal,
 } from "./pages/plugins/HappyAgentPluginPage";
 export {
+    HappyAgentPipelinesPage,
+    type HappyAgentPipelinesPageProps,
+} from "./pages/pipelines/HappyAgentPipelinesPage";
+export {
+    HappyAgentPipelinePage,
+    type HappyAgentPipelinePageProps,
+} from "./pages/pipelines/HappyAgentPipelinePage";
+export {
+    PipelineGraph,
+    PipelineGraphLegend,
+    PIPELINE_GRAPH_METRICS,
+    type PipelineGraphEdge,
+    type PipelineGraphNode,
+    type PipelineGraphProps,
+} from "./pages/pipelines/PipelineGraph";
+export {
+    pipelineGraphLayout,
+    type PipelineGraphLayout,
+} from "./pages/pipelines/pipelineGraphLayout";
+export { type PipelineLabels } from "./pages/pipelines/pipelinePresentation";
+export {
     HappyAgentArtifactsPanel,
     type HappyAgentArtifactsPanelProps,
 } from "./pages/artifacts/HappyAgentArtifactsPanel";

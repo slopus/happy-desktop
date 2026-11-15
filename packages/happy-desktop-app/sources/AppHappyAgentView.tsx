@@ -414,6 +414,7 @@ import {
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
 import { HappyAgentPluginsSurface } from "./views/HappyAgentPluginsSurface";
+import { HappyAgentPipelinesSurface } from "./views/HappyAgentPipelinesSurface";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
@@ -744,6 +745,12 @@ export interface AppHappyAgentSession {
         | undefined;
     /** The plugins this machine offers and its team installed; absent or undefined where it offers none. */
     readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
+    /** The pipelines a Happy Cloud server runs; absent or undefined anywhere it runs none. */
+    readonly pipelines?: () => import("happy-desktop-state").PipelinesStore | undefined;
+    /** One pipeline's page; undefined wherever `pipelines` is. */
+    readonly pipeline?: (
+        pipelineId: string,
+    ) => import("happy-desktop-state").PipelineStore | undefined;
     /** The repositories one cloud agent checked out; absent or undefined anywhere but Happy Cloud. */
     readonly checkouts?: (
         agentId: string,
@@ -1072,6 +1079,14 @@ export interface AppHappyAgentViewProps {
     onPluginsOpen?(happyAgentId: string): void;
     /** Addresses one plugin on one Happy Agent. */
     onPluginOpen?(happyAgentId: string, pluginId: string): void;
+    /** Whether the URL addresses the addressed Happy Cloud server's pipelines. */
+    pipelinesOpen?: boolean;
+    /** The pipeline the URL opens, within those pipelines. */
+    pipelineId?: string;
+    /** Addresses one server's pipelines. */
+    onPipelinesOpen?(happyAgentId: string): void;
+    /** Addresses one pipeline on one server. */
+    onPipelineOpen?(happyAgentId: string, pipelineId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
     /** The person whose profile the URL opens, on the addressed Happy Agent. */
@@ -3061,6 +3076,7 @@ function happyAgentTopSection(
             { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ARTIFACTS_SIDEBAR_ITEM,
             ...(happyAgent?.session?.plugins?.() ? [PLUGINS_SIDEBAR_ITEM] : []),
+            ...(happyAgent?.session?.pipelines?.() ? [PIPELINES_SIDEBAR_ITEM] : []),
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3418,6 +3434,14 @@ const ARTIFACTS_ITEM = "artifacts";
 const PLUGINS_ITEM = "plugins";
 
 /**
+ * The row that opens a Happy Cloud server's pipelines, directly under Plugins.
+ * The server runs them for the whole team rather than for any one chat, so the
+ * row belongs to the machine and never moves. It is there only where the
+ * server runs pipelines.
+ */
+const PIPELINES_ITEM = "pipelines";
+
+/**
  * The row that opens the reader's feed on the addressed Happy Agent: what
  * happened there, newest change first. It heads the sidebar's first group and,
  * like Artifacts under it, never moves; it counts what the reader has not
@@ -3502,6 +3526,15 @@ const PLUGINS_SIDEBAR_ITEM: SidebarItem = {
     id: PLUGINS_ITEM,
     kind: "project",
     label: "Plugins",
+    reorderable: false,
+};
+
+const PIPELINES_SIDEBAR_ITEM: SidebarItem = {
+    icon: "pipeline",
+    tint: "teal",
+    id: PIPELINES_ITEM,
+    kind: "project",
+    label: "Pipelines",
     reorderable: false,
 };
 
@@ -4226,21 +4259,23 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       ? artifactsItemId
                       : props.pluginsOpen
                         ? PLUGINS_ITEM
-                        : props.feedOpen
-                          ? FEED_ITEM
-                          : props.surfaceId !== undefined
-                            ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                            : props.groupId
-                              ? happyAgentItemId(
-                                    props.happyAgentId,
-                                    activeRowId(
-                                        active?.bots ?? [],
-                                        active?.tasks ?? [],
-                                        props.groupId,
-                                        props.chatId,
-                                    ),
-                                )
-                              : ""
+                        : props.pipelinesOpen
+                          ? PIPELINES_ITEM
+                          : props.feedOpen
+                            ? FEED_ITEM
+                            : props.surfaceId !== undefined
+                              ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
+                              : props.groupId
+                                ? happyAgentItemId(
+                                      props.happyAgentId,
+                                      activeRowId(
+                                          active?.bots ?? [],
+                                          active?.tasks ?? [],
+                                          props.groupId,
+                                          props.chatId,
+                                      ),
+                                  )
+                                : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -4520,6 +4555,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 if (id === PLUGINS_ITEM) {
                     props.onPluginsOpen?.(active?.id ?? props.happyAgentId);
+                    return;
+                }
+                if (id === PIPELINES_ITEM) {
+                    props.onPipelinesOpen?.(active?.id ?? props.happyAgentId);
                     return;
                 }
                 const row = happyAgentItemParse(id);
@@ -4972,6 +5011,35 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     onPluginsOpen={() => props.onPluginsOpen?.(active.id)}
                     {...(props.pluginId === undefined ? {} : { pluginId: props.pluginId })}
                     store={plugins}
+                />
+            );
+        }
+
+        // The pipelines belong to the addressed Happy Cloud server. A server that
+        // runs none says so, in case its address was reached some other way than
+        // its sidebar row.
+        if (props.pipelinesOpen && active?.session) {
+            const session = active.session;
+            const pipelines = session.pipelines?.();
+            if (!pipelines)
+                return (
+                    <EmptyState
+                        description="This server does not run pipelines."
+                        icon="pipeline"
+                        size="panel"
+                        title="No pipelines here"
+                    />
+                );
+            const pipeline =
+                props.pipelineId === undefined ? undefined : session.pipeline?.(props.pipelineId);
+            return (
+                <HappyAgentPipelinesSurface
+                    key={props.pipelineId}
+                    clock={session.clock}
+                    onPipelineOpen={(pipelineId) => props.onPipelineOpen?.(active.id, pipelineId)}
+                    onPipelinesOpen={() => props.onPipelinesOpen?.(active.id)}
+                    {...(pipeline ? { pipeline } : {})}
+                    pipelines={pipelines}
                 />
             );
         }

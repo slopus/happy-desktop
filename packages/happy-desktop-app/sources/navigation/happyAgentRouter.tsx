@@ -529,6 +529,18 @@ const pluginRoute = createRoute({
     path: "/plugins/$happyAgentId/$pluginId",
 });
 
+/** The pipelines a Happy Cloud server runs. */
+const pipelinesRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/pipelines/$happyAgentId",
+});
+
+/** One pipeline on the server that runs it. */
+const pipelineRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/pipelines/$happyAgentId/$pipelineId",
+});
+
 /** One artifact open in the viewer, on the machine that keeps it. */
 const artifactRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -651,6 +663,8 @@ const routeTree = rootRoute.addChildren([
         artifactRoute,
         pluginsRoute,
         pluginRoute,
+        pipelinesRoute,
+        pipelineRoute,
         feedRoute,
         userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
@@ -683,6 +697,7 @@ function HappyAgentWorkspaceLayout() {
         feed: matched.has(feedRoute.id),
         inbox: matched.has(inboxRoute.id),
         plugins: matched.has(pluginsRoute.id) || matched.has(pluginRoute.id),
+        pipelines: matched.has(pipelinesRoute.id) || matched.has(pipelineRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
         bugReportCreate: matched.has(bugReportCreateRoute.id),
@@ -740,6 +755,19 @@ function HappyAgentWorkspaceLayout() {
                 void navigate({
                     params: { happyAgentId, pluginId },
                     to: "/plugins/$happyAgentId/$pluginId",
+                })
+            }
+            pipelinesOpen={shows.pipelines}
+            {...(shows.pipelines && params.pipelineId !== undefined
+                ? { pipelineId: params.pipelineId }
+                : {})}
+            onPipelinesOpen={(happyAgentId) =>
+                void navigate({ params: { happyAgentId }, to: "/pipelines/$happyAgentId" })
+            }
+            onPipelineOpen={(happyAgentId, pipelineId) =>
+                void navigate({
+                    params: { happyAgentId, pipelineId },
+                    to: "/pipelines/$happyAgentId/$pipelineId",
                 })
             }
             {...(shows.artifacts && params.artifactId !== undefined

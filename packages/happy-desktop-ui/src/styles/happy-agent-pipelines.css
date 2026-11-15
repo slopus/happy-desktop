@@ -1,0 +1,632 @@
+/*
+ * P-047 Happy Agent pipelines: the list of a server's pipelines, and one
+ * pipeline's page with its graph beside its overview, history, or one node.
+ *
+ * The list reads down the content column under the shared surface header, as
+ * the plugins catalog does. A pipeline's page is two-dimensional, so it takes
+ * the whole lane: the graph fills it and an inspector the width of the app's
+ * own sits at its trailing edge. Colors, radii, and type come only from theme
+ * roles.
+ */
+
+/* ---- List -------------------------------------------------------------- */
+
+.happy-pipelines,
+.happy-pipeline-page {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-pipelines__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+.happy-pipelines__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-pipelines__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-pipelines__content {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 4px var(--happy-content-gutter) 48px;
+}
+
+.happy-pipelines__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-pipelines__item {
+    display: flex;
+    min-width: 0;
+    border-radius: 8px;
+}
+
+.happy-pipelines__item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-pipeline-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-row:focus-visible,
+.happy-pipeline-version:focus-visible,
+.happy-pipeline-node:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-pipeline-row__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-row__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-pipeline-row__name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-row__meta {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-row__run {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.happy-pipeline-row__time,
+.happy-pipeline-row__never {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* ---- State mark -------------------------------------------------------- */
+
+.happy-pipeline-state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.happy-pipeline-state__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+.happy-pipeline-state[data-tone="active"] .happy-pipeline-state__dot {
+    background: var(--text-link);
+}
+
+.happy-pipeline-state[data-tone="success"] .happy-pipeline-state__dot {
+    background: var(--success);
+}
+
+.happy-pipeline-state[data-tone="danger"] .happy-pipeline-state__dot {
+    background: var(--status-error);
+}
+
+/* ---- Pipeline page ----------------------------------------------------- */
+
+.happy-pipeline-page__body {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-pipeline-page__main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--groupped-background);
+}
+
+.happy-pipeline-page__bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: 48px;
+    padding-inline: 16px;
+}
+
+.happy-pipeline-page__version {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-pipeline-page__bar-end {
+    display: flex;
+    margin-inline-start: auto;
+}
+
+.happy-pipeline-page__empty {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+.happy-pipeline-page__inspector {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: clamp(250px, 30vw, 360px);
+    min-height: 0;
+    border-inline-start: 1px solid var(--divider);
+    background: var(--surface);
+}
+
+.happy-pipeline-page__inspector-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-pipeline-page__inspector-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+/* ---- Legend ------------------------------------------------------------ */
+
+.happy-pipeline-legend {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-pipeline-legend__item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy-pipeline-legend__stroke {
+    width: 20px;
+    height: 0;
+    border-top: 1.5px solid var(--text-secondary);
+}
+
+.happy-pipeline-legend__stroke[data-on="failure"] {
+    border-top-style: dashed;
+    border-top-color: color-mix(in srgb, var(--status-error) 60%, var(--text-secondary));
+}
+
+/* ---- Graph ------------------------------------------------------------- */
+
+.happy-pipeline-graph {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-pipeline-graph__viewport {
+    display: flex;
+    overflow: auto;
+}
+
+/* Centres the drawing while it fits; grows past the pane to scroll when it doesn't. */
+.happy-pipeline-graph__stage {
+    display: flex;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 100%;
+    min-height: 100%;
+}
+
+.happy-pipeline-graph__canvas {
+    /* The coordinate space the nodes and edges are placed in. */
+    position: relative;
+    flex: none;
+}
+
+.happy-pipeline-graph__edges {
+    /* Not flex: the edge drawing lies under the node cards at the canvas origin, sharing their coordinate space. */
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.happy-pipeline-graph__edge {
+    fill: none;
+    stroke: var(--text-secondary);
+    stroke-width: 1.5;
+}
+
+.happy-pipeline-graph__edge[data-on="failure"] {
+    stroke: color-mix(in srgb, var(--status-error) 60%, var(--text-secondary));
+    stroke-dasharray: 5 4;
+}
+
+.happy-pipeline-graph__arrow path {
+    fill: var(--text-secondary);
+}
+
+.happy-pipeline-graph__arrow[data-on="failure"] path {
+    fill: color-mix(in srgb, var(--status-error) 60%, var(--text-secondary));
+}
+
+.happy-pipeline-graph__entry circle {
+    fill: var(--text);
+}
+
+.happy-pipeline-graph__entry path {
+    fill: none;
+    stroke: var(--text);
+    stroke-width: 1.5;
+}
+
+/* ---- Node -------------------------------------------------------------- */
+
+.happy-pipeline-node {
+    /* Not flex: a node sits at the column and row the layered layout computed, a two-dimensional placement flexbox cannot express. */
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 12px;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow-subtle);
+    color: var(--text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-node:hover {
+    border-color: color-mix(in srgb, var(--text) 24%, var(--divider));
+}
+
+.happy-pipeline-node[aria-pressed="true"] {
+    border-color: var(--text-link);
+    box-shadow: 0 0 0 1px var(--text-link);
+}
+
+.happy-pipeline-node__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-pipeline-node__kind {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-node__name {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-node__detail {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Inspector detail -------------------------------------------------- */
+
+.happy-pipeline-detail {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.happy-pipeline-detail__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    height: 56px;
+    padding-inline: 16px 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-pipeline-detail__kind {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-detail__heading {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-pipeline-detail__name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-pipeline-detail__subtitle {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-pipeline-detail__body {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 20px;
+    box-sizing: border-box;
+    padding: 16px 16px 32px;
+}
+
+.happy-pipeline-detail__section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-pipeline-detail__title {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-pipeline-detail__note,
+.happy-pipeline-detail__prose {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-pipeline-detail__prose {
+    color: var(--text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-detail__code {
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--surface-high);
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-detail__source {
+    display: flex;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.happy-pipeline-detail__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+}
+
+.happy-pipeline-detail__fact {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-pipeline-detail__fact dt {
+    flex: none;
+    width: 112px;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-detail__fact dd {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+/* ---- Versions ---------------------------------------------------------- */
+
+.happy-pipeline-versions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-inline: -8px;
+}
+
+.happy-pipeline-versions__item {
+    display: flex;
+    border-radius: 8px;
+}
+
+.happy-pipeline-versions__item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-pipeline-version {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-pipeline-version[aria-current="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-pipeline-version__head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.happy-pipeline-version__number {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-pipeline-version__tag {
+    color: var(--text-link);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-pipeline-version__message {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.happy-pipeline-version__meta {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
