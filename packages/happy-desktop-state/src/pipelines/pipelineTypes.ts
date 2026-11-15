@@ -242,6 +242,7 @@ export interface PipelineNodeRun {
 /** Tokens and cost one model spent on one node. */
 export interface PipelineModelUsage {
     readonly provider: string;
+    /** The model's full ID, provider included, as definitions name it: `openai/gpt-6.1-terra`. */
     readonly model: string;
     readonly input: number;
     readonly output: number;

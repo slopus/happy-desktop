@@ -360,7 +360,7 @@ const liveRun: PipelineRun = {
             usage: [
                 {
                     provider: "anthropic",
-                    model: "opus-5-5",
+                    model: "anthropic/opus-5-5",
                     input: 48_210,
                     output: 3_904,
                     cacheRead: 212_480,
@@ -656,7 +656,7 @@ const lostRun: PipelineRun = {
                 usage: [
                     {
                         provider: "anthropic",
-                        model: "opus-5-5",
+                        model: "anthropic/opus-5-5",
                         input: 131_877,
                         output: 9_214,
                         cacheRead: 1_402_118,
@@ -666,7 +666,7 @@ const lostRun: PipelineRun = {
                     },
                     {
                         provider: "openai",
-                        model: "gpt-5.2-mini",
+                        model: "openai/gpt-5.2-mini",
                         input: 22_410,
                         output: 1_806,
                         cacheRead: 0,

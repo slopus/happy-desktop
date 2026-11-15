@@ -66,7 +66,7 @@ export function PipelineUsage(props: { readonly usage: readonly PipelineModelUsa
                     ["Tokens", tokensText(total)],
                     ["Cached", cachedText(total)],
                     ["Reasoning", total.reasoning > 0 ? pipelineTokensText(total.reasoning) : ""],
-                    ["Model", single ? `${single.provider}/${single.model}` : ""],
+                    ["Model", single?.model ?? ""],
                 ]}
             />
             {single ? null : (
@@ -76,9 +76,7 @@ export function PipelineUsage(props: { readonly usage: readonly PipelineModelUsa
                             className="happy-pipeline-usage__model"
                             key={`${entry.provider}/${entry.model}`}
                         >
-                            <span className="happy-pipeline-usage__name">
-                                {entry.provider}/{entry.model}
-                            </span>
+                            <span className="happy-pipeline-usage__name">{entry.model}</span>
                             <span className="happy-pipeline-usage__spend">
                                 {[
                                     entry.costUsd === null ? "" : pipelineCostText(entry.costUsd),
