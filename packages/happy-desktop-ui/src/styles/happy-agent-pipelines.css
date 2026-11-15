@@ -518,68 +518,6 @@
     white-space: nowrap;
 }
 
-.happy-pipeline-node__state {
-    flex: none;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--text-secondary);
-}
-
-/* The progress lane runs along the row's foot, kept whether or not it is painted. */
-.happy-pipeline-node__progress {
-    /* Not flex: the lane is drawn over the row's bottom edge, outside the row's line of glyph, name and state. */
-    position: absolute;
-    inset-inline: 8px;
-    bottom: 3px;
-    display: flex;
-    height: 2px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-.happy-pipeline-node__progress[data-empty] {
-    background: transparent;
-}
-
-.happy-pipeline-node__progress-fill {
-    flex: none;
-    height: 100%;
-    border-radius: 999px;
-    background: var(--text-link);
-}
-
-.happy-pipeline-node[data-tone="active"] {
-    border-color: color-mix(in srgb, var(--text-link) 60%, var(--divider));
-}
-
-.happy-pipeline-node[data-tone="active"] .happy-pipeline-node__state {
-    background: var(--text-link);
-}
-
-.happy-pipeline-node[data-tone="success"] .happy-pipeline-node__state {
-    background: var(--success);
-}
-
-.happy-pipeline-node[data-tone="danger"] {
-    border-color: color-mix(in srgb, var(--status-error) 55%, var(--divider));
-}
-
-.happy-pipeline-node[data-tone="danger"] .happy-pipeline-node__state {
-    background: var(--status-error);
-}
-
-.happy-pipeline-node[data-tone="danger"] .happy-pipeline-node__detail {
-    color: var(--text-destructive);
-}
-
-.happy-pipeline-node[data-muted] {
-    border-style: dashed;
-    background: transparent;
-    box-shadow: none;
-}
-
 .happy-pipeline-node[data-muted] .happy-pipeline-node__kind,
 .happy-pipeline-node[data-muted] .happy-pipeline-node__name,
 .happy-pipeline-node[data-muted] .happy-pipeline-node__detail {
@@ -1276,4 +1214,347 @@
     right: 16px;
     bottom: 12px;
     display: flex;
+}
+
+/* ---- Run timeline ------------------------------------------------------ */
+
+.happy-pipeline-timeline {
+    /* The positioning context for the way back to now, floating over the view. */
+    position: relative;
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-pipeline-timeline__viewport {
+    display: flex;
+    min-height: 0;
+    overflow: auto;
+    container-type: inline-size;
+    cursor: grab;
+    overscroll-behavior-x: contain;
+}
+
+.happy-pipeline-timeline__viewport:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-pipeline-timeline__viewport[data-dragging] {
+    cursor: grabbing;
+    user-select: none;
+}
+
+/* Half a view of room on either side, so the run's start and end can both reach the centre. */
+.happy-pipeline-timeline__track {
+    /* The coordinate space the plane is placed in, half a view in from the start. */
+    position: relative;
+    flex: none;
+}
+
+.happy-pipeline-timeline__plane {
+    /* Not flex: the plane's origin sits half a view in, where the track's first moment is drawn. */
+    position: absolute;
+    top: 0;
+    left: 50cqw;
+    contain: layout style;
+}
+
+.happy-pipeline-timeline__tick {
+    /* Not flex: a tick stands at its moment's x, with a faint rule down through the rows. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    border-inline-start: 1px solid color-mix(in srgb, var(--divider) 55%, transparent);
+}
+
+/* The time axis: labels for the ticks, the shortened stretches and now, kept in view while the rows scroll. */
+.happy-pipeline-timeline__axis {
+    /* Not flex: sticky holds the axis at the top while a tall run scrolls beneath it. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: 22px;
+    background: var(--groupped-background);
+}
+
+.happy-pipeline-timeline__axis-plane {
+    /* Not flex: the labels share the plane's origin, half a view in. */
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50cqw;
+}
+
+.happy-pipeline-timeline__tick-label {
+    /* Not flex: the label hangs just after its tick's rule. */
+    position: absolute;
+    top: 4px;
+    left: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 14px;
+    white-space: nowrap;
+}
+
+.happy-pipeline-timeline__break {
+    /* Not flex: the mark sits where a stretch was shortened. */
+    position: absolute;
+    top: 3px;
+    left: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 14px;
+}
+
+.happy-pipeline-timeline__edges {
+    /* Not flex: the edges lie under the bars, sharing the plane's coordinates. */
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.happy-pipeline-timeline__bar,
+.happy-pipeline-timeline__head {
+    /* Not flex: a node sits at its moment and its row, a two-dimensional placement flexbox cannot express. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-sizing: border-box;
+    height: 24px;
+    margin: 0;
+    padding: 0 8px 0 7px;
+    /* Clip, not hidden: a hidden overflow would make each bar a scroller and pin its label to the bar. */
+    overflow: clip;
+    container-type: inline-size;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    line-height: 16px;
+    text-align: start;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.happy-pipeline-timeline__bar:focus-visible,
+.happy-pipeline-timeline__head:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 1px;
+}
+
+.happy-pipeline-timeline__bar[aria-pressed="true"],
+.happy-pipeline-timeline__head[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--text-link);
+}
+
+.happy-pipeline-timeline__bar[data-tone="success"] {
+    border-color: color-mix(in srgb, var(--success) 45%, var(--divider));
+    background: color-mix(in srgb, var(--success) 14%, var(--surface));
+}
+
+.happy-pipeline-timeline__bar[data-tone="danger"] {
+    border-color: color-mix(in srgb, var(--status-error) 55%, var(--divider));
+    background: color-mix(in srgb, var(--status-error) 14%, var(--surface));
+}
+
+.happy-pipeline-timeline__bar[data-tone="danger"] .happy-pipeline-timeline__name {
+    color: var(--box-error-text);
+}
+
+.happy-pipeline-timeline__bar[data-tone="neutral"] {
+    background: color-mix(in srgb, var(--text) 6%, var(--surface));
+}
+
+.happy-pipeline-timeline__bar[data-mode="skipped"] {
+    border-style: dashed;
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+/* A bar's name stays in view while the bar runs off the view's leading edge. */
+.happy-pipeline-timeline__label {
+    /* Not flex: sticky keeps the label at the view's leading edge, within its bar. */
+    position: sticky;
+    left: 7px;
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.happy-pipeline-timeline__label .happy-pipeline-timeline__meta {
+    margin-inline-start: 2px;
+}
+
+/* A short bar keeps its name and drops its duration, which its tooltip still says. */
+@container (max-width: 120px) {
+    .happy-pipeline-timeline__label .happy-pipeline-timeline__meta {
+        display: none;
+    }
+}
+
+.happy-pipeline-timeline__glyph {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-timeline__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+}
+
+.happy-pipeline-timeline__status {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+}
+
+.happy-pipeline-timeline__meta {
+    flex: none;
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A working node's bar, from when it started to the now line. */
+.happy-pipeline-timeline__trail {
+    /* Not flex: the trail starts at its node's moment and grows with the now line. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    width: calc((var(--now-x, 0) - var(--x0, 0)) * 1px);
+    height: 24px;
+    border: 1px solid color-mix(in srgb, var(--text-link) 40%, var(--divider));
+    border-inline-end: 0;
+    border-radius: 6px 0 0 6px;
+    background: color-mix(in srgb, var(--text-link) 12%, var(--surface));
+}
+
+/* Heads ride the now line: a working node's card, and the nodes still ahead. */
+.happy-pipeline-timeline__head {
+    transform: translateX(calc((var(--now-x, 0) + var(--rel, 0) + var(--glide, 0)) * 1px));
+    will-change: transform;
+}
+
+.happy-pipeline-timeline__head[data-mode="live"] {
+    width: 232px;
+    border-color: color-mix(in srgb, var(--text-link) 70%, var(--divider));
+    border-radius: 0 6px 6px 0;
+    box-shadow: var(--shadow-subtle);
+}
+
+.happy-pipeline-timeline__head[data-mode="live"] .happy-pipeline-timeline__name {
+    flex: none;
+    max-width: 50%;
+}
+
+.happy-pipeline-timeline__head[data-mode="future"] {
+    width: 148px;
+    border-style: dashed;
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.happy-pipeline-timeline__progress {
+    /* Not flex: the lane runs along the card's foot, kept whether or not it is painted. */
+    position: absolute;
+    inset-inline: 7px;
+    bottom: 2px;
+    display: flex;
+    height: 2px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.happy-pipeline-timeline__progress[data-empty] {
+    background: transparent;
+}
+
+.happy-pipeline-timeline__progress-fill {
+    flex: none;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--text-link);
+    transform-origin: left center;
+}
+
+.happy-pipeline-timeline__now-line {
+    /* Not flex: the line stands at now's x through the axis and every row. */
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 2px;
+    background: var(--text-link);
+    transform: translateX(calc(var(--now-x, 0) * 1px));
+    will-change: transform;
+    pointer-events: none;
+}
+
+.happy-pipeline-timeline__now-label {
+    /* Not flex: the label rides the now line's head in the axis. */
+    position: absolute;
+    top: 3px;
+    left: 0;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--text-link);
+    color: var(--text-inverse);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 16px;
+    transform: translateX(calc(var(--now-x, 0) * 1px - 50%));
+    will-change: transform;
+    white-space: nowrap;
+}
+
+.happy-pipeline-timeline__return {
+    /* Not flex: the way back floats over the axis's trailing corner, in the now line's colours. */
+    position: absolute;
+    top: 3px;
+    right: 10px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 16px;
+    margin: 0;
+    padding: 0 8px 0 6px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--text-link);
+    box-shadow: var(--shadow-subtle);
+    color: var(--text-inverse);
+    font: inherit;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 16px;
+    cursor: pointer;
+}
+
+.happy-pipeline-timeline__return:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 2px;
 }

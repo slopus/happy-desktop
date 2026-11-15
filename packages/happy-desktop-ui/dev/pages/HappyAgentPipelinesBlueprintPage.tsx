@@ -419,6 +419,213 @@ const failedRun: PipelineRun = {
 
 const SECOND = 1_000;
 
+/**
+ * A wide release pipeline of 30 nodes, live: eight test shards and two
+ * end-to-end suites fan out of the build, three platforms package, sign and
+ * smoke-test, and release waits for all of it.
+ */
+const wideNode = (id: string, kind: PipelineNode["kind"] = "code", join: "all" | "any" = "all") =>
+    kind === "agent"
+        ? ({ ...e2e, id, join } as PipelineNode)
+        : kind === "pipeline"
+          ? ({ ...notify, id, join } as PipelineNode)
+          : ({ ...unit, id, join } as PipelineNode);
+const shards = Array.from({ length: 8 }, (_, index) => `test-${String(index + 1)}`);
+const platforms = ["mac", "win", "linux"];
+const wide: PipelineDefinition = {
+    ...ci,
+    root: "checkout",
+    nodes: [
+        wideNode("checkout"),
+        wideNode("install"),
+        wideNode("lint"),
+        wideNode("typecheck"),
+        wideNode("build"),
+        ...shards.map((id) => wideNode(id)),
+        wideNode("e2e-web", "agent"),
+        wideNode("e2e-desktop", "agent"),
+        wideNode("coverage"),
+        ...platforms.flatMap((platform) => [
+            wideNode(`package-${platform}`),
+            wideNode(`sign-${platform}`),
+            wideNode(`smoke-${platform}`),
+        ]),
+        wideNode("release"),
+        wideNode("docs"),
+        wideNode("changelog"),
+        wideNode("announce", "agent"),
+        wideNode("notify", "pipeline", "any"),
+    ],
+    edges: [
+        { from: "checkout", on: "success", to: "install" },
+        { from: "install", on: "success", to: "lint" },
+        { from: "install", on: "success", to: "typecheck" },
+        { from: "install", on: "success", to: "build" },
+        ...shards.flatMap((id) => [
+            { from: "build", on: "success", to: id } as const,
+            { from: id, on: "success", to: "coverage" } as const,
+        ]),
+        { from: "build", on: "success", to: "e2e-web" },
+        { from: "build", on: "success", to: "e2e-desktop" },
+        ...platforms.flatMap((platform) => [
+            { from: "build", on: "success", to: `package-${platform}` } as const,
+            { from: `package-${platform}`, on: "success", to: `sign-${platform}` } as const,
+            { from: `sign-${platform}`, on: "success", to: `smoke-${platform}` } as const,
+            { from: `smoke-${platform}`, on: "success", to: "release" } as const,
+        ]),
+        { from: "lint", on: "success", to: "release" },
+        { from: "typecheck", on: "success", to: "release" },
+        { from: "coverage", on: "success", to: "release" },
+        { from: "e2e-web", on: "success", to: "release" },
+        { from: "e2e-desktop", on: "success", to: "release" },
+        { from: "release", on: "success", to: "docs" },
+        { from: "release", on: "success", to: "changelog" },
+        { from: "changelog", on: "success", to: "announce" },
+        { from: "build", on: "failure", to: "notify" },
+        { from: "coverage", on: "failure", to: "notify" },
+        { from: "e2e-web", on: "failure", to: "notify" },
+        { from: "e2e-desktop", on: "failure", to: "notify" },
+        { from: "release", on: "failure", to: "notify" },
+    ],
+};
+
+/** Seconds before NOW each node started and, when it has, ended. */
+const wideTimes: Record<string, readonly [number, number | null, string?]> = {
+    checkout: [760, 742],
+    install: [742, 700],
+    lint: [700, 692],
+    typecheck: [700, 676],
+    build: [700, 560],
+    "test-1": [560, 470],
+    "test-2": [560, 455],
+    "test-3": [560, 430],
+    "test-4": [560, 402],
+    "test-5": [560, 380],
+    "test-6": [560, null, "shard 6 · 212 of 260"],
+    "test-7": [560, null, "shard 7 · 190 of 248"],
+    "test-8": [560, null, "shard 8 · 231 of 251"],
+    "e2e-web": [560, 300],
+    "e2e-desktop": [560, null, "replaying the settings flow"],
+    "package-mac": [560, 330],
+    "sign-mac": [330, null, "waiting for notarization"],
+    "package-win": [560, null, "building the installer"],
+    "package-linux": [560, 410],
+    "sign-linux": [410, 395],
+    "smoke-linux": [395, null, "launching on ubuntu-24.04"],
+};
+const wideRun: PipelineRun = {
+    ...liveRun,
+    id: "run_9",
+    rootRunId: "run_9",
+    createdAt: NOW - 760 * SECOND,
+    startedAt: NOW - 760 * SECOND,
+    leases: [],
+    nodes: wide.nodes.map((node) => {
+        const times = wideTimes[node.id];
+        if (!times) return nodeRun(node.id, node.kind, "pending");
+        const [start, end, status] = times;
+        return nodeRun(node.id, node.kind, end === null ? "running" : "succeeded", {
+            startedAt: NOW - start * SECOND,
+            endedAt: end === null ? null : NOW - end * SECOND,
+            status: status
+                ? {
+                      text: status,
+                      progress: node.id.startsWith("test-") ? 0.8 : null,
+                      at: NOW - 5 * SECOND,
+                  }
+                : null,
+        });
+    }),
+};
+
+/**
+ * The cluster's own example: strict failed with no failure edge, so the run
+ * failed and publish was skipped, while fallback, started by flaky's failure,
+ * is still finishing.
+ */
+const checks: PipelineDefinition = {
+    ...ci,
+    root: "split",
+    nodes: [
+        { ...unit, id: "split" } as PipelineNode,
+        { ...unit, id: "flaky" } as PipelineNode,
+        { ...unit, id: "strict" } as PipelineNode,
+        { ...unit, id: "fallback" } as PipelineNode,
+        { ...unit, id: "publish" } as PipelineNode,
+    ],
+    edges: [
+        { from: "split", on: "success", to: "flaky" },
+        { from: "split", on: "success", to: "strict" },
+        { from: "flaky", on: "failure", to: "fallback" },
+        { from: "strict", on: "success", to: "publish" },
+    ],
+};
+const traceback = (line: number, inMain: number, error: string) =>
+    `Traceback (most recent call last):\n  File "<python-input-0>", line ${String(line)}, in <module>\n    _hc_result(_hc_json.dumps(main(_hc_json.loads("5"))))\n                              ~~~~~~~~~~~~~~~~~~~~~~~~~\n  File "<python-input-0>", line ${String(inMain)}, in main\n    ${error}`;
+const finishingRun: PipelineRun = {
+    ...liveRun,
+    id: "run_11",
+    rootRunId: "run_11",
+    state: "failed",
+    createdAt: NOW - 50 * SECOND,
+    startedAt: NOW - 48 * SECOND,
+    endedAt: null,
+    leases: [],
+    nodes: [
+        nodeRun("fallback", "code", "running", {
+            status: { text: "falling back", progress: null, at: NOW - 4 * SECOND },
+            startedAt: NOW - 14 * SECOND,
+        }),
+        nodeRun("flaky", "code", "failed", {
+            failure: {
+                code: "exception",
+                message: traceback(
+                    6,
+                    3,
+                    "raise ValueError('flaky upstream')\nValueError: flaky upstream",
+                ),
+            },
+            startedAt: NOW - 40 * SECOND,
+            endedAt: NOW - 14 * SECOND,
+        }),
+        nodeRun("publish", "code", "skipped", { endedAt: NOW - 9 * SECOND }),
+        nodeRun("split", "code", "succeeded", {
+            startedAt: NOW - 48 * SECOND,
+            endedAt: NOW - 40 * SECOND,
+        }),
+        nodeRun("strict", "code", "failed", {
+            failure: {
+                code: "exception",
+                message: traceback(9, 5, "raise RuntimeError('too big')\nRuntimeError: too big"),
+            },
+            startedAt: NOW - 40 * SECOND,
+            endedAt: NOW - 9 * SECOND,
+        }),
+    ],
+};
+
+/** One node, working. */
+const single: PipelineDefinition = {
+    ...ci,
+    root: "checkout",
+    nodes: [checkout],
+    edges: [],
+};
+const singleRun: PipelineRun = {
+    ...liveRun,
+    id: "run_10",
+    rootRunId: "run_10",
+    createdAt: NOW - 40 * SECOND,
+    startedAt: NOW - 40 * SECOND,
+    leases: [],
+    nodes: [
+        nodeRun("checkout", "code", "running", {
+            status: { text: "installing", progress: 0.6, at: NOW - 2 * SECOND },
+            startedAt: NOW - 40 * SECOND,
+        }),
+    ],
+};
+
 /** Log entries numbered in order, each `at` seconds after `start`. */
 function logOf(
     start: number,
@@ -599,11 +806,12 @@ const emptyLog = logOf(NOW, []);
 const runSnapshot = (
     run: PipelineRun,
     nodeSelected: string | null = null,
+    definition: PipelineDefinition = ci,
 ): PipelineRunSnapshot => ({
     loading: false,
     missing: false,
     run,
-    definition: { state: "loaded", definition: ci },
+    definition: { state: "loaded", definition },
     nodeSelected,
     abort: { state: "idle" },
 });
@@ -784,7 +992,7 @@ export function HappyAgentPipelinesBlueprintPage() {
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A run in progress: checkout succeeded; unit and e2e run in parallel on one computer, each row with its status line, unit's with progress; release and notify wait. With no node picked, the log of the node working now is shown: a finished install, closed, and the test command still running, open."
+                detail="A run in progress on its timeline, following now at the centre: checkout finished to the left; unit and e2e work on the now line, each card with its status line and running time, unit's with progress; release and notify wait to the right, fading toward the edge. With no node picked, the log of the node working now is shown: a finished install, closed, and the test command still running, open."
                 label="Run, live"
                 number="08"
                 screen="08-run-live-1100x760"
@@ -810,7 +1018,7 @@ export function HappyAgentPipelinesBlueprintPage() {
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A finished run whose unit tests failed. With no node picked, the failed node's log is shown: the failing command in red with its output cut to the last 64 KiB, and the failure beside it. Release was skipped and notify ran as a child run; Abort is off."
+                detail="A finished run whose unit tests failed, resting on its end with no now line; names stay in view on bars that run off the left edge. With no node picked, the failed node's log is shown: the failing command in red with its output cut to the last 64 KiB, and the failure beside it. Release was skipped and notify ran as a child run; Abort is off."
                 label="Run, failed"
                 number="10"
                 screen="10-run-failed-1100x760"
@@ -843,6 +1051,45 @@ export function HappyAgentPipelinesBlueprintPage() {
                 window={WINDOW}
             >
                 <HappyAgentPipelineRunPage {...runPage} run={runSnapshot(liveRun, "release")} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A wide run of 30 nodes: shards, suites and platforms in parallel rows that never change, seven working on the now line, the rest still ahead fading out. The rows scroll under a fixed time axis."
+                label="Run, 30 nodes"
+                number="13"
+                screen="13-run-wide-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "test-6", snapshot: unitLiveLog }}
+                    run={runSnapshot(wideRun, null, wide)}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A run of a single node, working."
+                label="Run, one node"
+                number="14"
+                screen="14-run-single-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "checkout", snapshot: emptyLog }}
+                    run={runSnapshot(singleRun, null, single)}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A run that failed while a node it had already started is still finishing: strict failed with no failure edge and publish was skipped, so nothing more is promised ahead, but fallback works on the now line and its log is shown."
+                label="Run, failed with a node finishing"
+                number="15"
+                screen="15-run-failed-finishing-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "fallback", snapshot: emptyLog }}
+                    run={runSnapshot(finishingRun, null, checks)}
+                />
             </FullScreenSpecimen>
         </ComponentPage>
     );

@@ -7,21 +7,13 @@ import {
     type PipelineGraphLayoutMetrics,
     type PipelineGraphPoint,
 } from "./pipelineGraphLayout";
-import { PIPELINE_KIND_ICON, PIPELINE_KIND_LABEL, type PipelineTone } from "./pipelinePresentation";
+import { PIPELINE_KIND_ICON, PIPELINE_KIND_LABEL } from "./pipelinePresentation";
 
 export interface PipelineGraphNode {
     readonly id: string;
     readonly kind: PipelineNodeKind;
-    /** Beside the name: what the step is, or in a run what it last said. */
+    /** Beside the name: what the step is. */
     readonly detail: string;
-    /** In a run: the node's state, as a colour and its word. */
-    readonly state?: {
-        readonly tone: PipelineTone;
-        readonly label: string;
-        readonly muted: boolean;
-    };
-    /** In a run: how far along the node said it is, from 0 to 1. */
-    readonly progress?: number | null;
 }
 
 export interface PipelineGraphEdge {
@@ -39,16 +31,11 @@ export interface PipelineGraphProps {
     /** Selects a node; the selected node again selects nothing. */
     readonly onNodeSelect: (nodeId: string | null) => void;
     readonly "aria-label": string;
-    /** A run's nodes carry a state dot and a progress lane. */
-    readonly variant?: "definition" | "run";
     readonly className?: string;
     readonly style?: CSSProperties;
 }
 
-/**
- * The geometry every pipeline graph is drawn at: one dense row per node. A
- * run's progress lane sits inside the row, so both variants share it.
- */
+/** The geometry every pipeline graph is drawn at: one dense row per node. */
 export const PIPELINE_GRAPH_METRICS: PipelineGraphLayoutMetrics = {
     nodeWidth: 208,
     nodeHeight: 32,
@@ -86,7 +73,6 @@ function edgePath(points: readonly PipelineGraphPoint[]): string {
  */
 export function PipelineGraph(props: PipelineGraphProps) {
     const markerId = useId();
-    const variant = props.variant ?? "definition";
     const metrics = PIPELINE_GRAPH_METRICS;
     const layout = pipelineGraphLayout(
         { nodes: props.nodes.map((node) => node.id), edges: props.edges, root: props.root },
@@ -165,7 +151,6 @@ export function PipelineGraph(props: PipelineGraphProps) {
                                 aria-label={[
                                     node.id,
                                     PIPELINE_KIND_LABEL[node.kind],
-                                    node.state?.label,
                                     isRoot ? "start" : undefined,
                                 ]
                                     .filter(Boolean)
@@ -174,9 +159,6 @@ export function PipelineGraph(props: PipelineGraphProps) {
                                 className="happy-pipeline-node"
                                 data-happy-desktop-ui="pipeline-node"
                                 data-kind={node.kind}
-                                data-muted={node.state?.muted ? "" : undefined}
-                                data-tone={node.state?.tone}
-                                data-variant={variant}
                                 key={node.id}
                                 onClick={() =>
                                     props.onNodeSelect(
@@ -198,30 +180,6 @@ export function PipelineGraph(props: PipelineGraphProps) {
                                 <span className="happy-pipeline-node__detail" title={node.detail}>
                                     {node.detail}
                                 </span>
-                                {node.state ? (
-                                    <span
-                                        aria-hidden
-                                        className="happy-pipeline-node__state"
-                                        title={node.state.label}
-                                    />
-                                ) : null}
-                                {variant === "run" ? (
-                                    <span
-                                        aria-hidden
-                                        className="happy-pipeline-node__progress"
-                                        data-empty={node.progress == null ? "" : undefined}
-                                    >
-                                        <span
-                                            className="happy-pipeline-node__progress-fill"
-                                            style={{
-                                                width:
-                                                    node.progress == null
-                                                        ? 0
-                                                        : `${String(Math.round(node.progress * 100))}%`,
-                                            }}
-                                        />
-                                    </span>
-                                ) : null}
                             </button>
                         );
                     })}
