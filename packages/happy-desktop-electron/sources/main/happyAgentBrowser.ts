@@ -11,7 +11,7 @@ import {
 } from "./happyAgentBrowserProxy";
 import type { DesktopRuntime } from "./desktopRuntime";
 import { HappyAgentDaemonHttpError } from "./happyAgentDaemonClient";
-import { HappyCloudBrowserError } from "./happyCloudBrowser";
+import { HappyCloudBrowserError, happyCloudNestedRefusalRead } from "./happyCloudBrowser";
 
 export interface HappyAgentBrowserEvents {
     /** Happy Agent does not know the network (404); its tabs may ask their agent again. */
@@ -98,6 +98,7 @@ export class HappyAgentBrowser {
                 throw error;
             }
         }
+        const cloud = runtime.browserNetworkCloud(network.connectionId);
         const proxy = await happyAgentBrowserProxyCreate({
             // Resolve the current connection on each request so reconnecting does
             // not replace the profile or its guests. An ended network rejects.
@@ -116,7 +117,13 @@ export class HappyAgentBrowser {
                         throw error;
                     },
                 ),
-            pooled: runtime.browserNetworkCloud(network.connectionId),
+            pooled: cloud,
+            ...(cloud
+                ? {
+                      nestedRefused: (statusCode: number, body: Buffer) =>
+                          refusalNotice(happyCloudNestedRefusalRead(statusCode, body)),
+                  }
+                : {}),
         });
         const browser = new HappyAgentBrowser(session, proxy, network.artifactId !== undefined);
         browser.#reclaimEnd = runtime.browserTunnelsReclaimRegister(network, () =>

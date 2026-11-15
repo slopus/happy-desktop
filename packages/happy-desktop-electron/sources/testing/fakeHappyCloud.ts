@@ -18,8 +18,12 @@ import { WebSocketServer, type WebSocket } from "ws";
  * The agent's network stays the same for its whole life, while its compute
  * comes and goes: released, every answer is `409 no_compute`; offline, every
  * answer is `503 compute_offline`, and the tunnels already open close with
- * `1001 compute_offline`. A `legacy` cloud answers as clusters did before
- * those codes: `503 runner_unavailable`, and an unexplained `1008`.
+ * `1001 compute_offline`. Lost, the compute has stopped answering before the
+ * cloud has noticed: tunnels still open and stay open, but whatever they ask
+ * for is refused with `503 compute_offline`, as a nested `CONNECT` is in the
+ * first minute after a computer goes away. A `legacy` cloud answers as
+ * clusters did before those codes: `503 runner_unavailable`, and an
+ * unexplained `1008`.
  *
  * Tunnels are limited per user as the cluster limits them: so many open at
  * once and so many opened a minute, refused with `429 too_many_tunnels`. A
@@ -39,6 +43,7 @@ export interface FakeHappyCloud {
     tunnelsLive(): number;
     computeRelease(): void;
     computeOffline(): void;
+    computeLost(): void;
     computeAttach(): void;
     close(): Promise<void>;
 }
@@ -62,7 +67,7 @@ export interface FakeHappyCloudSessionContext {
     used(): void;
 }
 
-type Compute = "attached" | "released" | "offline";
+type Compute = "attached" | "released" | "offline" | "lost";
 
 interface Refusal {
     readonly status: number;
@@ -87,7 +92,11 @@ export async function fakeHappyCloudStart(
     let opened = 0;
     const openings: number[] = [];
     const live = new Set<WebSocket>();
-    const forward = await forwardProxyStart();
+    const forward = await forwardProxyStart(() =>
+        compute === "lost"
+            ? { status: 503, error: "The agent's computer is offline.", code: "compute_offline" }
+            : undefined,
+    );
 
     const json = (response: ServerResponse, status: number, body: unknown): void => {
         response
@@ -95,7 +104,7 @@ export async function fakeHappyCloudStart(
             .end(JSON.stringify(body));
     };
     const computeRefusal = (): Refusal | undefined => {
-        if (compute === "attached") return undefined;
+        if (compute === "attached" || compute === "lost") return undefined;
         if (options.legacy)
             return {
                 status: 503,
@@ -202,6 +211,9 @@ export async function fakeHappyCloudStart(
             compute = "offline";
             computeAway();
         },
+        computeLost() {
+            compute = "lost";
+        },
         computeAttach() {
             compute = "attached";
         },
@@ -265,10 +277,29 @@ export function fakeHappyCloudStreamSession(context: FakeHappyCloudSessionContex
 
 /**
  * The forwarding proxy behind a tunnel: absolute-form requests and nested
- * `CONNECT host:port`, both opened from this machine.
+ * `CONNECT host:port`, both opened from this machine unless `refusal` says
+ * why not.
  */
-async function forwardProxyStart(): Promise<{ port: number; close(): Promise<void> }> {
+async function forwardProxyStart(
+    refusal: () => Refusal | undefined,
+): Promise<{ port: number; close(): Promise<void> }> {
+    const refusalAnswer = (refused: Refusal): string => {
+        const body = JSON.stringify({ code: refused.code, error: refused.error });
+        return (
+            `HTTP/1.1 ${String(refused.status)} Service Unavailable\r\n` +
+            `Content-Type: application/json; charset=utf-8\r\n` +
+            `Content-Length: ${String(Buffer.byteLength(body))}\r\n\r\n${body}`
+        );
+    };
     const server = createServer((request, response) => {
+        const refused = refusal();
+        if (refused) {
+            request.resume();
+            response
+                .writeHead(refused.status, { "content-type": "application/json; charset=utf-8" })
+                .end(JSON.stringify({ code: refused.code, error: refused.error }));
+            return;
+        }
         let target: URL;
         try {
             target = new URL(request.url ?? "");
@@ -295,6 +326,14 @@ async function forwardProxyStart(): Promise<{ port: number; close(): Promise<voi
     (server as typeof server & { httpAllowHalfOpen: boolean }).httpAllowHalfOpen = true;
     server.on("connect", (request: IncomingMessage, client: Duplex, head: Buffer) => {
         client.on("error", () => client.destroy());
+        const refused = refusal();
+        if (refused) {
+            // The tunnel stays open after the answer, as the cluster's does,
+            // until its client is done with it.
+            client.write(refusalAnswer(refused));
+            client.once("end", () => client.end());
+            return;
+        }
         const [host, port] = (request.url ?? "").split(":");
         const upstream = connect(Number(port), host ?? "");
         upstream.on("error", () =>

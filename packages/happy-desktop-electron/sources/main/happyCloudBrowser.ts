@@ -185,6 +185,34 @@ export function happyCloudBrowserCreate(input: {
     };
 }
 
+/** The codes a nested `CONNECT` can be refused with because compute is away. */
+const NESTED_REFUSAL_CODES = new Set(["compute_offline", "no_compute", "draining"]);
+
+/**
+ * The compute refusal a nested `CONNECT` was answered with, from its body. A
+ * tunnel opened while compute was still thought present is refused this way
+ * the moment its compute stops answering, long before new tunnels are. Any
+ * other refusal, Happy's or the agent's own, is no compute refusal.
+ */
+export function happyCloudNestedRefusalRead(
+    statusCode: number,
+    body: Buffer,
+): HappyCloudBrowserError | undefined {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(body.toString("utf8"));
+    } catch {
+        return undefined;
+    }
+    const code =
+        typeof parsed === "object" && parsed !== null
+            ? (parsed as { readonly code?: unknown }).code
+            : undefined;
+    if (typeof code !== "string" || !NESTED_REFUSAL_CODES.has(code)) return undefined;
+    const error = refusalRead(statusCode, parsed);
+    return error.refusal === undefined ? undefined : error;
+}
+
 /** A server's refusal, as an error with the server's own code and words. */
 function refusalRead(statusCode: number, body: unknown): HappyCloudBrowserError {
     const refusal =

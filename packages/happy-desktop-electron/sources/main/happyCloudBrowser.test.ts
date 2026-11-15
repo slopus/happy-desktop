@@ -17,6 +17,7 @@ import {
 import {
     HappyCloudBrowserError,
     happyCloudBrowserCreate,
+    happyCloudNestedRefusalRead,
     type HappyCloudBrowser,
     type HappyCloudBrowserLimits,
 } from "./happyCloudBrowser";
@@ -307,6 +308,62 @@ it("tells the profile's pages when compute is away, whether opening or open", as
     const page = await proxyGet(proxy, `http://127.0.0.1:${String(origin.port)}/`);
     expect(page.status).toBe(502);
     expect(refused).toHaveBeenLastCalledWith("computeDetached", "This agent has no compute.");
+});
+
+it("tells the profile's pages when compute stops answering, before the cloud has noticed", async () => {
+    const cloud = await cloudStart();
+    const first = await originStart();
+    const second = await originStart();
+    const { browser: cloudBrowser } = transportCreate(cloud);
+    const refused = vi.fn();
+    const browser = await HappyAgentBrowser.create(
+        profileSession(),
+        { connectionId: CONNECTION, networkId: cloud.networkId },
+        {
+            openHttpProxy: (_network, signal) =>
+                cloudBrowser.tunnelOpen(CONNECTION, cloud.networkId, signal!),
+            browserNetworkCloud: () => true,
+            browserTunnelsReclaimRegister: (_network, reclaim) =>
+                cloudBrowser.idleReclaimRegister(CONNECTION, reclaim),
+        },
+        { networkMissing: vi.fn(), refused },
+    );
+    closers.push(() => browser.close());
+    const proxy = browser.proxy!;
+
+    // Nothing the agent's own network refuses is a compute refusal.
+    const closed = createServer();
+    await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
+    const closedPort = (closed.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => closed.close(() => resolve()));
+    const missing = await proxyConnect(proxy, `127.0.0.1:${String(closedPort)}`);
+    expect(missing.answer).toMatch(/^HTTP\/1\.1 502/u);
+    expect((await proxyGet(proxy, `http://127.0.0.1:${String(closedPort)}/`)).status).toBe(502);
+    await expect(proxyGet(proxy, `http://127.0.0.1:${String(first.port)}/`)).resolves.toMatchObject(
+        { status: 200 },
+    );
+    expect(refused).not.toHaveBeenCalled();
+
+    // Tunnels still open, but what they ask for is refused for compute.
+    cloud.computeLost();
+    const page = await proxyGet(proxy, `http://127.0.0.1:${String(second.port)}/`);
+    expect(page.status).toBe(502);
+    expect(refused).toHaveBeenLastCalledWith("computeOffline", "The agent's computer is offline.");
+    const socket = await proxyConnect(proxy, `127.0.0.1:${String(second.port)}`);
+    expect(socket.answer).toMatch(/^HTTP\/1\.1 503/u);
+    expect(refused).toHaveBeenCalledTimes(2);
+
+    const body = (value: unknown) => Buffer.from(JSON.stringify(value));
+    expect(
+        happyCloudNestedRefusalRead(503, body({ code: "draining", error: "Draining." })),
+    ).toMatchObject({ refusal: "computeOffline", message: "Draining." });
+    expect(
+        happyCloudNestedRefusalRead(409, body({ code: "no_compute", error: "None." })),
+    ).toMatchObject({ refusal: "computeDetached" });
+    expect(happyCloudNestedRefusalRead(503, body({ code: "runner_unavailable" }))).toBeUndefined();
+    expect(happyCloudNestedRefusalRead(503, body({ code: "upstream_down" }))).toBeUndefined();
+    expect(happyCloudNestedRefusalRead(503, Buffer.from("compute_offline"))).toBeUndefined();
+    expect(happyCloudNestedRefusalRead(503, Buffer.alloc(0))).toBeUndefined();
 });
 
 it("gives back a profile's unused kept tunnels when another opening waits for one", async () => {

@@ -36,7 +36,17 @@ export interface HappyAgentBrowserProxyOptions {
      * tunnels instead of one each. Otherwise every request opens its own.
      */
     readonly pooled?: boolean;
+    /**
+     * Hears why the agent's network refused a nested `CONNECT`: its status and
+     * the start of the body it gave. Without it the body is not waited for.
+     */
+    readonly nestedRefused?: (statusCode: number, body: Buffer) => void;
 }
+
+/** As much of a refused nested `CONNECT`'s body as is worth reading. */
+const NESTED_REFUSAL_BODY_MAX = 4096;
+/** How long a refused nested `CONNECT`'s body may take to arrive. */
+const NESTED_REFUSAL_BODY_MS = 2_000;
 
 /** Kept-alive connections to one destination, as a browser keeps to one host. */
 const POOL_SOCKETS = 6;
@@ -137,7 +147,7 @@ export function happyAgentBrowserProxyCreate(
                 ) => undefined;
             }
         ).createConnection = (connection, created) => {
-            void nestedOpen(openHttpProxy, authority, sockets).then(
+            void nestedOpen(openHttpProxy, authority, sockets, options.nestedRefused).then(
                 (socket) => {
                     (socket as Socket).setTimeout?.(connection.timeout ?? POOL_IDLE_MS);
                     created(null, socket);
@@ -163,7 +173,15 @@ export function happyAgentBrowserProxyCreate(
             );
             return;
         }
-        void proxyConnect(openHttpProxy, request, client, head, sockets, failureRecord);
+        void proxyConnect(
+            openHttpProxy,
+            request,
+            client,
+            head,
+            sockets,
+            failureRecord,
+            options.nestedRefused,
+        );
     });
     server.on("connection", (socket) => {
         sockets.add(socket);
@@ -264,6 +282,7 @@ async function proxyConnect(
     head: Buffer,
     sockets: Set<Duplex>,
     failureRecord: TunnelFailureRecord,
+    nestedRefused: HappyAgentBrowserProxyOptions["nestedRefused"],
 ): Promise<void> {
     const controller = new AbortController();
     const authority = request.url ?? "";
@@ -290,11 +309,22 @@ async function proxyConnect(
         });
         nested.once("connect", (proxyResponse, upstream, proxyHead) => {
             if (proxyResponse.statusCode !== 200) {
-                upstream.destroy();
-                refuse(
-                    proxyResponse.statusCode ?? 502,
-                    `The agent's network could not open ${authority} (${String(proxyResponse.statusCode)}${proxyResponse.statusMessage ? ` ${proxyResponse.statusMessage}` : ""}).`,
-                );
+                const status = proxyResponse.statusCode ?? 502;
+                const refused = () =>
+                    refuse(
+                        status,
+                        `The agent's network could not open ${authority} (${String(proxyResponse.statusCode)}${proxyResponse.statusMessage ? ` ${proxyResponse.statusMessage}` : ""}).`,
+                    );
+                if (!nestedRefused) {
+                    upstream.destroy();
+                    refused();
+                    return;
+                }
+                // Heard before the page is failed, so its tab hears why as it fails.
+                void nestedRefusalBodyRead(proxyResponse, upstream, proxyHead).then((body) => {
+                    nestedRefused(status, body);
+                    refused();
+                });
                 return;
             }
             // Either side may finish sending while the other still has bytes to
@@ -457,6 +487,7 @@ async function nestedOpen(
     openHttpProxy: (signal: AbortSignal) => Promise<Duplex>,
     authority: string,
     sockets: Set<Duplex>,
+    nestedRefused: HappyAgentBrowserProxyOptions["nestedRefused"],
 ): Promise<Duplex> {
     const tunnel = await openHttpProxy(AbortSignal.timeout(10_000));
     sockets.add(tunnel);
@@ -475,9 +506,18 @@ async function nestedOpen(
         });
         nested.once("connect", (answer, upstream, head) => {
             if (answer.statusCode !== 200) {
-                failed(
-                    `The agent's network could not open ${authority} (${String(answer.statusCode)}).`,
-                );
+                const refused = () =>
+                    failed(
+                        `The agent's network could not open ${authority} (${String(answer.statusCode)}).`,
+                    );
+                if (!nestedRefused) {
+                    refused();
+                    return;
+                }
+                void nestedRefusalBodyRead(answer, upstream, head).then((body) => {
+                    nestedRefused(answer.statusCode ?? 502, body);
+                    refused();
+                });
                 return;
             }
             if (head.length > 0) upstream.unshift(head);
@@ -493,6 +533,50 @@ async function nestedOpen(
             failed(`The agent's network closed before opening ${authority} (${error.message}).`),
         );
         nested.end();
+    });
+}
+
+/**
+ * Reads the start of a refused nested `CONNECT`'s body, which may have come
+ * with its headers or may still be on the way, then ends the tunnel it came
+ * over. Whatever has arrived when it stops coming is what there is.
+ */
+function nestedRefusalBodyRead(
+    answer: IncomingMessage,
+    upstream: Duplex,
+    head: Buffer,
+): Promise<Buffer> {
+    const declared = Number(answer.headers["content-length"]);
+    const wanted = Math.min(
+        Number.isSafeInteger(declared) && declared >= 0 ? declared : NESTED_REFUSAL_BODY_MAX,
+        NESTED_REFUSAL_BODY_MAX,
+    );
+    return new Promise((resolve) => {
+        const chunks: Buffer[] = [head];
+        let length = head.length;
+        let finished = false;
+        const done = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            upstream.removeListener("data", received);
+            upstream.destroy();
+            resolve(Buffer.concat(chunks, length).subarray(0, wanted));
+        };
+        const received = (chunk: Buffer) => {
+            chunks.push(chunk);
+            length += chunk.length;
+            if (length >= wanted) done();
+        };
+        const timer = setTimeout(done, NESTED_REFUSAL_BODY_MS);
+        if (length >= wanted) {
+            done();
+            return;
+        }
+        upstream.on("data", received);
+        upstream.once("end", done);
+        upstream.once("close", done);
+        upstream.resume();
     });
 }
 
