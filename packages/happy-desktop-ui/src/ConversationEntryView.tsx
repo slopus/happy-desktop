@@ -12,6 +12,7 @@ import type {
     ConversationAuthor,
     ConversationEntry,
     ConversationErrorAssistance,
+    ConversationMessageProjection,
     ConversationToolCall,
     UserError,
 } from "happy-desktop-state";
@@ -36,6 +37,7 @@ import type { ConversationFailureClock } from "./conversationFailureText";
 import type { ConversationSwitchTarget } from "./conversationSwitchTargets";
 import { ConversationSummaryRow } from "./ConversationSummaryRow";
 import { CopyButton } from "./CopyButton";
+import { EditPromptButton } from "./EditPromptButton";
 import { conversationErrorTitle } from "./conversationErrorTitle";
 import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
 import { TurnSummary } from "./TurnSummary";
@@ -97,6 +99,8 @@ export type ConversationEntryViewProps = {
     ownRunText?: string;
     /** How many messages `ownRunText` joins. */
     ownRunMessageCount?: number;
+    /** Populates the composer with a prior user-authored prompt so it can be edited and resent. */
+    onPromptEdit?: (message: ConversationMessageProjection) => void;
     /** Answers a pending question request entry. */
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Options ticked into this question so far, when the owner keeps them. */
@@ -647,13 +651,22 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.references ? { references: props.references } : {})}
             own={own}
             ownActions={
-                own && props.ownRunText !== undefined ? (
-                    <CopyButton
-                        label={
-                            (props.ownRunMessageCount ?? 1) > 1 ? "Copy messages" : "Copy message"
-                        }
-                        text={props.ownRunText}
-                    />
+                own && (props.onPromptEdit !== undefined || props.ownRunText !== undefined) ? (
+                    <>
+                        {props.onPromptEdit ? (
+                            <EditPromptButton onEdit={() => props.onPromptEdit?.(message)} />
+                        ) : null}
+                        {props.ownRunText !== undefined ? (
+                            <CopyButton
+                                label={
+                                    (props.ownRunMessageCount ?? 1) > 1
+                                        ? "Copy messages"
+                                        : "Copy message"
+                                }
+                                text={props.ownRunText}
+                            />
+                        ) : null}
+                    </>
                 ) : undefined
             }
             style={props.style}
