@@ -656,6 +656,12 @@ export interface GroupSession {
      * still doing work.
      */
     activeProcesses: number;
+    /**
+     * Set when the session reads as running only because background processes
+     * that it or its subtasks started are alive. Rows show it as running;
+     * keeping this computer awake does not count it.
+     */
+    backgroundOnly?: true;
     /** Direct interactive child work; hidden subagents remain covered by the total count. */
     subtaskActivity?: HappyAgentSubtaskActivity;
     archived: boolean;

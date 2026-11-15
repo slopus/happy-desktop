@@ -95,6 +95,9 @@ export function happyAgentConversationSummaryProject(
         title: summaryTitle(session),
         subtitle: session.displayCwd || session.cwd,
         activity,
+        ...(activity === "running" && session.backgroundOnly === true
+            ? { backgroundOnly: true as const }
+            : {}),
         updatedAt: session.lastMessageAt ?? session.updatedAt,
         ...(session.lastActivityAt === undefined ? {} : { lastActivityAt: session.lastActivityAt }),
         ...(session.unreadReason === undefined ? {} : { unread: true }),

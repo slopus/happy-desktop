@@ -1349,20 +1349,31 @@ const groupSessionCache = new WeakMap<
 
 // One child event replaces its ancestry, so unchanged branches retain their
 // rollup. Bots and workspaces share this projection without walking trees twice.
+// The two readings of a tree differ only in background processes, so each keeps
+// its own cache.
 const subtaskActivityCache = new WeakMap<Agent, HappyAgentSubtaskActivity>();
+const subtaskRunActivityCache = new WeakMap<Agent, HappyAgentSubtaskActivity>();
 
-function subtaskActivityOf(agent: Agent): HappyAgentSubtaskActivity | undefined {
+/**
+ * How live an agent's interactive subtasks are, rolled up. With `processes`, a
+ * subtask whose only work is a background process reads as running, which is
+ * what a row shows. Without it, only runs and delegated agents count, which is
+ * what stopping delegated work may reach: stopping a subtask kills its
+ * background processes, so a dev server alone never makes it a target.
+ */
+function subtaskActivityOf(agent: Agent, processes = true): HappyAgentSubtaskActivity | undefined {
     const children = (agent.subtasks ?? []).filter((child) => child.archivedAt === null);
     if (children.length === 0) return undefined;
-    const cached = subtaskActivityCache.get(agent);
+    const cache = processes ? subtaskActivityCache : subtaskRunActivityCache;
+    const cached = cache.get(agent);
     if (cached) return cached;
     const activities = children.map((child) =>
         happyAgentConversationActivityProject({
             status: child.status === "idle" ? "idle" : "running",
             pendingQuestion: child.pendingQuestionId !== null,
             activeSubagentCount: child.subagents.running,
-            activeProcessCount: child.processes.running,
-            subtaskActivity: subtaskActivityOf(child),
+            activeProcessCount: processes ? child.processes.running : 0,
+            subtaskActivity: subtaskActivityOf(child, processes),
             ...(child.wait == null ? {} : { wait: child.wait }),
         }),
     );
@@ -1377,21 +1388,41 @@ function subtaskActivityOf(agent: Agent): HappyAgentSubtaskActivity | undefined 
         activity,
         running: children.filter((child) => child.status !== "idle").length,
     };
-    subtaskActivityCache.set(agent, value);
+    cache.set(agent, value);
     return value;
 }
 
 /**
  * Whether one agent, or anything it delegated to, is still working: a run of
  * its own, a direct child the host counts as running, or an interactive
- * subtask anywhere in the tree it carries.
+ * subtask anywhere in the tree it carries. Background processes alone do not
+ * count: this decides what stopping delegated work reaches.
  */
 export function agentWorkRunning(agent: Agent): boolean {
     return (
         agent.status !== "idle" ||
         agent.subagents.running > 0 ||
-        (subtaskActivityOf(agent)?.activity ?? "idle") !== "idle"
+        (subtaskActivityOf(agent, false)?.activity ?? "idle") !== "idle"
     );
+}
+
+/**
+ * Whether a session reads as running only because background processes that
+ * it or its subtasks started are alive, while its own turn, its delegated
+ * agents and its subtasks' runs are idle. A row shows that as running; keeping
+ * this computer awake does not count it.
+ */
+function backgroundOnlyOf(agent: Agent): boolean {
+    const reading = (processes: boolean) =>
+        happyAgentConversationActivityProject({
+            status: agent.status === "idle" ? "idle" : "running",
+            pendingQuestion: agent.pendingQuestionId !== null,
+            activeSubagentCount: agent.subagents.running,
+            activeProcessCount: processes ? agent.processes.running : 0,
+            subtaskActivity: subtaskActivityOf(agent, processes),
+            ...(agent.wait == null ? {} : { wait: agent.wait }),
+        });
+    return reading(true) === "running" && reading(false) !== "running";
 }
 
 /**
@@ -1401,7 +1432,7 @@ export function agentWorkRunning(agent: Agent): boolean {
  */
 function subagentsRunningOf(agent: Agent, activity: AgentActivityResponse | undefined): boolean {
     if (agent.subagents.running > 0) return true;
-    if ((subtaskActivityOf(agent)?.activity ?? "idle") !== "idle") return true;
+    if ((subtaskActivityOf(agent, false)?.activity ?? "idle") !== "idle") return true;
     return (activity?.subagents ?? []).some(
         (child) => child.archivedAt === null && agentWorkRunning(child),
     );
@@ -1449,6 +1480,7 @@ function projectAgent(
     const value: GroupSession = {
         activeSubagents: agent.subagents.running,
         activeProcesses: agent.processes.running,
+        ...(backgroundOnlyOf(agent) ? { backgroundOnly: true as const } : {}),
         ...(subtaskActivity === undefined ? {} : { subtaskActivity }),
         archived: agent.archivedAt !== null,
         ...(agent.archivedAt === null ? {} : { archivedAt: agent.archivedAt }),

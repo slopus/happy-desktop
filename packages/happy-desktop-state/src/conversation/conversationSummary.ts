@@ -18,6 +18,12 @@ export interface ConversationSummary {
     /** The start of an unsent composer draft, on one line; absent while there is none. */
     readonly draftPreview?: string;
     readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
+    /**
+     * Set when `activity` is `running` only because background processes the
+     * conversation started are alive. A row shows such work as running; keeping
+     * this computer awake does not count it.
+     */
+    readonly backgroundOnly?: true;
     /** Epoch milliseconds of the newest content, for relative timestamps. */
     readonly updatedAt: number;
     /**

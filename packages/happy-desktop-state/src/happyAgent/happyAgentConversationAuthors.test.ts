@@ -34,3 +34,12 @@ it("calls a session with no title yet a new task, never by its id", () => {
             .title,
     ).toBe("Say the word OK");
 });
+
+it("shows a session whose turn has ended as running while its background processes live", () => {
+    const summary = happyAgentConversationSummaryProject(
+        session({ status: "idle", activeProcessCount: 1, backgroundOnly: true }),
+    );
+    expect(summary.activity).toBe("running");
+    expect(summary.backgroundOnly).toBe(true);
+    expect(happyAgentConversationSummaryProject(session({ status: "idle" })).activity).toBe("idle");
+});
