@@ -33,8 +33,8 @@ executable, on Windows with a daemon Happy manages:
 - An Agent that cannot answer `sandbox status --json` is launched unchanged and
   sets itself up on first use, as before; the step stays out of the way.
 
-The `windows-host` job in `desktop-validate.yml` typechecks and tests the
-Electron host on Windows from any ref, without signing.
+Typecheck and test the Electron host on Windows locally; there is no CI
+validation workflow.
 
 ## Where elevation comes from
 

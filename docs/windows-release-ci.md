@@ -10,11 +10,9 @@ the welcome screen. The screenshot is uploaded with the run.
 
 Every Windows build is signed; there are no unsigned Windows builds. Azure's
 GitHub federation trusts only `main`, so the Windows build refuses to run from any
-other ref. To validate without publishing a release:
-
-```sh
-gh workflow run desktop-validate.yml --ref main -f platform=windows
-```
+other ref. There is no separate validation workflow; validation is local now.
+To build a signed installer without publishing a release, dispatch
+`desktop-release.yml` as a preview.
 
 Download `happy-desktop-windows-installer-standard` or
 `happy-desktop-windows-installer-local-web` from the completed run and run its
@@ -45,7 +43,7 @@ alone. Apple signing and notarization remain unchanged.
 
 Previews skip only the platform-independent product suites: `desktop-release.yml`'s
 macOS verify job runs the full `pnpm test` on the same commit, and the Windows build
-starts only after it passes. `desktop-validate.yml` keeps the full set.
+starts only after it passes.
 
 Installed Windows apps update themselves as macOS does: Desktop picks the newest
 release allowed by the Preview updates setting that carries `latest.yml` (or

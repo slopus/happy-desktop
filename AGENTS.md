@@ -4,6 +4,12 @@
 
 Absolutely never change a host process of electron app without double confirmation from a human - this breaks clous updates.
 
+## GitHub Actions
+
+Never create GitHub Actions workflows, or add automatic triggers (`push`,
+`pull_request`, `schedule`) to existing ones, without explicit user instruction:
+Actions minutes cost real money. Validation runs locally.
+
 ## Master plans
 
 Read [`master-plans/00-master-plan.md`](master-plans/00-master-plan.md) first,
