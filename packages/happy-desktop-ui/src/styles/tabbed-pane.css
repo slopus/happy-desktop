@@ -219,11 +219,15 @@
     width: calc-size(fit-content, round(up, size, 1px));
 }
 
-/* A tab ending in its close lane keeps half the trailing padding: the lane's
-   own slack makes up the rest, so the cross sits as far from the tab's edge as
-   from its title. */
+/* A tab ending in its close lane is spaced as a sidebar row ending in its
+   trailing lane: the row's padding after it, and the row's 8px gap (the tab's
+   6px and 2px more) before it. */
 .happy-tabbed-pane[data-tab-sizing="content"] .happy-tabs__tab:has(.happy-tabs__tab-trailing) {
-    padding-right: 5px;
+    padding-right: var(--happy-panel-row-padding);
+}
+
+.happy-tabbed-pane[data-tab-sizing="content"] .happy-tabs__tab-trailing {
+    margin-left: 2px;
 }
 
 /* Editor tabs mark selection at the band's edge without painting a tab box. */
@@ -242,9 +246,9 @@
 }
 
 /* A long title stops short of the pane's own controls: the tab keeps its close
-   inside its bounds, and the title ends in an ellipsis rather than under them. */
+   inside its bounds, and the title ends inside the tab rather than under them. */
 .happy-tabbed-pane[data-tab-sizing="content"] .happy-tabs__tab {
-    max-width: 480px;
+    max-width: 288px;
 }
 
 .happy-tabbed-pane[data-tab-sizing="content"] .happy-tabs__tab-label {
@@ -252,4 +256,89 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/*
+ * A title too long for its tab fades out over its box's last
+ * `--happy-label-fade`, as a sidebar row's name does, rather than ellipsizing.
+ * A tab is as wide as its title, so a title that fits ends at its box's edge
+ * and a fade there would eat it: the fade is an animation on the label's own
+ * scroll timeline, which is inactive, and so paints nothing, unless the title
+ * overflows. Engines without scroll timelines keep the ellipsis.
+ */
+@supports (animation-timeline: scroll(self inline)) {
+    .happy-tabbed-pane[data-tab-sizing="content"] .happy-tabs__tab-label {
+        --happy-tabbed-pane-label-fade-inset: 0px;
+        text-overflow: clip;
+        /* A title that fits stops at 0px: one hard stop, and nothing faded. */
+        mask-image: linear-gradient(
+            to left,
+            transparent
+                calc(
+                    var(--happy-tabbed-pane-label-fade-inset) *
+                        var(--happy-tabbed-pane-label-overflows)
+                ),
+            #000
+                calc(
+                    (var(--happy-tabbed-pane-label-fade-inset) + var(--happy-label-fade)) *
+                        var(--happy-tabbed-pane-label-overflows)
+                )
+        );
+        animation: happy-tabbed-pane-label-fade both;
+        animation-timeline: scroll(self inline);
+    }
+
+    /* A busy title's shimmer overflows into the label, so the label is what
+       clips and fades it. */
+    .happy-tabbed-pane[data-tab-sizing="content"] .happy-tabs__tab-label > .happy-shimmer-text {
+        overflow: visible;
+    }
+
+    /*
+     * When the close is all the trailing lane would show, the title runs under
+     * it until it does: the label's box reaches over the empty lane to its far
+     * edge, and gives the room back in its margin so the tab keeps its width.
+     * While the close shows, the fade jumps to where a sidebar name's does
+     * while its control shows.
+     */
+    .happy-tabbed-pane[data-tab-sizing="content"]
+        .happy-tabs__tab:not(:has(.happy-tabs__tab-activity))
+        .happy-tabs__tab-label:has(+ .happy-tabs__tab-trailing) {
+        /* The row's 8px gap and the lane's 18px cell, less the 3px it stands
+           past the content edge: the box ends at the content edge, where a
+           sidebar name runs to. */
+        --happy-tabbed-pane-label-under: calc(8px + 18px - 3px);
+        margin-right: calc(-1 * var(--happy-tabbed-pane-label-under));
+        padding-right: var(--happy-tabbed-pane-label-under);
+    }
+
+    .happy-tabbed-pane[data-tab-sizing="content"]
+        .happy-tabs__tab:is(
+            :hover,
+            [data-close-revealed],
+            :focus-visible,
+            :has(:focus-visible)
+        ):not(:has(.happy-tabs__tab-activity))
+        .happy-tabs__tab-label:has(+ .happy-tabs__tab-trailing) {
+        /* The sidebar's controls reserve for one control: its 18px cell less
+           the 4px a name may run under its empty side
+           (SIDEBAR_CONTROL_NAME_INSET). */
+        --happy-tabbed-pane-label-fade-inset: calc(18px - 4px);
+    }
+}
+
+/* Set only while the label's scroll timeline is active, that is while its
+   title overflows. Registered so the animation can set it, and read outside
+   the keyframes so the fade still follows the hover controls. */
+@property --happy-tabbed-pane-label-overflows {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 0;
+}
+
+@keyframes happy-tabbed-pane-label-fade {
+    from,
+    to {
+        --happy-tabbed-pane-label-overflows: 1;
+    }
 }

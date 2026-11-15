@@ -27,7 +27,6 @@ import {
     transferZonesDisarm,
     type TabTransferTarget,
 } from "./tabTransfer";
-import { Ionicon } from "./vectorIcons/VectorIcon";
 import { WindowOverlay } from "./WindowOverlay";
 export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
@@ -140,7 +139,7 @@ function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
  * reader outranks everything, and running work outranks a scheduled wait: a tab
  * doing both is doing real work, and that is the thing worth showing.
  */
-function tabActivityMark(tab: TabItem) {
+function tabActivityMark(tab: TabItem, size: 12 | 14) {
     if (tab.awaitingInput)
         return (
             <span
@@ -149,10 +148,10 @@ function tabActivityMark(tab: TabItem) {
                 data-happy-desktop-ui="tab-awaiting-input"
                 role="img"
             >
-                <Icon name="question" size={12} />
+                <Icon name="question" size={size} />
             </span>
         );
-    if (tab.busy) return <Spinner label={`${tab.label} is working`} size={12} tone="muted" />;
+    if (tab.busy) return <Spinner label={`${tab.label} is working`} size={size} tone="muted" />;
     if (tab.waiting)
         return (
             <span
@@ -161,7 +160,7 @@ function tabActivityMark(tab: TabItem) {
                 data-happy-desktop-ui="tab-waiting"
                 role="img"
             >
-                <Icon name="clock" size={12} />
+                <Icon name="clock" size={size} />
             </span>
         );
     if (tab.dirty)
@@ -834,17 +833,15 @@ export function Tabs(props: TabsProps) {
                                             role="button"
                                             tabIndex={0}
                                         >
-                                            {local.closePresentation === "overlay" ? (
-                                                <Ionicon name="close-outline" size={14} />
-                                            ) : (
-                                                <Icon name="close" size={12} />
-                                            )}
+                                            <Icon name="close" size={12} />
                                         </span>
                                     ) : null}
                                 </span>
                             ) : null)(
                             local.onClose !== undefined && tab.closable !== false,
-                            tabActivityMark(tab),
+                            /* An overlay lane is a sidebar row's trailing
+                               cell, so it reports at the sidebar's size. */
+                            tabActivityMark(tab, local.closePresentation === "overlay" ? 14 : 12),
                         )}
                         {active() ? (
                             <span

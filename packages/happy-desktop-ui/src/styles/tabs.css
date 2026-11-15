@@ -413,13 +413,15 @@
     object-fit: contain;
 }
 
-/* A narrow lane: the cross is small, and the air either side of it is half a
-   tab's ordinary gap, so it reads as belonging to its title. */
+/* The lane is a sidebar row's trailing cell: the 18px square its spinner and
+   its hover control share (SIDEBAR_SLOT_CELL), held 3px past the tab's
+   content edge as the sidebar holds it past the row's, so a tab's cross and
+   spinner sit exactly where a row's do. */
 .happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-trailing {
     position: relative;
-    width: calc(2 * round(7px, var(--happy-device-pixel, 1px)));
-    height: calc(2 * round(10px, var(--happy-device-pixel, 1px)));
-    margin: 0 0 0 -2px;
+    width: 18px;
+    height: 18px;
+    margin-right: -3px;
     box-sizing: border-box;
 }
 
@@ -436,7 +438,7 @@
     opacity: 1;
 }
 
-/* The same quiet ink as the strip's "+", darkening only under the pointer.
+/* A sidebar row's control: the same ink, darkening only under the pointer.
    Paint containment draws the control from a whole device pixel: the cross is
    an untransformed glyph, which engines place at a fraction of a pixel while
    the hover square beside it snaps, so under page zoom the two parted by up
@@ -444,18 +446,8 @@
 .happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-close {
     width: 100%;
     height: 100%;
-    color: var(--button-secondary-tint);
     pointer-events: auto;
     contain: paint;
-}
-
-/* The cross is optically set on the title's text, not centred in its box: the
-   glyph's box-centre sits 1px above the title's x-height band, so it drops 1px
-   to put its ink on the title's baseline and its top on the x-height (measured
-   at 1x and 2x against the 13px title). The drop is a whole device pixel at
-   every zoom. */
-.happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-close > .happy-vector-icon {
-    translate: 0 max(var(--happy-device-pixel, 1px), round(1px, var(--happy-device-pixel, 1px)));
 }
 
 /* A keyboard reader on the tab sees the same close the pointer does. */
@@ -472,5 +464,4 @@
 
 .happy-tabs[data-close-presentation="overlay"] .happy-tabs__tab-activity {
     inset: 0;
-    width: 14px;
 }

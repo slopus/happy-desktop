@@ -383,6 +383,10 @@
        a strip's +, a row's own control) wears exactly this. */
     --happy-hover-radius: var(--happy-radius-sm);
     --happy-hover-fill: var(--surface-ripple);
+    /* How long a name too long for its box takes to fade out instead of
+       ellipsizing, at rest and where it moves to while hover controls show:
+       a sidebar row's name and a tab's title. */
+    --happy-label-fade: 14px;
     /* The one content column of the main lane. A chat's transcript and
        composer, and every page that takes the lane — the feed, artifacts and
        an artifact's page, the inbox, settings, a Surface — read down a column
