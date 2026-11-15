@@ -16,6 +16,7 @@ const session = (
     permissionMode: "auto",
     status: "running",
     activeSubagentCount: 0,
+    activeProcessCount: 0,
     pendingQuestion: false,
     createdAt: 1,
     updatedAt: 1,
