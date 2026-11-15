@@ -186,7 +186,7 @@ function rowEstimate(row: LogRow | undefined, open: (seq: number) => boolean): n
     if (entry.kind === "command")
         return 28 + (open(entry.seq) ? lineCount(entry.output) * LINE_HEIGHT + 8 : 0);
     if (entry.kind === "tool") return 26 + (entry.error === null ? 0 : LINE_HEIGHT);
-    if (entry.kind === "message") return 24 + Math.ceil(entry.text.length / 90) * 20;
+    if (entry.kind === "message") return 6 + Math.ceil(entry.text.length / 110) * LINE_HEIGHT;
     return 24;
 }
 

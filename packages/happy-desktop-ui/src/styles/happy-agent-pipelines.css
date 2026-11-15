@@ -1014,7 +1014,7 @@
 }
 
 .happy-pipeline-log__row[data-kind="message"] .happy-pipeline-log__gutter {
-    padding-top: 9px;
+    padding-top: 3px;
 }
 
 .happy-pipeline-log__body {
@@ -1199,16 +1199,47 @@
     padding-inline-start: 20px;
 }
 
-/* An agent's message reads as prose, not as log lines. */
+/* An agent's message reads as prose, not as log lines, at the log's own size
+   and on its line: the document's reading scale is brought down to it. */
 .happy-pipeline-log__message {
     display: flex;
     flex-direction: column;
     max-width: 720px;
-    padding-block: 6px;
+    padding-block: 3px;
     font-family: var(--happy-font-ui);
-    font-size: 13px;
-    line-height: 19px;
     white-space: normal;
+}
+
+.happy-pipeline-log__message .happy-markdown-document__body {
+    font-size: 12.5px;
+    line-height: 18px;
+}
+
+.happy-pipeline-log__message .happy-markdown-document__body > * + * {
+    margin-top: 6px;
+}
+
+.happy-pipeline-log__message .happy-markdown-document__body :is(h1, h2, h3, h4, h5, h6) {
+    margin-top: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-pipeline-log__message .happy-markdown-document__body code {
+    padding: 0 4px;
+    font-size: 11.5px;
+}
+
+.happy-pipeline-log__message .happy-markdown-document__body pre code {
+    padding: 6px 8px;
+    font-size: 11.5px;
+    line-height: 17px;
+}
+
+.happy-pipeline-log__message .happy-markdown-document__body table {
+    font-size: 12px;
+    line-height: 18px;
 }
 
 .happy-pipeline-log__status {
