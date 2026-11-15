@@ -18,6 +18,7 @@ import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHe
 import type {
     HappyAgentConnection,
     HappyAgentTeammate,
+    HappyAgentTeamRoster,
     SidebarReadAheadRows,
 } from "../happyAgentConnection/index.js";
 import {
@@ -158,6 +159,7 @@ import {
 } from "./happyAgentComputeStore.js";
 import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
 import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
+import { pipelineRunStoreCreate, type PipelineRunStore } from "../pipelines/pipelineRunStore.js";
 import {
     happyAgentPreviewsStoreCreate,
     type HappyAgentPreviewsStore,
@@ -322,6 +324,8 @@ export interface HappyAgentWorkspaceClient {
     pipelines(): PipelinesStore | undefined;
     /** One pipeline's page; materialized per pipeline and kept. Undefined where `pipelines()` is. */
     pipeline(pipelineId: string): PipelineStore | undefined;
+    /** One run of any pipeline, live; materialized per run and kept. Undefined where `pipelines()` is. */
+    pipelineRun(runId: string): PipelineRunStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
     previews(): HappyAgentPreviewsStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
@@ -390,6 +394,8 @@ export interface HappyAgentWorkspaceClient {
     surfaces(): HappyAgentSurfaces;
     /** The other people on the team `@` offers, held since the connection's bootstrap. */
     teammates(): readonly HappyAgentTeammate[];
+    /** Everyone on the team, the reader included, held since the connection's bootstrap. */
+    team(): HappyAgentTeamRoster;
     /**
      * What this Happy Agent's search finds for the command palette's
      * query. Materialized on first access; a daemon without search
@@ -803,6 +809,7 @@ export function happyAgentWorkspaceClientCreate(
     let computeStore: HappyAgentComputeStore | undefined;
     let pipelinesStore: PipelinesStore | undefined;
     const pipelineStores = new Map<string, PipelineStore>();
+    const pipelineRunStores = new Map<string, PipelineRunStore>();
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
@@ -1061,6 +1068,7 @@ export function happyAgentWorkspaceClientCreate(
             return feedOf();
         },
         teammates: () => deps.connection.teammates(),
+        team: () => deps.connection.team(),
         surfaces() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             surfaces ??= happyAgentSurfacesCreate({
@@ -1304,6 +1312,19 @@ export function happyAgentWorkspaceClientCreate(
             if (!store) {
                 store = pipelineStoreCreate({ pipelineId, request, sync: deps.connection.sync });
                 pipelineStores.set(pipelineId, store);
+            }
+            return store;
+        },
+        pipelineRun(runId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "pipelines"))
+                return undefined;
+            let store = pipelineRunStores.get(runId);
+            if (!store) {
+                store = pipelineRunStoreCreate({ runId, request, sync: deps.connection.sync });
+                pipelineRunStores.set(runId, store);
             }
             return store;
         },
@@ -1589,6 +1610,8 @@ export function happyAgentWorkspaceClientCreate(
             pipelinesStore = undefined;
             for (const store of pipelineStores.values()) store[Symbol.dispose]();
             pipelineStores.clear();
+            for (const store of pipelineRunStores.values()) store[Symbol.dispose]();
+            pipelineRunStores.clear();
             previewsStore?.[Symbol.dispose]();
             previewsStore = undefined;
             dailyUsageStore?.[Symbol.dispose]();

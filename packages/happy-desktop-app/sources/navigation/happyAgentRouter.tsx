@@ -541,6 +541,12 @@ const pipelineRoute = createRoute({
     path: "/pipelines/$happyAgentId/$pipelineId",
 });
 
+/** One run of a pipeline, live, on the server that runs it. */
+const pipelineRunRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/pipeline-runs/$happyAgentId/$runId",
+});
+
 /** One artifact open in the viewer, on the machine that keeps it. */
 const artifactRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -665,6 +671,7 @@ const routeTree = rootRoute.addChildren([
         pluginRoute,
         pipelinesRoute,
         pipelineRoute,
+        pipelineRunRoute,
         feedRoute,
         userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
@@ -697,7 +704,10 @@ function HappyAgentWorkspaceLayout() {
         feed: matched.has(feedRoute.id),
         inbox: matched.has(inboxRoute.id),
         plugins: matched.has(pluginsRoute.id) || matched.has(pluginRoute.id),
-        pipelines: matched.has(pipelinesRoute.id) || matched.has(pipelineRoute.id),
+        pipelines:
+            matched.has(pipelinesRoute.id) ||
+            matched.has(pipelineRoute.id) ||
+            matched.has(pipelineRunRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
         bugReportCreate: matched.has(bugReportCreateRoute.id),
@@ -761,6 +771,18 @@ function HappyAgentWorkspaceLayout() {
             {...(shows.pipelines && params.pipelineId !== undefined
                 ? { pipelineId: params.pipelineId }
                 : {})}
+            {...(shows.pipelines && params.runId !== undefined
+                ? { pipelineRunId: params.runId }
+                : {})}
+            onPipelineRunOpen={(happyAgentId, runId) =>
+                void navigate({
+                    params: { happyAgentId, runId },
+                    to: "/pipeline-runs/$happyAgentId/$runId",
+                })
+            }
+            onPipelineAgentOpen={(happyAgentId, agentId) =>
+                happyAgentRouterHappyLinkOpen(router, `happy://agents/${agentId}`, happyAgentId)
+            }
             onPipelinesOpen={(happyAgentId) =>
                 void navigate({ params: { happyAgentId }, to: "/pipelines/$happyAgentId" })
             }

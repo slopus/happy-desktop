@@ -1,4 +1,8 @@
 import type {
+    PipelineNodeRun,
+    PipelineRun,
+    PipelineRunEntry,
+    PipelineRunSnapshot,
     PipelineDefinition,
     PipelineNode,
     PipelinePermissions,
@@ -7,6 +11,7 @@ import type {
     PipelineVersion,
 } from "happy-desktop-state";
 import { HappyAgentPipelinePage } from "../../src/pages/pipelines/HappyAgentPipelinePage";
+import { HappyAgentPipelineRunPage } from "../../src/pages/pipelines/HappyAgentPipelineRunPage";
 import { HappyAgentPipelinesPage } from "../../src/pages/pipelines/HappyAgentPipelinesPage";
 import type { PipelineLabels } from "../../src/pages/pipelines/pipelinePresentation";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -29,7 +34,8 @@ const labels: PipelineLabels = {
     },
     author: (author) =>
         author === null ? "Unknown" : author.kind === "agent" ? "Release bot" : "Steve",
-    pipeline: (id) => (id === "pl_notify" ? "Notify team" : id),
+    pipeline: (id) => (id === "pl_notify" ? "Notify team" : id === "pl_ci" ? "Desktop CI" : id),
+    agent: () => "Release bot",
 };
 
 const none: PipelinePermissions = {
@@ -257,7 +263,167 @@ const pipelineSnapshot: PipelineSnapshot = {
         [2, { state: "loaded", definition: ciV2 }],
     ]),
     nodeSelected: null,
+    panel: "overview",
+    runs: { loading: false, entries: [], nextCursor: null, loadingMore: false },
 };
+
+const runEntry = (
+    id: string,
+    state: PipelineRunEntry["state"],
+    ago: number,
+    took: number | null,
+    version = 4,
+): PipelineRunEntry => ({
+    id,
+    version,
+    state,
+    trigger: { kind: "agent", agentId: "a1" },
+    parentRunId: null,
+    createdAt: NOW - ago * MINUTE,
+    startedAt: NOW - ago * MINUTE,
+    endedAt: took === null ? null : NOW - (ago - took) * MINUTE,
+});
+
+const runEntries: PipelineRunEntry[] = [
+    runEntry("run_7", "running", 3, null),
+    runEntry("run_6", "failed", 52, 9),
+    runEntry("run_5", "superseded", 70, 4),
+    runEntry("run_4", "succeeded", 26 * 60, 14, 3),
+    runEntry("run_3", "aborted", 28 * 60, 2, 3),
+    runEntry("run_2", "succeeded", 3 * 24 * 60, 11, 2),
+];
+
+const nodeRun = (
+    nodeId: string,
+    kind: PipelineNodeRun["kind"],
+    state: PipelineNodeRun["state"],
+    extra: Partial<PipelineNodeRun> = {},
+): PipelineNodeRun => ({
+    nodeId,
+    kind,
+    state,
+    status: null,
+    statuses: [],
+    input: null,
+    output: null,
+    failure: null,
+    agentId: null,
+    childRunId: null,
+    startedAt: null,
+    endedAt: null,
+    ...extra,
+});
+
+const statuses = (texts: readonly (readonly [string, number | null, number])[]) =>
+    texts.map(([text, progress, ago]) => ({ text, progress, at: NOW - ago * MINUTE }));
+
+const liveRun: PipelineRun = {
+    ...runEntries[0]!,
+    pipelineId: "pl_ci",
+    rootRunId: "run_7",
+    group: "main",
+    input: { sha: "9f2c1e7", branch: "main", channel: "preview" },
+    result: null,
+    nodes: [
+        nodeRun("checkout", "code", "succeeded", {
+            status: statuses([["installed dependencies", 1, 1]])[0]!,
+            statuses: statuses([
+                ["cloning", 0.1, 3],
+                ["installing", 0.6, 2],
+                ["installed dependencies", 1, 1],
+            ]),
+            input: { sha: "9f2c1e7", branch: "main", channel: "preview" },
+            output: { dir: "src" },
+            startedAt: NOW - 3 * MINUTE,
+            endedAt: NOW - 1 * MINUTE,
+        }),
+        nodeRun("unit", "code", "running", {
+            status: statuses([["412 of 980 tests", 0.42, 0]])[0]!,
+            statuses: statuses([
+                ["starting vitest", null, 1],
+                ["412 of 980 tests", 0.42, 0],
+            ]),
+            input: { dir: "src" },
+            startedAt: NOW - 1 * MINUTE,
+        }),
+        nodeRun("e2e", "agent", "running", {
+            status: statuses([["reading the trace of settings.spec.ts", null, 0]])[0]!,
+            statuses: statuses([
+                ["booting the browser", null, 1],
+                ["reading the trace of settings.spec.ts", null, 0],
+            ]),
+            input: { dir: "src" },
+            agentId: "agent_e2e",
+            startedAt: NOW - 1 * MINUTE,
+        }),
+        nodeRun("release", "code", "pending"),
+        nodeRun("notify", "pipeline", "pending"),
+    ],
+    leases: [
+        { name: "box", computerId: "ci-runner-04", holders: ["unit", "e2e"], releasedAt: null },
+    ],
+    childRunIds: [],
+};
+
+const failedRun: PipelineRun = {
+    ...liveRun,
+    ...runEntries[1]!,
+    rootRunId: "run_6",
+    result: { outputs: { notify: { delivered: true } } },
+    nodes: [
+        liveRun.nodes[0]!,
+        nodeRun("unit", "code", "succeeded", {
+            status: statuses([["980 tests passed", 1, 46]])[0]!,
+            statuses: statuses([["980 tests passed", 1, 46]]),
+            output: { passed: true },
+            startedAt: NOW - 50 * MINUTE,
+            endedAt: NOW - 46 * MINUTE,
+        }),
+        nodeRun("e2e", "agent", "failed", {
+            failure: {
+                code: "regression",
+                message:
+                    "settings.spec.ts fails on every retry: the theme switch no longer persists.",
+            },
+            statuses: statuses([
+                ["booting the browser", null, 50],
+                ["3 of 41 specs failed", 0.9, 45],
+            ]),
+            input: { dir: "src" },
+            agentId: "agent_e2e",
+            startedAt: NOW - 50 * MINUTE,
+            endedAt: NOW - 44 * MINUTE,
+        }),
+        nodeRun("release", "code", "skipped"),
+        nodeRun("notify", "pipeline", "succeeded", {
+            childRunId: "run_notify_12",
+            input: {
+                node: "e2e",
+                code: "regression",
+                message: "settings.spec.ts fails on every retry",
+            },
+            output: { delivered: true },
+            startedAt: NOW - 44 * MINUTE,
+            endedAt: NOW - 43 * MINUTE,
+        }),
+    ],
+    leases: [
+        { name: "box", computerId: "ci-runner-04", holders: [], releasedAt: NOW - 43 * MINUTE },
+    ],
+    childRunIds: ["run_notify_12"],
+};
+
+const runSnapshot = (
+    run: PipelineRun,
+    nodeSelected: string | null = null,
+): PipelineRunSnapshot => ({
+    loading: false,
+    missing: false,
+    run,
+    definition: { state: "loaded", definition: ci },
+    nodeSelected,
+    abort: { state: "idle" },
+});
 
 const list: PipelinesSnapshot = {
     loading: false,
@@ -321,7 +487,26 @@ const list: PipelinesSnapshot = {
 };
 
 const noop = (): void => undefined;
-const page = { labels, onBack: noop, onNodeSelect: noop, onVersionSelect: noop };
+const page = {
+    labels,
+    now: NOW,
+    onBack: noop,
+    onNodeSelect: noop,
+    onPanelSelect: noop,
+    onRunOpen: noop,
+    onRunsMore: noop,
+    onVersionSelect: noop,
+};
+const runPage = {
+    labels,
+    now: NOW,
+    onAbort: noop,
+    onAgentOpen: noop,
+    onBack: noop,
+    onNodeSelect: noop,
+    onPipelineOpen: noop,
+    onRunOpen: noop,
+};
 
 export function HappyAgentPipelinesBlueprintPage() {
     return (
@@ -416,6 +601,63 @@ export function HappyAgentPipelinesBlueprintPage() {
                         definitions: new Map(),
                     }}
                 />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The pipeline's runs, newest first, in the inspector's Runs panel."
+                label="Pipeline, runs"
+                number="08"
+                screen="08-runs-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelinePage
+                    {...page}
+                    pipeline={{
+                        ...pipelineSnapshot,
+                        panel: "runs",
+                        runs: {
+                            loading: false,
+                            entries: runEntries,
+                            nextCursor: "c1",
+                            loadingMore: false,
+                        },
+                    }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A run in progress: checkout succeeded, unit and e2e run in parallel on one computer, each with its status line and unit's progress; release and notify wait. Abort is live."
+                label="Run, live"
+                number="09"
+                screen="09-run-live-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage {...runPage} run={runSnapshot(liveRun)} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A running node picked: its status line and progress, status history, input, the computer it shares, and its transcript."
+                label="Run, running node"
+                number="10"
+                screen="10-run-node-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage {...runPage} run={runSnapshot(liveRun, "unit")} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A finished run whose e2e failed: the failure on the card and in the inspector; release was skipped and notify ran as a child run. Abort is off."
+                label="Run, failed node"
+                number="11"
+                screen="11-run-failed-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage {...runPage} run={runSnapshot(failedRun, "e2e")} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The finished run's overview: who started it, its input and result, and its child run."
+                label="Run, overview"
+                number="12"
+                screen="12-run-overview-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage {...runPage} run={runSnapshot(failedRun)} />
             </FullScreenSpecimen>
         </ComponentPage>
     );

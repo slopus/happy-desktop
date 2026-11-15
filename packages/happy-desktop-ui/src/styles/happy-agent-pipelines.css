@@ -636,3 +636,184 @@
     font-size: 12px;
     line-height: 16px;
 }
+
+/* ---- Inspector panels and runs ----------------------------------------- */
+
+.happy-pipeline-page__panel-switch {
+    display: flex;
+    flex: none;
+    align-items: center;
+    box-sizing: border-box;
+    height: 48px;
+    padding-inline: 16px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-pipeline-runs {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.happy-pipeline-detail__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.happy-pipeline-detail__state {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.happy-pipeline-detail__status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.happy-pipeline-detail__failure {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--box-error-border);
+    border-radius: 6px;
+    background: var(--box-error-background);
+}
+
+.happy-pipeline-detail__failure-code {
+    color: var(--box-error-text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* A value keeps its lines and scrolls both ways; the padding is the text's. */
+.happy-pipeline-detail__value {
+    display: flex;
+    max-height: 240px;
+    overflow: auto;
+    border-radius: 6px;
+    background: var(--surface-high);
+}
+
+.happy-pipeline-detail__value-text {
+    flex: 1 0 auto;
+    margin: 0;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre;
+}
+
+.happy-pipeline-statuses {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-pipeline-statuses__item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-pipeline-statuses__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.happy-pipeline-statuses__time {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* ---- Progress ---------------------------------------------------------- */
+
+.happy-pipeline-progress,
+.happy-pipeline-node__progress {
+    display: flex;
+    flex: none;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.happy-pipeline-progress__fill,
+.happy-pipeline-node__progress-fill {
+    flex: none;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--text-link);
+}
+
+/* Its lane is kept, so a bar appearing moves nothing; it is painted only with progress. */
+.happy-pipeline-progress[data-empty],
+.happy-pipeline-node__progress[data-empty] {
+    background: transparent;
+}
+
+/* ---- A node in a run --------------------------------------------------- */
+
+.happy-pipeline-node[data-variant="run"] {
+    gap: 4px;
+}
+
+.happy-pipeline-node__state {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-inline-start: auto;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+.happy-pipeline-node[data-tone="active"] {
+    border-color: color-mix(in srgb, var(--text-link) 60%, var(--divider));
+}
+
+.happy-pipeline-node[data-tone="active"] .happy-pipeline-node__state {
+    background: var(--text-link);
+}
+
+.happy-pipeline-node[data-tone="success"] .happy-pipeline-node__state {
+    background: var(--success);
+}
+
+.happy-pipeline-node[data-tone="danger"] {
+    border-color: color-mix(in srgb, var(--status-error) 55%, var(--divider));
+}
+
+.happy-pipeline-node[data-tone="danger"] .happy-pipeline-node__state {
+    background: var(--status-error);
+}
+
+.happy-pipeline-node[data-tone="danger"] .happy-pipeline-node__detail {
+    color: var(--text-destructive);
+}
+
+.happy-pipeline-node[data-muted] {
+    background: transparent;
+    box-shadow: none;
+    border-style: dashed;
+}
+
+.happy-pipeline-node[data-muted] .happy-pipeline-node__head,
+.happy-pipeline-node[data-muted] .happy-pipeline-node__detail {
+    opacity: 0.6;
+}

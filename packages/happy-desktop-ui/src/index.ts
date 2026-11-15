@@ -906,6 +906,10 @@ export {
     type HappyAgentPipelinePageProps,
 } from "./pages/pipelines/HappyAgentPipelinePage";
 export {
+    HappyAgentPipelineRunPage,
+    type HappyAgentPipelineRunPageProps,
+} from "./pages/pipelines/HappyAgentPipelineRunPage";
+export {
     PipelineGraph,
     PipelineGraphLegend,
     PIPELINE_GRAPH_METRICS,

@@ -2,9 +2,12 @@ import type {
     PipelineAuthor,
     PipelineNode,
     PipelineNodeKind,
+    PipelineNodeRunState,
     PipelineRunState,
+    PipelineRunTrigger,
     PipelineSchema,
 } from "happy-desktop-state";
+import { elapsedTimeFormat } from "../../elapsedTimeFormat";
 import type { IconName } from "../../Icon";
 
 /** How the pipeline surfaces name moments, people, and other pipelines, supplied by the app. */
@@ -13,6 +16,8 @@ export interface PipelineLabels {
     readonly author: (author: PipelineAuthor | null) => string;
     /** Another pipeline's name, for a `pipeline` node. */
     readonly pipeline: (pipelineId: string) => string;
+    /** An agent's name, for who started a run. */
+    readonly agent: (agentId: string) => string;
 }
 
 export const PIPELINE_KIND_ICON: Record<PipelineNodeKind, IconName> = {
@@ -59,6 +64,59 @@ export const PIPELINE_RUN_STATE_TONE: Record<PipelineRunState, PipelineTone> = {
     aborted: "neutral",
     superseded: "neutral",
 };
+
+export const PIPELINE_NODE_STATE_LABEL: Record<PipelineNodeRunState, string> = {
+    pending: "Waiting",
+    running: "Running",
+    succeeded: "Succeeded",
+    failed: "Failed",
+    skipped: "Skipped",
+    aborted: "Aborted",
+};
+
+export const PIPELINE_NODE_STATE_TONE: Record<PipelineNodeRunState, PipelineTone> = {
+    pending: "neutral",
+    running: "active",
+    succeeded: "success",
+    failed: "danger",
+    skipped: "neutral",
+    aborted: "neutral",
+};
+
+/** Whether a node in this state never did anything, so its card recedes. */
+export function pipelineNodeStateMuted(state: PipelineNodeRunState): boolean {
+    return state === "pending" || state === "skipped";
+}
+
+/** How long something took, or has taken so far while it runs. */
+export function pipelineDurationOf(
+    startedAt: number | null,
+    endedAt: number | null,
+    now: number,
+): string | null {
+    if (startedAt === null) return null;
+    return elapsedTimeFormat((endedAt ?? now) - startedAt);
+}
+
+/** Who started a run, in words. */
+export function pipelineTriggerText(
+    trigger: PipelineRunTrigger | null,
+    labels: PipelineLabels,
+): string {
+    if (trigger === null) return "Unknown";
+    return trigger.kind === "agent"
+        ? labels.agent(trigger.agentId)
+        : `Node ${trigger.nodeId} of a parent run`;
+}
+
+/** A JSON value as it reads indented; `null` for nothing. */
+export function pipelineValueText(value: unknown): string {
+    try {
+        return JSON.stringify(value, null, 2) ?? "null";
+    } catch {
+        return String(value);
+    }
+}
 
 /** A state as a dot and its word. */
 export function PipelineStateMark(props: { readonly tone: PipelineTone; readonly label: string }) {

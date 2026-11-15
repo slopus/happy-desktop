@@ -1,9 +1,15 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { PipelineDefinition, PipelineSnapshot, PipelineVersion } from "happy-desktop-state";
+import type {
+    PipelineDefinition,
+    PipelinePanel,
+    PipelineSnapshot,
+    PipelineVersion,
+} from "happy-desktop-state";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
 import { ScrollArea } from "../../Scrollbar";
+import { SegmentedControl } from "../../SegmentedControl";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
 import { PipelineGraph, PipelineGraphLegend } from "./PipelineGraph";
@@ -14,6 +20,7 @@ import {
     PipelineTypeText,
 } from "./PipelineNodeDetail";
 import { pipelineNodeSummary, type PipelineLabels } from "./pipelinePresentation";
+import { PipelineRunsList } from "./PipelineRunsList";
 
 export interface HappyAgentPipelinePageProps {
     readonly pipeline: PipelineSnapshot;
@@ -22,6 +29,11 @@ export interface HappyAgentPipelinePageProps {
     /** Shows one version's graph; null shows the latest. */
     readonly onVersionSelect: (number: number | null) => void;
     readonly onNodeSelect: (nodeId: string | null) => void;
+    readonly onPanelSelect: (panel: PipelinePanel) => void;
+    readonly onRunOpen: (runId: string) => void;
+    readonly onRunsMore: () => void;
+    /** Now, for how long a running run has taken so far. */
+    readonly now: number;
     readonly className?: string;
     readonly "data-testid"?: string;
     readonly style?: CSSProperties;
@@ -159,38 +171,69 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
                                 onClose={() => props.onNodeSelect(null)}
                             />
                         ) : (
-                            <ScrollArea
-                                className="happy-pipeline-page__inspector-scroll"
-                                viewportClassName="happy-pipeline-page__inspector-viewport"
-                            >
-                                <div className="happy-pipeline-detail__body">
-                                    {snapshot.error ? (
-                                        <Banner
-                                            tone="danger"
-                                            title="This pipeline may be out of date"
-                                        >
-                                            {snapshot.error.message}
-                                        </Banner>
-                                    ) : null}
-                                    {pipeline.description ? (
-                                        <p className="happy-pipeline-detail__prose">
-                                            {pipeline.description}
-                                        </p>
-                                    ) : null}
-                                    {definition ? (
-                                        <PipelineOverview definition={definition} />
-                                    ) : null}
-                                    <PipelineDetailSection title="Versions">
-                                        <PipelineVersions
-                                            head={pipeline.head.number}
-                                            labels={props.labels}
-                                            onVersionSelect={props.onVersionSelect}
-                                            shown={shown}
-                                            versions={snapshot.versions}
-                                        />
-                                    </PipelineDetailSection>
+                            <>
+                                <div className="happy-pipeline-page__panel-switch">
+                                    <SegmentedControl
+                                        aria-label="Show"
+                                        fullWidth
+                                        onChange={(value) =>
+                                            props.onPanelSelect(
+                                                value === "runs" ? "runs" : "overview",
+                                            )
+                                        }
+                                        segments={[
+                                            { value: "overview", label: "Overview" },
+                                            { value: "runs", label: "Runs" },
+                                        ]}
+                                        size="small"
+                                        value={snapshot.panel}
+                                    />
                                 </div>
-                            </ScrollArea>
+                                <ScrollArea
+                                    className="happy-pipeline-page__inspector-scroll"
+                                    viewportClassName="happy-pipeline-page__inspector-viewport"
+                                >
+                                    {snapshot.panel === "runs" ? (
+                                        <div className="happy-pipeline-detail__body">
+                                            <PipelineRunsList
+                                                labels={props.labels}
+                                                now={props.now}
+                                                onRunOpen={props.onRunOpen}
+                                                onRunsMore={props.onRunsMore}
+                                                runs={snapshot.runs}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="happy-pipeline-detail__body">
+                                            {snapshot.error ? (
+                                                <Banner
+                                                    tone="danger"
+                                                    title="This pipeline may be out of date"
+                                                >
+                                                    {snapshot.error.message}
+                                                </Banner>
+                                            ) : null}
+                                            {pipeline.description ? (
+                                                <p className="happy-pipeline-detail__prose">
+                                                    {pipeline.description}
+                                                </p>
+                                            ) : null}
+                                            {definition ? (
+                                                <PipelineOverview definition={definition} />
+                                            ) : null}
+                                            <PipelineDetailSection title="Versions">
+                                                <PipelineVersions
+                                                    head={pipeline.head.number}
+                                                    labels={props.labels}
+                                                    onVersionSelect={props.onVersionSelect}
+                                                    shown={shown}
+                                                    versions={snapshot.versions}
+                                                />
+                                            </PipelineDetailSection>
+                                        </div>
+                                    )}
+                                </ScrollArea>
+                            </>
                         )}
                     </aside>
                 </div>

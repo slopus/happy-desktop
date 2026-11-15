@@ -7,13 +7,21 @@ import {
     type PipelineGraphLayoutMetrics,
     type PipelineGraphPoint,
 } from "./pipelineGraphLayout";
-import { PIPELINE_KIND_ICON, PIPELINE_KIND_LABEL } from "./pipelinePresentation";
+import { PIPELINE_KIND_ICON, PIPELINE_KIND_LABEL, type PipelineTone } from "./pipelinePresentation";
 
 export interface PipelineGraphNode {
     readonly id: string;
     readonly kind: PipelineNodeKind;
-    /** The card's second line. */
+    /** The card's second line: what the step is, or in a run what it last said. */
     readonly detail: string;
+    /** In a run: the node's state, as a colour and its word. */
+    readonly state?: {
+        readonly tone: PipelineTone;
+        readonly label: string;
+        readonly muted: boolean;
+    };
+    /** In a run: how far along the node said it is, from 0 to 1. */
+    readonly progress?: number | null;
 }
 
 export interface PipelineGraphEdge {
@@ -31,6 +39,8 @@ export interface PipelineGraphProps {
     /** Selects a node; the selected node again selects nothing. */
     readonly onNodeSelect: (nodeId: string | null) => void;
     readonly "aria-label": string;
+    /** A run's graph has room on every card for a state and a progress bar. */
+    readonly variant?: "definition" | "run";
     readonly className?: string;
     readonly style?: CSSProperties;
 }
@@ -42,6 +52,12 @@ export const PIPELINE_GRAPH_METRICS: PipelineGraphLayoutMetrics = {
     columnGap: 56,
     rowGap: 24,
     padding: 32,
+};
+
+/** A run's cards are taller by the progress bar's lane, reserved whether or not it shows. */
+export const PIPELINE_RUN_GRAPH_METRICS: PipelineGraphLayoutMetrics = {
+    ...PIPELINE_GRAPH_METRICS,
+    nodeHeight: 76,
 };
 
 /** How far left of the root its entry mark sits. */
@@ -73,7 +89,8 @@ function edgePath(points: readonly PipelineGraphPoint[]): string {
  */
 export function PipelineGraph(props: PipelineGraphProps) {
     const markerId = useId();
-    const metrics = PIPELINE_GRAPH_METRICS;
+    const variant = props.variant ?? "definition";
+    const metrics = variant === "run" ? PIPELINE_RUN_GRAPH_METRICS : PIPELINE_GRAPH_METRICS;
     const layout = pipelineGraphLayout(
         { nodes: props.nodes.map((node) => node.id), edges: props.edges, root: props.root },
         metrics,
@@ -148,11 +165,21 @@ export function PipelineGraph(props: PipelineGraphProps) {
                         const isRoot = node.id === props.root;
                         return (
                             <button
-                                aria-label={`${node.id}, ${PIPELINE_KIND_LABEL[node.kind]}${isRoot ? ", start" : ""}`}
+                                aria-label={[
+                                    node.id,
+                                    PIPELINE_KIND_LABEL[node.kind],
+                                    node.state?.label,
+                                    isRoot ? "start" : undefined,
+                                ]
+                                    .filter(Boolean)
+                                    .join(", ")}
                                 aria-pressed={props.selectedNodeId === node.id}
                                 className="happy-pipeline-node"
                                 data-happy-desktop-ui="pipeline-node"
                                 data-kind={node.kind}
+                                data-muted={node.state?.muted ? "" : undefined}
+                                data-tone={node.state?.tone}
+                                data-variant={variant}
                                 key={node.id}
                                 onClick={() =>
                                     props.onNodeSelect(
@@ -172,8 +199,32 @@ export function PipelineGraph(props: PipelineGraphProps) {
                                         <Icon name={PIPELINE_KIND_ICON[node.kind]} size={14} />
                                     </span>
                                     <span className="happy-pipeline-node__name">{node.id}</span>
+                                    {node.state ? (
+                                        <span
+                                            aria-hidden
+                                            className="happy-pipeline-node__state"
+                                            title={node.state.label}
+                                        />
+                                    ) : null}
                                 </span>
                                 <span className="happy-pipeline-node__detail">{node.detail}</span>
+                                {variant === "run" ? (
+                                    <span
+                                        aria-hidden
+                                        className="happy-pipeline-node__progress"
+                                        data-empty={node.progress == null ? "" : undefined}
+                                    >
+                                        <span
+                                            className="happy-pipeline-node__progress-fill"
+                                            style={{
+                                                width:
+                                                    node.progress == null
+                                                        ? 0
+                                                        : `${String(Math.round(node.progress * 100))}%`,
+                                            }}
+                                        />
+                                    </span>
+                                ) : null}
                             </button>
                         );
                     })}

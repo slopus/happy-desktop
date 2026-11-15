@@ -59,6 +59,8 @@ export type HappyAgentRoute =
     | { readonly kind: "pipelines"; readonly happyAgentId: string }
     /** One pipeline on one server: its graph and history. */
     | { readonly kind: "pipeline"; readonly happyAgentId: string; readonly pipelineId: string }
+    /** One run of a pipeline on one server, live. A run is addressed alone, as a child run's parent links to it. */
+    | { readonly kind: "pipelineRun"; readonly happyAgentId: string; readonly runId: string }
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
     | { readonly kind: "settingsSection"; readonly section: string }
@@ -122,6 +124,8 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/pipelines/${part(route.happyAgentId)}`;
         case "pipeline":
             return `/pipelines/${part(route.happyAgentId)}/${part(route.pipelineId)}`;
+        case "pipelineRun":
+            return `/pipeline-runs/${part(route.happyAgentId)}/${part(route.runId)}`;
         case "happyAgent":
             return `/chats/${part(route.happyAgentId)}`;
         case "settings":
@@ -238,6 +242,10 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             return second === undefined
                 ? { kind: "pipelines", happyAgentId: first }
                 : { kind: "pipeline", happyAgentId: first, pipelineId: second };
+        case "pipeline-runs":
+            return first !== undefined && second !== undefined && segments.length === 3
+                ? { kind: "pipelineRun", happyAgentId: first, runId: second }
+                : undefined;
         case "people":
             return first !== undefined && second !== undefined && segments.length === 3
                 ? { kind: "userProfile", happyAgentId: first, userId: second }
@@ -330,6 +338,11 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         case "pipelines": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             return happyAgentId ? { kind: "pipelines", happyAgentId } : undefined;
+        }
+        case "pipelineRun": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const runId = fieldOf(record, "runId");
+            return happyAgentId && runId ? { kind: "pipelineRun", happyAgentId, runId } : undefined;
         }
         case "pipeline": {
             const happyAgentId = fieldOf(record, "happyAgentId");
