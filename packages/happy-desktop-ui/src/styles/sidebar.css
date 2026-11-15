@@ -13,7 +13,7 @@
 .happy-sidebar {
     --happy-surface-header-height: 56px;
     /* How long a name too long for its row takes to fade out, at rest and
-       where it slides to while hover controls show. */
+       where it moves to while hover controls show. */
     --happy-sidebar-label-fade: 14px;
     --happy-surface-footer-height: 40px;
     --happy-sidebar-floor: 226px;
@@ -1440,14 +1440,6 @@
         #000 calc(var(--happy-sidebar-label-fade-inset) + var(--happy-sidebar-label-fade))
     );
     transform: translateY(var(--happy-sidebar-label-optical-y, 0px));
-    transition: --happy-sidebar-label-fade-inset 120ms ease;
-}
-
-/* Registered so the fade glides to the controls instead of jumping there. */
-@property --happy-sidebar-label-fade-inset {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
 }
 
 /* While controls that sit alone in the lane show, the name runs under them, so
