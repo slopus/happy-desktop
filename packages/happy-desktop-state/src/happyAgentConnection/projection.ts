@@ -1361,6 +1361,7 @@ function subtaskActivityOf(agent: Agent): HappyAgentSubtaskActivity | undefined 
             status: child.status === "idle" ? "idle" : "running",
             pendingQuestion: child.pendingQuestionId !== null,
             activeSubagentCount: child.subagents.running,
+            activeProcessCount: child.processes.running,
             subtaskActivity: subtaskActivityOf(child),
             ...(child.wait == null ? {} : { wait: child.wait }),
         }),
@@ -1447,6 +1448,7 @@ function projectAgent(
               : ({ kind: "workspace", projectId, workspaceId: agent.workspaceId } as const);
     const value: GroupSession = {
         activeSubagents: agent.subagents.running,
+        activeProcesses: agent.processes.running,
         ...(subtaskActivity === undefined ? {} : { subtaskActivity }),
         archived: agent.archivedAt !== null,
         ...(agent.archivedAt === null ? {} : { archivedAt: agent.archivedAt }),

@@ -44,20 +44,26 @@ function summaryTitle(session: HappyAgentConversationSummaryInput): string {
 
 /**
  * How live one session reads in a list. A session is working when its own turn
- * is running and equally when it is only its delegated agents that still are:
- * work handed to a child is work this session set in motion, so the row keeps
- * its marker until nothing of the session's is running anywhere.
+ * is running and equally when it is only its delegated agents or its
+ * background processes that still are: work handed to a child or left running
+ * in the background is work this session set in motion, so the row keeps its
+ * marker until nothing of the session's is running anywhere.
  *
  * An open question outranks all of it: the run is stopped until the person
  * answers, so the row asks rather than claiming work is happening. A scheduled
  * wait is a low-priority modifier: a session sitting in a wait while its
- * children work is working. Interactive subtasks also keep an otherwise idle
- * ancestor live, including when all its visible work is waiting.
+ * children or processes work is working. Interactive subtasks also keep an
+ * otherwise idle ancestor live, including when all its visible work is waiting.
  */
 export function happyAgentConversationActivityProject(
     session: Pick<
         HappyAgentConversationSummaryInput,
-        "pendingQuestion" | "activeSubagentCount" | "status" | "wait" | "subtaskActivity"
+        | "pendingQuestion"
+        | "activeSubagentCount"
+        | "activeProcessCount"
+        | "status"
+        | "wait"
+        | "subtaskActivity"
     >,
 ): ConversationSummary["activity"] {
     const descendants = session.subtaskActivity;
@@ -66,6 +72,7 @@ export function happyAgentConversationActivityProject(
     // The host's count includes interactive subtasks. Their activity is known
     // below; only hidden children need the count's generic working marker.
     if (session.activeSubagentCount > (descendants?.running ?? 0)) return "running";
+    if (session.activeProcessCount > 0) return "running";
     const running = session.status === "running" || session.status === "queued";
     if ((running && session.wait === undefined) || descendants?.activity === "running")
         return "running";
