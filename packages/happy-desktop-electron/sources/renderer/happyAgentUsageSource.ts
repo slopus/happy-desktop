@@ -98,10 +98,9 @@ export function happyAgentUsageSourceCreate(
             if (legacy) return;
             // An older daemon answers `force` with 400, so it is only sent to one that knows it.
             const forced = (sync.health()?.version.protocol ?? 0) >= RECHECK_FORCE_PROTOCOL_VERSION;
-            // The pinned client's request type predates protocol 36's `force`.
-            const request: happyAgentProtocol.ProviderUsageRefreshRequest & { force?: boolean } =
-                forced ? { force: true } : { olderThanMs: RECHECK_LEGACY_OLDER_THAN_MS };
-            await client.refreshProviderUsage(request);
+            await client.refreshProviderUsage(
+                forced ? { force: true } : { olderThanMs: RECHECK_LEGACY_OLDER_THAN_MS },
+            );
         },
         subscribe(listener) {
             const controller = new AbortController();
