@@ -8,6 +8,7 @@ export const PIPELINE_EVENTS = [
     "pipeline.updated",
     "pipeline.run.updated",
     "pipeline.node.updated",
+    "pipeline.node.log",
 ] as const satisfies readonly HappyCloudEventType[];
 
 export interface PipelineFollow {

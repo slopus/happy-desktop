@@ -260,3 +260,90 @@ export interface PipelineRun extends PipelineRunEntry {
 export function pipelineRunAbortable(state: PipelineRunState): boolean {
     return state === "queued" || state === "running";
 }
+
+/**
+ * Which node's log a run page shows: the one the reader picked, else the one
+ * working longest now, else the last one that failed, else the last one that ran.
+ */
+export function pipelineRunNodeShown(run: PipelineRun, nodeSelected: string | null): string | null {
+    if (nodeSelected !== null) return nodeSelected;
+    // The server lists nodes by id, so every pick is by time, ties by id.
+    const byStart = (left: PipelineNodeRun, right: PipelineNodeRun) =>
+        (left.startedAt ?? 0) - (right.startedAt ?? 0) || left.nodeId.localeCompare(right.nodeId);
+    // The node working longest stays shown while others start beside it; a
+    // run that already failed may still have one finishing.
+    const running = run.nodes.filter((node) => node.state === "running").sort(byStart);
+    if (running.length > 0) return running[0]!.nodeId;
+    const ran = run.nodes.filter((node) => node.startedAt !== null).sort(byStart);
+    return (
+        ran.filter((node) => node.state === "failed").at(-1)?.nodeId ?? ran.at(-1)?.nodeId ?? null
+    );
+}
+
+/**
+ * One thing a node did, in the order it did it (§2.5). A command or tool call
+ * is written as it starts and rewritten in place, under the same `seq`, as it
+ * ends.
+ */
+export type PipelineLogEntry = { readonly seq: number; readonly at: number } & (
+    | {
+          /** A `print()` in a code node. */
+          readonly kind: "output";
+          readonly stream: "stdout" | "stderr";
+          readonly text: string;
+      }
+    | {
+          /** A shell command on a computer the node holds. */
+          readonly kind: "command";
+          readonly id: string;
+          readonly command: string;
+          readonly cwd: string | null;
+          /** The lease it ran on. */
+          readonly lease: string | null;
+          readonly state: "running" | "exited" | "aborted";
+          readonly exitCode: number | null;
+          readonly durationMs: number | null;
+          /** The last 64 KiB, so far while it runs. */
+          readonly output: string;
+          readonly outputTruncated: boolean;
+      }
+    | {
+          /** `fetch()`, a granted tool, or an agent's tool call. */
+          readonly kind: "tool";
+          readonly id: string;
+          readonly name: string;
+          readonly summary: string;
+          readonly state: "running" | "ok" | "error";
+          readonly durationMs: number | null;
+          readonly error: string | null;
+      }
+    | {
+          /** What an agent node's model said. */
+          readonly kind: "message";
+          readonly text: string;
+      }
+    | {
+          /** A status line the node set. */
+          readonly kind: "status";
+          readonly text: string;
+          readonly progress: number | null;
+      }
+);
+
+export type PipelineLogCommand = Extract<PipelineLogEntry, { kind: "command" }>;
+
+/** One read of a node's log after a sequence number. */
+export interface PipelineLogPage {
+    readonly entries: readonly PipelineLogEntry[];
+    /** What to read after next time. */
+    readonly nextAfter: number;
+    /** How many of the oldest entries the server let go. */
+    readonly dropped: number;
+    /** Entries already read that were rewritten since, such as a command that finished. */
+    readonly changed: readonly PipelineLogEntry[];
+}
+
+/** Whether a command ended badly: aborted, or exited with anything but 0. */
+export function pipelineLogCommandFailed(command: PipelineLogCommand): boolean {
+    return command.state === "aborted" || (command.state === "exited" && command.exitCode !== 0);
+}

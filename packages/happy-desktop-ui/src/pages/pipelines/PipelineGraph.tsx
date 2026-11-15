@@ -12,7 +12,7 @@ import { PIPELINE_KIND_ICON, PIPELINE_KIND_LABEL, type PipelineTone } from "./pi
 export interface PipelineGraphNode {
     readonly id: string;
     readonly kind: PipelineNodeKind;
-    /** The card's second line: what the step is, or in a run what it last said. */
+    /** Beside the name: what the step is, or in a run what it last said. */
     readonly detail: string;
     /** In a run: the node's state, as a colour and its word. */
     readonly state?: {
@@ -39,29 +39,26 @@ export interface PipelineGraphProps {
     /** Selects a node; the selected node again selects nothing. */
     readonly onNodeSelect: (nodeId: string | null) => void;
     readonly "aria-label": string;
-    /** A run's graph has room on every card for a state and a progress bar. */
+    /** A run's nodes carry a state dot and a progress lane. */
     readonly variant?: "definition" | "run";
     readonly className?: string;
     readonly style?: CSSProperties;
 }
 
-/** The geometry every pipeline graph is drawn at. */
+/**
+ * The geometry every pipeline graph is drawn at: one dense row per node. A
+ * run's progress lane sits inside the row, so both variants share it.
+ */
 export const PIPELINE_GRAPH_METRICS: PipelineGraphLayoutMetrics = {
-    nodeWidth: 176,
-    nodeHeight: 64,
-    columnGap: 56,
-    rowGap: 24,
-    padding: 32,
-};
-
-/** A run's cards are taller by the progress bar's lane, reserved whether or not it shows. */
-export const PIPELINE_RUN_GRAPH_METRICS: PipelineGraphLayoutMetrics = {
-    ...PIPELINE_GRAPH_METRICS,
-    nodeHeight: 76,
+    nodeWidth: 208,
+    nodeHeight: 32,
+    columnGap: 36,
+    rowGap: 8,
+    padding: 16,
 };
 
 /** How far left of the root its entry mark sits. */
-const ENTRY_OFFSET = 24;
+const ENTRY_OFFSET = 14;
 
 /** A smooth left-to-right path through the points; level runs stay straight. */
 function edgePath(points: readonly PipelineGraphPoint[]): string {
@@ -82,15 +79,15 @@ function edgePath(points: readonly PipelineGraphPoint[]): string {
 
 /**
  * PipelineGraph — a pipeline's nodes and edges, laid out left to right in
- * columns from the root. Each node is a card with its kind's glyph, its ID,
- * and a second line; success edges are solid, failure edges dashed, and the
- * root carries an entry mark on its leading side. The drawing is fixed-size
- * and scrolls both ways inside the pane, centred while it fits.
+ * columns from the root. Each node is one dense row: its kind's glyph, its ID,
+ * and what it is or last said; success edges are solid, failure edges dashed,
+ * and the root carries an entry mark on its leading side. The strip is as tall
+ * as the drawing, up to a share of the page, and scrolls past that.
  */
 export function PipelineGraph(props: PipelineGraphProps) {
     const markerId = useId();
     const variant = props.variant ?? "definition";
-    const metrics = variant === "run" ? PIPELINE_RUN_GRAPH_METRICS : PIPELINE_GRAPH_METRICS;
+    const metrics = PIPELINE_GRAPH_METRICS;
     const layout = pipelineGraphLayout(
         { nodes: props.nodes.map((node) => node.id), edges: props.edges, root: props.root },
         metrics,
@@ -102,7 +99,7 @@ export function PipelineGraph(props: PipelineGraphProps) {
             axes="both"
             className={["happy-pipeline-graph", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="pipeline-graph"
-            style={props.style}
+            style={{ height: layout.height, ...props.style }}
             viewportClassName="happy-pipeline-graph__viewport"
         >
             <div className="happy-pipeline-graph__stage">
@@ -152,9 +149,9 @@ export function PipelineGraph(props: PipelineGraphProps) {
                         })}
                         {root ? (
                             <g className="happy-pipeline-graph__entry">
-                                <circle cx={root.x - ENTRY_OFFSET} cy={root.y + middle} r="4" />
+                                <circle cx={root.x - ENTRY_OFFSET} cy={root.y + middle} r="3" />
                                 <path
-                                    d={`M ${String(root.x - ENTRY_OFFSET + 4)} ${String(root.y + middle)} L ${String(root.x)} ${String(root.y + middle)}`}
+                                    d={`M ${String(root.x - ENTRY_OFFSET + 3)} ${String(root.y + middle)} L ${String(root.x)} ${String(root.y + middle)}`}
                                 />
                             </g>
                         ) : null}
@@ -194,20 +191,20 @@ export function PipelineGraph(props: PipelineGraphProps) {
                                 }}
                                 type="button"
                             >
-                                <span className="happy-pipeline-node__head">
-                                    <span className="happy-pipeline-node__kind">
-                                        <Icon name={PIPELINE_KIND_ICON[node.kind]} size={14} />
-                                    </span>
-                                    <span className="happy-pipeline-node__name">{node.id}</span>
-                                    {node.state ? (
-                                        <span
-                                            aria-hidden
-                                            className="happy-pipeline-node__state"
-                                            title={node.state.label}
-                                        />
-                                    ) : null}
+                                <span className="happy-pipeline-node__kind">
+                                    <Icon name={PIPELINE_KIND_ICON[node.kind]} size={14} />
                                 </span>
-                                <span className="happy-pipeline-node__detail">{node.detail}</span>
+                                <span className="happy-pipeline-node__name">{node.id}</span>
+                                <span className="happy-pipeline-node__detail" title={node.detail}>
+                                    {node.detail}
+                                </span>
+                                {node.state ? (
+                                    <span
+                                        aria-hidden
+                                        className="happy-pipeline-node__state"
+                                        title={node.state.label}
+                                    />
+                                ) : null}
                                 {variant === "run" ? (
                                     <span
                                         aria-hidden

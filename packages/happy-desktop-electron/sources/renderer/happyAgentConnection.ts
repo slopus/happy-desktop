@@ -167,6 +167,10 @@ export interface HappyAgentSession {
     readonly pipelineRun: (
         runId: string,
     ) => import("happy-desktop-state").PipelineRunStore | undefined;
+    readonly pipelineNodeLog: (
+        runId: string,
+        nodeId: string,
+    ) => import("happy-desktop-state").PipelineNodeLogStore | undefined;
     /** Everyone on the team, which names the people and agents pipelines credit. */
     readonly team: () => import("happy-desktop-state").HappyAgentTeamRoster;
     readonly payments: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
@@ -745,6 +749,7 @@ export function happyAgentConnectionOpen(input: {
                     pipelines: () => client.pipelines(),
                     pipeline: (pipelineId) => client.pipeline(pipelineId),
                     pipelineRun: (runId) => client.pipelineRun(runId),
+                    pipelineNodeLog: (runId, nodeId) => client.pipelineNodeLog(runId, nodeId),
                     team: () => client.team(),
                     onboardingSettings: () => client.onboardingSettings(),
                     payments: () => client.payments(),

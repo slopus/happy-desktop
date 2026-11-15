@@ -267,6 +267,7 @@ export * from "./pipelines/pipelineTypes.js";
 export * from "./pipelines/pipelinesStore.js";
 export * from "./pipelines/pipelineStore.js";
 export * from "./pipelines/pipelineRunStore.js";
+export * from "./pipelines/pipelineNodeLogStore.js";
 export * from "./happyAgent/happyAgentPreviewsStore.js";
 export * from "./happyAgent/happyAgentDailyUsageStore.js";
 export * from "./happyAgent/happyAgentMembersStore.js";
