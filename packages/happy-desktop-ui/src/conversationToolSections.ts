@@ -83,6 +83,38 @@ function toolSectionContinues(
     );
 }
 
+const NO_TURNS: ReadonlySet<string> = new Set();
+
+/** Whether this row belongs to a turn the reader opened to see its steps. */
+function toolSectionEntryOpened(entry: ConversationEntry, opened: ReadonlySet<string>): boolean {
+    if (opened.size === 0) return false;
+    const trace = entryTrace(entry);
+    return (
+        (entry.traceFoldTargetId !== undefined && opened.has(entry.traceFoldTargetId)) ||
+        (entry.traceFoldAnchorId !== undefined && opened.has(entry.traceFoldAnchorId)) ||
+        (trace !== undefined && opened.has(trace.turnId))
+    );
+}
+
+/**
+ * The turns the reader opened, among those a transcript shows open. A turn
+ * left open because the reader watched it finish is not one of them: it keeps
+ * the rows it ran with.
+ */
+export function conversationTurnsOpened(
+    transcript: readonly ConversationEntry[],
+    expandedTurnIds: ReadonlySet<string> | undefined,
+): ReadonlySet<string> {
+    if (expandedTurnIds === undefined || expandedTurnIds.size === 0) return NO_TURNS;
+    let opened: Set<string> | undefined;
+    for (const entry of transcript) {
+        const trace = entryTrace(entry);
+        if (trace !== undefined && trace.quiet !== true && expandedTurnIds.has(trace.turnId))
+            (opened ??= new Set()).add(trace.turnId);
+    }
+    return opened ?? NO_TURNS;
+}
+
 /** Whether a call is still under way. */
 function toolSectionEntryActive(entry: ConversationToolSectionEntry): boolean {
     const status =
@@ -122,11 +154,16 @@ function toolSectionEndedAt(entry: ConversationEntry | undefined): number | unde
  * section before it whatever their calls last reported. Once a view has seen a
  * section end, `memory` keeps it ended: the turn going on, or the row after it
  * coming and going, never opens it again.
+ *
+ * A turn the reader opened with its trace control (`opened`, by turn) has no
+ * sections: opening it is asking to see its steps, so every call is a row of
+ * its own until the reader closes it again.
  */
 export function conversationToolSections(
     transcript: readonly ConversationEntry[],
     running: boolean,
     memory: ConversationToolSectionMemory,
+    opened: ReadonlySet<string> = NO_TURNS,
 ): ConversationToolSections {
     const rows: ConversationEntry[] = [];
     const sections = new Map<string, ConversationToolSection>();
@@ -140,7 +177,7 @@ export function conversationToolSections(
     let index = 0;
     while (index < transcript.length) {
         const lead = transcript[index]!;
-        if (!toolSectionCall(lead)) {
+        if (!toolSectionCall(lead) || toolSectionEntryOpened(lead, opened)) {
             rows.push(lead);
             index += 1;
             continue;

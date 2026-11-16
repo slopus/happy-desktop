@@ -256,6 +256,40 @@ const ONE_CALL: Step = {
     running: false,
 };
 
+const TURN_ID = "turn-opened";
+const OPENED_TRACE = {
+    turnId: TURN_ID,
+    agentUserId: agentAuthor.id,
+    status: "complete" as const,
+    entryCount: 15,
+    toolCallCount: 14,
+    subagents: [],
+    backgroundTerminals: [],
+};
+
+/** A finished turn the reader opened with "View traces": every row it hides when folded. */
+const OPENED: Step = {
+    label: "Opened turn",
+    entries: [
+        ASK,
+        ...[INTRO, ...firstRun("success"), MIDDLE, ...secondRun(8, "success")].map((entry, index) =>
+            index === 0 && entry.kind === "message"
+                ? {
+                      ...entry,
+                      traceFoldTargetId: TURN_ID,
+                      message: {
+                          ...entry.message,
+                          agentTrace: { ...OPENED_TRACE, foldsAway: true as const },
+                      },
+                  }
+                : { ...entry, traceFoldTargetId: TURN_ID },
+        ),
+        { ...ANSWER, traceFoldAnchorId: TURN_ID },
+        turnStatus("status", 344_000),
+    ],
+    running: false,
+};
+
 interface Step {
     readonly label: string;
     readonly entries: readonly ConversationEntry[];
@@ -339,15 +373,28 @@ const STEPS: readonly Step[] = [
     },
 ];
 
-function Transcript(props: { step: Step; testId?: string; ungrouped?: boolean }) {
+function Transcript(props: {
+    step: Step;
+    testId?: string;
+    ungrouped?: boolean;
+    expandedTurnIds?: ReadonlySet<string>;
+}) {
     return (
         <ToolCallsGroupedContext value={props.ungrouped !== true}>
-            <TranscriptView step={props.step} testId={props.testId} />
+            <TranscriptView
+                expandedTurnIds={props.expandedTurnIds}
+                step={props.step}
+                testId={props.testId}
+            />
         </ToolCallsGroupedContext>
     );
 }
 
-function TranscriptView(props: { step: Step; testId?: string }) {
+function TranscriptView(props: {
+    step: Step;
+    testId?: string;
+    expandedTurnIds?: ReadonlySet<string> | undefined;
+}) {
     return (
         <div
             style={{
@@ -365,6 +412,7 @@ function TranscriptView(props: { step: Step; testId?: string }) {
                 data-testid={props.testId}
                 elapsedMs={props.step.running ? 41_000 : undefined}
                 entries={props.step.entries}
+                {...(props.expandedTurnIds ? { expandedTurnIds: props.expandedTurnIds } : {})}
                 running={props.step.running}
                 style={{ flex: "1 1 auto", minWidth: 0 }}
                 viewerId={happyAgentOwnerAuthor.id}
@@ -609,6 +657,15 @@ export function AgentToolSectionPage() {
                 window={{ width: 1100, height: 760 }}
             >
                 <Transcript step={ONE_CALL} testId="one-call" />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A finished turn the reader opened with View traces: every call is its own row."
+                label="Transcript, opened turn"
+                number={`${componentNumber}.10`}
+                screen="10-opened-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <Transcript expandedTurnIds={new Set([TURN_ID])} step={OPENED} testId="opened" />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="The minimum window: the same one line."

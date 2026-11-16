@@ -110,6 +110,7 @@ import {
     conversationToolSectionEntryKeys,
     conversationToolSections,
     conversationToolSectionsNone,
+    conversationTurnsOpened,
     type ConversationToolSection,
     type ConversationToolSectionMemory,
 } from "./conversationToolSections";
@@ -676,14 +677,17 @@ export function ConversationView(props: ConversationViewProps) {
        live, the row shows the run's latest call; ended, it sums the run up on
        the same line. `transcript` is the rows; `steering.transcript` is every
        entry, for what reads the calls a section stands for. A transcript still
-       hydrating settles nothing about which runs have ended. Without it every
-       call is its own row, and there are no sections. */
+       hydrating settles nothing about which runs have ended. A turn the reader
+       opened with "View traces" shows every call again, all its sections at
+       once. Without Group tool calls every call is its own row, and there are
+       no sections. */
     const toolCallsGrouped = use(ToolCallsGroupedContext);
     const toolSections = toolCallsGrouped
         ? conversationToolSections(
               steering.transcript,
               props.running === true,
               props.loading ? new Set() : toolSectionMemory,
+              conversationTurnsOpened(steering.transcript, props.expandedTurnIds),
           )
         : conversationToolSectionsNone(steering.transcript);
     const transcript = toolSections.rows;
