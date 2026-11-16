@@ -10,6 +10,7 @@ import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
 import { RetainedViews } from "./RetainedViews";
 import { createRenderer } from "./testing";
+import { messageListEndOffset } from "./testing/messageListEnd";
 
 /* Views kept out of sight keep their DOM and scroll position, and nothing in
  * them answers the reader: no typing, no focus, no layout, no accessibility
@@ -244,9 +245,7 @@ it.each(["following", "parked"] as const)(
             const check = () => {
                 expect(viewportOf("a")).toBe(viewport);
                 if (mode === "following")
-                    expect(
-                        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
-                    ).toBeLessThan(1);
+                    expect(Math.abs(messageListEndOffset(viewport))).toBeLessThan(1);
                 else {
                     expect(anchor.isConnected).toBe(true);
                     expect(anchor.getBoundingClientRect().top).toBe(top);

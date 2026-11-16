@@ -19,6 +19,7 @@ import {
 import { messageTextLayoutCacheRefresh } from "./messageTextLayout";
 import type { MessageListLegacyScrollPosition, MessageListScrollPosition } from "./Message";
 import { createRenderer } from "./testing";
+import { messageListEndOffset } from "./testing/messageListEnd";
 import goldFiveMinuteLists from "./fixtures/gold-five-minute-lists.txt?raw";
 
 /* The reader's fixed point: VIRTUAL_ANCHOR_INSET above the viewport's lower edge. */
@@ -332,7 +333,8 @@ it("keeps a follower pinned to the bottom through resize drags", async () => {
     await document.fonts.ready;
     await settled();
     const element = scrollport();
-    const atBottom = () => element.scrollHeight - element.scrollTop - element.clientHeight;
+    // The last row against the lower edge, not what is left of the scroll range.
+    const atBottom = () => Math.abs(messageListEndOffset(element));
     expect(atBottom()).toBeLessThanOrEqual(1);
     const before = geometryRead();
     for (let cycle = 0; cycle < testDepthCount(1, 3); cycle += 1)
@@ -390,13 +392,9 @@ it("falls back to the bottom for a vanished row and restores legacy pixel offset
     await document.fonts.ready;
     await settled();
     harness.mount("missing", { type: "row", rowKey: ".$gone", offset: 40 });
-    expect(
-        scrollport().scrollHeight - scrollport().scrollTop - scrollport().clientHeight,
-    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(messageListEndOffset(scrollport()))).toBeLessThanOrEqual(1);
     harness.mount("legacy-follow", { scrollTop: 0, following: true });
-    expect(
-        scrollport().scrollHeight - scrollport().scrollTop - scrollport().clientHeight,
-    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(messageListEndOffset(scrollport()))).toBeLessThanOrEqual(1);
     harness.mount("legacy-parked", { scrollTop: 4_000, following: false });
     expect(scrollport().scrollTop).toBe(4_000);
     expectViewportExact("legacy restore");

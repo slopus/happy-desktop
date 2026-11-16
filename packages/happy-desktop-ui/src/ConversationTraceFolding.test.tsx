@@ -14,6 +14,7 @@ import {
 import "./styles.css";
 import { ConversationView } from "./ConversationView";
 import { RetainedViews } from "./RetainedViews";
+import { messageListEndOffset } from "./testing/messageListEnd";
 import { createRenderer } from "./testing";
 
 /* A finished turn folds its work away only once none of it is on screen: the
@@ -490,7 +491,8 @@ it.each(
                     current.type === "ready" ? current.value.expandedTurnIds : new Set<string>();
                 samples.push({
                     top: row?.getBoundingClientRect().top ?? 0,
-                    bottom: element.scrollHeight - element.clientHeight - element.scrollTop,
+                    // The last row against the lower edge, not the scroll range.
+                    bottom: messageListEndOffset(element),
                     folded:
                         !expanded.has("manual") &&
                         !expanded.has("watched") &&
@@ -776,14 +778,29 @@ it("renders one author header across inference messages and tools, expanded or c
     assertTurn();
 });
 
-it("folds from the top control without moving what is above it", async () => {
-    const { view, store } = renderChat([...turn("a", 6), ...turn("b", 20), ...turn("c", 3)]);
+// With a full viewport of transcript still under the folded turn, nothing
+// above the control moves. With less, no blank is held under the transcript
+// to keep it there: it comes down until its end rests on the lower edge.
+it.each([
+    { after: ["c", "d", "e", "f", "g", "h", "i", "j"], held: true },
+    { after: ["c"], held: false },
+])("folds from the top control without moving what is above it: %j", async ({ after, held }) => {
+    const { view, store } = renderChat([
+        ...turn("a", 6),
+        ...turn("b", 20),
+        ...after.flatMap((id) => turn(id, 3)),
+    ]);
     await view.ready();
     await frames();
     const viewport = viewportOf(view);
     store.turnTraceToggle("b");
     await frames();
     // Bring the top of the open turn into view, its prompt just inside the top edge.
+    for (let index = 0; index < 60 && !rowWith(viewport, "Prompt b:"); index += 1) {
+        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -300 }));
+        viewport.scrollTop -= 300;
+        await frames();
+    }
     const offset =
         rowWith(viewport, "Prompt b:")!.getBoundingClientRect().top -
         viewport.getBoundingClientRect().top -
@@ -804,5 +821,12 @@ it("folds from the top control without moving what is above it", async () => {
     await frames();
     expect(store.get().expandedTurnIds.has("b")).toBe(false);
     expect(promptRow.isConnected).toBe(true);
-    expect(promptRow.getBoundingClientRect().top).toBe(promptTop);
+    const moved = promptRow.getBoundingClientRect().top - promptTop;
+    const end = messageListEndOffset(viewport);
+    expect(end, "blank under the folded transcript").toBeLessThanOrEqual(1);
+    if (held) expect(moved).toBe(0);
+    else {
+        expect(moved).toBeGreaterThan(0);
+        expect(Math.abs(end), "came down past its end").toBeLessThanOrEqual(1);
+    }
 });

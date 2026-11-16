@@ -4,6 +4,7 @@ import { expect, it } from "vitest";
 import "./styles.css";
 import { MessageList, type MessageListScrollPosition } from "./Message";
 import { createRenderer } from "./testing";
+import { messageListEndOffset } from "./testing/messageListEnd";
 
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -91,7 +92,7 @@ it.each(["queued", "queued-wheel", "insert-only", "trim"] as const)(
             const inset =
                 viewport.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom;
             expect(viewport.scrollTop).toBe(0);
-            expect(Math.abs(inset - (mode === "trim" ? 212 : 112))).toBeLessThanOrEqual(1);
+            expect(Math.abs(inset - (mode === "trim" ? 124 : 24))).toBeLessThanOrEqual(1);
             if (mode === "queued-wheel") {
                 // The question is the last readable row. The upward wheel
                 // cannot move native 0, so its standard point is still this
@@ -102,23 +103,34 @@ it.each(["queued", "queued-wheel", "insert-only", "trim"] as const)(
             commit();
             await frame();
             await frame();
-            // A shrinking viewport consumes the 88px held by grow(). Without
-            // a queued row below it, the question keeps only its natural tail.
+            // grow() left nothing held under the question, so the shorter
+            // viewport has none to consume. The question's end keeps its place
+            // over the lower edge and what was appended arrives below the
+            // fold. A reader who wheeled holds the point they were reading
+            // instead, which is still in view once the floor gap is released.
+            const held =
+                mode === "queued-wheel"
+                    ? { offset: 72, viewportInset: 6 }
+                    : { offset: 80, viewportInset: 24 };
             expect(
                 Math.abs(
                     viewport.getBoundingClientRect().bottom -
                         row.getBoundingClientRect().bottom -
-                        (queued ? 112 : 24),
+                        (held.viewportInset - (80 - held.offset)),
                 ),
             ).toBeLessThanOrEqual(1);
-            expect(Math.abs(viewport.scrollTop - (queued ? 114 : 26))).toBeLessThanOrEqual(1);
-            expect(Math.abs(viewport.scrollHeight - (queued ? 803 : 691))).toBeLessThanOrEqual(1);
+            expect(
+                Math.abs(viewport.scrollTop - (mode === "queued-wheel" ? 0 : 26)),
+            ).toBeLessThanOrEqual(1);
+            // The whole transcript and its end padding, with nothing held.
+            const content = viewport.querySelector<HTMLElement>(".happy-message-list__virtual")!;
+            expect(Number.parseFloat(content.style.height)).toBe(queued ? 803 : 691);
+            expect(content.style.minHeight).toBe("");
             if (queued) {
                 expect(position).toMatchObject({
                     type: "row",
                     rowKey: ".$question",
-                    offset: 80,
-                    viewportInset: 112,
+                    ...held,
                 });
                 const top = row.getBoundingClientRect().top;
                 // One echo consumes expectedScrollTop; a repeated native echo
@@ -129,8 +141,7 @@ it.each(["queued", "queued-wheel", "insert-only", "trim"] as const)(
                 expect(position).toMatchObject({
                     type: "row",
                     rowKey: ".$question",
-                    offset: 80,
-                    viewportInset: 112,
+                    ...held,
                 });
                 const nativeTop = viewport.scrollTop;
                 const descriptor = Object.getOwnPropertyDescriptor(viewport, "scrollTop");
@@ -144,8 +155,7 @@ it.each(["queued", "queued-wheel", "insert-only", "trim"] as const)(
                     expect(position).toMatchObject({
                         type: "row",
                         rowKey: ".$question",
-                        offset: 80,
-                        viewportInset: 112,
+                        ...held,
                     });
                 } finally {
                     if (descriptor) Object.defineProperty(viewport, "scrollTop", descriptor);
@@ -158,17 +168,18 @@ it.each(["queued", "queued-wheel", "insert-only", "trim"] as const)(
                 expect(position).toMatchObject({
                     type: "row",
                     rowKey: ".$question",
-                    offset: 80,
-                    viewportInset: 112,
+                    ...held,
                 });
                 viewport.scrollTop -= 1;
                 viewport.dispatchEvent(new Event("scroll"));
                 viewport.dispatchEvent(new Event("scrollend"));
+                // A real scroll takes the standard reading point, 32px above
+                // the lower edge: 1px further down the question than before.
                 expect(position).toMatchObject({
                     type: "row",
-                    rowKey: ".$queued",
-                    offset: 76,
-                    viewportInset: 35,
+                    rowKey: ".$question",
+                    offset: held.offset + held.viewportInset - 32 - 1,
+                    viewportInset: 32,
                 });
             }
         } finally {
@@ -222,7 +233,7 @@ it.each(["wheel", "End"] as const)(
             const viewport = view.container.querySelector<HTMLElement>(
                 ".happy-message-list__viewport",
             )!;
-            expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+            expect(Math.abs(messageListEndOffset(viewport, 8))).toBeLessThanOrEqual(1);
             const before = viewport.scrollTop;
             if (intent === "wheel")
                 viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 10, cancelable: true }));
@@ -233,7 +244,7 @@ it.each(["wheel", "End"] as const)(
             await frame();
             await frame();
             expect(position).toEqual({ type: "bottom" });
-            expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+            expect(Math.abs(messageListEndOffset(viewport, 8))).toBeLessThanOrEqual(1);
             const row = viewport.querySelector<HTMLElement>('[data-row="2"]')!;
             expect(row.getBoundingClientRect().bottom).toBeLessThanOrEqual(
                 viewport.getBoundingClientRect().bottom,
@@ -305,7 +316,7 @@ it.each(["wheel", "ArrowDown"] as const)(
                 await frame();
             }
             expect(fixture.position()).toEqual({ type: "bottom" });
-            expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+            expect(Math.abs(messageListEndOffset(viewport, 8))).toBeLessThanOrEqual(1);
         } finally {
             view.destroy();
         }
@@ -341,7 +352,7 @@ it("leaves an uncancelable wheel to scroll natively and follows the end it lands
             await frame();
         }
         expect(fixture.position()).toEqual({ type: "bottom" });
-        expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+        expect(Math.abs(messageListEndOffset(viewport, 8))).toBeLessThanOrEqual(1);
     } finally {
         view.destroy();
     }
@@ -355,7 +366,7 @@ it("never puts a scrollbar drag back when the stream commits before its scroll e
         await frame();
         await frame();
         const viewport = fixture.viewport();
-        expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+        expect(Math.abs(messageListEndOffset(viewport, 8))).toBeLessThanOrEqual(1);
         // A press on the native bar: past the client area, on the scrollport itself.
         const bounds = viewport.getBoundingClientRect();
         viewport.dispatchEvent(

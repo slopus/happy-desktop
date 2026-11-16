@@ -16,7 +16,8 @@ A good chat with an AI follows a few principles:
 - **The draft never hides the conversation.** A draft that grows carries the
   transcript up with it in the same frame, so the newest lines stay in view; a
   docked question does the same. A draft that shrinks, or empties on send,
-  leaves space behind that holds still. Typing on one line moves nothing.
+  brings the transcript back down with it and leaves no blank behind. Typing on
+  one line moves nothing.
 - **Sending gives the reply room.** A send from the bottom lifts the sent
   message once, in the commit that adds it, until its top edge sits 30% down
   the viewport: the turn before it stays in view and the reply has the rest.
@@ -37,23 +38,19 @@ A good chat with an AI follows a few principles:
   place. It appears at that point in its first frame and does not move after.
   A chat out of sight does no work to stay placed; it is placed once, in the
   commit that shows it, and not shown until its content is current.
-- **Space that exists stays put.** Blank space added to keep content still —
-  under a send, under a shrinking draft, below a grown window — belongs to the
-  end of the transcript. It keeps its size wherever the reader scrolls, moves
-  with the end when history above changes, and is only ever taken up by new
-  content growing into it; once that content outgrows it, the transcript grows
-  as usual. A window, composer, or dock shrinking the viewport uses held blank
-  space first, one pixel for one pixel, before the transcript moves; zoom
-  preserves its physical size within 70% of the viewport. Enlarging the viewport
-  may add the blank needed to keep a parked row fixed, without applying the
-  shrink cap again or letting the viewport become entirely blank. Resizing the
-  window vertically, from its bottom edge or its top edge, behaves like the
-  draft growing: "if there's space to take, the resize should probably take that
-  space", and the transcript moves with the edge at the same rate however fast
-  or slow it is dragged. Blank space a resize added goes once it has fully
-  scrolled off screen. Space never
-  decays with time, scrolling, or
-  streaming, and never animates or disappears on its own.
+- **No blank under the transcript.** In the user's words: "there should be no
+  blanks at all ever." Nothing is left blank under the last row to keep content
+  still: not below a grown window, not under a shrinking draft, not after a
+  zoom, not on returning to a chat. When the window grows, "chat should be
+  pinned to bottom": a reader following the end stays on it. A reader who had
+  scrolled up keeps their row while there is transcript to fill the viewport
+  below it; where keeping it would leave blank under the last row, the blank is
+  removed as well and the transcript comes down to its real end. A window,
+  composer, or dock shrinking the viewport moves the transcript with it.
+  Resizing the window vertically, from its bottom edge or its top edge, behaves
+  like the draft growing or shrinking, and the transcript moves with the edge
+  at the same rate however fast or slow it is dragged. The room the queue holds
+  for its next status, above, stays.
 - **Work folds away out of sight.** A finished turn's steps fold behind
   "View traces", but never while any row of it is on screen: a turn the reader
   watched finish, or steered, stays open until all of it has scrolled away, and
@@ -126,7 +123,12 @@ up when they get to a reasonable point."
   zoom from 50% to 200%, window and pane resizing, fractional display scales,
   and very short, very long, and empty conversations. They find no programmatic
   scroll against the person and no visible row moving 1px or more without a
-  gesture.
+  gesture, other than the transcript coming down to its end where blank would
+  otherwise be left under it.
+- In those runs no blank is ever found under the transcript's last row while
+  there is transcript to fill the viewport. This is measured from where the
+  last row is drawn against the viewport's lower edge, not from the scroll
+  range, which cannot tell the two apart.
 - After a send from the bottom, the sent message's top edge is 30% down the
   viewport in the frame that first shows it, the turn before it is visible
   above, and nothing moves until the reply fills the space below and the

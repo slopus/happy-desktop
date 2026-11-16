@@ -5,6 +5,7 @@ import "./styles.css";
 import { MessageList } from "./Message";
 import { useMessageListDisclosureAnchor } from "./messageListDisclosureAnchor";
 import { createRenderer } from "./testing";
+import { messageListEndClearance } from "./testing/messageListEnd";
 
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 async function frames() {
@@ -88,13 +89,23 @@ it.each([
             flushSync(() => control.click());
             await frames();
             expect(Math.abs(control.getBoundingClientRect().top - top)).toBeLessThanOrEqual(1);
+            // What the opened disclosure pushed below the fold (8px is this
+            // list's own padding under its last row).
+            const below = Math.max(0, 8 - messageListEndClearance(viewport));
             insert();
             await frames();
             expect(control.isConnected).toBe(true);
-            const expectedTop = covered ? viewport.getBoundingClientRect().bottom - 32 : top;
+            // A viewport that gains more room than the transcript has to fill
+            // it does not leave the rest blank under the last row: the short
+            // transcript comes down to its floor, the disclosure with it.
+            const settled = Math.max(0, dock - afterDock - below - 64);
+            const expectedTop = covered
+                ? viewport.getBoundingClientRect().bottom - 32
+                : top + settled;
             expect(Math.abs(control.getBoundingClientRect().top - expectedTop)).toBeLessThanOrEqual(
                 1,
             );
+            if (!covered) expect(messageListEndClearance(viewport)).toBeLessThanOrEqual(8 + 1);
         } finally {
             view.destroy();
         }

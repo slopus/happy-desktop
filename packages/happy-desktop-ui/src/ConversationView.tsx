@@ -1028,8 +1028,12 @@ export function ConversationView(props: ConversationViewProps) {
         startsGroup: workingStatusStartsGroup,
         closesMessage: workingStatusClosesMessage,
     });
+    /* Sends waiting to be taken up have a turn coming whose status will show
+       under them, whether they wait under a running turn or, once it is
+       stopped, at the end of the transcript. */
     const queuedStatusHeight =
-        queued.length === 0
+        queued.length === 0 &&
+        (props.running === true || conversationPendingSteering(props.entries).queued.length === 0)
             ? 0
             : conversationWorkingStatusHeight({
                   visible: true,

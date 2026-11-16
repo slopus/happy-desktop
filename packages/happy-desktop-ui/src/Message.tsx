@@ -1206,9 +1206,6 @@ export function MessageList(props: MessageListProps) {
     const viewportGeometry = useRef({ height: 0, width: 0 });
     const viewportScale = useRef(0);
     const geometryPlacementPending = useRef(false);
-    /* This list's observers have just reattached after a time out of sight —
-       a kept view shown again — and its geometry has not been read back yet. */
-    const returnPending = useRef(false);
     /* The rows the last commit mounted, by key with the index each had there. */
     const mountedRows = useRef<readonly { readonly key: Key; readonly index: number }[]>([]);
     const viewportGeometryCommitCurrent = useRef((_width: number, _height: number) => {});
@@ -1216,12 +1213,6 @@ export function MessageList(props: MessageListProps) {
         undefined,
     );
     const virtualContent = useRef<HTMLDivElement | null>(null);
-    // Space held below the transcript: by a viewport that grows keeping its
-    // previous content extent. It moves with the
-    // transcript's end. A shrinking viewport or new content takes it up.
-    const geometryExtent = useRef(0);
-    // A viewport resize makes held tail space reclaimable once wholly unseen.
-    const geometryExtentResized = useRef(false);
     const geometrySparseInset = useRef(0);
     const geometryFollowInset = useRef(0);
     const footerFollowed = useRef(false);
@@ -1343,31 +1334,42 @@ export function MessageList(props: MessageListProps) {
             viewportGeometryCommitCurrent.current(geometry.width, height);
             return;
         }
-        /* The status room is held blank, so like any held blank it leaves the
-           newest rows in view: it and the end padding take at most the share
-           of the viewport a zoom leaves held blank space. */
-        const reserve = Math.min(
-            props.footerReserveHeight ?? 0,
-            Math.max(0, height * (1 - LEADING_HEADER_REST_TOP) - paddingEnd),
-        );
-        if (following.current && virtualized && reserve > 0) {
+        const wanted = virtualized && following.current ? statusRoomWanted() : 0;
+        if (wanted > 0) {
             geometryFollowInset.current = 0;
-            geometryExtentRequire(
-                geometrySparseInset.current + estimatedContentHeight() + reserve - height,
-                height,
-            );
+            if (!rowSizeModel.statusAwaited) {
+                // A status already at the end stands in the room asked for.
+                rowSizeModel.statusOwed += statusAtEnd();
+                rowSizeModel.statusAwaited = true;
+            }
+            rowSizeModel.statusOwed = Math.max(rowSizeModel.statusOwed, wanted);
         }
+        statusRoomApply();
         // Virtual rows already have authoritative geometry. Native scrollHeight
         // can still include overflow from a previous virtual range mid-commit.
         const total = virtualized
-            ? Math.max(estimatedContentHeight(), geometryExtent.current) +
-              geometrySparseInset.current
+            ? endHeight() + geometrySparseInset.current
             : element.scrollHeight;
         // Native geometry may retain a fractional maximum at browser zoom.
         // Following never writes upward; model compensation owns that change.
         const bottom = total - (geometry.height || height) - geometryFollowInset.current;
         const current = element.scrollTop;
-        if (bottom > current) scrollTopWrite(element, bottom);
+        if (bottom > current) {
+            scrollTopWrite(element, bottom);
+            return;
+        }
+        /* A taller viewport, or content that shrank under the end, leaves no
+           room to hold the follower's old offset: nothing is kept blank below
+           the transcript, so the browser has already brought its end down to
+           the lower edge. That is where a follower belongs; take it as the
+           reader's offset, so the scroll event reporting it is not read as
+           the reader leaving the end. */
+        if (
+            following.current &&
+            initialPositionApplied.current &&
+            messageListScrollOffsetMoved(current, readerScrollTop.current)
+        )
+            scrollTopWrite(element, current);
     };
     /**
      * Holds a resting header's gap at its current size, as the list's sparse
@@ -1573,6 +1575,10 @@ export function MessageList(props: MessageListProps) {
         pending: 0,
         /* The previous layout's queued footer room, consumed on acceptance. */
         footerReserveHeight: 0,
+        /* What the end of the transcript is owed for a queued turn's status,
+           and whether that status has yet to show; see `statusRoom`. */
+        statusOwed: 0,
+        statusAwaited: false,
         width: undefined as number | undefined,
         /* Advances whenever any row's size or exactness may have changed. */
         version: 0,
@@ -1599,10 +1605,10 @@ export function MessageList(props: MessageListProps) {
      */
     function rowSizeModelLayout(rowWidth: number, from: number, focus: MessageListLayoutFocus) {
         const element = list.current;
-        const heldBlank = Math.min(
-            rowSizeModel.footerReserveHeight,
-            Math.max(0, geometryExtent.current - estimatedContentHeight()),
-        );
+        /* The queue's status room as the previous layout held it. */
+        const roomBefore = statusRoom();
+        const naturalBefore = estimatedContentHeight();
+        const statusBefore = statusAtEnd();
         if (
             wheelScrollPending.current &&
             !following.current &&
@@ -1624,7 +1630,7 @@ export function MessageList(props: MessageListProps) {
         if (props.followKey !== followSeen.current) {
             followSeen.current = props.followKey;
             const bottom =
-                Math.max(estimatedContentHeight(), geometryExtent.current) +
+                endHeight() +
                 geometrySparseInset.current -
                 viewportGeometry.current.height -
                 geometryFollowInset.current;
@@ -1868,7 +1874,7 @@ export function MessageList(props: MessageListProps) {
                     (footerFollowed.current
                         ? Math.min(0, footerDelta)
                         : footerDelta > 0
-                          ? Math.max(0, footerDelta - heldBlank)
+                          ? Math.max(0, footerDelta - roomBefore)
                           : footerDelta),
             );
         // A content update can also discover cached sizes for cold rows. Only
@@ -1905,19 +1911,25 @@ export function MessageList(props: MessageListProps) {
             }
             return 0;
         };
-        const extentShift = geometryExtent.current > 0 ? tailShift() : 0;
         if (following.current && !widthReflow)
             // An answered request can enter history before newer messages.
             // Keep the retained tail in the same place; content appended after
             // it still follows naturally. This also covers cold prefix sizes.
-            coordinateDelta = geometryExtent.current > 0 ? extentShift : tailShift();
-        if (extentShift !== 0) {
-            // The held space belongs to the end of the transcript: rows that
-            // arrive, leave, or change above its last row carry it along, so
-            // only content added at the end grows into it.
-            geometryExtent.current += extentShift;
-            if (virtualContent.current)
-                virtualContent.current.style.minHeight = `${String(geometryExtent.current)}px`;
+            coordinateDelta = tailShift();
+        if (model.statusOwed > 0) {
+            // Whatever arrives under the last row the model already had takes
+            // the room up. Until the queue's turn has shown its status, a
+            // status at the end only stands in the room: one that leaves
+            // before then, as when a turn is stopped, gives it back.
+            const grown = estimatedContentHeight() - naturalBefore - tailShift();
+            const taken = model.statusAwaited ? grown - (statusAtEnd() - statusBefore) : grown;
+            if (taken > 0) model.statusOwed = Math.max(0, model.statusOwed - taken);
+            if (model.statusAwaited && model.footerReserveHeight === 0 && statusAtEnd() > 0) {
+                // No queue asks any more and the status is here: all that is
+                // left of the room is what that status did not fill.
+                model.statusAwaited = false;
+                model.statusOwed = Math.max(0, model.statusOwed - statusAtEnd());
+            }
         }
         /* A footer held below the fold only stays there while nothing else
            moves it. Content written past the end carries a follower anyway,
@@ -1929,7 +1941,7 @@ export function MessageList(props: MessageListProps) {
             initialPositionApplied.current &&
             followSentHold.current === undefined &&
             geometryFollowInset.current > 0 &&
-            Math.max(estimatedContentHeight(), geometryExtent.current) +
+            endHeight() +
                 geometrySparseInset.current -
                 viewportGeometry.current.height -
                 geometryFollowInset.current >
@@ -1940,7 +1952,7 @@ export function MessageList(props: MessageListProps) {
         if (following.current && initialPositionApplied.current && coordinateDelta !== 0) {
             // Refining unseen rows moves model coordinates, not the reader.
             // Carry the same delta through the eventual DOM commit, including
-            // when estimates shrink while geometry slack prevents a clamp.
+            // when estimates shrink.
             pendingFollowerTop.current = readerScrollTop.current + coordinateDelta;
             readerScrollTop.current = pendingFollowerTop.current;
             // The next render must select rows at the compensated offset.
@@ -2040,21 +2052,78 @@ export function MessageList(props: MessageListProps) {
                 : rowSizeModel.starts[last]! + rowSizeModel.sizes[last]!) + paddingEnd
         );
     };
-    function geometryExtentCommit() {
-        const element = list.current;
+    /**
+     * Room under queued rows for the live status their turn will show below
+     * them once it takes them up, as tall as that status, so taking the queue
+     * up moves nothing. It is the only space the list ever keeps under its
+     * last row.
+     *
+     * A follower's queue asks for it. It lasts until that turn's status
+     * shows: a status at the end meanwhile stands in it, and gives it back if
+     * it leaves first, as when the turn before is stopped and the queue is
+     * taken up a moment later. Rows arriving under the last row take it up.
+     * What a shorter status left of it goes with the next rows, or when the
+     * reader scrolls all of it out of view or leaves the chat. It leaves the
+     * newest rows in view: with the end padding it takes at most the share of
+     * the viewport below a resting header's lift line.
+     *
+     * Nothing else adds space here. A taller viewport, shorter content, and a
+     * zoom all bring the transcript's end down to the viewport's lower edge.
+     */
+    function statusRoom() {
+        const room = rowSizeModel.statusAwaited
+            ? rowSizeModel.statusOwed - statusAtEnd()
+            : rowSizeModel.statusOwed;
+        return Math.max(0, Math.min(room, statusRoomLimit()));
+    }
+    /** The live status's height while it is the transcript's last row, else 0. */
+    function statusAtEnd() {
+        const last = rowSizeModel.keys.length - 1;
+        return last >= 0 && rowSizeModel.keys[last] === MESSAGE_LIST_FOOTER_KEY
+            ? rowSizeModel.sizes[last]!
+            : 0;
+    }
+    function statusRoomLimit() {
+        return Math.max(
+            0,
+            viewportGeometry.current.height * (1 - LEADING_HEADER_REST_TOP) - paddingEnd,
+        );
+    }
+    /** The room the queue the model was built for asks a follower to keep. */
+    function statusRoomWanted() {
+        return Math.min(rowSizeModel.footerReserveHeight, statusRoomLimit());
+    }
+    function statusRoomRelease() {
+        rowSizeModel.statusOwed = 0;
+        rowSizeModel.statusAwaited = false;
+    }
+    /** The transcript's whole extent: every row, its clearances, and the queue's status room. */
+    function endHeight() {
+        return estimatedContentHeight() + statusRoom();
+    }
+    /** Gives the virtual content the status room it holds, and takes back what it let go. */
+    function statusRoomApply() {
         const content = virtualContent.current;
-        if (!element || !content) return;
-        const naturalHeight = estimatedContentHeight();
+        if (!content) return;
+        const room = statusRoom();
+        const minHeight = room > 0 ? `${String(estimatedContentHeight() + room)}px` : "";
+        if (content.style.minHeight !== minHeight) content.style.minHeight = minHeight;
+    }
+    /** Lets go of status room no queue asks for once the reader has scrolled all of it away. */
+    function statusRoomOffscreenRelease(top: number, height: number) {
+        const room = statusRoom();
+        if (room === 0 || rowSizeModel.footerReserveHeight > 0) return;
+        if (top + height > leadingGap(height) + estimatedContentHeight()) return;
+        // The next native scroll must compare against the released height,
+        // otherwise returning to the bottom looks like a content mutation.
+        scrollHeightBaseline.current -= room;
+        statusRoomRelease();
+        statusRoomApply();
+    }
+    function sparseInsetCommit() {
+        const element = list.current;
+        if (!element) return;
         const intendedTop = pendingFollowerTop.current ?? element.scrollTop;
-        // Content takes up held space as it grows; resized space can also be
-        // released once wholly outside the viewport.
-        if (geometryExtent.current > 0 && naturalHeight >= geometryExtent.current) {
-            const removed = Math.max(0, geometryExtent.current - naturalHeight);
-            geometryExtent.current = 0;
-            geometryExtentResized.current = false;
-            content.style.removeProperty("min-height");
-            geometryFollowInset.current = Math.max(0, geometryFollowInset.current - removed);
-        }
         const inset = geometrySparseInset.current;
         if (inset > 0 && intendedTop >= inset) {
             // The leading gap is entirely above the reader. Remove it and
@@ -2064,20 +2133,20 @@ export function MessageList(props: MessageListProps) {
             geometrySparseInset.current = 0;
             spacerHoldRelease();
             scrollTopWrite(element, top - inset);
+            return;
         }
-    }
-    function geometryExtentOffscreenRelease(top: number, height: number) {
-        if (!geometryExtentResized.current || geometryExtent.current === 0) return;
-        if (top + height > leadingGap(height) + estimatedContentHeight()) return;
-        // The next native scroll must compare against the released height,
-        // otherwise returning to the bottom looks like a content mutation.
-        scrollHeightBaseline.current -= Math.max(
-            0,
-            geometryExtent.current - estimatedContentHeight(),
-        );
-        geometryExtent.current = 0;
-        geometryExtentResized.current = false;
-        virtualContent.current?.style.removeProperty("min-height");
+        /* A transcript shorter than the viewport rests on its floor. A gap
+           held above it that has come to leave blank under its last row, as
+           when its end shrank, is let go: the rows come down to the floor. */
+        if (
+            inset > 0 &&
+            !headerLeads &&
+            rowModelCurrent() &&
+            inset + endHeight() < viewportGeometry.current.height - 1
+        ) {
+            geometrySparseInset.current = 0;
+            spacerHoldRelease();
+        }
     }
     /** The newest row a caller's key names, else the footer. */
     function sentRowIndex(key: string): number | undefined {
@@ -2102,21 +2171,13 @@ export function MessageList(props: MessageListProps) {
         const size = index === undefined ? undefined : rowSizeModel.sizes[index];
         if (start === undefined || size === undefined) return;
         const height = viewportGeometry.current.height;
-        const end = Math.max(estimatedContentHeight(), geometryExtent.current);
+        const end = endHeight();
         const withheld = end - start - Math.max(height, size);
         if (withheld <= geometryFollowInset.current) return;
         geometryFollowInset.current = withheld;
         followSentHold.current = items.length;
         /* The end was followed past the send before it was held back. */
         scrollTopWrite(element, geometrySparseInset.current + end - height - withheld);
-    }
-    function geometryExtentRequire(top: number, height: number) {
-        const content = virtualContent.current;
-        if (!content) return;
-        const extent = top + height - geometrySparseInset.current;
-        if (extent <= estimatedContentHeight() || extent <= geometryExtent.current) return;
-        geometryExtent.current = extent;
-        content.style.minHeight = `${String(extent)}px`;
     }
     /**
      * Where the list opens: the restored reader position, or the newest
@@ -2257,17 +2318,12 @@ export function MessageList(props: MessageListProps) {
      */
     function leadingGap(viewportHeight: number): number {
         if (geometrySparseInset.current > 0 || headerLeads) return geometrySparseInset.current;
-        return Math.max(
-            0,
-            viewportHeight - Math.max(estimatedContentHeight(), geometryExtent.current),
-        );
+        return Math.max(0, viewportHeight - endHeight());
     }
     function modelFloored(viewportHeight: number): boolean {
         return (
             readerScrollTop.current <= 1 &&
-            leadingGap(viewportHeight) +
-                Math.max(estimatedContentHeight(), geometryExtent.current) <=
-                viewportHeight + 1
+            leadingGap(viewportHeight) + endHeight() <= viewportHeight + 1
         );
     }
     function modelAnchorCapture(
@@ -2283,9 +2339,9 @@ export function MessageList(props: MessageListProps) {
         let item = modeledItemAtOffset(point);
         let heldPoint = point;
         if (!item || item.key === MESSAGE_LIST_FOOTER_KEY) {
-            // Resizing can preserve blank space below the last row. Anchor
-            // that row's end when the point lands in blank space or a changing
-            // status footer, so only history owns the reader's fixed point.
+            // The point can land under the last row, in its end padding or
+            // the queue's status room, or in a changing status footer. Anchor
+            // that row's end, so only history owns the reader's fixed point.
             const keys = rowSizeModel.keys;
             const index =
                 item?.key === MESSAGE_LIST_FOOTER_KEY
@@ -2469,9 +2525,12 @@ export function MessageList(props: MessageListProps) {
         const element = list.current;
         if (!element || following.current) return false;
         if (anchor.type === "scrollTop") {
-            geometryExtentRequire(anchor.scrollTop, viewportHeight);
             readerAnchor.current = anchor;
-            scrollTopWrite(element, anchor.scrollTop);
+            // An offset past the transcript's end is brought back to it.
+            scrollTopWrite(element, anchor.scrollTop, (top) => {
+                if (messageListScrollOffsetMoved(top, anchor.scrollTop))
+                    readerAnchor.current = { scrollTop: top, type: "scrollTop" };
+            });
             return true;
         }
         const place = modelAnchorPlace(anchor, viewportHeight);
@@ -2479,9 +2538,6 @@ export function MessageList(props: MessageListProps) {
             readerAnchor.current = undefined;
             return false;
         }
-        // A floored place is where the floor already puts the rows; held
-        // space would take that floor away.
-        if (!place.floored) geometryExtentRequire(place.scrollTop, viewportHeight);
         // Pending restoration may still use the previous viewport. Persist its
         // point in the current basis before the offset report can render again.
         readerAnchor.current = {
@@ -2490,9 +2546,11 @@ export function MessageList(props: MessageListProps) {
             viewportInset: anchor.viewportInset + viewportGeometry.current.height - viewportHeight,
         };
         scrollTopWrite(element, place.scrollTop, (top) => {
-            // A clamp or a growing dock can leave the old point outside the
-            // viewport. Hold the point actually painted in the new geometry,
-            // before reporting that offset can render another range.
+            // The transcript's end, a floor, or a growing dock can leave the
+            // old point where it cannot be placed: nothing is kept blank under
+            // the last row to reach it. Hold the point actually painted in
+            // the new geometry, before reporting that offset can render
+            // another range.
             const held = readerAnchor.current;
             if (
                 place.clamped ||
@@ -2500,8 +2558,25 @@ export function MessageList(props: MessageListProps) {
                 (held?.type === "item" &&
                     (held.viewportInset < 0 ||
                         held.viewportInset > viewportGeometry.current.height))
-            )
-                readerAnchor.current = modelAnchorCapture(viewportGeometry.current.height, top);
+            ) {
+                const height = viewportGeometry.current.height;
+                const item = modeledItemAtIndex(place.index);
+                /* The reader's own row stays their fixed point while that
+                   point is still on screen, so what arrives under it later
+                   leaves it where it now is. */
+                const inset =
+                    item === undefined
+                        ? -1
+                        : height -
+                          (leadingGap(height) +
+                              item.start +
+                              Math.min(anchor.itemOffset, item.size) -
+                              top);
+                readerAnchor.current =
+                    inset >= 0 && inset <= height
+                        ? { ...anchor, index: place.index, viewportInset: inset }
+                        : modelAnchorCapture(height, top);
+            }
         });
         return true;
     }
@@ -2640,35 +2715,6 @@ export function MessageList(props: MessageListProps) {
         }
         pendingViewportGeometry.current = undefined;
         const element = list.current;
-        /* A follower shown again is placed as one opened again is: at the end
-           of its transcript as it is now. Blank held under that end belongs to
-           what the reader was watching when they left, and a viewport that
-           grew while the list was out of sight moved nothing they saw, so
-           neither holds the end up off the lower edge. Placed before the new
-           geometry is applied, at the new height, so that transition sees a
-           follower already at its end and adds no blank of its own. */
-        const returned =
-            returnPending.current &&
-            following.current &&
-            initialPositionApplied.current &&
-            element !== null;
-        returnPending.current = false;
-        if (returned) {
-            geometryExtent.current = 0;
-            geometryExtentResized.current = false;
-            virtualContent.current?.style.removeProperty("min-height");
-            pendingFollowerTop.current = undefined;
-            scrollTopWrite(
-                element,
-                Math.max(
-                    0,
-                    estimatedContentHeight() +
-                        geometrySparseInset.current -
-                        nextHeight -
-                        geometryFollowInset.current,
-                ),
-            );
-        }
         const previous = viewportGeometry.current;
         const previouslyFloored = pendingAnchor.current?.floored ?? modelFloored(previous.height);
         const scale =
@@ -2677,28 +2723,10 @@ export function MessageList(props: MessageListProps) {
                 : viewportScale.current;
         const zoomChanged =
             viewportScale.current > 0 && Math.abs(scale / viewportScale.current - 1) > 0.01;
-        if (zoomChanged) {
-            // Held blank space has a physical size. Counter a zoom instead of
-            // magnifying it until the transcript has left the visible viewport.
-            const natural = estimatedContentHeight();
-            const ratio = viewportScale.current / scale;
-            const blank = Math.min(
-                Math.max(0, geometryExtent.current - natural) * ratio,
-                nextHeight * (1 - LEADING_HEADER_REST_TOP),
-            );
-            geometryExtent.current = blank > 0 ? natural + blank : 0;
-            if (virtualContent.current)
-                virtualContent.current.style.minHeight =
-                    blank > 0 ? `${String(geometryExtent.current)}px` : "";
-            geometryPlacementPending.current = following.current;
-        }
+        // A zoom rescales every offset; a follower is placed at its end again.
+        if (zoomChanged) geometryPlacementPending.current = following.current;
         viewportScale.current = scale;
-        if (previous.width === nextWidth && previous.height === nextHeight && !zoomChanged) {
-            /* Nothing else places a follower when the box came back as it
-               left; room reserved under its end is asked for again here. */
-            if (returned) scrollBottomFollow(element, nextHeight);
-            return;
-        }
+        if (previous.width === nextWidth && previous.height === nextHeight && !zoomChanged) return;
         const nextRowWidth = messageListRowWidth(nextWidth, estimateRowWidth);
         if (rowSizeModel.width === undefined) {
             /* The first report: there is no earlier geometry to keep a reader
@@ -2775,10 +2803,6 @@ export function MessageList(props: MessageListProps) {
             return;
         }
         const previousHeight = previous.height || nextHeight;
-        if (nextHeight !== previousHeight && !zoomChanged) {
-            geometryExtentResized.current = geometryExtent.current > estimatedContentHeight();
-            geometryExtentOffscreenRelease(readerScrollTop.current, previousHeight);
-        }
         const widthChanged = nextRowWidth !== rowSizeModel.width;
         let floorShrank = false;
         if (
@@ -2790,21 +2814,15 @@ export function MessageList(props: MessageListProps) {
                re-centres in the new scrollport. */
             !(headerLeads && estimatedContentHeight() <= previousHeight)
         ) {
-            const naturalHeight = estimatedContentHeight();
+            const naturalHeight = endHeight();
             const wasFloored = previouslyFloored;
             floorShrank = wasFloored && nextHeight < previousHeight;
-            if (nextHeight < previousHeight && geometryExtent.current > naturalHeight) {
-                // Any shrinking viewport takes existing tail space first.
-                // Once it is exhausted, following carries rows one-for-one.
-                geometryExtent.current -= Math.min(
-                    previousHeight - nextHeight,
-                    geometryExtent.current - naturalHeight,
-                );
-                virtualContent.current.style.minHeight = `${String(geometryExtent.current)}px`;
-            }
-            let inset =
-                geometrySparseInset.current ||
-                Math.max(0, previousHeight - Math.max(naturalHeight, geometryExtent.current));
+            let inset = geometrySparseInset.current || Math.max(0, previousHeight - naturalHeight);
+            /* A taller viewport keeps a short transcript on its floor, and a
+               follower at its end: the gap above the rows takes the room
+               gained, never the space under the last row. */
+            if (nextHeight > previousHeight && !headerLeads && (following.current || wasFloored))
+                inset = Math.max(inset, nextHeight - naturalHeight);
             if (nextHeight < previousHeight) {
                 if (following.current || wasFloored)
                     inset = Math.min(inset, Math.max(0, nextHeight - naturalHeight));
@@ -2837,32 +2855,18 @@ export function MessageList(props: MessageListProps) {
                 // A held header gap is already pinned as the spacer's height.
                 if (!headerLeads) spacer.current!.style.marginTop = `${String(inset)}px`;
             }
-            const extent = readerScrollTop.current + nextHeight - inset;
-            if (extent > naturalHeight) {
-                geometryExtent.current = Math.max(geometryExtent.current, extent);
-                virtualContent.current.style.minHeight = `${String(geometryExtent.current)}px`;
-            }
             /* A shorter viewport (a growing composer) leaves the inset as it
                was, so the follower keeps its bottom in view and the transcript
-               rises with the composer. A taller one is held by the extent.
-               Rows appended in this same commit must still follow: the new
-               height may consume a withheld inset, never create more of it. */
+               rises with the composer. A taller one brings the end down with
+               its lower edge. Rows appended in this same commit must still
+               follow: the new height may consume a withheld inset, never
+               create more of it. */
             if (following.current && nextHeight > previousHeight)
                 geometryFollowInset.current = Math.min(
                     geometryFollowInset.current,
-                    Math.max(
-                        0,
-                        Math.max(naturalHeight, geometryExtent.current) +
-                            inset -
-                            nextHeight -
-                            readerScrollTop.current,
-                    ),
+                    Math.max(0, naturalHeight + inset - nextHeight - readerScrollTop.current),
                 );
         }
-        // A proportional cap changes the carry rate as the window crosses it.
-        // The shrink above consumes one pixel of blank per pixel of drag.
-        if (nextHeight !== previousHeight && !zoomChanged)
-            geometryExtentResized.current = geometryExtent.current > estimatedContentHeight();
         const pending = pendingAnchor.current;
         const heldAnchor =
             pending?.anchor ?? readerAnchor.current ?? modelAnchorCapture(previousHeight);
@@ -2888,13 +2892,11 @@ export function MessageList(props: MessageListProps) {
                     const requestedTop = globalPoint - Math.max(0, nextHeight - inset);
                     const maximumTop = Math.max(
                         0,
-                        Math.max(estimatedContentHeight(), geometryExtent.current) +
-                            geometrySparseInset.current -
-                            nextHeight,
+                        endHeight() + geometrySparseInset.current - nextHeight,
                     );
                     const top = Math.max(0, Math.min(requestedTop, maximumTop));
-                    // A floor restore may use held space, but cannot create
-                    // more blank space just to reach the previous bottom inset.
+                    // A floor restore never reaches past the transcript's end
+                    // for the previous bottom inset.
                     nextInset = nextHeight - (globalPoint - top);
                 }
             }
@@ -2948,9 +2950,10 @@ export function MessageList(props: MessageListProps) {
         };
         const width = messageListViewportWidth(element);
         const height = messageListViewportHeight(element);
-        /* TanStack observes again each time the list comes back into sight.
-           With a model already built, this is a return, not the first report. */
-        returnPending.current = rowSizeModel.width !== undefined;
+        /* TanStack observes again each time the list comes back into sight. A
+           chat returned to is drawn as one opened again is: it keeps status
+           room only for a queue it still has. */
+        if (rowSizeModel.footerReserveHeight === 0) statusRoomRelease();
         viewportGeometryCommitCurrent.current(width, height);
         reportRect(width, height);
         const geometryChanged: ResizeObserverCallback = (entries) => {
@@ -3003,8 +3006,7 @@ export function MessageList(props: MessageListProps) {
         const height = viewportGeometry.current.height || element.clientHeight;
         /* The modeled end, as following reads it: no layout is forced to know it. */
         const total = virtualized
-            ? Math.max(estimatedContentHeight(), geometryExtent.current) +
-              geometrySparseInset.current
+            ? endHeight() + geometrySparseInset.current
             : element.scrollHeight;
         const away = !following.current && total - height - element.scrollTop > height / 3;
         if (button.hidden === !away) return;
@@ -3240,7 +3242,8 @@ export function MessageList(props: MessageListProps) {
             viewportGeometryCommit(geometry.width, geometry.height);
             if (rowSizeModel.version !== version) return;
         }
-        geometryExtentCommit();
+        statusRoomApply();
+        sparseInsetCommit();
         if (geometryPlacementPending.current) {
             geometryPlacementPending.current = false;
             geometryFollowInset.current = Math.min(
@@ -3249,7 +3252,7 @@ export function MessageList(props: MessageListProps) {
             );
             pendingFollowerTop.current = Math.max(
                 0,
-                Math.max(estimatedContentHeight(), geometryExtent.current) +
+                endHeight() +
                     geometrySparseInset.current -
                     viewportGeometry.current.height -
                     geometryFollowInset.current,
@@ -3295,12 +3298,6 @@ export function MessageList(props: MessageListProps) {
             if (pendingFollowerTop.current !== undefined) {
                 const top = pendingFollowerTop.current;
                 pendingFollowerTop.current = undefined;
-                scrollTopWrite(element, top);
-            } else if (readerScrollTop.current > element.scrollTop) {
-                // A shorter footer or disclosure may clamp native scrollTop
-                // before this commit. Keep its previous extent and position.
-                const top = readerScrollTop.current;
-                geometryExtentRequire(top, viewportGeometry.current.height);
                 scrollTopWrite(element, top);
             }
             if (followSentHold.current !== undefined && followSentHold.current !== items.length) {
@@ -3383,6 +3380,10 @@ export function MessageList(props: MessageListProps) {
         const element = list.current;
         const rowWidth = rowSizeModel.width;
         if (!virtualized || !element || rowWidth === undefined) return;
+        /* The queue's status room is part of the model, which takes a change
+           to it by asking the last row again. */
+        if ((props.footerReserveHeight ?? 0) !== rowSizeModel.footerReserveHeight)
+            from = Math.min(from, Math.max(0, items.length - 1));
         /* The model holds one size per row, whatever the caller reported. */
         if (items.length !== rowSizeModel.keys.length)
             from = Math.min(
@@ -3717,7 +3718,7 @@ export function MessageList(props: MessageListProps) {
             previousScrollTop = element.scrollTop;
             readerScrollTop.current = element.scrollTop;
             scrollHeightBaseline.current = currentScrollHeight;
-            geometryExtentOffscreenRelease(readerScrollTop.current, viewportHeight);
+            statusRoomOffscreenRelease(readerScrollTop.current, viewportHeight);
             /* A wheel or key animation lands on the end as it was when the
                reader asked for it; streaming may have moved it since. Landing
                there is reaching the end. */

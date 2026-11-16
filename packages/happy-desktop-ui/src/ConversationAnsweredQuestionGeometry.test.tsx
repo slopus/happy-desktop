@@ -364,7 +364,7 @@ it.each(["Run it in batches overnight", ""])(
 );
 
 it.each([360, 880])(
-    "holds the transcript still when a failed answer's banner gives way to its retry (width %i)",
+    "keeps the transcript's end on the lower edge when a failed answer's banner gives way to its retry (width %i)",
     async (width) => {
         const request: ConversationEntry = {
             kind: "request",
@@ -468,23 +468,38 @@ it.each([360, 880])(
             await frame();
             await frame();
             const before = top();
+            /* The card's end against the scrollport's lower edge: what a
+               follower keeps while the card above that end changes height. */
+            const below = () =>
+                viewport.getBoundingClientRect().bottom - card().getBoundingClientRect().bottom;
+            const end = below();
+            const height = card().getBoundingClientRect().height;
             const retry = banner()!.querySelector<HTMLButtonElement>("button")!;
             retry.click();
             expect(retried).toBe(true);
             submit(pending);
             expect(banner()).toBeNull();
-            expect(top(), "retry commit").toBeCloseTo(before, 1);
+            // The banner is gone and no blank is held where it was: the card
+            // comes down by exactly the height it lost, in the same commit.
+            const lost = height - card().getBoundingClientRect().height;
+            expect(lost).toBeGreaterThan(0);
+            expect(below(), "retry commit").toBeCloseTo(end, 1);
+            expect(top(), "retry commit").toBeCloseTo(before + lost, 1);
             for (let index = 0; index < 3; index += 1) {
                 await frame();
-                expect(top(), `retry frame ${String(index)}`).toBeCloseTo(before, 1);
+                expect(below(), `retry frame ${String(index)}`).toBeCloseTo(end, 1);
+                expect(top(), `retry frame ${String(index)}`).toBeCloseTo(before + lost, 1);
             }
             expect(Math.abs(overlap()), "pending: model against paint").toBeLessThanOrEqual(1);
 
-            // It fails again: the banner grows back into the space it left.
+            // It fails again: the banner grows back and the card rises to
+            // where it was, its end still on the lower edge.
             submit(failed);
+            expect(below(), "failure commit").toBeCloseTo(end, 1);
             expect(top(), "failure commit").toBeCloseTo(before, 1);
             await frame();
             await frame();
+            expect(below(), "failure frames").toBeCloseTo(end, 1);
             expect(top(), "failure frames").toBeCloseTo(before, 1);
             expect(Math.abs(overlap()), "failed again: model against paint").toBeLessThanOrEqual(1);
         } finally {

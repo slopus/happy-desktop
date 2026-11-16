@@ -217,8 +217,11 @@ it("retains a parked shell node when queued messages are accepted atomically (se
             redraw();
             await frames();
         }
-        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -430, cancelable: true }));
-        viewport.scrollTop -= 430;
+        // Folding the output shortened the transcript's end, which came down
+        // to the lower edge with nothing blank held under it. Park the reader
+        // above that end with the shell row still in view.
+        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -60, cancelable: true }));
+        viewport.scrollTop -= 60;
         await frames();
         elements = [
             ...elements,

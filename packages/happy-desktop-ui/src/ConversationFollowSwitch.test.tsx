@@ -18,6 +18,7 @@ import { ConversationView } from "./ConversationView";
 import type { MessageListScrollPosition } from "./Message";
 import { RetainedViews } from "./RetainedViews";
 import { createRenderer } from "./testing";
+import { messageListEndOffset } from "./testing/messageListEnd";
 
 /* A reader following a conversation's end is still following it when they
  * come back to it, whether its view was kept out of sight or let go and drawn
@@ -255,11 +256,13 @@ function harness(initial: Shown) {
     const rows = () => [
         ...viewport().querySelectorAll<HTMLElement>(".happy-message-list__virtual-row"),
     ];
-    /** Space left to scroll below the reader. */
-    const gap = () => {
-        const element = viewport();
-        return element.scrollHeight - element.scrollTop - element.clientHeight;
-    };
+    /**
+     * How far the transcript's end is from resting on the viewport's lower
+     * edge: positive is transcript left below the fold, negative is blank
+     * under its last row. Read from the rows drawn, never the scroll range,
+     * which also counts any blank held under them.
+     */
+    const gap = () => -messageListEndOffset(viewport());
     /** How far the transcript's lowest row ends above the viewport's lower edge. */
     const endClearance = () =>
         viewport().getBoundingClientRect().bottom -
@@ -275,7 +278,7 @@ type Harness = ReturnType<typeof harness>;
 
 /** The live end in full view: nothing left below, the last row and status above the fold. */
 function expectAtEnd(h: Harness, label: string) {
-    expect(h.gap(), `${label}: space below`).toBeLessThan(1);
+    expect(Math.abs(h.gap()), `${label}: end off the lower edge`).toBeLessThan(1);
     // The list's own end padding is the only room under its last row.
     expect(h.endClearance(), `${label}: last row cut off`).toBeGreaterThan(0);
     const status = h
@@ -486,7 +489,13 @@ it.each(kinds)("returns a %s parked reader to the same row at the same height", 
             row!.getBoundingClientRect().top - h.viewport().getBoundingClientRect().top,
             `${label}: anchor row moved`,
         ).toBeCloseTo(top, 0);
-        expect(h.gap(), `${label}: resumed following`).toBeGreaterThan(100);
+        // Far from the end the scroll range is the honest measure: the
+        // transcript's last row is not drawn at all.
+        const element = h.viewport();
+        expect(
+            element.scrollHeight - element.scrollTop - element.clientHeight,
+            `${label}: resumed following`,
+        ).toBeGreaterThan(100);
     });
 });
 

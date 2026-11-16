@@ -10,6 +10,7 @@ import "./styles.css";
 import { ConversationView } from "./ConversationView";
 import { ConversationDock } from "./ConversationDock";
 import { createRenderer } from "./testing";
+import { messageListEndOffset } from "./testing/messageListEnd";
 
 // Sample after ResizeObserver has applied this frame's geometry, before the
 // next drag step. A promise resolved inside RAF would run before the observer.
@@ -53,7 +54,7 @@ const cases = ["following", "parked"].flatMap((state) =>
 );
 
 it.each(cases)(
-    "takes held space before carrying rows during a vertical drag: %j",
+    "keeps the end on the lower edge and holds no blank through a vertical drag: %j",
     async ({ state, edge, step }) => {
         let following = false;
         function Harness() {
@@ -108,11 +109,12 @@ it.each(cases)(
             }
             const sample = () => {
                 const bounds = viewport.getBoundingClientRect();
-                const natural = Number.parseFloat(content.style.height);
                 return {
                     scrollTop: viewport.scrollTop,
                     height: bounds.height,
-                    blank: Math.max(0, (Number.parseFloat(content.style.minHeight) || 0) - natural),
+                    // Positive is blank under the last row; negative is how much
+                    // of the transcript is left below the fold.
+                    end: messageListEndOffset(viewport),
                     rows: [
                         ...viewport.querySelectorAll<HTMLElement>(
                             ".happy-message-list__virtual-row",
@@ -140,9 +142,12 @@ it.each(cases)(
                 if (edge === "top") panel.style.transform = `translateY(${700 - height}px)`;
                 await frame();
                 const next = sample();
-                const carry = state.startsWith("following")
-                    ? Math.max(0, delta - previous.blank)
-                    : 0;
+                // A follower's rows ride the lower edge up; a parked reader's
+                // rows hold while the fold closes over the ones below.
+                const carry = state.startsWith("following") ? delta : 0;
+                expect(next.end, JSON.stringify({ state, edge, step, height })).toBeLessThanOrEqual(
+                    1,
+                );
                 const before = new Map(previous.rows.map((row) => [row.id, row.top]));
                 for (const row of next.rows) {
                     const top = before.get(row.id);
@@ -154,7 +159,6 @@ it.each(cases)(
                                 edge,
                                 step,
                                 delta,
-                                blank: previous.blank,
                                 carry,
                                 row,
                                 top,
@@ -162,29 +166,45 @@ it.each(cases)(
                         ).toBeLessThanOrEqual(1);
                     const start = initialRows.get(row.id);
                     if (start !== undefined) {
-                        const totalCarry = state.startsWith("following")
-                            ? Math.max(0, 700 - height - initial.blank)
-                            : 0;
+                        const totalCarry = state.startsWith("following") ? 700 - height : 0;
                         expect(Math.abs(row.top - start + totalCarry)).toBeLessThanOrEqual(1);
                     }
                 }
                 previous = next;
             }
             const grownHeight = state === "parked" ? 1100 : 700;
+            let clamped = false;
             for (; height < grownHeight; height += 20) {
-                panel.style.height = `${Math.min(grownHeight, height + 20)}px`;
-                if (edge === "top")
-                    panel.style.transform = `translateY(${700 - Math.min(grownHeight, height + 20)}px)`;
+                const grown = Math.min(grownHeight, height + 20);
+                panel.style.height = `${grown}px`;
+                if (edge === "top") panel.style.transform = `translateY(${700 - grown}px)`;
                 await frame();
                 const next = sample();
+                // Room gained is filled by the transcript: first by what was
+                // below the fold, which moves nothing, then by the rows coming
+                // down with the lower edge. No frame shows blank under the end.
+                const carry = Math.max(0, grown - height + previous.end);
+                clamped ||= carry > 0;
+                expect(next.end, JSON.stringify({ state, edge, step, grown })).toBeLessThanOrEqual(
+                    1,
+                );
                 const before = new Map(previous.rows.map((row) => [row.id, row.top]));
                 for (const row of next.rows) {
                     const top = before.get(row.id);
-                    if (top !== undefined) expect(Math.abs(row.top - top)).toBeLessThanOrEqual(1);
+                    if (top !== undefined)
+                        expect(
+                            Math.abs(row.top - top - carry),
+                            JSON.stringify({ state, edge, step, grown, carry, row, top }),
+                        ).toBeLessThanOrEqual(1);
                 }
                 previous = next;
             }
-            expect(sample().blank).toBeGreaterThan(0);
+            // Both readers end with the transcript's last row on the lower
+            // edge: the follower all along, the parked one once the growth
+            // outran what was below it.
+            expect(clamped).toBe(true);
+            expect(Math.abs(sample().end)).toBeLessThanOrEqual(1);
+            expect(content.style.minHeight).toBe("");
             viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -1000 }));
             viewport.scrollTop -= 1000;
             const parkedTop = viewport.scrollTop;

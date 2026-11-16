@@ -12,6 +12,7 @@ import "./styles.css";
 import { testDepthCount } from "./testing/testDepth";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
+import { messageListEndOffset } from "./testing/messageListEnd";
 import { createRenderer, pageViewport } from "./testing";
 import type { ConversationSwitchSource } from "./conversationSwitchTargets";
 
@@ -489,7 +490,7 @@ it.each([
 
 // These cases use Chromium's CDP device metrics to emulate page zoom.
 it.skipIf(server.browser !== "chromium").each(["send", "draft"] as const)(
-    "keeps visible content above held %s space through zoom changes",
+    "keeps the newest row in view and still through zoom changes after a %s",
     async (source) => {
         const { view, send } = renderConversation(40);
         const baseScale = devicePixelRatio;
@@ -560,7 +561,7 @@ it.each(["parked"] as const)(
 
 // Without `field-sizing` (Gecko) the draft never grows, so it leaves no slack.
 it.skipIf(!CSS.supports("field-sizing", "content")).each([false, true])(
-    "lets an inline question take draft slack before carrying the transcript up, including a multiline draft: %s",
+    "leaves no slack under the transcript when a draft clears, so an inline question carries it up whole, including a multiline draft: %s",
     async (multiline) => {
         const { view, question } = renderConversation(60);
         await view.ready();
@@ -578,26 +579,23 @@ it.skipIf(!CSS.supports("field-sizing", "content")).each([false, true])(
         const viewport = view.container.querySelector<HTMLElement>(
             ".happy-message-list__viewport",
         )!;
-        const content = viewport.querySelector<HTMLElement>(".happy-message-list__virtual")!;
         const row = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].at(-1)!;
         const top = row.getBoundingClientRect().top;
         const height = viewport.clientHeight;
-        const blank = Math.max(
-            0,
-            content.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom - 24,
-        );
-        // The cleared draft left blank space under the newest row.
-        expect(blank).toBeGreaterThan(0);
+        // The cleared draft gave its room back to the transcript, which came
+        // down with the lower edge: nothing blank is left under the newest row.
+        expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
         question(false);
         await frames();
-        // The question is a transcript row: the viewport keeps its height,
-        // the question fills the held blank first, and only the rest of its
-        // height carries the transcript up, so all of it is in view.
+        // The question is a transcript row: the viewport keeps its height and
+        // the question's whole height carries the transcript up, so all of it
+        // is in view with no blank under it.
         expect(viewport.clientHeight).toBe(height);
         const added = rowsBelow(viewport, row);
-        expect(added).toBeGreaterThan(blank);
+        expect(added).toBeGreaterThan(0);
         const carried = top - row.getBoundingClientRect().top;
-        expect(Math.abs(carried - (added - blank))).toBeLessThanOrEqual(1);
+        expect(Math.abs(carried - added)).toBeLessThanOrEqual(1);
+        expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
         const card = questionRow(viewport).getBoundingClientRect();
         const bounds = viewport.getBoundingClientRect();
         expect(card.top).toBeGreaterThanOrEqual(bounds.top);
@@ -956,7 +954,8 @@ it("does not resume following on a small native offset adjustment after an upwar
     await frames();
     expect(anchor!.isConnected).toBe(true);
     expect(Math.abs(anchorTop() - parked)).toBeLessThanOrEqual(1);
-    expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeGreaterThan(1);
+    // Still parked: the transcript goes on below the fold.
+    expect(messageListEndOffset(viewport)).toBeLessThan(-1);
 });
 
 // These cases use Chromium's CDP device metrics to emulate page zoom.
@@ -1016,7 +1015,7 @@ it.skipIf(server.browser !== "chromium").each([0.67, 0.9, 1.5, 2])(
 );
 
 it.each([2, 40])(
-    "keeps geometry slack while it is visible and lands a send in it with %i preceding messages",
+    "brings the end down with a taller window and lands a send on it with %i preceding messages",
     async (count) => {
         const { view, send, resize } = renderConversation(count);
         await view.ready();
@@ -1026,25 +1025,27 @@ it.each([2, 40])(
         )!;
         const content = viewport.querySelector<HTMLElement>(".happy-message-list__virtual")!;
         const anchor = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].at(-1)!;
-        const top = anchor.getBoundingClientRect().top;
+        const below = () =>
+            viewport.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom;
+        const room = below();
+        expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
         resize(800);
         await frames();
-        expect(anchor.getBoundingClientRect().top).toBe(top);
-        const extent = content.style.minHeight;
-        expect(Number.parseFloat(extent)).toBeGreaterThan(0);
+        // The newest row stays on the lower edge: the window's new room opens
+        // above the transcript's end, never as blank under it.
+        expect(Math.abs(below() - room)).toBeLessThanOrEqual(1);
+        expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
+        expect(content.style.minHeight).toBe("");
         send();
         await frames();
         const bounds = viewport.getBoundingClientRect();
         const sent = [...viewport.querySelectorAll<HTMLElement>(".happy-message")]
             .find((element) => element.textContent?.includes("The newly sent message"))!
             .getBoundingClientRect();
-        // The send is in view, and the space it stands in never shrinks while
-        // it is in view.
+        // The send is in view at the end, with nothing blank under it.
         expect(sent.top).toBeGreaterThanOrEqual(bounds.top);
         expect(sent.bottom).toBeLessThanOrEqual(bounds.bottom);
-        expect(Number.parseFloat(content.style.minHeight || "0")).toBeGreaterThanOrEqual(
-            Number.parseFloat(extent),
-        );
+        expect(messageListEndOffset(viewport)).toBeLessThanOrEqual(1);
     },
 );
 
@@ -1099,31 +1100,41 @@ it("keeps newer messages fixed when a question above them is answered", async ()
     await userEvent.click(textarea);
     await userEvent.keyboard("one{Shift>}{Enter}{/Shift}two{Shift>}{Enter}{/Shift}three");
     await frames();
-    const expandedTop = anchor.getBoundingClientRect().top;
+    // From here the window and the draft change the room the transcript has.
+    // Its newest row keeps its place over the lower edge through both, so
+    // neither a taller window nor a cleared draft leaves blank under it.
+    const viewport = view.container.querySelector<HTMLElement>(".happy-message-list__viewport")!;
+    const below = () =>
+        viewport.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom;
+    const room = below();
+    expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
     resize(800);
     await frames();
-    expect(Math.abs(anchor.getBoundingClientRect().top - expandedTop)).toBeLessThan(1);
+    expect(Math.abs(below() - room)).toBeLessThan(1);
     await draftClear(textarea);
     await frames();
-    expect(Math.abs(anchor.getBoundingClientRect().top - expandedTop)).toBeLessThan(1);
+    expect(Math.abs(below() - room)).toBeLessThan(1);
+    expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
 });
 
-it("keeps a cold long history fixed while resize slack and idle refinement overlap", async () => {
+it("keeps a cold long history on the lower edge while a window growth and idle refinement overlap", async () => {
     const { view, resize } = renderConversation(400);
     await view.ready();
     await frames();
     const viewport = view.container.querySelector<HTMLElement>(".happy-message-list__viewport")!;
     const anchor = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].at(-1)!;
-    const top = anchor.getBoundingClientRect().top;
+    const below = () =>
+        viewport.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom;
+    expect(below()).toBe(24);
     resize(800);
     await frames();
-    expect(anchor.getBoundingClientRect().top).toBe(top);
+    // The window grew by 100px and the newest row came down with its edge.
+    expect(below()).toBe(24);
+    const top = anchor.getBoundingClientRect().top;
     await new Promise<void>((resolve) => setTimeout(resolve, 1200));
     expect(anchor.isConnected).toBe(true);
     expect(anchor.getBoundingClientRect().top).toBe(top);
-    expect(viewport.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom).toBe(
-        124,
-    );
+    expect(below()).toBe(24);
 });
 
 it("keeps a parked row fixed when answering grows the viewport", async () => {
@@ -1150,7 +1161,7 @@ it("keeps a parked row fixed when answering grows the viewport", async () => {
     expect(Math.abs(anchor.getBoundingClientRect().top - top)).toBeLessThan(1);
 });
 
-it("anchors the last visible message when an upward wheel lands in preserved blank space", async () => {
+it("anchors the last visible message when an upward wheel follows a window growth", async () => {
     const { view, question, send, resize } = renderConversation(60);
     await view.ready();
     question(false);
@@ -1170,7 +1181,7 @@ it("anchors the last visible message when an upward wheel lands in preserved bla
     expect(Math.abs(anchor.getBoundingClientRect().top - top)).toBeLessThan(1);
 });
 
-it("keeps a parked message fixed when the status footer disappears near the bottom", async () => {
+it("brings a message parked near the bottom down to the real end when the status footer disappears", async () => {
     const { view, question, finish } = renderConversation(60);
     await view.ready();
     question(true);
@@ -1181,10 +1192,19 @@ it("keeps a parked message fixed when the status footer disappears near the bott
     await frames();
     const anchor = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].at(-1)!;
     const top = anchor.getBoundingClientRect().top;
+    const status = viewport
+        .querySelector<HTMLElement>('[data-happy-desktop-ui="conversation-status-line"]')!
+        .closest<HTMLElement>(".happy-message-list__virtual-row")!
+        .getBoundingClientRect().height;
+    expect(status).toBeGreaterThan(4);
     finish();
     await frames();
     expect(anchor.isConnected).toBe(true);
-    expect(Math.abs(anchor.getBoundingClientRect().top - top)).toBeLessThan(1);
+    // The reader was 4px above the end and the status under it is gone. The
+    // transcript is not held above the room it left: it comes down to its
+    // real end, by the status less those 4px, and no further.
+    expect(Math.abs(anchor.getBoundingClientRect().top - top - (status - 4))).toBeLessThan(1);
+    expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
 });
 
 it("keeps the visible parked row fixed when resize clips its previous anchor and streaming resumes", async () => {
@@ -1269,7 +1289,7 @@ it("keeps a parked text anchor and its DOM node through cold-history refinement 
 });
 
 it.each([2, 40])(
-    "carries visible rows up with a growing multiline composer and holds them as it clears with %i messages",
+    "carries visible rows up with a growing multiline composer and back down as it clears with %i messages",
     async (count) => {
         const { view } = renderConversation(count);
         await view.ready();
@@ -1284,16 +1304,21 @@ it.each([2, 40])(
         const above = () =>
             viewport.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom;
         const gap = above();
+        const rest = anchorTop();
         await userEvent.click(textarea);
         await userEvent.keyboard("one{Shift>}{Enter}{/Shift}two{Shift>}{Enter}{/Shift}three");
         await frames();
         expect(textarea.value).toBe("one\ntwo\nthree");
         expect(above()).toBe(gap);
-        const top = anchorTop();
         await draftClear(textarea);
         await frames();
         expect(textarea.value).toBe("");
-        expect(anchorTop()).toBe(top);
+        // The draft's room goes back to the transcript: its newest row keeps
+        // its place over the lower edge and is back where it rested, with no
+        // blank left where the draft was. (Without `field-sizing` the draft
+        // never grew, and nothing moved either way.)
+        expect(above()).toBe(gap);
+        expect(anchorTop()).toBe(rest);
     },
 );
 
@@ -1336,10 +1361,10 @@ it("offers a way back to the newest row once the reader scrolls away, and moves 
 
     button.click();
     await frames();
-    expect(viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight).toBeLessThan(1);
+    expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
     expect(jump()).toBeNull();
     // And from there it follows what arrives.
     stream(6);
     await frames();
-    expect(viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight).toBeLessThan(1);
+    expect(Math.abs(messageListEndOffset(viewport))).toBeLessThanOrEqual(1);
 });

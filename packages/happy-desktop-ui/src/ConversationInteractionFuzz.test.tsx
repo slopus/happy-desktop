@@ -905,7 +905,16 @@ function restoredGlyphTop(row: HTMLElement, previous: ReturnType<typeof snapshot
     }
     return undefined;
 }
-function parkedRowsCheck(before: ReturnType<typeof snapshot>, next: ReturnType<typeof snapshot>) {
+/**
+ * A parked reader's rows hold still. `carried` is how far (px) they are
+ * expected to come down together instead, when a taller viewport outgrew what
+ * was below the fold and the transcript's end came down with its lower edge.
+ */
+function parkedRowsCheck(
+    before: ReturnType<typeof snapshot>,
+    next: ReturnType<typeof snapshot>,
+    carried = 0,
+) {
     const insertedAt = next.keys.findIndex((key) => !before.keys.includes(key));
     const insertionBefore =
         insertedAt < 0
@@ -921,7 +930,7 @@ function parkedRowsCheck(before: ReturnType<typeof snapshot>, next: ReturnType<t
             continue;
         if (insertionBefore !== undefined && previous.index > (before.anchor?.index ?? -1))
             continue;
-        const delta = previous.node.getBoundingClientRect().top - previous.top;
+        const delta = previous.node.getBoundingClientRect().top - previous.top - carried;
         const upstream = insertionBefore !== undefined && previous.index < insertionBefore;
         if (upstream) upstreamDelta ??= delta;
         expect(
@@ -1033,8 +1042,16 @@ function stable(before: ReturnType<typeof snapshot>, harness: Harness) {
         before.glyph.range.startContainer.isConnected &&
         Math.abs(before.glyph.range.getBoundingClientRect().top - before.glyph.top - floorDelta) <=
             1;
+    // No blank is ever held under the transcript. A reading point that could
+    // only stay put above blank comes down instead, exactly as far as it takes
+    // to rest the transcript's end on the lower edge and no further.
+    const signedShift =
+        expectedPoint !== undefined && before.readingOffset !== undefined
+            ? currentTop + before.readingOffset - expectedPoint
+            : currentTop - row.top - floorDelta;
+    const clampedToEnd = signedShift > 1 && Math.abs(next.endGap) <= 1;
     expect(
-        glyphHeld ? 0 : pointShift,
+        glyphHeld || clampedToEnd ? 0 : pointShift,
         `anchor moved: ${row.text.slice(0, 70)}`,
     ).toBeLessThanOrEqual(1);
     const common = before.rows.filter(
@@ -1110,16 +1127,14 @@ function followingCheck(harness: Harness) {
         Number.parseFloat(content.style.minHeight || "0") -
             Number.parseFloat(content.style.height || "0"),
     );
-    // Preserved space owns the end until the reply consumes it. Otherwise the
-    // end is either the real footer or the final transcript row (an idle status
-    // footer can deliberately sit below the logical end).
+    // The room a queue holds for its turn's status owns the end until that
+    // status shows. Otherwise the end is either the real footer or the final
+    // transcript row (an idle status footer can deliberately sit below the
+    // logical end).
     if (held > 0) return;
     const last = [...viewport.querySelectorAll<HTMLElement>(".happy-message-list__virtual-row")]
         .filter((node) => node.dataset.itemId !== "working-status")
         .at(-1);
-    const nativeGap =
-        Math.abs(viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight) *
-        harness.scale;
     const logicalGap = last
         ? Math.abs(bounds.bottom - last.getBoundingClientRect().bottom - 24 * harness.scale)
         : Infinity;
@@ -1139,8 +1154,8 @@ function followingCheck(harness: Harness) {
         signedGap - (footer?.getBoundingClientRect().height ?? 0),
     );
     expect(
-        Math.min(nativeGap, logicalGap, modeledGap, footerGap, partialFooterGap),
-        `follower lost the logical end: native=${nativeGap} logical=${logicalGap} modeled=${modeledGap} footer=${footerGap} signedModel=${content.getBoundingClientRect().bottom - bounds.bottom} footerHeight=${footer?.getBoundingClientRect().height} contentHeight=${content.style.height} extent=${content.style.minHeight}`,
+        Math.min(logicalGap, modeledGap, footerGap, partialFooterGap),
+        `follower lost the logical end: logical=${logicalGap} modeled=${modeledGap} footer=${footerGap} signedModel=${content.getBoundingClientRect().bottom - bounds.bottom} footerHeight=${footer?.getBoundingClientRect().height} contentHeight=${content.style.height} extent=${content.style.minHeight}`,
     ).toBeLessThanOrEqual(1);
 }
 
@@ -2116,7 +2131,16 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
                         action !== "zoom" &&
                         action !== "send"
                     )
-                        parkedRowsCheck(before, snapshot(h));
+                        parkedRowsCheck(
+                            before,
+                            snapshot(h),
+                            Math.max(
+                                0,
+                                currentBounds.height -
+                                    before.bounds.height -
+                                    Math.max(0, before.endGap),
+                            ),
+                        );
                 }
                 if (heightChanged && before.anchor && !before.floorResting) {
                     const oldAnchorBounds = before.anchor.node.getBoundingClientRect();
@@ -2780,7 +2804,7 @@ it.skipIf(!pageZoom).each([1, 3])(
 );
 
 it.skipIf(!pageZoom)(
-    "keeps a sparse parked reply fixed when a docked question follows zoom out (seed 65521)",
+    "keeps a sparse reply on its floor when a docked question follows zoom out (seed 65521)",
     async () => {
         const h = harnessCreate(0, "sparse-question");
         try {
@@ -2798,18 +2822,32 @@ it.skipIf(!pageZoom)(
             await settle();
             await h.resize(420, 888, 0.5);
             await settle();
+            // Zooming out doubles the room the reply has. It stays the end of
+            // a followed transcript resting on its floor, not a row parked
+            // above blank the zoom left under it.
             const before = snapshot(h);
-            expect(before.position?.type, "zoomed sparse reply is not parked").toBe("row");
+            expect(before.position?.type, "zoomed sparse reply left its end").toBe("bottom");
+            expect(before.floorResting, "zoomed sparse reply left its floor").toBe(true);
+            followingCheck(h);
             await act(h, "question", () => 0, 42);
             await settle();
-            stable(before, h);
+            geometryCheck(h);
+            followingCheck(h);
+            expect(snapshot(h).floorResting, "docked question lifted the reply").toBe(true);
         } finally {
             await h.close();
         }
     },
 );
 
-function edgeRestoreCheck(before: ReturnType<typeof snapshot>, harness: Harness) {
+/**
+ * A reader comes back to the row and glyph they left, where they left them.
+ * `carried` is how far (px) the return is expected to bring them down instead:
+ * a viewport that grew while they were away shows what was below their fold
+ * first and, past that, brings the transcript's end down with its lower edge
+ * rather than holding blank under the last row.
+ */
+function edgeRestoreCheck(before: ReturnType<typeof snapshot>, harness: Harness, carried = 0) {
     const after = snapshot(harness);
     const row = after.allRows.find((candidate) => candidate.key === before.anchor?.key);
     const glyphTop = row ? restoredGlyphTop(row.node, before) : undefined;
@@ -2826,13 +2864,13 @@ function edgeRestoreCheck(before: ReturnType<typeof snapshot>, harness: Harness)
     );
     expect(row, "edge return lost its reading row").toBeDefined();
     expect(
-        Math.abs(row!.top - before.anchor!.top),
+        Math.abs(row!.top - before.anchor!.top - carried),
         "edge return moved its reading row",
     ).toBeLessThanOrEqual(1);
     if (before.glyph) {
         expect(glyphTop, "edge return lost its reading glyph").toBeDefined();
         expect(
-            Math.abs(glyphTop! - before.glyph.top),
+            Math.abs(glyphTop! - before.glyph.top - carried),
             "edge return moved its reading glyph",
         ).toBeLessThanOrEqual(1);
     }
@@ -2899,7 +2937,13 @@ it.each(["warm", "cold"] as const)(
             }
             h.switch(0);
             await frame();
-            edgeRestoreCheck(before, h);
+            // `endGap` is what the reader left below their fold.
+            edgeRestoreCheck(
+                before,
+                h,
+                Math.max(0, nextHeight - before.bounds.height - Math.max(0, before.endGap)),
+            );
+            expect(snapshot(h).endGap, "blank under the returned transcript").toBeGreaterThan(-1);
         } catch (error) {
             console.error(
                 "EDGE_INSPECTION",

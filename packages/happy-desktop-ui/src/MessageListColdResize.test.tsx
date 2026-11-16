@@ -6,6 +6,7 @@ import "./styles.css";
 import { MessageList, type MessageListScrollPosition } from "./Message";
 import { RetainedViews } from "./RetainedViews";
 import { createRenderer } from "./testing";
+import { messageListEndClearance } from "./testing/messageListEnd";
 
 const settle = async () => {
     for (let i = 0; i < 4; i++)
@@ -104,6 +105,14 @@ it.each([
             const committed = read();
             const committedTop = viewport().scrollTop;
             const element = viewport();
+            // How much of the transcript the committed view leaves below its
+            // fold, read from the boxes drawn rather than the scroll range.
+            const below = Math.max(
+                0,
+                element
+                    .querySelector<HTMLElement>(".happy-message-list__virtual")!
+                    .getBoundingClientRect().bottom - element.getBoundingClientRect().bottom,
+            );
             let nativeTop = committedTop;
             if (native === "wheel") {
                 let hidden = false;
@@ -144,7 +153,18 @@ it.each([
             const warm = read();
             // Pending geometry keeps its committed view, even if native input
             // arrived in the same task. An unchanged box keeps the native move.
-            const movement = nextHeight === 800 ? nativeTop - committedTop : 0;
+            // A taller box first shows what was below the fold, which moves
+            // nothing; past that the transcript's end comes down with the
+            // lower edge, because no blank is held under the last row.
+            const movement =
+                nextHeight === 800
+                    ? nativeTop - committedTop
+                    : -Math.max(0, nextHeight - 800 - below);
+            // 8px is this list's own padding under its last row.
+            expect(
+                messageListEndClearance(element),
+                "blank under the transcript's last row",
+            ).toBeLessThanOrEqual(8 + 1);
             console.log(
                 "DBG",
                 JSON.stringify({

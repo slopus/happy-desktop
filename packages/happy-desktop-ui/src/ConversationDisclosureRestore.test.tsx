@@ -17,6 +17,7 @@ import { RetainedViews } from "./RetainedViews";
 import type { MessageListScrollPosition } from "./Message";
 import { createRenderer } from "./testing";
 import { regressionFrames } from "./testing/conversationRegressionHarness";
+import { messageListEndOffset } from "./testing/messageListEnd";
 
 const sessionId = (id: string) => id as HappyAgentSessionId;
 const group = "disclosure-project" as HappyAgentGroupId;
@@ -226,6 +227,12 @@ it.each([false, true])(
             const original = viewport();
             // No frame or native scroll report may intervene between these gestures.
             flushSync(() => button().click());
+            // The fold shortened the end of the transcript. Nothing blank is
+            // held under it to keep the control where it was pressed: the
+            // transcript comes down to its real end, and that is the place
+            // the reader left.
+            expect(messageListEndOffset(viewport())).toBeLessThanOrEqual(1);
+            const parked = button().getBoundingClientRect().top;
             open("b");
             expect(
                 reports.at(-1)?.type,
@@ -236,7 +243,8 @@ it.each([false, true])(
             await regressionFrames();
             expect(viewport() === original).toBe(cached);
             expect(button()).toBeDefined();
-            expect(Math.abs(button().getBoundingClientRect().top - top)).toBeLessThanOrEqual(1);
+            expect(Math.abs(button().getBoundingClientRect().top - parked)).toBeLessThanOrEqual(1);
+            expect(messageListEndOffset(viewport())).toBeLessThanOrEqual(1);
             expect(workspace.get().conversation.type).toBe("ready");
         } finally {
             view.destroy();

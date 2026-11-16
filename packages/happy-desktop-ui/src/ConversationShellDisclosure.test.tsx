@@ -241,8 +241,12 @@ it.each([false, true])(
                 button.click();
                 await frames();
             }
-            viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -240, cancelable: true }));
-            viewport.scrollTop -= 240;
+            // Folding the output brought the transcript's end down to the lower
+            // edge, with nothing blank held under it. A short wheel parks the
+            // reader there with the folded shell still in view.
+            const away = collapsed ? 40 : 240;
+            viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -away, cancelable: true }));
+            viewport.scrollTop -= away;
             await frames();
             const output = viewport.querySelector<HTMLElement>(
                 collapsed
@@ -252,6 +256,9 @@ it.each([false, true])(
             const row = output.closest<HTMLElement>(".happy-message-list__virtual-row")!;
             const top = output.getBoundingClientRect().top;
             const rowTop = row.getBoundingClientRect().top;
+            expect(top, "parked shell content is not in view").toBeLessThan(
+                viewport.getBoundingClientRect().bottom,
+            );
             insert();
             await frames();
             expect(row.isConnected).toBe(true);

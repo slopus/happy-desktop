@@ -17,6 +17,7 @@ import {
     monoOutputTextHeight,
 } from "./messageTextLayout";
 import { createRenderer } from "./testing";
+import { messageListEndOffset } from "./testing/messageListEnd";
 import nestedLinkList from "./fixtures/nested-link-list.txt?raw";
 import richTablePayload from "./fixtures/streaming-layout-rich-table.txt?raw";
 import movieListPayload from "./fixtures/movie-list-layout.txt?raw";
@@ -111,10 +112,17 @@ function expectRowGeometry(container: Element, label: string) {
         ).toBeLessThanOrEqual(2.1);
     }
     const viewport = container.querySelector<HTMLElement>(".happy-message-list__viewport")!;
-    expect(
-        Math.abs(viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight),
-        `${label}: following reader stays at the tail`,
-    ).toBeLessThanOrEqual(1);
+    // The last row rests on the lower edge with nothing blank under it. A
+    // status that appeared under a settled follower is the one thing allowed
+    // below the fold: it waits there until content carries the reader to it.
+    const end = messageListEndOffset(viewport);
+    const status = viewport
+        .querySelector<HTMLElement>('[data-happy-desktop-ui="conversation-status-line"]')
+        ?.closest<HTMLElement>(".happy-message-list__virtual-row");
+    expect(end, `${label}: blank under the following reader's tail`).toBeLessThanOrEqual(1);
+    expect(end, `${label}: following reader stays at the tail`).toBeGreaterThanOrEqual(
+        -(status?.getBoundingClientRect().height ?? 0) - 1,
+    );
 }
 
 it("keeps live prose, tool, and status rows adjacent before and after settlement", async () => {
