@@ -973,6 +973,14 @@
     display: none;
 }
 
+/* The window narrowed under an open panel while the workspace was being worked
+   in: the workspace keeps the region. The panel stays laid out where a takeover
+   would put it, so a terminal or page underneath keeps its size, but it is not
+   drawn and takes no pointer or keyboard until its toggle asks for it. */
+.happy-desktop-app-shell__content[data-panel-yielded] > .happy-desktop-app-shell__panel {
+    visibility: hidden;
+}
+
 /* A selected tab is always legible, while AppShell's one focus owner says which
    pane the keyboard acts on. Pointer-down joins DOM focus because a file canvas
    or transcript is often not itself focusable; clicking it still owns Cmd-W. */
