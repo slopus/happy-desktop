@@ -206,7 +206,9 @@ export function SidebarFooter(props: SidebarFooterProps) {
             {props.onSettingsOpen ? (
                 <Tooltip
                     align="end"
-                    {...(props.settingsShortcut ? { label: props.settingsLabel ?? "Settings" } : {})}
+                    {...(props.settingsShortcut
+                        ? { label: props.settingsLabel ?? "Settings" }
+                        : {})}
                     placement="top"
                     {...(props.settingsShortcut ? { shortcut: props.settingsShortcut } : {})}
                 >

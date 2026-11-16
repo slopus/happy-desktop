@@ -43,7 +43,11 @@ export function WindowEscape(props: { readonly onEscape: () => void }) {
         if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
         if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"))
+        if (
+            target?.closest(
+                "input, textarea, select, [contenteditable]:not([contenteditable='false'])",
+            )
+        )
             return;
         if (windowShortcutBlocked()) return;
         event.preventDefault();
