@@ -137,7 +137,9 @@ export function pipelineTriggerText(
 ): string {
     if (trigger === null) return "Unknown";
     return trigger.kind === "agent"
-        ? labels.agent(trigger.agentId)
+        ? trigger.agentId === null
+            ? "An agent"
+            : labels.agent(trigger.agentId)
         : `Node ${trigger.nodeId} of a parent run`;
 }
 

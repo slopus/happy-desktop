@@ -5,6 +5,7 @@ import type {
     PipelineRun,
     PipelineRunEntry,
     PipelineRunRelative,
+    PipelineRunListEntry,
     PipelineRunSnapshot,
     PipelineDefinition,
     PipelineNode,
@@ -1150,8 +1151,56 @@ const deployParent: PipelineRunRelative = {
     status: null,
 };
 
+/** One run among every pipeline's runs. */
+const acrossRun = (
+    id: string,
+    pipelineId: string,
+    pipelineName: string,
+    state: PipelineRunEntry["state"],
+    ago: number,
+    took: number | null,
+    extra: Partial<PipelineRunListEntry> = {},
+): PipelineRunListEntry => ({
+    ...runEntry(id, state, ago, took),
+    pipelineId,
+    pipelineName,
+    pipelineArchived: false,
+    ...extra,
+});
+
+/** Newest first: two running, one queued behind its group, a child run, and an archived pipeline's run. */
+const acrossRuns: PipelineRunListEntry[] = [
+    acrossRun("run_7", "pl_ci", "Desktop CI", "running", 3, null),
+    acrossRun("run_d41", "pl_deploy", "Deploy cluster", "queued", 2, null, { startedAt: null }),
+    acrossRun("run_n13", "pl_notify", "Notify team", "succeeded", 8, 0.5, {
+        version: 1,
+        trigger: { kind: "pipeline", runId: "run_i88", nodeId: "escalate" },
+        parentRunId: "run_i88",
+    }),
+    acrossRun("run_i88", "pl_inbox", "Inbox triage", "failed", 9, 1, { version: 7 }),
+    acrossRun("run_6", "pl_ci", "Desktop CI", "failed", 52, 9),
+    acrossRun("run_d40", "pl_deploy", "Deploy cluster", "succeeded", 140, 18, { version: 12 }),
+    acrossRun("run_s3", "pl_sync", "Calendar sync", "succeeded", 300, 2, {
+        version: 2,
+        pipelineArchived: true,
+    }),
+    acrossRun("run_5", "pl_ci", "Desktop CI", "superseded", 70 * 6, 4),
+    acrossRun("run_b9", "pl_nightly", "Nightly benchmarks", "aborted", 30 * 60, 60, {
+        version: 3,
+    }),
+];
+
+const listRuns = (entries: readonly PipelineRunListEntry[], listed = true) => ({
+    loading: false,
+    listed,
+    entries,
+    nextCursor: entries.length > 0 ? "run_b9" : null,
+    loadingMore: false,
+});
+
 const list: PipelinesSnapshot = {
     loading: false,
+    runs: listRuns(acrossRuns),
     pipelines: [
         {
             id: "pl_ci",
@@ -1221,6 +1270,13 @@ const page = {
     onRunsMore: noop,
     onVersionSelect: noop,
 };
+const listPage = {
+    labels,
+    now: NOW,
+    onPipelineOpen: noop,
+    onRunOpen: noop,
+    onRunsMore: noop,
+};
 const runPage = {
     labels,
     now: NOW,
@@ -1241,13 +1297,44 @@ export function HappyAgentPipelinesBlueprintPage() {
             width={WINDOW.width + 64}
         >
             <FullScreenSpecimen
-                detail="Each pipeline with its latest version and how its last run went; a disabled one says so."
+                detail="The pipelines on top, one compact row each with its latest version and how its last run went; a disabled one says so. Beneath, every run of them, newest first: running ones count their time, a child run says which run it came from, and an archived pipeline's run is muted, its name no longer a link."
                 label="List"
                 number="01"
                 screen="01-list-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPipelinesPage labels={labels} onPipelineOpen={noop} pipelines={list} />
+                <HappyAgentPipelinesPage {...listPage} pipelines={list} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Pipelines that have not run yet."
+                label="List, no runs"
+                number="01b"
+                screen="01b-list-no-runs-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelinesPage
+                    {...listPage}
+                    pipelines={{
+                        ...list,
+                        pipelines: list.pipelines.map((pipeline) => ({
+                            ...pipeline,
+                            lastRun: null,
+                        })),
+                        runs: listRuns([]),
+                    }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A server that does not list runs across pipelines yet: the pipelines, and where their runs are."
+                label="List, runs not listed"
+                number="01c"
+                screen="01c-list-unlisted-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelinesPage
+                    {...listPage}
+                    pipelines={{ ...list, runs: listRuns([], false) }}
+                />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="No pipelines yet. Agents make them, so the page says to ask one."
@@ -1257,9 +1344,8 @@ export function HappyAgentPipelinesBlueprintPage() {
                 window={WINDOW}
             >
                 <HappyAgentPipelinesPage
-                    labels={labels}
-                    onPipelineOpen={noop}
-                    pipelines={{ loading: false, pipelines: [] }}
+                    {...listPage}
+                    pipelines={{ loading: false, pipelines: [], runs: listRuns([]) }}
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen

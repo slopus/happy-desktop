@@ -26,7 +26,7 @@ function personName(team: HappyAgentTeamRoster | undefined, userId: string): str
 }
 
 /**
- * One Happy Cloud server's pipelines: the list, one pipeline when `pipeline`
+ * One Happy Cloud server's pipelines: the list with every run beneath, one pipeline when `pipeline`
  * is given, or one run when `run` is. Each stays current on its own from the
  * server's pipeline events.
  */
@@ -93,7 +93,10 @@ export function HappyAgentPipelinesSurface(props: {
         return (
             <HappyAgentPipelinesPage
                 labels={labels}
+                now={now}
                 onPipelineOpen={props.onPipelineOpen}
+                onRunOpen={props.onRunOpen}
+                onRunsMore={props.pipelines.runsMore}
                 pipelines={list}
             />
         );

@@ -184,7 +184,8 @@ export interface PipelineDetail {
 
 /** How a run came to be: an agent's `run_pipeline`, or a `pipeline` node of a parent run. */
 export type PipelineRunTrigger =
-    | { readonly kind: "agent"; readonly agentId: string }
+    /** `agentId` is null when the server no longer names the agent. */
+    | { readonly kind: "agent"; readonly agentId: string | null }
     | { readonly kind: "pipeline"; readonly runId: string; readonly nodeId: string };
 
 /** One entry in a pipeline's runs, newest first. */
@@ -197,6 +198,30 @@ export interface PipelineRunEntry {
     readonly createdAt: number;
     readonly startedAt: number | null;
     readonly endedAt: number | null;
+}
+
+/** One run among every pipeline's runs: its entry, and which pipeline it ran. */
+export interface PipelineRunListEntry extends PipelineRunEntry {
+    readonly pipelineId: string;
+    readonly pipelineName: string;
+    /** Its pipeline was archived: the run still reads, the pipeline's page does not. */
+    readonly pipelineArchived: boolean;
+}
+
+/**
+ * A page of runs read again on top of what is already kept, newest first. A
+ * reader who paged past the first page keeps the older runs they read, below
+ * the fresh page; one who did not takes the page as it is.
+ */
+export function pipelineRunsMerge<T extends PipelineRunEntry>(
+    previous: readonly T[],
+    page: readonly T[],
+    pageComplete: boolean,
+): T[] {
+    if (pageComplete) return [...page];
+    const fresh = new Set(page.map((run) => run.id));
+    const oldest = page.at(-1)?.createdAt ?? Number.POSITIVE_INFINITY;
+    return [...page, ...previous.filter((run) => !fresh.has(run.id) && run.createdAt <= oldest)];
 }
 
 export type PipelineNodeRunState =

@@ -15,11 +15,12 @@ import {
     pipelineVersionDefinitionRead,
     pipelineVersionsRead,
 } from "./pipelineRead.js";
-import type {
-    PipelineDefinitionLoad,
-    PipelineDetail,
-    PipelineRunEntry,
-    PipelineVersion,
+import {
+    pipelineRunsMerge,
+    type PipelineDefinitionLoad,
+    type PipelineDetail,
+    type PipelineRunEntry,
+    type PipelineVersion,
 } from "./pipelineTypes.js";
 
 /** The pipeline's runs, newest first, as far as they have been paged in. */
@@ -76,17 +77,6 @@ export interface PipelineStore {
  * A fresh newest page in front of the older pages already read. Runs that
  * page holds replace their old copies; older ones keep their place.
  */
-function runsMerge(
-    previous: readonly PipelineRunEntry[],
-    page: readonly PipelineRunEntry[],
-    pageComplete: boolean,
-): PipelineRunEntry[] {
-    if (pageComplete) return [...page];
-    const fresh = new Set(page.map((run) => run.id));
-    const oldest = page.at(-1)?.createdAt ?? Number.POSITIVE_INFINITY;
-    return [...page, ...previous.filter((run) => !fresh.has(run.id) && run.createdAt <= oldest)];
-}
-
 export function pipelineStoreCreate(deps: {
     readonly pipelineId: string;
     readonly request: HappyCloudRequest;
@@ -177,7 +167,7 @@ export function pipelineStoreCreate(deps: {
             const page = pipelineRunsRead(await deps.request("GET", `${base}/runs`));
             if (disposed) return;
             const current = store.getState().runs;
-            const entries = runsMerge(current.entries, page.runs, !pagedPastFirst);
+            const entries = pipelineRunsMerge(current.entries, page.runs, !pagedPastFirst);
             const { error: _cleared, ...rest } = current;
             store.setState({
                 runs: {
