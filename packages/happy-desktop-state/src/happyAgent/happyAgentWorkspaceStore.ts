@@ -3166,6 +3166,19 @@ export function happyAgentWorkspaceStoreCreate(
         groupConversationList(groupId).map((summary) => summary.id);
 
     /**
+     * The conversation this window last asked for in each group, until it is
+     * written in, refused, or closed. `listed` turns true once the host's list
+     * has shown it, so one that then leaves the list is known to be closed
+     * rather than still on its way.
+     */
+    const conversationsRequested = new Map<
+        HappyAgentGroupId,
+        { readonly sessionId: HappyAgentSessionId; listed: boolean }
+    >();
+    /** A creation still waiting for the host to name its conversation, by group. */
+    const conversationsCreating = new Map<HappyAgentGroupId, Promise<void>>();
+
+    /**
      * A conversation in this group that nothing has happened in yet: no
      * message, no draft, no work. Asking for a new one while such a chat is
      * already open is asking for that chat, so it is answered with it rather
@@ -3179,15 +3192,37 @@ export function happyAgentWorkspaceStoreCreate(
         // message is on screen before the list hears of it — so the open
         // chat answers for itself.
         const openChat = chatStore?.get();
-        const unused = groupConversationList(groupId).filter(
+        const openUnused = (sessionId: string): boolean =>
+            openChat === undefined ||
+            openChat.sessionId !== sessionId ||
+            (openChat.entries.length === 0 &&
+                !openChat.draft?.trim() &&
+                openChat.runStatus === "idle");
+        const conversations = groupConversationList(groupId);
+        // A conversation this window just asked for may not be listed yet: a
+        // second Cmd-T while the first is still on its way is asking for that
+        // one, not for another beside it.
+        const requested = conversationsRequested.get(groupId);
+        if (requested !== undefined) {
+            const summary = conversations.find((candidate) => candidate.id === requested.sessionId);
+            const unlisted =
+                summary === undefined &&
+                !requested.listed &&
+                !list.get().sessionCreateFailures.has(requested.sessionId);
+            if (summary !== undefined) requested.listed = true;
+            const unused =
+                unlisted ||
+                (summary !== undefined &&
+                    summary.untouched === true &&
+                    summary.activity === "idle");
+            if (unused && openUnused(requested.sessionId)) return requested.sessionId;
+            // Written in, refused, or listed and since closed: it is no longer
+            // the chat a new one would be.
+            conversationsRequested.delete(groupId);
+        }
+        const unused = conversations.filter(
             (summary) =>
-                summary.untouched === true &&
-                summary.activity === "idle" &&
-                (openChat === undefined ||
-                    openChat.sessionId !== summary.id ||
-                    (openChat.entries.length === 0 &&
-                        !openChat.draft?.trim() &&
-                        openChat.runStatus === "idle")),
+                summary.untouched === true && summary.activity === "idle" && openUnused(summary.id),
         );
         const open = unused.find((summary) => summary.id === openId);
         return (open ?? unused.at(-1))?.id as HappyAgentSessionId | undefined;
@@ -8061,6 +8096,10 @@ export function happyAgentWorkspaceStoreCreate(
         conversationCreate: (groupId, input, source) => {
             const refusal = groupConversationRefusalFind(groupId);
             if (refusal) return Promise.reject(new Error(refusal));
+            // Asked again before the host has named the first one: both asks
+            // land on the same new conversation.
+            const creating = conversationsCreating.get(groupId);
+            if (creating) return creating;
             const unused = groupConversationUnusedFind(groupId);
             if (unused !== undefined) {
                 openRequest({ sessionId: unused, groupId });
@@ -8071,6 +8110,10 @@ export function happyAgentWorkspaceStoreCreate(
             const create = selection ? { ...selectionCreateFields(selection), ...input } : input;
             const created = (location: HappyAgentSessionLocation | undefined): void => {
                 if (!location) return;
+                conversationsRequested.set(groupId, {
+                    sessionId: location.sessionId,
+                    listed: false,
+                });
                 activityRecord({
                     kind: "conversationCreated",
                     source,
@@ -8087,9 +8130,18 @@ export function happyAgentWorkspaceStoreCreate(
                 created(list.worktreeSessionStart(worktreeId, create));
                 return Promise.resolve();
             }
-            return list.sessionCreate(create).then(created);
+            const pending = list
+                .sessionCreate(create)
+                .then(created)
+                .finally(() => conversationsCreating.delete(groupId));
+            conversationsCreating.set(groupId, pending);
+            return pending;
         },
         conversationArchive: async (conversationId) => {
+            // Closing the chat this window just asked for ends it as the one a
+            // new chat would reopen, before the list has even shown it.
+            for (const [groupId, requested] of conversationsRequested)
+                if (requested.sessionId === conversationId) conversationsRequested.delete(groupId);
             await list.sessionArchive(conversationId);
             client.chatArchive(conversationId);
             if (retained.has(conversationId)) {
