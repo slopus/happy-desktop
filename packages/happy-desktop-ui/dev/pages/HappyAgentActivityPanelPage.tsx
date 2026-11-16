@@ -7,6 +7,7 @@ import type {
 } from "happy-desktop-state";
 import { Button } from "../../src/Button";
 import { HappyAgentActivityPanel } from "../../src/HappyAgentActivityPanel";
+import { TabbedPane } from "../../src/TabbedPane";
 import { WorkFloaty } from "../../src/WorkFloaty";
 import { ComponentPage, Specimen } from "../kit";
 
@@ -91,6 +92,35 @@ const backgroundProcesses: readonly HappyAgentBackgroundProcess[] = [
     { id: 2, command: "vite --host", cwd: "/repo", status: "running" },
 ];
 
+const exitedProcesses: readonly HappyAgentBackgroundProcess[] = [
+    {
+        id: 3,
+        command: "pnpm typecheck",
+        cwd: "/repo",
+        status: "exited",
+        exitCode: 0,
+        startedAt: NOW - 240_000,
+        endedAt: NOW - 180_000,
+    },
+    {
+        id: 4,
+        command: "pnpm --filter happy-desktop-ui test",
+        cwd: "/repo",
+        status: "exited",
+        exitCode: 1,
+        startedAt: NOW - 200_000,
+        endedAt: NOW - 60_000,
+    },
+    {
+        id: 5,
+        command: "tail -f server.log",
+        cwd: "/repo",
+        status: "exited",
+        startedAt: NOW - 400_000,
+        endedAt: NOW - 300_000,
+    },
+];
+
 /** What the chat changed and published, as the side panel's Activity tab leads with it. */
 const workList = (
     <WorkFloaty
@@ -110,9 +140,13 @@ const workList = (
                 trailing: { type: "changes", added: 128, deleted: 41 },
             },
         ]}
-        history={[]}
-        historyExpanded={false}
-        onHistoryExpandedChange={() => undefined}
+        history={[
+            {
+                id: "artifact:migration",
+                label: "Migration notes",
+                mark: { type: "icon", icon: "package" },
+            },
+        ]}
         onRowOpen={() => undefined}
         placement="panel"
     />
@@ -176,15 +210,14 @@ export function HappyAgentActivityPanelPage() {
             </Specimen>
 
             <Specimen
-                detail="the Completed disclosure directly rendered open, with its delegated-session navigation affordance"
-                label="Completed expanded"
+                detail="finished agents and exited terminals listed as records, newest first, with each terminal's outcome; nothing is folded away"
+                label="Finished records"
                 number="01b"
                 stage="surface"
             >
                 <div style={{ width: "560px" }}>
                     <HappyAgentActivityPanel
-                        backgroundProcesses={[]}
-                        completedInitiallyOpen
+                        backgroundProcesses={exitedProcesses}
                         now={NOW}
                         onSubagentSelect={() => undefined}
                         subagents={subagents.slice(1)}
@@ -284,14 +317,14 @@ export function HappyAgentActivityPanelPage() {
             </Specimen>
 
             <Specimen
-                detail="the side panel's Activity tab: what the chat changed and published leads, then its running agents and terminals, goal, tasks and settled agents"
+                detail="the side panel's Activity tab: what the chat changed and published leads, then its running agents and terminals, goal, tasks, and every finished agent and terminal as a record"
                 label="Activity tab with work"
                 number="07"
                 stage="surface"
             >
                 <div style={{ display: "flex", height: "560px", width: "360px" }}>
                     <HappyAgentActivityPanel
-                        backgroundProcesses={backgroundProcesses}
+                        backgroundProcesses={[...backgroundProcesses, ...exitedProcesses]}
                         goal={goal}
                         leading={workList}
                         now={NOW}
@@ -302,6 +335,69 @@ export function HappyAgentActivityPanelPage() {
                         tasks={tasks}
                     />
                 </div>
+            </Specimen>
+
+            <Specimen
+                detail="the side panel as the app draws it: Activity is its first tab, always present and never closable, ahead of Files and any opened tool"
+                label="Side panel, Activity first"
+                number="08"
+                stage="surface"
+            >
+                <TabbedPane
+                    activeId="activity"
+                    closePresentation="overlay"
+                    onClose={() => undefined}
+                    onSelect={() => undefined}
+                    overflowFade
+                    size="medium"
+                    style={{ height: "560px", width: "360px" }}
+                    tabSizing="content"
+                    tabs={[
+                        { closable: false, icon: "agents", id: "activity", label: "Activity" },
+                        { closable: true, icon: "files", id: "files", label: "Files" },
+                        { closable: true, icon: "terminal", id: "terminal", label: "Terminal" },
+                    ]}
+                >
+                    <HappyAgentActivityPanel
+                        backgroundProcesses={[...backgroundProcesses, ...exitedProcesses]}
+                        goal={goal}
+                        leading={workList}
+                        now={NOW}
+                        onBackgroundProcessStop={() => undefined}
+                        onSubagentSelect={() => undefined}
+                        placement="panel"
+                        subagents={subagents}
+                        tasks={tasks}
+                    />
+                </TabbedPane>
+            </Specimen>
+
+            <Specimen
+                detail="the permanent tab before the chat has done anything: one quiet line"
+                label="Side panel, empty"
+                number="09"
+                stage="surface"
+            >
+                <TabbedPane
+                    activeId="activity"
+                    closePresentation="overlay"
+                    onSelect={() => undefined}
+                    size="medium"
+                    style={{ height: "240px", width: "360px" }}
+                    tabSizing="content"
+                    tabs={[
+                        { closable: false, icon: "agents", id: "activity", label: "Activity" },
+                        { closable: true, icon: "files", id: "files", label: "Files" },
+                    ]}
+                >
+                    <HappyAgentActivityPanel
+                        backgroundProcesses={[]}
+                        now={NOW}
+                        placement="panel"
+                        subagents={[]}
+                        tasks={[]}
+                    />
+                </TabbedPane>
             </Specimen>
         </ComponentPage>
     );

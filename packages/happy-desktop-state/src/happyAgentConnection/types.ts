@@ -585,11 +585,16 @@ export interface SessionState {
      * is `stopSubagents`.
      */
     subagentsRunning: boolean;
+    /** Running and exited processes, newest first; an exited one is kept as a record. */
     backgroundProcesses: readonly {
         sessionId: number;
         command: string;
         cwd: string;
-        status: "running";
+        status: "running" | "exited";
+        /** Absent while running, and after a kill that produced no code. */
+        exitCode?: number;
+        startedAt?: number;
+        endedAt?: number;
     }[];
     usage?: SessionUsage;
     connection: ConnectionState;

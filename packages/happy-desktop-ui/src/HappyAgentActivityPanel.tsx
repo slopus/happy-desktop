@@ -10,7 +10,6 @@ import type {
 import { Button } from "./Button";
 import { CompactActivityRow } from "./CompactActivityRow";
 import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
-import { Icon } from "./Icon";
 import { ScrollArea } from "./Scrollbar";
 
 export type HappyAgentActivityPanelProps = {
@@ -19,15 +18,13 @@ export type HappyAgentActivityPanelProps = {
      * session's own activity. Present, the panel is never empty.
      */
     leading?: ReactNode;
-    /** Opens the native Completed disclosure on its first render; omitted is closed. */
-    completedInitiallyOpen?: boolean;
     /** The session's persistent goal, when one is set (`/goal`). */
     goal?: HappyAgentGoal;
     /** The session task list in display order (`/tasks`). */
     tasks: readonly HappyAgentTodo[];
     /** Delegated subagents for the live monitor (`/agents`). */
     subagents: readonly SubagentSummary[];
-    /** Running background terminals (`/ps`). */
+    /** Background terminals (`/ps`), running and exited. */
     backgroundProcesses: readonly HappyAgentBackgroundProcess[];
     /** Requests termination of one background terminal (`/stop`); omit to hide the control. */
     onBackgroundProcessStop?: (processId: number) => void;
@@ -85,6 +82,19 @@ function subagentPriority(subagent: SubagentSummary): number {
         case "archived":
             return 5;
     }
+}
+
+/** Newest first, by when it last moved; ties keep the order they arrived in. */
+function newestFirst<T>(items: readonly T[], at: (item: T) => number): readonly T[] {
+    return items
+        .map((item, index) => ({ item, index }))
+        .sort((left, right) => at(right.item) - at(left.item) || left.index - right.index)
+        .map(({ item }) => item);
+}
+
+function processOutcome(process: HappyAgentBackgroundProcess): string {
+    if (process.status === "running") return "running";
+    return process.exitCode === undefined ? "ended" : `exit ${String(process.exitCode)}`;
 }
 
 function SectionHeading(props: { count?: number; label: string }) {
@@ -195,12 +205,12 @@ function BackgroundProcessRow(props: {
         >
             <CompactActivityRow
                 arguments={[process.command]}
-                accessibleLabel={`Terminal ${process.command}, running`}
+                accessibleLabel={`Terminal ${process.command}, ${processOutcome(process)}`}
                 icon="terminal"
-                meta={["running", process.cwd]}
+                meta={[processOutcome(process), process.cwd]}
                 placement="panel"
                 trailing={
-                    props.onStop ? (
+                    props.onStop && process.status === "running" ? (
                         <span
                             data-happy-desktop-ui="happy-agent-activity-process-stop"
                             data-testid="happy-agent-activity-process-stop"
@@ -280,7 +290,8 @@ function TerminalSection(props: {
 /**
  * HappyAgentActivityPanel — the read-only session activity monitor combining the TUI's
  * `/goal`, `/tasks`, `/agents`, and `/ps` views. Live agents and terminals lead;
- * settled agents remain mounted inside a collapsed disclosure. An optional
+ * everything that finished stays listed after them as a record, newest first,
+ * and nothing is folded away. An optional
  * selection callback turns agent readouts into session-navigation buttons. Every
  * value flows from the reactive session snapshot (reconciled from
  * `tasks_changed`/`goal_changed`/`subagent_changed`/`background_processes_changed`
@@ -297,14 +308,23 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
             subagent.status === "running" ||
             subagent.status === "suspended",
     );
-    const completedSubagents = orderedSubagents.filter(
-        (subagent) =>
-            subagent.status === "completed" ||
-            subagent.status === "aborted" ||
-            subagent.status === "error" ||
-            subagent.status === "archived",
+    const finishedSubagents = newestFirst(
+        subagents.filter(
+            (subagent) =>
+                subagent.status === "completed" ||
+                subagent.status === "aborted" ||
+                subagent.status === "error" ||
+                subagent.status === "archived",
+        ),
+        (subagent) => subagent.updatedAt,
     );
-    const hasRunning = runningSubagents.length > 0 || backgroundProcesses.length > 0;
+    const runningProcesses = backgroundProcesses.filter((process) => process.status === "running");
+    const exitedProcesses = newestFirst(
+        backgroundProcesses.filter((process) => process.status === "exited"),
+        (process) => process.endedAt ?? process.startedAt ?? 0,
+    );
+    const hasRunning = runningSubagents.length > 0 || runningProcesses.length > 0;
+    const hasFinished = finishedSubagents.length > 0 || exitedProcesses.length > 0;
     const empty =
         props.leading === undefined &&
         goal === undefined &&
@@ -325,7 +345,7 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
                     className="happy-agent-activity__empty"
                     data-happy-desktop-ui="happy-agent-activity-empty"
                 >
-                    No goal, tasks, agents, or background terminals for this session yet.
+                    Nothing has happened in this chat yet.
                 </p>
             ) : (
                 <>
@@ -342,7 +362,7 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
                                     onSelect={props.onSubagentSelect}
                                 />
                                 <TerminalSection
-                                    processes={backgroundProcesses}
+                                    processes={runningProcesses}
                                     onStop={props.onBackgroundProcessStop}
                                 />
                             </div>
@@ -368,33 +388,21 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
                         </section>
                     ) : null}
 
-                    {completedSubagents.length > 0 ? (
-                        <details
-                            className="happy-agent-activity__completed"
-                            data-happy-desktop-ui="happy-agent-activity-completed"
-                            open={props.completedInitiallyOpen || undefined}
+                    {hasFinished ? (
+                        <section
+                            className="happy-agent-activity__group"
+                            data-happy-desktop-ui="happy-agent-activity-finished"
                         >
-                            <summary className="happy-agent-activity__completed-summary">
-                                <Icon
-                                    className="happy-agent-activity__completed-chevron"
-                                    name="chevron-right"
-                                    size={12}
-                                />
-                                <h2 className="happy-agent-activity__completed-heading">
-                                    Completed
-                                </h2>
-                                <span className="happy-agent-activity__count">
-                                    {completedSubagents.length}
-                                </span>
-                            </summary>
-                            <div className="happy-agent-activity__completed-content">
+                            <h2 className="happy-agent-activity__group-heading">Finished</h2>
+                            <div className="happy-agent-activity__group-content">
                                 <AgentSection
-                                    agents={completedSubagents}
+                                    agents={finishedSubagents}
                                     now={props.now}
                                     onSelect={props.onSubagentSelect}
                                 />
+                                <TerminalSection processes={exitedProcesses} />
                             </div>
-                        </details>
+                        </section>
                     ) : null}
                 </>
             )}

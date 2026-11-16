@@ -307,14 +307,15 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         tasks: [],
         subagents: projectSubagents(agent, input.activity),
         subagentsRunning: subagentsRunningOf(agent, input.activity),
-        backgroundProcesses: (input.activity?.processes ?? [])
-            .filter((process) => process.status === "running")
-            .map((process) => ({
-                sessionId: projectNumericIdentity(process.id),
-                command: process.command,
-                cwd: workspacePath(workspace),
-                status: "running" as const,
-            })),
+        backgroundProcesses: (input.activity?.processes ?? []).map((process) => ({
+            sessionId: projectNumericIdentity(process.id),
+            command: process.command,
+            cwd: workspacePath(workspace),
+            status: process.status,
+            ...(process.exitCode === null ? {} : { exitCode: process.exitCode }),
+            startedAt: process.startedAt,
+            ...(process.endedAt === null ? {} : { endedAt: process.endedAt }),
+        })),
         ...(usage === undefined ? {} : { usage }),
         connection: input.connection,
         transcriptComplete: !input.hasMore,

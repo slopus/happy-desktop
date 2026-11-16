@@ -562,7 +562,12 @@ export interface HappyAgentBackgroundProcess {
     readonly id: number;
     readonly command: string;
     readonly cwd: string;
-    readonly status: "running";
+    /** An exited process stays listed as a record of what ran. */
+    readonly status: "running" | "exited";
+    /** Absent while running, and after a kill that produced no code. */
+    readonly exitCode?: number;
+    readonly startedAt?: number;
+    readonly endedAt?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -332,3 +332,88 @@ it("shows an empty state when there is no goal, task, subagent, or process", asy
         view.container.querySelector('[data-happy-desktop-ui="happy-agent-activity-empty"]'),
     ).not.toBeNull();
 }, 120_000);
+
+it("keeps finished agents and exited terminals as records after the running ones, newest first, with nothing folded", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div style={{ width: "560px" }}>
+                <HappyAgentActivityPanel
+                    backgroundProcesses={[
+                        {
+                            id: 1,
+                            command: "older",
+                            cwd: "/repo",
+                            status: "exited",
+                            exitCode: 0,
+                            endedAt: 10,
+                        },
+                        { id: 2, command: "live", cwd: "/repo", status: "running" },
+                        {
+                            id: 3,
+                            command: "newer",
+                            cwd: "/repo",
+                            status: "exited",
+                            exitCode: 2,
+                            endedAt: 20,
+                        },
+                        { id: 4, command: "killed", cwd: "/repo", status: "exited", endedAt: 5 },
+                    ]}
+                    now={64_000}
+                    onBackgroundProcessStop={() => undefined}
+                    subagents={[
+                        {
+                            ...subagents[0]!,
+                            id: "a" as SubagentSummary["id"],
+                            status: "completed",
+                            updatedAt: 100,
+                        },
+                        {
+                            ...subagents[0]!,
+                            id: "b" as SubagentSummary["id"],
+                            status: "error",
+                            updatedAt: 300,
+                        },
+                        subagents[0]!,
+                    ]}
+                    tasks={[]}
+                />
+            </div>
+        ),
+        { width: 600, height: 760, padding: 12 },
+    );
+    await view.ready();
+
+    expect(view.container.querySelector("details")).toBeNull();
+    const running = view.$('[data-happy-desktop-ui="happy-agent-activity-running"]').element;
+    const finished = view.$('[data-happy-desktop-ui="happy-agent-activity-finished"]').element;
+    expect(
+        running.compareDocumentPosition(finished) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+        running.querySelectorAll('[data-happy-desktop-ui="happy-agent-activity-process"]'),
+    ).toHaveLength(1);
+
+    const records = Array.from(
+        finished.querySelectorAll<HTMLElement>(
+            '[data-happy-desktop-ui="happy-agent-activity-process"]',
+        ),
+    ).map((row) => row.textContent ?? "");
+    expect(records).toHaveLength(3);
+    expect(records[0]).toContain("newer");
+    expect(records[0]).toContain("exit 2");
+    expect(records[1]).toContain("exit 0");
+    expect(records[2]).toContain("ended");
+    // A record has nothing left to stop.
+    expect(
+        finished.querySelector('[data-happy-desktop-ui="happy-agent-activity-process-stop"]'),
+    ).toBeNull();
+
+    const agents = Array.from(
+        finished.querySelectorAll<HTMLElement>(
+            '[data-happy-desktop-ui="happy-agent-activity-subagent"]',
+        ),
+    );
+    expect(agents).toHaveLength(2);
+    for (const agent of agents) expect(agent.getBoundingClientRect().height).toBeGreaterThan(0);
+}, 120_000);

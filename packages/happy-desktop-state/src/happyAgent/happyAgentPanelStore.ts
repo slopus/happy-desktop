@@ -142,10 +142,6 @@ export interface HappyAgentPanelSnapshot {
      * share one browser per group, so this is that browser's history.
      */
     readonly browserRecent: readonly HappyAgentBrowserRecent[];
-    /** Whether the transient Activity tab is selected/open for this conversation. */
-    readonly activityViewOpen: boolean;
-    /** Whether the reader dismissed the Activity tab for this conversation. */
-    readonly activityViewDismissed: boolean;
     /** Whether the transient Usage tab is open for this conversation. */
     readonly usageViewOpen: boolean;
     /**
@@ -188,8 +184,6 @@ export interface HappyAgentPanelSnapshot {
      * exists, so the two never disagree about the file being shown.
      */
     readonly fileViewOpen: boolean;
-    /** Whether the work list's history fold is open. */
-    readonly floatyHistoryExpanded: boolean;
     /**
      * The artifact a conversation link opened in the transient artifact tab,
      * and the version it named when it named one. Absent, the tab is closed.
@@ -230,12 +224,10 @@ export interface HappyAgentPanelStore {
      * artifacts at all.
      */
     artifactsSelect(): void;
-    /** Opens or selects the transient Activity tab for the current conversation. */
+    /** Selects the permanent Activity tab and opens the panel. */
     activitySelect(): void;
-    /** Hides Activity while another panel is shown without dismissing its tab. */
+    /** Leaves Activity for the view the panel would otherwise show. */
     activityHide(): void;
-    /** Closes the transient Activity tab and returns to Files when it was selected. */
-    activityClose(): void;
     /** Opens or selects the transient Usage tab for the current conversation. */
     usageSelect(): void;
     /** Closes the transient Usage tab. */
@@ -277,7 +269,6 @@ export interface HappyAgentPanelStore {
      * Applied at once when it already is.
      */
     filesSelectOnArrival(groupId: HappyAgentGroupId): void;
-    floatyHistoryExpandedUpdate(expanded: boolean): void;
     /**
      * Shows one artifact — at one version, when a link named one — in the
      * transient artifact tab and opens the panel. Like the file viewer it is a
@@ -531,7 +522,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     let open = false;
     let activeViewId: HappyAgentPanelSnapshot["activeViewId"] = "files";
     let activityViewShown = false;
-    let activityViewDismissed = false;
     let usageViewShown = false;
     let devicesViewShown = false;
     let previewEntryId: string | undefined;
@@ -541,7 +531,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     let changeConversationId: HappyAgentSessionId | undefined;
     let fileViewShown = false;
     let filesViewShown = true;
-    let floatyHistoryExpanded = false;
     let artifactView: HappyAgentPanelArtifactView | undefined;
     /** A group whose Files tab is shown when it is next addressed. */
     let filesArrivalGroupId: HappyAgentGroupId | undefined;
@@ -560,14 +549,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     let disposed = false;
     let snapshot: HappyAgentPanelSnapshot = {
         activeViewId: "files",
-        activityViewDismissed: false,
-        activityViewOpen: false,
         usageViewOpen: false,
         devicesViewOpen: false,
         fileViewOpen: false,
         filesViewOpen: true,
         browserRecent: NO_RECENT,
-        floatyHistoryExpanded: false,
         open: false,
         tabs: NO_TABS,
         browserTabs: [],
@@ -577,14 +563,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         const visible = tabs.filter((tab) => tab.groupId === groupId);
         return {
             activeViewId,
-            activityViewDismissed,
-            activityViewOpen: activityViewShown,
             usageViewOpen: usageViewShown,
             devicesViewOpen: devicesViewShown,
             fileViewOpen: fileViewShown,
             filesViewOpen: filesViewShown,
             browserRecent: (groupId && recentByGroup.get(groupId)) || NO_RECENT,
-            floatyHistoryExpanded,
             ...(artifactView === undefined ? {} : { artifactView }),
             open,
             browserTabs: tabs.flatMap((tab) =>
@@ -666,8 +649,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         if (
             next.open === snapshot.open &&
             next.activeViewId === snapshot.activeViewId &&
-            next.activityViewDismissed === snapshot.activityViewDismissed &&
-            next.activityViewOpen === snapshot.activityViewOpen &&
             next.usageViewOpen === snapshot.usageViewOpen &&
             next.devicesViewOpen === snapshot.devicesViewOpen &&
             next.previewEntryId === snapshot.previewEntryId &&
@@ -676,7 +657,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             next.fileViewOpen === snapshot.fileViewOpen &&
             next.filesViewOpen === snapshot.filesViewOpen &&
             next.browserRecent === snapshot.browserRecent &&
-            next.floatyHistoryExpanded === snapshot.floatyHistoryExpanded &&
             next.artifactView === snapshot.artifactView &&
             next.terminalRefusal === snapshot.terminalRefusal &&
             tabsSame &&
@@ -693,14 +673,11 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
               });
         snapshot = {
             activeViewId: next.activeViewId,
-            activityViewDismissed: next.activityViewDismissed,
-            activityViewOpen: next.activityViewOpen,
             usageViewOpen: next.usageViewOpen,
             devicesViewOpen: next.devicesViewOpen,
             fileViewOpen: next.fileViewOpen,
             filesViewOpen: next.filesViewOpen,
             browserRecent: next.browserRecent,
-            floatyHistoryExpanded: next.floatyHistoryExpanded,
             ...(next.artifactView === undefined ? {} : { artifactView: next.artifactView }),
             open: next.open,
             tabs: projectedTabs,
@@ -1003,30 +980,17 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             recompute();
         },
         activitySelect() {
-            if (disposed || !conversationId) return;
+            if (disposed) return;
             activityViewShown = true;
-            activityViewDismissed = false;
             activeViewId = "activity";
             open = true;
             remember();
             recompute();
         },
         activityHide() {
-            if (disposed || !conversationId) return;
+            if (disposed) return;
             if (!activityViewShown && activeViewId !== "activity") return;
             activityViewShown = false;
-            if (activeViewId === "activity") {
-                if (usageViewShown) activeViewId = "usage";
-                else landing();
-            }
-            remember();
-            recompute();
-        },
-        activityClose() {
-            if (disposed || !conversationId || (!activityViewShown && activityViewDismissed))
-                return;
-            activityViewShown = false;
-            activityViewDismissed = true;
             if (activeViewId === "activity") {
                 if (usageViewShown) activeViewId = "usage";
                 else landing();
@@ -1116,11 +1080,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             fileViewShown = false;
             if (activeViewId === "file") landing();
             remember();
-            recompute();
-        },
-        floatyHistoryExpandedUpdate(next) {
-            if (disposed) return;
-            floatyHistoryExpanded = next;
             recompute();
         },
         artifactViewOpen(artifactId, version) {
@@ -1354,10 +1313,9 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             const conversationChanged = conversationId !== nextConversationId;
             conversationId = nextConversationId;
             if (conversationChanged) {
-                activityViewShown = false;
-                activityViewDismissed = false;
                 usageViewShown = false;
-                if (activeViewId === "activity" || activeViewId === "usage") activeViewId = "files";
+                // Activity is permanent: it stays selected and shows the next conversation's.
+                if (activeViewId === "usage") activeViewId = "files";
             }
             if (previewConversationId !== nextConversationId) {
                 previewEntryId = undefined;
@@ -1380,7 +1338,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             // something inside that checkout, so it does not travel to the next
             // project.
             activityViewShown = false;
-            activityViewDismissed = false;
             usageViewShown = false;
             devicesViewShown = false;
             fileViewShown = false;

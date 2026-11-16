@@ -147,12 +147,3 @@
     line-height: 16px;
     color: var(--text-secondary);
 }
-
-.happy-work-floaty__chevron {
-    display: flex;
-    color: var(--text-secondary);
-}
-
-[aria-expanded="true"] > .happy-work-floaty__trailing > .happy-work-floaty__chevron {
-    transform: rotate(90deg);
-}

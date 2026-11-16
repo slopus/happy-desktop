@@ -57,14 +57,12 @@ const everything = {
     history,
 } satisfies Pick<WorkFloatyProps, "changes" | "artifacts" | "agents" | "history">;
 
-/** One card as the workspace docks it: interactive, so History opens in place. */
+/** One card as the workspace docks it: interactive, so a row selects in place. */
 function Card(
     props: Pick<WorkFloatyProps, "changes" | "artifacts" | "agents" | "history"> & {
-        readonly expanded?: boolean;
         readonly selectedId?: string;
     },
 ) {
-    const [expanded, setExpanded] = useState(props.expanded ?? false);
     const [selected, setSelected] = useState(props.selectedId);
     return (
         <WorkFloaty
@@ -72,8 +70,6 @@ function Card(
             artifacts={props.artifacts}
             changes={props.changes}
             history={props.history}
-            historyExpanded={expanded}
-            onHistoryExpandedChange={setExpanded}
             onRowOpen={setSelected}
             selectedId={selected}
         />
@@ -105,7 +101,7 @@ export function WorkFloatyPage() {
         <ComponentPage
             number={componentNumber}
             title="Work floaty"
-            summary="What a chat changed, published and has working, as sidebar rows on a fixed 280px card. Changes and artifacts first; agents and their history a half row below. Every row ends in one right-aligned column, and the card grows with its rows up to 60% of the pane before scrolling."
+            summary="What a chat changed, published and has working, as sidebar rows on a fixed 280px card. Changes and artifacts first; agents and their finished records, muted, a half row below. Every row ends in one right-aligned column, and the card grows with its rows up to 60% of the pane before scrolling."
             width={1100}
         >
             <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
@@ -122,24 +118,13 @@ export function WorkFloatyPage() {
                 </Specimen>
                 <Specimen
                     number="02"
-                    label="Everything, History shut"
+                    label="Everything"
                     stage="surface"
-                    detail="Folder · two projects · artifact · running and finished agents"
+                    detail="Folder · two projects · artifact · running agents, then past agents and artifacts, muted"
                 >
                     <Column height={600}>
                         <DimensionRule label="280" />
                         <Card {...everything} />
-                    </Column>
-                </Specimen>
-                <Specimen
-                    number="03"
-                    label="History open"
-                    stage="surface"
-                    detail="Past agents and artifacts, muted · chevron turned"
-                >
-                    <Column height={720}>
-                        <DimensionRule label="280" />
-                        <Card {...everything} expanded />
                     </Column>
                 </Specimen>
                 <Specimen
@@ -213,7 +198,7 @@ export function WorkFloatyPage() {
                             boxSizing: "border-box",
                         }}
                     >
-                        <Card {...everything} expanded />
+                        <Card {...everything} />
                     </div>
                 </Specimen>
             </div>

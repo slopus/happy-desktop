@@ -7816,8 +7816,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 artifacts={floatyOutputs.slice(0, FLOATY_ARTIFACTS)}
                 changes={floatyPlaces.map((place) => place.row)}
                 history={floatyOutputs.slice(FLOATY_ARTIFACTS)}
-                historyExpanded={panel.floatyHistoryExpanded}
-                onHistoryExpandedChange={props.workspace.panel.floatyHistoryExpandedUpdate}
                 onRowOpen={(id) => {
                     const place = floatyPlaces.find((candidate) => candidate.row.id === id);
                     if (place?.workspaceId !== undefined) workspaceOpen(place.workspaceId);
@@ -7945,7 +7943,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     };
     const panelViewClose = (viewId: string) => {
         if (viewId === "files") props.workspace.panel.filesClose();
-        else if (viewId === "activity") props.workspace.activityPanelClose();
         else if (viewId === "usage") props.workspace.usagePanelClose();
         else if (viewId === "devices") props.workspace.panel.devicesClose();
         else if (viewId === "preview") props.workspace.panel.previewClose();
@@ -11976,10 +11973,6 @@ function HappyAgentPanelBody(props: {
         artifactView === undefined
             ? "Artifact"
             : artifactTabLabelOf(titles, titlesStore, artifactView.artifactId);
-    const activityTabShown =
-        props.panel.activityViewOpen ||
-        ((props.activity?.activityAvailable === true || props.work !== undefined) &&
-            !props.panel.activityViewDismissed);
     const activityBackgroundProcesses = props.activity
         ? props.activity.backgroundProcesses.filter((process) =>
               props.activity?.detachedBackgroundProcessIds.has(process.id),
@@ -11991,14 +11984,13 @@ function HappyAgentPanelBody(props: {
               "Happy Agent must reconnect before loading all files.")
             : undefined;
     const baseTabs: TabItem[] = [
+        // Activity is permanent and first: what the chat is doing and has done.
+        { closable: false, icon: "agents" as const, id: "activity", label: "Activity" },
         ...(props.panel.filesViewOpen
             ? [{ closable: true, icon: "files" as const, id: "files", label: "Files" }]
             : []),
         ...(props.artifacts
             ? [{ closable: false, icon: "package" as const, id: "artifacts", label: "Artifacts" }]
-            : []),
-        ...(activityTabShown
-            ? [{ closable: true, icon: "agents" as const, id: "activity", label: "Activity" }]
             : []),
         ...(props.panel.usageViewOpen
             ? [{ closable: true, icon: "clock" as const, id: "usage", label: "Usage" }]
@@ -12335,26 +12327,17 @@ function HappyAgentPanelBody(props: {
                             />
                         )
                     ) : props.panel.activeViewId === "activity" ? (
-                        props.activity || props.work ? (
-                            <HappyAgentActivityPanel
-                                backgroundProcesses={activityBackgroundProcesses}
-                                {...(props.activity?.goal ? { goal: props.activity.goal } : {})}
-                                {...(props.work === undefined ? {} : { leading: props.work })}
-                                now={props.now}
-                                onBackgroundProcessStop={props.onActivityProcessStop}
-                                onSubagentSelect={props.onSubagentSelect}
-                                placement="panel"
-                                subagents={props.activity?.subagents ?? []}
-                                tasks={props.activity?.tasks ?? []}
-                            />
-                        ) : (
-                            <EmptyState
-                                description="Open a session to see its goal, tasks, subagents, and background terminals."
-                                icon="agents"
-                                size="panel"
-                                title="No session activity"
-                            />
-                        )
+                        <HappyAgentActivityPanel
+                            backgroundProcesses={activityBackgroundProcesses}
+                            {...(props.activity?.goal ? { goal: props.activity.goal } : {})}
+                            {...(props.work === undefined ? {} : { leading: props.work })}
+                            now={props.now}
+                            onBackgroundProcessStop={props.onActivityProcessStop}
+                            onSubagentSelect={props.onSubagentSelect}
+                            placement="panel"
+                            subagents={props.activity?.subagents ?? []}
+                            tasks={props.activity?.tasks ?? []}
+                        />
                     ) : props.panel.activeViewId === "usage" ? (
                         props.activity ? (
                             <HappyAgentUsagePanel

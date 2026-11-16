@@ -318,10 +318,8 @@ export interface HappyAgentConversationSnapshot {
     readonly goal?: HappyAgentGoal;
     readonly subagents: readonly SubagentSummary[];
     readonly backgroundProcesses: readonly HappyAgentBackgroundProcess[];
-    /** Running terminal ids classified from the live transcript/process projection. */
+    /** Background terminal ids classified from the live transcript/process projection. */
     readonly detachedBackgroundProcessIds: ReadonlySet<number>;
-    /** Whether the conversation has activity the panel can show, including settled history. */
-    readonly activityAvailable: boolean;
     readonly showReasoning: boolean;
     /** Finished turns the reader expanded, so their trace entries stay listed. */
     readonly expandedTurnIds: ReadonlySet<string>;
@@ -3093,11 +3091,6 @@ export function happyAgentWorkspaceStoreCreate(
         /** Stands in only until this session states its own; see `recompute`. */
         pendingMenus: HappyAgentMenusSnapshot | undefined,
     ): HappyAgentConversationSnapshot => {
-        const activityAvailable =
-            chat.goal !== undefined ||
-            chat.tasks.length > 0 ||
-            chat.subagents.length > 0 ||
-            chat.detachedBackgroundProcessIds.size > 0;
         return {
             conversationId: chat.sessionId,
             ready: chat.ready,
@@ -3127,7 +3120,6 @@ export function happyAgentWorkspaceStoreCreate(
             subagents: chat.subagents,
             backgroundProcesses: chat.backgroundProcesses,
             detachedBackgroundProcessIds: chat.detachedBackgroundProcessIds,
-            activityAvailable,
             showReasoning: chat.showReasoning,
             expandedTurnIds: chat.expandedTurnIds,
             expandedMessageIds: chat.expandedMessageIds,
@@ -8893,7 +8885,7 @@ export function happyAgentWorkspaceStoreCreate(
         activityPanelToggle: () => chatStore?.activityPanelToggle(),
         activityPanelClose: () => {
             chatStore?.activityPanelClose();
-            panel.activityClose();
+            panel.activityHide();
         },
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
@@ -9543,7 +9535,6 @@ function conversationAcquiring(
         subagents: NO_SUBAGENTS,
         backgroundProcesses: NO_PROCESSES,
         detachedBackgroundProcessIds: NO_PROCESS_IDS,
-        activityAvailable: false,
         showReasoning: false,
         expandedTurnIds: NO_TURNS,
         expandedMessageIds: NO_TURNS,

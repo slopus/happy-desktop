@@ -295,6 +295,9 @@ function transcriptBackgroundProcessesProject(
         command: process.command,
         cwd: process.cwd,
         status: process.status,
+        ...(process.exitCode === undefined ? {} : { exitCode: process.exitCode }),
+        ...(process.startedAt === undefined ? {} : { startedAt: process.startedAt }),
+        ...(process.endedAt === undefined ? {} : { endedAt: process.endedAt }),
     }));
 }
 

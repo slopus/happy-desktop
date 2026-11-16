@@ -42,10 +42,8 @@ export interface WorkFloatyProps {
     readonly changes: readonly WorkFloatyRow[];
     readonly artifacts: readonly WorkFloatyRow[];
     readonly agents: readonly WorkFloatyRow[];
-    /** Finished agents and older artifacts, listed muted under History. */
+    /** Finished agents and older artifacts, listed muted after the rest as records. */
     readonly history: readonly WorkFloatyRow[];
-    readonly historyExpanded: boolean;
-    readonly onHistoryExpandedChange: (expanded: boolean) => void;
     /** The row whose tab is the one the pane beside it is showing. */
     readonly selectedId?: string;
     readonly onRowOpen: (id: string) => void;
@@ -141,28 +139,7 @@ export function WorkFloaty(props: WorkFloatyProps) {
                     {working ? (
                         <div className="happy-work-floaty__group">
                             {props.agents.map((item) => row(item, false))}
-                            {props.history.length > 0 ? (
-                                <button
-                                    aria-expanded={props.historyExpanded}
-                                    className="happy-work-floaty__row"
-                                    data-happy-desktop-ui="work-floaty-history"
-                                    onClick={() =>
-                                        props.onHistoryExpandedChange(!props.historyExpanded)
-                                    }
-                                    type="button"
-                                >
-                                    <span className="happy-work-floaty__mark" />
-                                    <span className="happy-work-floaty__label">History</span>
-                                    <span className="happy-work-floaty__trailing">
-                                        <span className="happy-work-floaty__chevron">
-                                            <Icon name="chevron-right" size={12} />
-                                        </span>
-                                    </span>
-                                </button>
-                            ) : null}
-                            {props.historyExpanded
-                                ? props.history.map((item) => row(item, true))
-                                : null}
+                            {props.history.map((item) => row(item, true))}
                         </div>
                     ) : null}
                 </div>,
