@@ -272,6 +272,14 @@ export interface HappyAgentPanelStore {
     /** Closes the file-viewer tab and returns to Files. */
     fileViewClose(): void;
     /**
+     * Shows the panel's file in the Files tab's own preview, beside the
+     * listing it was picked from, and opens the panel. A checkout's file has
+     * nowhere else to be in the panel, so the separate viewer tab — kept for a
+     * file read out of another workspace — gives way. The workspace store
+     * calls this as it starts reading the file, like `fileViewOpen`.
+     */
+    filesPreviewOpen(): void;
+    /**
      * Shows one other conversation in a panel tab of its own and opens the
      * panel, selecting the tab already reading it rather than adding another.
      */
@@ -1130,6 +1138,15 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             if (disposed) return;
             fileViewShown = false;
             if (activeViewId === "file") landing();
+            remember();
+            recompute();
+        },
+        filesPreviewOpen() {
+            if (disposed) return;
+            fileViewShown = false;
+            filesViewShown = true;
+            activeViewId = "files";
+            open = true;
             remember();
             recompute();
         },
