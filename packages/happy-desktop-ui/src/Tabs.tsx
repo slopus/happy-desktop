@@ -690,6 +690,50 @@ export function Tabs(props: TabsProps) {
         transferRun(tab, target, true);
     };
 
+    /**
+     * The strip is one stop on Tab, the way a tablist is: only the selected tab
+     * takes focus from outside, and the arrows walk the focus along the strip
+     * from there. Moving focus does not open anything — opening a chat is real
+     * work, so Enter or Space opens the tab the focus is on, as a click would.
+     * Delete closes it, which is how a tab whose close button only appears
+     * under the pointer is closed from the keyboard.
+     */
+    const focusByKey = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number): void => {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const tabs = [
+            ...(list.current?.querySelectorAll<HTMLButtonElement>(":scope > [role='tab']") ?? []),
+        ];
+        const last = tabs.length - 1;
+        const next =
+            event.key === "ArrowRight"
+                ? index === last
+                    ? 0
+                    : index + 1
+                : event.key === "ArrowLeft"
+                  ? index === 0
+                      ? last
+                      : index - 1
+                  : event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? last
+                      : undefined;
+        if (next !== undefined) {
+            event.preventDefault();
+            tabs[next]?.focus();
+            return;
+        }
+        if (event.key !== "Delete" && event.key !== "Backspace") return;
+        const tab = local.tabs[index];
+        if (!tab || local.onClose === undefined || tab.closable === false) return;
+        event.preventDefault();
+        local.onClose(tab.id);
+    };
+    // The tab Tab lands on: the selected one, or the first while none is.
+    const focusableId = local.tabs.some((tab) => tab.id === local.activeId)
+        ? local.activeId
+        : local.tabs[0]?.id;
+
     return (
         <div
             {...rest}
@@ -729,7 +773,10 @@ export function Tabs(props: TabsProps) {
                         }}
                         onContextMenu={(event) => openTabMenu(tab, event)}
                         onDoubleClick={() => local.onDoubleClick?.(tab.id)}
-                        onKeyDown={(event) => moveByKey(event, tab)}
+                        onKeyDown={(event) => {
+                            moveByKey(event, tab);
+                            if (!event.defaultPrevented) focusByKey(event, index);
+                        }}
                         onPointerCancel={dragEnd}
                         onPointerDown={(event) => {
                             if (event.button === 0) intent(event.currentTarget, tab.id, true);
@@ -740,6 +787,7 @@ export function Tabs(props: TabsProps) {
                         onPointerMove={dragMove}
                         onPointerUp={dragEnd}
                         role="tab"
+                        tabIndex={tab.id === focusableId ? 0 : -1}
                         style={
                             dragged()
                                 ? { transform: `translateX(${drag!.deltaX}px)` }
@@ -831,7 +879,10 @@ export function Tabs(props: TabsProps) {
                                                 local.onClose!(tab.id);
                                             }}
                                             role="button"
-                                            tabIndex={0}
+                                            // Outside the Tab order: the tab is
+                                            // the strip's one stop, and Delete on
+                                            // it closes it.
+                                            tabIndex={-1}
                                         >
                                             <Icon name="close" size={12} />
                                         </span>
