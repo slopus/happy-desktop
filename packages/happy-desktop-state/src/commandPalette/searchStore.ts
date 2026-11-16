@@ -39,12 +39,36 @@ export interface HappyAgentSearchDeps {
 /** How long typing has to pause before the Happy Agent is asked. */
 const DEBOUNCE_MS = 120;
 /**
- * How many hits one answer asks for. A long chat can match on every one of
- * its messages, and the palette shows one row per chat, so it asks for enough
- * to still reach several chats.
+ * How many hits one answer asks for. The palette shows one row per chat, and
+ * a long chat can match on many of its messages: a Happy Agent that answers
+ * with at most three per chat reaches a dozen chats well within this, and one
+ * that does not still reaches several.
  */
 const LIMIT = 50;
 const OFF: HappyAgentSearchSnapshot = { status: "off" };
+
+/**
+ * Where a found conversation sits among the others, as a newer Happy Agent states
+ * it beside the fields the client package types: the chat that started it and
+ * how many of its messages matched. Each is read only when it has its own shape,
+ * so an older Happy Agent, which sends neither, leaves both absent.
+ */
+function conversationFields(result: SearchResult): {
+    parentAgentId?: HappyAgentSessionId;
+    agentMatchCount?: number;
+} {
+    const sent = result as { readonly parentAgentId?: unknown; readonly agentMatchCount?: unknown };
+    const parent = sent.parentAgentId;
+    const count = sent.agentMatchCount;
+    return {
+        ...(typeof parent === "string" && parent.length > 0
+            ? { parentAgentId: parent as HappyAgentSessionId }
+            : {}),
+        ...(typeof count === "number" && Number.isInteger(count) && count > 0
+            ? { agentMatchCount: count }
+            : {}),
+    };
+}
 
 /** One wire result as its product variant; a person takes their photo from the team. */
 function hitProject(
@@ -119,6 +143,7 @@ function hitProject(
                 createdAt: result.createdAt,
                 workspaceId: result.workspaceId as HappyAgentGroupId | null,
                 projectId: result.projectId as HappyAgentProjectId | null,
+                ...conversationFields(result),
             };
         case "user": {
             const imageUrl = photos.get(result.userId);
@@ -166,6 +191,7 @@ function hitProject(
                 archived: result.archived,
                 workspaceId: result.workspaceId as HappyAgentGroupId | null,
                 projectId: result.projectId as HappyAgentProjectId | null,
+                ...conversationFields(result),
             };
         case "project":
             return {

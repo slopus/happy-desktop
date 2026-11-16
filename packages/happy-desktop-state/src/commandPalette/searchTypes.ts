@@ -70,6 +70,16 @@ export type HappyAgentSearchHit =
           /** Where the conversation is, as on its `agent` hit; `null` when unknown. */
           readonly workspaceId: HappyAgentGroupId | null;
           readonly projectId: HappyAgentProjectId | null;
+          /**
+           * The chat that started this one, for a sub-agent or subtask; absent for a
+           * top-level chat, and from a Happy Agent too old to say.
+           */
+          readonly parentAgentId?: HappyAgentSessionId;
+          /**
+           * How many messages in this chat the words were found in, when the Happy
+           * Agent says. A lower bound: it counts within the matches it scanned.
+           */
+          readonly agentMatchCount?: number;
       })
     | (HappyAgentSearchHitFields & {
           readonly type: "todo";
@@ -116,6 +126,16 @@ export type HappyAgentSearchHit =
           readonly workspaceId: HappyAgentGroupId | null;
           /** The project owning that workspace; `null` for bots, tasks, and their subtasks. */
           readonly projectId: HappyAgentProjectId | null;
+          /**
+           * The chat that started this one, for a sub-agent or subtask; absent for a
+           * top-level chat, and from a Happy Agent too old to say.
+           */
+          readonly parentAgentId?: HappyAgentSessionId;
+          /**
+           * How many messages in this chat the words were found in, when the Happy
+           * Agent says. A lower bound: it counts within the matches it scanned.
+           */
+          readonly agentMatchCount?: number;
       })
     | (HappyAgentSearchHitFields & {
           readonly type: "project";

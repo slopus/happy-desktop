@@ -1729,13 +1729,16 @@ function contentHit(hit: HappyAgentSearchHit): boolean {
  * - `more`: things found by name that the window's own answer did not list —
  *   a vault file, a calendar event, a project the window matched differently.
  * - `mentions`: things found by the words inside them, one row per chat
- *   however many of its messages matched, showing where the words are.
+ *   however many of its messages matched, showing where the words are and,
+ *   when the Happy Agent counts them, how many messages matched.
  *
  * Conversations count only as the work the palette already offers: a
- * subtask's chat is its task's row, and a chat the window does not list — a
- * sub-agent's, or one in a workspace it cannot open — is left out. Anything
- * already shown above, or over (an archived task, a closed session), is left
- * out too, so each thing is offered once.
+ * subtask's chat is its task's row, and a sub-agent's chat is the row of the
+ * chat that started it, when the Happy Agent names that chat. A chat the
+ * window does not list and that names no listed parent — one in a workspace
+ * it cannot open, or a sub-agent from a Happy Agent too old to name its
+ * parent — is left out. Anything already shown above, or over (an archived
+ * task, a closed session), is left out too, so each thing is offered once.
  */
 function remoteSections(
     input: CommandPaletteInput,
@@ -1756,9 +1759,29 @@ function remoteSections(
         if (hit.type !== "message" && hit.archived) return undefined;
         const offer =
             hit.type === "agent" || hit.type === "message"
-                ? bySession.get(hit.agentId)
+                ? (bySession.get(hit.agentId) ??
+                  (hit.parentAgentId === undefined ? undefined : bySession.get(hit.parentAgentId)))
                 : byKey.get(hit.key);
         return offer === undefined || offer.tier === 2 ? undefined : offer;
+    };
+    // How many messages matched in all the chats one row stands for: its own
+    // and the sub-agents folded into it, each counted once, as the Happy Agent
+    // counted them. Absent when it counted none of them.
+    const matches = new Map<string, Map<string, number>>();
+    for (const hit of input.remote) {
+        if (hit.type !== "message" || hit.agentMatchCount === undefined) continue;
+        const offer = workOf(hit);
+        if (offer === undefined) continue;
+        let chats = matches.get(offer.key);
+        if (chats === undefined) matches.set(offer.key, (chats = new Map()));
+        chats.set(hit.agentId, hit.agentMatchCount);
+    }
+    const matchesText = (offer: WorkOffer): string | undefined => {
+        const chats = matches.get(offer.key);
+        if (chats === undefined) return undefined;
+        let total = 0;
+        for (const count of chats.values()) total += count;
+        return total > 1 ? `${String(total)} matches` : undefined;
     };
     const placed = new Set(shown);
     const hits = [...input.remote].sort((left, right) => left.rank - right.rank);
@@ -1789,9 +1812,12 @@ function remoteSections(
             mentions.push({
                 ...offer.row,
                 id: `mention:${offer.key}`,
-                // The chat is what opens; where it lives and the words found
-                // in it are what tell two chats of the same name apart.
-                meta: [offer.row.meta, hit.snippet].filter((part) => part).join(" · "),
+                // The chat is what opens; where it lives, how much of it
+                // matched, and the words found in it are what tell two chats
+                // of the same name apart.
+                meta: [offer.row.meta, matchesText(offer), hit.snippet]
+                    .filter((part) => part)
+                    .join(" · "),
                 metaOverflow: undefined,
             });
             continue;
