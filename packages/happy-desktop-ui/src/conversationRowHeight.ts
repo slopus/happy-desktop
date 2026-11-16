@@ -454,6 +454,8 @@ const SMALL_BUTTON_CHROME = 22;
 /* Questions share the agent's 16px/24px prose and column. Options reserve only
    the 18px checkbox and its 12px gap; a free-form reply line has no inner padding. */
 const USER_INPUT_HORIZONTAL_MARGIN = AGENT_INSET;
+/** `.happy-agent-input[data-variant="card"]`: the row's 6px above and below its frame. */
+const USER_INPUT_CHROME = 2 * 6;
 /** The prompt's gap after its Markdown context. */
 const USER_INPUT_CONTEXT_GAP = 12;
 const USER_INPUT_OPTION_HORIZONTAL_CHROME = 30;
@@ -1363,7 +1365,10 @@ export function conversationRowHeight(
             `request:${String(width)}:${context.expanded ? "expanded" : "collapsed"}:${lead ? "lead" : "plain"}:${context.requestFailure ? `${context.requestFailure.retry ? "retry" : "failed"}:${context.requestFailure.message}` : ""}`,
             () =>
                 entry.request.kind === "userInput"
-                    ? (lead ? ACTIVITY_LEAD_CHROME : 0) +
+                    ? /* Opening its turn, the frame sits the 6px under the
+                         identity line that a run of tool rows does. */
+                      (lead ? ACTIVITY_LEAD_CHROME + ACTIVITY_LEAD_RUN_SEPARATION : 0) +
+                      USER_INPUT_CHROME +
                       userInputRequestHeight(
                           entry.request,
                           width,

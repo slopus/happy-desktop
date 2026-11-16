@@ -25,11 +25,14 @@
     border-radius: 12px;
 }
 
-/* The frame stands outside the text column; its contents align with prose. */
+/* The frame stands outside the text column; its contents align with prose.
+   Above and below, the row keeps the 6px a failure card's row and a tool row
+   keep, so two cards in a row stand 12px apart and a card never touches the
+   line before or after it. `conversationRowHeight` mirrors the 6px. */
 .happy-conversation .happy-agent-input[data-variant="card"] {
     width: auto;
-    margin-right: calc(64px - var(--happy-chat-frame-outset));
-    margin-left: calc(30px - var(--happy-chat-frame-outset));
+    margin: 6px calc(64px - var(--happy-chat-frame-outset)) 6px
+        calc(30px - var(--happy-chat-frame-outset));
 }
 
 /* Opening its turn, the question sits in the Message that carries the agent's

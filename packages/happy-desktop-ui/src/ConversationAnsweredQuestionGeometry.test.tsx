@@ -232,8 +232,9 @@ it.each([360, 880])(
                 expect(card(view), `${label}: same card`).toBe(cardElement);
                 expect(card(view).getAttribute("data-state")).toBe("answered");
                 expect(geometry(view), `${label}: geometry`).toEqual(before);
+                /* The row keeps 6px above and below the card's frame. */
                 expect(modeledHeight(view), `${label}: modeled row`).toBeCloseTo(
-                    before.card.height,
+                    before.card.height + 12,
                     0,
                 );
             };
@@ -274,7 +275,7 @@ it.each([360, 880])(
             expect(shown.card.height).toBe(atSubmit!.card.height);
             expect(shown.card.width).toBe(atSubmit!.card.width);
             expect(shown.parts).toEqual(atSubmit!.parts);
-            expect(modeledHeight(reload)).toBeCloseTo(shown.card.height, 0);
+            expect(modeledHeight(reload)).toBeCloseTo(shown.card.height + 12, 0);
         } finally {
             reload.destroy();
         }

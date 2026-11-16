@@ -60,12 +60,13 @@
    beneath it, not prose the run interrupts, so it sits slightly tighter than the
    14px between a run and the sentences around it: 6px here plus the row's own
    6px. A turn that opens on a notice — an error, a failure card's frame, a
-   service line — keeps the same 6px inset as a tool row, so it opens at the
-   same 12px. */
+   service line — or on a question's frame keeps the same 6px inset as a tool
+   row, so it opens at the same 12px. */
 .happy-message--activity-lead:has(
         .happy-agent-activity-row,
         .happy-tool-section,
         .happy-conversation-error-card,
+        .happy-agent-input[data-variant="card"],
         .happy-system-notice[data-align="start"]
     )
     .happy-message__meta {
