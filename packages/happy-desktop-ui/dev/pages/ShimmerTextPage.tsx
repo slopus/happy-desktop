@@ -187,7 +187,7 @@ export function ShimmerTextPage() {
             </Specimen>
 
             <Specimen
-                detail="An inline run breaks where its words would and carries one band across every line it wraps onto, parked at the same steps as the filmstrip"
+                detail="An inline run breaks where its words would and is swept word by word in reading order, the band leaving one line for the next, parked at the same steps as the filmstrip"
                 label="Wrapping inline"
                 number="06"
                 stage="app"

@@ -179,7 +179,7 @@ export function MessageReferencesPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="An agent working, a workspace and a project being prepared · ShimmerText sheen, inherit tone, inline · a wrapped link carries one band across all of its lines"
+                detail="An agent working, a workspace and a project being prepared · ShimmerText sheen, inherit tone, inline · a wrapped link is swept in reading order, line after line"
                 label="Busy references"
                 number="02"
                 stage="app"
@@ -191,7 +191,7 @@ export function MessageReferencesPage() {
                             "",
                             "The new checkout [](happy://workspaces/cloning) is being prepared, and [](happy://projects/importing) is still cloning.",
                             "",
-                            "A long one wraps like prose, and one band crosses every line of it: [](happy://agents/packager).",
+                            "A long one wraps like prose, and the band runs off one line onto the next: [](happy://agents/packager).",
                         ].join("\n"),
                     ),
                 )}

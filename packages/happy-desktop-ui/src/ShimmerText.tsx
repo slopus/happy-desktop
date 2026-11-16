@@ -36,8 +36,10 @@ export type ShimmerTextProps = {
      * run inside a paragraph — a link in a message — has to break exactly where
      * its words would without the shimmer, so turning the sweep on and off
      * never reflows the text or the row it is in. A run split across lines
-     * still carries one band: it crosses every line the run wraps onto at once,
-     * over the rectangle those lines share.
+     * has no one box for the band to cross, so each of its words carries the
+     * part of the band that is over it, and the band travels through the run in
+     * reading order. That needs plain text; an inline run with any other
+     * children breathes its opacity instead.
      */
     inline?: boolean;
     /** One sweep, in milliseconds. */
@@ -74,9 +76,10 @@ export type ShimmerTextProps = {
  * Every frame of the loop is a compositor frame, so the shimmer stays smooth
  * while the main thread is busy, as it is at launch: the ramp is a box of its
  * own that slides behind the run's glyphs — text or a font icon — which mask
- * it, so a frame repaints and rasterises nothing. A wrapping inline run anchors
- * that box to the rectangle around all of its lines. An engine that cannot mask
- * by glyphs, or cannot anchor a wrapping run, breathes the run's opacity instead.
+ * it, so a frame repaints and rasterises nothing. A wrapping inline run cannot
+ * carry one sliding box, so each of its words carries a band of its own, laid
+ * over the word rather than masking it: the word stays ordinary text, and a
+ * selection highlights it like the text around it.
  */
 export function ShimmerText(props: ShimmerTextProps) {
     const [local] = partitionComponentProps(props, [
@@ -98,12 +101,16 @@ export function ShimmerText(props: ShimmerTextProps) {
         const phase = local.phase ?? 0;
         return ((phase % 1) + 1) % 1;
     };
+    const layered = () => !local.inline;
+    const words = () => (local.inline ? shimmerWords(local.children) : undefined);
     return (
         <span
             className={["happy-shimmer-text", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui={local["data-happy-desktop-ui"] ?? "shimmer-text"}
             data-inline={local.inline ? "" : undefined}
+            data-layered={layered() ? "" : undefined}
             data-paused={paused() ? "" : undefined}
+            data-words={words() ? "" : undefined}
             data-sweep={local.sweep ?? "lift"}
             data-testid={local["data-testid"]}
             data-tone={local.tone ?? "default"}
@@ -117,8 +124,59 @@ export function ShimmerText(props: ShimmerTextProps) {
                 } as CSSProperties
             }
         >
-            {local.children}
-            <span aria-hidden="true" className="happy-shimmer-text__ramp" />
+            {words()?.map((word) =>
+                word.blank ? (
+                    word.text
+                ) : (
+                    <span
+                        className="happy-shimmer-text__word"
+                        key={word.start}
+                        style={
+                            {
+                                "--happy-shimmer-word-start": `${word.start}`,
+                                "--happy-shimmer-word-length": `${word.text.length}`,
+                                "--happy-shimmer-run-length": `${word.runLength}`,
+                            } as CSSProperties
+                        }
+                    >
+                        {word.text}
+                        <span aria-hidden="true" className="happy-shimmer-text__band">
+                            <span className="happy-shimmer-text__glyphs" data-text={word.text} />
+                        </span>
+                    </span>
+                ),
+            ) ?? local.children}
+            {layered() ? <span aria-hidden="true" className="happy-shimmer-text__ramp" /> : null}
         </span>
     );
+}
+
+type ShimmerWord = { text: string; blank: boolean; start: number; runLength: number };
+
+/**
+ * An inline run's text as the pieces a line usually breaks between — at white
+ * space and after a hyphen — each with where it starts in the run, counted in
+ * characters. A run that is not plain text has no words to give and returns
+ * nothing.
+ *
+ * The split only decides which letters share a band. It never moves a line
+ * break: every piece is an ordinary inline, and a piece the browser breaks
+ * anyway simply rests (see the container query in `shimmer-text.css`).
+ */
+function shimmerWords(children: ReactNode): ShimmerWord[] | undefined {
+    const text =
+        typeof children === "string"
+            ? children
+            : Array.isArray(children) && children.every((child) => typeof child === "string")
+              ? children.join("")
+              : undefined;
+    if (text === undefined || text.trim() === "") return undefined;
+    const words: ShimmerWord[] = [];
+    let start = 0;
+    for (const part of text.split(/(\s+)|(?<=-)(?=[^\s-])/u)) {
+        if (part === undefined || part === "") continue;
+        words.push({ text: part, blank: part.trim() === "", start, runLength: text.length });
+        start += part.length;
+    }
+    return words;
 }
