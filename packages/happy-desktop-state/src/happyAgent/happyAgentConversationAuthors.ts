@@ -74,6 +74,21 @@ export function happyAgentConversationActivityProject(
     return "idle";
 }
 
+/**
+ * Whether nothing has happened in a session yet. The host moves
+ * `lastActivityAt` off `createdAt` the moment a person writes there, so the
+ * two being equal says nobody has; a title or a draft says otherwise even
+ * then. A host that does not report it is never assumed untouched.
+ */
+function happyAgentConversationUntouched(session: HappyAgentConversationSummaryInput): boolean {
+    return (
+        session.lastActivityAt !== undefined &&
+        session.lastActivityAt === session.createdAt &&
+        session.title === undefined &&
+        session.draftPreview === undefined
+    );
+}
+
 /** Projects one Happy Agent session into the shared conversation-list row. */
 const summaryCache = new WeakMap<HappyAgentConversationSummaryInput, ConversationSummary>();
 
@@ -89,6 +104,7 @@ export function happyAgentConversationSummaryProject(
         subtitle: session.displayCwd || session.cwd,
         activity,
         updatedAt: session.lastMessageAt ?? session.updatedAt,
+        ...(happyAgentConversationUntouched(session) ? { untouched: true as const } : {}),
         ...(session.lastActivityAt === undefined ? {} : { lastActivityAt: session.lastActivityAt }),
         ...(session.unreadReason === undefined ? {} : { unread: true }),
         ...(session.unreadReason === undefined || session.unreadCount === undefined

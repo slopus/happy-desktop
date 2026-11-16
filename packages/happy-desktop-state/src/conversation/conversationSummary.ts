@@ -21,6 +21,12 @@ export interface ConversationSummary {
     /** Epoch milliseconds of the newest content, for relative timestamps. */
     readonly updatedAt: number;
     /**
+     * Nothing has happened here yet: nobody has written in it, and it has
+     * neither a title nor a draft. Absent once anything has, and from a host
+     * too old to say when a person last wrote.
+     */
+    readonly untouched?: true;
+    /**
      * Epoch milliseconds of the agent's last important activity, its latest
      * person message or status update, as the daemon reports it; absent until
      * it does.

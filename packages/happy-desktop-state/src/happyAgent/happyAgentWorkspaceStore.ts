@@ -1642,6 +1642,8 @@ export interface HappyAgentWorkspaceStore {
      * Starts a conversation in the named group. The group is named rather than
      * inferred: `input.worktreeId` is absent for a project-root session, and an
      * absent id identifies nothing, so it can neither be checked nor refused.
+     * A group that already holds a conversation nothing has happened in opens
+     * that one instead of starting a second empty one.
      */
     conversationCreate(
         groupId: HappyAgentGroupId,
@@ -3149,15 +3151,46 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /** The sessions a group holds right now, in list order, or none while it is not ready. */
-    const groupConversationIdList = (groupId: HappyAgentGroupId): readonly string[] => {
+    const groupConversationList = (groupId: HappyAgentGroupId): readonly ConversationSummary[] => {
         const projects = list.get().projects;
         if (projects.type !== "ready") return [];
         for (const project of projects.value) {
-            if (project.id === groupId) return project.conversations.map((summary) => summary.id);
+            if (project.id === groupId) return project.conversations;
             const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
-            if (worktree) return worktree.conversations.map((summary) => summary.id);
+            if (worktree) return worktree.conversations;
         }
         return [];
+    };
+
+    const groupConversationIdList = (groupId: HappyAgentGroupId): readonly string[] =>
+        groupConversationList(groupId).map((summary) => summary.id);
+
+    /**
+     * A conversation in this group that nothing has happened in yet: no
+     * message, no draft, no work. Asking for a new one while such a chat is
+     * already open is asking for that chat, so it is answered with it rather
+     * than with another empty tab beside it. The open one wins, then the
+     * newest.
+     */
+    const groupConversationUnusedFind = (
+        groupId: HappyAgentGroupId,
+    ): HappyAgentSessionId | undefined => {
+        // The host's list trails what was just done in the open chat — a first
+        // message is on screen before the list hears of it — so the open
+        // chat answers for itself.
+        const openChat = chatStore?.get();
+        const unused = groupConversationList(groupId).filter(
+            (summary) =>
+                summary.untouched === true &&
+                summary.activity === "idle" &&
+                (openChat === undefined ||
+                    openChat.sessionId !== summary.id ||
+                    (openChat.entries.length === 0 &&
+                        !openChat.draft?.trim() &&
+                        openChat.runStatus === "idle")),
+        );
+        const open = unused.find((summary) => summary.id === openId);
+        return (open ?? unused.at(-1))?.id as HappyAgentSessionId | undefined;
     };
 
     /** The sessions a group holds right now, or none while the list is not ready. */
@@ -8028,6 +8061,11 @@ export function happyAgentWorkspaceStoreCreate(
         conversationCreate: (groupId, input, source) => {
             const refusal = groupConversationRefusalFind(groupId);
             if (refusal) return Promise.reject(new Error(refusal));
+            const unused = groupConversationUnusedFind(groupId);
+            if (unused !== undefined) {
+                openRequest({ sessionId: unused, groupId });
+                return Promise.resolve();
+            }
             const models = client.models.get();
             const selection = models.type === "ready" ? models.defaultSelection : undefined;
             const create = selection ? { ...selectionCreateFields(selection), ...input } : input;
