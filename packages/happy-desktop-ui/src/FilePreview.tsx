@@ -13,6 +13,7 @@ import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
 import { ScrollArea } from "./Scrollbar";
 import { SegmentedControl } from "./SegmentedControl";
+import { Tooltip } from "./Tooltip";
 import { Spinner } from "./Spinner";
 import { VideoViewer } from "./VideoViewer";
 import { Ionicon } from "./vectorIcons/VectorIcon";
@@ -358,7 +359,9 @@ export function FilePreview(props: FilePreviewProps) {
                                 <FileTreeFamilyIcon family={family} size={16} />
                             )}
                         </span>
-                        <FilePathLabel className="happy-file-preview__path" path={local.path} />
+                        <Tooltip align="start" label={local.path} placement="bottom">
+                            <FilePathLabel className="happy-file-preview__path" path={local.path} />
+                        </Tooltip>
                     </>
                 )}
                 {meta ? (

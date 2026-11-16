@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { ChangedFileDiff, type ChangedFileDiffMode } from "../../src/ChangedFileDiff";
 import { FileBrowser, type FileBrowserLayout } from "../../src/FileBrowser";
 import { FilePreview } from "../../src/FilePreview";
 import { FileSplit } from "../../src/FileSplit";
@@ -47,6 +48,11 @@ function panelShareOf(room: number): number {
 }
 `,
 };
+const changedBefore = `/**
+ * The widest a balanced panel grows.
+ */
+export const APP_SHELL_PANEL_BALANCED_MAX_WIDTH = 640;
+`;
 function frame(children: ReactNode, width: number, height = 440) {
     return (
         <div
@@ -70,17 +76,30 @@ function frame(children: ReactNode, width: number, height = 440) {
  * in the listing previews the file beside it, and the divider remembers where
  * it was left.
  */
-function LiveSplit(props: { width: number; initial?: string }) {
+function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileDiffMode }) {
     const [layout, layoutSet] = useState<FileBrowserLayout>("flat");
     const [selected, selectedSet] = useState<string | undefined>(props.initial);
     const [listWidth, listWidthSet] = useState<number>();
+    const [mode, modeSet] = useState<ChangedFileDiffMode>(props.mode ?? "unified");
     return frame(
         <FileSplit
             {...(listWidth === undefined ? {} : { listWidth })}
             onListWidthChange={listWidthSet}
             {...(selected
                 ? {
-                      preview: (
+                      preview: props.mode ? (
+                          // A changed file, the way the Changes listing opens
+                          // one: named above its modes in every one of them.
+                          <ChangedFileDiff
+                              appearance="light"
+                              mode={mode}
+                              newContent={sources[selected] ?? ""}
+                              oldContent={changedBefore}
+                              onModeChange={modeSet}
+                              onOpenInTab={() => selectedSet(undefined)}
+                              path={selected}
+                          />
+                      ) : (
                           <FilePreview
                               content={
                                   sources[selected] === undefined
@@ -149,6 +168,32 @@ export function FileSplitPage() {
                 <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
                     <LiveSplit width={400} />
                     <LiveSplit initial="packages/happy-desktop-ui/src/AppShell.tsx" width={400} />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="a row above the modes names the file in all of them · directories give way from their start · full path on hover · Open in tab ends the row"
+                label="A changed file picked"
+                number="04"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <LiveSplit
+                        initial="packages/happy-desktop-ui/src/AppShell.tsx"
+                        mode="unified"
+                        width={720}
+                    />
+                    <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
+                        <LiveSplit
+                            initial="packages/happy-desktop-ui/src/AppShell.tsx"
+                            mode="file"
+                            width={400}
+                        />
+                        <LiveSplit
+                            initial="packages/happy-desktop-ui/src/AppShell.tsx"
+                            mode="unified"
+                            width={400}
+                        />
+                    </div>
                 </div>
             </Specimen>
         </ComponentPage>

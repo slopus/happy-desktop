@@ -10107,6 +10107,7 @@ function HappyAgentFileBody(props: {
                               preview: (
                                   <HappyAgentChangedFilePreview
                                       entities={props.entities}
+                                      pathHidden={props.tabNamed !== true}
                                       file={file}
                                       onFileOpen={linkedFileOpen}
                                       onFileLinkOpen={fileLinkOpen}
@@ -10249,6 +10250,8 @@ function HappyAgentChangedFilePreview(props: {
     text: string;
     /** The file's characters, editable, where this checkout can be written. */
     editor?: ReactNode;
+    /** Leaves the name to the diff around the preview, which says it above its modes. */
+    pathHidden?: boolean;
 }) {
     const { file } = props;
     // A picture, a recording, or an archive opens as itself rather than as a
@@ -10287,6 +10290,7 @@ function HappyAgentChangedFilePreview(props: {
             onFileLinkOpen={props.onFileLinkOpen}
             entities={props.entities}
             path={file.path}
+            pathHidden={props.pathHidden === true}
         />
     );
 }
