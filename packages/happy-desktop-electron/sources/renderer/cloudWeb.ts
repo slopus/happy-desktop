@@ -1,4 +1,8 @@
+import { HAPPY_CLOUD_ACCOUNTS_URL } from "../shared/happyCloud";
+import { CLOUD_WEB_PICKER_URL, cloudWebLogoutNext } from "./cloudWebLogout";
 import { cloudWebLocked, cloudWebRefreshCreate, cloudWebStorageErase } from "./cloudWebRefresh";
+
+export { CLOUD_WEB_PICKER_URL };
 
 declare const __HAPPY_CLOUD_WEB__: boolean;
 
@@ -16,8 +20,6 @@ const REFRESH_PATH = "/auth/refresh";
 const SESSION_PATH = "/auth/session";
 const LOGOUT_PATH = "/auth/logout";
 const PASSWORD_PATH = "/auth/password";
-/** Where a person signs out to and switches servers from. */
-export const CLOUD_WEB_PICKER_URL = "https://happybases.com/";
 
 /** Sends the page to sign in, coming back to where it is now. */
 export function cloudWebSignIn(): void {
@@ -55,12 +57,19 @@ export async function cloudWebPasswordSignIn(
     return typeof body?.error === "string" ? body.error : "Signing in didn't work.";
 }
 
-/** Signs out at the edge, then leaves for the server picker. */
+/**
+ * Signs out at the edge, then ends the sign-in at the accounts service when
+ * the edge names its page, which returns to the server picker.
+ */
 export async function cloudWebSignOut(): Promise<void> {
-    await originalFetch(LOGOUT_PATH, { method: "POST", credentials: "same-origin" }).catch(
-        () => undefined,
+    const response = await originalFetch(LOGOUT_PATH, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+    }).catch(() => undefined);
+    window.location.assign(
+        await cloudWebLogoutNext(response, new URL(HAPPY_CLOUD_ACCOUNTS_URL).origin),
     );
-    window.location.assign(CLOUD_WEB_PICKER_URL);
 }
 
 /**
