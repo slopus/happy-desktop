@@ -23,9 +23,6 @@ import {
     happyAgentSessionGroupIdOf,
     happyAgentVaultNameShown,
     happyAgentVaultPathShown,
-    searchFuse,
-    type SearchEntry,
-    type SearchRemoteEntry,
 } from "happy-desktop-state";
 import {
     commandShortcut,
@@ -208,11 +205,15 @@ export type CommandPaletteRow = CommandPaletteCommandRow | CommandPaletteSetting
 export type CommandPaletteSectionId =
     | "update"
     | "recent"
-    /** What a typed query finds, this window's answer and the Happy Agent's fused into one list. */
+    /** What a typed query finds by name among what this window holds. */
     | "results"
     | "actions"
     | "settings"
-    | "archived";
+    | "archived"
+    /** What only the Happy Agent's search found by name, once it answers. */
+    | "more"
+    /** Where the Happy Agent's search found the words inside something: one row per chat. */
+    | "mentions";
 
 export interface CommandPaletteSection {
     readonly id: CommandPaletteSectionId;
@@ -235,23 +236,6 @@ export interface CommandPaletteResults {
      * own chords or controls already say what they do.
      */
     readonly numbered: readonly number[];
-    /**
-     * Where the found rows are in the flat list and the search key of
-     * each, in order: what the palette records as the rows the reader has
-     * passed when the highlight moves, so they keep their places when the
-     * Happy Agent's answer arrives.
-     */
-    readonly found: { readonly start: number; readonly keys: readonly string[] };
-}
-
-/**
- * The search keys of the found rows the reader has passed, from the top
- * through the highlighted row at `index`.
- */
-export function commandPaletteHeld(results: CommandPaletteResults, index: number): string[] {
-    const { start, keys } = results.found;
-    if (index < start) return [];
-    return keys.slice(0, Math.min(keys.length, index - start + 1));
 }
 
 /** One tab of the open workspace, as the surface that owns the strip states it. */
@@ -357,11 +341,6 @@ export interface CommandPaletteInput extends CommandPaletteContext {
      * has answered. Absent, the palette's own answer stands alone.
      */
     readonly remote?: readonly HappyAgentSearchHit[];
-    /**
-     * The found rows the reader has passed, by key, as the palette recorded
-     * them. Absent until the reader moves the highlight after typing.
-     */
-    readonly held?: readonly string[];
     readonly surfaces?: CommandPaletteSurfaceSources;
     /** The artifacts the palette's own catalog has read, newest first. */
     readonly artifacts?: readonly HappyAgentArtifact[];
@@ -1487,7 +1466,7 @@ export function commandPaletteSuggestionSections(
     ];
 }
 
-/** How many found rows the palette's own answer offers to the fusion, and how many it shows. */
+/** How many rows the palette's own answer shows. */
 const FOUND_LIMIT = 12;
 
 /**
@@ -1569,25 +1548,21 @@ function eventDayText(start: number, allDay: boolean): string {
           });
 }
 
-/** What a chat, task, subtask, or bot the Happy Agent found is, as its row says. */
-const AGENT_KIND_LABEL = {
-    chat: "Chat",
-    task: "Task",
-    subtask: "Subtask",
-    bot: "Bot",
-} as const;
+/** A hit about a conversation or a checkout, which is shown as the work this window lists. */
+type WorkHit = Extract<
+    HappyAgentSearchHit,
+    { type: "agent" | "message" | "project" | "workspace" }
+>;
 
 /**
- * One thing the Happy Agent found, as the row that opens it here. Work this
- * window holds is its own row; other work opens in the workspace the Happy
- * Agent names, and is left out when it names none, as a message is. Anything
- * archived, which the palette lists apart, is left out too, and so is what
- * the desktop has nowhere to open: a skill, or a person outside Happy Cloud.
+ * One thing the Happy Agent found that has a row of its own here — a file, a
+ * document, a todo, an event, an artifact, a Surface, a person. What the
+ * desktop has nowhere to open is left out: a skill, or a person outside Happy
+ * Cloud.
  */
 function remoteRow(
-    hit: HappyAgentSearchHit,
+    hit: Exclude<HappyAgentSearchHit, WorkHit>,
     input: CommandPaletteInput,
-    work: ReadonlyMap<string, WorkOffer>,
 ): FoundRow | undefined {
     const happyAgentId = input.happyAgentId;
     const surfaceOf = (surfaceId: string) =>
@@ -1676,33 +1651,6 @@ function remoteRow(
                 ...(hit.match === "content" ? snippet(hit.snippet) : {}),
             };
         }
-        case "message": {
-            // A message opens its conversation, where the conversation is known.
-            if (hit.workspaceId === null) return undefined;
-            const conversation = work.get(`agent:${hit.agentId}`)?.row.title;
-            const day = new Date(hit.createdAt).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-            });
-            return {
-                row: {
-                    kind: "command",
-                    id: hit.key,
-                    title: hit.snippet,
-                    meta: [conversation ?? "Chat", hit.role === "agent" ? "Agent" : undefined, day]
-                        .filter((part) => part !== undefined)
-                        .join(" · "),
-                    glyph: { kind: "icon", name: "chat" },
-                    command: {
-                        kind: "chatOpen",
-                        happyAgentId,
-                        groupId: hit.workspaceId,
-                        chatId: hit.agentId,
-                        archived: false,
-                    },
-                },
-            };
-        }
         // A person opens their profile, which only Happy Cloud has.
         case "user":
             if (!input.happyCloud) return undefined;
@@ -1752,106 +1700,109 @@ function remoteRow(
                 },
             };
         }
-        case "agent":
-        case "project":
-        case "workspace": {
-            if (hit.archived) return undefined;
-            const offer = work.get(hit.key);
-            if (offer !== undefined) return offer.tier < 2 ? { row: offer.row } : undefined;
-            if (hit.type === "agent") {
-                if (hit.workspaceId === null) return undefined;
-                const project =
-                    hit.projectId === null
-                        ? undefined
-                        : input.projects.find((group) => group.id === hit.projectId);
-                return {
-                    row: {
-                        kind: "command",
-                        id: hit.key,
-                        title: hit.title,
-                        meta:
-                            project === undefined
-                                ? AGENT_KIND_LABEL[hit.kind]
-                                : `${AGENT_KIND_LABEL[hit.kind]} · ${project.name}`,
-                        glyph: { kind: "icon", name: "chat" },
-                        command: {
-                            kind: "chatOpen",
-                            happyAgentId,
-                            groupId: hit.workspaceId,
-                            chatId: hit.agentId,
-                            archived: false,
-                        },
-                    },
-                };
-            }
-            const groupId = hit.type === "project" ? hit.projectId : hit.workspaceId;
-            const project =
-                hit.type === "workspace"
-                    ? input.projects.find((group) => group.id === hit.projectId)
-                    : undefined;
-            return {
-                row: {
-                    kind: "command",
-                    id: hit.key,
-                    title: hit.name,
-                    ...(project === undefined ? {} : { meta: project.name }),
-                    glyph: { kind: "icon", name: hit.type === "project" ? "files" : "branch" },
-                    command: { kind: "workspaceOpen", happyAgentId, groupId },
-                },
-            };
-        }
     }
 }
 
+/** Whether a hit names a conversation or a checkout. */
+function workHit(hit: HappyAgentSearchHit): hit is WorkHit {
+    return (
+        hit.type === "agent" ||
+        hit.type === "message" ||
+        hit.type === "project" ||
+        hit.type === "workspace"
+    );
+}
+
+/** Whether the Happy Agent found a thing by the words inside it rather than by its name. */
+function contentHit(hit: HappyAgentSearchHit): boolean {
+    return "match" in hit && hit.match === "content";
+}
+
 /**
- * The rows a typed query finds: this window's answer, fused with the Happy
- * Agent's once it arrives, with the rows the reader has already passed kept
- * where they were. A thing both found keeps this window's row, and its
- * identity, saying where a content match was found when the Happy Agent says.
+ * What the Happy Agent's search adds to what this window found on its own.
+ *
+ * It arrives after the window's own answer is already on screen, so it never
+ * goes into that answer: everything it adds is placed below every row already
+ * shown, and a row the reader is looking at or has highlighted stays where it
+ * is. Its additions are of two kinds, in two sections:
+ *
+ * - `more`: things found by name that the window's own answer did not list —
+ *   a vault file, a calendar event, a project the window matched differently.
+ * - `mentions`: things found by the words inside them, one row per chat
+ *   however many of its messages matched, showing where the words are.
+ *
+ * Conversations count only as the work the palette already offers: a
+ * subtask's chat is its task's row, and a chat the window does not list — a
+ * sub-agent's, or one in a workspace it cannot open — is left out. Anything
+ * already shown above, or over (an archived task, a closed session), is left
+ * out too, so each thing is offered once.
  */
-function foundRows(
+function remoteSections(
     input: CommandPaletteInput,
     offers: readonly WorkOffer[],
-): { readonly rows: CommandPaletteCommandRow[]; readonly keys: string[]; readonly best: number } {
-    const local = localFound(input, offers);
-    const localEntries: SearchEntry<FoundRow>[] = local.flatMap((entry) =>
-        entry.key === undefined || entry.row.kind !== "command"
-            ? []
-            : [{ key: entry.key, row: { row: entry.row } }],
-    );
-    let remote: SearchRemoteEntry<FoundRow>[] | undefined;
-    if (input.remote !== undefined) {
-        const work = new Map(offers.map((offer) => [offer.key, offer]));
-        remote = input.remote.flatMap((hit) => {
-            const row = remoteRow(hit, input, work);
-            return row === undefined
-                ? []
-                : [{ key: hit.key, rank: hit.rank, row: snippetShown(row) }];
-        });
+    shown: ReadonlySet<string>,
+): { readonly more: CommandPaletteCommandRow[]; readonly mentions: CommandPaletteCommandRow[] } {
+    const more: CommandPaletteCommandRow[] = [];
+    const mentions: CommandPaletteCommandRow[] = [];
+    if (input.remote === undefined) return { more, mentions };
+    const bySession = new Map<string, WorkOffer>();
+    const byKey = new Map<string, WorkOffer>();
+    for (const offer of offers) {
+        byKey.set(offer.key, offer);
+        for (const session of offer.sessions)
+            if (!bySession.has(session)) bySession.set(session, offer);
     }
-    const fused = searchFuse<FoundRow>({
-        local: localEntries,
-        ...(remote === undefined ? {} : { remote }),
-        ...(input.held === undefined ? {} : { held: input.held }),
-        merge: (mine, theirs) =>
-            snippetShown({
-                row: mine.row,
-                ...(theirs.snippet === undefined ? {} : { snippet: theirs.snippet }),
-            }),
-    }).slice(0, Math.max(FOUND_LIMIT, input.held?.length ?? 0));
-    return {
-        rows: fused.map((entry) => entry.row.row),
-        keys: fused.map((entry) => entry.key),
-        best:
-            // Until the reader moves the highlight, nothing they chose can move, so the
-            // Happy Agent's answer puts the list first. Once they have, only this
-            // window's own matches place it, so the answer arriving never moves it.
-            input.held === undefined && remote !== undefined && remote.length > 0
-                ? -Infinity
-                : local.length > 0
-                  ? Math.min(...local.map((entry) => entry.rank))
-                  : Infinity,
+    const workOf = (hit: WorkHit): WorkOffer | undefined => {
+        if (hit.type !== "message" && hit.archived) return undefined;
+        const offer =
+            hit.type === "agent" || hit.type === "message"
+                ? bySession.get(hit.agentId)
+                : byKey.get(hit.key);
+        return offer === undefined || offer.tier === 2 ? undefined : offer;
     };
+    const placed = new Set(shown);
+    const hits = [...input.remote].sort((left, right) => left.rank - right.rank);
+    // Names first, so a chat found both by its title and by its messages is
+    // the one row its title found.
+    for (const hit of hits) {
+        if (more.length === SECTION_LIMIT) break;
+        if (hit.type === "message" || contentHit(hit)) continue;
+        if (workHit(hit)) {
+            const offer = workOf(hit);
+            if (offer === undefined || placed.has(offer.key)) continue;
+            placed.add(offer.key);
+            more.push(offer.row);
+            continue;
+        }
+        if (placed.has(hit.key)) continue;
+        const found = remoteRow(hit, input);
+        if (found === undefined) continue;
+        placed.add(hit.key);
+        more.push(found.row);
+    }
+    for (const hit of hits) {
+        if (mentions.length === SECTION_LIMIT) break;
+        if (hit.type === "message") {
+            const offer = workOf(hit);
+            if (offer === undefined || placed.has(offer.key)) continue;
+            placed.add(offer.key);
+            mentions.push({
+                ...offer.row,
+                id: `mention:${offer.key}`,
+                // The chat is what opens; where it lives and the words found
+                // in it are what tell two chats of the same name apart.
+                meta: [offer.row.meta, hit.snippet].filter((part) => part).join(" · "),
+                metaOverflow: undefined,
+            });
+            continue;
+        }
+        if (workHit(hit) || !contentHit(hit) || placed.has(hit.key)) continue;
+        const found = remoteRow(hit, input);
+        if (found === undefined) continue;
+        placed.add(hit.key);
+        mentions.push(snippetShown(found).row);
+    }
+    return { more, mentions };
 }
 
 /**
@@ -1859,25 +1810,26 @@ function foundRows(
  * addresses and as the sections it draws.
  *
  * An empty query answers with what the reader is likely to open next. Anything
- * typed searches the whole machine: one list of what it finds — its work, the
- * open workspace's files, documents, todos, artifacts, shared Surfaces, and
- * whatever the Happy Agent's search adds, vault files and calendar
- * events among them — then the window's acts and its settings. Those three
- * are listed by their best answer, so a typed act ("fold sidebar") is not left
- * under work that merely contains one of its words. Work that is over comes
- * last.
+ * typed answers first from what this window holds: its work, the open
+ * workspace's files, documents, todos, artifacts, and shared Surfaces, then
+ * the window's acts and its settings. Those three are listed by their best
+ * answer, so a typed act ("fold sidebar") is not left under work that merely
+ * contains one of its words. Work that is over comes after them.
+ *
+ * Whatever the Happy Agent's search adds comes last, below all of that, in
+ * the order it arrives in: what it found by name, then where it found the
+ * words inside something. Its answer only ever appends, so no row already on
+ * screen moves when it lands and the highlighted row stays the row it was.
  */
 export function commandPaletteResults(input: CommandPaletteInput): CommandPaletteResults {
     const query = input.query.trim().toLowerCase();
     const sections: CommandPaletteSection[] = [];
-    let found: readonly string[] = [];
     if (query.length === 0) {
         for (const section of commandPaletteSuggestionSections(input))
             if (section.rows.length > 0) sections.push(section);
     } else {
         const offers = workOffers(input);
-        const results = foundRows(input, offers);
-        found = results.keys;
+        const local = localFound(input, offers);
         const workRank = (offer: WorkOffer) => rowRank(query, offer.row.title, ...offer.keywords);
         const offered: readonly {
             readonly id: CommandPaletteSectionId;
@@ -1885,54 +1837,68 @@ export function commandPaletteResults(input: CommandPaletteInput): CommandPalett
             readonly rows: readonly CommandPaletteRow[];
             readonly best: number;
         }[] = [
-            { id: "results", label: "Results", rows: results.rows, best: results.best },
-            ...[
-                {
-                    id: "actions" as const,
-                    label: "Actions",
-                    rows: rankedOf(
-                        actionOffers(input, updateRow(input)).flatMap((offer) => {
-                            const rank = rowRank(
-                                query,
-                                offer.row.title,
-                                offer.row.meta,
-                                offer.keywords,
-                            );
-                            return rank === undefined
-                                ? []
-                                : [{ rank, updatedAt: 0, row: offer.row }];
-                        }),
-                        SECTION_LIMIT,
-                    ),
-                },
-                {
-                    id: "settings" as const,
-                    label: "Settings",
-                    rows: rankedOf(settingsSectionRows(input), SECTION_LIMIT),
-                },
-            ].map((section) => ({
-                id: section.id,
-                label: section.label,
-                rows: section.rows.map((entry) => entry.row),
-                best: Math.min(...section.rows.map((entry) => entry.rank)),
-            })),
-        ];
+            { id: "results" as const, label: "Results", rows: local },
+            {
+                id: "actions" as const,
+                label: "Actions",
+                rows: rankedOf(
+                    actionOffers(input, updateRow(input)).flatMap((offer) => {
+                        const rank = rowRank(
+                            query,
+                            offer.row.title,
+                            offer.row.meta,
+                            offer.keywords,
+                        );
+                        return rank === undefined ? [] : [{ rank, updatedAt: 0, row: offer.row }];
+                    }),
+                    SECTION_LIMIT,
+                ),
+            },
+            {
+                id: "settings" as const,
+                label: "Settings",
+                rows: rankedOf(settingsSectionRows(input), SECTION_LIMIT),
+            },
+        ].map((section) => ({
+            id: section.id,
+            label: section.label,
+            rows: section.rows.map((entry) => entry.row),
+            best: Math.min(...section.rows.map((entry) => entry.rank)),
+        }));
         for (const section of offered
             .filter((candidate) => candidate.rows.length > 0)
             .sort((left, right) => left.best - right.best))
             sections.push({ id: section.id, label: section.label, rows: section.rows });
-        // Work that is over answers last, below every live answer, however
-        // well its title matches.
+        // Work that is over answers after every live answer, however well
+        // its title matches.
         const archived = workRanked(
             offers.filter((offer) => offer.tier === 2),
             input,
             workRank,
             SECTION_LIMIT,
-        ).map((entry) => entry.row);
+        );
         if (archived.length > 0)
-            sections.push({ id: "archived", label: "Archived", rows: archived });
+            sections.push({
+                id: "archived",
+                label: "Archived",
+                rows: archived.map((entry) => entry.row),
+            });
+        const shown = new Set(
+            [...local, ...archived].flatMap((entry) =>
+                entry.key === undefined ? [] : [entry.key],
+            ),
+        );
+        const remote = remoteSections(input, offers, shown);
+        if (remote.more.length > 0)
+            sections.push({ id: "more", label: "More results", rows: remote.more });
+        if (remote.mentions.length > 0)
+            sections.push({
+                id: "mentions",
+                label: "In messages and documents",
+                rows: remote.mentions,
+            });
     }
-    return numberedResults(sections, found);
+    return numberedResults(sections);
 }
 
 /** The sections whose rows go somewhere, and so are numbered for ⌘1…⌘9. */
@@ -1940,6 +1906,8 @@ const NUMBERED_SECTIONS: ReadonlySet<CommandPaletteSectionId> = new Set([
     "recent",
     "results",
     "archived",
+    "more",
+    "mentions",
 ]);
 
 const NUMBER_SHORTCUTS = Array.from({ length: 9 }, (_, index) =>
@@ -1950,10 +1918,7 @@ const NUMBER_SHORTCUTS = Array.from({ length: 9 }, (_, index) =>
  * The flat result list, with the first nine rows that open something wearing
  * the ⌘-number that opens them, counted down the list as the reader sees it.
  */
-function numberedResults(
-    sections: readonly CommandPaletteSection[],
-    found: readonly string[],
-): CommandPaletteResults {
+function numberedResults(sections: readonly CommandPaletteSection[]): CommandPaletteResults {
     const numbered: number[] = [];
     let index = 0;
     const shown = sections.map((section) => ({
@@ -1971,16 +1936,10 @@ function numberedResults(
             return { ...row, shortcut };
         }),
     }));
-    let start = 0;
-    for (const section of shown) {
-        if (section.id === "results") break;
-        start += section.rows.length;
-    }
     return {
         sections: shown,
         rows: shown.flatMap((section) => section.rows),
         numbered,
-        found: { start, keys: found },
     };
 }
 

@@ -22,11 +22,7 @@ import type {
 } from "happy-desktop-state";
 import { commandShortcut } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "../sources/appShortcuts";
-import {
-    commandPaletteHeld,
-    commandPaletteResults,
-    type CommandPaletteInput,
-} from "../sources/commandPaletteResults";
+import { commandPaletteResults, type CommandPaletteInput } from "../sources/commandPaletteResults";
 import { happyAgentSettingsCategoryExists } from "../sources/views/AppHappyAgentSettingsView";
 
 const NOW = 1_764_000_000_000;
@@ -539,36 +535,23 @@ const REMOTE: readonly HappyAgentSearchHit[] = [
     },
 ];
 
-it("fuses the Happy Agent's answer into the found rows, best match first, keeping every local row's identity", () => {
+it("adds the Happy Agent's answer below every row already shown, each thing once", () => {
     const base = input({
         query: "search",
         surfaces: { ...SOURCES, surfaces: [...SOURCES.surfaces, VAULT] },
     });
     const before = commandPaletteResults(base);
     const after = commandPaletteResults({ ...base, remote: REMOTE });
-    const found = (result: ReturnType<typeof commandPaletteResults>) =>
-        result.sections.find((section) => section.id === "results")!.rows;
-    // The reader has not moved the highlight, so the best fused match leads: the spec
-    // both found, then the vault file the Happy Agent ranked first, then the project
-    // that led before.
-    expect(
-        found(after)
-            .map((row) => row.id)
-            .slice(0, 3),
-    ).toEqual(["surface:srf_spec", "vault_file:vf_budget", found(before)[0]!.id]);
-    // Once they have moved it back to the top, that row stays at the top.
-    const held = commandPaletteResults({ ...base, remote: REMOTE, held: [before.found.keys[0]!] });
-    expect(
-        found(held)
-            .map((row) => row.id)
-            .slice(0, 3),
-    ).toEqual([found(before)[0]!.id, "surface:srf_spec", "vault_file:vf_budget"]);
-    // A document both found is one row, keeping this window's id, saying where the words are.
-    expect(found(after).filter((row) => row.id === "surface:srf_spec")).toHaveLength(1);
-    expect(after.rows.find((row) => row.id === "surface:srf_spec")).toMatchObject({
-        meta: "…ranking search results by…",
-        command: { kind: "surfaceOpen", surfaceId: "srf_spec" },
-    });
+    // Nothing on screen moves when the answer lands: it only appends.
+    expect(ids(after).slice(0, before.rows.length)).toEqual(ids(before));
+    expect(after.sections.map((section) => section.id)).toEqual([
+        ...before.sections.map((section) => section.id),
+        "mentions",
+    ]);
+    // A file found by its words says where the words are. The spec this window
+    // already found by name is not offered again, and neither is work that is
+    // over, a chat in no known workspace, or one this window does not list.
+    expect(after.sections.at(-1)!.rows.map((row) => row.id)).toEqual(["vault_file:vf_budget"]);
     expect(after.rows.find((row) => row.id === "vault_file:vf_budget")).toMatchObject({
         title: "budget.md",
         meta: "the search budget for Q3",
@@ -580,88 +563,98 @@ it("fuses the Happy Agent's answer into the found rows, best match first, keepin
             itemId: "vf_budget",
         },
     });
+    expect(ids(after).filter((id) => id === "surface:srf_spec")).toHaveLength(1);
     expect(ids(after)).not.toContain("agent:ses_nowhere");
-    expect(after.rows.find((row) => row.id === "agent:ses_elsewhere")).toMatchObject({
-        meta: "Chat · search-infra",
-        command: {
-            kind: "chatOpen",
-            happyAgentId: "local",
-            groupId: "prj_infra",
-            chatId: "ses_elsewhere",
-            archived: false,
-        },
-    });
+    expect(ids(after)).not.toContain("agent:ses_elsewhere");
     expect(ids(after).filter((id) => id === "task:search_old")).toHaveLength(1);
 });
 
-it("keeps the rows the reader has passed where they were when the Happy Agent answers", () => {
-    const base = input({ query: "search", surfaces: SOURCES, artifacts: ARTIFACTS });
-    const before = commandPaletteResults(base);
-    // The reader arrowed down to the third row before the answer arrived.
-    const held = commandPaletteHeld(before, 2);
-    expect(held).toEqual(before.found.keys.slice(0, 3));
-    const after = commandPaletteResults({ ...base, remote: REMOTE, held });
-    expect(after.rows.slice(0, 3).map((row) => row.id)).toEqual(
-        before.rows.slice(0, 3).map((row) => row.id),
-    );
-    expect(ids(after)).toContain("vault_file:vf_budget");
-    // Arrowing on through what is shown now holds what is shown now.
-    const further = commandPaletteResults({
-        ...base,
-        remote: REMOTE,
-        held: commandPaletteHeld(after, 4),
-    });
-    expect(ids(further)).toEqual(ids(after));
-});
-
-it("opens a found message in its conversation, and leaves out what the desktop cannot open", () => {
+it("offers work the Happy Agent found by name that this window's answer left out", () => {
     const remote: readonly HappyAgentSearchHit[] = [
         {
-            type: "message",
-            key: "message:msg_1",
+            type: "agent",
+            key: "agent:ses_index",
             rank: 1,
             agentId: "ses_index" as HappyAgentSessionId,
-            messageId: "msg_1",
-            role: "agent",
-            snippet: "rebuilt the search index overnight",
-            createdAt: NOW,
+            title: "Index rebuild",
+            kind: "chat",
+            archived: false,
             workspaceId: "prj_infra" as HappyAgentProjectId,
             projectId: "prj_infra" as HappyAgentProjectId,
         },
+        // A subtask's chat is its task's row, and that row is already shown.
+        {
+            type: "agent",
+            key: "agent:ses_notes",
+            rank: 2,
+            agentId: "ses_notes" as HappyAgentSessionId,
+            title: "Write the changelog",
+            kind: "subtask",
+            archived: false,
+            workspaceId: "ws_release" as HappyAgentWorktreeId,
+            projectId: null,
+        },
+    ];
+    const result = commandPaletteResults(input({ query: "release", remote }));
+    expect(result.sections.map((section) => section.id)).toEqual(["results", "more"]);
+    expect(ids(result)).toEqual(["task:release", "chat:ses_index"]);
+});
+
+it("finds a chat by its messages as one row that names the chat and the words", () => {
+    const message = (id: string, rank: number, agentId: string, snippet: string) => ({
+        type: "message" as const,
+        key: `message:${id}`,
+        rank,
+        agentId: agentId as HappyAgentSessionId,
+        messageId: id,
+        role: "agent" as const,
+        snippet,
+        createdAt: NOW,
+        workspaceId: "prj_infra" as HappyAgentProjectId,
+        projectId: "prj_infra" as HappyAgentProjectId,
+    });
+    const remote: readonly HappyAgentSearchHit[] = [
+        message("msg_1", 1, "ses_index", "rebuilt the search index overnight"),
+        message("msg_2", 2, "ses_index", "search index is warm again"),
+        // A sub-agent's chat is not one this window lists, so its words are not offered.
+        message("msg_3", 3, "ses_subagent", "searched the logs"),
         {
             type: "message",
-            key: "message:msg_2",
-            rank: 2,
+            key: "message:msg_4",
+            rank: 4,
             agentId: "ses_gone" as HappyAgentSessionId,
-            messageId: "msg_2",
+            messageId: "msg_4",
             role: "user",
             snippet: "search where?",
             createdAt: NOW,
             workspaceId: null,
             projectId: null,
         },
-        { type: "user", key: "user:usr_1", rank: 3, userId: "usr_1", name: "Search Person" },
+        { type: "user", key: "user:usr_1", rank: 5, userId: "usr_1", name: "Search Person" },
         {
             type: "skill",
             key: "skill:sk_1",
-            rank: 4,
+            rank: 6,
             skillId: "sk_1",
             name: "search-skill",
             description: "Searches",
         },
     ];
     const result = commandPaletteResults(input({ query: "search", remote }));
-    expect(result.rows.find((row) => row.id === "message:msg_1")).toMatchObject({
-        title: "rebuilt the search index overnight",
-        command: {
-            kind: "chatOpen",
-            happyAgentId: "local",
-            groupId: "prj_infra",
-            chatId: "ses_index",
-            archived: false,
-        },
-    });
-    expect(ids(result)).not.toContain("message:msg_2");
+    expect(result.sections.at(-1)!.rows).toEqual([
+        expect.objectContaining({
+            id: "mention:agent:ses_index",
+            title: "Index rebuild",
+            meta: "search-infra · rebuilt the search index overnight",
+            command: {
+                kind: "chatOpen",
+                happyAgentId: "local",
+                groupId: "prj_infra",
+                chatId: "ses_index",
+                archived: false,
+            },
+        }),
+    ]);
     expect(ids(result)).not.toContain("user:usr_1");
     expect(ids(result)).not.toContain("skill:sk_1");
 });
@@ -717,35 +710,21 @@ const HIDE_REMOTE: readonly HappyAgentSearchHit[] = [
     },
 ];
 
-it("puts the results first when the Happy Agent answers before the reader moves the highlight", () => {
-    // "Hide sidebar" outranks the task that only contains the word, until the answer arrives.
-    expect(commandPaletteResults(input(HIDE)).sections.map((section) => section.id)).toEqual([
+it("keeps the sections and the highlighted row where they were when the Happy Agent answers", () => {
+    // "Hide sidebar" outranks the task that only contains the word.
+    const before = commandPaletteResults(input(HIDE));
+    expect(before.sections.map((section) => section.id)).toEqual([
         "actions",
         "results",
         "settings",
     ]);
     const answered = commandPaletteResults(input({ ...HIDE, remote: HIDE_REMOTE }));
     expect(answered.sections.map((section) => section.id)).toEqual([
-        "results",
-        "actions",
-        "settings",
-    ]);
-    // The highlight stays on the first row, which is now the best match.
-    expect(answered.rows[0]!.id).toBe("vault_file:vf_hide");
-    expect(answered.found.start).toBe(0);
-});
-
-it("keeps the sections where they were when the Happy Agent answers after the reader moved the highlight", () => {
-    const before = commandPaletteResults(input(HIDE));
-    // The reader arrowed onto the action above the results: no found row is passed.
-    const held = commandPaletteHeld(before, 0);
-    expect(held).toEqual([]);
-    const answered = commandPaletteResults(input({ ...HIDE, remote: HIDE_REMOTE, held }));
-    expect(answered.sections.map((section) => section.id)).toEqual([
         "actions",
         "results",
         "settings",
+        "more",
     ]);
-    expect(answered.rows[0]!.id).toBe(before.rows[0]!.id);
-    expect(answered.rows.map((row) => row.id)).toContain("vault_file:vf_hide");
+    expect(ids(answered).slice(0, before.rows.length)).toEqual(ids(before));
+    expect(ids(answered).at(-1)).toBe("vault_file:vf_hide");
 });

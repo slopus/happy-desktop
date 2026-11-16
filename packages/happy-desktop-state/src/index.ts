@@ -20,7 +20,6 @@ export * from "./appearance/appearanceStore.js";
 export * from "./appearance/customTheme.js";
 export * from "./keepAwake/keepAwakeStore.js";
 export * from "./commandPalette/commandPaletteStore.js";
-export * from "./commandPalette/searchFuse.js";
 export * from "./commandPalette/searchStore.js";
 export * from "./commandPalette/searchTypes.js";
 export * from "./experiments/experimentsStore.js";
