@@ -1,7 +1,6 @@
 import {
     Fragment,
     useCallback,
-    useId,
     useLayoutEffect,
     useRef,
     useState,
@@ -154,16 +153,6 @@ export type ComposerModelUsageWatch = {
      */
     recheck?(): Promise<void>;
 };
-/**
- * The conversation's account is spent, so the selection is another account
- * its next message moves to; the session still holds `from` until then.
- */
-export type ComposerModelAccountSwitch = {
-    /** The spent account the conversation is on. */
-    from: string;
-    /** When it starts over, already formatted in local time, such as "Thu 6:00 PM". */
-    resets?: string;
-};
 /** The menu's own two rows, and the list each of them opens beside it. */
 export type ComposerModelPanel = "main" | "model" | "effort";
 /**
@@ -189,8 +178,6 @@ export type ComposerModelControlPreview = {
     accountNoticeOpen?: boolean;
     /** The pill's usage warning label, shown open. */
     usageWarningOpen?: boolean;
-    /** The account switch's explanation, shown open. */
-    accountSwitchOpen?: boolean;
 };
 export type ComposerModelControlProps = {
     className?: string;
@@ -206,12 +193,6 @@ export type ComposerModelControlProps = {
     selectionModel?: ComposerModelChoice;
     /** Shown beside the pill when the selected account is not an ordinary choice. */
     accountNotice?: ComposerModelAccountNotice;
-    /**
-     * A quiet "accounts" line above the pill says the selection is an account
-     * moved to because the conversation's own is spent, and explains why on
-     * hover or focus. It takes no room of its own, so it appearing moves nothing.
-     */
-    accountSwitch?: ComposerModelAccountSwitch;
     /** The Chief of Staff bot's live name, which help is asked of. Defaults to "Chief of Staff". */
     chiefOfStaffName?: string;
     /**
@@ -1162,19 +1143,6 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
     const warning = selection
         ? usageWarning(liveUsage?.accounts.get(selection.account))
         : undefined;
-    /** An account as the picker names it, by id; one it does not list keeps its id. */
-    const accountNamed = (id: string) => {
-        const account = props.services
-            .flatMap((service) => service.accounts)
-            .find((candidate) => candidate.id === id);
-        return account === undefined ? id : account.default ? "Default account" : account.label;
-    };
-    const accountSwitch = props.accountSwitch;
-    const accountSwitchReasonId = useId();
-    const accountSwitchReason =
-        accountSwitch && selection
-            ? `${accountNamed(accountSwitch.from)} is out of usage${accountSwitch.resets ? ` until ${accountSwitch.resets}` : ""}. Your next message will run on ${accountNamed(selection.account)}. Pick ${accountNamed(accountSwitch.from)} in the model picker to keep it.`
-            : undefined;
 
     const close = () => {
         setPanel(null);
@@ -1522,33 +1490,6 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
             ref={rootAttach}
             style={props.style}
         >
-            {accountSwitchReason ? (
-                <Tooltip
-                    align="end"
-                    className="happy-composer-model-control__switching"
-                    label={accountSwitchReason}
-                    open={preview?.accountSwitchOpen}
-                >
-                    <button
-                        aria-describedby={accountSwitchReasonId}
-                        aria-label="Switching accounts"
-                        className="happy-composer-model-control__switching-line"
-                        data-happy-desktop-ui="composer-model-control-switching"
-                        disabled={props.disabled}
-                        // The way back to the spent account is the picker, so the line opens it.
-                        onClick={() => (open ? undefined : menuOpen())}
-                        type="button"
-                    >
-                        <Octicon name="arrow-switch" size={12} />
-                        <span>accounts</span>
-                    </button>
-                </Tooltip>
-            ) : null}
-            {accountSwitchReason ? (
-                <span className="happy-visually-hidden" id={accountSwitchReasonId}>
-                    {accountSwitchReason}
-                </span>
-            ) : null}
             {props.accountNotice ? (
                 <AccountNotice
                     chiefOfStaffName={props.chiefOfStaffName ?? "Chief of Staff"}
@@ -1561,7 +1502,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                 aria-haspopup={hasModels ? "dialog" : undefined}
                 aria-label={
                     hasModels
-                        ? `Model: ${modelLabel}.${effortLabel ? ` Effort: ${effortLabel}.` : ""}${warning ? ` ${warning.label}.` : ""}${accountSwitchReason ? " Switching accounts." : ""}`
+                        ? `Model: ${modelLabel}.${effortLabel ? ` Effort: ${effortLabel}.` : ""}${warning ? ` ${warning.label}.` : ""}`
                         : modelLabel
                 }
                 className="happy-composer-model-control__trigger"

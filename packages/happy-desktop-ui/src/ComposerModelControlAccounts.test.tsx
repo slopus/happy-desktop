@@ -7,7 +7,6 @@ import "./styles/button.css";
 import "./styles/composer-model-control.css";
 import "./styles/icon.css";
 import "./styles/tooltip.css";
-import "./styles/visually-hidden.css";
 import {
     ComposerModelControl,
     type ComposerModelAccountNotice,
@@ -16,7 +15,6 @@ import {
     type ComposerModelService,
 } from "./ComposerModelControl";
 import { happyAgentComposerModelControlProps } from "./happyAgentComposerModelControl";
-import { localDayTime } from "./localTime";
 import { createRenderer } from "./testing";
 
 const EFFORTS = [
@@ -310,115 +308,3 @@ it("maps hidden, switched-off, and missing accounts into the pill's notices", ()
     expect(available.selectionModel).toBeUndefined();
     expect(available.onAccountsManage).toBeUndefined();
 });
-
-/** Claude's default account and a second one, the conversation on the default. */
-function menusTwoAccounts(): HappyAgentMenusSnapshot {
-    const work = { ...OPTION, providerId: "claude_work", providerName: "work@example.com" };
-    return {
-        ...menusOn("available", "claude"),
-        modelOptions: [{ ...OPTION, current: true }, work],
-        currentOption: { ...OPTION, current: true },
-    };
-}
-
-it("shows the account a spent one moves to as the selection, and keeps the spent one when it is picked", () => {
-    const handlers = { onModelChange: vi.fn(), onEffortChange: vi.fn() };
-    const resetsAt = new Date(2026, 10, 15, 18, 0).getTime();
-    const suggested = happyAgentComposerModelControlProps(menusTwoAccounts(), {
-        ...handlers,
-        accountSwitch: {
-            fromProviderId: "claude",
-            fromResetsAt: resetsAt,
-            providerId: "claude_work",
-        },
-    });
-    expect(suggested.accountSwitch).toEqual({
-        from: "claude",
-        resets: localDayTime(resetsAt, Date.now()),
-    });
-    expect(suggested.selection).toMatchObject({ account: "claude_work", model: "opus" });
-    expect(suggested.services[0]!.account).toBe("claude_work");
-    // An effort on the suggested account is an effort change, not a move.
-    suggested.onSelect!({ ...suggested.selection!, effort: "medium" });
-    expect(handlers.onEffortChange).toHaveBeenCalledWith("medium");
-    expect(handlers.onModelChange).not.toHaveBeenCalled();
-    // Picking the spent account again is a pick of it.
-    suggested.onSelect!({ ...suggested.selection!, account: "claude" });
-    expect(handlers.onModelChange).toHaveBeenCalledWith({
-        providerId: "claude",
-        modelId: "opus",
-        effort: "high",
-    });
-
-    // A disabled pill shows what the session runs, and no switch.
-    const disabled = happyAgentComposerModelControlProps(menusTwoAccounts(), {
-        ...handlers,
-        disabled: true,
-        accountSwitch: { fromProviderId: "claude", providerId: "claude_work" },
-    });
-    expect(disabled.accountSwitch).toBeUndefined();
-    expect(disabled.selection?.account).toBe("claude");
-});
-
-/** The conversation's work account is spent; its next message moves to the default one. */
-function Switched(props: { resets?: string }) {
-    const services: readonly ComposerModelService[] = [
-        {
-            ...SERVICES[0]!,
-            accounts: [
-                ...SERVICES[0]!.accounts,
-                { id: "claude_work", label: "work@example.com", models: [OPUS] },
-            ],
-        },
-    ];
-    return (
-        <div style={{ display: "flex", justifyContent: "flex-end", width: 720, paddingTop: 420 }}>
-            <ComposerModelControl
-                accountSwitch={{
-                    from: "claude_work",
-                    ...(props.resets === undefined ? {} : { resets: props.resets }),
-                }}
-                data-testid="control"
-                selection={{ ...ON_EXTRA, account: "claude" }}
-                services={services}
-            />
-        </div>
-    );
-}
-
-it("says a switch of accounts above the pill without taking room, and why on focus", async () => {
-    const view = render(() => <Switched resets="Thu 6:00 PM" />);
-    await view.ready();
-    const line = view.$('[data-happy-desktop-ui="composer-model-control-switching"]');
-    const trigger = view.$('[data-happy-desktop-ui="composer-model-control-trigger"]');
-    const control = view.$('[data-testid="control"]');
-    expect(line.element.lastElementChild?.textContent).toBe("accounts");
-    expect(line.element.querySelector(".happy-vector-icon")).not.toBeNull();
-    // Over the pill, from where its text starts, and outside the control's own box.
-    expect(line.bounds().y + line.bounds().height).toBeLessThanOrEqual(trigger.bounds().y - 4);
-    expect(line.bounds().x).toBe(trigger.bounds().x + 12);
-    expect(control.bounds().height).toBe(trigger.bounds().height);
-
-    const reason =
-        "work@example.com is out of usage until Thu 6:00 PM. Your next message will run on " +
-        "Default account. Pick work@example.com in the model picker to keep it.";
-    const bubble = view.$('[data-happy-desktop-ui="tooltip-bubble"]');
-    expect(bubble.element.textContent).toBe(reason);
-    const described = line.element.getAttribute("aria-describedby");
-    expect(described && document.getElementById(described)?.textContent).toBe(reason);
-    expect(line.element.getAttribute("aria-label")).toBe("Switching accounts");
-    expect(bubble.computedStyle("opacity")).toBe("0");
-    // Reachable from the keyboard, which opens the explanation at once.
-    await userEvent.tab();
-    expect(document.activeElement).toBe(line.element);
-    await vi.waitFor(() => expect(bubble.computedStyle("opacity")).toBe("1"));
-}, 60000);
-
-it("leaves the reset out of the explanation when the usage gave none", async () => {
-    const view = render(() => <Switched />);
-    await view.ready();
-    expect(view.$('[data-happy-desktop-ui="tooltip-bubble"]').element.textContent).toBe(
-        "work@example.com is out of usage. Your next message will run on Default account. " +
-            "Pick work@example.com in the model picker to keep it.",
-    );
-}, 60000);

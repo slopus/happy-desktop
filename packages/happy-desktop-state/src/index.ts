@@ -45,7 +45,6 @@ export * from "./modules/terminal/terminalState.js";
 export * from "./onboarding/welcomeStore.js";
 export * from "./onboarding/happyMobileOnboardingStore.js";
 export * from "./happyAgent/happyAgentChatStore.js";
-export * from "./happyAgent/happyAgentAccountSwitch.js";
 export * from "./happyAgent/happyAgentClient.js";
 export * from "./happyAgent/happyAgentConversationRetention.js";
 export * from "./happyAgent/happyAgentClock.js";

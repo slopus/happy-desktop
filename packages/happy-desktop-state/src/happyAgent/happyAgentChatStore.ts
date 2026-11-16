@@ -38,11 +38,6 @@ import type {
     ConversationRetrying,
 } from "../conversation/conversationEntry.js";
 import { happyAgentRetryingProject } from "./happyAgentFailureProject.js";
-import {
-    happyAgentAccountSwitchTarget,
-    type HappyAgentAccountSwitch,
-} from "./happyAgentAccountSwitch.js";
-import type { HappyAgentProviderUsageStore } from "./happyAgentProviderUsageStore.js";
 import type {
     HappyAgentAnsweredUserInput,
     HappyAgentBackgroundProcess,
@@ -689,12 +684,6 @@ export interface HappyAgentChatSnapshot {
     readonly openImage?: HappyAgentOpenImage;
     readonly menus?: HappyAgentMenusSnapshot;
     /**
-     * The conversation's account is spent, so its next message moves to this
-     * account of the same service. `menus` keeps the account the Happy Agent
-     * holds until that message is sent.
-     */
-    readonly accountSwitch?: HappyAgentAccountSwitch;
-    /**
      * Whether a failed turn can be continued on any account and model the live
      * catalog offers. A daemon before protocol 32 accepts only the targets it
      * stored with the failure, which this client no longer reads, so it is
@@ -851,13 +840,6 @@ export interface HappyAgentChatDeps {
     readonly selectionUsed?: (selection: HappyAgentSelection) => void;
     /** Reports the provider of a model picked here, which new sessions then start on. */
     readonly providerPicked?: (providerId: string) => void;
-    /**
-     * Every account's usage on this Happy Agent, followed while the conversation
-     * is, so a conversation on a spent account is offered another one.
-     */
-    readonly providerUsage?: HappyAgentProviderUsageStore;
-    /** The provider picked last anywhere on this Happy Agent, which a spent account moves to first. */
-    readonly providerPickedLast?: () => string | undefined;
     readonly modelSelect?: (
         current: HappyAgentSelection,
         input: HappyAgentModelSelection,
@@ -1009,9 +991,6 @@ export function happyAgentChatStoreCreate(
     let runStartedAt: number | undefined;
     let turnElapsedMs: number | undefined;
     let showReasoning = false;
-    /* Spent accounts the reader picked again over the one suggested. */
-    const accountsKept = new Set<string>();
-    let unsubscribeUsage: (() => void) | undefined;
     /* Turns the reader opened. */
     let openedTurnIds: ReadonlySet<string> = new Set();
     /* Turns that finished while this store followed them. Folding a turn the
@@ -1104,44 +1083,6 @@ export function happyAgentChatStoreCreate(
             : status === "error" && error !== undefined
               ? { type: "error", error }
               : { type: "loading" };
-
-    const accountSwitchProject = (
-        connected: SessionState | undefined,
-    ): HappyAgentAccountSwitch | undefined => {
-        if (
-            connected === undefined ||
-            connected.selectionKnown === false ||
-            connected.modelLocked ||
-            connected.archived ||
-            accountsKept.has(connected.providerId)
-        )
-            return undefined;
-        return happyAgentAccountSwitchTarget({
-            catalog,
-            providerId: connected.providerId,
-            modelId: connected.modelId,
-            usage: deps.providerUsage?.get().providers ?? [],
-            preferredProviderId: deps.providerPickedLast?.(),
-            now: Date.now(),
-        });
-    };
-
-    /**
-     * A message is about to go out: a suggested account becomes the
-     * conversation's, on the same model and effort, before the message
-     * leaves, so it runs there.
-     */
-    const accountSwitchApply = (): void => {
-        const connected = transcriptSession;
-        const pending = accountSwitchProject(connected);
-        if (connected === undefined || pending === undefined) return;
-        const effort = transcriptSelectionOf(connected).effort;
-        modelUpdateRun({
-            providerId: pending.providerId,
-            modelId: connected.modelId,
-            ...(effort === undefined ? {} : { effort }),
-        });
-    };
 
     const commit = (): void => {
         const previous = store.getState();
@@ -1236,7 +1177,6 @@ export function happyAgentChatStoreCreate(
         const workingWait = workingWaitProject(connected);
         const retrying = happyAgentRetryingProject(connected?.activity.retrying);
         const openImage = openImageProject(entries, openImageRef);
-        const accountSwitch = accountSwitchProject(connected);
         const next: HappyAgentChatSnapshot = {
             sessionId,
             connection: connected?.connection ?? "connecting",
@@ -1305,7 +1245,6 @@ export function happyAgentChatStoreCreate(
                           deps.effortRemembered,
                       ),
                   }),
-            ...(accountSwitch === undefined ? {} : { accountSwitch }),
             failureSwitchSupported:
                 (deps.daemonProtocol?.() ?? 0) >= HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION,
         };
@@ -1400,12 +1339,6 @@ export function happyAgentChatStoreCreate(
             },
         });
         transcriptConnection.followingSet?.(readerFollowing);
-        // Usage moves on its own; only a change in what it suggests is drawn.
-        unsubscribeUsage = deps.providerUsage?.subscribe(() => {
-            if (!active || disposed) return;
-            if (!deepEqual(accountSwitchProject(transcriptSession), store.getState().accountSwitch))
-                commit();
-        });
     };
 
     const stop = (): void => {
@@ -1414,8 +1347,6 @@ export function happyAgentChatStoreCreate(
         runningGroupIds.clear();
         transcriptConnection?.close();
         transcriptConnection = undefined;
-        unsubscribeUsage?.();
-        unsubscribeUsage = undefined;
         arrivalSettle(new UserError("The conversation closed before this was sent."));
     };
 
@@ -1620,7 +1551,6 @@ export function happyAgentChatStoreCreate(
                 if (current.session.value.permissionMode !== permissionMode)
                     throw new Error("The access mode changed. Review the message again.");
                 const steered = runStatus === "running";
-                accountSwitchApply();
                 await deps.connectActions.sendMessageConfirmed(sessionId, text, (id) => {
                     if (steered) steeringSendId = id;
                 });
@@ -1629,7 +1559,6 @@ export function happyAgentChatStoreCreate(
         messageSend: (text, images, refused, files) =>
             rejecting(async () => {
                 if (!arrived()) await arrivalWait();
-                accountSwitchApply();
                 const pendingQuestion = store.getState().pendingUserInputs[0];
                 const steered = runStatus === "running";
                 const mutationId = deps.connectActions.sendMessage(
@@ -1709,7 +1638,6 @@ export function happyAgentChatStoreCreate(
                 const name = command.name;
                 if (command.kind === "skill") {
                     const steered = runStatus === "running";
-                    accountSwitchApply();
                     const text =
                         argumentsValue === undefined || argumentsValue.trim().length === 0
                             ? `/${name}`
@@ -1764,31 +1692,7 @@ export function happyAgentChatStoreCreate(
             commit();
         },
         modelUpdate(input) {
-            const connected = transcriptSession;
-            if (connected === undefined) return;
-            // Picking the spent account over the one suggested keeps it.
-            if (
-                store.getState().accountSwitch !== undefined &&
-                input.providerId === connected.providerId
-            ) {
-                accountsKept.add(connected.providerId);
-                if (input.modelId === connected.modelId) {
-                    if (input.effort !== undefined && input.effort !== connected.effort) {
-                        deps.selectionUsed?.(
-                            happyAgentSelectionEffortUpdate(
-                                transcriptSelectionOf(connected),
-                                input.effort,
-                            ),
-                        );
-                        connectMutationTrack(
-                            deps.connectActions.setEffort(sessionId, input.effort),
-                        );
-                    }
-                    commit();
-                    return;
-                }
-            }
-            modelUpdateRun(input);
+            if (transcriptSession !== undefined) modelUpdateRun(input);
         },
         async modelChange(input) {
             try {

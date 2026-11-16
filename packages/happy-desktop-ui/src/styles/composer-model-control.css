@@ -79,46 +79,6 @@
     color: var(--text-secondary);
 }
 
-/* "accounts" over the pill while the next message moves off a spent account.
- * It hangs in the composer's 24px draft-to-toolbar inset, starting where the
- * pill's text starts, so it takes no room and showing it moves nothing: its
- * 16px line ends 4px above the pill and 4px short of the draft's last line.
- * Two classes, so it is placed here rather than where a Tooltip sits. */
-.happy-composer-model-control .happy-composer-model-control__switching {
-    position: absolute;
-    bottom: calc(100% + 4px);
-    left: 12px;
-}
-
-.happy-composer-model-control__switching-line {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
-    white-space: nowrap;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-}
-
-.happy-composer-model-control__switching-line:disabled {
-    cursor: default;
-}
-
-.happy-composer-model-control__switching-line:focus-visible {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 2px;
-}
-
 /* The usage warning: one ring before the model name, present only while the
  * selected account runs low, so a quiet pill reserves no room for it. The
  * ring's 12px box sits on the pill's centre line with the name's 18px line. */
