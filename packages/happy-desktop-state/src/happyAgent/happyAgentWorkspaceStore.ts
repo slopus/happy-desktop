@@ -1812,6 +1812,8 @@ export interface HappyAgentWorkspaceStore {
      * It is `fileOpen` with the other placement, and opens the same tab, read
      * the same way, into the same editor. The panel holds one file at a time,
      * so this replaces whichever file was in it.
+     * A file already open as a tab of the main content is not moved: that tab
+     * is selected instead, and the panel keeps what it was showing.
      */
     filePanelOpen(
         groupId: HappyAgentGroupId,
@@ -8319,6 +8321,16 @@ export function happyAgentWorkspaceStoreCreate(
 
         filePanelOpen(groupId, path, kind, selection) {
             if (disposed) return;
+            // A file the reader already has open as a tab of the main content
+            // is there to be read: the pick goes to that tab, as it is, and the
+            // panel's preview stays on whatever it was showing.
+            const opened = fileTabs.find(
+                (tab) => tab.id === fileTabIdOf(groupId, path) && tab.placement === "main",
+            );
+            if (opened) {
+                fileTabOpen(groupId, path, opened.kind, opened.preview, "main", selection);
+                return;
+            }
             fileTabOpen(groupId, path, kind, false, "panel", selection);
             panel.filesPreviewOpen();
         },
