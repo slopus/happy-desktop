@@ -5915,6 +5915,7 @@ function paletteResultsRow(
         kind: "command",
         title: row.title,
         ...(row.meta === undefined ? {} : { meta: row.meta }),
+        ...(row.metaOverflow === undefined ? {} : { metaOverflow: row.metaOverflow }),
         // The lane the computed row already decided: a glyph, the thing's own
         // picture, or the product's mark for what kind of news this row is.
         ...(row.glyph.kind === "icon"

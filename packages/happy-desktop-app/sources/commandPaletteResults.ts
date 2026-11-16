@@ -133,6 +133,8 @@ export interface CommandPaletteCommandRow {
     readonly title: string;
     /** The quiet second line: where a chat lives, what a file's path is. */
     readonly meta?: string;
+    /** Set when the second line is a path, which gives up its head rather than its folder name. */
+    readonly metaOverflow?: "start";
     readonly glyph: CommandPaletteGlyph;
     /** The chord that does the same thing outside the palette, shown as a cap. */
     readonly shortcut?: CommandShortcut;
@@ -860,6 +862,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
                 id: `workspace:${project.id}`,
                 title: project.name,
                 meta: project.displayPath,
+                metaOverflow: "start",
                 glyph: projectGlyph(project),
                 command: { kind: "workspaceOpen", happyAgentId, groupId: project.id },
             },
@@ -1036,6 +1039,7 @@ function tabRows(input: CommandPaletteInput): Ranked[] {
                 id: `tab:${tab.id}`,
                 title: name,
                 meta: tab.path,
+                metaOverflow: "start",
                 glyph: { kind: "icon", name: tab.icon },
                 command: {
                     kind: "fileOpen",
