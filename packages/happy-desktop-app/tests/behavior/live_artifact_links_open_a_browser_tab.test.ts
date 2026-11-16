@@ -74,6 +74,7 @@ it("opens a live artifact's link as a browser tab bound to the artifact, then fo
             agentId: AGENT,
             networkId: "net_agent",
             artifactId: LIVE,
+            reopenings: 0,
         },
     ]);
     expect(panel.get().artifactView).toBeUndefined();
