@@ -65,13 +65,15 @@ export interface ServerSessionsDeps {
         servers(): ReadonlyMap<string, string>;
         /**
          * The account sign-in: its ID, its address, and its method, which is
-         * known rather than discovered. It is never listed, and its token is
-         * never handed to the transport.
+         * known rather than discovered, with how the browser's answer becomes
+         * the account's tokens. It is never listed, and its token is never
+         * handed to the transport.
          */
         readonly account: {
             readonly connectionId: string;
             readonly serverUrl: string;
             readonly method: OAuthAuthenticationMethod;
+            signInComplete(signIn: OAuthSignIn, callbackUrl: string): Promise<OAuthCredential>;
         };
         /**
          * Where the servers' sign-ins are kept across restarts, encrypted by
@@ -669,9 +671,12 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 try {
                     await bound();
                     try {
-                        credential = await completeOAuthSignIn(signIn, callbackUrl, {
-                            fetch: deps.fetch,
-                        });
+                        credential =
+                            direct?.account.connectionId === connectionId
+                                ? await direct.account.signInComplete(signIn, callbackUrl)
+                                : await completeOAuthSignIn(signIn, callbackUrl, {
+                                      fetch: deps.fetch,
+                                  });
                     } catch (error) {
                         throw new ServerSessionError(
                             error instanceof HappyAgentOAuthError

@@ -1,3 +1,4 @@
+import { completeOAuthSignIn } from "@slopus/happy-agent-client";
 import { afterEach, expect, it, vi } from "vitest";
 import { serverSessionsCreate, type ServerSessionsDeps } from "./serverSessions";
 
@@ -455,6 +456,8 @@ function cloudCreate(server: ReturnType<typeof serverCreate>) {
                     clientId: "happy",
                     resource: ACCOUNTS,
                 },
+                signInComplete: (signIn, callbackUrl) =>
+                    completeOAuthSignIn(signIn, callbackUrl, { fetch: server.fetch }),
             },
         },
     });

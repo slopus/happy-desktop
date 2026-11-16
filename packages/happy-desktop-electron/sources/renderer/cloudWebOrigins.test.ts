@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { HAPPY_CLOUD_ACCOUNTS_URL } from "../shared/happyCloud";
+import { HAPPY_CLOUD_IDENTITY_URL } from "../shared/happyCloud";
 import {
     CLOUD_WEB_ORIGINS_PRODUCTION,
     cloudWebOrigins,
@@ -22,7 +22,7 @@ it("defaults to production's accounts origin and picker", () => {
     expect(cloudWebOrigins).toEqual(CLOUD_WEB_ORIGINS_PRODUCTION);
     // The desktop app signs in at the same accounts service.
     expect(CLOUD_WEB_ORIGINS_PRODUCTION.accountsOrigin).toBe(
-        new URL(HAPPY_CLOUD_ACCOUNTS_URL).origin,
+        new URL(HAPPY_CLOUD_IDENTITY_URL).origin,
     );
 });
 

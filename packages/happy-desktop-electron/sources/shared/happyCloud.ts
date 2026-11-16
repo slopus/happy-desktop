@@ -1,18 +1,22 @@
 /**
- * Happy Cloud: an accounts service and the servers it lists, every one of
- * them reached directly from this app, never through the host Happy Agent.
- * The accounts service and the servers live on separate domains, each set
- * in one place here.
+ * Happy Cloud: an identity provider, the cluster's account API, and the
+ * servers it lists, every one of them reached directly from this app, never
+ * through the host Happy Agent. Each address is set in one place here.
  */
 /** The domain every server sits under, as `<name>.<base>`. */
 export const HAPPY_CLOUD_BASE = "happy-clusters.com";
 /**
- * Where the person's Happy Cloud account signs in and lists their servers;
- * also the audience of the account's tokens.
+ * Where the person signs in, for an identity token that only the account API
+ * takes. Nothing else is asked of it.
  */
-export const HAPPY_CLOUD_ACCOUNTS_URL = "https://auth.happy.engineering/";
+export const HAPPY_CLOUD_IDENTITY_URL = "https://auth.happy.engineering/";
 /**
- * The sign-in ID of the account itself. Its token is only for the accounts
+ * The cluster's account API: the account's session, its servers and their
+ * tokens. Also the audience of the account's session.
+ */
+export const HAPPY_CLOUD_API_URL = `https://api.${HAPPY_CLOUD_BASE}/`;
+/**
+ * The sign-in ID of the account itself. Its token is only for the account
  * API: it is never listed as a connection and never sent to a server.
  */
 export const HAPPY_CLOUD_ACCOUNT_ID = "happy-cloud-account";
