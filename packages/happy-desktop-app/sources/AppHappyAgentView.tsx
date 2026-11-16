@@ -12260,7 +12260,7 @@ function HappyAgentPanelBody(props: {
                                           onOpenInTab: () =>
                                               props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
                                       }),
-                                      previewKey: filesPreview.id,
+                                      previewRequest: props.panel.filesPreviewRequest,
                                   }
                                 : {})}
                             emptyDescription="Its contents or changes show here, beside the list."

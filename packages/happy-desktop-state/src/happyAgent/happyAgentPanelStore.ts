@@ -185,6 +185,13 @@ export interface HappyAgentPanelSnapshot {
      */
     readonly fileViewOpen: boolean;
     /**
+     * How many times a file was asked to show in Files, counting a pick of the
+     * file already showing. A pane too narrow for the listing and the preview
+     * together brings the preview forward again on each new count, which a
+     * comparison of which file is showing cannot do for the same file twice.
+     */
+    readonly filesPreviewRequest: number;
+    /**
      * The artifact a conversation link opened in the transient artifact tab,
      * and the version it named when it named one. Absent, the tab is closed.
      */
@@ -264,6 +271,7 @@ export interface HappyAgentPanelStore {
      * nowhere else to be in the panel, so the separate viewer tab — kept for a
      * file read out of another workspace — gives way. The workspace store
      * calls this as it starts reading the file, like `fileViewOpen`.
+     * Every call counts in `filesPreviewRequest`, the same file again too.
      */
     filesPreviewOpen(): void;
     /**
@@ -539,6 +547,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     let changeConversationId: HappyAgentSessionId | undefined;
     let fileViewShown = false;
     let filesViewShown = true;
+    let filesPreviewRequest = 0;
     let artifactView: HappyAgentPanelArtifactView | undefined;
     /** A group whose Files tab is shown when it is next addressed. */
     let filesArrivalGroupId: HappyAgentGroupId | undefined;
@@ -561,6 +570,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         devicesViewOpen: false,
         fileViewOpen: false,
         filesViewOpen: true,
+        filesPreviewRequest: 0,
         browserRecent: NO_RECENT,
         open: false,
         tabs: NO_TABS,
@@ -575,6 +585,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             devicesViewOpen: devicesViewShown,
             fileViewOpen: fileViewShown,
             filesViewOpen: filesViewShown,
+            filesPreviewRequest,
             browserRecent: (groupId && recentByGroup.get(groupId)) || NO_RECENT,
             ...(artifactView === undefined ? {} : { artifactView }),
             open,
@@ -664,6 +675,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             next.changeViewPath === snapshot.changeViewPath &&
             next.fileViewOpen === snapshot.fileViewOpen &&
             next.filesViewOpen === snapshot.filesViewOpen &&
+            next.filesPreviewRequest === snapshot.filesPreviewRequest &&
             next.browserRecent === snapshot.browserRecent &&
             next.artifactView === snapshot.artifactView &&
             next.terminalRefusal === snapshot.terminalRefusal &&
@@ -685,6 +697,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             devicesViewOpen: next.devicesViewOpen,
             fileViewOpen: next.fileViewOpen,
             filesViewOpen: next.filesViewOpen,
+            filesPreviewRequest: next.filesPreviewRequest,
             browserRecent: next.browserRecent,
             ...(next.artifactView === undefined ? {} : { artifactView: next.artifactView }),
             open: next.open,
@@ -1092,6 +1105,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         },
         filesPreviewOpen() {
             if (disposed) return;
+            filesPreviewRequest += 1;
             fileViewShown = false;
             filesViewShown = true;
             activeViewId = "files";
