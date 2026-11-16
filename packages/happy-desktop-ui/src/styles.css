@@ -130,6 +130,7 @@
 @import "./styles/happy-agent-client.css";
 @import "./styles/happy-agent-chat.css";
 @import "./styles/agent-activity-row.css";
+@import "./styles/tool-section.css";
 @import "./styles/delegated-agent.css";
 @import "./styles/wait-ring.css";
 @import "./styles/usage-ring.css";

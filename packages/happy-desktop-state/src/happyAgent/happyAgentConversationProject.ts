@@ -1096,6 +1096,7 @@ function happyAgentConnectGroupProject(
                               : "complete",
                     reason: element.reason,
                     durationMs: element.elapsedMs,
+                    endedAt: element.endedAt,
                     ...(element.usedTokens === undefined ? {} : { usedTokens: element.usedTokens }),
                     ...(element.finalContextTokens === undefined
                         ? {}
@@ -1188,12 +1189,12 @@ function happyAgentConnectGroupProject(
             // reader's own message does: folding it away would leave the answer
             // standing over nothing.
             (entry.kind === "agentActivity" && entry.activity.kind === "agentMessage") ||
-            // File edits, presented media, and published artifacts are a result
-            // the reader can open, even when execution traces are folded.
+            // Presented media and published artifacts are a result the reader
+            // can open, even when execution traces are folded. A file edit is a
+            // step like any other and folds with the run it belongs to.
             (entry.kind === "agentActivity" &&
                 entry.activity.kind === "tool" &&
-                (entry.activity.tool.presentation?.type === "fileDiff" ||
-                    entry.activity.tool.presentation?.type === "media" ||
+                (entry.activity.tool.presentation?.type === "media" ||
                     entry.activity.tool.presentation?.type === "artifact" ||
                     entry.activity.tool.presentation?.type === "preview" ||
                     entry.activity.tool.presentation?.type === "page")) ||
@@ -1219,7 +1220,7 @@ function happyAgentConnectGroupProject(
      * agent-owned row on screen — so it never lands mid-turn under a second
      * header, and folding never takes away rows above it. Collapsed that is the
      * first row the fold keeps: usually the answer, else a delegation, a
-     * collaborator's message, a failure, or an edit the turn shows before it.
+     * collaborator's message, a failure, or a file the turn presents before it.
      * Expanded it is the turn's first row, usually a tool call. The collapsed
      * lead also names the turn as the row that survives folding.
      */

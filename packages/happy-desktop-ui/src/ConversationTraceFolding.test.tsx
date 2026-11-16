@@ -82,6 +82,12 @@ function prompt(groupId: string, text: string): ChatElement {
         text,
     };
 }
+/*
+ * One step of a turn's work. A run of one-line calls is a single section row,
+ * and these cases are about a turn of many rows, so each step also reports a
+ * failed checkout: a call that says something under its line keeps a row of
+ * its own.
+ */
 function step(groupId: string, index: number): ChatElement {
     clock += 1;
     return {
@@ -99,6 +105,9 @@ function step(groupId: string, index: number): ChatElement {
             kind: "command",
             command: `pnpm test --filter ${groupId}-step-${String(index)}`,
         },
+        checkoutFailures: [
+            { repository: "happy/tools", branch: "main", error: "The branch is gone." },
+        ],
     } as ChatElement;
 }
 function answer(groupId: string, text: string): ChatElement {

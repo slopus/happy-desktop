@@ -400,6 +400,13 @@ export {
     type ActivityTreatment,
     type AgentActivityRowProps,
 } from "./AgentActivityRow";
+export { AgentToolSection, type AgentToolSectionProps } from "./AgentToolSection";
+export {
+    conversationToolSections,
+    type ConversationToolSection,
+    type ConversationToolSectionMemory,
+    type ConversationToolSections,
+} from "./conversationToolSections";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
 export { ContextMenu, type ContextMenuProps } from "./ContextMenu";

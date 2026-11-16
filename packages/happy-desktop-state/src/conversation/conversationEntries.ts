@@ -249,6 +249,7 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             left.reason === right.reason &&
             left.copyText === right.copyText &&
             left.durationMs === right.durationMs &&
+            left.endedAt === right.endedAt &&
             left.usedTokens === right.usedTokens &&
             left.finalContextTokens === right.finalContextTokens &&
             left.tools === right.tools &&

@@ -162,6 +162,11 @@ export type ConversationRowContext = {
     readonly mediaPlaced?: ReadonlySet<number>;
     /** The layouts this reply draws, and its text with each one's placeholder. */
     readonly messageLayouts?: MessageInlineLayouts;
+    /**
+     * This row opens a run of tool calls and draws it as one section: a
+     * single line, live or ended, whatever the run holds.
+     */
+    readonly toolSection?: boolean;
 };
 export type ConversationFailureRowContext = {
     /** The conversation has not moved past this failure, so its actions are offered. */
@@ -1122,6 +1127,18 @@ export function conversationRowHeight(
         const startsGroup =
             context.surface === "conversation" && conversationAgentRowStartsGroup(entries, index);
         const expanded = context.expanded ?? entry.activity.kind === "shell";
+        /* A section is the one line a tool row takes, and reads nothing of
+           its calls: one arriving, finishing, or failing, and the run ending,
+           all leave it where it is. */
+        if (context.toolSection)
+            return rowHeightCached(
+                cache,
+                entry,
+                `tool-section:${startsGroup ? "lead" : "plain"}`,
+                () =>
+                    (startsGroup ? ACTIVITY_LEAD_CHROME + ACTIVITY_LEAD_RUN_SEPARATION : 0) +
+                    ACTIVITY_HEIGHT.tool,
+            );
         const activityInset = (startsGroup ? ACTIVITY_LEAD_INSET : ACTIVITY_ROW_INSET)[
             context.activityTreatment ?? "detailed"
         ];

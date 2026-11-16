@@ -22,7 +22,9 @@ import {
     type ActivityTreatment,
     type AgentActivityMediaRun,
 } from "./AgentActivityRow";
+import { AgentToolSection } from "./AgentToolSection";
 import type { ConversationMediaRun } from "./conversationMediaRuns";
+import type { ConversationToolSection } from "./conversationToolSections";
 import type { MessageInlineLayouts } from "./conversationInlineLayouts";
 import { ConversationMedia } from "./ConversationMedia";
 import type { InlinePageProps } from "./InlinePage";
@@ -147,6 +149,11 @@ export type ConversationEntryViewProps = {
     references?: MessageReferences;
     /** The page this row's tool call shows inline, when its owner shows one. */
     inlinePage?: InlinePageProps;
+    /**
+     * The run of tool calls this row opens, from `conversationToolSections`.
+     * The row then draws the whole run as one section instead of its own call.
+     */
+    toolSection?: ConversationToolSection;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -223,7 +230,8 @@ function traceControl(
 /**
  * ConversationEntryView — renders one `ConversationEntry` through the shared
  * chat vocabulary: an authored message is a `Message`, agent activity is one
- * glanceable `AgentActivityRow`, a service line is a `SystemNotice`, a section
+ * glanceable `AgentActivityRow` or, for a run of tool calls, one
+ * `AgentToolSection`, a service line is a `SystemNotice`, a section
  * boundary is a `DayDivider`, and something waiting on the reader is its request
  * prompt. Both stacks render their conversations through this one component, so
  * neither grows a second message list.
@@ -295,7 +303,14 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
            has, so the control rides there rather than opening a line of its
            own between the header and the work. */
         const leadTrace = traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle);
-        const activity = (
+        const activity = props.toolSection ? (
+            <AgentToolSection
+                data-testid={props["data-testid"]}
+                {...(props.onToolSelect ? { onToolSelect: props.onToolSelect } : {})}
+                {...(props.references ? { references: props.references } : {})}
+                section={props.toolSection}
+            />
+        ) : (
             <AgentActivityRow
                 activity={entry.activity}
                 data-testid={props["data-testid"]}

@@ -373,7 +373,7 @@ it("appends a pending request with no element of its own and drops an answered o
     ).toEqual([]);
 });
 
-it("keeps a completed file edit visible while command traces are folded", () => {
+it("folds a completed file edit away with the command traces around it", () => {
     const base = { groupId: "edit-turn", runId: "edit-run", createdAt: 1000 };
     const elements: ChatElement[] = [
         {
@@ -458,10 +458,9 @@ it("keeps a completed file edit visible while command traces are folded", () => 
                 entry.activity.kind === "tool" &&
                 entry.activity.tool.presentation?.type === "fileDiff",
         );
-    expect(edits(collapsed)).toHaveLength(1);
+    expect(edits(collapsed)).toHaveLength(0);
     expect(edits(expanded)).toHaveLength(1);
-    expect(edits(collapsed)[0]).toMatchObject({
-        id: edits(expanded)[0]!.id,
+    expect(edits(expanded)[0]).toMatchObject({
         activity: { tool: { presentation: { files: [{ path: "lol.txt", added: 1 }] } } },
     });
     expect(

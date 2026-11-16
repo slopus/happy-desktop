@@ -64,6 +64,7 @@
    same 12px. */
 .happy-message--activity-lead:has(
         .happy-agent-activity-row,
+        .happy-tool-section,
         .happy-conversation-error-card,
         .happy-system-notice[data-align="start"]
     )
@@ -75,7 +76,8 @@
  * that turn's rows end on the transcript's own 30px inset. The message that
  * carries the first one takes the same trailing inset instead of prose's wider
  * right edge, so the hover time does not step in and out down one turn. */
-.happy-message--activity-lead:has(.happy-agent-activity-row[data-treatment="focused"]) {
+.happy-message--activity-lead:has(.happy-agent-activity-row[data-treatment="focused"]),
+.happy-message--activity-lead:has(.happy-tool-section) {
     padding-right: 30px;
 }
 

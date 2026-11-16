@@ -105,6 +105,12 @@ import { WindowOverlay } from "./WindowOverlay";
 import { conversationMediaRunRows, conversationMediaRuns } from "./conversationMediaRuns";
 import { conversationInlineLayouts } from "./conversationInlineLayouts";
 import {
+    conversationToolSectionEntryKeys,
+    conversationToolSections,
+    type ConversationToolSection,
+    type ConversationToolSectionMemory,
+} from "./conversationToolSections";
+import {
     mediaVideoFramesSignature,
     mediaVideoFramesSubscribe,
     mediaVideoFramesVersion,
@@ -418,13 +424,21 @@ function conversationTracesOnScreen(
     return seen;
 }
 
-/** The row keys of the entries among `first`–`last`. */
+/**
+ * The keys of the entries among rows `first`–`last`: each row's own, and every
+ * call of a tool section the row draws.
+ */
 function conversationEntriesOnScreen(
-    entries: readonly ConversationEntry[],
+    rows: readonly ConversationEntry[],
+    sections: ReadonlyMap<string, ConversationToolSection>,
     first: number,
     last: number,
 ): ReadonlySet<string> {
-    return new Set(entries.slice(first, last + 1).map(entryKey));
+    return new Set(
+        rows
+            .slice(first, last + 1)
+            .flatMap((entry) => conversationToolSectionEntryKeys(entry, sections)),
+    );
 }
 
 /** Whether the turn this row carries the trace control for is currently open. */
@@ -642,6 +656,10 @@ export function ConversationView(props: ConversationViewProps) {
         entry.kind === "message"
             ? messageExpandedChange(entry, expanded)
             : rowExpandedChange(entry, expanded);
+    /* Which runs of tool calls this view has seen end. It changes what an
+       ended section shows, never the rows or their heights. Like the caches
+       here it is written while rendering and never drives a render itself. */
+    const [toolSectionMemory] = useState<ConversationToolSectionMemory>(() => new Set());
     const rowHeightCache = conversationRowHeightCacheGet(conversationCacheKey);
     conversationRowHeightCachePrune(rowHeightCache, props.entries);
     /* With no turn running, a send waiting on the daemon is next to nothing:
@@ -651,7 +669,16 @@ export function ConversationView(props: ConversationViewProps) {
             ? conversationPendingSteering(props.entries)
             : { transcript: props.entries, queued: [] };
     const queued = steering.queued;
-    const transcript = steering.transcript;
+    /* Runs of one-line tool calls are one row each: live, the row shows the
+       run's latest call; ended, it sums the run up on the same line. `transcript` is the rows; `steering.transcript` is every entry,
+       for what reads the calls a section stands for. A transcript still
+       hydrating settles nothing about which runs have ended. */
+    const toolSections = conversationToolSections(
+        steering.transcript,
+        props.running === true,
+        props.loading ? new Set() : toolSectionMemory,
+    );
+    const transcript = toolSections.rows;
     // A queued message keeps its entity key and virtual row when Stop ends
     // the turn and when the daemon accepts it into the next one.
     const listEntries = queued.length === 0 ? transcript : [...transcript, ...queued];
@@ -685,8 +712,8 @@ export function ConversationView(props: ConversationViewProps) {
             setInlinePageGeneration((generation) => generation + 1);
         },
     };
-    const inlineLayouts = conversationInlineLayouts(transcript, framesAt);
-    const mediaRuns = conversationMediaRuns(transcript, inlineLayouts.hidden);
+    const inlineLayouts = conversationInlineLayouts(steering.transcript, framesAt);
+    const mediaRuns = conversationMediaRuns(steering.transcript, inlineLayouts.hidden);
     /* What a row draws because of a reply's layouts: the pictures a call gave
        up to one, or the layouts a reply draws. */
     const placedOf = (entry: ConversationEntry | undefined) => {
@@ -699,7 +726,9 @@ export function ConversationView(props: ConversationViewProps) {
         return placed ? { mediaPlaced: placed } : {};
     };
     const inlinePages = props.inlinePages;
-    const inlineLeads = inlinePages ? conversationInlineArtifactLeads(transcript) : undefined;
+    const inlineLeads = inlinePages
+        ? conversationInlineArtifactLeads(steering.transcript)
+        : undefined;
     const inlinePageOf = (entry: ConversationEntry | undefined) =>
         entry === undefined || inlinePages === undefined || inlineLeads === undefined
             ? undefined
@@ -862,7 +891,7 @@ export function ConversationView(props: ConversationViewProps) {
         props.running === true &&
         !awaitingInput &&
         props.workingWait === undefined &&
-        conversationScheduledWait(transcript);
+        conversationScheduledWait(steering.transcript);
     /*
      * An unanswered question keeps the footer after the run that asked it
      * stops. The turn is not over — it is waiting on the reader — and the one
@@ -961,6 +990,9 @@ export function ConversationView(props: ConversationViewProps) {
                 entry === undefined ? undefined : mediaRuns.get(entryKey(entry)),
             ),
             ...placedOf(entry),
+            ...(entry !== undefined && toolSections.sections.has(entryKey(entry))
+                ? { toolSection: true }
+                : {}),
             viewerId: props.viewerId,
             width,
         };
@@ -1074,7 +1106,7 @@ export function ConversationView(props: ConversationViewProps) {
                             props.viewerId,
                             props.activityTreatment,
                             rowExpansion,
-                            conversationReferencesSignature(transcript, props.references),
+                            conversationReferencesSignature(steering.transcript, props.references),
                             inlinePageGeneration,
                             inlinePages?.artifacts,
                             inlinePages?.artifactRender === undefined,
@@ -1107,6 +1139,8 @@ export function ConversationView(props: ConversationViewProps) {
                                     );
                                 return `${fold}|${layouts.signature}|${frames}`;
                             }
+                            /* A section's row is one line whatever it holds. */
+                            if (toolSections.sections.has(entryKey(entry))) return "section";
                             const placed = [
                                 ...(inlineLayouts.hidden.get(entryKey(entry)) ?? []),
                             ].join(",");
@@ -1166,7 +1200,12 @@ export function ConversationView(props: ConversationViewProps) {
                                       );
                                       props.onEntriesSeen?.(
                                           entriesViewer,
-                                          conversationEntriesOnScreen(listEntries, first, last),
+                                          conversationEntriesOnScreen(
+                                              listEntries,
+                                              toolSections.sections,
+                                              first,
+                                              last,
+                                          ),
                                       );
                                   },
                               }
@@ -1265,6 +1304,9 @@ export function ConversationView(props: ConversationViewProps) {
                                         mediaRuns.get(entryKey(entry)),
                                     )}
                                     {...placedOf(entry)}
+                                    {...((section) => (section ? { toolSection: section } : {}))(
+                                        toolSections.sections.get(entryKey(entry)),
+                                    )}
                                     onDelegationSelect={props.onDelegationSelect}
                                     now={conversationEntryReadsNow(entry) ? props.now : undefined}
                                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}

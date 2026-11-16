@@ -1024,6 +1024,8 @@ export interface ConversationTurnStatusEntry {
     readonly copyText?: string;
     /** Final duration from request sent through completion, when known. */
     readonly durationMs?: number;
+    /** When the run settled, in Unix milliseconds, when known. */
+    readonly endedAt?: number;
     /** Tokens consumed by this run across provider/model segments. */
     readonly usedTokens?: number;
     /** Conversation context measured when the run settled. */
