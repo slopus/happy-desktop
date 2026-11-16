@@ -15,8 +15,10 @@ color — but color that explains a difference rather than decorates.
 Opening a file should open a real preview inside Happy, not a browser. Clicking
 a JPEG shows the JPEG. Clicking a Markdown file shows a good Markdown viewer. A
 video plays. That preview is one component, reused everywhere a file or a link
-is opened. The only difference is where it lands: opened from Files it goes into
-a main content tab; opened from the main content it opens on the right.
+is opened. The only difference is where it lands: in Files a single click shows
+it in the panel, beside the list it was picked from, and a double click or the
+Open in tab button on the preview opens it as a main content tab; opened from
+the main content it opens on the right.
 
 ## How we get there
 
@@ -86,5 +88,6 @@ of the browser.
 - Returning to an already loaded file shows content and syntax highlighting in
   the same frame. Open tabs retain their content, a bounded cache retains recent
   editor parsing, and a genuinely unavailable file alone shows loading.
-- Images, video, and Markdown open in Happy's own preview — in a main content
-  tab from Files, on the right from the main content — and never in a browser.
+- Images, video, and Markdown open in Happy's own preview — beside the list in
+  the panel on a single click in Files, in a main content tab on a double click
+  or Open in tab, on the right from the main content — and never in a browser.
