@@ -14,10 +14,9 @@ export type PanelHeaderProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
 };
 
 /**
- * The 56px band across the top of a docked panel column — the `ChannelHeader` of
- * the panel side, to the pixel and to the same transparent, borderless contract,
- * so the two columns' headers are one band across the window and whatever each
- * one holds beneath starts on the same line.
+ * The 56px band across the top of a docked panel column, transparent and
+ * borderless, so the columns' headers are one band across the window and
+ * whatever each one holds beneath starts on the same line.
  *
  * It is legitimately empty. A panel whose content begins at the very top of the
  * window sits a header's height above the surface it belongs with, and in the

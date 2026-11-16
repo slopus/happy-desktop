@@ -9,7 +9,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 export const componentNumber = "C-010";
 const panelShortcut = commandShortcut("b", { alt: true });
 /*
- * Slot placeholders: the shell composes TitleBar, Rail, Sidebar, and content
+ * Slot placeholders: the shell composes a title bar, Sidebar, and content
  * built elsewhere, so the blueprint marks each region with a dashed slot and
  * its contract dimension instead of duplicating those components.
  */
@@ -55,7 +55,6 @@ const titleBarSlot = () => (
         <Slot height="auto" label="titleBar" note="38px" width="100%" />
     </div>
 );
-const railSlot = () => <Slot label="rail" note="76px" width="76px" />;
 const sidebarSlot = () => <Slot label="sidebar" note="288px" width="288px" />;
 function window1024(children: ReactNode) {
     return (
@@ -66,13 +65,10 @@ function window1024(children: ReactNode) {
     );
 }
 
-/*
- * The narrowest window the shell admits: Happy's 720px desktop minimum leaves
- * a 140px workspace after the 64px rail and two 250px side lanes.
- */
+/* The narrowest window the shell admits: Happy's 720px desktop minimum. */
 const LANE_MIN = 250;
 const WORKSPACE_MIN = 140;
-const WINDOW_MIN = 64 + LANE_MIN * 2 + WORKSPACE_MIN;
+const WINDOW_MIN = 720;
 
 function windowAtMinimum(children: ReactNode) {
     return (
@@ -86,7 +82,7 @@ function windowAtMinimum(children: ReactNode) {
         >
             <div style={{ height: "640px", width: `${String(WINDOW_MIN)}px` }}>{children}</div>
             <DimensionRule
-                label={`${String(WINDOW_MIN)}px × 640px — 64 rail + ${String(LANE_MIN)} + ${String(WORKSPACE_MIN)} + ${String(LANE_MIN)}`}
+                label={`${String(WINDOW_MIN)}px × 640px — two ${String(LANE_MIN)}px lanes and the workspace between them`}
             />
         </div>
     );
@@ -128,11 +124,11 @@ export function AppShellPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Window composition: chrome base, 38px title bar row, rail | main card with no top/left inset, an 8px right/bottom inset, a macOS-matched 8px radius, and a darker sidebar lane separated by an inset hairline."
+            summary="Window composition: chrome base, 38px title bar row, then the main card with no top/left inset, an 8px right/bottom inset, a macOS-matched 8px radius, and a darker sidebar lane separated by an inset hairline."
             title="AppShell"
         >
             <Specimen
-                detail="rail 76px · no top/left inset · 8px right/bottom + panel gap · radius 8px · darker sidebar + inset separator share the card with workspace"
+                detail="no top/left inset · 8px right/bottom + panel gap · radius 8px · darker sidebar + inset separator share the card with workspace"
                 label="Full composition with panel"
                 number="01"
                 stage="chrome"
@@ -140,7 +136,6 @@ export function AppShellPage() {
                 {window1024(
                     <AppShell
                         panel={<Slot label="panel" note="340px · agent desk" />}
-                        rail={railSlot()}
                         sidebar={sidebarSlot()}
                         titleBar={titleBarSlot()}
                     >
@@ -153,13 +148,13 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="no panel — sidebar and workspace share one card, flush to rail/title with 8px right/bottom clearance"
-                label="Rail + sidebar, no panel"
+                detail="no panel — sidebar and workspace share one card, flush to the title bar with 8px right/bottom clearance"
+                label="Sidebar, no panel"
                 number="02"
                 stage="chrome"
             >
                 {window1024(
-                    <AppShell rail={railSlot()} sidebar={sidebarSlot()} titleBar={titleBarSlot()}>
+                    <AppShell sidebar={sidebarSlot()} titleBar={titleBarSlot()}>
                         <Slot label="children" note="workspace beside the 288px sidebar" />
                     </AppShell>,
                 )}
@@ -167,7 +162,7 @@ export function AppShellPage() {
 
             <Specimen
                 detail="sidebar omitted · panelWidth 300 — the panel keeps its explicit width, the main card takes the rest"
-                label="Rail only, custom panel width"
+                label="No sidebar, custom panel width"
                 number="03"
                 stage="chrome"
             >
@@ -175,7 +170,6 @@ export function AppShellPage() {
                     <AppShell
                         panel={<Slot label="panel" note="panelWidth 300" />}
                         panelWidth={300}
-                        rail={railSlot()}
                         titleBar={titleBarSlot()}
                     >
                         <Slot label="children" note="main workspace" />
@@ -193,7 +187,6 @@ export function AppShellPage() {
                     <AppShell
                         panel={<Slot label="panel" note="resizable · 340px" />}
                         panelResizable
-                        rail={railSlot()}
                         sidebar={<Slot label="sidebar" note="resizable · 288px" />}
                         sidebarCollapsible
                         titleBar={titleBarSlot()}
@@ -211,7 +204,6 @@ export function AppShellPage() {
             >
                 {window1024(
                     <AppShell
-                        rail={railSlot()}
                         sidebar={<Slot label="sidebar" note="hidden while collapsed" />}
                         sidebarCollapsible
                         sidebarDefaultCollapsed
@@ -233,7 +225,6 @@ export function AppShellPage() {
                         {window1024(
                             <AppShell
                                 connectionRail
-                                rail={railSlot()}
                                 sidebar={
                                     <Sidebar
                                         activeItemId=""
@@ -292,7 +283,6 @@ export function AppShellPage() {
                             </div>
                         }
                         panelResizable
-                        rail={railSlot()}
                         sidebar={<Slot label="sidebar" note="resizable · 288px" />}
                         sidebarCollapsible
                         titleBar={titleBarSlot()}
@@ -312,7 +302,7 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="Happy's 720×640 desktop minimum. The two side lanes shrink to their 250px floors and the workspace keeps the remaining 140px after the 64px rail. Drag the blueprint narrower and the shell stops here and the page scrolls instead, matching the native window contract."
+                detail="Happy's 720×640 desktop minimum. The two side lanes shrink to their 250px floors and the workspace keeps what remains. Drag the blueprint narrower and the shell stops here and the page scrolls instead, matching the native window contract."
                 label="Every lane at its minimum"
                 number="10"
                 stage="chrome"
@@ -325,7 +315,6 @@ export function AppShellPage() {
                                 note={`shrunk to its ${String(LANE_MIN)}px floor`}
                             />
                         }
-                        rail={railSlot()}
                         sidebar={
                             <Slot
                                 label="sidebar"
@@ -336,7 +325,7 @@ export function AppShellPage() {
                     >
                         <Slot
                             label="children"
-                            note={`holding the remaining ${String(WORKSPACE_MIN)}px`}
+                            note={`holding the remaining ${String(WINDOW_MIN - 2 * LANE_MIN)}px`}
                         />
                     </AppShell>,
                 )}
@@ -352,7 +341,6 @@ export function AppShellPage() {
                     <AppShell
                         panel={<Slot label="panel" note="resizable · capped by what is left" />}
                         panelResizable
-                        rail={railSlot()}
                         sidebar={<Slot label="sidebar" note="resizable · capped by what is left" />}
                         sidebarCollapsible
                         titleBar={titleBarSlot()}

@@ -1,5 +1,8 @@
-import { SetupChoice } from "../../src/SetupChoice";
-import { DesktopMobileSetup, type DesktopMobileSetupStep } from "../../src/DesktopMobileSetup";
+import {
+    desktopMobileSetupPage,
+    type DesktopMobileSetupProps,
+    type DesktopMobileSetupStep,
+} from "../../src/DesktopMobileSetup";
 import { LocalOnboardingScreen, type LocalOnboardingView } from "../../src/LocalOnboardingScreen";
 import { ProfileSetupScreen } from "../../src/ProfileSetupScreen";
 import { SetupHandoff, SetupPage } from "../../src/SetupPage";
@@ -9,6 +12,11 @@ import { ComponentPage, DimensionRule, FullScreenSpecimen, Specimen } from "../k
 import type { MobileRelayPairingState } from "../../src/MobilePairingOptions";
 import { direct, relayWaiting } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
+
+/** One setup step drawn alone, the way the flow's retained `SetupPage` draws it. */
+function DesktopMobileSetup(props: DesktopMobileSetupProps) {
+    return <SetupPage {...desktopMobileSetupPage(props)} />;
+}
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-252";
@@ -170,43 +178,6 @@ export function SetupPagePage() {
                         />
                     </div>
                     <DimensionRule label="Command is selectable · monospace on surface-high" />
-                </div>
-            </Specimen>
-
-            <Specimen
-                detail="A body of its own replaces the scene: the fork is already a picture"
-                label="With a body"
-                number="03"
-                stage="surface"
-            >
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={frame}>
-                        <SetupPage title="How should Happy run?">
-                            <SetupChoice
-                                onSelect={noop}
-                                options={[
-                                    {
-                                        actionLabel: "Stay in the app",
-                                        description:
-                                            "Everything happens in this window. Nothing is added to your machine.",
-                                        id: "app",
-                                        scene: "sparkles",
-                                        title: "Just the app",
-                                    },
-                                    {
-                                        actionLabel: "Install the CLI",
-                                        actionVariant: "primary",
-                                        description:
-                                            "Happy Agent is a coding agent you run from a terminal, always in sync with this app.",
-                                        id: "happy-agent",
-                                        scene: "robot",
-                                        title: "Install CLI tools",
-                                    },
-                                ]}
-                            />
-                        </SetupPage>
-                    </div>
-                    <DimensionRule label="Slot is full width inside the body measure" />
                 </div>
             </Specimen>
 

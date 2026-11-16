@@ -53,7 +53,6 @@ export {
     type NightSkyShaderMotion,
     type NightSkyShaderProps,
 } from "./NightSkyShader";
-export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
 export {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
@@ -147,7 +146,6 @@ export {
 } from "./LivePerformanceIndicator";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { QRCode, type QRCodeMark, type QRCodeProps } from "./QRCode";
-export { ChannelHeader, type ChannelHeaderProps, type ChannelMember } from "./ChannelHeader";
 export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
 export {
@@ -200,8 +198,6 @@ export {
 } from "./DiffSnippet";
 export { ToolCallPreview, type ToolCallPreviewProps } from "./ToolCallPreview";
 export type { Dimension } from "./dimensions";
-export { EventCard, type EventCardProps } from "./EventCard";
-export { Fade, type FadeProps } from "./Fade";
 export {
     FileTree,
     FileTreeFamilyIcon,
@@ -212,7 +208,6 @@ export {
     type FileTreeProps,
     type FileTreeSelectModifiers,
 } from "./FileTree";
-export { FilePanel, type FilePanelProps } from "./FilePanel";
 export {
     FileBrowser,
     type FileBrowserLayout,
@@ -327,7 +322,6 @@ export {
     type MessageProps,
     type MessageReaction,
     type MessageSegment,
-    SteeringNotice,
     SystemNotice,
     type SystemNoticeSegment,
 } from "./Message";
@@ -344,7 +338,6 @@ export {
 } from "./MessageMarkdown";
 export { type MessageReferences, type MessageReferenceView } from "./messageReferences";
 export { Lightbox, type LightboxProps } from "./Lightbox";
-export { Rail, type RailItem, type RailProps } from "./Rail";
 export {
     ThemeScope,
     type ScrollbarVisibility,
@@ -387,13 +380,6 @@ export {
     type SidebarKeepAwakeMode,
 } from "./SidebarKeepAwakeMenu";
 export {
-    SIDEBAR_SPACES_BAR_HEIGHT,
-    SIDEBAR_SPACES_DOT_SIZE,
-    SidebarSpaces,
-    type SidebarSpace,
-    type SidebarSpacesProps,
-} from "./SidebarSpaces";
-export {
     SidebarUpdateAction,
     type SidebarUpdateActionProps,
     type SidebarUpdateContributor,
@@ -408,10 +394,6 @@ export {
     type DesktopStartupUpdate,
     type DesktopStartupValues,
 } from "./DesktopStartupScreen";
-export {
-    HappyAgentConnectionStatus,
-    type HappyAgentConnectionStatusProps,
-} from "./HappyAgentConnectionStatus";
 export {
     AgentActivityRow,
     type ActivityMotion,
@@ -447,7 +429,6 @@ export {
 export { filePathMatches } from "./fileTreeSearch";
 export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSort";
 export {
-    ConversationStatus,
     ConversationView,
     type ConversationViewProps,
     type ConversationLeadingHeader,
@@ -455,12 +436,9 @@ export {
 export {
     ComposerFooterBar,
     ConversationDock,
-    FloatingConversationDock,
     type ComposerFooterBarProps,
     type ConversationDockProps,
-    type FloatingConversationDockProps,
 } from "./ConversationDock";
-export { ComposerPanel, type ComposerPanelProps } from "./ComposerPanel";
 export {
     HappyAgentUserInputPrompt,
     type HappyAgentUserInputAnswerMap,
@@ -515,11 +493,6 @@ export {
     type SearchFieldEditableProps,
     type SearchFieldOpenerProps,
     type SearchFieldProps,
-    TitleBar,
-    type TitleBarEditableProps,
-    type TitleBarOpenerProps,
-    type TitleBarPlainProps,
-    type TitleBarProps,
     WindowDragRegion,
     type WindowDragRegionProps,
 } from "./TitleBar";
@@ -530,7 +503,6 @@ export {
     type TextFieldType,
 } from "./TextField";
 export { Select, type SelectOption, type SelectProps, type SelectSize } from "./Select";
-export { LoadingSwap, type LoadingSwapProps } from "./LoadingSwap";
 export {
     SPINNER_FRAMES,
     SPINNER_VARIANTS,
@@ -616,7 +588,6 @@ export { Menu, type MenuItem, type MenuProps } from "./Menu";
 export { MenuButton, type MenuButtonProps } from "./MenuButton";
 export { Modal, type ModalProps, type ModalSize, type ModalTone } from "./Modal";
 export {
-    WindowsSandboxSetup,
     type WindowsSandboxSetupProps,
     type WindowsSandboxSetupState,
 } from "./WindowsSandboxSetup";
@@ -719,13 +690,6 @@ export {
     type DocumentEditorUser,
 } from "./DocumentEditor";
 export {
-    DataTable,
-    type DataTableAlign,
-    type DataTableColumn,
-    type DataTableProps,
-    type DataTableRow,
-} from "./DataTable";
-export {
     type StatDelta,
     StatTile,
     type StatTileProps,
@@ -758,7 +722,6 @@ export {
     type ProfileSetupScreenProps,
 } from "./ProfileSetupScreen";
 export {
-    DesktopMobileSetup,
     desktopMobilePairingOptionsCopy,
     type DesktopMobilePairingOptions,
     type DesktopMobileSetupProps,
@@ -786,7 +749,6 @@ export {
     type WelcomeSlide,
     type WelcomeSlideArt,
 } from "./WelcomeDeck";
-export { SetupChoice, type SetupChoiceOption, type SetupChoiceProps } from "./SetupChoice";
 export {
     SetupAssistants,
     type SetupAgentPrompt,
@@ -807,18 +769,6 @@ export {
     type SetupProgressProps,
 } from "./SetupPage";
 export {
-    SetupOptionCard,
-    type SetupOptionCardProps,
-    type SetupOptionHintTone,
-    type SetupOptionStatus,
-} from "./SetupOptionCard";
-export {
-    BuildProgressPanel,
-    type BuildProgressPanelProps,
-    type BuildProgressStatus,
-} from "./BuildProgressPanel";
-export { type Availability, StatusPicker, type StatusPickerProps } from "./StatusPicker";
-export {
     type SearchResultAvatar,
     type SearchResultGroup,
     type SearchResultItem,
@@ -827,12 +777,6 @@ export {
     type SearchResultsVariant,
     type SearchResultType,
 } from "./SearchResults";
-export {
-    MediaGallery,
-    type MediaGalleryProps,
-    type MediaItem,
-    type MediaKind,
-} from "./MediaGallery";
 export {
     FileAttachment,
     type FileAttachmentKind,
@@ -1321,7 +1265,6 @@ export {
 } from "./WorkFloaty";
 export { ChangeStats, type ChangeStatsProps } from "./ChangeStats";
 export { FileChangeDiff, type FileChangeDiffProps } from "./FileChangeDiff";
-export { WorkTabControls, type WorkTabControlsProps } from "./WorkTabControls";
 export { ConversationSummaryRow, type ConversationSummaryRowProps } from "./ConversationSummaryRow";
 export {
     DataDisclosure,

@@ -32,8 +32,6 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     panelWidth?: number;
     /** One persistent header control at the window's right edge. */
     panelToggleAction?: { open: boolean; onClick: () => void; shortcut?: KeyboardShortcut };
-    /** Optional 64px feature rail. When omitted the content spans the full body. */
-    rail?: ReactNode;
     sidebar?: ReactNode;
     style?: CSSProperties;
     titleBar?: ReactNode;
@@ -184,15 +182,14 @@ function panelShareOf(): number {
 }
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const REVEAL_WIDTH = 48;
-const RAIL_WIDTH = 64;
 /**
- * The workspace remaining at Happy's 720px desktop minimum after the 64px rail
- * and two 250px side lanes. The same number app-shell.css states.
+ * The workspace's floor at Happy's 720px desktop minimum, beside its side
+ * lanes. The same number app-shell.css states.
  */
 const WORKSPACE_MIN_WIDTH = 140;
 /**
- * How wide one side lane may grow: never past the room left once the rail, the
- * lane opposite, and the workspace's own floor have taken theirs.
+ * How wide one side lane may grow: never past the room left once the
+ * lane opposite and the workspace's own floor have taken theirs.
  *
  * Without this bound a lane's cap answered only to the window — the panel's was
  * a share of the viewport — and two lanes could each be within their own cap
@@ -337,7 +334,7 @@ function ResizeHandle(props: {
 }
 /*
  * Window composition for the Happy desktop app. An optional title bar row,
- * then rail | navigation | workspace and an optional right inspector. Every
+ * then navigation | workspace and an optional right inspector. Every
  * region meets on a hairline so the desktop feels like one native surface.
  *
  * The sidebar collapse/resize and the panel resize are narrowly scoped local UI
@@ -366,7 +363,6 @@ export function AppShell(props: AppShellProps) {
         "panel",
         "panelWidth",
         "panelToggleAction",
-        "rail",
         "sidebar",
         "style",
         "titleBar",
@@ -454,7 +450,7 @@ export function AppShell(props: AppShellProps) {
     const [panelDragWidth, setPanelDragWidth] = useState<number>();
     /*
      * What each lane may grow to, given the other. A lane's own cap is only half
-     * the answer: the two share one window with the rail and the workspace, so
+     * the answer: the two share one window with the workspace, so
      * each is measured against the room the rest of them leave.
      *
      * A caller who named a maximum meant it and keeps it. A collapsed sidebar
@@ -462,7 +458,6 @@ export function AppShell(props: AppShellProps) {
      * occupies nothing, so folding one away really does hand its room to the
      * other instead of merely appearing to.
      */
-    const railFootprint = local.rail ? RAIL_WIDTH : 0;
     const sidebarOccupied = !local.sidebar
         ? 0
         : local.sidebarCollapsible === true && sidebarCollapsed
@@ -472,11 +467,9 @@ export function AppShell(props: AppShellProps) {
           : sidebarWidth;
     const panelOccupied = local.panel === undefined || local.panel === null ? 0 : panelWidthState;
     const sidebarMax =
-        local.sidebarMaxWidth ??
-        laneMaxWidthOf(sidebarCap, sidebarMin, railFootprint + panelOccupied);
+        local.sidebarMaxWidth ?? laneMaxWidthOf(sidebarCap, sidebarMin, panelOccupied);
     const panelMax =
-        local.panelMaxWidth ??
-        laneMaxWidthOf(panelCap, panelMin, railFootprint + sidebarOccupied, workspaceMin);
+        local.panelMaxWidth ?? laneMaxWidthOf(panelCap, panelMin, sidebarOccupied, workspaceMin);
     const sidebarInteractive = local.sidebarCollapsible === true;
     const sidebarSized = sidebarInteractive || local.sidebarDefaultWidth !== undefined;
     const sidebarShortcut = local.sidebarShortcut === true && sidebarInteractive;
@@ -585,12 +578,12 @@ export function AppShell(props: AppShellProps) {
               // shrunk between renders narrows the panel with it rather than
               // waiting for the next one. Both halves of the bound are here —
               // the panel's share of the window, and the room left once the
-              // rail, the sidebar, and the workspace's floor have theirs — so
+              // sidebar and the workspace's floor have theirs — so
               // a live resize cannot cross the second one either. A caller
               // that named a width means that width.
               maxWidth:
                   local.panelMaxWidth === undefined
-                      ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw, calc(100vw - ${String(railFootprint + sidebarOccupied + workspaceMin)}px))`
+                      ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw, calc(100vw - ${String(sidebarOccupied + workspaceMin)}px))`
                       : `${panelMax}px`,
           }
         : local.panelWidth === undefined
@@ -829,14 +822,6 @@ export function AppShell(props: AppShellProps) {
                     className="happy-desktop-app-shell__body"
                     data-happy-desktop-ui="app-shell-body"
                 >
-                    {local.rail ? (
-                        <div
-                            className="happy-desktop-app-shell__rail"
-                            data-happy-desktop-ui="app-shell-rail"
-                        >
-                            {local.rail}
-                        </div>
-                    ) : null}
                     <div
                         className="happy-desktop-app-shell__content"
                         data-happy-desktop-ui="app-shell-content"

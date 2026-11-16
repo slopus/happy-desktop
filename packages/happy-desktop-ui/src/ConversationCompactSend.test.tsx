@@ -463,7 +463,6 @@ it.each([false, true].flatMap((cold) => [false, true].map((title) => ({ cold, ti
                 <div style={{ height: 760, width: 880 }}>
                     <ConversationView
                         conversationId="compact-return"
-                        title={title ? "A titled conversation" : undefined}
                         leadingHeader={
                             title
                                 ? {

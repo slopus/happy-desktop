@@ -79,7 +79,6 @@ function TranscriptWindow(props: { readonly theme: (typeof themes)[number] }) {
                     onToolMediaOpen={noop}
                     running={false}
                     style={{ flex: "1 1 auto", minWidth: 0 }}
-                    title="Theme review"
                     viewerId={happyAgentOwnerAuthor.id}
                 />
             </div>

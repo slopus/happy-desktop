@@ -11,7 +11,6 @@ function shell(theme: "light" | "dark") {
         <ThemeScope mode={theme}>
             <AppShell
                 data-testid={`${theme}-shell`}
-                rail={<div />}
                 titleBar={<WindowDragRegion data-testid={`${theme}-drag`} />}
             >
                 <Button data-testid={`${theme}-primary`} variant="primary">

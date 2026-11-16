@@ -42,9 +42,6 @@
 }
 
 .happy-desktop-app-shell[data-window-controls]
-    .happy-desktop-app-shell__workspace
-    > .happy-channel-header:first-child,
-.happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__panel-content
     > .happy-panel-header:first-child {
     padding-right: calc(16px + var(--happy-desktop-app-shell-caption-inset, 0px));
@@ -66,12 +63,4 @@
 /* Full-window headers and overlays own the whole native caption reservation. */
 .happy-desktop-app-shell[data-window-controls] .happy-lightbox__header {
     padding-right: calc(16px + var(--happy-window-caption-right));
-}
-
-.happy-title-bar[data-window-controls] {
-    padding-right: calc(12px + var(--happy-window-caption-right));
-}
-
-.happy-title-bar__controls {
-    width: env(titlebar-area-x, 78px);
 }

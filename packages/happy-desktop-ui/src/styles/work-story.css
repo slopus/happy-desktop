@@ -91,13 +91,6 @@
     padding: 12px;
 }
 
-.happy-work-tab-controls {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 4px;
-}
-
 /* A sidebar batch in Happy's chat: the note on one line, the moves one click away. */
 .happy-conversation-summary[data-kind="batch"] {
     padding: 0;

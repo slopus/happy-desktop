@@ -423,8 +423,6 @@ function conversation(screen: Screen): ReactNode {
             onRequestAnswer={noop}
             running={false}
             style={{ flex: "1 1 auto", minWidth: 0 }}
-            subtitle="~/Developer/happy-agent"
-            title="Token rotation race"
             viewerId={happyAgentOwnerAuthor.id}
         />
     );

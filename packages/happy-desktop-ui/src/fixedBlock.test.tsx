@@ -9,7 +9,6 @@ import { Sidebar } from "./Sidebar";
 import { Tabs } from "./Tabs";
 import { createRenderer } from "./testing";
 import { TransferZone } from "./TransferZone";
-import { WorkTabControls } from "./WorkTabControls";
 
 /*
  * Everything the window floats over its content is placed from a rectangle or a
@@ -98,7 +97,16 @@ for (const contained of [false, true]) {
                     contained,
                     <>
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                            <WorkTabControls chats={{ items: () => ITEMS, onSelect: () => {} }} />
+                            <MenuButton
+                                align="end"
+                                icon="history"
+                                items={ITEMS}
+                                label="Show chats"
+                                menuLabel="Chats"
+                                menuWidth={300}
+                                onSelect={() => {}}
+                                overlay
+                            />
                         </div>
                         <div style={{ display: "flex", flex: "1 1 0%" }} />
                         <div style={{ display: "flex", paddingLeft: 180 }}>

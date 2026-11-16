@@ -4060,37 +4060,3 @@ export function SystemNotice(props: {
         </div>
     );
 }
-/**
- * The service line for a message the agent took while it was already working.
- * The message itself keeps its own place in the transcript — nothing a reader is
- * looking at moves — so this line is what says when the agent actually picked it
- * up, and it quotes that message so the moment reads on its own.
- */
-export function SteeringNotice(props: {
-    className?: string;
-    quote: string;
-    style?: CSSProperties;
-    text: string;
-}) {
-    return (
-        <div
-            aria-label={`${props.text}: ${props.quote}`}
-            className={["happy-steering-notice", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="steering-notice"
-            role="note"
-            style={props.style}
-        >
-            <SystemNotice
-                className="happy-steering-notice__line"
-                icon="arrow-right"
-                text={props.text}
-            />
-            <blockquote
-                className="happy-steering-notice__quote"
-                data-happy-desktop-ui="steering-notice-quote"
-            >
-                {props.quote}
-            </blockquote>
-        </div>
-    );
-}

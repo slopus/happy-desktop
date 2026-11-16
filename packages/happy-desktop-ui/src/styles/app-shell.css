@@ -1,12 +1,12 @@
 /*
  * AppShell — Happy desktop window composition.
  *
- * Flat native-style surfaces fill the desktop window. The title bar, rail,
+ * Flat native-style surfaces fill the desktop window. The title bar,
  * navigation, workspace, and optional inspector meet on shared hairlines rather
  * than floating as separate rounded cards.
  *
- * Happy's native desktop minimum is 720×640. At that width the 64px rail and
- * two 250px side lanes leave a real 140px workspace; the resize hit lanes
+ * Happy's native desktop minimum is 720×640. At that width the side lanes
+ * still leave a real 140px workspace; the resize hit lanes
  * overlay the joins instead of consuming more room.
  */
 
@@ -439,7 +439,6 @@
  * swallowed pointer input. Interactive descendants opt out explicitly.
  */
 .happy-desktop-app-shell[data-window-controls] .happy-sidebar__header,
-.happy-desktop-app-shell[data-window-controls] .happy-channel-header,
 .happy-desktop-app-shell[data-window-controls] .happy-panel-header,
 .happy-desktop-app-shell__reveal[data-window-controls] {
     -webkit-app-region: drag;
@@ -447,17 +446,17 @@
 }
 
 /* Rule 1 in force. A tab strip is window chrome only where there is no header
-   above it; nested under a channel header it is an ordinary control surface, and
+   above it; nested under a header it is an ordinary control surface, and
    making it draggable reclaimed the top of every menu that opened downwards out
    of that header. The test is "no header before it", not `:first-child`: the
    workspace keeps an always-mounted, usually empty lifecycle lane ahead of its
-   strip, so `:first-child` never matched once the channel header was removed and
+   strip, so `:first-child` never matched and
    the main band, with or without tabs, stopped moving the window. The side
    panel's strip heads its own column the same way, and the pane toggle's box
    beside it is chrome around one button. */
 .happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__workspace
-    > .happy-tabbed-pane:not(:is(.happy-channel-header, .happy-panel-header) ~ *)
+    > .happy-tabbed-pane:not(.happy-panel-header ~ *)
     > .happy-tabbed-pane__bar,
 .happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__panel-content
@@ -501,10 +500,7 @@
         select,
         textarea,
         [contenteditable="true"]
-    ):is(
-        :not(.happy-tabbed-pane__body *),
-        :is(.happy-channel-header, .happy-panel-header, .happy-tabbed-pane__bar) *
-    ) {
+    ):is(:not(.happy-tabbed-pane__body *), :is(.happy-panel-header, .happy-tabbed-pane__bar) *) {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
@@ -526,8 +522,7 @@
    opened from any header rather than one call site's control. */
 .happy-desktop-app-shell[data-window-controls] .happy-menu,
 .happy-desktop-app-shell[data-window-controls] .happy-menu-button__popover,
-.happy-desktop-app-shell[data-window-controls] .happy-agent-control__popover,
-.happy-desktop-app-shell[data-window-controls] .happy-channel-header__menu-popover {
+.happy-desktop-app-shell[data-window-controls] .happy-agent-control__popover {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
@@ -539,7 +534,6 @@
    screen too, so the rows below keep their place as the lights come and go and
    nothing sits on the top edge where macOS slides its menu bar down. */
 .happy-desktop-app-shell[data-window-controls] .happy-sidebar__header,
-.happy-desktop-app-shell[data-window-controls] .happy-channel-header,
 .happy-desktop-app-shell[data-window-controls] .happy-panel-header {
     height: var(--happy-window-controls-height);
 }
@@ -634,7 +628,6 @@
 
 /* Same reservation on whichever strip heads the workspace once the sidebar is
    hidden and the traffic lights plus the floating toggle sit over it. */
-.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed] .happy-channel-header,
 .happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
     .happy-desktop-app-shell__workspace
     > .happy-tabbed-pane:first-child
@@ -716,14 +709,6 @@
     min-height: 0;
 }
 
-.happy-desktop-app-shell__rail {
-    box-sizing: border-box;
-    display: flex;
-    align-items: stretch;
-    flex: none;
-    min-height: 0;
-}
-
 .happy-desktop-app-shell__content {
     position: relative;
     box-sizing: border-box;
@@ -796,7 +781,7 @@
        Being an overlay it centres itself rather than inheriting the heading's
        alignment: the 56px sidebar header centres its content on 28px, so this
        28px box hangs at 14px to sit on that same line as the heading beside it
-       and the channel header's icon and title across the divider. */
+       and the header's content across the divider. */
     position: absolute;
     z-index: 2;
     top: 14px;
@@ -943,7 +928,7 @@
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
-    /* At the desktop minimum, the rail and both side lanes leave 140px here. */
+    /* At the desktop minimum, both side lanes leave 140px here. */
     min-width: var(--happy-desktop-app-shell-workspace-min);
     min-height: 0;
 }

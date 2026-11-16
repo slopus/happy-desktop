@@ -282,7 +282,6 @@ export function ArtifactAppModeDesktopPage() {
                         }}
                         running={false}
                         style={{ flex: "1 1 auto", minWidth: 0 }}
-                        title="Paddle game"
                         viewerId={happyAgentOwnerAuthor.id}
                     />
                 </DesktopWindow>

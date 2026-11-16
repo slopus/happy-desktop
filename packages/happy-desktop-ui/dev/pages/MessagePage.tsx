@@ -3,7 +3,7 @@ import type { ConversationAuthor } from "happy-desktop-state";
 import { ConversationEntryView } from "../../src/ConversationEntryView";
 import { DiffSnippet } from "../../src/DiffSnippet";
 import { FileAttachment } from "../../src/FileAttachment";
-import { DayDivider, Message, MessageList, SteeringNotice, SystemNotice } from "../../src/Message";
+import { DayDivider, Message, MessageList, SystemNotice } from "../../src/Message";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 import {
     mediaImagePanorama,
@@ -594,29 +594,6 @@ export function MessagePage() {
                         </>,
                     )}
                     <DimensionRule label="680 px frame · icon faint · refs at text-secondary weight 500" />
-                </div>
-            </Specimen>
-
-            <Specimen
-                detail="The service line for a message the agent took mid-run, quoting that message so the moment reads on its own"
-                label="SteeringNotice — steering applied"
-                number="14"
-                stage="app"
-            >
-                <div style={column}>
-                    {channelFrame(
-                        <>
-                            <SteeringNotice
-                                quote="Also check the retry budget before you touch the scheduler."
-                                text="@ada steered @fixer"
-                            />
-                            <SteeringNotice
-                                quote="stop after the migration"
-                                text="@bob steered @fixer"
-                            />
-                        </>,
-                    )}
-                    <DimensionRule label="line at 13/20 · quote capped at 560 px, centered" />
                 </div>
             </Specimen>
 

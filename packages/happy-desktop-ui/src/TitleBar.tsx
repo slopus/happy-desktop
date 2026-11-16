@@ -1,5 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
-import { type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
+import { type CSSProperties, type HTMLAttributes } from "react";
 import { KeyCap } from "./Badge";
 import type { Dimension } from "./dimensions";
 import { toCssDimension } from "./dimensions";
@@ -102,85 +102,5 @@ export function SearchField(props: SearchFieldProps) {
                 />
             )}
         </div>
-    );
-}
-type TitleBarBaseProps = {
-    /** Left slot, e.g. a workspace crumb. */
-    leading?: ReactNode;
-    /** Reserve 78px at the left edge for native macOS traffic lights. */
-    showWindowControls?: boolean;
-    /** Right slot for actions. */
-    trailing?: ReactNode;
-};
-/** Editable search well that reports typing through `onSearchChange`. */
-export type TitleBarEditableProps = TitleBarBaseProps & {
-    onSearchChange: (value: string) => void;
-    onSearchOpen?: never;
-    searchPlaceholder?: string;
-    searchValue: string;
-};
-/** Opener search well (read-only) that invokes `onSearchOpen` on click/Enter. */
-export type TitleBarOpenerProps = TitleBarBaseProps & {
-    onSearchOpen: () => void;
-    onSearchChange?: never;
-    searchPlaceholder?: string;
-    searchValue: string;
-};
-/** Title bar without a centered search well. */
-export type TitleBarPlainProps = TitleBarBaseProps & {
-    onSearchChange?: never;
-    onSearchOpen?: never;
-    searchPlaceholder?: never;
-    searchValue?: never;
-};
-/** The search well is editable, a palette opener, or omitted entirely. */
-export type TitleBarProps = TitleBarEditableProps | TitleBarOpenerProps | TitleBarPlainProps;
-/**
- * 56px window title bar: draggable app-owned chrome under the transparent
- * native title bar, with an optional centered 420px-max SearchField between
- * two 1fr slots.
- */
-export function TitleBar(props: TitleBarProps) {
-    const searchOpen = "onSearchOpen" in props ? props.onSearchOpen : undefined;
-    const searchChange = "onSearchChange" in props ? props.onSearchChange : undefined;
-    const searchValue = ("searchValue" in props ? props.searchValue : "") ?? "";
-    const hasSearch = searchOpen !== undefined || searchChange !== undefined;
-    return (
-        <header
-            className="happy-title-bar"
-            data-happy-desktop-ui="title-bar"
-            data-window-controls={props.showWindowControls ? "" : undefined}
-        >
-            <div className="happy-title-bar__leading" data-happy-desktop-ui="title-bar-leading">
-                {props.showWindowControls ? (
-                    <span
-                        aria-hidden="true"
-                        className="happy-title-bar__controls"
-                        data-happy-desktop-ui="title-bar-controls"
-                    />
-                ) : null}
-                {props.leading}
-            </div>
-            {hasSearch ? (
-                <div className="happy-title-bar__center" data-happy-desktop-ui="title-bar-center">
-                    {searchOpen ? (
-                        <SearchField
-                            onOpen={searchOpen}
-                            placeholder={props.searchPlaceholder}
-                            value={searchValue}
-                        />
-                    ) : (
-                        <SearchField
-                            onChange={searchChange!}
-                            placeholder={props.searchPlaceholder}
-                            value={searchValue}
-                        />
-                    )}
-                </div>
-            ) : null}
-            <div className="happy-title-bar__trailing" data-happy-desktop-ui="title-bar-trailing">
-                {props.trailing}
-            </div>
-        </header>
     );
 }

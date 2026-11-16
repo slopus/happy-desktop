@@ -68,11 +68,6 @@
     border-bottom: 1px solid var(--divider);
 }
 
-.happy-agent-panel-files > .happy-file-panel {
-    flex: 1 1 0%;
-    height: auto;
-}
-
 .happy-agent-client__banner {
     display: flex;
     padding: 8px 12px 0;

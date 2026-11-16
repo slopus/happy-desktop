@@ -5,12 +5,21 @@ import type { OnboardingStage } from "../../src/OnboardingSteps";
 import { ThemeScope } from "../../src/ThemeScope";
 import type { WelcomeSlide } from "../../src/WelcomeDeck";
 import { WelcomeScreen } from "../../src/WelcomeScreen";
-import { WindowsSandboxSetup } from "../../src/WindowsSandboxSetup";
+import {
+    windowsSandboxSetupPage,
+    type WindowsSandboxSetupProps,
+} from "../../src/WindowsSandboxSetup";
+import { SetupPage } from "../../src/SetupPage";
 import { SplashCover } from "../../src/SplashCover";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import type { DesktopMobilePairingOptions } from "../../src/DesktopMobileSetup";
 import { direct, relayWaiting } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
+
+/** The sandbox step drawn alone, the way the flow's retained `SetupPage` draws it. */
+function WindowsSandboxSetup(props: WindowsSandboxSetupProps) {
+    return <SetupPage {...windowsSandboxSetupPage(props)} />;
+}
 
 /** The page plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-014";

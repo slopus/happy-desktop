@@ -1,7 +1,3 @@
-import { useState } from "react";
-import { Icon } from "../../src/Icon";
-import { LoadingSwap } from "../../src/LoadingSwap";
-import { Switch } from "../../src/Switch";
 import {
     SPINNER_FRAMES,
     SPINNER_VARIANTS,
@@ -89,57 +85,6 @@ const ascii: Record<string, Record<string, string>> = {
 const tones: SpinnerTone[] = ["default", "muted", "accent"];
 
 /* Square edge paired with the largest Icon size that fits it. */
-const swapSizes = [
-    { box: 16, glyph: 12 },
-    { box: 20, glyph: 16 },
-    { box: 24, glyph: 18 },
-    { box: 32, glyph: 20 },
-] as const;
-
-/*
- * The one interactive fixture on this page: LoadingSwap only proves its
- * contract when `loading` actually changes, so the specimen owns the flag and
- * hands it to every sample.
- */
-function LoadingSwapSpecimen() {
-    const [loading, setLoading] = useState(true);
-    return (
-        <div style={card}>
-            <Switch
-                checked={loading}
-                label="loading"
-                description="Toggle to cross-fade every square below; a square that mounts loading shows its spinner instantly."
-                onChange={setLoading}
-            />
-            <div style={row}>
-                {(["braille-2", "braille-sand", "arc", "blocks"] as SpinnerVariant[]).map(
-                    (variant) => (
-                        <div key={variant} style={{ ...cell, minWidth: "auto" }}>
-                            <LoadingSwap loading={loading} variant={variant}>
-                                <Icon name="check-circle" size={20} />
-                            </LoadingSwap>
-                            <span style={caption}>{variant}</span>
-                        </div>
-                    ),
-                )}
-                {swapSizes.map(({ box, glyph }) => (
-                    <div key={box} style={{ ...cell, minWidth: "auto" }}>
-                        <LoadingSwap loading={loading} size={box} tone="accent">
-                            <Icon name="check-circle" size={glyph} />
-                        </LoadingSwap>
-                        <span style={caption}>{box} px square</span>
-                    </div>
-                ))}
-                <div style={{ ...cell, minWidth: "auto" }}>
-                    <LoadingSwap loading={loading} tone="muted" />
-                    <span style={caption}>no content</span>
-                </div>
-            </div>
-            <DimensionRule label="Square box · both states centred · 160 ms cross-fade" />
-        </div>
-    );
-}
-
 function VariantCell(props: { variant: SpinnerVariant }) {
     return (
         <div style={cell}>
@@ -266,15 +211,6 @@ export function SpinnerPage() {
                         <Spinner key={variant} tone="inverse" variant={variant} />
                     ))}
                 </div>
-            </Specimen>
-
-            <Specimen
-                detail="One square, two states · CSS transition, so a square that mounts loading is instant"
-                label="LoadingSwap — toggle"
-                number="06"
-                stage="surface"
-            >
-                <LoadingSwapSpecimen />
             </Specimen>
 
             <Specimen

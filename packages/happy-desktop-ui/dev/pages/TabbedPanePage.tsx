@@ -5,7 +5,6 @@ import { MenuButton } from "../../src/MenuButton";
 import { type MenuItem } from "../../src/Menu";
 import { TabbedPane } from "../../src/TabbedPane";
 import { type TabItem } from "../../src/Tabs";
-import { WorkTabControls } from "../../src/WorkTabControls";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -30,36 +29,6 @@ const historyItems: MenuItem[] = [
     { id: "b", kind: "item", label: "Address sessions by URL", icon: "history" },
 ];
 
-/** A workspace's chats as the band's menu lists them: open first, then closed, each with when. */
-const chatItems: MenuItem[] = [
-    { kind: "label", label: "Open" },
-    { id: "chat:a", kind: "item", label: "Refactor the router", icon: "chat", detail: "now" },
-    {
-        id: "chat:b",
-        kind: "item",
-        label: "Address local sessions by URL through a cloud-shaped router",
-        icon: "chat",
-        detail: "12m",
-    },
-    { kind: "separator" },
-    { kind: "label", label: "Closed" },
-    {
-        id: "chat:c",
-        kind: "item",
-        label: "Fix the flaky upload test",
-        icon: "archive",
-        detail: "3h",
-    },
-    {
-        id: "chat:d",
-        kind: "item",
-        label: "Rebuild the composer model control",
-        icon: "archive",
-        detail: "Tue",
-    },
-    { id: "chat:e", kind: "item", label: "Weekly plan usage", icon: "archive", detail: "10/19" },
-];
-
 function Body(props: { title: string }) {
     return (
         <EmptyState
@@ -79,7 +48,6 @@ function Pane(props: {
     withClose?: boolean;
     withReorder?: boolean;
     withTrailing?: boolean;
-    withWorkControls?: boolean;
 }) {
     return (
         <div
@@ -111,9 +79,7 @@ function Pane(props: {
                 onSelect={() => {}}
                 tabs={props.tabs}
                 trailing={
-                    props.withWorkControls ? (
-                        <WorkTabControls chats={{ items: () => chatItems, onSelect: () => {} }} />
-                    ) : props.withTrailing ? (
+                    props.withTrailing ? (
                         <MenuButton
                             align="end"
                             icon="history"
@@ -191,17 +157,6 @@ export function TabbedPanePage() {
                         <Pane active="one" tabs={sessionTabs} withAction withTrailing />
                         <Pane active="one" tabs={longTabs} withAction withTrailing />
                         <DimensionRule label="trailing margin-left auto · pad 0 16 0 8 · gap 4" />
-                    </div>
-                </Specimen>
-                <Specimen
-                    detail="the band's own controls: the workspace's chats, open and closed. The menu reads its rows when it opens; Escape and the close chord close it, never the tab behind it"
-                    label="Chats menu"
-                    number="T-08"
-                    stage="app"
-                >
-                    <div style={{ padding: "24px" }}>
-                        <Pane active="one" tabs={sessionTabs} withClose withWorkControls />
-                        <DimensionRule label="28 square · popover 300, end aligned · time 12px, whole; title ellipsis" />
                     </div>
                 </Specimen>
                 <Specimen

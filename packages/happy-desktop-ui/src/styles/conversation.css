@@ -1,5 +1,5 @@
 /*
- * ConversationView: the assembled conversation surface — header status, entry
+ * ConversationView: the assembled conversation surface — entry
  * list and the composer dock with its `/` palette.
  * Layout is flexbox throughout; colors and type come only from theme roles.
  */
@@ -12,34 +12,6 @@
     min-height: 0;
     container-type: size;
     background: var(--surface);
-}
-
-.happy-conversation__status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.happy-conversation__status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--text-secondary);
-}
-
-.happy-conversation__status[data-running] {
-    color: var(--box-warning-text);
-}
-
-.happy-conversation__status[data-running] .happy-conversation__status-dot {
-    background: var(--box-warning-text);
-}
-
-.happy-conversation__status-elapsed {
-    font-family: var(--happy-font-mono);
-    font-size: 11px;
 }
 
 /*
@@ -326,73 +298,6 @@
     overflow-wrap: anywhere;
     text-align: left;
     white-space: pre-wrap;
-}
-
-/*
- * Floating conversation dock — the composer over an expanded panel.
- *
- * It leaves the flow on purpose (an overlay, not a row): the surface underneath
- * keeps its full height, so nothing reflows or loses its last lines when the
- * dock appears. Only the dock takes pointer input; the faded band above it
- * belongs to the surface it is floating over.
- */
-.happy-floating-dock {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    pointer-events: none;
-}
-
-/* In a panel footer the composer itself occupies its real height in the flex
-   column. Only the fade below is overlaid, so the input covers no content and
-   no matching spacer or padding is introduced. */
-.happy-floating-dock[data-placement="footer"] {
-    position: relative;
-    right: auto;
-    bottom: auto;
-    left: auto;
-    width: 100%;
-}
-
-/* Carries the surface colour up behind the dock so text scrolling under it
-   fades out instead of being sliced by a hard edge. The fade is an alpha mask
-   over a solid surface fill rather than a gradient to `transparent`: every
-   engine interpolates a colour gradient towards transparent *black*, which
-   would tint the fade grey in light mode. In a mask only the alpha channel is
-   read, so the two stops here are opacity, not colour. */
-.happy-floating-dock__scrim {
-    flex: none;
-    height: 72px;
-    background: var(--surface);
-    -webkit-mask-image: linear-gradient(to bottom, transparent, black);
-    mask-image: linear-gradient(to bottom, transparent, black);
-}
-
-/* Footer placement removes the fade from flex flow and hangs it over the final
-   72px of the panel body; the measure below remains the footer's sole height. */
-.happy-floating-dock[data-placement="footer"] .happy-floating-dock__scrim {
-    position: absolute;
-    right: 0;
-    bottom: 100%;
-    left: 0;
-}
-
-/* Stretches its child: the dock centres its own contents at the chat measure,
-   exactly as it does in the conversation flow. */
-.happy-floating-dock__measure {
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    flex: none;
-    width: 100%;
-    background: var(--surface);
-    pointer-events: auto;
 }
 
 /*

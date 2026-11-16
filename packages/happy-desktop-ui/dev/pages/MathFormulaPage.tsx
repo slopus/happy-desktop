@@ -163,7 +163,6 @@ function TranscriptWindow(props: {
                     entries={props.entries}
                     running={false}
                     style={{ flex: "1 1 auto", minWidth: 0 }}
-                    title="Variance of a correlated mean"
                     viewerId={happyAgentOwnerAuthor.id}
                 />
             </div>

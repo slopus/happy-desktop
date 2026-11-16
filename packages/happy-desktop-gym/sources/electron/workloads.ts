@@ -2277,7 +2277,7 @@ const COMPOSER_TYPING_STREAM_ONLY_MS = 3_000;
 const COMPOSER_TYPING_COMPONENTS = {
     composer: ["HappyAgentComposerDock", "ConversationDock", "Composer"],
     transcript: ["MessageList", "ConversationEntryView"],
-    header: ["ChannelHeader", "Tabs"],
+    header: ["Tabs"],
     surface: [
         "ConversationView",
         "HappyAgentWorkspaceSurface",

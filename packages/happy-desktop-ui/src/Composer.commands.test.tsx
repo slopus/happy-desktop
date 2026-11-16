@@ -1,18 +1,14 @@
 import { useState } from "react";
-import { composerStoreCreate } from "happy-desktop-state";
 import { expect, it } from "vitest";
 import { userEvent } from "vitest/browser";
 import "./theme.css";
 import "./styles/button.css";
 import "./styles/command-picker.css";
 import "./styles/composer.css";
-import "./styles/composer-panel.css";
 import "./styles/conversation.css";
 import "./styles/icon.css";
 import { Composer } from "./Composer";
 import type { CommandPickerItem } from "./CommandPicker";
-import { ComposerPanel } from "./ComposerPanel";
-import { ConversationDock } from "./ConversationDock";
 import { createRenderer } from "./testing";
 
 const agentsCommand: CommandPickerItem = {
@@ -62,40 +58,3 @@ it("dismisses slash autocomplete as soon as its suggestion is accepted", async (
     expect(view.container.querySelector('[data-happy-desktop-ui="command-picker"]')).toBeNull();
     expect(document.activeElement).toBe(textarea);
 }, 120_000);
-
-it.each([960, 720])(
-    "aligns an above-composer panel exactly with the input at a %ipx desktop width",
-    async (width) => {
-        const view = createRenderer();
-        const composer = composerStoreCreate(`geometry-${String(width)}`).getState();
-        view.render(
-            () => (
-                <ConversationDock
-                    composer={composer}
-                    composerAboveControl={
-                        <ComposerPanel onClose={() => undefined} title="Session activity">
-                            <div>One uninterrupted activity surface</div>
-                        </ComposerPanel>
-                    }
-                    onComposerSend={() => undefined}
-                    onComposerValueChange={() => undefined}
-                />
-            ),
-            { width, height: 360 },
-        );
-        await view.ready();
-
-        const panel = view.$('[data-happy-desktop-ui="composer-panel"]');
-        const composerBox = view.$('[data-happy-desktop-ui="composer"]');
-        expect(panel.bounds()).toMatchObject({
-            x: composerBox.bounds().x,
-            width: composerBox.bounds().width,
-        });
-        expect(
-            view
-                .$('[data-happy-desktop-ui="composer-panel-header"]')
-                .computedStyle("border-bottom-width"),
-        ).toBe("0px");
-    },
-    120_000,
-);

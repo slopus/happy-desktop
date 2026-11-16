@@ -129,7 +129,6 @@ async function pageZoomSet(panel: HTMLElement, baseScale: number, zoom: number) 
 function renderConversation(
     count: number,
     withShell = false,
-    withTitle = false,
     expandedMessageIds?: ReadonlySet<string>,
 ) {
     const view = createRenderer();
@@ -325,7 +324,6 @@ function renderConversation(
                     motion="calm"
                     running={running}
                     steeringSendId={steeringSendId}
-                    title={withTitle ? "Conversation" : undefined}
                     viewerId={reader.id}
                 />
             </div>
@@ -608,10 +606,10 @@ it.skipIf(!CSS.supports("field-sizing", "content")).each([false, true])(
 );
 
 // Page zoom is emulated through CDP, which only Chromium has.
-it.skipIf(server.browser !== "chromium").each([false, true])(
-    "keeps a sent message and an inline question in view while zooming and answering it, with header: %s",
-    async (withTitle) => {
-        const { view, send, question } = renderConversation(60, false, withTitle);
+it.skipIf(server.browser !== "chromium")(
+    "keeps a sent message and an inline question in view while zooming and answering it",
+    async () => {
+        const { view, send, question } = renderConversation(60);
         const baseScale = devicePixelRatio;
         try {
             await view.ready();
@@ -820,7 +818,6 @@ it.each([0, 40])(
 it("shows the end of an explicitly expanded send taller than the viewport, then follows its reply", async () => {
     const { view, send, start, stream } = renderConversation(
         10,
-        false,
         false,
         new Set(["sent-message-1"]),
     );

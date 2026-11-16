@@ -169,7 +169,7 @@
  * The bar's own trailing controls, held against its far edge whatever the tabs
  * do. `margin-left: auto` takes the free space the shrinkable scrollport leaves,
  * so a strip with two tabs puts this control in the same column a strip with
- * twenty does — and the 16px gutter is the ChannelHeader's, which is what lines
+ * twenty does — and the 16px gutter is the header band's, which is what lines
  * it up with the header control directly above it.
  */
 .happy-tabbed-pane__trailing {

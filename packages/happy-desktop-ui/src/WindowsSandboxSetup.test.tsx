@@ -15,7 +15,8 @@ import "./styles/icon.css";
 import "./styles/lottie-scene.css";
 import "./styles/vector-icon.css";
 import "./styles/windows-sandbox-setup.css";
-import { WindowsSandboxSetup, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
+import { SetupPage } from "./SetupPage";
+import { windowsSandboxSetupPage, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
 import { createRenderer } from "./testing";
 
 it("keeps the onboarding page and button still while Windows setup waits or needs another attempt", async () => {
@@ -41,13 +42,15 @@ it("keeps the onboarding page and button still while Windows setup waits or need
                 data-testid="frame"
                 style={{ width: 720, height: 640, transform: "translateZ(0)" }}
             >
-                <WindowsSandboxSetup
-                    appearance="light"
-                    state={current}
-                    onContinue={() => {
-                        continued += 1;
-                        publish("waiting");
-                    }}
+                <SetupPage
+                    {...windowsSandboxSetupPage({
+                        appearance: "light",
+                        state: current,
+                        onContinue: () => {
+                            continued += 1;
+                            publish("waiting");
+                        },
+                    })}
                 />
             </div>
         );

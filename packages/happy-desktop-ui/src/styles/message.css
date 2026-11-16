@@ -1458,43 +1458,6 @@
     text-wrap: balance;
 }
 
-/* ---- SteeringNotice ---------------------------------------------------- */
-/*
- * A steering notice is a service line plus the message it announces. The line
- * keeps SystemNotice's exact geometry, so the quote is the only thing added: a
- * centered, muted run at the same 13px/20px rhythm, capped at the reading
- * measure and inset so it reads as spoken by the line above it rather than as
- * a bubble of its own.
- */
-
-.happy-steering-notice {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    align-items: center;
-}
-
-/* The line already owns the notice row's vertical measure; the quote hangs
-   under it, so the line sheds the padding that would double the gap. */
-.happy-steering-notice__line.happy-system-notice {
-    padding-bottom: 4px;
-}
-
-.happy-steering-notice__quote {
-    max-width: 560px;
-    margin: 0 0 16px;
-    padding: 0 20px;
-    font-family: var(--happy-font-ui);
-    font-synthesis: none;
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 20px;
-    color: var(--text-secondary);
-    text-align: center;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-}
-
 /*
  * The assistant-turn hint: mid-turn agent context reads as part of that turn,
  * so it aligns to the message text column and drops to the tighter vertical

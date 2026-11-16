@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { OnboardingSteps } from "./OnboardingSteps";
-import { SetupPage, type SetupPageProps } from "./SetupPage";
+import type { SetupPageProps } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
 
 export type WindowsSandboxSetupState = "before" | "waiting" | "unfinished";
@@ -18,14 +18,9 @@ export interface WindowsSandboxSetupProps {
     onContinue(): void;
 }
 
-/** The Windows-only step after Subscriptions. Rendering never starts setup. */
-export function WindowsSandboxSetup(props: WindowsSandboxSetupProps) {
-    return <SetupPage {...windowsSandboxSetupPage(props)} />;
-}
-
 /**
- * The same step as a setup page, for a flow that draws every step with one
- * retained `SetupPage` so its sky and step bar stay put between steps.
+ * The Windows-only step after Subscriptions, as the props of the one retained
+ * `SetupPage` a flow draws every step with. Rendering never starts setup.
  */
 export function windowsSandboxSetupPage(props: WindowsSandboxSetupProps): SetupPageProps {
     const waiting = props.state === "waiting";

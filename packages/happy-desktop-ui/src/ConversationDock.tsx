@@ -392,53 +392,6 @@ export function ConversationDock(props: ConversationDockProps) {
     );
 }
 
-export type FloatingConversationDockProps = {
-    children: ReactNode;
-    className?: string;
-    "data-testid"?: string;
-    /**
-     * `overlay` leaves the whole dock over its surface. `footer` reserves only
-     * the composer's real height while the fade still reaches over the content
-     * above it, so no spacer or guessed input height is needed.
-     */
-    placement?: "overlay" | "footer";
-    style?: CSSProperties;
-};
-
-/**
- * Floats a `ConversationDock` over a surface that owns its own scrolling — the
- * expanded workspace panel, whose body is a file tree, a diff, or a live
- * terminal.
- *
- * In its default overlay placement the dock leaves the flow deliberately. In a
- * panel footer it reserves only the composer's real height while the gradient
- * still floats over the content above. Either way, only the dock itself takes
- * pointer input — the faded band stays the surface's own.
- */
-export function FloatingConversationDock(props: FloatingConversationDockProps) {
-    return (
-        <div
-            className={["happy-floating-dock", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="floating-dock"
-            data-placement={props.placement === "footer" ? "footer" : undefined}
-            data-testid={props["data-testid"]}
-            style={props.style}
-        >
-            <div
-                aria-hidden="true"
-                className="happy-floating-dock__scrim"
-                data-happy-desktop-ui="floating-dock-scrim"
-            />
-            <div
-                className="happy-floating-dock__measure"
-                data-happy-desktop-ui="floating-dock-measure"
-            >
-                {props.children}
-            </div>
-        </div>
-    );
-}
-
 export type ComposerFooterBarProps = {
     className?: string;
     "data-testid"?: string;

@@ -8,7 +8,7 @@ import {
 } from "./OnboardingSteps";
 import { QRCode } from "./QRCode";
 import { SetupDrift } from "./SetupDrift";
-import { SetupPage, type SetupPageProps } from "./SetupPage";
+import type { SetupPageProps } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
 
 export type DesktopMobileSetupStep =
@@ -143,14 +143,10 @@ export function MobileStoreDownload() {
     );
 }
 
-/** Optional desktop-to-phone setup. All operations and progress arrive through props. */
-export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
-    return <SetupPage {...desktopMobileSetupPage(props)} />;
-}
-
 /**
- * The same steps as setup pages, for a flow that draws every step with one
- * retained `SetupPage` so its sky and step bar stay put between steps.
+ * Optional desktop-to-phone setup, as the props of the one retained `SetupPage`
+ * a flow draws every step with, so its sky and step bar stay put between steps.
+ * All operations and progress arrive through props.
  */
 export function desktopMobileSetupPage(props: DesktopMobileSetupProps): SetupPageProps {
     const { step } = props;

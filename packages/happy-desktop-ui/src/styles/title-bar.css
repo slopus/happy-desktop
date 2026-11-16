@@ -1,15 +1,11 @@
 /*
- * TitleBar + SearchField — 56px native desktop header with a centered 420px
- * search well.
+ * WindowDragRegion + SearchField — the drag target full-window screens put under
+ * the native title bar, and the search well.
  *
- * Contract: bar exactly 56px high (bottom hairline included), grid
- * [leading 1fr] [center max 420px] [trailing 1fr]; the whole bar is a drag
- * region, interactive parts opt out. SearchField: 32px, radius 6, inset bg,
- * hairline border, 14px search icon, 12px text, trailing KeyCap hint.
+ * SearchField: 32px, radius 6, inset bg, hairline border, 14px search icon,
+ * 12px text, trailing KeyCap hint.
  */
 
-.happy-title-bar,
-.happy-title-bar *,
 .happy-window-drag-region,
 .happy-search-field,
 .happy-search-field * {
@@ -35,87 +31,6 @@
     user-select: none;
     -webkit-app-region: drag;
     app-region: drag;
-}
-
-/* ---- TitleBar --------------------------------------------------------- */
-
-.happy-title-bar {
-    display: flex;
-    align-items: center;
-    column-gap: 12px;
-    width: 100%;
-    height: 56px;
-    margin: 0;
-    /* Seamless chrome: no bottom hairline — the title bar and the rail read as
-       one continuous frame, and the inset content card supplies the boundary.
-       The 56px lane centers the 32px search well on integer coordinates. */
-    padding: 0 12px;
-    background: transparent;
-    color: var(--header-tint);
-    font-family: var(--happy-font-ui);
-    /* Explicit chrome text metrics: bare text slotted into the lanes gets a
-       deterministic line box — Gecko's `line-height: normal` builds a taller
-       box for the same font and floats slotted text visibly low. Re-verified
-       at true-2x captures: with the 13px/16px pin the crumb ink centroid
-       drifts cr +0.17 / ff +0.67 / wk +0.62 and all-caps ink cr -0.65 /
-       ff -0.15 / wk -0.19 — every engine inside the 0.75px ceiling. No
-       line-height pins all three tighter: moving the baseline helps
-       caps-heavy ink exactly as much as it hurts x-height-heavy ink. */
-    font-size: 13px;
-    line-height: 16px;
-    font-synthesis: none;
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-app-region: drag;
-    app-region: drag;
-}
-
-/* Traffic-light inset: the 78px reservation starts at the window edge. The
-   Electron host positions the native 14px controls at x=14, y=12 so their
-   visual center lands on this panel's 19px vertical center. */
-.happy-title-bar[data-window-controls] {
-    padding-left: 0;
-}
-
-.happy-title-bar__controls {
-    display: block;
-    flex: none;
-    width: 78px;
-    height: 100%;
-    -webkit-app-region: drag;
-    app-region: drag;
-}
-
-.happy-title-bar__leading,
-.happy-title-bar__trailing {
-    display: flex;
-    /* Equal side lanes (was 1fr | … | 1fr): each takes half the space left of
-       the centered search well, so the well stays centered in the bar. */
-    flex: 1 1 0;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    height: 100%;
-}
-
-.happy-title-bar__trailing {
-    justify-content: flex-end;
-}
-
-.happy-title-bar__center {
-    display: flex;
-    /* Center lane capped at 420px (was minmax(0, 420px)); it never grows past
-       420 and shrinks on a narrow window while the side lanes absorb slack. */
-    flex: 0 1 420px;
-    align-items: center;
-    min-width: 0;
-}
-
-/* Slotted controls stay clickable inside the drag region. */
-.happy-title-bar__leading > :not(.happy-title-bar__controls),
-.happy-title-bar__trailing > * {
-    -webkit-app-region: no-drag;
-    app-region: no-drag;
 }
 
 /* ---- SearchField ------------------------------------------------------ */

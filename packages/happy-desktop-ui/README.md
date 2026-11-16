@@ -11,8 +11,8 @@ fonts so component typography does not depend on host operating-system fonts.
 Run `pnpm blueprint` from the repository root to open the Blueprint component workbench through
 Portless. Its component selector
 navigates between the specimen pages C-001 (Box) through C-017 (Composer): layout and window
-chrome (AppShell, TitleBar, Rail, Sidebar), chat (ChannelHeader, Message/MessageList, Composer),
-agent surfaces (AgentRunCard, ApprovalCard, EventCard, AgentDesk, DiffSnippet), and the primitives
+chrome (AppShell, Sidebar), chat (Message/MessageList, Composer),
+agent surfaces (AgentRunCard, ApprovalCard, AgentDesk, DiffSnippet), and the primitives
 they compose (Icon, Button, Avatar, Badge family).
 
 ```tsx

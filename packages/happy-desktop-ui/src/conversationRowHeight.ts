@@ -445,13 +445,6 @@ const FAILURE_CODE_EXTRA = 32;
 /** Small Button: 28px tall, 10px padding and a 1px border per side, 12/700 at 0.01em. */
 const SMALL_BUTTON_HEIGHT = 28;
 const SMALL_BUTTON_CHROME = 22;
-/* A steering notice keeps the notice row's 16px lead but closes to 4px above the
-   quote it introduces; the quote itself wraps at 560px, inset 20px per side, and
-   closes the row with the notice's usual 16px. */
-const STEERING_LINE_CHROME = 20;
-const STEERING_QUOTE_MEASURE = 560;
-const STEERING_QUOTE_INSET = 40;
-const STEERING_QUOTE_MARGIN = 16;
 /** Transcript request chrome from happy-agent-chat.css / approval-card.css. */
 /* Questions share the agent's 16px/24px prose and column. Options reserve only
    the 18px checkbox and its 12px gap; a free-form reply line has no inner padding. */
@@ -670,24 +663,6 @@ export function noticeRowHeight(
 ): number {
     if (align === "start") return SYSTEM_NOTIFICATION_HEIGHT;
     return NOTICE_CHROME_CENTER + noticeTextHeight(text, width - NOTICE_INSET, cache);
-}
-/** Height of a steering notice: its service line above the message it quotes. */
-export function steeringNoticeRowHeight(
-    text: string,
-    quote: string,
-    width: number,
-    cache?: MessageTextLayoutCache,
-): number {
-    return (
-        STEERING_LINE_CHROME +
-        noticeTextHeight(text, width - NOTICE_INSET, cache) +
-        noticeTextHeight(
-            quote,
-            Math.min(STEERING_QUOTE_MEASURE, width) - STEERING_QUOTE_INSET,
-            cache,
-        ) +
-        STEERING_QUOTE_MARGIN
-    );
 }
 /**
  * The width a message's content column has, which its photos are laid out in:

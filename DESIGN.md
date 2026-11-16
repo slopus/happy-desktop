@@ -152,8 +152,8 @@ Current reference dimensions are:
 | Blueprint specimen grid   | 16 px minor / 80 px major       |
 
 The **surface header row** is the 56 px context strip at the top of a main
-surface or a side panel: `ChannelHeader`, `InfoPanel`, and `ThreadPanel` all use
-it so the chat header and its side panels line up on one baseline. The reusable
+surface or a side panel: `PanelHeader`, `InfoPanel`, and `ThreadPanel` all use
+it so a surface's header and its side panels line up on one baseline. The reusable
 `SURFACE_HEADER_HEIGHT` constant is the single source of truth; a panel that
 composes `Toolbar` for its header passes this height. The bare `Toolbar` default
 (48 px) is the lighter **section toolbar** used inside a page body (admin tables,

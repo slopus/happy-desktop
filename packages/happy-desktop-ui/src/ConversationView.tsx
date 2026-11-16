@@ -31,7 +31,6 @@ import {
     type AgentWaitStatus,
     type AgentWorkingPhase,
 } from "./AgentWorkingStatus";
-import { ChannelHeader } from "./ChannelHeader";
 import {
     authorAvatar,
     ConversationEntryView,
@@ -125,15 +124,6 @@ export type ConversationLeadingHeader = {
 };
 
 export type ConversationViewProps = {
-    /**
-     * Titles this conversation's own 56px header. Omit it when the surface that
-     * hosts this view already names what is open — the local workspace heads a
-     * whole directory and switches sessions with tabs beneath that heading — and
-     * no header renders at all.
-     */
-    title?: string;
-    /** Secondary header line: the working directory, topic, or participants. */
-    subtitle?: string;
     /** True while the agent is working; drives the live activity line. */
     running?: boolean;
     /** The message this client most recently sent during a running turn. */
@@ -236,8 +226,6 @@ export type ConversationViewProps = {
      * transcript fits on screen and they have nothing left to scroll.
      */
     onStartReached?: () => void;
-    /** Header controls composed by the surface owner. */
-    headerActions?: ReactNode;
     /**
      * A modal-class surface (settings dialog, picker) hosted above this one.
      * The owner decides whether it is open; this surface only says where it
@@ -289,8 +277,6 @@ export type ConversationViewProps = {
      * hidden behind another surface, it is not.
      */
     onEntriesSeen?: (viewer: HappyAgentTraceViewer, entryIds: ReadonlySet<string>) => void;
-    /** @deprecated Pending steering now renders as an ordered transcript message. */
-    queued?: readonly { readonly id: string; readonly text: string }[];
     /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens or downloads one linked transcript attachment. */
@@ -541,41 +527,8 @@ function conversationScheduledWait(transcript: readonly ConversationEntry[]): bo
     return waiting;
 }
 
-function elapsedFormat(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    return `${Math.floor(seconds / 60)}m ${(seconds % 60).toString().padStart(2, "0")}s`;
-}
-
 /**
- * The agent's live run state for the header that names what is open. It sits
- * here rather than inside `ConversationView` because a surface whose heading
- * spans a whole directory still shows the open session's activity.
- */
-export function ConversationStatus(props: { elapsedMs?: number; running?: boolean }) {
-    return (
-        <span
-            className="happy-conversation__status"
-            data-happy-desktop-ui="conversation-status"
-            data-running={props.running ? "" : undefined}
-        >
-            <span aria-hidden="true" className="happy-conversation__status-dot" />
-            {props.running ? "Running" : "Idle"}
-            {props.running && props.elapsedMs !== undefined ? (
-                <span
-                    className="happy-conversation__status-elapsed"
-                    data-happy-desktop-ui="conversation-elapsed"
-                >
-                    {elapsedFormat(props.elapsedMs)}
-                </span>
-            ) : null}
-        </span>
-    );
-}
-
-/**
- * ConversationView — the assembled conversation surface: a `ChannelHeader` with
- * the title, subtitle, and owner-supplied controls; the virtualized shared
+ * ConversationView — the assembled conversation surface: the virtualized shared
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
  * the body; and the owner's `dock` under them, usually a `ConversationDock`
  * holding the shared `Composer`. A running turn keeps one minimal `AgentWorkingStatus` in the
@@ -1047,23 +1000,6 @@ export function ConversationView(props: ConversationViewProps) {
             data-testid={props["data-testid"]}
             style={props.style}
         >
-            {props.title === undefined ? null : (
-                <ChannelHeader
-                    actions={
-                        <>
-                            <ConversationStatus
-                                elapsedMs={props.elapsedMs}
-                                running={props.running}
-                            />
-                            {props.headerActions}
-                        </>
-                    }
-                    icon="spark"
-                    title={props.title}
-                    topic={props.subtitle}
-                />
-            )}
-
             {props.notice ? (
                 <div
                     className="happy-conversation__notice"

@@ -1,5 +1,4 @@
 import { Button } from "../../src/Button";
-import { ChannelHeader } from "../../src/ChannelHeader";
 import { PanelHeader } from "../../src/PanelHeader";
 import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -50,7 +49,7 @@ export function PanelHeaderPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="56px band across the top of a docked panel column, matching ChannelHeader to the pixel so the two columns' headers read as one band and their content starts on the same line. Legitimately empty, and the window's drag lane on that edge."
+            summary="56px band across the top of a docked panel column, so the columns' headers read as one band and their content starts on the same line. Legitimately empty, and the window's drag lane on that edge."
             title="PanelHeader"
         >
             <Specimen
@@ -67,7 +66,7 @@ export function PanelHeaderPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="panel band beside a ChannelHeader: both tab strips start at y = 56"
+                detail="two columns, each under its own band: both tab strips start at y = 56"
                 label="Aligned with the surface beside it"
                 number="02"
                 stage="app"
@@ -75,7 +74,7 @@ export function PanelHeaderPage() {
                 <div style={column}>
                     <div style={columns}>
                         <div style={workspace}>
-                            <ChannelHeader icon="inbox" title="happy" topic="~/happy" />
+                            <PanelHeader>happy</PanelHeader>
                             <TabbedPane
                                 activeId="one"
                                 onSelect={() => {}}

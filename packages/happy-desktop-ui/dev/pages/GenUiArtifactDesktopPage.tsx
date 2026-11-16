@@ -353,7 +353,6 @@ function ReleaseChat() {
             }}
             running={false}
             style={{ flex: "1 1 auto", minWidth: 0 }}
-            title="Ship 2.41"
             viewerId={happyAgentOwnerAuthor.id}
         />
     );

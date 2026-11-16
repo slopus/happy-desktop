@@ -4,7 +4,6 @@ import { expect, it } from "vitest";
 import { server, userEvent } from "vitest/browser";
 import { AppShell } from "./AppShell";
 import { Button } from "./Button";
-import { ChannelHeader } from "./ChannelHeader";
 import { PanelHeader } from "./PanelHeader";
 import { Sidebar } from "./Sidebar";
 import { TabbedPane } from "./TabbedPane";
@@ -130,10 +129,6 @@ it("composes Happy's flat desktop shell with clamped navigation and inspector su
             <AppShell
                 data-testid="shell"
                 panel={slot("panel-slot", { background: "var(--surface)" })}
-                rail={slot("rail-slot", {
-                    background: "var(--header-background)",
-                    width: "64px",
-                })}
                 sidebar={slot("sidebar-slot", {
                     background: "var(--groupped-background)",
                     width: "100%",
@@ -164,28 +159,22 @@ it("composes Happy's flat desktop shell with clamped navigation and inspector su
         x: 0,
         y: 0,
     });
-    expect(view.$('[data-happy-desktop-ui="app-shell-rail"]').bounds()).toEqual({
-        height: 744,
-        width: 64,
-        x: 0,
-        y: 56,
-    });
     expect(view.$('[data-happy-desktop-ui="app-shell-content"]').bounds()).toEqual({
         height: 744,
-        width: 1216,
-        x: 64,
+        width: 1280,
+        x: 0,
         y: 56,
     });
     expect(view.$('[data-happy-desktop-ui="app-shell-main"]').bounds()).toEqual({
         height: 744,
-        width: 856,
-        x: 64,
+        width: 920,
+        x: 0,
         y: 56,
     });
     expect(view.$('[data-happy-desktop-ui="app-shell-sidebar"]').bounds()).toEqual({
         height: 744,
         width: 360,
-        x: 64,
+        x: 0,
         y: 56,
     });
     expect(
@@ -204,10 +193,6 @@ it("keeps a workspace-only shell flat and free of legacy card insets", async () 
         () => (
             <AppShell
                 data-testid="bare-shell"
-                rail={slot("bare-rail", {
-                    background: "var(--header-background)",
-                    width: "64px",
-                })}
                 titleBar={slot("bare-title", {
                     background: "var(--header-background)",
                     height: "56px",
@@ -222,7 +207,7 @@ it("keeps a workspace-only shell flat and free of legacy card insets", async () 
     await view.ready();
 
     const main = view.$('[data-testid="bare-shell"] [data-happy-desktop-ui="app-shell-main"]');
-    expect(main.bounds()).toEqual({ height: 744, width: 1216, x: 64, y: 56 });
+    expect(main.bounds()).toEqual({ height: 744, width: 1280, x: 0, y: 56 });
     expect(main.computedStyles(["border-top-width", "border-radius", "padding-bottom"])).toEqual({
         "border-top-width": "0px",
         "border-radius": "0px",
@@ -257,21 +242,24 @@ it("reserves macOS chrome and keeps real desktop header controls clickable", asy
                 }
                 windowControls
             >
-                <ChannelHeader
-                    actions={
-                        <Button
-                            aria-label="Search"
-                            icon="search"
-                            iconOnly
-                            onClick={() => searchClicks++}
-                            size="small"
-                            variant="ghost"
-                        />
-                    }
-                    memberCount={3}
-                    onMembersClick={() => memberClicks++}
-                    title="Checks"
-                />
+                <PanelHeader data-testid="header">
+                    <Button
+                        aria-label="Members"
+                        icon="users"
+                        iconOnly
+                        onClick={() => memberClicks++}
+                        size="small"
+                        variant="ghost"
+                    />
+                    <Button
+                        aria-label="Search"
+                        icon="search"
+                        iconOnly
+                        onClick={() => searchClicks++}
+                        size="small"
+                        variant="ghost"
+                    />
+                </PanelHeader>
             </AppShell>
         ),
         { height: 600, width: 900 },
@@ -282,8 +270,8 @@ it("reserves macOS chrome and keeps real desktop header controls clickable", asy
     expect(view.container.querySelector('[data-happy-desktop-ui="window-drag-region"]')).toBeNull();
     const sidebarHeader = view.$('[data-happy-desktop-ui="sidebar-header"]');
     const logo = view.$('[data-happy-desktop-ui="sidebar-brand-logo"]');
-    const channelHeader = view.$('[data-happy-desktop-ui="channel-header"]');
-    const members = view.$('[data-happy-desktop-ui="channel-header-members"]');
+    const header = view.$('[data-testid="header"]');
+    const members = view.$('button[aria-label="Members"]');
     const search = view.$('button[aria-label="Search"]');
     // The heading clears the native lights (x=14…68) with 16px trailing
     // clearance. A supplied collapse toggle docks independently at the
@@ -292,7 +280,7 @@ it("reserves macOS chrome and keeps real desktop header controls clickable", asy
     expect(logo.bounds().x).toBeGreaterThanOrEqual(84);
     if (server.browser === "chromium") {
         expect(appRegion(sidebarHeader.element)).toBe("drag");
-        expect(appRegion(channelHeader.element)).toBe("drag");
+        expect(appRegion(header.element)).toBe("drag");
         expect(appRegion(members.element)).toBe("no-drag");
         expect(appRegion(search.element)).toBe("no-drag");
     }

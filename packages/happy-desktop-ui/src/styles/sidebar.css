@@ -94,7 +94,7 @@
 
 /*
  * The sidebar's own header band, in the same quiet tone as the header across
- * the divider from it (see channel-header.css): the two bands are one line
+ * the divider from it: the two bands are one line
  * across the window and must not disagree about how loud a heading is.
  */
 .happy-sidebar__title {

@@ -68,7 +68,6 @@ function VideoWindow(props: { readonly id: string; readonly mode: "light" | "dar
                     }}
                     running={false}
                     style={{ flex: "1 1 auto", minWidth: 0 }}
-                    title="Onboarding recordings"
                     viewerId={happyAgentOwnerAuthor.id}
                 />
                 {open ? (

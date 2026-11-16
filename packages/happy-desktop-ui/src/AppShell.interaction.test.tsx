@@ -327,10 +327,6 @@ it("keeps both resized sidebars fully reachable at the minimum desktop width", a
                 panelMinWidth={280}
                 panelMaxWidth={560}
                 panelResizable
-                rail={slot("tight-rail", {
-                    background: "var(--groupped-background)",
-                    width: 64,
-                })}
                 sidebar={slot("tight-sidebar", {
                     background: "var(--groupped-background)",
                     width: "100%",
@@ -364,13 +360,11 @@ it("keeps both resized sidebars fully reachable at the minimum desktop width", a
     const workspace = view.$('[data-happy-desktop-ui="app-shell-workspace"]').bounds();
     const panel = view.$('[data-happy-desktop-ui="app-shell-panel"]').bounds();
 
-    /* 64px rail + 220px sidebar + 140px workspace leaves 296px for the
-       panel, accounting for every pixel of the 720px desktop minimum. */
+    /* 220px sidebar + 140px workspace leaves 360px for the panel,
+       accounting for every pixel of the 720px desktop minimum. */
     expect(sidebar.width).toBe(220);
     expect(workspace.width).toBe(140);
-    // The rail leaves 656px for content. After preserving the sidebar and
-    // workspace minimums, the panel owns the remaining 296px.
-    expect(panel.width).toBe(296);
+    expect(panel.width).toBe(360);
     expect(sidebar.x).toBe(main.x);
     expect(panel.x + panel.width).toBe(content.x + content.width);
 });

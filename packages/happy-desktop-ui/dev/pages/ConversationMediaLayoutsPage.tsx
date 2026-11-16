@@ -64,7 +64,6 @@ function TranscriptWindow(props: {
                     onToolMediaOpen={noop}
                     running={false}
                     style={{ flex: "1 1 auto", minWidth: 0 }}
-                    title="Onboarding screenshots"
                     viewerId={happyAgentOwnerAuthor.id}
                 />
             </div>

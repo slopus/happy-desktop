@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { DesktopMobileSetup } from "../../src/DesktopMobileSetup";
+import { desktopMobileSetupPage, type DesktopMobileSetupProps } from "../../src/DesktopMobileSetup";
+import { SetupPage } from "../../src/SetupPage";
 import { LocalOnboardingScreen } from "../../src/LocalOnboardingScreen";
 import type {
     MobileDirectConnectorState,
@@ -23,6 +24,11 @@ import {
     setupPairingOptions,
     type PairingVariant,
 } from "./mobilePairingSpecimens";
+
+/** One setup step drawn alone, the way the flow's retained `SetupPage` draws it. */
+function DesktopMobileSetup(props: DesktopMobileSetupProps) {
+    return <SetupPage {...desktopMobileSetupPage(props)} />;
+}
 
 /** The page plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-021";
