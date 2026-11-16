@@ -158,6 +158,8 @@ type Shown = {
     readonly ids: readonly string[];
     readonly entries: readonly ConversationEntry[];
     readonly running: boolean;
+    /** The pane's height where a test resizes it; the whole surface otherwise. */
+    readonly paneHeight?: number;
 };
 
 function harness(initial: Shown) {
@@ -196,7 +198,13 @@ function harness(initial: Shown) {
     function Harness() {
         const shown = useSyncExternalStore(subscribe, get, get);
         return (
-            <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: shown.paneHeight ?? "100%",
+                }}
+            >
                 <RetainedViews
                     activeId={shown.activeId}
                     views={shown.ids.map((id) => ({
@@ -280,6 +288,17 @@ function expectAtEnd(h: Harness, label: string) {
         ).toBeLessThanOrEqual(h.viewport().getBoundingClientRect().bottom);
 }
 
+/** The list's own clearance under its last row (px), which is all a follower's end leaves below it. */
+const END_PADDING = 24;
+
+/** The transcript's last row rests on the viewport's lower edge: no blank is held under it. */
+function expectEndAtEdge(h: Harness, label: string) {
+    expectAtEnd(h, label);
+    expect(h.endClearance(), `${label}: blank under the last row`).toBeLessThanOrEqual(
+        END_PADDING + 1,
+    );
+}
+
 /** Shows `a` again and checks it in the commit that shows it and in every frame after. */
 async function showAndHold(h: Harness, check: (label: string) => void, ids = ["a", "b"]) {
     h.set({ activeId: "a", ids });
@@ -335,6 +354,67 @@ it.each(kinds)(
             expectAtEnd(h, `stream ${String(step)}`);
         }
         expect(h.positions.get("a")).toEqual({ type: "bottom" });
+    },
+);
+
+it.each(kinds)(
+    "returns a %s following chat to its end when its pane grew while it was away",
+    async (kind) => {
+        const h = harness({
+            activeId: "a",
+            ids: ["a", "b"],
+            entries: history("a", 16),
+            running: false,
+            paneHeight: 440,
+        });
+        await h.view.ready();
+        await frame();
+        await frame();
+        expectEndAtEdge(h, "opened");
+
+        h.set({ activeId: "b", ids: away(kind) });
+        await frame();
+        expect(h.positions.get("a")).toEqual({ type: "bottom" });
+        // The window is made taller while another chat is on screen.
+        h.set({ paneHeight: 640 });
+        await frame();
+        await frame();
+
+        // Nothing of this chat was on screen to hold still: it comes back at
+        // its end, not above the room the window gained.
+        await showAndHold(h, (label) => expectEndAtEdge(h, label));
+        expect(h.positions.get("a")).toEqual({ type: "bottom" });
+        h.view.destroy();
+    },
+);
+
+it.each(kinds)(
+    "returns a %s following chat to its end, not above blank it held when it was left",
+    async (kind) => {
+        const h = harness({
+            activeId: "a",
+            ids: ["a", "b"],
+            entries: history("a", 16),
+            running: false,
+            paneHeight: 440,
+        });
+        await h.view.ready();
+        await frame();
+        await frame();
+        expectEndAtEdge(h, "opened");
+        // The window grows with the chat on screen: its rows hold still over
+        // the room gained, which is blank under the transcript's end.
+        h.set({ paneHeight: 640 });
+        await frame();
+        await frame();
+        expect(h.positions.get("a")).toEqual({ type: "bottom" });
+
+        h.set({ activeId: "b", ids: away(kind) });
+        await frame();
+        // A view let go is drawn again at its end. One kept comes back there too.
+        await showAndHold(h, (label) => expectEndAtEdge(h, label));
+        expect(h.positions.get("a")).toEqual({ type: "bottom" });
+        h.view.destroy();
     },
 );
 

@@ -1206,6 +1206,9 @@ export function MessageList(props: MessageListProps) {
     const viewportGeometry = useRef({ height: 0, width: 0 });
     const viewportScale = useRef(0);
     const geometryPlacementPending = useRef(false);
+    /* This list's observers have just reattached after a time out of sight —
+       a kept view shown again — and its geometry has not been read back yet. */
+    const returnPending = useRef(false);
     /* The rows the last commit mounted, by key with the index each had there. */
     const mountedRows = useRef<readonly { readonly key: Key; readonly index: number }[]>([]);
     const viewportGeometryCommitCurrent = useRef((_width: number, _height: number) => {});
@@ -2636,9 +2639,38 @@ export function MessageList(props: MessageListProps) {
             return;
         }
         pendingViewportGeometry.current = undefined;
+        const element = list.current;
+        /* A follower shown again is placed as one opened again is: at the end
+           of its transcript as it is now. Blank held under that end belongs to
+           what the reader was watching when they left, and a viewport that
+           grew while the list was out of sight moved nothing they saw, so
+           neither holds the end up off the lower edge. Placed before the new
+           geometry is applied, at the new height, so that transition sees a
+           follower already at its end and adds no blank of its own. */
+        const returned =
+            returnPending.current &&
+            following.current &&
+            initialPositionApplied.current &&
+            element !== null;
+        returnPending.current = false;
+        if (returned) {
+            geometryExtent.current = 0;
+            geometryExtentResized.current = false;
+            virtualContent.current?.style.removeProperty("min-height");
+            pendingFollowerTop.current = undefined;
+            scrollTopWrite(
+                element,
+                Math.max(
+                    0,
+                    estimatedContentHeight() +
+                        geometrySparseInset.current -
+                        nextHeight -
+                        geometryFollowInset.current,
+                ),
+            );
+        }
         const previous = viewportGeometry.current;
         const previouslyFloored = pendingAnchor.current?.floored ?? modelFloored(previous.height);
-        const element = list.current;
         const scale =
             element && nextWidth > 0
                 ? messageListViewportScale(element, nextWidth)
@@ -2661,7 +2693,12 @@ export function MessageList(props: MessageListProps) {
             geometryPlacementPending.current = following.current;
         }
         viewportScale.current = scale;
-        if (previous.width === nextWidth && previous.height === nextHeight && !zoomChanged) return;
+        if (previous.width === nextWidth && previous.height === nextHeight && !zoomChanged) {
+            /* Nothing else places a follower when the box came back as it
+               left; room reserved under its end is asked for again here. */
+            if (returned) scrollBottomFollow(element, nextHeight);
+            return;
+        }
         const nextRowWidth = messageListRowWidth(nextWidth, estimateRowWidth);
         if (rowSizeModel.width === undefined) {
             /* The first report: there is no earlier geometry to keep a reader
@@ -2911,6 +2948,9 @@ export function MessageList(props: MessageListProps) {
         };
         const width = messageListViewportWidth(element);
         const height = messageListViewportHeight(element);
+        /* TanStack observes again each time the list comes back into sight.
+           With a model already built, this is a return, not the first report. */
+        returnPending.current = rowSizeModel.width !== undefined;
         viewportGeometryCommitCurrent.current(width, height);
         reportRect(width, height);
         const geometryChanged: ResizeObserverCallback = (entries) => {
@@ -3422,6 +3462,17 @@ export function MessageList(props: MessageListProps) {
            were still the previous commit's. With nothing to lay out there is
            no second commit to report them, so they are reported here. */
         if (rowModelCurrent()) visibleRowsReport(element);
+        /* Nor is there one to apply a scrollport box read while they were.
+           The first effect left it waiting for the observer's next delivery:
+           after this commit for a list just shown again, and not until the
+           box next changes otherwise. A list shown again is placed in the
+           commit that shows it. */
+        const waiting = pendingViewportGeometry.current;
+        if (waiting && rowModelCurrent()) {
+            const version = rowSizeModel.version;
+            viewportGeometryCommit(waiting.width, waiting.height);
+            if (rowSizeModel.version !== version) return;
+        }
         /* A pending row TanStack has just rendered in view is laid out now,
            before this commit can paint it at its placeholder size. A pending
            overscan row stays offscreen until idle time or a scroll gesture. */
