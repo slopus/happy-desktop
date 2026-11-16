@@ -1,5 +1,5 @@
-import { HAPPY_CLOUD_ACCOUNTS_URL } from "../shared/happyCloud";
 import { CLOUD_WEB_PICKER_URL, cloudWebLogoutNext } from "./cloudWebLogout";
+import { cloudWebOrigins } from "./cloudWebOrigins";
 import { cloudWebLocked, cloudWebRefreshCreate, cloudWebStorageErase } from "./cloudWebRefresh";
 
 export { CLOUD_WEB_PICKER_URL };
@@ -67,9 +67,7 @@ export async function cloudWebSignOut(): Promise<void> {
         credentials: "same-origin",
         headers: { accept: "application/json" },
     }).catch(() => undefined);
-    window.location.assign(
-        await cloudWebLogoutNext(response, new URL(HAPPY_CLOUD_ACCOUNTS_URL).origin),
-    );
+    window.location.assign(await cloudWebLogoutNext(response, cloudWebOrigins.accountsOrigin));
 }
 
 /**
