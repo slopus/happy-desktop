@@ -238,6 +238,7 @@ export {
     type FileBrowserProps,
     type FileBrowserScope,
 } from "./FileBrowser";
+export { FileOpenInTabButton } from "./FileOpenInTab";
 export { FileSplit, FILE_SPLIT_LIST_DEFAULT_WIDTH, type FileSplitProps } from "./FileSplit";
 export { FilePathLabel, type FilePathLabelProps } from "./FilePathLabel";
 export {
