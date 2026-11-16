@@ -239,7 +239,7 @@ export {
     type CommandShortcut,
     type KeyboardShortcut,
 } from "./keyboardShortcut";
-export { WindowShortcuts, type WindowShortcutAction } from "./WindowShortcuts";
+export { WindowEscape, WindowShortcuts, type WindowShortcutAction } from "./WindowShortcuts";
 export type { HtmlPreviewFailure, HtmlPreviewProps, HtmlPreviewRenderer } from "./htmlPreview";
 export {
     INLINE_PAGE_CONTENT_GAP,

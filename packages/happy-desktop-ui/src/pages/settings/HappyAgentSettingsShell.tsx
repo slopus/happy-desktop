@@ -6,6 +6,7 @@ import { IconTile, type IconTileTone } from "../../IconTile";
 import { PanelHeader } from "../../PanelHeader";
 import { ScrollArea } from "../../Scrollbar";
 import { Sidebar, type SidebarSection } from "../../Sidebar";
+import { WindowEscape } from "../../WindowShortcuts";
 
 export interface HappyAgentSettingsCategory {
     readonly id: string;
@@ -118,6 +119,9 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
             >
                 <Box className="happy-agent-settings__content">{props.children}</Box>
             </ScrollArea>
+            {/* Escape takes the same step back as the header's back control,
+                or leaves settings from a category's own page. */}
+            <WindowEscape onEscape={props.onBack ?? props.onClose} />
         </AppShell>
     );
 }

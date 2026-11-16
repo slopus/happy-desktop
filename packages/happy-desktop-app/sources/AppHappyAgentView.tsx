@@ -4148,6 +4148,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                   }
                 : {})}
             onSettingsOpen={props.onSettingsOpen}
+            settingsShortcut={APP_SHORTCUTS.settingsOpen}
         />
     );
     const surfaceCreateSelect = (id: string): void => {
@@ -5423,6 +5424,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                 ]}
                             />
                         ) : null}
+                        {/* Command-comma opens settings from anywhere in the window, as the
+                footer's cog does. Settings answers Escape to come back. */}
+                        <WindowShortcuts
+                            actions={[
+                                {
+                                    run: props.onSettingsOpen,
+                                    shortcut: APP_SHORTCUTS.settingsOpen,
+                                },
+                            ]}
+                        />
                         {/* Cmd-N belongs to the window too: a task is made from wherever
                 the reader is, as the New task row under Search makes one. Bound only
                 while the machine on screen can make one, so an older Happy

@@ -12,6 +12,8 @@ export const APP_SHORTCUTS = {
     panelToggle: commandShortcut("j"),
     panelToggleAlternate: commandShortcut("b", { alt: true }),
     sessionCreate: commandShortcut("t"),
+    /** Opens settings, on the chord every Mac app keeps for its preferences. */
+    settingsOpen: commandShortcut(","),
     /**
      * Folds the window's sidebar away and brings it back. The shell binds it
      * itself; it is named here so the palette's row wears the shell's own cap.
