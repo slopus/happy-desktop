@@ -149,10 +149,11 @@ describe("change tiers in view preferences", () => {
         });
         expect(document?.changeTiers.map((entry) => entry.id)).toEqual(["a", "b", "d"]);
         // The per-project field is not carried forward, so the next write drops it.
+        // The width written is also kept as the one an unsized checkout opens at.
         const written = happyAgentViewPreferencesUpdate(document!, "g" as HappyAgentGroupId, {
             panelWidth: 400,
         });
-        expect(Object.keys(written)).toEqual(["groups", "changeTiers"]);
+        expect(Object.keys(written)).toEqual(["groups", "changeTiers", "panelWidth"]);
         expect(written.changeTiers).toBe(document?.changeTiers);
     });
 
