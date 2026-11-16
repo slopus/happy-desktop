@@ -8073,6 +8073,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 return;
         }
     };
+    /**
+     * The question the archive card asks, naming what goes. Cmd-W and a tab's
+     * close button both land here, often on a tab that is not the one being
+     * read, so a bare "Archive?" left the reader guessing which chat it meant
+     * and whether it was gone for good.
+     */
+    const conversationArchiveQuestion = (
+        target: HappyAgentConversationArchiveConfirmSnapshot,
+    ): { readonly title: string; readonly message: string } => {
+        const name = groupTabs.find((tab) => tab.id === target.conversationId)?.label;
+        const noun = target.kind === "task" ? "task" : "chat";
+        return {
+            title: `Archive this ${noun}?`,
+            message: `${name ? `“${name}” leaves` : "It leaves"} the tabs. Search finds it again.`,
+        };
+    };
     const conversationArchiveConfirmAnswer = () => {
         const target = props.workspace.get().conversationArchiveConfirm;
         props.workspace.conversationArchiveConfirmClose();
@@ -8811,7 +8827,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         props.workspace.conversationArchiveConfirmClose()
                                     }
                                     onConfirm={conversationArchiveConfirmAnswer}
-                                    title="Archive?"
+                                    {...conversationArchiveQuestion(
+                                        workspace.conversationArchiveConfirm,
+                                    )}
                                     tone="warning"
                                 />
                             </ModalOverlay>
