@@ -13,6 +13,7 @@ import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
 import { useFileRevealMenu } from "./FileRevealMenu";
 import { SegmentedControl } from "./SegmentedControl";
+import { Tooltip } from "./Tooltip";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 export type FileEditorProps = {
     className?: string;
@@ -172,7 +173,12 @@ export function FileEditor(props: FileEditorProps) {
                         >
                             <FileTreeFamilyIcon family={family} size={16} />
                         </span>
-                        <FilePathLabel className="happy-file-editor__heading" path={local.path} />
+                        <Tooltip align="start" label={local.path} placement="bottom">
+                            <FilePathLabel
+                                className="happy-file-editor__heading"
+                                path={local.path}
+                            />
+                        </Tooltip>
                     </>
                 )}
                 <span

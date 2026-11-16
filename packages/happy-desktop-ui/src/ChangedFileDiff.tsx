@@ -10,6 +10,7 @@ import { ScrollArea } from "./Scrollbar";
 import { PIERRE_DIFF_HEADER_CSS, PIERRE_PANE_CSS } from "./pierreCodeSurface";
 import { ReviewComment } from "./ReviewComment";
 import { SegmentedControl } from "./SegmentedControl";
+import { Tooltip } from "./Tooltip";
 
 /**
  * How a changed file is being looked at.
@@ -56,8 +57,9 @@ export type ChangedFileDiffProps = {
     oldCacheKey?: string;
     path: string;
     /**
-     * Whether the diff's header names the file. A tab that already names it
-     * leaves the header to the change's counts. Defaults to naming it.
+     * Whether a row above the modes names the file, in every mode. A tab that
+     * already names it leaves the diff's header to the change's counts.
+     * Defaults to naming it.
      */
     pathShown?: boolean;
     /** Stable loaded-document identity used by the edit mode's bounded state cache. */
@@ -389,6 +391,29 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             data-testid={props["data-testid"]}
             style={props.style}
         >
+            {/* The file's name, over every mode alike: the rendered document and
+                the file itself draw no header of their own, and a pane with no
+                tab or row beside it has nothing else that says which file this
+                is. The renderer's mark and title stand down in
+                `PIERRE_DIFF_HEADER_CSS`, so the diff says it once, here. */}
+            {props.pathShown === false ? null : (
+                <div
+                    className="happy-changed-file-diff__title"
+                    data-happy-desktop-ui="changed-file-diff-title"
+                >
+                    <Tooltip align="start" label={props.path} placement="bottom">
+                        <DiffFileTitle
+                            path={props.path}
+                            {...(props.oldPath === undefined || props.oldPath === props.path
+                                ? {}
+                                : { previousPath: props.oldPath })}
+                        />
+                    </Tooltip>
+                    {props.onOpenInTab ? (
+                        <FileOpenInTabButton onClick={() => props.onOpenInTab?.()} />
+                    ) : null}
+                </div>
+            )}
             <div
                 className="happy-changed-file-diff__bar"
                 data-happy-desktop-ui="changed-file-diff-bar"
@@ -452,7 +477,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                             value={props.wrap === true ? "wrap" : "scroll"}
                         />
                     ) : null}
-                    {props.onOpenInTab ? (
+                    {props.onOpenInTab && props.pathShown === false ? (
                         <FileOpenInTabButton onClick={() => props.onOpenInTab?.()} />
                     ) : null}
                 </span>
@@ -494,19 +519,6 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         fileDiff={diff}
                         options={diffOptions}
                         selectedLines={selection}
-                        // The whole header name, ours, through the slot the
-                        // renderer leaves ahead of its own. The renderer's mark
-                        // and title stand down in `PIERRE_DIFF_HEADER_CSS`.
-                        renderHeaderPrefix={() =>
-                            props.pathShown === false ? null : (
-                                <DiffFileTitle
-                                    path={props.path}
-                                    {...(props.oldPath === undefined || props.oldPath === props.path
-                                        ? {}
-                                        : { previousPath: props.oldPath })}
-                                />
-                            )
-                        }
                         {...(lineAnnotations === undefined ? {} : { lineAnnotations })}
                         {...(commenting
                             ? {
