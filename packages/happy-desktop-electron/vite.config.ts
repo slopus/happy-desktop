@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import { lottieLocalWasmPlugin } from "happy-desktop-ui/vite";
 import { browserLocalHappyAgentPlugin } from "./sources/main/browserDevServer";
+import { cloudWebOriginsRead } from "./sources/renderer/cloudWebOrigins";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("./package.json") as { readonly version: string };
@@ -80,6 +81,9 @@ export default defineConfig({
         __HAPPY_ALLOW_SOURCE_AGENT__: JSON.stringify(process.env.HAPPY_ALLOW_SOURCE_AGENT === "1"),
         __HAPPY_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
         __HAPPY_CLOUD_WEB__: JSON.stringify(cloudWeb),
+        // The accounts origin and picker the cloud web app leaves for:
+        // production's unless a local build names its own hosts.
+        __HAPPY_CLOUD_WEB_ORIGINS__: JSON.stringify(cloudWebOriginsRead(process.env)),
         __HAPPY_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
         __HAPPY_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
         // The version this renderer was built as, which is what analytics

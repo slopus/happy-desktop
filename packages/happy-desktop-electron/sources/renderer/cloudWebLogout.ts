@@ -1,5 +1,7 @@
+import { cloudWebOrigins } from "./cloudWebOrigins";
+
 /** Where a person signs out to and switches servers from. */
-export const CLOUD_WEB_PICKER_URL = "https://happybases.com/";
+export const CLOUD_WEB_PICKER_URL = cloudWebOrigins.pickerUrl;
 
 /**
  * Where the page goes once the edge signed it out. The edge names the
