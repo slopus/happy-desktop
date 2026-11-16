@@ -144,7 +144,7 @@ const notice = (failure: ConversationFailure): ConversationServiceNoticeEntry =>
 });
 
 it.each(["light", "dark"] as const)(
-    "frames a usage limit in warning tokens with normal text in %s mode",
+    "draws a usage limit as a plain row with normal text in %s mode",
     async (theme) => {
         const view = createRenderer();
         const failure: ConversationFailure = {
@@ -175,20 +175,13 @@ it.each(["light", "dark"] as const)(
             ".happy-conversation-failure-card__message",
         )!;
         const style = getComputedStyle(
-            card.querySelector<HTMLElement>(".happy-conversation-failure-card__frame")!,
+            card.querySelector<HTMLElement>(".happy-conversation-failure-card__body")!,
         );
-        expect(style.borderTopWidth).toBe("1px");
-        expect(style.borderTopStyle).toBe("solid");
-        expect(style.borderTopColor).toBe(
-            theme === "light" ? "rgb(255, 149, 0)" : "rgb(255, 159, 10)",
-        );
-        expect(style.backgroundColor).toBe(
-            theme === "light" ? "rgb(255, 248, 240)" : "rgba(255, 159, 10, 0.15)",
-        );
+        expect(style.borderTopWidth).toBe("0px");
+        expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
         expect(getComputedStyle(message).color).toBe(
             theme === "light" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
         );
-        expect(style.borderTopLeftRadius).toBe("12px");
         expect(card.getBoundingClientRect().height).toBe(
             modeled(failure, 832, { retry: true, newChat: false, switch: true }),
         );

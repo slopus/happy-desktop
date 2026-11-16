@@ -434,14 +434,9 @@ const CHAT_FRAME_OUTSET = 12;
  * of 14px text, whose glyphs sit 3px into the line.
  */
 const CHAT_FRAME_TEXT_INSET = CHAT_FRAME_OUTSET - 3;
-/**
- * Failure card: the row's 6px above and below, then the frame's inset (its
- * border included) above its message line and below a last line of text. A
- * card that ends on the switch button pads by the full outset below it.
- */
-const FAILURE_CHROME = 2 * 6 + 2 * CHAT_FRAME_TEXT_INSET;
-const FAILURE_CONTROL_END = CHAT_FRAME_OUTSET - CHAT_FRAME_TEXT_INSET;
-/** Failure card: between the message line and the button row, and below that row. */
+/** Failure card: the row's 6px above its message line and below its last line or button. */
+const FAILURE_CHROME = 2 * 6;
+/** Failure card: between the message line and the button row. */
 const FAILURE_SECTION_GAP = 12;
 /** Failure card: between the message line and the record of what was done. */
 const FAILURE_RESOLUTION_GAP = 6;
@@ -1337,8 +1332,7 @@ export function conversationRowHeight(
                             errorTextHeight(layout.assistance.detail, measure, cache?.text);
                     /* The switch button has the row under the message to
                        itself; its main segment gives way rather than wrap. */
-                    if (target)
-                        height += FAILURE_SECTION_GAP + SMALL_BUTTON_HEIGHT + FAILURE_CONTROL_END;
+                    if (target) height += FAILURE_SECTION_GAP + SMALL_BUTTON_HEIGHT;
                     return height;
                 },
             );

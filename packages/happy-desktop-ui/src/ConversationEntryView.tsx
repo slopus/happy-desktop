@@ -176,6 +176,8 @@ export type ConversationEntryViewProps = {
 };
 
 const NOTICE_ICON = { info: "dot", warning: "shield" } as const;
+/** A configuration notice records a setting the turn ran with being changed. */
+const CONFIGURATION_NOTICE_ICON = "settings" as const;
 
 /**
  * Whether a turn has settled into something worth revealing. A running turn
@@ -472,7 +474,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 <SystemNotice
                     align="start"
                     className={props.activityAuthor ? undefined : props.className}
-                    icon={NOTICE_ICON[entry.level]}
+                    icon={
+                        entry.variant === "configuration"
+                            ? CONFIGURATION_NOTICE_ICON
+                            : NOTICE_ICON[entry.level]
+                    }
                     style={props.activityAuthor ? undefined : props.style}
                     text={
                         entry.variant === "configuration" ? entry.text : SYSTEM_NOTIFICATION_LABEL

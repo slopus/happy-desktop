@@ -1,9 +1,10 @@
 /*
  * ConversationFailureCard — a failed turn the client writes from its kind.
  *
- * It wears a warning frame around the turn's recovery actions. The message line holds the
- * message and its own action; one left-aligned row below holds the switch
- * split button and Ask Chief of Staff. Every constant here is mirrored in
+ * It is a plain transcript row, not a framed card: the warning icon's tint is
+ * its only cue, and its lines read like the status and notice rows around it.
+ * The message line holds the message and its own action; one left-aligned row
+ * below holds the switch split button. Every constant here is mirrored in
  * `conversationRowHeight.ts`, which models this card without mounting it.
  */
 
@@ -19,33 +20,19 @@
     padding-right: 0;
 }
 
-/* The frame stands out from that column by the shared chat frame outset on
-   either side, and what it holds sits that same distance inside it on every
-   side, so the icons and text keep the transcript content edge. A 14px glyph
-   sits 3px into its 20px line, so a side that ends on text pads by the frame's
-   text inset; the side the switch button ends on pads by the full outset. The
-   resolution is a sibling of the error row, not nested in its text column:
-   both status icons start on that edge, and so does the switch row. */
-.happy-conversation-failure-card__frame {
+/* The card's lines stack on the transcript's content edge. The resolution is a
+   sibling of the error row, not nested in its text column: both status icons
+   start on that edge, and so does the switch row. */
+.happy-conversation-failure-card__body {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     row-gap: 12px;
     min-width: 0;
-    margin-inline: calc(-1 * var(--happy-chat-frame-outset));
-    padding: calc(var(--happy-chat-frame-text-inset) - 1px)
-        calc(var(--happy-chat-frame-outset) - 1px);
-    border: 1px solid var(--box-warning-border);
-    border-radius: 12px;
-    background: var(--box-warning-background);
-}
-
-.happy-conversation-failure-card__frame[data-ends="control"] {
-    padding-bottom: calc(var(--happy-chat-frame-outset) - 1px);
 }
 
 /* The record of what was done reads as a second line of the message. */
-.happy-conversation-failure-card__frame[data-resolved] {
+.happy-conversation-failure-card__body[data-resolved] {
     row-gap: 6px;
 }
 

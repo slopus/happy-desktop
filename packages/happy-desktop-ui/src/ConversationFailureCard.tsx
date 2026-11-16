@@ -89,9 +89,8 @@ export function ConversationFailureCard(props: ConversationFailureCardProps) {
             style={props.style}
         >
             <div
-                className="happy-conversation-failure-card__frame"
-                data-ends={layout.switchTargets ? "control" : "text"}
-                data-happy-desktop-ui="conversation-failure-frame"
+                className="happy-conversation-failure-card__body"
+                data-happy-desktop-ui="conversation-failure-body"
                 data-resolved={layout.resolution !== undefined ? "" : undefined}
             >
                 <div
