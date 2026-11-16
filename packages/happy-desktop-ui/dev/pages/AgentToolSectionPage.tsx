@@ -231,6 +231,31 @@ const TOOL_FIRST: readonly ConversationEntry[] = [
     call("f5", "bash", "Run the nightly build", "running", 31_000),
 ];
 
+/** A run of many kinds, for a summary too long for its row. */
+const MANY_KINDS: readonly Call[] = [
+    call("k1", "read", "Read compiler head", "success", 4_000),
+    call("k2", "read", "Read tool registry", "success", 9_000),
+    call("k3", "grep", "List numeric constants", "success", 15_000),
+    call("k4", "edit", "Edit read.ts", "success", 21_000),
+    call("k5", "bash", "Run the tool tests", "success", 30_000),
+    call("k6", "web_fetch", "Fetch the release notes", "success", 41_000),
+    call("k7", "glob", "Find every limits file", "success", 52_000),
+    call("k8", "bash", "Run the type checker", "success", 61_000),
+];
+
+/** A finished turn whose only call sat between two things the agent said. */
+const ONE_CALL: Step = {
+    label: "One call",
+    entries: [
+        ASK,
+        INTRO,
+        call("o1", "read", "Read compiler head", "success", 4_000),
+        MIDDLE,
+        turnStatus("status", 198_000),
+    ],
+    running: false,
+};
+
 interface Step {
     readonly label: string;
     readonly entries: readonly ConversationEntry[];
@@ -440,7 +465,7 @@ export function AgentToolSectionPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="One run of tool calls as a single grey transcript line: its latest call while it runs, each new one coming in a character at a time the way a reply arrives in the mobile app, then how long the run took on the same line."
+            summary="One run of tool calls as a single grey transcript line: its latest call while it runs, each new one coming in a character at a time the way a reply arrives in the mobile app, then what it was made of and how long it took on the same line."
             title="AgentToolSection"
         >
             <Specimen
@@ -471,7 +496,7 @@ export function AgentToolSectionPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="The same 32px line · how long the run took, then how many calls it was"
+                detail="The same 32px line · what the run was made of, then how long it took · one call stays itself · under a second, no time"
                 label="Ended"
                 number="ended"
                 stage="surface"
@@ -494,7 +519,29 @@ export function AgentToolSectionPage() {
                             330_000,
                         )}
                     />
-                    <AgentToolSection section={sectionOf(firstRun("success", 1), false)} />
+                    <AgentToolSection section={sectionOf(firstRun("success", 1), false, 4_400)} />
+                    <AgentToolSection
+                        section={sectionOf(
+                            [
+                                call("z1", "read", "Read package.json", "success", 4_000),
+                                call("z2", "read", "Read tsconfig.json", "success", 4_300),
+                            ],
+                            false,
+                            4_600,
+                        )}
+                    />
+                    <AgentToolSection section={sectionOf(MANY_KINDS, false, 75_000)} />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="Too narrow for every kind: the kinds end in an ellipsis, the duration stays"
+                label="Ended, narrow"
+                number="ended-narrow"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", width: 300 }}>
+                    <AgentToolSection section={sectionOf(MANY_KINDS, false, 75_000)} />
+                    <AgentToolSection section={sectionOf(firstRun("success"), false)} />
                 </div>
             </Specimen>
             <FullScreenSpecimen
@@ -553,6 +600,15 @@ export function AgentToolSectionPage() {
                     step={{ label: "Tool-first", entries: TOOL_FIRST, running: true }}
                     testId="tool-first"
                 />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A run of one call ends as that call's line: nothing to sum up."
+                label="Transcript, one call"
+                number={`${componentNumber}.11`}
+                screen="11-one-call-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <Transcript step={ONE_CALL} testId="one-call" />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="The minimum window: the same one line."

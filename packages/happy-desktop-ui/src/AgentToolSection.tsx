@@ -1,6 +1,6 @@
 import { createContext, useState, type CSSProperties, type ReactNode } from "react";
 import type { ConversationToolCall } from "happy-desktop-state";
-import { AgentActivityRow } from "./AgentActivityRow";
+import { AgentActivityRow, agentActivityKindName } from "./AgentActivityRow";
 import { ArrivingText } from "./ArrivingText";
 import type {
     ConversationToolSection,
@@ -29,6 +29,32 @@ export type AgentToolSectionProps = {
  */
 export const ToolCallsGroupedContext = createContext(false);
 
+/** How many kinds of step a summary names before it counts the rest. */
+const KINDS_NAMED = 4;
+
+/**
+ * What a run was made of: each kind of step with how many of it there were,
+ * the most frequent first and otherwise in the order they first ran. A kind
+ * that ran once goes without its number. Past `KINDS_NAMED` kinds the rest
+ * are counted together, so the line ends on a whole word rather than being
+ * cut through one.
+ */
+function sectionKinds(members: readonly ConversationToolSectionEntry[]): readonly string[] {
+    const counts = new Map<string, number>();
+    for (const member of members) {
+        const name = agentActivityKindName(member.activity) ?? "Tool";
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    /* `sort` is stable, so kinds that ran equally often keep their first order. */
+    const kinds = [...counts].sort((left, right) => right[1] - left[1]);
+    const named = kinds.length > KINDS_NAMED ? kinds.slice(0, KINDS_NAMED - 1) : kinds;
+    const rest = kinds.slice(named.length).reduce((total, kind) => total + kind[1], 0);
+    return [
+        ...named.map(([name, count]) => (count > 1 ? `${name} ${String(count)}` : name)),
+        ...(rest > 0 ? [`+${String(rest)} more`] : []),
+    ];
+}
+
 /** The line shows the run summed up rather than one of its calls. */
 const SUMMARY = Symbol("summary");
 
@@ -39,42 +65,51 @@ const SUMMARY = Symbol("summary");
  * new call comes in the way a reply arrives in the mobile app, a character at
  * a time, and replaces the one before it letter by letter: as each place's
  * turn comes, the character that stood there goes and the new one takes it.
- * Once the run ends the summary replaces the last call the same way: how long
- * the run took, then how many calls it was. How a call ended is not this
- * line's news: a failed call reads in the same grey as any other, and the
- * summary counts calls without sorting them. The line is one height
- * throughout, so nothing around it ever moves.
+ * Once the run ends the summary replaces the last call the same way: what the
+ * run was made of, then how long it took, as "Read 4 · Edit 2 · Bash · 3m 12s".
+ * A run of one call is never summed up: it ends as that call's line, at rest,
+ * and history draws it the same way. How a call ended is not this line's
+ * news: a failed call reads in the same grey as any other, and the summary
+ * counts it with its kind. The line is one height throughout, so nothing
+ * around it ever moves.
  */
 export function AgentToolSection(props: AgentToolSectionProps) {
     const section = props.section;
     const latest = section.members.at(-1)!;
-    /* What the line shows: a call, by its entry, or the summary. */
-    const showing = section.live ? latest.id : SUMMARY;
-    /* What this line showed last, and what that replaced. Only a line this
-       component drew can leave: a section first drawn already ended is
-       history, and one first drawn mid-run starts at its latest call.
-       Compared during render, as TypedText compares its own. */
-    const [line, setLine] = useState<{ shown: string | typeof SUMMARY; left?: string }>({
-        shown: showing,
-    });
+    /* What the line shows: a call, by its entry, or the summary. A run of
+       one call is never summed up: that call is all there is to say. */
+    const showing = section.live || section.members.length === 1 ? latest.id : SUMMARY;
+    /* What this line showed last, what that replaced, and whether it is at
+       rest: drawn already ended, as history is, with nothing arriving since.
+       Only a line this component drew can leave, and one first drawn mid-run
+       starts at its latest call. Compared during render, as TypedText
+       compares its own. */
+    const [line, setLine] = useState<{
+        shown: string | typeof SUMMARY;
+        left?: string;
+        rest?: boolean;
+    }>({ shown: showing, ...(section.live ? {} : { rest: true }) });
     if (line.shown !== showing)
         setLine({ shown: showing, ...(line.shown === SUMMARY ? {} : { left: line.shown }) });
     const leaving =
         line.left === undefined
             ? undefined
             : section.members.find((member) => member.id === line.left);
-    const count = section.members.length;
-    /* How long the run took, then how many calls it was. */
-    const facts = [
-        ...(section.durationMs === undefined ? [] : [elapsedTimeFormat(section.durationMs)]),
-        `${String(count)} ${count === 1 ? "tool" : "tools"}`,
-    ].join(" · ");
+    /* What the run was made of, then how long it took. The duration is
+       never what gives way to a narrow row: the kinds end in an ellipsis
+       first. */
+    const kinds = sectionKinds(section.members).join(" · ");
+    /* A run over within the second says no time at all rather than "0s". */
+    const duration =
+        section.durationMs === undefined || section.durationMs < 1_000
+            ? undefined
+            : ` · ${elapsedTimeFormat(section.durationMs)}`;
     const onToolSelect = props.onToolSelect;
     const call = (entry: ConversationToolSectionEntry, state: "current" | "leaving") => (
         <div
             aria-hidden={state === "leaving" ? true : undefined}
             className="happy-tool-section__item"
-            data-arrives=""
+            data-arrives={line.rest === true ? undefined : ""}
             data-arriving-text={state === "leaving" ? "leaving" : undefined}
             data-happy-desktop-ui="tool-section-item"
             data-state={state}
@@ -84,7 +119,7 @@ export function AgentToolSection(props: AgentToolSectionProps) {
             <AgentActivityRow
                 activity={entry.activity}
                 className="happy-tool-section__call"
-                motion="arriving"
+                motion={line.rest === true ? "calm" : "arriving"}
                 {...(onToolSelect && state === "current"
                     ? { onToolSelect: (tool: ConversationToolCall) => onToolSelect(entry.id, tool) }
                     : {})}
@@ -96,7 +131,7 @@ export function AgentToolSection(props: AgentToolSectionProps) {
     );
     const items: ReactNode[] = [];
     if (leaving) items.push(call(leaving, "leaving"));
-    if (section.live) items.push(call(latest, "current"));
+    if (showing !== SUMMARY) items.push(call(latest, "current"));
     else
         items.push(
             <div
@@ -114,7 +149,18 @@ export function AgentToolSection(props: AgentToolSectionProps) {
                     className="happy-tool-section__facts"
                     data-happy-desktop-ui="tool-section-facts"
                 >
-                    {leaving ? <ArrivingText value={facts} /> : facts}
+                    <span className="happy-tool-section__kinds">
+                        {leaving ? <ArrivingText value={kinds} /> : kinds}
+                    </span>
+                    {duration === undefined ? null : (
+                        <span className="happy-tool-section__duration">
+                            {leaving ? (
+                                <ArrivingText lead={Array.from(kinds).length} value={duration} />
+                            ) : (
+                                duration
+                            )}
+                        </span>
+                    )}
                 </span>
             </div>,
         );

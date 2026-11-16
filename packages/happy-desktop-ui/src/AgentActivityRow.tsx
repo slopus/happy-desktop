@@ -303,6 +303,21 @@ function toolVerb(
 /** What `toolVerb` calls a tool it has no word for. */
 const GENERIC_VERBS: ReadonlySet<string> = new Set(["Tool", "Used"]);
 
+/**
+ * The kind of step an activity was, in the word its focused row leads with
+ * once it is done: "Read", "Edit", "Bash". A tool with no such word is named
+ * by its own name, and a step the producer labeled by that label. How the step
+ * ended is left out, so a failed read is still a read. It is what a summary of
+ * several steps counts them by.
+ */
+export function agentActivityKindName(activity: ConversationActivity): string | undefined {
+    if (activity.kind === "labeled") return activity.label;
+    if (activity.kind !== "tool") return undefined;
+    const tool = activity.tool;
+    const verb = toolVerbFocused(toolVerb(tool.toolName, "success", tool.presentation));
+    return GENERIC_VERBS.has(verb) ? humanizeToolName(tool.toolName) : verb;
+}
+
 /** Turns the lifecycle word into the stable action label used by focused rows. */
 function toolVerbFocused(verb: string): string {
     switch (verb) {

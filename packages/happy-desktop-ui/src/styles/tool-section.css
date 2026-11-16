@@ -1,7 +1,7 @@
 /*
  * AgentToolSection: one run of tool calls as a single grey transcript line.
- * Live, the line is the run's latest call; ended, it says how long the run
- * took and how many calls it was. One replaces another letter by letter. Both
+ * Live, the line is the run's latest call; ended, it says what the run was
+ * made of and how long it took. One replaces another letter by letter. Both
  * are one 32px row, so a call arriving and a section ending move nothing
  * around them. Layout is flexbox throughout; colors and type come only from
  * theme roles.
@@ -141,14 +141,36 @@
     color: var(--text-secondary);
 }
 
-/* How long the run took, and how many calls it was. */
+/* What the run was made of, then how long it took. Where the row is too
+   narrow for all of it, the kinds end in an ellipsis and the duration stays. */
 .happy-tool-section__facts {
     display: flex;
-    flex: none;
+    flex: 0 1 auto;
     flex-direction: row;
     align-items: center;
-    gap: 6px;
+    min-width: 0;
     font-variant-numeric: tabular-nums;
+}
+
+.happy-tool-section__kinds {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Its separator opens it, and keeps its space at the start of the box. */
+.happy-tool-section__duration {
+    flex: none;
+    white-space: pre;
+}
+
+/* Arriving, the kinds' characters are the run itself, so the same ellipsis
+   takes the ones that do not fit: as one inline-block, the whole summary
+   would be cut as a single box. */
+.happy-tool-section__kinds .happy-arriving-text {
+    display: inline;
 }
 
 /* How a call ended is not this line's news. A failed call keeps its own verb
