@@ -148,15 +148,25 @@ const CODEX_KEY = `codex\u0000gpt-6.1-sol`;
 const SPARE_KEY = `claude_spare\u0000opus-5-5`;
 
 const before = conversationEntries.slice(0, 3);
-const failed = (failure: ConversationFailure): ConversationEntry => ({
-    kind: "notice",
-    id: "failed",
-    sequence: "30",
-    variant: "notice",
-    level: "error",
-    text: failure.message,
-    failure,
-});
+/** A turn's end as the projection writes it: its footer, then the failure's own card. */
+const failed = (failure: ConversationFailure): readonly ConversationEntry[] => [
+    {
+        kind: "turnStatus",
+        id: "failed-status",
+        sequence: "30",
+        status: "failed",
+        durationMs: 1_000,
+    },
+    {
+        kind: "notice",
+        id: "failed",
+        sequence: "31",
+        variant: "notice",
+        level: "error",
+        text: failure.message,
+        failure,
+    },
+];
 const resetNotice: ConversationEntry = {
     kind: "notice",
     id: "reset",
@@ -237,47 +247,47 @@ const screens: readonly Screen[] = [
     {
         id: "signin-missing",
         label: "Sign-in missing · Retry, the switch and Ask Chief of Staff",
-        entries: [...before, signinMissing],
+        entries: [...before, ...signinMissing],
     },
     {
         id: "signin-missing-no-switch",
         label: "Sign-in missing · no other account to switch to",
-        entries: [...before, signinMissing],
+        entries: [...before, ...signinMissing],
         source: SOURCE_ALONE,
     },
     {
         id: "usage-limit",
         label: "Usage limit · preset to the account with the most week left",
-        entries: [...before, failed(usageLimit)],
+        entries: [...before, ...failed(usageLimit)],
     },
     {
         id: "usage-limit-menu",
         label: "Usage limit · the picker's accounts and usage, codex hovered",
-        entries: [...before, failed(usageLimit)],
+        entries: [...before, ...failed(usageLimit)],
         preview: { menu: { active: CODEX_KEY } },
     },
     {
         id: "usage-limit-menu-spent",
         label: "Usage limit · a spent account hovered",
-        entries: [...before, failed(usageLimit)],
+        entries: [...before, ...failed(usageLimit)],
         preview: { menu: { active: SPARE_KEY } },
     },
     {
         id: "usage-limit-beside-picker",
         label: "Usage limit · the composer's picker open on the same Claude accounts",
-        entries: [...before, failed(usageLimit)],
+        entries: [...before, ...failed(usageLimit)],
         picker: { accounts: "claude", accountHover: "claude" },
     },
     {
         id: "usage-limit-older-daemon",
         label: "Usage limit · a daemon before protocol 32 offers Retry, not a switch",
-        entries: [...before, failed(usageLimit)],
+        entries: [...before, ...failed(usageLimit)],
         olderDaemon: true,
     },
     {
         id: "usage-limit-picked",
         label: "Usage limit · codex picked",
-        entries: [...before, failed(usageLimit)],
+        entries: [...before, ...failed(usageLimit)],
         preview: { target: CODEX_KEY },
     },
     {
@@ -285,7 +295,7 @@ const screens: readonly Screen[] = [
         label: "Usage limit · switched, the card stays in history",
         entries: [
             ...before,
-            failed({
+            ...failed({
                 ...usageLimit,
                 resolution: {
                     action: "switched",
@@ -302,19 +312,19 @@ const screens: readonly Screen[] = [
     {
         id: "no-account-available",
         label: "No account available · every Claude account spent, Codex preset",
-        entries: [...before, noAccount],
+        entries: [...before, ...noAccount],
         source: SOURCE_CLAUDE_SPENT,
     },
     {
         id: "no-account-available-members",
         label: "No account available · each account set aside, and why",
-        entries: [...before, noAccountMembers],
+        entries: [...before, ...noAccountMembers],
         source: SOURCE_CLAUDE_SPENT,
     },
     {
         id: "no-account-available-menu",
         label: "No account available · target list open",
-        entries: [...before, noAccount],
+        entries: [...before, ...noAccount],
         source: SOURCE_CLAUDE_SPENT,
         preview: { menu: {} },
     },
@@ -335,7 +345,7 @@ const screens: readonly Screen[] = [
         label: "Auto-retry · gave up",
         entries: [
             ...before,
-            failed({
+            ...failed({
                 kind: "provider_unavailable",
                 provider: CLAUDE,
                 message: "Claude is overloaded right now.",
@@ -355,7 +365,7 @@ const screens: readonly Screen[] = [
         entries: [
             ...before,
             resetNotice,
-            failed({
+            ...failed({
                 kind: "context_too_long",
                 modelId: "opus-5.5",
                 modelName: "Opus 5.5",
@@ -367,9 +377,9 @@ const screens: readonly Screen[] = [
 
 const statusAlignment: Screen = {
     id: "status-alignment",
-    label: "Failed turn · shared status-row content edge",
+    label: "Failed turn · footer, then the failure card, then the provider row",
     entries: [
-        failed({
+        ...failed({
             ...usageLimit,
             resolution: {
                 action: "switched",
@@ -381,19 +391,12 @@ const statusAlignment: Screen = {
             },
         }),
         {
-            kind: "turnStatus",
-            id: "failed-status",
-            sequence: "31",
-            status: "failed",
-            durationMs: 1_000,
-        },
-        {
             kind: "notice",
             variant: "configuration",
             id: "provider-changed",
             sequence: "32",
             level: "info",
-            text: "Provider selection changed: claude → claude_kirill_for_sms_gmail",
+            text: "Provider selection changed: Current CLI → Claude Kirill For Sms Gmail",
         },
     ],
 };
@@ -459,7 +462,7 @@ export function ConversationFailureFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Failed turns as the client writes them from the failure's kind: the message, then Retry or New chat, the switch and Ask Chief of Staff on its line, or together under it when the line has no room. The switch lists the conversation's model picker's own accounts and live usage, never a list stored with the failure. Reset times are told on the viewer's own clock; this page pins it to Los Angeles. Each viewport is named for `pnpm blueprint:screens`."
+            summary="Failed turns as the client writes them from the failure's kind: after the turn's footer, a card of its own with the message on top and one row of buttons under it — Retry or New chat, the switch, and Ask Chief of Staff. The switch lists the conversation's model picker's own accounts and live usage, never a list stored with the failure. Reset times are told on the viewer's own clock; this page pins it to Los Angeles. Each viewport is named for `pnpm blueprint:screens`."
             title="Conversation failure flow"
         >
             {[
@@ -468,7 +471,7 @@ export function ConversationFailureFlowPage() {
             ].map((window) => (
                 <FullScreenSpecimen
                     key={`status-alignment-${String(window.width)}`}
-                    detail="Only the author avatar hangs in the gutter; status icons share the content edge."
+                    detail="The frame stands out from the text column; the footer, the card's icons and the provider row share the content edge."
                     label={statusAlignment.label}
                     number="00"
                     screen={`00-status-alignment-${String(window.width)}x${String(window.height)}`}

@@ -163,7 +163,7 @@ export function ConversationSwitchButton(props: ConversationSwitchButtonProps) {
                 onClick={() => props.onSwitch?.(current)}
                 size="small"
                 title={conversationFailureSwitchLabel(current)}
-                variant="ghost"
+                variant="secondary"
             >
                 {conversationFailureSwitchShortLabel(current)}
             </Button>
@@ -185,7 +185,7 @@ export function ConversationSwitchButton(props: ConversationSwitchButtonProps) {
                     }
                 }}
                 size="small"
-                variant="ghost"
+                variant="secondary"
             >
                 <Octicon name={open ? "chevron-up" : "chevron-down"} size={12} />
             </Button>

@@ -53,11 +53,12 @@ export interface ConversationFailureCardProps extends ConversationFailureActions
 }
 
 /**
- * A failed turn, written by the client from the failure's kind: the message,
- * then its actions on the same line as quiet text buttons — its own action, the
- * switch split button, and Ask Chief of Staff. Where the line has no room for
- * them they move under the message together. None of them is filled: the row
- * reads as quietly as the rows around it. Once acted on, the card stays in the
+ * A failed turn, written by the client from the failure's kind, as a card of
+ * its own after the turn's footer. It is framed like the question card: a
+ * neutral hairline that stands out from the text column while its content
+ * keeps that column, and the warning icon's tint its only colour. The message
+ * is on top; under it one row of small buttons — its own action, the switch
+ * split button, and Ask Chief of Staff. Once acted on, the card stays in the
  * transcript and records what was done.
  */
 export function ConversationFailureCard(props: ConversationFailureCardProps) {
@@ -108,93 +109,32 @@ export function ConversationFailureCard(props: ConversationFailureCardProps) {
                         className="happy-conversation-failure-card__content"
                         data-happy-desktop-ui="conversation-error-content"
                     >
-                        <div
-                            className="happy-conversation-failure-card__line"
-                            data-happy-desktop-ui="conversation-failure-line"
+                        <span
+                            className="happy-conversation-failure-card__message"
+                            data-happy-desktop-ui="conversation-error-reason"
                         >
-                            <span
-                                className="happy-conversation-failure-card__message"
-                                data-happy-desktop-ui="conversation-error-reason"
-                            >
-                                {conversationFailureMessage(props.failure, clock).map(
-                                    (segment, index) =>
-                                        segment.kind === "text" ? (
-                                            segment.text
-                                        ) : (
-                                            <span
-                                                className="happy-conversation-failure-card__code"
-                                                data-happy-desktop-ui="conversation-failure-code"
-                                                key={`code:${String(index)}`}
-                                            >
-                                                <code className="happy-conversation-failure-card__code-text">
-                                                    {segment.text}
-                                                </code>
-                                                <CopyButton
-                                                    className="happy-conversation-failure-card__copy"
-                                                    label={`Copy ${segment.text}`}
-                                                    text={segment.text}
-                                                />
-                                            </span>
-                                        ),
-                                )}
-                            </span>
-                            {layout.lineAction || layout.switchTargets || layout.assistance ? (
-                                <span
-                                    className="happy-conversation-failure-card__line-actions"
-                                    data-happy-desktop-ui="conversation-failure-line-actions"
-                                >
-                                    {layout.lineAction ? (
-                                        <Button
-                                            className="happy-conversation-failure-card__line-action"
-                                            onClick={
-                                                lineAction === "retry"
-                                                    ? props.onRetry
-                                                    : props.onNewChat
-                                            }
-                                            size="small"
-                                            variant="ghost"
+                            {conversationFailureMessage(props.failure, clock).map(
+                                (segment, index) =>
+                                    segment.kind === "text" ? (
+                                        segment.text
+                                    ) : (
+                                        <span
+                                            className="happy-conversation-failure-card__code"
+                                            data-happy-desktop-ui="conversation-failure-code"
+                                            key={`code:${String(index)}`}
                                         >
-                                            {layout.lineAction.label}
-                                        </Button>
-                                    ) : null}
-                                    {layout.switchTargets ? (
-                                        <ConversationSwitchButton
-                                            {...(props.previewMenu
-                                                ? {
-                                                      defaultOpen: true,
-                                                      ...(props.previewMenu.active === undefined
-                                                          ? {}
-                                                          : {
-                                                                previewActive:
-                                                                    props.previewMenu.active,
-                                                            }),
-                                                  }
-                                                : {})}
-                                            onOpen={props.onSwitchOpen}
-                                            onSwitch={props.onSwitch}
-                                            onTargetChange={props.onTargetChange}
-                                            target={props.target}
-                                            targets={layout.switchTargets}
-                                            usageNow={props.usageNow}
-                                        />
-                                    ) : null}
-                                    {layout.assistance ? (
-                                        <Button
-                                            className="happy-conversation-failure-card__ask"
-                                            disabled={
-                                                layout.assistance.disabled ||
-                                                !props.onAssistanceRequest
-                                            }
-                                            onClick={props.onAssistanceRequest}
-                                            size="small"
-                                            variant="ghost"
-                                        >
-                                            {layout.assistance.label}
-                                        </Button>
-                                    ) : null}
-                                </span>
-                            ) : null}
-                        </div>
+                                            <code className="happy-conversation-failure-card__code-text">
+                                                {segment.text}
+                                            </code>
+                                            <CopyButton
+                                                className="happy-conversation-failure-card__copy"
+                                                label={`Copy ${segment.text}`}
+                                                text={segment.text}
+                                            />
+                                        </span>
+                                    ),
+                            )}
+                        </span>
                         {layout.assistance?.detail ? (
                             <span className="happy-conversation-failure-card__detail">
                                 {layout.assistance.detail}
@@ -202,6 +142,54 @@ export function ConversationFailureCard(props: ConversationFailureCardProps) {
                         ) : null}
                     </div>
                 </div>
+                {layout.lineAction || layout.switchTargets || layout.assistance ? (
+                    <div
+                        className="happy-conversation-failure-card__actions"
+                        data-happy-desktop-ui="conversation-failure-actions"
+                    >
+                        {layout.lineAction ? (
+                            <Button
+                                className="happy-conversation-failure-card__line-action"
+                                onClick={lineAction === "retry" ? props.onRetry : props.onNewChat}
+                                size="small"
+                                variant="secondary"
+                            >
+                                {layout.lineAction.label}
+                            </Button>
+                        ) : null}
+                        {layout.switchTargets ? (
+                            <ConversationSwitchButton
+                                {...(props.previewMenu
+                                    ? {
+                                          defaultOpen: true,
+                                          ...(props.previewMenu.active === undefined
+                                              ? {}
+                                              : {
+                                                    previewActive: props.previewMenu.active,
+                                                }),
+                                      }
+                                    : {})}
+                                onOpen={props.onSwitchOpen}
+                                onSwitch={props.onSwitch}
+                                onTargetChange={props.onTargetChange}
+                                target={props.target}
+                                targets={layout.switchTargets}
+                                usageNow={props.usageNow}
+                            />
+                        ) : null}
+                        {layout.assistance ? (
+                            <Button
+                                className="happy-conversation-failure-card__ask"
+                                disabled={layout.assistance.disabled || !props.onAssistanceRequest}
+                                onClick={props.onAssistanceRequest}
+                                size="small"
+                                variant="ghost"
+                            >
+                                {layout.assistance.label}
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : null}
                 {layout.resolution !== undefined ? (
                     <span
                         className="happy-conversation-failure-card__resolution"

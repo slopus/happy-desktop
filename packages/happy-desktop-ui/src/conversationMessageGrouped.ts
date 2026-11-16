@@ -167,6 +167,24 @@ function answeredQuestionRow(entry: ConversationEntry | undefined): boolean {
     return entry?.kind === "request" && entry.request.kind === "userInput";
 }
 
+/**
+ * Whether this is the failure that ended a turn, standing after that turn's
+ * footer as a card of its own. It belongs to the turn it follows and is not
+ * part of what the agent said, so it never opens an author header.
+ */
+export function conversationFailureFollowsStatus(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    const entry = entries[index];
+    return (
+        entry?.kind === "notice" &&
+        entry.variant === "notice" &&
+        entry.failure !== undefined &&
+        entries[index - 1]?.kind === "turnStatus"
+    );
+}
+
 /** Rows the agent itself produces, and which can therefore open its turn. */
 function agentOwnedRow(entry: ConversationEntry | undefined): boolean {
     return (
@@ -210,6 +228,7 @@ export function conversationAgentRowStartsGroup(
     index: number,
 ): boolean {
     const entry = entries[index];
+    if (conversationFailureFollowsStatus(entries, index)) return false;
     if (entry?.opensGroup) return true;
     // The trace control rides the header, so a row carrying it opens one.
     const trace = entry && agentOwnedRow(entry) ? entryTrace(entry) : undefined;
@@ -245,6 +264,8 @@ export function conversationTurnStatusStartsGroup(
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const entry = entries[cursor];
         if (!entry) break;
+        // A failure card after a status closes that other turn with it.
+        if (conversationFailureFollowsStatus(entries, cursor)) return true;
         if (agentOwnedRow(entry)) return false;
         if (entry.kind === "message") return entry.message.sender?.kind !== "agent";
         // Another turn's status: this one opens everything after it.

@@ -66,8 +66,6 @@ import {
     conversationFailureCardLayout,
     conversationFailureMessage,
     type ConversationFailureClock,
-    conversationFailureSwitchShortLabel,
-    conversationFailureTargetKey,
 } from "./conversationFailureText";
 import type { ConversationSwitchTarget } from "./conversationSwitchTargets";
 import {
@@ -434,27 +432,19 @@ const CHAT_FRAME_OUTSET = 12;
  * of 14px text, whose glyphs sit 3px into the line.
  */
 const CHAT_FRAME_TEXT_INSET = CHAT_FRAME_OUTSET - 3;
-/** Failure card: the row's 6px above its message line and below its last line or button. */
+/** Failure card: the row's 6px above and below its frame. */
 const FAILURE_CHROME = 2 * 6;
-/** Failure card: between the message line and the detail under it. */
+/** Failure card: between the message, the detail under it and the row of buttons. */
 const FAILURE_SECTION_GAP = 12;
 /** Failure card: between the message line and the record of what was done. */
 const FAILURE_RESOLUTION_GAP = 6;
-/** `.happy-conversation-failure-card__line` row gap, between the message and buttons under it. */
-const FAILURE_LINE_GAP = 8;
-/** The same line's 16px column gap, less the 11px the button group starts back by. */
-const FAILURE_LINE_ACTIONS_LEAD = 16 - 11;
-/** Failure card: one 20px line of message, which the 28px buttons hang 4px over. */
-const FAILURE_LINE_HEIGHT = 20;
-/** The switch's 24px chevron segment, less the 6px its label's trailing padding gives up to it. */
-const FAILURE_SWITCH_MENU_WIDTH = 24 - 6;
+/** `.happy-conversation-failure-card__actions` padding under its buttons. */
+const FAILURE_ACTIONS_FOOT = 4;
 /** A command box: 5px padding per side, the 2px gap and the 20px copy button. */
 const FAILURE_CODE_EXTRA = 32;
 /** Small Button: 28px tall, 10px padding and a 1px border per side, 12/700 at 0.01em. */
 const SMALL_BUTTON_HEIGHT = 28;
 const SMALL_BUTTON_CHROME = 22;
-/** `.happy-conversation-failure-card__line-actions` gap between its quiet buttons. */
-const FAILURE_LINE_ACTIONS_GAP = 4;
 /* A steering notice keeps the notice row's 16px lead but closes to 4px above the
    quote it introduces; the quote itself wraps at 560px, inset 20px per side, and
    closes the row with the notice's usual 16px. */
@@ -1278,11 +1268,6 @@ export function conversationRowHeight(
                 ...(context.errorAssistance ? { assistance: context.errorAssistance } : {}),
             });
             const segments = conversationFailureMessage(failure, options.clock ?? {});
-            const target =
-                layout.switchTargets?.find(
-                    (candidate) => conversationFailureTargetKey(candidate) === options.target,
-                ) ?? layout.switchTargets?.[0];
-            const switchLabel = target ? conversationFailureSwitchShortLabel(target) : "";
             return rowHeightCached(
                 cache,
                 entry,
@@ -1291,59 +1276,24 @@ export function conversationRowHeight(
                     String(width),
                     String(lead),
                     segments.map((segment) => `${segment.kind}:${segment.text}`).join("\u0000"),
-                    layout.lineAction?.label ?? "",
-                    switchLabel,
-                    layout.assistance?.label ?? "",
+                    layout.lineAction || layout.switchTargets || layout.assistance ? "actions" : "",
                     layout.assistance?.detail ?? "",
                     layout.resolution ?? "",
                 ].join(":"),
                 () => {
-                    /* The message's own action, the switch and Ask Chief of
-                       Staff follow it on its line while that line has room
-                       for them; otherwise they sit under the message, which
-                       then has the whole measure. */
-                    const lineButtons = [
-                        ...(layout.lineAction
-                            ? [smallButtonWidth(layout.lineAction.label, cache?.text)]
-                            : []),
-                        ...(target
-                            ? [
-                                  smallButtonWidth(switchLabel, cache?.text) +
-                                      FAILURE_SWITCH_MENU_WIDTH,
-                              ]
-                            : []),
-                        ...(layout.assistance
-                            ? [smallButtonWidth(layout.assistance.label, cache?.text)]
-                            : []),
-                    ];
-                    const lineActions =
-                        lineButtons.length === 0
-                            ? 0
-                            : FAILURE_LINE_ACTIONS_LEAD +
-                              lineButtons.reduce((total, button) => total + button, 0) +
-                              (lineButtons.length - 1) * FAILURE_LINE_ACTIONS_GAP;
-                    const messageHeight = (width: number): number =>
+                    let height =
+                        lead +
+                        FAILURE_CHROME +
+                        2 * CHAT_FRAME_TEXT_INSET +
                         errorRichTextHeight(
                             segments.map((segment) =>
                                 segment.kind === "code"
                                     ? { code: segment.text, extraWidth: FAILURE_CODE_EXTRA }
                                     : { text: segment.text },
                             ),
-                            width,
+                            measure,
                             cache?.text,
                         );
-                    const beside =
-                        lineActions > 0 && measure > lineActions
-                            ? messageHeight(measure - lineActions)
-                            : undefined;
-                    let height =
-                        lead +
-                        FAILURE_CHROME +
-                        (lineActions === 0
-                            ? messageHeight(measure)
-                            : beside === FAILURE_LINE_HEIGHT
-                              ? FAILURE_LINE_HEIGHT
-                              : messageHeight(measure) + FAILURE_LINE_GAP + FAILURE_LINE_HEIGHT);
                     if (layout.resolution !== undefined)
                         return (
                             height +
@@ -1354,6 +1304,9 @@ export function conversationRowHeight(
                         height +=
                             FAILURE_SECTION_GAP +
                             errorTextHeight(layout.assistance.detail, measure, cache?.text);
+                    /* The buttons never wrap: the switch gives way instead. */
+                    if (layout.lineAction || layout.switchTargets || layout.assistance)
+                        height += FAILURE_SECTION_GAP + SMALL_BUTTON_HEIGHT + FAILURE_ACTIONS_FOOT;
                     return height;
                 },
             );

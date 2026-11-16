@@ -1,34 +1,50 @@
 /*
  * ConversationFailureCard — a failed turn the client writes from its kind.
  *
- * It is a plain transcript row, not a framed card: the warning icon's tint is
- * its only cue, and its lines read like the status and notice rows around it.
- * The message line holds the message and every action after it. Every constant
- * here is mirrored in
- * `conversationRowHeight.ts`, which models this card without mounting it.
+ * It is a card of its own after the turn's footer, framed like the question
+ * card: a neutral hairline that stands out from the text column by the shared
+ * chat frame outset, while the icon, the message and the buttons keep that
+ * column. The warning icon's tint is its only colour. Every constant here is
+ * mirrored in `conversationRowHeight.ts`, which models this card without
+ * mounting it.
  */
 
-/* The card's row keeps a tool row's 6px above and below and prose's trailing
-   edge, so the column inside it is the transcript's text column. */
+/* The row keeps 6px above and below its frame, and lets the frame stand out
+   from the agent's text column on both sides. */
 .happy-conversation-error-card.happy-conversation-failure-card {
-    padding-right: 64px;
+    padding: 6px calc(64px - var(--happy-chat-frame-outset)) 6px
+        calc(30px - var(--happy-chat-frame-outset));
 }
 
-/* Opening its turn, the card sits in the Message that carries the agent's
-   identity line, which already supplies the text column. */
+/* A failure the turn retried past can open that turn, inside the Message that
+   carries the agent's identity line and already supplies the text column. */
 .happy-message--activity-lead .happy-conversation-error-card.happy-conversation-failure-card {
+    width: auto;
+    margin-right: calc(-1 * var(--happy-chat-frame-outset));
+    margin-left: calc(-1 * var(--happy-chat-frame-outset));
     padding-right: 0;
+    padding-left: 0;
 }
 
-/* The card's lines stack on the transcript's content edge. The resolution is a
-   sibling of the error row, not nested in its text column: both status icons
-   start on that edge, and so does the switch row. */
+/* The warning mark is the card's one colour, in the plain warning token. */
+.happy-conversation-error-card.happy-conversation-failure-card
+    .happy-conversation-error-card__icon {
+    color: var(--box-warning-text);
+}
+
+/* The frame: the question card's hairline, radius and insets. Its sections
+   stack on the text column's edge — the warning icon, the first button and
+   the resolution's icon all start there. */
 .happy-conversation-failure-card__body {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     row-gap: 12px;
     min-width: 0;
+    padding: calc(var(--happy-chat-frame-text-inset) - 1px)
+        calc(var(--happy-chat-frame-outset) - 1px);
+    border: 1px solid var(--divider);
+    border-radius: 12px;
 }
 
 /* The record of what was done reads as a second line of the message. */
@@ -44,21 +60,7 @@
     min-width: 0;
 }
 
-/* The message, then its actions on the same line. A line with no room for both
-   moves the actions under the message as one group, on the text's own edge,
-   and the message keeps the whole measure. The 28px buttons hang 4px above
-   and below their 20px line; outer boxes align at the start so font baseline
-   rounding cannot enlarge the modeled row. */
-.happy-conversation-failure-card__line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 8px 16px;
-    min-width: 0;
-}
-
 .happy-conversation-failure-card__message {
-    flex: 0 1 auto;
     min-width: 0;
     min-height: 20px;
     overflow-wrap: anywhere;
@@ -68,31 +70,20 @@
     line-height: 20px;
 }
 
-/* The message's own action, the switch and Ask Chief of Staff, as quiet text
-   buttons a little apart. Narrower than the three together, the switch gives
-   way and the other two keep their words. Their 28px boxes hang 4px over and under the message's 20px
-   line, so the line keeps the icon's height, and their labels sit on the
-   message's baseline. Button's optical lift centres a label in a filled pill;
-   beside running text it would only raise the label off that baseline. */
-.happy-conversation-failure-card__line-actions {
+/* One row of small buttons under the message, as the question card sets its
+   Submit: from the content edge, with the footer's 4px under them. They never
+   wrap; in a card narrower than the three, the switch's account name gives
+   way and the other two keep their words. */
+.happy-conversation-failure-card__actions {
     display: flex;
-    flex: 0 1 auto;
-    align-items: baseline;
-    gap: 4px;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
-    max-width: calc(100% + 11px);
-    /* A text button's label sits 11px inside its box. Starting the group that
-       far back puts its first word on the text's edge when it is under the
-       message, and 16px after the message when it is beside it. */
-    margin: -4px 0 -4px -11px;
+    padding-bottom: 4px;
 }
 
-.happy-conversation-failure-card__line-actions > .happy-button {
+.happy-conversation-failure-card__actions > .happy-button {
     flex: none;
-}
-
-.happy-conversation-failure-card__line-actions .happy-button {
-    --happy-button-label-y: 0px;
 }
 
 /* A command with its copy button is one unbreakable box on the 20px line. */
@@ -153,8 +144,8 @@
     overflow-wrap: anywhere;
 }
 
-/* The switch split button: two quiet segments, the chevron close after the
-   words it belongs to. The main segment gives way first, ending its account
+/* The switch split button: one outlined button in two segments, the chevron
+   behind a hairline. The main segment gives way first, ending its account
    name in an ellipsis. */
 .happy-conversation-switch {
     display: inline-flex;
@@ -166,7 +157,7 @@
 .happy-conversation-switch .happy-conversation-switch__main {
     flex: 0 1 auto;
     min-width: 0;
-    padding-right: 4px;
+    border-right: 0;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
 }
@@ -183,7 +174,7 @@
 }
 
 .happy-conversation-switch .happy-conversation-switch__menu {
-    width: 24px;
+    width: 28px;
     padding: 0;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
@@ -191,8 +182,7 @@
 
 /* Open: the chevron segment keeps the hover's face while its list is out. */
 .happy-conversation-switch .happy-conversation-switch__menu[data-open] {
-    background: var(--happy-hover-fill);
-    color: var(--text);
+    background-image: linear-gradient(var(--surface-ripple), var(--surface-ripple));
 }
 
 /* Covers the window while the list is open, so a click outside closes it and

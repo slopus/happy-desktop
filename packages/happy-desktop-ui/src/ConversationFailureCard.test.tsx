@@ -144,7 +144,7 @@ const notice = (failure: ConversationFailure): ConversationServiceNoticeEntry =>
 });
 
 it.each(["light", "dark"] as const)(
-    "draws a usage limit as a plain row with normal text in %s mode",
+    "draws a usage limit as a neutral framed card with normal text in %s mode",
     async (theme) => {
         const view = createRenderer();
         const failure: ConversationFailure = {
@@ -177,7 +177,8 @@ it.each(["light", "dark"] as const)(
         const style = getComputedStyle(
             card.querySelector<HTMLElement>(".happy-conversation-failure-card__body")!,
         );
-        expect(style.borderTopWidth).toBe("0px");
+        expect(style.borderTopWidth).toBe("1px");
+        expect(style.borderTopLeftRadius).toBe("12px");
         expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
         expect(getComputedStyle(message).color).toBe(
             theme === "light" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)",
@@ -380,7 +381,7 @@ const buttons = (root: ParentNode) =>
     }));
 
 it.each([360, 720])(
-    "puts Retry, the switch and Ask Chief of Staff on one line, and models the row exactly at %ipx",
+    "puts Retry, the switch and Ask Chief of Staff in one row under the message, and models the card exactly at %ipx",
     async (width) => {
         const view = createRenderer();
         const onSwitch = vi.fn();
@@ -403,27 +404,22 @@ it.each([360, 720])(
         const card = view.$('[data-happy-desktop-ui="conversation-error-card"]')
             .element as HTMLElement;
         expect(buttons(card)).toEqual([
-            { text: "Retry", variant: "ghost", height: 28 },
-            { text: "Switch to claude_work", variant: "ghost", height: 28 },
-            { text: "Choose another account", variant: "ghost", height: 28 },
+            { text: "Retry", variant: "secondary", height: 28 },
+            { text: "Switch to claude_work", variant: "secondary", height: 28 },
+            { text: "Choose another account", variant: "secondary", height: 28 },
             { text: "Ask Chief of Staff", variant: "ghost", height: 28 },
         ]);
-        /* The three share one line, 4px apart. Beside the message they start
-           16px after it, hanging 4px over its 20px line; with no room there
-           they sit 8px under it, Retry's label on the text's own edge. */
+        /* The three share one row 12px under the message, 8px apart, Retry
+           on the content edge the warning icon starts on. */
         const message = view.$('[data-happy-desktop-ui="conversation-error-reason"]').bounds();
+        const icon = view.$('[data-happy-desktop-ui="conversation-error-icon"]').bounds();
         const retry = view.$(".happy-conversation-failure-card__line-action").bounds();
         const split = view.$('[data-happy-desktop-ui="conversation-switch"]').bounds();
         const ask = view.$(".happy-conversation-failure-card__ask").bounds();
-        if (retry.y < message.y + message.height) {
-            expect(retry.x - (message.x + message.width)).toBeCloseTo(5, 1);
-            expect(retry.y + retry.height / 2).toBeCloseTo(message.y + 10, 1);
-        } else {
-            expect(retry.x).toBeCloseTo(message.x - 11, 1);
-            expect(retry.y + retry.height / 2).toBeCloseTo(message.y + message.height + 8 + 10, 1);
-        }
-        expect(split.x - (retry.x + retry.width)).toBeCloseTo(4, 1);
-        expect(ask.x - (split.x + split.width)).toBeCloseTo(4, 1);
+        expect(retry.x).toBeCloseTo(icon.x, 1);
+        expect(retry.y).toBeCloseTo(message.y + message.height + 12, 1);
+        expect(split.x - (retry.x + retry.width)).toBeCloseTo(8, 1);
+        expect(ask.x - (split.x + split.width)).toBeCloseTo(8, 1);
         expect(ask.y).toBe(retry.y);
         // The command copies itself.
         const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
@@ -437,7 +433,7 @@ it.each([360, 720])(
     },
 );
 
-it("keeps the message line's own action quiet when nothing can be switched to", async () => {
+it("offers the message's own action and Ask Chief of Staff when nothing can be switched to", async () => {
     const view = createRenderer();
     const onNewChat = vi.fn();
     const tooLong: ConversationFailure = {
@@ -453,7 +449,7 @@ it("keeps the message line's own action quiet when nothing can be switched to", 
     await view.ready();
     const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
     expect(buttons(card)).toEqual([
-        { text: "New chat", variant: "ghost", height: 28 },
+        { text: "New chat", variant: "secondary", height: 28 },
         { text: "Ask Chief of Staff", variant: "ghost", height: 28 },
     ]);
     card.querySelector<HTMLButtonElement>(".happy-conversation-failure-card__line-action")!.click();
@@ -971,7 +967,7 @@ it("offers Retry alone when the live picker has no other account", async () => {
                 (button) => `${button.textContent}:${(button as HTMLElement).dataset["variant"]}`,
             ),
         )
-        .toEqual(["Retry:ghost"]);
+        .toEqual(["Retry:secondary"]);
 });
 
 it("keeps every account reachable in a short window: the list takes the roomier side and scrolls", async () => {

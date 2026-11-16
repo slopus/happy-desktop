@@ -1102,6 +1102,20 @@ function happyAgentConnectGroupProject(
                         : { finalContextTokens: element.finalContextTokens }),
                     tools: elements.filter((candidate) => candidate.kind === "tool_call").length,
                 });
+                /* The typed failure that ended the turn is not part of what the
+                   turn said: the turn closes on its footer first, and the
+                   failure follows it as a card of its own. A failure the turn
+                   retried past stays where it happened. */
+                for (const ended of entries.filter(
+                    (entry) =>
+                        entry.kind === "notice" &&
+                        entry.variant === "notice" &&
+                        entry.failure !== undefined &&
+                        entry.retry === undefined,
+                )) {
+                    entries.splice(entries.indexOf(ended), 1);
+                    entries.push(ended);
+                }
                 break;
             }
         }
