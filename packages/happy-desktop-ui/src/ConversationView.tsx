@@ -664,6 +664,8 @@ export function ConversationView(props: ConversationViewProps) {
        ended section shows, never the rows or their heights. Like the caches
        here it is written while rendering and never drives a render itself. */
     const [toolSectionMemory] = useState<ConversationToolSectionMemory>(() => new Set());
+    /* The questions this view has shown waiting for an answer, by row key. */
+    const [questionsAskedHere] = useState(() => new Set<string>());
     const rowHeightCache = conversationRowHeightCacheGet(conversationCacheKey);
     conversationRowHeightCachePrune(rowHeightCache, props.entries);
     /* With no turn running, a send waiting on the daemon is next to nothing:
@@ -691,6 +693,24 @@ export function ConversationView(props: ConversationViewProps) {
           )
         : conversationToolSectionsNone(steering.transcript);
     const transcript = toolSections.rows;
+    /* Under Group tool calls an answered question is one line, except one
+       this view showed waiting: the reader answered that card here, and it
+       keeps its place and size while they are still with it, as every row of
+       a watched turn does. Written while rendering, like the section memory. */
+    if (toolCallsGrouped)
+        for (const entry of steering.transcript)
+            if (
+                entry.kind === "request" &&
+                entry.request.kind === "userInput" &&
+                entry.request.status === "pending"
+            )
+                questionsAskedHere.add(entryKey(entry));
+    const questionLine = (entry: ConversationEntry | undefined) =>
+        toolCallsGrouped &&
+        entry?.kind === "request" &&
+        entry.request.kind === "userInput" &&
+        entry.request.status === "answered" &&
+        !questionsAskedHere.has(entryKey(entry));
     // A queued message keeps its entity key and virtual row when Stop ends
     // the turn and when the daemon accepts it into the next one.
     const listEntries = queued.length === 0 ? transcript : [...transcript, ...queued];
@@ -1005,6 +1025,7 @@ export function ConversationView(props: ConversationViewProps) {
             ...(entry !== undefined && toolSections.sections.has(entryKey(entry))
                 ? { toolSection: true }
                 : {}),
+            ...(questionLine(entry) ? { questionLine: true } : {}),
             viewerId: props.viewerId,
             width,
         };
@@ -1153,6 +1174,8 @@ export function ConversationView(props: ConversationViewProps) {
                             }
                             /* A section's row is one line whatever it holds. */
                             if (toolSections.sections.has(entryKey(entry))) return "section";
+                            /* So is an answered question's, under Group tool calls. */
+                            if (questionLine(entry)) return "question-line";
                             const placed = [
                                 ...(inlineLayouts.hidden.get(entryKey(entry)) ?? []),
                             ].join(",");
@@ -1319,6 +1342,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     {...((section) => (section ? { toolSection: section } : {}))(
                                         toolSections.sections.get(entryKey(entry)),
                                     )}
+                                    questionLine={questionLine(entry)}
                                     onDelegationSelect={props.onDelegationSelect}
                                     now={conversationEntryReadsNow(entry) ? props.now : undefined}
                                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}

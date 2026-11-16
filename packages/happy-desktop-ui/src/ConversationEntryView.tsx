@@ -23,6 +23,7 @@ import {
     type AgentActivityMediaRun,
 } from "./AgentActivityRow";
 import { AgentToolSection } from "./AgentToolSection";
+import { AnsweredQuestionLine } from "./AnsweredQuestionLine";
 import type { ConversationMediaRun } from "./conversationMediaRuns";
 import type { ConversationToolSection } from "./conversationToolSections";
 import type { MessageInlineLayouts } from "./conversationInlineLayouts";
@@ -154,6 +155,8 @@ export type ConversationEntryViewProps = {
      * The row then draws the whole run as one section instead of its own call.
      */
     toolSection?: ConversationToolSection;
+    /** Group tool calls: an answered question is one `AnsweredQuestionLine`. */
+    questionLine?: boolean;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -526,26 +529,37 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     }
     if (entry.kind === "request") {
         const lead = props.activityAuthor !== undefined && entry.request.kind === "userInput";
-        const request = (
-            <ConversationRequestView
-                className={lead ? undefined : props.className}
-                data-testid={props["data-testid"]}
-                defaultExpanded={props.activityDefaultExpanded}
-                error={props.requestError}
-                retryAnswers={props.requestRetryAnswers}
-                expanded={props.rowExpanded}
-                {...(props.onRequestAnswer ? { onAnswer: props.onRequestAnswer } : {})}
-                {...(props.onRequestSelectionChange
-                    ? { onSelectionChange: props.onRequestSelectionChange }
-                    : {})}
-                {...(props.requestSelection ? { selection: props.requestSelection } : {})}
-                {...(props.onRequestDecide ? { onDecide: props.onRequestDecide } : {})}
-                pending={props.requestPending}
-                onExpandedChange={props.onRowExpandedChange}
-                request={entry.request}
-                {...(lead ? {} : { style: props.style })}
-            />
-        );
+        /* Under Group tool calls an answered question is one line. */
+        const request =
+            props.questionLine &&
+            entry.request.kind === "userInput" &&
+            entry.request.status === "answered" ? (
+                <AnsweredQuestionLine
+                    className={lead ? undefined : props.className}
+                    data-testid={props["data-testid"]}
+                    request={entry.request}
+                    {...(lead ? {} : { style: props.style })}
+                />
+            ) : (
+                <ConversationRequestView
+                    className={lead ? undefined : props.className}
+                    data-testid={props["data-testid"]}
+                    defaultExpanded={props.activityDefaultExpanded}
+                    error={props.requestError}
+                    retryAnswers={props.requestRetryAnswers}
+                    expanded={props.rowExpanded}
+                    {...(props.onRequestAnswer ? { onAnswer: props.onRequestAnswer } : {})}
+                    {...(props.onRequestSelectionChange
+                        ? { onSelectionChange: props.onRequestSelectionChange }
+                        : {})}
+                    {...(props.requestSelection ? { selection: props.requestSelection } : {})}
+                    {...(props.onRequestDecide ? { onDecide: props.onRequestDecide } : {})}
+                    pending={props.requestPending}
+                    onExpandedChange={props.onRowExpandedChange}
+                    request={entry.request}
+                    {...(lead ? {} : { style: props.style })}
+                />
+            );
         /* An answered question the turn opens with carries the turn's identity
            and trace control, as a tool-first turn's first call does. */
         return lead && props.activityAuthor ? (

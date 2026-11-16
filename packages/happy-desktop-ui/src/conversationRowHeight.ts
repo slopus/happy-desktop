@@ -167,6 +167,8 @@ export type ConversationRowContext = {
      * single line, live or ended, whatever the run holds.
      */
     readonly toolSection?: boolean;
+    /** Group tool calls: an answered question is one line rather than its card. */
+    readonly questionLine?: boolean;
 };
 export type ConversationFailureRowContext = {
     /** The conversation has not moved past this failure, so its actions are offered. */
@@ -1359,6 +1361,20 @@ export function conversationRowHeight(
             entry.request.kind === "userInput" &&
             context.surface === "conversation" &&
             conversationAgentRowStartsGroup(entries, index);
+        /* `AnsweredQuestionLine` is the line a tool section is. */
+        if (
+            context.questionLine &&
+            entry.request.kind === "userInput" &&
+            entry.request.status === "answered"
+        )
+            return rowHeightCached(
+                cache,
+                entry,
+                `question-line:${lead ? "lead" : "plain"}`,
+                () =>
+                    (lead ? ACTIVITY_LEAD_CHROME + ACTIVITY_LEAD_RUN_SEPARATION : 0) +
+                    ACTIVITY_HEIGHT.tool,
+            );
         return rowHeightCached(
             cache,
             entry,

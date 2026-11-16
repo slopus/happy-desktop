@@ -1,5 +1,6 @@
 /*
  * AgentToolSection: one run of tool calls as a single grey transcript line.
+ * AnsweredQuestionLine is the same line for a question the reader answered.
  * Live, the line is the run's latest call; ended, it says what the run was
  * made of and how long it took. One replaces another letter by letter. Both
  * are one 32px row, so a call arriving and a section ending move nothing
@@ -152,7 +153,8 @@
     font-variant-numeric: tabular-nums;
 }
 
-.happy-tool-section__kinds {
+.happy-tool-section__kinds,
+.happy-answered-question__text {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -171,6 +173,13 @@
    would be cut as a single box. */
 .happy-tool-section__kinds .happy-arriving-text {
     display: inline;
+}
+
+/* AnsweredQuestionLine: what a question was called reads as a tool row's verb
+   does, and the answer beside it in the line's grey. */
+.happy-answered-question__header {
+    font-weight: 500;
+    color: var(--text-secondary);
 }
 
 /* How a call ended is not this line's news. A failed call keeps its own verb

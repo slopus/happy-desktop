@@ -243,6 +243,40 @@ const MANY_KINDS: readonly Call[] = [
     call("k8", "bash", "Run the type checker", "success", 61_000),
 ];
 
+function question(
+    id: string,
+    header: string,
+    text: string,
+    options: readonly string[],
+    answer?: string,
+): ConversationEntry {
+    const questions = [
+        {
+            id: `${id}-q`,
+            header,
+            question: text,
+            multiSelect: false,
+            required: true,
+            options: options.map((label) => ({ label, description: `${label}, as asked` })),
+        },
+    ];
+    return {
+        kind: "request",
+        id,
+        sequence: id,
+        request:
+            answer === undefined
+                ? { kind: "userInput", requestId: id, questions, status: "pending" }
+                : {
+                      kind: "userInput",
+                      requestId: id,
+                      questions,
+                      status: "answered",
+                      answers: { [`${id}-q`]: [answer] },
+                  },
+    };
+}
+
 /** A finished turn whose only call sat between two things the agent said. */
 const ONE_CALL: Step = {
     label: "One call",
@@ -254,6 +288,33 @@ const ONE_CALL: Step = {
         turnStatus("status", 198_000),
     ],
     running: false,
+};
+
+/** A turn that asks two questions in a row, then a third the reader has yet to answer. */
+const QUESTIONS: Step = {
+    label: "Questions",
+    entries: [
+        ASK,
+        INTRO,
+        ...firstRun("success", 2),
+        question(
+            "q1",
+            "Module",
+            "Where should the constants live?",
+            ["src/constants.ts", "src/tools/limits.ts"],
+            "src/constants.ts",
+        ),
+        question(
+            "q2",
+            "Names",
+            "How should the constants be named?",
+            ["SCREAMING_CASE", "camelCase"],
+            "SCREAMING_CASE",
+        ),
+        message("q-a1", agentAuthor, "Got it. One more thing before I move them.", 60_000),
+        question("q3", "Tests", "Should I update the tool tests too?", ["Yes", "No"]),
+    ],
+    running: true,
 };
 
 const TURN_ID = "turn-opened";
@@ -657,6 +718,24 @@ export function AgentToolSectionPage() {
                 window={{ width: 1100, height: 760 }}
             >
                 <Transcript step={ONE_CALL} testId="one-call" />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Answered questions are one grey line each; the one still waiting is its card."
+                label="Transcript, questions"
+                number={`${componentNumber}.8`}
+                screen="08-questions-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <Transcript step={QUESTIONS} testId="questions" />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Without Group tool calls: every call its own row, every question its card, with room between cards."
+                label="Transcript, ungrouped"
+                number={`${componentNumber}.9`}
+                screen="09-ungrouped-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <Transcript step={QUESTIONS} testId="ungrouped" ungrouped />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A finished turn the reader opened with View traces: every call is its own row."
