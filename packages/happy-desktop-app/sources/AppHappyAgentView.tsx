@@ -12261,6 +12261,11 @@ function HappyAgentPanelBody(props: {
                                               props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
                                       }),
                                       previewRequest: props.panel.filesPreviewRequest,
+                                      // A double click on a row when the
+                                      // listing and the preview take turns:
+                                      // its second click lands on the preview.
+                                      onOpenInTab: () =>
+                                          props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
                                   }
                                 : {})}
                             emptyDescription="Its contents or changes show here, beside the list."
