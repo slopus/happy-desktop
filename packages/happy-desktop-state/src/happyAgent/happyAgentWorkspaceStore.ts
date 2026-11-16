@@ -2463,8 +2463,6 @@ export function happyAgentWorkspaceStoreCreate(
         chatOpen: (agentId) => happyAgentPanelChatOpen(() => client.chat(agentId)),
         memoryRead: (groupId) => client.memory.groupRead(groupId)?.panel,
         memoryWrite: (groupId, memory) => client.memory.groupPanelWrite(groupId, memory),
-        floatyMemoryRead: () => client.memory.floatyOpenedRead(),
-        floatyMemoryWrite: (keys) => client.memory.floatyOpenedWrite(keys),
     });
 
     const listeners = new Set<() => void>();

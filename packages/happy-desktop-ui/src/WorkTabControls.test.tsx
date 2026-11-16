@@ -37,14 +37,12 @@ const CHATS: MenuItem[] = [
     },
 ];
 
-function controls(selected: string[] = [], toggled: boolean[] = []) {
+function controls(selected: string[] = []) {
     return createRenderer().render(
         () => (
             <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
                 <WorkTabControls
                     chats={{ items: () => CHATS, onSelect: (id) => selected.push(id) }}
-                    floatyOpen={false}
-                    onFloatyOpenChange={(open) => toggled.push(open)}
                 />
             </div>
         ),
@@ -66,17 +64,12 @@ const closeChord = (target: Element) => {
     );
 };
 
-it("holds the chats menu beside the activity toggle, and lists open and closed chats with when", async () => {
+it("holds the chats menu, and lists open and closed chats with when", async () => {
     const view = controls();
     await view.ready();
 
     const trigger = view.$('[data-happy-desktop-ui="menu-button"] > button');
-    const toggle = view.$(".happy-work-tab-controls__toggle");
-    // Two equal squares on the band's control gap, the menu first.
     expect(trigger.bounds()).toMatchObject({ width: 28, height: 28 });
-    expect(toggle.bounds()).toMatchObject({ width: 28, height: 28 });
-    expect(toggle.bounds().x - (trigger.bounds().x + trigger.bounds().width)).toBe(4);
-    expect(toggle.bounds().y).toBe(trigger.bounds().y);
     expect(trigger.element.getAttribute("aria-label")).toBe("Show chats");
     expect(trigger.element.getAttribute("aria-haspopup")).toBe("menu");
     // Nothing is read, or drawn, until the menu is asked for.
@@ -217,29 +210,4 @@ it("is worked from the keyboard, and closes on Escape or the close chord before 
     await expect.poll(() => selected).toEqual(["chat:three"]);
     expect(menuOpen()).toBe(false);
     expect(document.activeElement).toBe(trigger);
-});
-
-it("offers no chats menu to a band that has none, and leaves the toggle where it was", async () => {
-    const toggled: boolean[] = [];
-    const view = createRenderer().render(
-        () => (
-            <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
-                <WorkTabControls
-                    floatyOpen={false}
-                    onFloatyOpenChange={(open) => toggled.push(open)}
-                />
-            </div>
-        ),
-        { width: 420, height: 80, padding: 16 },
-    );
-    await view.ready();
-
-    expect(view.container.querySelector('[data-happy-desktop-ui="menu-button"]')).toBeNull();
-    const controlsBox = view.$('[data-happy-desktop-ui="work-tab-controls"]').bounds();
-    const toggle = view.$(".happy-work-tab-controls__toggle");
-    expect(controlsBox.width).toBe(28);
-    expect(toggle.bounds()).toMatchObject({ width: 28, height: 28 });
-
-    await userEvent.click(toggle.element);
-    expect(toggled).toEqual([true]);
 });

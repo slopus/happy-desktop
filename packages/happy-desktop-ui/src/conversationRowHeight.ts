@@ -90,25 +90,20 @@ import {
     type MessageInlineLayouts,
 } from "./conversationInlineLayouts";
 import { AGENT_WORKING_STATUS_ROW_HEIGHT } from "./AgentWorkingStatus";
-import { HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./HappyAgentActivityControl";
 
 /** The same footer geometry for the live row and the room a queued turn will need. */
 export function conversationWorkingStatusHeight(input: {
     readonly visible: boolean;
     readonly startsGroup: boolean;
     readonly closesMessage: boolean;
-    readonly activityControl: boolean;
 }): number {
-    return Math.max(
-        input.visible
-            ? input.startsGroup
-                ? 68
-                : input.closesMessage
-                  ? 32
-                  : AGENT_WORKING_STATUS_ROW_HEIGHT
-            : 0,
-        input.activityControl ? HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT : 0,
-    );
+    return input.visible
+        ? input.startsGroup
+            ? 68
+            : input.closesMessage
+              ? 32
+              : AGENT_WORKING_STATUS_ROW_HEIGHT
+        : 0;
 }
 
 /**

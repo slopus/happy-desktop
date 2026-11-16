@@ -123,19 +123,13 @@
     opacity: 0;
 }
 
-/* The live turn and its external work are one stable line. The status takes
-   whatever room remains and carries the activity summary to the far end; both
-   sides truncate in place instead of turning terminals or subagents into a
-   second row. */
+/* The live turn's one stable line; the status takes the whole of it and
+   truncates in place. */
 .happy-conversation__status-line {
     display: flex;
     align-items: center;
     width: 100%;
     min-width: 0;
-}
-
-.happy-conversation__status-line[data-active-turn] {
-    gap: 16px;
 }
 
 .happy-conversation__status-line > .happy-agent-working-status {
@@ -144,8 +138,7 @@
     min-width: 0;
 }
 
-/* A settled turn leaves the whole line to the summary, which then reads as an
-   ordinary transcript row rather than something pushed to the right. */
+/* A settled turn draws nothing on the live line. */
 .happy-conversation__status-line > .happy-agent-working-status:not([data-active]) {
     flex: 0 0 0;
     width: 0;
@@ -153,29 +146,10 @@
 }
 
 /* When the live status opens the agent turn, Message supplies identity rather
-   than prose. Drop its prose-only right reserve so the trailing activity keeps
-   the same 30px inset it owns on every other live status line. */
+   than prose. Drop its prose-only right reserve so the line keeps the same
+   30px inset it owns on every other live status line. */
 .happy-message[data-agent].happy-message--working-lead {
     padding-right: 0;
-}
-
-.happy-conversation__activity-entry {
-    display: flex;
-    flex: 0 1 auto;
-    min-width: 0;
-    /* Alone, the summary starts on the status clock's column: the 30px row
-       inset, the 3px + 7px + 3px braille loader column, and the 6px the clock
-       already sits past it. */
-    padding-left: 49px;
-}
-
-/* The clock-column inset belongs only to the external-work-only state. Beside
-   a live status, the parent line's gap separates the two visible children. The
-   status carries the running turn's 4px clearance as a margin, so the summary
-   takes the same one and the two texts share a line box. */
-.happy-conversation__status-line[data-active-turn] > .happy-conversation__activity-entry {
-    margin-top: 4px;
-    padding-left: 0;
 }
 
 .happy-conversation
@@ -255,14 +229,6 @@
     from {
         visibility: hidden;
     }
-}
-
-.happy-conversation__activity-fallback {
-    width: 100%;
-    max-width: var(--happy-content-measure);
-    margin-right: auto;
-    margin-left: auto;
-    margin-top: 12px;
 }
 
 /*

@@ -98,12 +98,6 @@
     gap: 4px;
 }
 
-/* Pressed while the floaty shows, as a hovered ghost button looks. */
-.happy-work-tab-controls__toggle[aria-pressed="true"] {
-    background: var(--surface-ripple);
-    color: var(--text);
-}
-
 /* A sidebar batch in Happy's chat: the note on one line, the moves one click away. */
 .happy-conversation-summary[data-kind="batch"] {
     padding: 0;

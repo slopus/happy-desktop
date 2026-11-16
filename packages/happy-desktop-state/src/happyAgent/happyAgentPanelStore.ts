@@ -188,12 +188,7 @@ export interface HappyAgentPanelSnapshot {
      * exists, so the two never disagree about the file being shown.
      */
     readonly fileViewOpen: boolean;
-    /**
-     * The conversations whose work floaty the reader opened by hand. The
-     * floaty never opens on its own: it stays shut until opened here.
-     */
-    readonly floatyOpened: ReadonlySet<string>;
-    /** Whether the floaty's history fold is open. */
+    /** Whether the work list's history fold is open. */
     readonly floatyHistoryExpanded: boolean;
     /**
      * The artifact a conversation link opened in the transient artifact tab,
@@ -282,8 +277,6 @@ export interface HappyAgentPanelStore {
      * Applied at once when it already is.
      */
     filesSelectOnArrival(groupId: HappyAgentGroupId): void;
-    /** Opens one chat's or space's floaty by hand, or shuts it again. */
-    floatyOpenedUpdate(key: string, opened: boolean): void;
     floatyHistoryExpandedUpdate(expanded: boolean): void;
     /**
      * Shows one artifact — at one version, when a link named one — in the
@@ -428,9 +421,6 @@ export interface HappyAgentPanelDeps {
      */
     readonly memoryRead?: (groupId: HappyAgentGroupId) => HappyAgentPanelMemory | undefined;
     readonly memoryWrite?: (groupId: HappyAgentGroupId, memory: HappyAgentPanelMemory) => void;
-    /** Which floaties were opened by hand, read once and written on every change. */
-    readonly floatyMemoryRead?: () => readonly string[];
-    readonly floatyMemoryWrite?: (keys: readonly string[]) => void;
 }
 
 interface Tab {
@@ -551,7 +541,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
     let changeConversationId: HappyAgentSessionId | undefined;
     let fileViewShown = false;
     let filesViewShown = true;
-    let floatyOpened: ReadonlySet<string> = new Set(deps.floatyMemoryRead?.() ?? []);
     let floatyHistoryExpanded = false;
     let artifactView: HappyAgentPanelArtifactView | undefined;
     /** A group whose Files tab is shown when it is next addressed. */
@@ -578,7 +567,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         fileViewOpen: false,
         filesViewOpen: true,
         browserRecent: NO_RECENT,
-        floatyOpened,
         floatyHistoryExpanded: false,
         open: false,
         tabs: NO_TABS,
@@ -596,7 +584,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             fileViewOpen: fileViewShown,
             filesViewOpen: filesViewShown,
             browserRecent: (groupId && recentByGroup.get(groupId)) || NO_RECENT,
-            floatyOpened,
             floatyHistoryExpanded,
             ...(artifactView === undefined ? {} : { artifactView }),
             open,
@@ -689,7 +676,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             next.fileViewOpen === snapshot.fileViewOpen &&
             next.filesViewOpen === snapshot.filesViewOpen &&
             next.browserRecent === snapshot.browserRecent &&
-            next.floatyOpened === snapshot.floatyOpened &&
             next.floatyHistoryExpanded === snapshot.floatyHistoryExpanded &&
             next.artifactView === snapshot.artifactView &&
             next.terminalRefusal === snapshot.terminalRefusal &&
@@ -714,7 +700,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             fileViewOpen: next.fileViewOpen,
             filesViewOpen: next.filesViewOpen,
             browserRecent: next.browserRecent,
-            floatyOpened: next.floatyOpened,
             floatyHistoryExpanded: next.floatyHistoryExpanded,
             ...(next.artifactView === undefined ? {} : { artifactView: next.artifactView }),
             open: next.open,
@@ -1131,15 +1116,6 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             fileViewShown = false;
             if (activeViewId === "file") landing();
             remember();
-            recompute();
-        },
-        floatyOpenedUpdate(key, opened) {
-            if (disposed || floatyOpened.has(key) === opened) return;
-            const next = new Set(floatyOpened);
-            if (opened) next.add(key);
-            else next.delete(key);
-            floatyOpened = next;
-            deps.floatyMemoryWrite?.([...next]);
             recompute();
         },
         floatyHistoryExpandedUpdate(next) {

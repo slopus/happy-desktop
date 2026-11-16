@@ -128,8 +128,6 @@ export interface HappyAgentWorkspaceMemoryDocument {
     readonly groups: { readonly [groupId: string]: HappyAgentGroupTabMemory | undefined };
     /** Restorable session and file destinations, most recently visited first. */
     readonly recentTabs?: readonly HappyAgentRecentTabMemory[];
-    /** The work floaties the reader opened by hand, by chat or space, oldest first. */
-    readonly floatyOpened?: readonly string[];
     /** The Surfaces whose shared chat the reader left open beside them, oldest first. */
     readonly surfaceChatsShown?: readonly string[];
     /** The Surfaces the reader widened to the whole pane, oldest first. */
@@ -184,9 +182,6 @@ export interface HappyAgentWorkspaceMemoryStore {
     recentTabsRead(): readonly HappyAgentRecentTabMemory[];
     /** Moves one destination to the front, replacing an older visit to the same tab. */
     recentTabRemember(tab: HappyAgentRecentTabMemory): void;
-    /** The work floaties the reader opened by hand, by chat or space. */
-    floatyOpenedRead(): readonly string[];
-    floatyOpenedWrite(keys: readonly string[]): void;
     /** The Surfaces whose shared chat the reader left open beside them. */
     surfaceChatsShownRead(): readonly string[];
     surfaceChatsShownWrite(surfaceIds: readonly string[]): void;
@@ -199,8 +194,6 @@ const FILE_KINDS: readonly HappyAgentFileTabKind[] = ["file", "diff", "document"
 /** Per-group budgets keep one busy workspace from erasing every other workspace's history. */
 const RECENT_SESSION_LIMIT_PER_GROUP = 200;
 const RECENT_FILE_LIMIT_PER_GROUP = 80;
-/** Opened floaties remembered; the oldest is forgotten first. */
-const FLOATY_OPENED_LIMIT = 500;
 /** Surfaces remembered with their chat open, or widened; the oldest is forgotten first. */
 const SURFACE_CHATS_SHOWN_LIMIT = 500;
 const SURFACES_EXPANDED_LIMIT = 500;
@@ -417,7 +410,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
 ): HappyAgentWorkspaceMemoryStore {
     const groups = new Map<string, HappyAgentGroupTabMemory>();
     let recentTabs: readonly HappyAgentRecentTabMemory[] = [];
-    let floatyOpened: readonly string[] = [];
     let surfaceChatsShown: readonly string[] = [];
     let surfacesExpanded: readonly string[] = [];
     const stored = (() => {
@@ -448,7 +440,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 }),
             );
         }
-        floatyOpened = storedKeysParse(document.floatyOpened, FLOATY_OPENED_LIMIT);
         surfaceChatsShown = storedKeysParse(document.surfaceChatsShown, SURFACE_CHATS_SHOWN_LIMIT);
         surfacesExpanded = storedKeysParse(document.surfacesExpanded, SURFACES_EXPANDED_LIMIT);
     }
@@ -459,7 +450,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
             persistence.write({
                 groups: Object.fromEntries(groups),
                 recentTabs,
-                ...(floatyOpened.length === 0 ? {} : { floatyOpened }),
                 ...(surfaceChatsShown.length === 0 ? {} : { surfaceChatsShown }),
                 ...(surfacesExpanded.length === 0 ? {} : { surfacesExpanded }),
             });
@@ -537,11 +527,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 tab,
                 ...recentTabs.filter((entry) => recentTabKey(entry) !== key),
             ]);
-            flush();
-        },
-        floatyOpenedRead: () => floatyOpened,
-        floatyOpenedWrite(keys) {
-            floatyOpened = [...new Set(keys)].slice(-FLOATY_OPENED_LIMIT);
             flush();
         },
         surfaceChatsShownRead: () => surfaceChatsShown,

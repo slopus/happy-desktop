@@ -68,7 +68,6 @@ function Card(
     const [selected, setSelected] = useState(props.selectedId);
     return (
         <WorkFloaty
-            open
             agents={props.agents}
             artifacts={props.artifacts}
             changes={props.changes}

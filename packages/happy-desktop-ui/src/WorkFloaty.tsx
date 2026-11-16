@@ -38,7 +38,6 @@ export interface WorkFloatyRow {
 }
 
 export interface WorkFloatyProps {
-    readonly open: boolean;
     /** The places the work changed files: its own folder or checkout first, then each other one. */
     readonly changes: readonly WorkFloatyRow[];
     readonly artifacts: readonly WorkFloatyRow[];
@@ -51,10 +50,10 @@ export interface WorkFloatyProps {
     readonly selectedId?: string;
     readonly onRowOpen: (id: string) => void;
     /**
-     * `overlay` floats the card over the top-right corner of the nearest
-     * positioned content without changing the transcript or composer's width.
+     * `panel` lays the rows flat across a side-panel listing that scrolls
+     * them, rather than on their own fixed-width card.
      */
-    readonly placement?: "inline" | "overlay";
+    readonly placement?: "inline" | "panel";
 }
 
 /**
@@ -66,7 +65,7 @@ export interface WorkFloatyProps {
 export function WorkFloaty(props: WorkFloatyProps) {
     const outputs = [...props.changes, ...props.artifacts];
     const working = props.agents.length > 0 || props.history.length > 0;
-    if (!props.open || (outputs.length === 0 && !working)) return null;
+    if (outputs.length === 0 && !working) return null;
     const row = (item: WorkFloatyRow, muted: boolean) => (
         <button
             className="happy-work-floaty__row"
@@ -131,7 +130,8 @@ export function WorkFloaty(props: WorkFloatyProps) {
                 } as CSSProperties
             }
         >
-            <ScrollArea>
+            {((content) =>
+                props.placement === "panel" ? content : <ScrollArea>{content}</ScrollArea>)(
                 <div className="happy-work-floaty__content">
                     {outputs.length > 0 ? (
                         <div className="happy-work-floaty__group">
@@ -165,8 +165,8 @@ export function WorkFloaty(props: WorkFloatyProps) {
                                 : null}
                         </div>
                     ) : null}
-                </div>
-            </ScrollArea>
+                </div>,
+            )}
         </aside>
     );
 }

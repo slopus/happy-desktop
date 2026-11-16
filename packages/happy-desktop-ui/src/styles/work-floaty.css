@@ -17,12 +17,21 @@
     background: var(--surface);
 }
 
-.happy-work-floaty[data-placement="overlay"] {
-    position: absolute;
-    z-index: 3;
-    top: 8px;
-    right: 12px;
-    box-shadow: 0 4px 16px var(--shadow-activity-card);
+/* In a side-panel listing the rows lie flat across it, scrolled by the listing. */
+.happy-work-floaty[data-placement="panel"] {
+    align-self: stretch;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+/* Its marks stand on the listing's own column; the rows' hover fill reaches past it. */
+.happy-work-floaty[data-placement="panel"] .happy-work-floaty__content {
+    margin: 0 calc(-1 * var(--happy-panel-row-padding));
+    padding: 0;
 }
 
 /* The scrollport takes the card's whole width, however short its rows are. */

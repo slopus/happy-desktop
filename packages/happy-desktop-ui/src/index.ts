@@ -511,11 +511,6 @@ export {
     type HappyAgentActivityPanelProps,
 } from "./HappyAgentActivityPanel";
 export {
-    HAPPY_AGENT_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT,
-    HappyAgentActivityControl,
-    type HappyAgentActivityControlProps,
-} from "./HappyAgentActivityControl";
-export {
     SearchField,
     type SearchFieldEditableProps,
     type SearchFieldOpenerProps,

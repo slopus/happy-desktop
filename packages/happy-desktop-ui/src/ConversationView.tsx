@@ -195,11 +195,6 @@ export type ConversationViewProps = {
     /** Activity-row content/chrome policy, independent of animation. */
     activityTreatment?: ActivityTreatment;
     /**
-     * A live summary of external work, rendered as the final transcript entry
-     * instead of taking space above the composer.
-     */
-    activityControl?: ReactNode;
-    /**
      * The global switch for a caret at the end of a still-streaming reply.
      * Off by default, preserving the historical no-caret text stream.
      */
@@ -964,12 +959,6 @@ export function ConversationView(props: ConversationViewProps) {
             waiting={scheduledWait}
         />
     );
-    /**
-     * The live turn and its external work share one line: the status keeps the
-     * left and the activity summary sits at the far right. When no parent turn
-     * is active, the same line remains with only the external-work summary, so
-     * a terminal or subagent never jumps into the settled "Completed in" row.
-     */
     const workingStatusLine = (
         <div
             className="happy-conversation__status-line"
@@ -977,14 +966,6 @@ export function ConversationView(props: ConversationViewProps) {
             data-happy-desktop-ui="conversation-status-line"
         >
             {workingStatus}
-            {props.activityControl ? (
-                <div
-                    className="happy-conversation__activity-entry"
-                    data-happy-desktop-ui="conversation-activity-entry"
-                >
-                    {props.activityControl}
-                </div>
-            ) : null}
         </div>
     );
     const workingStatusRow =
@@ -1002,14 +983,6 @@ export function ConversationView(props: ConversationViewProps) {
         ) : (
             workingStatusLine
         );
-    const activityFallback = props.activityControl ? (
-        <div
-            className="happy-conversation__activity-fallback"
-            data-happy-desktop-ui="conversation-activity-fallback"
-        >
-            {props.activityControl}
-        </div>
-    ) : null;
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
         const inlinePage = inlinePageOf(entry);
@@ -1054,7 +1027,6 @@ export function ConversationView(props: ConversationViewProps) {
         visible: statusVisible,
         startsGroup: workingStatusStartsGroup,
         closesMessage: workingStatusClosesMessage,
-        activityControl: Boolean(props.activityControl),
     });
     const queuedStatusHeight =
         queued.length === 0
@@ -1063,7 +1035,6 @@ export function ConversationView(props: ConversationViewProps) {
                   visible: true,
                   startsGroup: props.agentAuthor !== undefined,
                   closesMessage: false,
-                  activityControl: Boolean(props.activityControl),
               });
     return (
         <section
@@ -1121,7 +1092,6 @@ export function ConversationView(props: ConversationViewProps) {
                         tone="muted"
                         variant="line"
                     />
-                    {activityFallback}
                 </ScrollArea>
             ) : props.entries.length === 0 && props.leadingHeader === undefined ? (
                 <ScrollArea
@@ -1141,7 +1111,6 @@ export function ConversationView(props: ConversationViewProps) {
                             title="Nothing here yet"
                         />
                     )}
-                    {activityFallback}
                 </ScrollArea>
             ) : (
                 <MarkdownLayoutCacheContext.Provider value={rowHeightCache.text}>

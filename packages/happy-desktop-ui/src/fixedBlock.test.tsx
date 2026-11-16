@@ -98,11 +98,7 @@ for (const contained of [false, true]) {
                     contained,
                     <>
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                            <WorkTabControls
-                                chats={{ items: () => ITEMS, onSelect: () => {} }}
-                                floatyOpen={false}
-                                onFloatyOpenChange={() => {}}
-                            />
+                            <WorkTabControls chats={{ items: () => ITEMS, onSelect: () => {} }} />
                         </div>
                         <div style={{ display: "flex", flex: "1 1 0%" }} />
                         <div style={{ display: "flex", paddingLeft: 180 }}>

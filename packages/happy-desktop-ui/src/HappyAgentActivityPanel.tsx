@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type {
     HappyAgentBackgroundProcess,
     HappyAgentGoal,
@@ -14,6 +14,11 @@ import { Icon } from "./Icon";
 import { ScrollArea } from "./Scrollbar";
 
 export type HappyAgentActivityPanelProps = {
+    /**
+     * What the chat changed, published and delegated, listed ahead of the
+     * session's own activity. Present, the panel is never empty.
+     */
+    leading?: ReactNode;
     /** Opens the native Completed disclosure on its first render; omitted is closed. */
     completedInitiallyOpen?: boolean;
     /** The session's persistent goal, when one is set (`/goal`). */
@@ -301,6 +306,7 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
     );
     const hasRunning = runningSubagents.length > 0 || backgroundProcesses.length > 0;
     const empty =
+        props.leading === undefined &&
         goal === undefined &&
         tasks.length === 0 &&
         subagents.length === 0 &&
@@ -313,6 +319,7 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
             data-testid={props["data-testid"]}
             style={props.style}
         >
+            {props.leading}
             {empty ? (
                 <p
                     className="happy-agent-activity__empty"

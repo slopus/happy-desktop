@@ -7,6 +7,7 @@ import type {
 } from "happy-desktop-state";
 import { Button } from "../../src/Button";
 import { HappyAgentActivityPanel } from "../../src/HappyAgentActivityPanel";
+import { WorkFloaty } from "../../src/WorkFloaty";
 import { ComponentPage, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -89,6 +90,33 @@ const backgroundProcesses: readonly HappyAgentBackgroundProcess[] = [
     },
     { id: 2, command: "vite --host", cwd: "/repo", status: "running" },
 ];
+
+/** What the chat changed and published, as the side panel's Activity tab leads with it. */
+const workList = (
+    <WorkFloaty
+        agents={[]}
+        artifacts={[
+            {
+                id: "artifact:usage",
+                label: "Usage API sketch",
+                mark: { type: "icon", icon: "package" },
+            },
+        ]}
+        changes={[
+            {
+                id: "folder",
+                label: "happy-desktop",
+                mark: { type: "folder" },
+                trailing: { type: "changes", added: 128, deleted: 41 },
+            },
+        ]}
+        history={[]}
+        historyExpanded={false}
+        onHistoryExpandedChange={() => undefined}
+        onRowOpen={() => undefined}
+        placement="panel"
+    />
+);
 
 function DynamicActivityPanelFixture() {
     const [completed, setCompleted] = useState(false);
@@ -245,6 +273,27 @@ export function HappyAgentActivityPanelPage() {
                     <HappyAgentActivityPanel
                         backgroundProcesses={backgroundProcesses}
                         goal={goal}
+                        now={NOW}
+                        onBackgroundProcessStop={() => undefined}
+                        onSubagentSelect={() => undefined}
+                        placement="panel"
+                        subagents={subagents}
+                        tasks={tasks}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="the side panel's Activity tab: what the chat changed and published leads, then its running agents and terminals, goal, tasks and settled agents"
+                label="Activity tab with work"
+                number="07"
+                stage="surface"
+            >
+                <div style={{ display: "flex", height: "560px", width: "360px" }}>
+                    <HappyAgentActivityPanel
+                        backgroundProcesses={backgroundProcesses}
+                        goal={goal}
+                        leading={workList}
                         now={NOW}
                         onBackgroundProcessStop={() => undefined}
                         onSubagentSelect={() => undefined}

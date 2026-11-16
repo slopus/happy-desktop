@@ -290,7 +290,6 @@ import {
     ModalOverlay,
     ModalOverlayPresence,
     ReviewStream,
-    HappyAgentActivityControl,
     HappyAgentActivityPanel,
     fileTreeBuild,
     fileTreeExpanded,
@@ -377,7 +376,6 @@ import {
     workspaceLifecycleNoticeLines,
     WorkFloaty,
     type WorkFloatyRow,
-    WorkTabControls,
     WindowCover,
     Tooltip,
     type WorkspaceLifecyclePhase,
@@ -7731,11 +7729,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             detachedConversationId ?? openGroup?.singleConversationId,
         ),
     ];
-    // The floaty's agents: what this conversation has delegated, by the names
-    // they were started under, with what is over one level down.
-    const floatyAgents = workFloatyAgents(
-        conversation.type === "ready" ? conversation.value.subagents : [],
-    );
     // What the work changed: the checkout's own diff where Git keeps one, and
     // the conversation's edits where it does not, such as a task's folder.
     const floatyFromGit = (openGroup?.changes.length ?? 0) > 0;
@@ -7792,7 +7785,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             : workFloatyCreatedPlaces(rows, props.chatId, openGroup?.id)),
     ];
     // What this chat has published. Read while the chat is open, since the
-    // floaty opens on its own once there is any.
+    // panel's Activity tab shows itself once there is any.
     const floatyArtifacts = props.onArtifactOpen ? props.artifacts : undefined;
     const floatyArtifactStore = floatyArtifacts?.panel() ?? happyAgentArtifactCatalogStoreNoop;
     const floatyArtifactContext = happyAgentArtifactChatContext(
@@ -7813,29 +7806,40 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         floatyArtifactStore.get,
     );
     const floatyOutputs = workFloatyOutputs(floatyCatalog.artifacts, props.chatId);
-    // The floaty opens on its own wherever there is work to show, and stays
-    // folded where the reader folded it by hand until they open it again.
-    const floatyKey = conversation.type === "ready" ? conversation.value.conversationId : undefined;
-    const floatyShown =
-        floatyKey !== undefined &&
-        panel.floatyOpened.has(floatyKey) &&
-        (floatyPlaces.length > 0 ||
-            floatyOutputs.length > 0 ||
-            floatyAgents.current.length > 0 ||
-            floatyAgents.history.length > 0);
-    // The row whose tab the pane beside the chat is showing.
-    const floatyActiveTab = panel.open
-        ? panel.tabs.find((tab) => tab.id === panel.activeViewId)
-        : undefined;
-    const floatySelectedId = !panel.open
-        ? undefined
-        : panel.activeViewId === "files"
-          ? floatyPlaces.find((place) => place.workspaceId === undefined)?.row.id
-          : panel.activeViewId === "artifact" && panel.artifactView
-            ? `${FLOATY_ARTIFACT_PREFIX}${panel.artifactView.artifactId}`
-            : floatyActiveTab?.kind === "chat"
-              ? floatyActiveTab.agentId
-              : undefined;
+    // What the work changed and published leads the panel's Activity tab, above
+    // the session's own agents and terminals. Every row opens beside the chat,
+    // which stays where it was: a place as its changes, an artifact as itself.
+    const workList =
+        floatyPlaces.length > 0 || floatyOutputs.length > 0 ? (
+            <WorkFloaty
+                agents={[]}
+                artifacts={floatyOutputs.slice(0, FLOATY_ARTIFACTS)}
+                changes={floatyPlaces.map((place) => place.row)}
+                history={floatyOutputs.slice(FLOATY_ARTIFACTS)}
+                historyExpanded={panel.floatyHistoryExpanded}
+                onHistoryExpandedChange={props.workspace.panel.floatyHistoryExpandedUpdate}
+                onRowOpen={(id) => {
+                    const place = floatyPlaces.find((candidate) => candidate.row.id === id);
+                    if (place?.workspaceId !== undefined) workspaceOpen(place.workspaceId);
+                    else if (place) {
+                        if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, "changed");
+                        props.workspace.panel.filesSelect();
+                    } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX)) {
+                        const artifactId = id.slice(
+                            FLOATY_ARTIFACT_PREFIX.length,
+                        ) as HappyAgentArtifactId;
+                        if (props.artifacts)
+                            artifactBesideOpen({
+                                artifacts: props.artifacts,
+                                panel: props.workspace.panel,
+                                artifactId,
+                            });
+                        else props.workspace.panel.artifactViewOpen(artifactId);
+                    }
+                }}
+                placement="panel"
+            />
+        ) : undefined;
     // Closing a tab archives the session behind it, while a file tab simply
     // closes. The close control and every context-menu sweep funnel through
     // this one routine, so a sweep behaves exactly like closing each tab by
@@ -8564,6 +8568,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             activity={
                                 conversation.type === "ready" ? conversation.value : undefined
                             }
+                            {...(workList ? { work: workList } : {})}
                             canStartBrowser={
                                 availability.online &&
                                 openGroup !== undefined &&
@@ -8863,20 +8868,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         </Tooltip>
                                     ) : null
                                 }
-                                trailing={
-                                    /* The strip's own controls hold the bar's far
-                                   edge instead of sliding along with the tabs. */
-                                    <WorkTabControls
-                                        floatyOpen={floatyShown}
-                                        onFloatyOpenChange={(open) => {
-                                            if (floatyKey !== undefined)
-                                                props.workspace.panel.floatyOpenedUpdate(
-                                                    floatyKey,
-                                                    open,
-                                                );
-                                        }}
-                                    />
-                                }
                                 activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                                 tabSizing="content"
                                 closePresentation="overlay"
@@ -9047,64 +9038,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 }}
                                 tabs={groupTabs}
                             >
-                                <WorkFloaty
-                                    agents={floatyAgents.current}
-                                    artifacts={floatyOutputs.slice(0, FLOATY_ARTIFACTS)}
-                                    changes={floatyPlaces.map((place) => place.row)}
-                                    history={[
-                                        ...floatyAgents.history,
-                                        ...floatyOutputs.slice(FLOATY_ARTIFACTS),
-                                    ]}
-                                    historyExpanded={panel.floatyHistoryExpanded}
-                                    onHistoryExpandedChange={
-                                        props.workspace.panel.floatyHistoryExpandedUpdate
-                                    }
-                                    // Every row opens beside the chat, which stays
-                                    // where it was: a place as its changes, an
-                                    // artifact as itself, an agent as its chat. A
-                                    // tab already showing it is selected again.
-                                    onRowOpen={(id) => {
-                                        const place = floatyPlaces.find(
-                                            (candidate) => candidate.row.id === id,
-                                        );
-                                        if (place?.workspaceId !== undefined)
-                                            workspaceOpen(place.workspaceId);
-                                        else if (place) {
-                                            if (openGroup)
-                                                props.workspace.fileScopeUpdate(
-                                                    openGroup.id,
-                                                    "changed",
-                                                );
-                                            props.workspace.panel.filesSelect();
-                                        } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX)) {
-                                            const artifactId = id.slice(
-                                                FLOATY_ARTIFACT_PREFIX.length,
-                                            ) as HappyAgentArtifactId;
-                                            if (props.artifacts)
-                                                artifactBesideOpen({
-                                                    artifacts: props.artifacts,
-                                                    panel: props.workspace.panel,
-                                                    artifactId,
-                                                });
-                                            else props.workspace.panel.artifactViewOpen(artifactId);
-                                        } else {
-                                            const agent = [
-                                                ...floatyAgents.current,
-                                                ...floatyAgents.history,
-                                            ].find((candidate) => candidate.id === id);
-                                            if (agent)
-                                                props.workspace.panel.chatTabOpen(
-                                                    id as HappyAgentSessionId,
-                                                    agent.label,
-                                                );
-                                        }
-                                    }}
-                                    open={floatyShown}
-                                    placement="overlay"
-                                    {...(floatySelectedId === undefined
-                                        ? {}
-                                        : { selectedId: floatySelectedId })}
-                                />
                                 {/* The whole content area accepts a tab dragged out
                                 of the panel, so the reader aims at where the
                                 thing will be rather than at a stripe. */}
@@ -10266,9 +10199,8 @@ function HappyAgentConversationViews(props: {
     );
 }
 
-/** How many of a chat's artifacts and agents the floaty lists before its history. */
+/** How many of a chat's artifacts the Activity tab lists before its history. */
 const FLOATY_ARTIFACTS = 4;
-const FLOATY_AGENTS = 3;
 
 /**
  * Readies a workspace about to be opened to show its work: with uncommitted
@@ -10415,38 +10347,6 @@ function workFloatyOutputs(
         );
 }
 
-/**
- * One conversation's delegated agents as the floaty lists them: every one
- * still working, then the newest finished ones up to the list's length, and
- * the rest under History.
- */
-function workFloatyAgents(subagents: readonly SubagentSummary[]): {
-    readonly current: readonly WorkFloatyRow[];
-    readonly history: readonly WorkFloatyRow[];
-} {
-    const row = (subagent: SubagentSummary): WorkFloatyRow => {
-        const label = subagent.taskName?.trim() || subagent.description.trim() || "Agent";
-        return {
-            id: subagent.id,
-            label,
-            mark: { type: "icon", icon: "agents" },
-            ...(happyAgentSubagentActive(subagent)
-                ? { trailing: { type: "working", label: `${label} is working` } }
-                : subagent.totalTokens !== undefined && subagent.totalTokens > 0
-                  ? { trailing: { type: "tokens", count: subagent.totalTokens } }
-                  : {}),
-        };
-    };
-    const newestFirst = [...subagents].sort((left, right) => right.updatedAt - left.updatedAt);
-    const working = newestFirst.filter(happyAgentSubagentActive);
-    const finished = newestFirst.filter((subagent) => !happyAgentSubagentActive(subagent));
-    const shown = Math.max(0, FLOATY_AGENTS - working.length);
-    return {
-        current: [...working, ...finished.slice(0, shown)].map(row),
-        history: finished.slice(shown).map(row),
-    };
-}
-
 /** A delegated agent that is still working, or about to be. */
 function happyAgentSubagentActive(subagent: SubagentSummary): boolean {
     return subagent.status === "queued" || subagent.status === "running";
@@ -10461,25 +10361,6 @@ function happyAgentConversationWorking(
     conversation: Pick<HappyAgentConversationSnapshot, "running" | "subagents">,
 ): boolean {
     return conversation.running || conversation.subagents.some(happyAgentSubagentActive);
-}
-
-/** Counts live agents and terminals for the compact transcript affordance. */
-function happyAgentActiveActivityCounts(
-    conversation: Pick<
-        HappyAgentConversationSnapshot,
-        "subagents" | "backgroundProcesses" | "detachedBackgroundProcessIds"
-    >,
-): {
-    readonly agents: number;
-    readonly terminals: number;
-} {
-    const agents = conversation.subagents.filter(happyAgentSubagentActive);
-    return {
-        agents: agents.length,
-        terminals: conversation.backgroundProcesses.filter((process) =>
-            conversation.detachedBackgroundProcessIds.has(process.id),
-        ).length,
-    };
 }
 
 /**
@@ -10656,8 +10537,6 @@ function HappyAgentConversationSurface(props: {
         conversation.menus.currentAccount !== "hidden";
     const composerDisabled = props.readOnly || modelsNotConfigured;
     const configurable = !composerDisabled && sendRefusal === undefined;
-    const activeActivity = happyAgentActiveActivityCounts(conversation);
-    const activityTotal = activeActivity.agents + activeActivity.terminals;
     const openImage = conversation.openImage;
     /* The model pill and a failure card's switch read one set of props, so the
        card offers the accounts, models, and usage the pill does, live. */
@@ -10759,15 +10638,6 @@ function HappyAgentConversationSurface(props: {
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
             agentAuthor={agentAuthor}
-            activityControl={
-                activityTotal > 0 ? (
-                    <HappyAgentActivityControl
-                        agents={activeActivity.agents}
-                        backgroundTerminals={activeActivity.terminals}
-                        onClick={() => workspace.activityPanelOpen()}
-                    />
-                ) : undefined
-            }
             dock={
                 <HappyAgentComposerDock
                     composer={conversation.composer}
@@ -11104,7 +10974,7 @@ function HappyAgentConversationSurface(props: {
             activityTreatment="focused"
             motion="calm-typed"
             running={conversation.running}
-            delegatedAgents={activeActivity.agents}
+            delegatedAgents={conversation.subagents.filter(happyAgentSubagentActive).length}
             delegatedElapsedMs={happyAgentDelegatedElapsedMs(conversation, props.now)}
             elapsedMs={happyAgentTurnElapsedMs(conversation, props.now)}
             now={props.now}
@@ -11917,6 +11787,8 @@ function HappyAgentDevicesSurface(props: { store: HappyAgentDeviceBridgesStore }
 function HappyAgentPanelBody(props: {
     previewContext: ConversationPreviewContext;
     activity?: HappyAgentConversationSnapshot;
+    /** What the work changed and published, leading the Activity tab when there is any. */
+    work?: ReactNode;
     /**
      * What the open chat has published, offered only where the machine keeps
      * artifacts: the machine's artifact stores, the chat the list narrows to,
@@ -12106,7 +11978,8 @@ function HappyAgentPanelBody(props: {
             : artifactTabLabelOf(titles, titlesStore, artifactView.artifactId);
     const activityTabShown =
         props.panel.activityViewOpen ||
-        (props.activity?.activityAvailable === true && !props.panel.activityViewDismissed);
+        ((props.activity?.activityAvailable === true || props.work !== undefined) &&
+            !props.panel.activityViewDismissed);
     const activityBackgroundProcesses = props.activity
         ? props.activity.backgroundProcesses.filter((process) =>
               props.activity?.detachedBackgroundProcessIds.has(process.id),
@@ -12193,11 +12066,7 @@ function HappyAgentPanelBody(props: {
     ];
     // The strip holds what can be opened, not the panel's listings.
     const tabs = baseTabs.filter(
-        (tab) =>
-            tab.id !== "artifacts" &&
-            tab.id !== "activity" &&
-            tab.id !== "usage" &&
-            tab.id !== "devices",
+        (tab) => tab.id !== "artifacts" && tab.id !== "usage" && tab.id !== "devices",
     );
     return (
         <>
@@ -12466,16 +12335,17 @@ function HappyAgentPanelBody(props: {
                             />
                         )
                     ) : props.panel.activeViewId === "activity" ? (
-                        props.activity ? (
+                        props.activity || props.work ? (
                             <HappyAgentActivityPanel
                                 backgroundProcesses={activityBackgroundProcesses}
-                                goal={props.activity.goal}
+                                {...(props.activity?.goal ? { goal: props.activity.goal } : {})}
+                                {...(props.work === undefined ? {} : { leading: props.work })}
                                 now={props.now}
                                 onBackgroundProcessStop={props.onActivityProcessStop}
                                 onSubagentSelect={props.onSubagentSelect}
                                 placement="panel"
-                                subagents={props.activity.subagents}
-                                tasks={props.activity.tasks}
+                                subagents={props.activity?.subagents ?? []}
+                                tasks={props.activity?.tasks ?? []}
                             />
                         ) : (
                             <EmptyState

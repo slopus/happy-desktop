@@ -112,11 +112,7 @@ function Pane(props: {
                 tabs={props.tabs}
                 trailing={
                     props.withWorkControls ? (
-                        <WorkTabControls
-                            chats={{ items: () => chatItems, onSelect: () => {} }}
-                            floatyOpen={false}
-                            onFloatyOpenChange={() => {}}
-                        />
+                        <WorkTabControls chats={{ items: () => chatItems, onSelect: () => {} }} />
                     ) : props.withTrailing ? (
                         <MenuButton
                             align="end"
@@ -198,14 +194,14 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="the band's own controls: the workspace's chats, open and closed, then the activity toggle. The menu reads its rows when it opens; Escape and the close chord close it, never the tab behind it"
-                    label="Chats menu and activity toggle"
+                    detail="the band's own controls: the workspace's chats, open and closed. The menu reads its rows when it opens; Escape and the close chord close it, never the tab behind it"
+                    label="Chats menu"
                     number="T-08"
                     stage="app"
                 >
                     <div style={{ padding: "24px" }}>
                         <Pane active="one" tabs={sessionTabs} withClose withWorkControls />
-                        <DimensionRule label="two 28 squares · gap 4 · popover 300, end aligned · time 12px, whole; title ellipsis" />
+                        <DimensionRule label="28 square · popover 300, end aligned · time 12px, whole; title ellipsis" />
                     </div>
                 </Specimen>
                 <Specimen

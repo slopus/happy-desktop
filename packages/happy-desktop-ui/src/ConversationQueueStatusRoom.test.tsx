@@ -10,7 +10,6 @@ import {
 import "./styles.css";
 import { ConversationView } from "./ConversationView";
 import { ConversationDock } from "./ConversationDock";
-import { HappyAgentActivityControl } from "./HappyAgentActivityControl";
 import { createRenderer } from "./testing";
 
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -91,11 +90,6 @@ it.each(cases)(
                         running={state.running}
                         delegatedAgents={subagents && state.accepted ? 2 : 0}
                         motion="calm"
-                        activityControl={
-                            subagents && state.accepted ? (
-                                <HappyAgentActivityControl agents={2} />
-                            ) : undefined
-                        }
                         dock={
                             <ConversationDock
                                 composer={composer}
