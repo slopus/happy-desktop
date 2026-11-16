@@ -157,6 +157,8 @@ function General(props: { pickerOpen?: boolean }) {
             scrollbarVisibility="automatic"
             avatarsAnimated={false}
             onAvatarsAnimatedChange={noop}
+            onToolCallsGroupedChange={noop}
+            toolCallsGrouped={false}
             titleShimmerEnabled
         />
     );

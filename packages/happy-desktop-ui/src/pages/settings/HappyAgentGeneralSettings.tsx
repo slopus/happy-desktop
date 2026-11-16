@@ -60,6 +60,12 @@ export type HappyAgentGeneralSettingsProps = {
     avatarsAnimated?: boolean;
     onAvatarsAnimatedChange?: (animated: boolean) => void;
     /**
+     * Group tool calls: a run of tool calls is one transcript line. Absent
+     * where the host keeps no such choice, which offers no control.
+     */
+    toolCallsGrouped?: boolean;
+    onToolCallsGroupedChange?: (grouped: boolean) => void;
+    /**
      * Whether the sidebar leaves out every connection's Projects section. Absent
      * where the host keeps no such choice, which offers no control.
      */
@@ -271,6 +277,22 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                         description="Avatars without a picture move. Uses more CPU, GPU, and battery."
                         htmlFor="happy-agent-settings-avatars-animated"
                         label="Animated avatars"
+                    />
+                ) : null}
+                {props.onToolCallsGroupedChange ? (
+                    <FormRow
+                        control={
+                            <Switch
+                                aria-label="Group tool calls"
+                                checked={props.toolCallsGrouped === true}
+                                id="happy-agent-settings-tool-calls-grouped"
+                                onChange={props.onToolCallsGroupedChange}
+                                size="small"
+                            />
+                        }
+                        description="A run of tool calls is one line in the chat, and so is an answered question."
+                        htmlFor="happy-agent-settings-tool-calls-grouped"
+                        label="Group tool calls"
                     />
                 ) : null}
                 {props.onProjectsHiddenChange ? (

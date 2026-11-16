@@ -1160,6 +1160,8 @@ export function HappyAgentSettingsBlueprintPage() {
                             scrollbarVisibility="automatic"
                             avatarsAnimated={false}
                             onAvatarsAnimatedChange={noop}
+                            onToolCallsGroupedChange={noop}
+                            toolCallsGrouped={false}
                             titleShimmerEnabled={false}
                         />
                     </HappyAgentSettingsShell>
@@ -2105,6 +2107,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         scrollbarVisibility="automatic"
                         avatarsAnimated={false}
                         onAvatarsAnimatedChange={noop}
+                        onToolCallsGroupedChange={noop}
+                        toolCallsGrouped={false}
                         titleShimmerEnabled={false}
                         unavailable="Happy Agent is offline. Showing the last synced defaults."
                         onPreviewUpdatesChange={noop}

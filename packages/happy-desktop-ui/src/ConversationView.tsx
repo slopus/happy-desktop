@@ -2,6 +2,7 @@ import {
     type CSSProperties,
     memo,
     type ReactNode,
+    use,
     useRef,
     useState,
     useSyncExternalStore,
@@ -26,6 +27,7 @@ import {
     type HappyAgentTraceViewer,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
+import { ToolCallsGroupedContext } from "./AgentToolSection";
 import {
     AgentWorkingStatus,
     type AgentWaitStatus,
@@ -107,6 +109,7 @@ import { conversationInlineLayouts } from "./conversationInlineLayouts";
 import {
     conversationToolSectionEntryKeys,
     conversationToolSections,
+    conversationToolSectionsNone,
     type ConversationToolSection,
     type ConversationToolSectionMemory,
 } from "./conversationToolSections";
@@ -669,15 +672,20 @@ export function ConversationView(props: ConversationViewProps) {
             ? conversationPendingSteering(props.entries)
             : { transcript: props.entries, queued: [] };
     const queued = steering.queued;
-    /* Runs of one-line tool calls are one row each: live, the row shows the
-       run's latest call; ended, it sums the run up on the same line. `transcript` is the rows; `steering.transcript` is every entry,
-       for what reads the calls a section stands for. A transcript still
-       hydrating settles nothing about which runs have ended. */
-    const toolSections = conversationToolSections(
-        steering.transcript,
-        props.running === true,
-        props.loading ? new Set() : toolSectionMemory,
-    );
+    /* Under Group tool calls, runs of one-line tool calls are one row each:
+       live, the row shows the run's latest call; ended, it sums the run up on
+       the same line. `transcript` is the rows; `steering.transcript` is every
+       entry, for what reads the calls a section stands for. A transcript still
+       hydrating settles nothing about which runs have ended. Without it every
+       call is its own row, and there are no sections. */
+    const toolCallsGrouped = use(ToolCallsGroupedContext);
+    const toolSections = toolCallsGrouped
+        ? conversationToolSections(
+              steering.transcript,
+              props.running === true,
+              props.loading ? new Set() : toolSectionMemory,
+          )
+        : conversationToolSectionsNone(steering.transcript);
     const transcript = toolSections.rows;
     // A queued message keeps its entity key and virtual row when Stop ends
     // the turn and when the daemon accepts it into the next one.

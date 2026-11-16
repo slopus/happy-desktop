@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useState, type CSSProperties, type ReactNode } from "react";
 import type { ConversationToolCall } from "happy-desktop-state";
 import { AgentActivityRow } from "./AgentActivityRow";
 import { ArrivingText } from "./ArrivingText";
@@ -21,6 +21,13 @@ export type AgentToolSectionProps = {
     "data-testid"?: string;
     style?: CSSProperties;
 };
+
+/**
+ * Group tool calls: whether a transcript draws a run of tool calls as one
+ * `AgentToolSection` line rather than a row for each call. It comes from the
+ * appearance (`ThemeScope`), and is off unless the reader turned it on.
+ */
+export const ToolCallsGroupedContext = createContext(false);
 
 /** The line shows the run summed up rather than one of its calls. */
 const SUMMARY = Symbol("summary");

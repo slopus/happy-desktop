@@ -7,7 +7,8 @@ import {
 
 /**
  * The appearance surface: the selected and resolved theme, the window's
- * scrollbar visibility behavior, and whether avatar placeholders move.
+ * scrollbar visibility behavior, whether avatar placeholders move, and whether
+ * a run of tool calls is drawn as one line.
  *
  * It exists because appearance is product state, not React state: every
  * workspace renders one `ThemeScope` from it instead of carrying a separate
@@ -38,6 +39,12 @@ export interface AppearanceSnapshot {
      * turned off.
      */
     readonly avatarsAnimated: boolean;
+    /**
+     * Group tool calls: a run of tool calls between two pieces of the agent's
+     * text is one transcript line, and an answered question is one too. Kept by
+     * this window, off unless turned on: each call is otherwise its own row.
+     */
+    readonly toolCallsGrouped: boolean;
 }
 
 export interface AppearanceStore {
@@ -55,6 +62,7 @@ export interface AppearanceStore {
     appearanceSelect(mode: ThemeMode): void;
     scrollbarVisibilitySelect(visibility: ScrollbarVisibility): void;
     avatarsAnimatedUpdate(animated: boolean): void;
+    toolCallsGroupedUpdate(grouped: boolean): void;
     [Symbol.dispose](): void;
 }
 
@@ -80,6 +88,8 @@ export interface AppearanceStoreOptions {
     readonly scrollbarVisibility?: ScrollbarVisibility;
     /** Initial Animated avatars; defaults to on. */
     readonly avatarsAnimated?: boolean;
+    /** Initial Group tool calls; defaults to off. */
+    readonly toolCallsGrouped?: boolean;
     /**
      * Injected platform appearance source. Supplying it keeps this store free of
      * a `window` dependency in tests and in any non-browser host.
@@ -133,6 +143,7 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
     let customTheme = options.customTheme ?? customThemeEmpty;
     let scrollbarVisibility: ScrollbarVisibility = options.scrollbarVisibility ?? "automatic";
     let avatarsAnimated = options.avatarsAnimated ?? true;
+    let toolCallsGrouped = options.toolCallsGrouped ?? false;
     const paletteResolve = (): ThemePalette =>
         mode === "system" ? systemAppearance() : mode === "custom" ? customTheme.base : mode;
     const resolve = (): AppearanceSnapshot => {
@@ -144,6 +155,7 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
             customTheme,
             scrollbarVisibility,
             avatarsAnimated,
+            toolCallsGrouped,
         };
     };
     let snapshot = resolve();
@@ -157,7 +169,8 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
             snapshot.palette === next.palette &&
             snapshot.customTheme === next.customTheme &&
             snapshot.scrollbarVisibility === next.scrollbarVisibility &&
-            snapshot.avatarsAnimated === next.avatarsAnimated
+            snapshot.avatarsAnimated === next.avatarsAnimated &&
+            snapshot.toolCallsGrouped === next.toolCallsGrouped
         )
             return;
         snapshot = next;
@@ -221,6 +234,11 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
         avatarsAnimatedUpdate(animated) {
             if (avatarsAnimated === animated) return;
             avatarsAnimated = animated;
+            publish();
+        },
+        toolCallsGroupedUpdate(grouped) {
+            if (toolCallsGrouped === grouped) return;
+            toolCallsGrouped = grouped;
             publish();
         },
         [Symbol.dispose]() {

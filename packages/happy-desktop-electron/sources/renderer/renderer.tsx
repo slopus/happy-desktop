@@ -188,6 +188,7 @@ import {
 } from "./desktopProjectsVisibility";
 import { desktopStatusBarPersistence } from "./desktopStatusBar";
 import { desktopAvatarsAnimated } from "./desktopAvatarsAnimated";
+import { desktopToolCallsGrouped } from "./desktopToolCallsGrouped";
 import { desktopPowerSavingCreate, type DesktopPowerSaving } from "./desktopPowerSaving";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
@@ -446,6 +447,7 @@ function DesktopAppearance(props: {
             customTheme={appearance.customTheme}
             mode={appearance.mode}
             scrollbarVisibility={appearance.scrollbarVisibility}
+            toolCallsGrouped={appearance.toolCallsGrouped}
         >
             {props.children}
         </ThemeScope>
@@ -1624,6 +1626,7 @@ if (mediaPreviewBridge) {
                         : ["system", "dark", "light"],
                 scrollbarVisibility: preferences.initialScrollbarVisibility,
                 avatarsAnimated: desktopAvatarsAnimated.read(),
+                toolCallsGrouped: desktopToolCallsGrouped.read(),
             });
             appearanceReceive = (next) =>
                 writer.configReceived({
@@ -1637,6 +1640,8 @@ if (mediaPreviewBridge) {
                 preferences.appearanceChanged(snapshot.mode, snapshot.scrollbarVisibility);
                 if (snapshot.avatarsAnimated !== desktopAvatarsAnimated.read())
                     desktopAvatarsAnimated.write(snapshot.avatarsAnimated);
+                if (snapshot.toolCallsGrouped !== desktopToolCallsGrouped.read())
+                    desktopToolCallsGrouped.write(snapshot.toolCallsGrouped);
             });
             const store = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
             return {

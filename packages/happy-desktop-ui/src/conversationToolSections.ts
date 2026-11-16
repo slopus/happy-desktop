@@ -186,6 +186,15 @@ export function conversationToolSections(
     return { rows, sections };
 }
 
+const NO_SECTIONS: ReadonlyMap<string, ConversationToolSection> = new Map();
+
+/** The transcript with every call its own row: what a view draws with tool calls ungrouped. */
+export function conversationToolSectionsNone(
+    transcript: readonly ConversationEntry[],
+): ConversationToolSections {
+    return { rows: transcript, sections: NO_SECTIONS };
+}
+
 /** Every entry a row stands for: itself, and the rest of a section it opens. */
 export function conversationToolSectionEntryKeys(
     entry: ConversationEntry,

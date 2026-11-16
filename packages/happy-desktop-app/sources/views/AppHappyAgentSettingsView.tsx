@@ -1834,6 +1834,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onAvatarsAnimatedChange={(animated) =>
                         props.appearance.avatarsAnimatedUpdate(animated)
                     }
+                    toolCallsGrouped={appearance.toolCallsGrouped}
+                    onToolCallsGroupedChange={(grouped) =>
+                        props.appearance.toolCallsGroupedUpdate(grouped)
+                    }
                     titleShimmerEnabled={titleShimmer.titleShimmerEnabled}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />

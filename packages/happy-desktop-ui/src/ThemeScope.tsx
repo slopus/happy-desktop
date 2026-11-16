@@ -1,6 +1,7 @@
 import { createContext, type CSSProperties, type ReactNode } from "react";
 import type { CustomTheme, ThemeColorRole, ThemeMode } from "happy-desktop-state";
 import { AvatarsAnimatedContext } from "./AvatarPlaceholder";
+import { ToolCallsGroupedContext } from "./AgentToolSection";
 import { useDevicePixelRatio } from "./devicePixelRatio";
 
 export type { ThemeMode };
@@ -19,6 +20,8 @@ export type ThemeScopeProps = {
     scrollbarVisibility?: ScrollbarVisibility;
     /** Animated avatars: placeholders move as their shaders instead of showing their stills. */
     avatarsAnimated?: boolean;
+    /** Group tool calls: a run of tool calls is one transcript line. */
+    toolCallsGrouped?: boolean;
 };
 
 /**
@@ -39,23 +42,25 @@ export function ThemeScope(props: ThemeScopeProps) {
     return (
         <ThemeAppearanceContext value={palette === "midnight" ? "dark" : palette}>
             <AvatarsAnimatedContext value={props.avatarsAnimated ?? false}>
-                <div
-                    className={
-                        palette === "system"
-                            ? "happy-theme-scope"
-                            : `happy-theme-scope happy-theme-${palette}`
-                    }
-                    data-happy-desktop-ui="theme-scope"
-                    data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}
-                    style={
-                        {
-                            "--happy-device-pixel": `${devicePixel}px`,
-                            ...(colors ? themeColorsStyle(colors) : null),
-                        } as CSSProperties
-                    }
-                >
-                    {props.children}
-                </div>
+                <ToolCallsGroupedContext value={props.toolCallsGrouped ?? false}>
+                    <div
+                        className={
+                            palette === "system"
+                                ? "happy-theme-scope"
+                                : `happy-theme-scope happy-theme-${palette}`
+                        }
+                        data-happy-desktop-ui="theme-scope"
+                        data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}
+                        style={
+                            {
+                                "--happy-device-pixel": `${devicePixel}px`,
+                                ...(colors ? themeColorsStyle(colors) : null),
+                            } as CSSProperties
+                        }
+                    >
+                        {props.children}
+                    </div>
+                </ToolCallsGroupedContext>
             </AvatarsAnimatedContext>
         </ThemeAppearanceContext>
     );

@@ -6,7 +6,7 @@ import {
     type ConversationEntry,
     type ConversationToolCall,
 } from "happy-desktop-state";
-import { AgentToolSection } from "../../src/AgentToolSection";
+import { AgentToolSection, ToolCallsGroupedContext } from "../../src/AgentToolSection";
 import { ConversationView } from "../../src/ConversationView";
 import {
     conversationToolSections,
@@ -314,7 +314,15 @@ const STEPS: readonly Step[] = [
     },
 ];
 
-function Transcript(props: { step: Step; testId?: string }) {
+function Transcript(props: { step: Step; testId?: string; ungrouped?: boolean }) {
+    return (
+        <ToolCallsGroupedContext value={props.ungrouped !== true}>
+            <TranscriptView step={props.step} testId={props.testId} />
+        </ToolCallsGroupedContext>
+    );
+}
+
+function TranscriptView(props: { step: Step; testId?: string }) {
     return (
         <div
             style={{

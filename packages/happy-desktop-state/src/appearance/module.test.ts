@@ -36,6 +36,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
 
         system.set("dark");
@@ -46,6 +47,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
         expect(seen).toEqual(["dark"]);
 
@@ -68,6 +70,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
 
         store.appearanceToggle();
@@ -78,6 +81,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
 
         unsubscribe();
@@ -104,6 +108,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
         expect(seen).toEqual(["dark"]);
 
@@ -116,6 +121,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
 
         unsubscribe();
@@ -156,6 +162,7 @@ describe("appearance store", () => {
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
             avatarsAnimated: true,
+            toolCallsGrouped: false,
         });
         // Re-selecting the current mode is not a change.
         store.appearanceSelect("dark");

@@ -401,7 +401,11 @@ export {
     type ActivityTreatment,
     type AgentActivityRowProps,
 } from "./AgentActivityRow";
-export { AgentToolSection, type AgentToolSectionProps } from "./AgentToolSection";
+export {
+    AgentToolSection,
+    ToolCallsGroupedContext,
+    type AgentToolSectionProps,
+} from "./AgentToolSection";
 export {
     conversationToolSections,
     type ConversationToolSection,
