@@ -184,7 +184,8 @@ export interface PipelineDetail {
 
 /** How a run came to be: an agent's `run_pipeline`, or a `pipeline` node of a parent run. */
 export type PipelineRunTrigger =
-    | { readonly kind: "agent"; readonly agentId: string }
+    /** `agentId` is null when the server no longer names the agent. */
+    | { readonly kind: "agent"; readonly agentId: string | null }
     | { readonly kind: "pipeline"; readonly runId: string; readonly nodeId: string };
 
 /** One entry in a pipeline's runs, newest first. */

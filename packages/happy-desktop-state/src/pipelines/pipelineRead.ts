@@ -371,8 +371,8 @@ export function pipelineVersionDefinitionRead(answer: unknown): unknown {
 
 function triggerRead(value: unknown): PipelineRunTrigger | null {
     const trigger = recordOf(value);
-    if (trigger?.kind === "agent" && typeof trigger.agentId === "string")
-        return { kind: "agent", agentId: trigger.agentId };
+    // An agent the server no longer names (its agent removed) is still an agent's run.
+    if (trigger?.kind === "agent") return { kind: "agent", agentId: textOrNull(trigger.agentId) };
     if (
         trigger?.kind === "pipeline" &&
         typeof trigger.runId === "string" &&
