@@ -70,7 +70,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             ...(flags.agent ? { agentId: flags.agent } : {}),
             ...(flags.pageUrl ? { pageUrl: flags.pageUrl } : {}),
             ...(flags.tokenCommand ? { tokenCommand: flags.tokenCommand } : {}),
-            ...(flags.accountsUrl ? { accountsUrl: flags.accountsUrl } : {}),
+            ...(flags.identityUrl ? { identityUrl: flags.identityUrl } : {}),
+            ...(flags.apiUrl ? { apiUrl: flags.apiUrl } : {}),
             ...(flags.serverName ? { serverName: flags.serverName } : {}),
             ...(flags.computeOffline ? { computeOffline: flags.computeOffline } : {}),
             ...(flags.computeOnline ? { computeOnline: flags.computeOnline } : {}),
@@ -158,7 +159,8 @@ function parseFlags(args: readonly string[]): {
     readonly agent?: string;
     readonly pageUrl?: string;
     readonly tokenCommand?: string;
-    readonly accountsUrl?: string;
+    readonly identityUrl?: string;
+    readonly apiUrl?: string;
     readonly serverName?: string;
     readonly computeOffline?: string;
     readonly computeOnline?: string;
@@ -182,7 +184,8 @@ function parseFlags(args: readonly string[]): {
         agent?: string;
         pageUrl?: string;
         tokenCommand?: string;
-        accountsUrl?: string;
+        identityUrl?: string;
+        apiUrl?: string;
         serverName?: string;
         computeOffline?: string;
         computeOnline?: string;
@@ -215,8 +218,9 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--page-url") result.pageUrl = requiredValue(value, next, () => index++);
         else if (value === "--token-command")
             result.tokenCommand = requiredValue(value, next, () => index++);
-        else if (value === "--accounts-url")
-            result.accountsUrl = requiredValue(value, next, () => index++);
+        else if (value === "--identity-url")
+            result.identityUrl = requiredValue(value, next, () => index++);
+        else if (value === "--api-url") result.apiUrl = requiredValue(value, next, () => index++);
         else if (value === "--server-name")
             result.serverName = requiredValue(value, next, () => index++);
         else if (value === "--compute-offline")
@@ -281,7 +285,7 @@ Commands:
   smoke
   browser-preview [--expect proxy|direct] [--artifact-dir PATH]
   cloud-browser --fake | --server-url URL --workspace ID --agent ID --page-url URL
-      [--token-command CMD | --accounts-url URL --server-name NAME]
+      [--token-command CMD | --identity-url URL --api-url URL --server-name NAME]
       [--compute-offline CMD --compute-online CMD] [--compute-release CMD --compute-attach CMD]
       [--navigate PATH,PATH,...] [--artifact-dir PATH]   (bearer: HAPPY_GYM_CLOUD_TOKEN, or the options above)
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]

@@ -24,8 +24,8 @@ import { electronEntrypointResolve, gymRunPathsCreate } from "./paths.js";
  * comes back, and, when asked, its compute is released and attached again.
  *
  * The app's sign-in, directory and panel are not part of it; a bearer for the
- * server is supplied by the person running it, or obtained from the accounts
- * service the way the app does.
+ * server is supplied by the person running it, or obtained from the identity
+ * provider and the cluster's account API the way the app does.
  */
 export interface GymCloudBrowserOptions {
     /** Runs against the fake Happy Cloud and a local dev server instead. */
@@ -38,11 +38,13 @@ export interface GymCloudBrowserOptions {
     /** A command printing the server's bearer, when `HAPPY_GYM_CLOUD_TOKEN` is not set. */
     readonly tokenCommand?: string;
     /**
-     * An accounts service to sign in to as the app does, with
-     * `HAPPY_GYM_CLOUD_LOGIN` and `HAPPY_GYM_CLOUD_PASSWORD`, for a token to
-     * the server named `serverName`.
+     * The identity provider to sign in to as the app does, with
+     * `HAPPY_GYM_CLOUD_LOGIN` and `HAPPY_GYM_CLOUD_PASSWORD`; its identity
+     * token is traded at `apiUrl` for a token to the server named `serverName`.
      */
-    readonly accountsUrl?: string;
+    readonly identityUrl?: string;
+    /** The cluster's account API, e.g. `https://api.happy-clusters.com/`. */
+    readonly apiUrl?: string;
     readonly serverName?: string;
     /** Shell commands that take the agent's computer offline and back. */
     readonly computeOffline?: string;
@@ -334,8 +336,9 @@ async function cloudTargetRead(options: GymCloudBrowserOptions): Promise<CloudTa
 }
 
 /**
- * The server's bearer: given outright, printed by a command, or issued by an
- * accounts service for the named server, as the app is issued one.
+ * The server's bearer: given outright, printed by a command, or issued by the
+ * cluster's account API for the named server, signed in with an identity
+ * token from the identity provider, as the app is issued one.
  */
 async function tokenRead(options: GymCloudBrowserOptions, serverUrl: string): Promise<string> {
     const given = process.env.HAPPY_GYM_CLOUD_TOKEN?.trim();
@@ -345,30 +348,35 @@ async function tokenRead(options: GymCloudBrowserOptions, serverUrl: string): Pr
         if (!printed) throw new Error("The token command printed nothing.");
         return printed;
     }
-    if (options.accountsUrl && options.serverName) {
+    if (options.identityUrl && options.apiUrl && options.serverName) {
         const login = process.env.HAPPY_GYM_CLOUD_LOGIN;
         const password = process.env.HAPPY_GYM_CLOUD_PASSWORD;
         if (!login || !password)
             throw new Error("HAPPY_GYM_CLOUD_LOGIN and HAPPY_GYM_CLOUD_PASSWORD are required.");
-        const accounts = new URL(options.accountsUrl);
-        const call = async (path: string, init: RequestInit) => {
-            const response = await fetch(new URL(path, accounts), { ...init, redirect: "error" });
+        const call = async (base: string, path: string, init: RequestInit) => {
+            const response = await fetch(new URL(path, base), { ...init, redirect: "error" });
             const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
             if (!response.ok)
-                throw new Error(
-                    `The accounts service refused ${path} (${String(response.status)}).`,
-                );
+                throw new Error(`${base} refused ${path} (${String(response.status)}).`);
             return json;
         };
-        const signedIn = await call("v1/auth/password", {
+        const headers = { "content-type": "application/json", accept: "application/json" };
+        const identity = await call(options.identityUrl, "v2/auth/password", {
             method: "POST",
-            headers: { "content-type": "application/json", accept: "application/json" },
+            headers,
             body: JSON.stringify({ login, password }),
         });
-        const account = signedIn.access_token;
-        if (typeof account !== "string") throw new Error("The accounts service issued no token.");
+        if (typeof identity.id_token !== "string")
+            throw new Error("The identity provider issued no identity token.");
+        const session = await call(options.apiUrl, "v1/session", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ id_token: identity.id_token }),
+        });
+        const account = session.access_token;
+        if (typeof account !== "string") throw new Error("The cluster issued no account session.");
         const authorization = { authorization: `Bearer ${account}`, accept: "application/json" };
-        const listed = await call("v1/servers", { headers: authorization });
+        const listed = await call(options.apiUrl, "v1/servers", { headers: authorization });
         const servers = Array.isArray(listed.servers) ? listed.servers : [];
         const server = servers.find(
             (each): each is { id: string } =>
@@ -378,16 +386,17 @@ async function tokenRead(options: GymCloudBrowserOptions, serverUrl: string): Pr
                 typeof (each as { id?: unknown }).id === "string",
         );
         if (!server) throw new Error(`The account has no server named ${options.serverName}.`);
-        const issued = await call(`v1/servers/${encodeURIComponent(server.id)}/token`, {
-            method: "POST",
-            headers: authorization,
-        });
+        const issued = await call(
+            options.apiUrl,
+            `v1/servers/${encodeURIComponent(server.id)}/token`,
+            { method: "POST", headers: authorization },
+        );
         if (typeof issued.access_token !== "string")
-            throw new Error(`The accounts service issued no token for ${serverUrl}.`);
+            throw new Error(`The cluster issued no token for ${serverUrl}.`);
         return issued.access_token;
     }
     throw new Error(
-        "No bearer: set HAPPY_GYM_CLOUD_TOKEN, --token-command, or --accounts-url with --server-name.",
+        "No bearer: set HAPPY_GYM_CLOUD_TOKEN, --token-command, or --identity-url and --api-url with --server-name.",
     );
 }
 
