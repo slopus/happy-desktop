@@ -518,6 +518,11 @@ export type ConversationActivity =
           readonly agentFace?: ConversationAgentFace;
           /** The sender's one-line account of what the message is, when it gave one. */
           readonly explanation?: string;
+          /**
+           * The agent sent it to itself: a goal continuation, a message it
+           * scheduled for itself, or a result it is owed, such as a pipeline's.
+           */
+          readonly self?: true;
           /** The message as it arrived, addressing envelope included. */
           readonly text: string;
       }

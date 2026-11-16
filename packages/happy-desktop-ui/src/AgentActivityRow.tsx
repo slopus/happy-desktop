@@ -1679,6 +1679,8 @@ function AgentMessageActivity(props: {
     agentFace?: ConversationAgentFace;
     /** The sender's one line on what the message is; without it the row names the sender. */
     explanation?: string;
+    /** The agent sent it to itself, so the row names no sender and no reply. */
+    self?: true;
     references?: MessageReferences;
     text: string;
     defaultExpanded?: boolean;
@@ -1692,6 +1694,14 @@ function AgentMessageActivity(props: {
         props.onExpandedChange,
     );
     const hasBody = props.text.trim().length > 0;
+    const verb =
+        props.explanation === undefined
+            ? "Message"
+            : // A line that names its sender already says who it is from, and an
+              // agent's note to itself has no one else to name.
+              props.self || props.explanation.includes(props.agentId)
+              ? null
+              : `${props.agentName ?? agentIdShort(props.agentId)} replied`;
     return (
         <div
             className="happy-agent-activity"
@@ -1725,21 +1735,21 @@ function AgentMessageActivity(props: {
                 </span>
                 <span
                     className="happy-agent-activity__verb"
+                    data-empty={verb === null ? "" : undefined}
                     data-happy-desktop-ui="agent-activity-verb"
                 >
-                    {props.explanation === undefined
-                        ? "Message"
-                        : // A line that names its sender already says who it is from.
-                          props.explanation.includes(props.agentId)
-                          ? null
-                          : `${props.agentName ?? agentIdShort(props.agentId)} replied`}
+                    {verb}
                 </span>
                 <ScrollingText
                     className="happy-agent-activity__text"
                     data-happy-desktop-ui="agent-activity-text"
                 >
                     {props.explanation === undefined ? (
-                        `from ${props.agentName ?? agentIdShort(props.agentId)}`
+                        props.self ? (
+                            "to itself"
+                        ) : (
+                            `from ${props.agentName ?? agentIdShort(props.agentId)}`
+                        )
                     ) : (
                         <AgentMessageExplanation
                             references={props.references}
@@ -2102,6 +2112,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     {...(activity.explanation === undefined
                         ? {}
                         : { explanation: activity.explanation })}
+                    {...(activity.self ? { self: true } : {})}
                     defaultExpanded={props.defaultExpanded}
                     expanded={props.expanded}
                     onExpandedChange={props.onExpandedChange}

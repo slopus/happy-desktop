@@ -361,7 +361,7 @@ export function AgentActivityRowPage() {
             </Specimen>
 
             <Specimen
-                detail="a collaborator's message collapsed to one line, and expanded onto the message it delivered · the sender named and pictured as its own row is: a subtask's generated mark, a bot's picture, a team task's owner initials, a standalone task's glyph · a sender nobody can name falls back to the start of its agent id"
+                detail="a collaborator's message collapsed to one line, and expanded onto the message it delivered · the sender named and pictured as its own row is: a subtask's generated mark, a bot's picture, a team task's owner initials, a standalone task's glyph · a sender nobody can name falls back to the start of its agent id · an agent's message to itself, a goal continuation or a scheduled note, names no sender, and a result it is owed, such as a pipeline's, reads as its own line"
                 label="Agent message"
                 number="06"
                 stage="surface"
@@ -425,6 +425,29 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "v2eibi1k9zgwde56wwuhrbku",
                             text: AGENT_MESSAGE_TEXT,
+                        }}
+                    />
+                    {/* The agent to itself: a goal continuation or a message it scheduled. */}
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "v2eibi1k9zgwde56wwuhrbku",
+                            agentName: "Retry policy rewrite",
+                            agentFace: { kind: "placeholder", seed: "v2eibi1k9zgwde56wwuhrbku" },
+                            self: true,
+                            text: "A message you scheduled for now:\n\nCheck whether the nightly build finished.",
+                        }}
+                    />
+                    {/* A result it is owed, told in its own line: a pipeline's. */}
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "v2eibi1k9zgwde56wwuhrbku",
+                            agentName: "Retry policy rewrite",
+                            agentFace: { kind: "placeholder", seed: "v2eibi1k9zgwde56wwuhrbku" },
+                            explanation: "Pipeline Ship v3 succeeded",
+                            self: true,
+                            text: 'Pipeline Ship (run run_ship_21) succeeded.\n\nResult: {"announce": {"posted": true}}',
                         }}
                     />
                 </div>
