@@ -1,5 +1,5 @@
 import type { ConfigurationBlock } from "@slopus/happy-agent-client";
-import type { HappyAgentModel } from "./happyAgentTypes.js";
+import type { HappyAgentModel, HappyAgentModelProvider } from "./happyAgentTypes.js";
 import { happyAgentPermissionLabel } from "./happyAgentSupport.js";
 
 const EFFORT_LABELS: Readonly<Record<string, string>> = {
@@ -13,10 +13,14 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
     ultra: "Ultra",
 };
 
-/** Only durable execution identity decides a switch; the current catalog names models only. */
+/**
+ * Only durable execution identity decides a switch; the current catalog only
+ * names what changed. A model or account the catalog no longer lists keeps its ID.
+ */
 export function happyAgentConfigurationChanges(
     configuration: ConfigurationBlock,
     models: readonly HappyAgentModel[],
+    providers: readonly HappyAgentModelProvider[] = [],
 ): readonly {
     readonly field: "model" | "account" | "provider" | "effort" | "permissions" | "speed";
     readonly text: string;
@@ -28,6 +32,8 @@ export function happyAgentConfigurationChanges(
         text: string;
     }[] = [];
     const modelName = (id: string): string => models.find((model) => model.id === id)?.name ?? id;
+    const providerName = (id: string): string =>
+        providers.find((provider) => provider.id === id)?.name ?? id;
     const speedName = (modelId: string, tier: string | null): string =>
         models
             .find((model) => model.id === modelId)
@@ -58,7 +64,7 @@ export function happyAgentConfigurationChanges(
         // Route IDs are authoritative even if family/account identity was withheld.
         changes.push({
             field: "provider",
-            text: `Provider selection changed: ${before.providerId} → ${after.providerId}`,
+            text: `Provider selection changed: ${providerName(before.providerId)} → ${providerName(after.providerId)}`,
         });
     }
     if (before.effort !== after.effort)

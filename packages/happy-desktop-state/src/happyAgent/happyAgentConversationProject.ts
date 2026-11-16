@@ -102,7 +102,7 @@ export interface HappyAgentConversationInput {
     /** Messages submitted by this store, independent of daemon acceptance. */
     readonly sentMessageIds?: ReadonlySet<string>;
     readonly models?: readonly HappyAgentModel[];
-    /** The catalog's accounts, which name the one a failure was switched to. */
+    /** The catalog's accounts, which name the one a failure or a configuration change switched to. */
     readonly providers?: readonly HappyAgentModelProvider[];
     readonly elements: readonly ChatElement[];
     readonly sessionId: string;
@@ -984,6 +984,7 @@ function happyAgentConnectGroupProject(
                 for (const { field, text } of happyAgentConfigurationChanges(
                     element.configuration,
                     input.models ?? [],
+                    input.providers ?? [],
                 ))
                     entries.push({
                         kind: "notice",
