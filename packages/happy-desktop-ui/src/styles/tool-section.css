@@ -1,10 +1,10 @@
 /*
  * AgentToolSection: one run of tool calls as a single grey transcript line.
  * Live, the line is the run's latest call; ended, it says how long the run
- * took and how many calls it was. Both are
- * one 32px row, so a call arriving and a section ending move nothing around
- * them. Layout is flexbox throughout; colors and type come only from theme
- * roles.
+ * took and how many calls it was. One replaces another letter by letter. Both
+ * are one 32px row, so a call arriving and a section ending move nothing
+ * around them. Layout is flexbox throughout; colors and type come only from
+ * theme roles.
  *
  * `conversationRowHeight` mirrors the 32px line. A change to it must be made
  * there too.
@@ -64,34 +64,33 @@
 .happy-tool-section__item[data-arrives] .happy-agent-activity__glyph,
 .happy-tool-section__item[data-arrives] .happy-tool-section__glyph {
     animation: happy-arriving-text-glyph 200ms ease-in-out both;
-    animation-delay: var(--happy-arriving-start, 0ms);
 }
 
-/* Taking over from another line, it waits for most of that one to be gone, so
-   the first characters do not come up through the last. */
-.happy-tool-section__item[data-state="leaving"] ~ .happy-tool-section__item {
-    --happy-arriving-start: 90ms;
-}
-
-/* The line it replaces fades out where it stood, lifting a little. It leaves
-   the flow as an overlay does, so the arriving line already has the row.
-   Drawn for the first time it is simply gone: only a line that was current
-   moves. */
+/* The line it replaces is laid under it as an overlay, so the arriving line
+   already has the row, and goes letter by letter on the same clock: each
+   character leaves as the one taking its place arrives, and what is left past
+   the new line's end goes on leaving in the same order. Its glyph goes first.
+   Once the last character is out the line is taken away whole, so nothing a
+   call draws that is not a character can stay behind. */
 .happy-tool-section__item[data-state="leaving"] {
     position: absolute;
     top: 0;
     left: 0;
-    opacity: 0;
-    transform: translateY(-4px);
-    transition:
-        opacity 140ms ease-in-out,
-        transform 140ms ease-in-out;
+    visibility: hidden;
+    transition: visibility 0s linear 700ms;
     pointer-events: none;
+}
+
+.happy-tool-section__item[data-state="leaving"] .happy-agent-activity__glyph {
+    animation:
+        happy-arriving-text-glyph 200ms ease-in-out both,
+        happy-arriving-text-leave 160ms ease-in-out forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .happy-tool-section__item[data-arrives] .happy-agent-activity__glyph,
-    .happy-tool-section__item[data-arrives] .happy-tool-section__glyph {
+    .happy-tool-section__item[data-arrives] .happy-tool-section__glyph,
+    .happy-tool-section__item[data-state="leaving"] .happy-agent-activity__glyph {
         animation: none;
     }
 
@@ -128,7 +127,7 @@
 /* What an edit added and removed is part of the same grey sentence. */
 .happy-tool-section .happy-tool-section__call .happy-agent-activity__added,
 .happy-tool-section .happy-tool-section__call .happy-agent-activity__deleted {
-    color: inherit;
+    color: var(--warning);
 }
 
 /* The same fixed square a tool row's glyph takes, on the same column. */

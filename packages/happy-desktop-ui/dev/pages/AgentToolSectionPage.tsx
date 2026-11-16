@@ -91,6 +91,14 @@ function added(path: string, lines: number): ConversationToolCall["presentation"
     };
 }
 
+function edited(path: string, more: number, fewer: number): ConversationToolCall["presentation"] {
+    return {
+        type: "fileDiff",
+        files: [{ path, kind: "update", added: more, deleted: fewer, omittedLines: 0, hunks: [] }],
+        omittedFiles: 0,
+    };
+}
+
 function compaction(id: string, status: "running" | "success", at: number): Call {
     return {
         kind: "agentActivity",
@@ -152,12 +160,11 @@ function firstRun(last: ConversationToolCall["status"], count = 6): readonly Cal
     return calls.slice(0, count);
 }
 
-/** Three calls on one live line: one done, one failed, one still running. */
+/** The first run with its failed search behind it and the next one going. */
 function live3(): readonly Call[] {
     return [
-        call("t1", "read", "Read compiler head", "success", 4_000),
-        call("t2", "grep", "List numeric constants per tool", "failed", 9_000),
-        call("t3", "apply_patch", "Add constants.ts", "running", 15_000),
+        ...firstRun("success", 3),
+        call("t4", "grep", "List numeric constants in src/tools", "running", 21_000),
     ];
 }
 
@@ -170,8 +177,12 @@ const MIDDLE = message(
 
 function secondRun(count: number, last: ConversationToolCall["status"]): readonly Call[] {
     const calls: Call[] = [
-        call("s1", "edit", "Edit read.ts", "success", 200_000),
-        call("s2", "edit", "Edit grep.ts", "success", 208_000),
+        call("s1", "edit", "Edit read.ts", "success", 200_000, {
+            presentation: edited("src/tools/read.ts", 4, 9),
+        }),
+        call("s2", "edit", "Edit grep.ts", "success", 208_000, {
+            presentation: edited("src/tools/grep.ts", 12, 3),
+        }),
         compaction("s3", "success", 215_000),
         call("s4", "edit", "Edit bash.ts", "success", 240_000),
         call("s5", "bash", "Run the tool tests", "failed", 262_000),
@@ -248,6 +259,16 @@ const STEPS: readonly Step[] = [
     {
         label: "Text resumes: the section ends",
         entries: [ASK, INTRO, ...firstRun("success"), MIDDLE],
+        running: true,
+    },
+    {
+        label: "Second run: an edit lands",
+        entries: [ASK, INTRO, ...firstRun("success"), MIDDLE, ...secondRun(1, "running")],
+        running: true,
+    },
+    {
+        label: "Another edit replaces it",
+        entries: [ASK, INTRO, ...firstRun("success"), MIDDLE, ...secondRun(2, "running")],
         running: true,
     },
     {
@@ -443,7 +464,7 @@ export function AgentToolSectionPage() {
                 screen="02-ended-and-live-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
-                <Transcript step={STEPS[7]!} testId="ended-and-live" />
+                <Transcript step={STEPS[9]!} testId="ended-and-live" />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Both runs summed up: duration, then calls."
@@ -452,7 +473,7 @@ export function AgentToolSectionPage() {
                 screen="03-finished-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
-                <Transcript step={STEPS[9]!} testId="finished" />
+                <Transcript step={STEPS[11]!} testId="finished" />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A turn stopped mid-call: its run is summed up, nothing spins."
@@ -461,7 +482,7 @@ export function AgentToolSectionPage() {
                 screen="04-stopped-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
-                <Transcript step={STEPS[10]!} testId="stopped" />
+                <Transcript step={STEPS[12]!} testId="stopped" />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Step through the turn: no row moves as calls arrive, finish, fail, or a section ends."
@@ -491,7 +512,7 @@ export function AgentToolSectionPage() {
                 screen="06-live-720x640"
                 window={{ width: 720, height: 640 }}
             >
-                <Transcript step={STEPS[7]!} testId="narrow" />
+                <Transcript step={STEPS[9]!} testId="narrow" />
             </FullScreenSpecimen>
         </ComponentPage>
     );

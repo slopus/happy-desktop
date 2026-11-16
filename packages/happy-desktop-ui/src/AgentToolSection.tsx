@@ -22,49 +22,61 @@ export type AgentToolSectionProps = {
     style?: CSSProperties;
 };
 
+/** The line shows the run summed up rather than one of its calls. */
+const SUMMARY = Symbol("summary");
+
 /**
  * AgentToolSection — one run of tool calls as a single grey transcript line.
  *
  * While the run is going the line is its latest call and nothing else; each
  * new call comes in the way a reply arrives in the mobile app, a character at
- * a time, as the one before it fades out. Once the run ends the same line sums
- * it up: how long it took, then how many calls it was. How a call ended is not
- * this line's news: a failed call reads in the same grey as any other, and the
+ * a time, and replaces the one before it letter by letter: as each place's
+ * turn comes, the character that stood there goes and the new one takes it.
+ * Once the run ends the summary replaces the last call the same way: how long
+ * the run took, then how many calls it was. How a call ended is not this
+ * line's news: a failed call reads in the same grey as any other, and the
  * summary counts calls without sorting them. The line is one height
  * throughout, so nothing around it ever moves.
  */
 export function AgentToolSection(props: AgentToolSectionProps) {
     const section = props.section;
-    /* Whether this line was drawn while its run was going. A section first
-       drawn already ended is history: its summary is simply there, and
-       nothing arrives. */
-    const [watched] = useState(section.live);
+    const latest = section.members.at(-1)!;
+    /* What the line shows: a call, by its entry, or the summary. */
+    const showing = section.live ? latest.id : SUMMARY;
+    /* What this line showed last, and what that replaced. Only a line this
+       component drew can leave: a section first drawn already ended is
+       history, and one first drawn mid-run starts at its latest call.
+       Compared during render, as TypedText compares its own. */
+    const [line, setLine] = useState<{ shown: string | typeof SUMMARY; left?: string }>({
+        shown: showing,
+    });
+    if (line.shown !== showing)
+        setLine({ shown: showing, ...(line.shown === SUMMARY ? {} : { left: line.shown }) });
+    const leaving =
+        line.left === undefined
+            ? undefined
+            : section.members.find((member) => member.id === line.left);
     const count = section.members.length;
     /* How long the run took, then how many calls it was. */
     const facts = [
         ...(section.durationMs === undefined ? [] : [elapsedTimeFormat(section.durationMs)]),
         `${String(count)} ${count === 1 ? "tool" : "tools"}`,
     ].join(" · ");
-    const latest = section.members.at(-1)!;
-    /* What is leaving the line: the call before the latest, or the latest
-       itself once the summary has taken its place. It stays mounted under its
-       own key so it leaves from where it stood. */
-    const leaving = section.live ? section.members.at(-2) : watched ? latest : undefined;
     const onToolSelect = props.onToolSelect;
     const call = (entry: ConversationToolSectionEntry, state: "current" | "leaving") => (
         <div
             aria-hidden={state === "leaving" ? true : undefined}
             className="happy-tool-section__item"
-            data-arrives={state === "current" ? "" : undefined}
+            data-arrives=""
+            data-arriving-text={state === "leaving" ? "leaving" : undefined}
             data-happy-desktop-ui="tool-section-item"
             data-state={state}
-            key={entry.id}
+            /* Its own key: the call keeps its characters as it leaves. */
+            key={`call:${entry.id}`}
         >
             <AgentActivityRow
                 activity={entry.activity}
                 className="happy-tool-section__call"
-                /* The call comes in a character at a time, and keeps those
-                   characters as it leaves. */
                 motion="arriving"
                 {...(onToolSelect && state === "current"
                     ? { onToolSelect: (tool: ConversationToolCall) => onToolSelect(entry.id, tool) }
@@ -82,7 +94,8 @@ export function AgentToolSection(props: AgentToolSectionProps) {
         items.push(
             <div
                 className="happy-tool-section__item"
-                data-arrives={watched ? "" : undefined}
+                /* The summary arrives only over a call it replaces. */
+                data-arrives={leaving ? "" : undefined}
                 data-happy-desktop-ui="tool-section-summary"
                 data-state="current"
                 key="summary"
@@ -94,7 +107,7 @@ export function AgentToolSection(props: AgentToolSectionProps) {
                     className="happy-tool-section__facts"
                     data-happy-desktop-ui="tool-section-facts"
                 >
-                    {watched ? <ArrivingText value={facts} /> : facts}
+                    {leaving ? <ArrivingText value={facts} /> : facts}
                 </span>
             </div>,
         );

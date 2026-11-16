@@ -41,9 +41,10 @@ import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
  * only: wording, timestamps, controls, and every other piece of row content
  * stay identical across profiles.
  *
- * `arriving` types nothing: the row's verb and subject come in a character at
- * a time whenever the row appears, the way a reply arrives in the mobile app.
- * It is for a line drawn while the reader watches, never for settled history.
+ * `arriving` types nothing: the row's verb, its subject, and what an edit
+ * changed come in a character at a time whenever the row appears, the way a
+ * reply arrives in the mobile app. It is for a line drawn while the reader
+ * watches, never for settled history.
  */
 export type ActivityMotion = "typewriter" | "verb-typed" | "calm-typed" | "calm" | "arriving";
 
@@ -404,14 +405,13 @@ function AgentActivityChangingText(props: {
     value: string;
     typed?: boolean;
     typeFirst?: boolean;
-    /** The label arrives a character at a time, after `lead` others of a line of `run`. */
-    arriving?: { readonly lead: number; readonly run: number };
+    /** The label arrives a character at a time, `lead` characters into its line. */
+    arriving?: { readonly lead: number };
 }) {
     return props.arriving ? (
         <ArrivingText
             data-happy-desktop-ui="agent-activity-changing-text"
             lead={props.arriving.lead}
-            run={props.arriving.run}
             value={props.value}
         />
     ) : (props.typed ?? true) ? (
@@ -1086,12 +1086,11 @@ function AgentToolActivity(props: {
         verb = action.verb;
         primaryText = action.subject;
     } else if (focused && presentation?.type !== "fileDiff") verb = toolVerbFocused(verb);
-    /* A line that arrives brings its verb and subject in as one run. */
-    const arrivingRun =
-        motion === "arriving" ? Array.from(verb).length + Array.from(primaryText).length : 0;
-    const verbArriving = motion === "arriving" ? { lead: 0, run: arrivingRun } : undefined;
-    const subjectArriving =
-        motion === "arriving" ? { lead: Array.from(verb).length, run: arrivingRun } : undefined;
+    /* A line that arrives brings its verb, its subject, and what an edit
+       changed in as one run: each starts where the one before it ends. */
+    const verbArriving = motion === "arriving" ? { lead: 0 } : undefined;
+    const subjectArriving = motion === "arriving" ? { lead: Array.from(verb).length } : undefined;
+    const statsLead = Array.from(verb).length + Array.from(primaryText).length;
     /* Ran outside the sandbox. Said in colour alone — the whole line turns
        amber — because a word in the verb would push the command itself out of
        a row that is already short. A call that stopped or failed never got
@@ -1263,12 +1262,33 @@ function AgentToolActivity(props: {
                         >
                             {stats.added ? (
                                 <span aria-hidden="true" className="happy-agent-activity__added">
-                                    +{compactCount(stats.added)}
+                                    {subjectArriving ? (
+                                        <ArrivingText
+                                            lead={statsLead}
+                                            silent
+                                            value={`+${compactCount(stats.added)}`}
+                                        />
+                                    ) : (
+                                        <>+{compactCount(stats.added)}</>
+                                    )}
                                 </span>
                             ) : null}
                             {stats.deleted ? (
                                 <span aria-hidden="true" className="happy-agent-activity__deleted">
-                                    &minus;{compactCount(stats.deleted)}
+                                    {subjectArriving ? (
+                                        <ArrivingText
+                                            lead={
+                                                statsLead +
+                                                (stats.added
+                                                    ? compactCount(stats.added).length + 1
+                                                    : 0)
+                                            }
+                                            silent
+                                            value={`\u2212${compactCount(stats.deleted)}`}
+                                        />
+                                    ) : (
+                                        <>&minus;{compactCount(stats.deleted)}</>
+                                    )}
                                 </span>
                             ) : null}
                             <span className="happy-visually-hidden">
@@ -2058,7 +2078,6 @@ function AgentLabeledActivity(props: {
     time?: string;
 }) {
     const lead = Array.from(props.label).length;
-    const run = lead + Array.from(props.subject ?? "").length;
     return (
         <div
             className="happy-agent-activity"
@@ -2077,7 +2096,7 @@ function AgentLabeledActivity(props: {
                     data-happy-desktop-ui="agent-activity-verb"
                 >
                     <AgentActivityChangingText
-                        {...(props.arriving ? { arriving: { lead: 0, run } } : {})}
+                        {...(props.arriving ? { arriving: { lead: 0 } } : {})}
                         value={props.label}
                     />
                 </span>
@@ -2087,7 +2106,7 @@ function AgentLabeledActivity(props: {
                         data-happy-desktop-ui="agent-activity-text"
                     >
                         <AgentActivityChangingText
-                            {...(props.arriving ? { arriving: { lead, run } } : {})}
+                            {...(props.arriving ? { arriving: { lead } } : {})}
                             value={props.subject}
                         />
                     </ScrollingText>

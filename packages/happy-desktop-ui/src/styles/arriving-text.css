@@ -28,11 +28,7 @@
     /* A space is a character of the line too, and keeps its width. */
     white-space: pre;
     transform-origin: center;
-    animation: happy-arriving-text-glyph 200ms ease-in-out both;
-    animation-delay: calc(
-        var(--happy-arriving-start, 0ms) + var(--happy-arriving-index, 0) *
-            var(--happy-arriving-step, 25ms)
-    );
+    animation: happy-arriving-text-glyph 200ms ease-in-out var(--happy-arriving-delay, 0ms) both;
 }
 
 @keyframes happy-arriving-text-glyph {
@@ -47,8 +43,34 @@
     }
 }
 
+/*
+ * A line that leaves goes the way it came, played on: each character rises
+ * 6px further, shrinks to half its size and fades, when its place's turn
+ * comes. A line arriving over it on the same clock therefore replaces it
+ * letter by letter.
+ *
+ * The arrival stays first in the list, so a character still on its way in is
+ * not started again, and the leaving has no `from`: it goes from wherever the
+ * arrival has brought the character, which for one that never got to show is
+ * nothing at all. It fills forwards only, so until its turn the character is
+ * exactly what the arrival made it.
+ */
+[data-arriving-text="leaving"] .happy-arriving-text__glyph {
+    animation:
+        happy-arriving-text-glyph 200ms ease-in-out var(--happy-arriving-delay, 0ms) both,
+        happy-arriving-text-leave 160ms ease-in-out var(--happy-arriving-place, 0ms) forwards;
+}
+
+@keyframes happy-arriving-text-leave {
+    to {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.5);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .happy-arriving-text__glyph {
+    .happy-arriving-text__glyph,
+    [data-arriving-text="leaving"] .happy-arriving-text__glyph {
         animation: none;
     }
 }
