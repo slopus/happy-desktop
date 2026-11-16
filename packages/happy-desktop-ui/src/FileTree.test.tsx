@@ -5,6 +5,7 @@ import "./styles/visually-hidden.css";
 import "./styles/icon.css";
 import "./styles/file-tree.css";
 import { FileTree, type FileTreeNode } from "./FileTree";
+import { fileTreeBuild, fileTreeFlatten, fileTreeVisibleFiles } from "./fileTreeBuild";
 import { createRenderer } from "./testing";
 
 /*
@@ -500,3 +501,92 @@ it("routes selection, disclosure, and paging callbacks, and renders loading/empt
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await view.screenshot("FileTree.states");
 }, 120_000);
+
+it("shortens contained labels while preserving canonical selection, external roots, and directory expansion", async () => {
+    const root = "/Users/steve/Happy/Tasks/task_66";
+    const contained = `${root}/.context/task-status.md`;
+    const external = "/Users/steve/Happy/Tasks/task_660/report.md";
+    const entries = [
+        { path: contained, displayPath: ".context/task-status.md", addedLines: 41 },
+        { path: external, addedLines: 3 },
+        // An unrooted historical path must not share the absolute directory's identity.
+        { path: "Users/steve/Happy/Tasks/task_660/report.md", addedLines: 1 },
+    ];
+    const expansion = {
+        opened: new Set<string>(),
+        closed: new Set<string>(),
+        defaultDepth: Infinity,
+    };
+    expect(
+        fileTreeBuild([{ path: `${root}/a\\b.txt`, displayPath: "a\\b.txt" }], expansion),
+    ).toEqual([{ id: `${root}/a\\b.txt`, name: "a\\b.txt", kind: "file" }]);
+    const built = fileTreeBuild(entries, expansion);
+    const directory = built.find((node) => node.id === `${root}/.context`);
+    expect(directory).toMatchObject({
+        name: ".context",
+        expanded: true,
+        children: [{ id: contained, name: "task-status.md" }],
+    });
+    expect(built.find((node) => node.id === "/Users/steve/Happy/Tasks/task_660")).toMatchObject({
+        name: "/Users/steve/Happy/Tasks/task_660",
+    });
+    expect(built.find((node) => node.id === "Users/steve/Happy/Tasks/task_660")).toMatchObject({
+        name: "Users/steve/Happy/Tasks/task_660",
+    });
+    const collapsed = fileTreeBuild(entries, {
+        ...expansion,
+        closed: new Set([`${root}/.context`]),
+    });
+    expect(fileTreeVisibleFiles(collapsed)).not.toContain(contained);
+    const flat = fileTreeFlatten(entries);
+    expect(flat.find((node) => node.id === contained)).toMatchObject({
+        name: "task-status.md",
+        directory: ".context",
+    });
+    expect(flat.find((node) => node.id === external)).toMatchObject({
+        directory: "/Users/steve/Happy/Tasks/task_660",
+    });
+    expect(fileTreeFlatten([{ path: "/report.md" }])).toEqual([
+        { id: "/report.md", name: "/report.md", kind: "file" },
+    ]);
+
+    const selected: string[] = [];
+    const opened: string[] = [];
+    const toggled: string[] = [];
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div style={{ background: "var(--surface)", display: "flex", gap: "24px" }}>
+                <FileTree
+                    data-testid="resolved-tree"
+                    nodes={built}
+                    onSelect={(id) => selected.push(id)}
+                    onOpen={(id) => opened.push(id)}
+                    onToggle={(id) => toggled.push(id)}
+                />
+                <FileTree
+                    data-testid="resolved-list"
+                    nodes={flat}
+                    onSelect={(id) => selected.push(id)}
+                />
+            </div>
+        ),
+        { width: 1000, height: 260, padding: 16 },
+    );
+    await view.ready();
+    const entry = (id: string) =>
+        view.$(
+            `[data-testid="resolved-tree"] [data-path="${CSS.escape(id)}"] [data-happy-desktop-ui="file-tree-entry"]`,
+        ).element as HTMLElement;
+    const label = (id: string) =>
+        entry(id).querySelector('[data-happy-desktop-ui="file-tree-label"]')?.textContent;
+    expect(label(`${root}/.context`)).toBe(".context");
+    expect(label("/Users/steve/Happy/Tasks/task_660")).toBe("/Users/steve/Happy/Tasks/task_660");
+    entry(contained).click();
+    entry(contained).dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    entry(`${root}/.context`).click();
+    expect(selected).toEqual([contained]);
+    expect(opened).toEqual([contained]);
+    expect(toggled).toEqual([`${root}/.context`]);
+    await view.screenshot("FileTree.resolved-paths");
+});

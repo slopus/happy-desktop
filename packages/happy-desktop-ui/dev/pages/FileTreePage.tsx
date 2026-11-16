@@ -1,4 +1,5 @@
 import { FileTree, type FileTreeNode } from "../../src/FileTree";
+import { fileTreeBuild, fileTreeFlatten } from "../../src/fileTreeBuild";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -71,6 +72,27 @@ const manyNodes: FileTreeNode[] = Array.from({ length: 2000 }, (_, index) => ({
     name: `module-${String(index)}.ts`,
     kind: "file" as const,
 }));
+
+const resolvedEntries = [
+    {
+        path: "/Users/steve/Happy/Tasks/task_66/.context/task-status.md",
+        displayPath: ".context/task-status.md",
+        addedLines: 41,
+    },
+    {
+        path: "/Users/steve/Happy/Tasks/task_66/happy-cluster-secret-inventory.md",
+        displayPath: "happy-cluster-secret-inventory.md",
+        addedLines: 191,
+        deletedLines: 1,
+    },
+    { path: "/Users/steve/Happy/Tasks/task_660/report.md", addedLines: 3 },
+];
+const resolvedTree = fileTreeBuild(resolvedEntries, {
+    opened: new Set(),
+    closed: new Set(),
+    defaultDepth: Infinity,
+});
+const resolvedList = fileTreeFlatten(resolvedEntries);
 
 function frame(children: ReturnType<typeof FileTree>, width = 320) {
     return (
@@ -152,6 +174,18 @@ export function FileTreePage() {
 
             <Specimen detail="Nothing to show" label="Empty" number="05" stage="surface">
                 {frame(<FileTree nodes={[]} />)}
+            </Specimen>
+
+            <Specimen
+                detail="Workspace-relative labels retain full path identities; external files keep their absolute root"
+                label="Resolved change paths"
+                number="06"
+                stage="surface"
+            >
+                <div style={{ display: "flex", gap: "24px" }}>
+                    {frame(<FileTree nodes={resolvedTree} />, 440)}
+                    {frame(<FileTree nodes={resolvedList} />, 440)}
+                </div>
             </Specimen>
         </ComponentPage>
     );

@@ -3,6 +3,8 @@ import { fileEntriesSort } from "./fileTreeSort";
 
 export interface FileTreeBuildEntry {
     readonly path: string;
+    /** A workspace-relative suffix of `path`, used only for labels and nesting. */
+    readonly displayPath?: string;
     readonly gitStatus?: FileTreeGitStatus;
     readonly addedLines?: number;
     readonly deletedLines?: number;
@@ -55,7 +57,8 @@ function entryFacts(entry: FileTreeBuildEntry) {
 }
 
 /**
- * Turns a flat list of repository-relative paths into `FileTree` nodes.
+ * Turns a flat list of paths into `FileTree` nodes. A displayPath can shorten a
+ * contained path without changing file or directory identities.
  *
  * Directories keep their full path as their id, matching the files beneath
  * them, so expansion state and selection are addressed the same way everywhere
@@ -77,40 +80,53 @@ export function fileTreeBuild(
     expansion: FileTreeExpansion,
 ): FileTreeNode[] {
     interface Directory {
+        readonly name: string;
+        readonly path: string;
         readonly children: Map<string, Directory>;
         readonly files: (FileTreeBuildEntry & { name: string })[];
     }
-    const directoryCreate = (): Directory => ({ children: new Map(), files: [] });
-    const root = directoryCreate();
+    const directoryCreate = (name: string, path: string): Directory => ({
+        name,
+        path,
+        children: new Map(),
+        files: [],
+    });
+    const root = directoryCreate("", "");
 
     for (const entry of fileEntriesSort(entries)) {
-        const segments = entry.path.split("/").filter((segment) => segment.length > 0);
+        const shown = entry.displayPath ?? entry.path;
+        const segments = shown.split("/").filter((segment) => segment.length > 0);
+        // An absolute root is part of both its label and its identity, not an empty segment.
+        if (shown.startsWith("/") && segments.length > 0)
+            segments[0] = `${shown.startsWith("//") ? "//" : "/"}${segments[0]}`;
         const name = segments.pop();
         if (name === undefined) continue;
         let directory = root;
+        let path = entry.path.slice(0, entry.path.length - shown.length);
         for (const segment of segments) {
-            let child = directory.children.get(segment);
+            path = path === "" || path.endsWith("/") ? `${path}${segment}` : `${path}/${segment}`;
+            let child = directory.children.get(path);
             if (!child) {
-                child = directoryCreate();
-                directory.children.set(segment, child);
+                child = directoryCreate(segment, path);
+                directory.children.set(path, child);
             }
             directory = child;
         }
         directory.files.push({ ...entry, name });
     }
 
-    const nodesOf = (directory: Directory, prefix: string, depth: number): FileTreeNode[] => {
+    const nodesOf = (directory: Directory, depth: number): FileTreeNode[] => {
         const directories: FileTreeNode[] = [];
-        for (const [segment, child] of directory.children) {
-            let label = segment;
-            let path = prefix ? `${prefix}/${segment}` : segment;
+        for (const child of directory.children.values()) {
+            let label = child.name;
+            let path = child.path;
             let node = child;
             // Collapse the chain while this level holds exactly one directory
             // and no files of its own — there is nothing to choose between here.
             while (node.files.length === 0 && node.children.size === 1) {
-                const [nextSegment, nextChild] = [...node.children][0]!;
-                label = `${label}/${nextSegment}`;
-                path = `${path}/${nextSegment}`;
+                const nextChild = [...node.children.values()][0]!;
+                label = `${label}/${nextChild.name}`;
+                path = nextChild.path;
                 node = nextChild;
             }
             const open = fileTreeExpanded(expansion, path, depth);
@@ -123,7 +139,7 @@ export function fileTreeBuild(
                 // is already in memory, but handing every unopened branch to the
                 // renderer would build a repository's worth of rows nobody asked
                 // to see.
-                ...(open ? { children: nodesOf(node, path, depth + 1) } : {}),
+                ...(open ? { children: nodesOf(node, depth + 1) } : {}),
             });
         }
         const files = directory.files.map((file) => ({
@@ -135,7 +151,7 @@ export function fileTreeBuild(
         return [...directories, ...files];
     };
 
-    return nodesOf(root, "", 0);
+    return nodesOf(root, 0);
 }
 
 /**
@@ -167,12 +183,13 @@ export function fileTreeRanked(entries: readonly FileTreeBuildEntry[]): FileTree
 
 function fileTreeRows(entries: readonly FileTreeBuildEntry[]): FileTreeNode[] {
     return entries.map((entry) => {
-        const cut = entry.path.lastIndexOf("/");
+        const shown = entry.displayPath ?? entry.path;
+        const cut = shown.lastIndexOf("/");
         return {
             id: entry.path,
-            name: cut === -1 ? entry.path : entry.path.slice(cut + 1),
+            name: cut <= 0 ? shown : shown.slice(cut + 1),
             kind: "file" as const,
-            ...(cut === -1 ? {} : { directory: entry.path.slice(0, cut) }),
+            ...(cut <= 0 ? {} : { directory: shown.slice(0, cut) }),
             ...entryFacts(entry),
         };
     });

@@ -3,9 +3,10 @@ import type {
     ConversationDiffLine,
     ConversationEntry,
     ConversationFileDiff,
+    ConversationToolCall,
 } from "./conversationEntry.js";
 
-/** One file a conversation's edits touched, with the lines they changed. */
+/** One file a conversation's edits touched, addressed by its resolved path when known. */
 export interface ConversationFileChange {
     readonly path: string;
     readonly added: number;
@@ -161,14 +162,73 @@ function hunksOf(lines: readonly Line[]): ConversationDiffHunk[] {
     return hunks;
 }
 
+/** Lexical normalization only: filesystem aliases and a compute's home are not known here. */
+function filePathNormalize(path: string): string {
+    const windows = /^[a-z]:[\\/]/iu.test(path) || path.startsWith("\\\\");
+    const normalized = windows ? path.replaceAll("\\", "/") : path;
+    // A UNC share has its own root boundary. Keep its spelling rather than
+    // guessing how parent segments resolve against a share we cannot inspect.
+    if (normalized.startsWith("//")) return normalized;
+    const root = /^[a-z]:\//iu.exec(normalized)?.[0] ?? (normalized.startsWith("/") ? "/" : "");
+    const segments: string[] = [];
+    for (const segment of normalized.slice(root.length).split("/")) {
+        if (segment === "" || segment === ".") continue;
+        if (segment === "..") {
+            const last = segments.at(-1);
+            if (last !== undefined && last !== ".." && last !== "~") segments.pop();
+            else if (root === "") segments.push(segment);
+        } else segments.push(segment);
+    }
+    return root + segments.join("/") || ".";
+}
+
+function filePathRooted(path: string): boolean {
+    return (
+        path.startsWith("/") || /^[a-z]:\//iu.test(path) || path === "~" || path.startsWith("~/")
+    );
+}
+
+/** New presentations name the target outright; old patches kept their header's spelling. */
+function fileEditPath(path: string, tool: ConversationToolCall, cwd: string | undefined): string {
+    const normalized = filePathNormalize(path);
+    if (filePathRooted(normalized) || tool.toolName !== "apply_patch") return normalized;
+    const args = tool.arguments;
+    // A missing argument payload cannot establish that the call used the default cwd.
+    if (
+        args === null ||
+        typeof args !== "object" ||
+        !("patch" in args) ||
+        typeof args.patch !== "string"
+    )
+        return normalized;
+    // Desktop's old Docker projection uses this display namespace, not a runtime
+    // directory. Decline default-root inference there, even for a host using that prefix.
+    const operationCwd = cwd?.startsWith("/docker/") ? undefined : cwd;
+    const workdir =
+        "workdir" in args && typeof args.workdir === "string" ? args.workdir : operationCwd;
+    if (workdir === undefined || workdir === "") return normalized;
+    const directory = filePathNormalize(workdir);
+    const base =
+        filePathRooted(directory) || operationCwd === undefined || operationCwd === ""
+            ? directory
+            : filePathNormalize(`${operationCwd}/${directory}`);
+    return filePathNormalize(`${base}/${normalized}`);
+}
+
 /** The edits a conversation made to files, in the order they were made. A failed call changed nothing. */
-function fileDiffsOf(entries: readonly ConversationEntry[]): readonly ConversationFileDiff[] {
+function fileDiffsOf(
+    entries: readonly ConversationEntry[],
+    cwd: string | undefined,
+): readonly ConversationFileDiff[] {
     const diffs: ConversationFileDiff[] = [];
     for (const entry of entries) {
         if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") continue;
         const tool = entry.activity.tool;
         if (tool.failed || tool.presentation?.type !== "fileDiff") continue;
-        diffs.push(...tool.presentation.files);
+        for (const file of tool.presentation.files) {
+            const path = fileEditPath(file.path, tool, cwd);
+            diffs.push(path === file.path ? file : { ...file, path });
+        }
     }
     return diffs;
 }
@@ -210,25 +270,30 @@ function fileDiffCompose(
  * file before the first of them. This is the record for work outside a Git
  * checkout, which has no working-tree diff to read; its counts are the ones
  * `conversationFileChanges` reports for the same file.
+ * `cwd` is the conversation's operation directory, used only for old relative patch records.
  */
 export function conversationFileDiff(
     entries: readonly ConversationEntry[],
     path: string,
+    cwd?: string,
 ): ConversationFileDiff | undefined {
-    const edits = fileDiffsOf(entries).filter((edit) => edit.path === path);
-    return edits.length === 0 ? undefined : fileDiffCompose(path, edits);
+    const target = filePathNormalize(path);
+    const edits = fileDiffsOf(entries, cwd).filter((edit) => edit.path === target);
+    return edits.length === 0 ? undefined : fileDiffCompose(target, edits);
 }
 
 /**
  * The files a conversation changed, in the order they were first edited, each
  * counted from its composed diff: a line written and then removed again is not
  * a change, and a file whose edits cancel out is left out.
+ * New records already name their resolved target; `cwd` resolves old patch headers.
  */
 export function conversationFileChanges(
     entries: readonly ConversationEntry[],
+    cwd?: string,
 ): readonly ConversationFileChange[] {
     const edits = new Map<string, ConversationFileDiff[]>();
-    for (const edit of fileDiffsOf(entries)) {
+    for (const edit of fileDiffsOf(entries, cwd)) {
         const known = edits.get(edit.path);
         if (known) known.push(edit);
         else edits.set(edit.path, [edit]);

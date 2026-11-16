@@ -2112,10 +2112,14 @@ function markdownHighlightCacheKey(path: string, hash: string): string {
  * A leading `./` is the same file written the way a shell prompt writes it, and
  * the host addresses that file without it.
  */
-function workspacePathRelative(path: string, root: string | undefined): string {
-    const normalized = path.replaceAll("\\", "/").replace(/^(?:\.\/)+/u, "");
+export function workspacePathRelative(path: string, root: string | undefined): string {
+    const windows =
+        /^[a-z]:[\\/]/iu.test(path) ||
+        path.startsWith("\\\\") ||
+        (root !== undefined && (/^[a-z]:[\\/]/iu.test(root) || root.startsWith("\\\\")));
+    const normalized = (windows ? path.replaceAll("\\", "/") : path).replace(/^(?:\.\/)+/u, "");
     if (root === undefined) return normalized;
-    const base = root.replaceAll("\\", "/").replace(/\/+$/u, "");
+    const base = (windows ? root.replaceAll("\\", "/") : root).replace(/\/+$/u, "");
     const contained = /^[a-z]:\//iu.test(base)
         ? normalized.toLowerCase().startsWith(`${base.toLowerCase()}/`)
         : normalized.startsWith(`${base}/`);
@@ -7736,20 +7740,32 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // What the work changed: the checkout's own diff where Git keeps one, and
     // the conversation's edits where it does not, such as a task's folder.
     const floatyFromGit = (openGroup?.changes.length ?? 0) > 0;
+    // The old Docker cwd is a display placeholder, so it cannot root file identity or labels.
+    const conversationCwd =
+        conversation.type === "ready" &&
+        conversation.value.session.type === "ready" &&
+        !conversation.value.session.value.cwd.startsWith("/docker/")
+            ? conversation.value.session.value.cwd
+            : undefined;
     const floatyEdits =
         floatyFromGit || conversation.type !== "ready"
             ? []
-            : conversationFileChanges(conversation.value.entries);
+            : conversationFileChanges(conversation.value.entries, conversationCwd);
     const changeDiff =
         panel.changeViewPath === undefined || conversation.type !== "ready"
             ? undefined
-            : conversationFileDiff(conversation.value.entries, panel.changeViewPath);
+            : conversationFileDiff(
+                  conversation.value.entries,
+                  panel.changeViewPath,
+                  conversationCwd,
+              );
     // The listing Changes shows: the checkout's own where Git keeps one, the
     // conversation's edits where it does not.
     const panelChanges: readonly HappyAgentPanelChange[] = floatyFromGit
         ? (openGroup?.changes ?? [])
         : floatyEdits.map((change) => ({
               path: change.path,
+              displayPath: workspacePathRelative(change.path, conversationCwd),
               addedLines: change.added,
               deletedLines: change.deleted,
           }));
@@ -11780,7 +11796,7 @@ function HappyAgentCreateTaskSurface(props: {
 type HappyAgentPanelChange = Pick<
     OpenGroup["changes"][number],
     "path" | "addedLines" | "deletedLines"
-> & { readonly status?: OpenGroup["changes"][number]["status"] };
+> & { readonly status?: OpenGroup["changes"][number]["status"]; readonly displayPath?: string };
 
 /**
  * One changed file as a listing entry. Under "All files" the changed ones keep
@@ -11790,6 +11806,7 @@ type HappyAgentPanelChange = Pick<
 function changeEntry(change: HappyAgentPanelChange): FileTreeBuildEntry {
     return {
         path: change.path,
+        ...(change.displayPath === undefined ? {} : { displayPath: change.displayPath }),
         ...(change.status === undefined ? {} : { gitStatus: change.status }),
         ...(change.addedLines === undefined ? {} : { addedLines: change.addedLines }),
         ...(change.deletedLines === undefined ? {} : { deletedLines: change.deletedLines }),

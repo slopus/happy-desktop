@@ -19,10 +19,25 @@ import {
 } from "happy-desktop-state";
 import {
     workspaceCloseTargetFind,
+    workspacePathRelative,
     AppHappyAgentView,
     type AppHappyAgentDirectorySnapshot,
     type AppHappyAgentDirectoryStore,
 } from "../../sources/AppHappyAgentView";
+
+it("shortens contained Changes paths only at a directory boundary and retains external attribution", () => {
+    const root = "/Users/steve/Happy/Tasks/task_66";
+    expect(workspacePathRelative(`${root}/.context/task-status.md`, root)).toBe(
+        ".context/task-status.md",
+    );
+    const neighboringTask = "/Users/steve/Happy/Tasks/task_660/report.md";
+    expect(workspacePathRelative(neighboringTask, root)).toBe(neighboringTask);
+    expect(workspacePathRelative("/tmp/report.md", root)).toBe("/tmp/report.md");
+    expect(workspacePathRelative("~/a/report.md", root)).toBe("~/a/report.md");
+    expect(workspacePathRelative(`${root}/report.md`, undefined)).toBe(`${root}/report.md`);
+    expect(workspacePathRelative(`${root}/a\\b.txt`, root)).toBe("a\\b.txt");
+    expect(workspacePathRelative("C:\\task\\src\\same.txt", "C:\\task")).toBe("src/same.txt");
+});
 
 /* The local workspace renders the shared cloud components with local product
  * state. These tests pin the parts of that contract the app layer owns: which
