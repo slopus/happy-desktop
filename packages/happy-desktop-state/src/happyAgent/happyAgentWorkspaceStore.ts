@@ -63,6 +63,7 @@ import {
 import {
     HAPPY_AGENT_VIEW_PREFERENCES_EMPTY,
     happyAgentViewPreferencesParse,
+    happyAgentViewPreferencesFileListWidthUpdate,
     happyAgentViewPreferencesTiersUpdate,
     happyAgentViewPreferencesUpdate,
     type HappyAgentGroupViewPreferences,
@@ -847,13 +848,19 @@ export interface HappyAgentWorkspaceSnapshot {
      */
     readonly reviews: ReadonlyMap<HappyAgentGroupId, HappyAgentReview>;
     /**
-     * How wide the right panel is in the addressed checkout, in CSS pixels, or
-     * nothing where this reader has never sized it and the product's own default
-     * applies. Absent rather than pre-filled, because a remembered width and a
-     * width nobody chose are different things and only the first should survive
-     * a change to the default.
+     * How wide the right panel is in the addressed checkout, in CSS pixels:
+     * the width the reader left this checkout at, else the width they last left
+     * any checkout at, else nothing — the reader has never sized a panel and
+     * the product's own default applies. Absent rather than pre-filled, because
+     * a remembered width and a width nobody chose are different things and only
+     * the first should survive a change to the default.
      */
     readonly panelWidth?: number;
+    /**
+     * How wide the Files tab's listing is beside its preview, in CSS pixels, or
+     * nothing where the reader has never moved it.
+     */
+    readonly fileListWidth?: number;
     /**
      * Directories the reader opened in the tree, by full path.
      *
@@ -1839,10 +1846,11 @@ export interface HappyAgentWorkspaceStore {
     attachmentDownload(attachment: string, name: string): Promise<Blob> | undefined;
     /**
      * Opens one workspace file in the panel's viewer, beside the conversation
-     * that named it. This is what a link in a message and the file a tool call
-     * worked on resolve to: the file is read for showing, the panel's viewer tab
-     * appears immediately with that read's loading state, and the main content
-     * — the transcript the reader is following — is left exactly as it was.
+     * that named it. This is what a click in the Files listing, a link in a
+     * message, and the file a tool call worked on resolve to: the file is read
+     * for showing, the Files tab's preview shows it immediately with that
+     * read's loading state, and the main content — the transcript the reader
+     * is following — is left exactly as it was.
      *
      * It is `fileOpen` with the other placement, and opens the same tab, read
      * the same way, into the same editor. The panel holds one file at a time,
@@ -1858,7 +1866,7 @@ export interface HappyAgentWorkspaceStore {
     filePanelClose(): void;
     /**
      * Follows a reference — a `Store.ts:120` in a message, a link in a
-     * document — into the panel's file viewer, after asking the checkout
+     * document — into the Files tab's preview, after asking the checkout
      * whether the file is there. A reference is written by hand or by a model,
      * and either can name a file that does not exist; opening a tab on it
      * would put an error where the reader expected the file. When the checkout
@@ -1991,8 +1999,13 @@ export interface HappyAgentWorkspaceStore {
     /** Keeps the written note. An empty one is a cancel, not an empty comment. */
     commentDraftSubmit(): void;
     commentRemove(commentId: HappyAgentCommentId): void;
-    /** Records how wide the reader left the right panel in this checkout. */
+    /**
+     * Records how wide the reader left the right panel in this checkout, which
+     * is also the width a checkout nobody has sized opens at.
+     */
     panelWidthUpdate(groupId: HappyAgentGroupId, width: number): void;
+    /** Records how wide the reader left the Files tab's listing beside its preview. */
+    fileListWidthUpdate(width: number): void;
     /**
      * Records that the reader wants one directory open or closed.
      *
@@ -3391,7 +3404,8 @@ export function happyAgentWorkspaceStoreCreate(
             nextFileScope === "all"
                 ? "tree"
                 : (nextView.fileLayout ?? HAPPY_AGENT_FILE_LAYOUT_DEFAULT);
-        const nextPanelWidth = nextView.panelWidth;
+        const nextPanelWidth = nextView.panelWidth ?? viewPreferences.panelWidth;
+        const nextFileListWidth = viewPreferences.fileListWidth;
         // Recomputed here rather than remembered: it is derived from the same
         // list snapshot this projection is built from, so it cannot lag behind
         // the rows it describes. The panel is told too, since a shell is started
@@ -3442,6 +3456,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.fileOpenFailure === fileOpenFailure &&
                 snapshot.reviews === reviews &&
                 snapshot.panelWidth === nextPanelWidth &&
+                snapshot.fileListWidth === nextFileListWidth &&
                 snapshot.fileTreeExpanded === fileTreeExpanded &&
                 snapshot.fileTreeCollapsed === fileTreeCollapsed &&
                 snapshot.workspaceFiles === workspaceFiles &&
@@ -3472,6 +3487,9 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(fileOpenFailure === undefined ? {} : { fileOpenFailure }),
                           reviews,
                           ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
+                          ...(nextFileListWidth === undefined
+                              ? {}
+                              : { fileListWidth: nextFileListWidth }),
                           fileTreeExpanded,
                           fileTreeCollapsed,
                           ...(workspaceFiles ? { workspaceFiles } : {}),
@@ -7791,7 +7809,7 @@ export function happyAgentWorkspaceStoreCreate(
                 if (disposed || generation !== fileReferenceGeneration) return;
                 fileOpenFailure = undefined;
                 fileTabOpen(groupId, path, kind, false, "panel", selection);
-                panel.fileViewOpen();
+                panel.filesPreviewOpen();
                 recompute();
             },
             (error: unknown) => {
@@ -8555,7 +8573,7 @@ export function happyAgentWorkspaceStoreCreate(
         filePanelOpen(groupId, path, kind, selection) {
             if (disposed) return;
             fileTabOpen(groupId, path, kind, false, "panel", selection);
-            panel.fileViewOpen();
+            panel.filesPreviewOpen();
         },
         fileReferenceOpen(groupId, path, kind, selection) {
             if (disposed) return;
@@ -8708,7 +8726,7 @@ export function happyAgentWorkspaceStoreCreate(
                         activeMainViewId = undefined;
                         displayedMainViewId = undefined;
                     }
-                    panel.fileViewOpen();
+                    panel.filesPreviewOpen();
                 } else {
                     panel.fileViewClose();
                     // A glance the reader settled on is a document they keep,
@@ -8920,6 +8938,17 @@ export function happyAgentWorkspaceStoreCreate(
             const next = Math.round(width);
             if (!Number.isFinite(next) || groupView(groupId).panelWidth === next) return;
             viewPreferencesWrite(groupId, { panelWidth: next });
+            recompute();
+        },
+        fileListWidthUpdate(width) {
+            const next = Math.round(width);
+            if (!Number.isFinite(next) || viewPreferences.fileListWidth === next) return;
+            viewPreferences = happyAgentViewPreferencesFileListWidthUpdate(viewPreferences, next);
+            try {
+                deps.viewPreferences?.write(viewPreferences);
+            } catch {
+                // Kept on screen for as long as the window stays open.
+            }
             recompute();
         },
         fileTreeExpandedUpdate(path, expanded) {
