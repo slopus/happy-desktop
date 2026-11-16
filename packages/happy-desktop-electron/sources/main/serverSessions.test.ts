@@ -35,6 +35,8 @@ function serverCreate(
         readonly audience?: readonly string[];
         /** Issues no refresh token, as Happy Cloud's account pass. */
         readonly noRefresh?: boolean;
+        /** Answers every refresh with this instead. */
+        readonly refreshAnswer?: () => Response;
     } = {},
 ) {
     let issued = 0;
@@ -60,6 +62,8 @@ function serverCreate(
         if (url.href === "https://login.example.com/token") {
             const form = Object.fromEntries(new URLSearchParams(String(init?.body)));
             tokenRequests.push(form);
+            if (form.grant_type === "refresh_token" && options.refreshAnswer)
+                return options.refreshAnswer();
             if (form.grant_type === "refresh_token" && options.refreshRefused)
                 return Response.json({ error: "invalid_grant" }, { status: 400 });
             if (form.grant_type === "authorization_code") await options.exchangeGate;
@@ -179,6 +183,42 @@ it("refreshes once for many refusals, and hands a newer token to a caller that i
 
 it("ends the sign-in when the refresh is refused, and says so", async () => {
     const context = sessionsCreate(serverCreate({ refreshRefused: true }));
+    await signedIn(context);
+    expect(await context.sessions.refresh("team", access(1))).toBeUndefined();
+    expect(tokenOf(context)).toBeUndefined();
+    expect(context.sessions.get()).toEqual([
+        {
+            connectionId: "team",
+            state: "signedOut",
+            message: "Your sign-in to this server ended. Sign in again.",
+        },
+    ]);
+});
+
+it.each([
+    [
+        "503 temporarily_unavailable",
+        () => Response.json({ error: "temporarily_unavailable" }, { status: 503 }),
+    ],
+    [
+        "502 from a gateway's HTML page",
+        () => new Response("<html>Bad gateway</html>", { status: 502 }),
+    ],
+    ["429", () => new Response("Too many requests", { status: 429 })],
+])("keeps the sign-in when a refresh is answered %s", async (_answer, refreshAnswer) => {
+    const context = sessionsCreate(serverCreate({ refreshAnswer }));
+    await signedIn(context);
+    expect(await context.sessions.refresh("team", access(1))).toBeUndefined();
+    expect(tokenOf(context)).toBe(access(1));
+    expect(context.sessions.get()).toEqual([{ connectionId: "team", state: "signedIn" }]);
+});
+
+it("ends the sign-in when a refresh is answered 400 invalid_grant", async () => {
+    const context = sessionsCreate(
+        serverCreate({
+            refreshAnswer: () => Response.json({ error: "invalid_grant" }, { status: 400 }),
+        }),
+    );
     await signedIn(context);
     expect(await context.sessions.refresh("team", access(1))).toBeUndefined();
     expect(tokenOf(context)).toBeUndefined();

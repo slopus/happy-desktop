@@ -187,6 +187,16 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     let closed = false;
     let rosterTimer: ReturnType<typeof setTimeout> | undefined;
     const direct = deps.direct;
+    /**
+     * A refresh answered 5xx or 429 is a fault on the way, not a refusal: it
+     * fails like an unreachable server, so the token is kept and asked again.
+     */
+    const refreshFetch: typeof globalThis.fetch = async (input, init) => {
+        const response = await deps.fetch(input, init);
+        if (response.status >= 500 || response.status === 429)
+            throw new TypeError(`The sign-in server answered ${String(response.status)}.`);
+        return response;
+    };
     /** Kept sign-ins being refreshed, by connection, until they are held or dropped. */
     const restoring = new Map<string, { timer?: ReturnType<typeof setTimeout> }>();
     /** Whether the kept sign-ins were read: until then nothing may overwrite them. */
@@ -282,7 +292,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
             resource: stored.resource,
             serverUrl: stored.serverUrl,
         };
-        void refreshOAuthCredential(credential, { fetch: deps.fetch }).then(
+        void refreshOAuthCredential(credential, { fetch: refreshFetch }).then(
             (fresh) => {
                 if (closed || !restoring.has(stored.connectionId)) return;
                 restoring.delete(stored.connectionId);
@@ -468,7 +478,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 if (!directIs(connectionId)) rosterReconcile(servers);
                 if (sessions.get(connectionId) !== session) return undefined;
                 const credential = await refreshOAuthCredential(session.credential, {
-                    fetch: deps.fetch,
+                    fetch: refreshFetch,
                 });
                 if (sessions.get(connectionId) !== session) return undefined;
                 // A refreshed token for another server ends the sign-in like a refusal.
