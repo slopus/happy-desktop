@@ -24,11 +24,12 @@ export type FileSplitProps = {
     /** The selected file, drawn beside the listing. Absent, the column says how to fill it. */
     preview?: ReactNode;
     /**
-     * Which file `preview` is showing. Where the split is too narrow for both
-     * columns the preview replaces the listing, with a way back; picking
-     * another file brings its preview forward again.
+     * How many times the caller has been asked to show a file here, counting
+     * a pick of the file already showing. Where the split is too narrow for
+     * both columns the preview replaces the listing, with a way back; each new
+     * count brings the preview forward again. Without it, the way back is final.
      */
-    previewKey?: string;
+    previewRequest?: number;
     /** Listing width in CSS pixels; `FILE_SPLIT_LIST_DEFAULT_WIDTH` where nobody chose one. */
     listWidth?: number;
     /** Reports the settled width after a drag or keyboard step. */
@@ -66,7 +67,7 @@ export function FileSplit(props: FileSplitProps) {
         "style",
         "listing",
         "preview",
-        "previewKey",
+        "previewRequest",
         "listWidth",
         "onListWidthChange",
         "emptyTitle",
@@ -75,10 +76,10 @@ export function FileSplit(props: FileSplitProps) {
     ]);
     const [width, setWidth] = useState(0);
     const [dragWidth, setDragWidth] = useState<number>();
-    // The preview the reader stepped back from, while stacked. Comparing it to
-    // the preview now on screen is what lets the next pick come forward without
-    // anything having to reset this.
-    const [listShownFor, setListShownFor] = useState<string | null>();
+    // The request the reader stepped back from, while stacked. The caller's next
+    // request differs from it, so the next pick comes forward without anything
+    // having to reset this — the same file picked again included.
+    const [listShownFor, setListShownFor] = useState<number>();
     // React Compiler keeps this callback's identity, so the observer lives as
     // long as the node.
     const rootRef = (node: HTMLDivElement | null) => {
@@ -96,10 +97,10 @@ export function FileSplit(props: FileSplitProps) {
         LIST_MIN_WIDTH,
         listMax,
     );
-    const previewKey = local.previewKey ?? null;
+    const previewRequest = local.previewRequest ?? 0;
     const showing: "list" | "preview" | "both" = !stacked
         ? "both"
-        : local.preview !== undefined && listShownFor !== previewKey
+        : local.preview !== undefined && listShownFor !== previewRequest
           ? "preview"
           : "list";
     return (
@@ -137,7 +138,7 @@ export function FileSplit(props: FileSplitProps) {
                     <div className="happy-file-split__back" data-happy-desktop-ui="file-split-back">
                         <Button
                             icon="chevron-left"
-                            onClick={() => setListShownFor(previewKey)}
+                            onClick={() => setListShownFor(previewRequest)}
                             size="small"
                             variant="ghost"
                         >

@@ -79,6 +79,9 @@ function frame(children: ReactNode, width: number, height = 440) {
 function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileDiffMode }) {
     const [layout, layoutSet] = useState<FileBrowserLayout>("flat");
     const [selected, selectedSet] = useState<string | undefined>(props.initial);
+    // Counts every pick, the file already showing included, as the product's
+    // panel store does.
+    const [picks, picksSet] = useState(0);
     const [listWidth, listWidthSet] = useState<number>();
     const [mode, modeSet] = useState<ChangedFileDiffMode>(props.mode ?? "unified");
     return frame(
@@ -112,7 +115,7 @@ function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileD
                               path={selected}
                           />
                       ),
-                      previewKey: selected,
+                      previewRequest: picks,
                   }
                 : {})}
             emptyDescription="Its contents or changes show here, beside the list."
@@ -124,7 +127,10 @@ function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileD
                     layout={layout}
                     nodes={fileTreeFlatten(changed)}
                     onLayoutChange={layoutSet}
-                    onSelect={(id) => selectedSet(id)}
+                    onSelect={(id) => {
+                        selectedSet(id);
+                        picksSet((count) => count + 1);
+                    }}
                     scope="changed"
                     {...(selected ? { selectedId: selected } : {})}
                 />
