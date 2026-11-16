@@ -38,8 +38,12 @@ export interface HappyAgentSearchDeps {
 
 /** How long typing has to pause before the Happy Agent is asked. */
 const DEBOUNCE_MS = 120;
-/** How many hits one answer asks for. */
-const LIMIT = 20;
+/**
+ * How many hits one answer asks for. A long chat can match on every one of
+ * its messages, and the palette shows one row per chat, so it asks for enough
+ * to still reach several chats.
+ */
+const LIMIT = 50;
 const OFF: HappyAgentSearchSnapshot = { status: "off" };
 
 /** One wire result as its product variant; a person takes their photo from the team. */
