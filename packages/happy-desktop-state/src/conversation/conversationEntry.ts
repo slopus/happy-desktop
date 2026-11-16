@@ -84,6 +84,12 @@ export interface ConversationMessageProjection {
     readonly changePts: string;
     readonly sender?: ConversationAuthor;
     readonly text: string;
+    /**
+     * Replies an agent offered at the end of its text, each sent as the
+     * person's next message when chosen; the block that offered them is not
+     * in `text` (`conversationTextOptions`).
+     */
+    readonly options?: readonly string[];
     readonly generationStatus?: "streaming" | "complete" | "failed";
     readonly agentTrace?: AgentTurnTraceSummary;
     readonly reactions: readonly ConversationReaction[];

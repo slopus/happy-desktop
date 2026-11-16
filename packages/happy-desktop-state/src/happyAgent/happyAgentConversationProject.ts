@@ -19,6 +19,7 @@ import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type { AgentTurnTraceSummary } from "../types.js";
 import { happyAgentInboundMessageOmit } from "./happyAgentInboundMessageProject.js";
 import { happyAgentStreamingMarkdownTrim } from "./happyAgentStreamingMarkdown.js";
+import { conversationTextOptions } from "../happyAgentConnection/conversationTextOptions.js";
 import {
     happyAgentDelegatedChildrenByRow,
     happyAgentDelegationEntryProject,
@@ -806,15 +807,16 @@ function happyAgentConnectGroupProject(
                 // and replaces "Waiting for model" when real output arrives.
                 break;
             case "agent_text": {
-                const text = element.complete
-                    ? element.text
-                    : happyAgentStreamingMarkdownTrim(element.text);
+                const { text, options } = conversationTextOptions(
+                    element.complete ? element.text : happyAgentStreamingMarkdownTrim(element.text),
+                    element.complete,
+                );
                 /* A text block opens before the model has said anything into
                    it. Projecting that empty block reserves a blank message row
                    in the transcript moments before the first words arrive, so
                    the reader watches a gap open and then fill. The live status
                    already reports the turn; the row belongs to the text. */
-                if (text.trim().length === 0) break;
+                if (text.trim().length === 0 && options === undefined) break;
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -824,6 +826,7 @@ function happyAgentConnectGroupProject(
                         sessionId: input.sessionId,
                         sequence,
                         text,
+                        ...(options ? { options } : {}),
                         createdAt: element.createdAt,
                         author: agentAuthor,
                         generationStatus: element.complete ? "complete" : "streaming",
@@ -1253,6 +1256,7 @@ function messageProject(input: {
     readonly sessionId: string;
     readonly sequence: string;
     readonly text: string;
+    readonly options?: readonly string[];
     readonly createdAt: number;
     readonly author: ConversationAuthor;
     readonly attachments?: ConversationMessageProjection["attachments"];
@@ -1266,6 +1270,7 @@ function messageProject(input: {
         changePts: input.sequence,
         sender: input.author,
         text: input.text,
+        ...(input.options ? { options: input.options } : {}),
         attachments: input.attachments ?? [],
         reactions: [],
         createdAt: new Date(input.createdAt).toISOString(),
