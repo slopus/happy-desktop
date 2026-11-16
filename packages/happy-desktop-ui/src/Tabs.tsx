@@ -752,10 +752,18 @@ export function Tabs(props: TabsProps) {
         event.preventDefault();
         local.onClose(tab.id);
     };
-    // The tab Tab lands on: the selected one, or the first while none is.
-    const focusableId = local.tabs.some((tab) => tab.id === local.activeId)
-        ? local.activeId
-        : local.tabs[0]?.id;
+    // The tab the focus is on while it is inside the strip. It holds the
+    // strip's one stop, so Tab from a tab the arrows reached leaves the strip
+    // instead of landing on the selected tab beside it.
+    const [focusedId, setFocusedId] = useState<string>();
+    // The tab Tab lands on: the focused one, else the selected one, or the
+    // first while none is.
+    const focusableId =
+        focusedId !== undefined && local.tabs.some((tab) => tab.id === focusedId)
+            ? focusedId
+            : local.tabs.some((tab) => tab.id === local.activeId)
+              ? local.activeId
+              : local.tabs[0]?.id;
 
     return (
         <div
@@ -765,6 +773,10 @@ export function Tabs(props: TabsProps) {
             data-happy-desktop-ui="tabs"
             data-close-presentation={local.closePresentation}
             data-size={size()}
+            onBlur={(event) => {
+                // Focus gone from the strip: coming back lands on the selected tab.
+                if (!event.currentTarget.contains(event.relatedTarget)) setFocusedId(undefined);
+            }}
             ref={list}
             role="tablist"
             style={local.style}
@@ -796,6 +808,7 @@ export function Tabs(props: TabsProps) {
                         }}
                         onContextMenu={(event) => openTabMenu(tab, event)}
                         onDoubleClick={() => local.onDoubleClick?.(tab.id)}
+                        onFocus={() => setFocusedId(tab.id)}
                         onKeyDown={(event) => {
                             moveByKey(event, tab);
                             if (!event.defaultPrevented) focusByKey(event, index);
