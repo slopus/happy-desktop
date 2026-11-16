@@ -2,6 +2,7 @@ import { parseDiffFromFile, type SelectedLineRange } from "@pierre/diffs";
 import { FileDiff, useStableCallback } from "@pierre/diffs/react";
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
+import { FileOpenInTabButton } from "./FileOpenInTab";
 import { CodeEditor } from "./CodeEditor";
 import { DiffFileTitle } from "./DiffFileTitle";
 import { CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH } from "./CodeBlock";
@@ -79,6 +80,8 @@ export type ChangedFileDiffProps = {
      * and silently inert.
      */
     onWrapChange?: (wrap: boolean) => void;
+    /** Moves the file into a tab of the main content. Absent hides the control. */
+    onOpenInTab?: () => void;
     /**
      * Receives edits to the working-tree text. Without it there is nobody to
      * hand an edit to, so the mode is not offered at all rather than offered
@@ -448,6 +451,9 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                             size="compact"
                             value={props.wrap === true ? "wrap" : "scroll"}
                         />
+                    ) : null}
+                    {props.onOpenInTab ? (
+                        <FileOpenInTabButton onClick={() => props.onOpenInTab?.()} />
                     ) : null}
                 </span>
             </div>

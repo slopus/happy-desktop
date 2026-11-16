@@ -8154,13 +8154,17 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
               }
             : {}),
     });
-    const mainFileBody = (file: HappyAgentFileTabSnapshot, tabNamed = true): ReactNode => (
+    const mainFileBody = (
+        file: HappyAgentFileTabSnapshot,
+        preview?: { readonly onOpenInTab: () => void },
+    ): ReactNode => (
         <FileRevealContext.Provider key={`${file.id}:${file.kind}`} value={fileTabReveal(file)}>
             <HappyAgentFileBody
                 appearance={appearance.appearance}
                 entities={documentEntities}
                 file={file}
-                tabNamed={tabNamed}
+                tabNamed={preview === undefined}
+                {...(preview ? { onOpenInTab: preview.onOpenInTab } : {})}
                 {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                 {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                 mode={workspace.fileViewMode}
@@ -9275,6 +9279,8 @@ function HappyAgentFileBody(props: {
     entities: MessageReferences;
     /** The file's tab names it, so its content does not name it again. */
     tabNamed?: boolean;
+    /** Moves a file previewed in the panel into a main-content tab. */
+    onOpenInTab?: () => void;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: HappyAgentFileViewMode;
@@ -9344,6 +9350,7 @@ function HappyAgentFileBody(props: {
                     document={file.document}
                     {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                     key={file.id}
+                    {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
                     path={file.path}
                     revalidating={file.revalidating}
                 />
@@ -9368,6 +9375,7 @@ function HappyAgentFileBody(props: {
                 banner={happyAgentFileNotices(file)}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
+                {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
                 {...(file.kind === "document" && props.htmlPreview
                     ? {
                           rendered: (
@@ -9475,6 +9483,7 @@ function HappyAgentFileBody(props: {
                     key={`${file.id}:${file.kind}`}
                     loading={file.revalidating}
                     mode={props.mode}
+                    {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
                     {...(newCacheKey === undefined ? {} : { newCacheKey })}
                     newContent={current}
                     {...(oldCacheKey === undefined ? {} : { oldCacheKey })}
@@ -9758,6 +9767,7 @@ function HappyAgentChangedFilePreview(props: {
 function HappyAgentFilePreview(props: {
     document: HappyAgentFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
+    onOpenInTab?: () => void;
     path: string;
     revalidating: boolean;
 }) {
@@ -9793,6 +9803,7 @@ function HappyAgentFilePreview(props: {
             // A file with no viewer is still a file, and saving it is often the
             // only thing left to do with it.
             onDownload={() => fileDownload(props.path, { type: "url", url: value.url })}
+            {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
             path={props.path}
             size={fileSizeFormat(value.size)}
             updating={props.revalidating}
@@ -11885,10 +11896,13 @@ function HappyAgentPanelBody(props: {
      * beside a conversation is the identical surface to the file in a
      * main-content tab — same header, same Rendered / Source, same editor,
      * same Command-S.
-     * `tabNamed` is false where no tab names the file — the Files tab's preview —
-     * so the body names it itself.
+     * `preview` is given where no tab names the file — the Files tab's preview —
+     * so the body names it itself and offers to move it into a main tab.
      */
-    fileBody: (file: HappyAgentFileTabSnapshot, tabNamed?: boolean) => ReactNode;
+    fileBody: (
+        file: HappyAgentFileTabSnapshot,
+        preview?: { readonly onOpenInTab: () => void },
+    ) => ReactNode;
     onPanelFileClose: () => void;
     onScopeChange: (scope: HappyAgentFileScope) => void;
     onToggle: (path: string, expanded: boolean) => void;
@@ -12234,7 +12248,14 @@ function HappyAgentPanelBody(props: {
                             // beside the listing it belongs to.
                             {...(filesPreview
                                 ? {
-                                      preview: props.fileBody(filesPreview, false),
+                                      // The same move as dragging the file's
+                                      // tab across, or a double click on its
+                                      // row: its read and any unsaved edit
+                                      // come along.
+                                      preview: props.fileBody(filesPreview, {
+                                          onOpenInTab: () =>
+                                              props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
+                                      }),
                                       previewKey: filesPreview.id,
                                   }
                                 : {})}
