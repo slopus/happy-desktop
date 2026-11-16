@@ -55,6 +55,7 @@ const suggestions: CommandPaletteResultsSection[] = [
                 id: "project-infra",
                 avatar: { initials: "S", type: "agent" },
                 meta: "~/Developer/search-infra",
+                metaOverflow: "start",
                 shortcut: NUMBERS[1],
                 title: "search-infra",
             },
@@ -98,7 +99,9 @@ const searched: CommandPaletteResultsSection[] = [
                 kind: "command",
                 id: "project-infra",
                 avatar: { initials: "S", type: "agent" },
-                meta: "~/Developer/search-infra",
+                // A path too long for the row gives up its head, never the folder name.
+                meta: "/Users/kirill/Library/Mobile Documents/com~apple~CloudDocs/Developer/clients/acme/search-infra",
+                metaOverflow: "start",
                 shortcut: NUMBERS[0],
                 title: "search-infra",
             },

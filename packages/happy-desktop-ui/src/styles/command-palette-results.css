@@ -213,6 +213,13 @@
     text-overflow: ellipsis;
 }
 
+/* A path gives up its head, as a diff's file title does: `direction: rtl`
+   puts the ellipsis at the start, and the `bdi` inside keeps the characters in
+   their own order. */
+.happy-command-palette-results__meta[data-overflow="start"] {
+    direction: rtl;
+}
+
 .happy-command-palette-results__caps {
     flex: none;
 }
