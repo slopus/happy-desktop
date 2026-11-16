@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 
+import { gymElectronAccessoryExecutable } from "./accessoryBundle.js";
+
 /**
  * The one way a Gym, a test, or an agent's recording script starts the desktop
  * app. The app runs in hidden-window mode (happy-desktop-electron
@@ -65,7 +67,7 @@ export async function gymElectronLaunch(
     const app = await electron.launch({
         args: [...options.args, GYM_AUTOMATION_SWITCH],
         env: { ...options.env, ...GYM_ENVIRONMENT },
-        executablePath: options.executablePath,
+        executablePath: await gymElectronAccessoryExecutable(options.executablePath),
         timeout: options.timeout ?? 60_000,
         ...(options.cwd ? { cwd: options.cwd } : {}),
     });
@@ -250,7 +252,8 @@ export async function gymElectronProcessRun(
 ): Promise<GymElectronProcessResult> {
     if (!options.args.some((argument) => argument.startsWith("--user-data-dir=")))
         throw new Error("gymElectronProcessRun requires an owned --user-data-dir.");
-    const child = spawn(options.executablePath, [...options.args, GYM_AUTOMATION_SWITCH], {
+    const executable = await gymElectronAccessoryExecutable(options.executablePath);
+    const child = spawn(executable, [...options.args, GYM_AUTOMATION_SWITCH], {
         env: { ...options.env, ...GYM_ENVIRONMENT },
         stdio: ["ignore", "pipe", "pipe"],
         ...(options.cwd ? { cwd: options.cwd } : {}),
