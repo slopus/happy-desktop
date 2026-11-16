@@ -53,6 +53,36 @@
     min-width: 0;
 }
 
+/* The header names the file before it offers anything: the directories give
+   way first, the name only when nothing else is left to give. */
+.happy-file-editor__header {
+    container-type: inline-size;
+}
+
+.happy-file-editor__header > .happy-tooltip {
+    flex: 1 1 auto;
+}
+
+.happy-file-editor__heading .happy-file-path-label__name {
+    flex-shrink: 0.001;
+}
+
+/* Too narrow for the name and every control, the wrap toggle and the download
+   move into the More menu, which is otherwise not drawn. */
+.happy-file-editor__actions > .happy-file-editor__compact {
+    display: none;
+}
+
+@container (max-width: 519px) {
+    .happy-file-editor__actions > .happy-file-editor__roomy {
+        display: none;
+    }
+
+    .happy-file-editor__actions > .happy-file-editor__compact {
+        display: flex;
+    }
+}
+
 .happy-file-editor__heading .happy-file-path-label__directory {
     color: var(--text);
 }
