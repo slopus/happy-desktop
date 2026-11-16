@@ -38,6 +38,7 @@ import {
     type MessageBodyFormat,
 } from "./messagePlainText";
 import { messagePlainTextSegments, type MessageReferences } from "./messageReferences";
+import { useWindowZoom } from "./WindowZoom";
 import {
     MessageListDisclosureAnchorProvider,
     type MessageListDisclosureAnchor,
@@ -1104,15 +1105,27 @@ function messageListViewportWidth(element: HTMLElement): number {
     return Number.parseFloat(element.ownerDocument.defaultView!.getComputedStyle(element).width);
 }
 /**
- * Device pixels per layout pixel of the scrollport. Its layout width is the
- * content width plus the native bar's lane (the scrollport has no padding or
- * border), so both sides of the ratio measure the same box.
+ * How far the scrollport is zoomed: its painted width over its layout width,
+ * times the window's zoom. Its layout width is the content width plus the
+ * native bar's lane (the scrollport has no padding or border), so both sides
+ * of the ratio measure the same box.
+ *
+ * `windowZoom` is the percentage the window's owner reports. Where nothing
+ * reports one, the device pixel ratio stands in for it: a page cannot tell its
+ * browser's zoom from the density of the display it is on, so there a window
+ * moved to another display reads as zoomed. With an owner's report it does not.
  */
-function messageListViewportScale(element: HTMLElement, width: number): number {
+function messageListViewportScale(
+    element: HTMLElement,
+    width: number,
+    windowZoom: number | undefined,
+): number {
     return (
         (element.getBoundingClientRect().width /
             (width + element.offsetWidth - element.clientWidth)) *
-        element.ownerDocument.defaultView!.devicePixelRatio
+        (windowZoom === undefined
+            ? element.ownerDocument.defaultView!.devicePixelRatio
+            : windowZoom / 100)
     );
 }
 function messageListViewportHeight(element: HTMLElement): number {
@@ -1205,6 +1218,10 @@ export function MessageList(props: MessageListProps) {
     );
     const viewportGeometry = useRef({ height: 0, width: 0 });
     const viewportScale = useRef(0);
+    /* The zoom the window's owner reports, and the report the scale was last
+       read against. */
+    const windowZoom = useWindowZoom();
+    const windowZoomRead = useRef(windowZoom);
     const geometryPlacementPending = useRef(false);
     /* The rows the last commit mounted, by key with the index each had there. */
     const mountedRows = useRef<readonly { readonly key: Key; readonly index: number }[]>([]);
@@ -2201,7 +2218,7 @@ export function MessageList(props: MessageListProps) {
             const boxMatches =
                 Math.abs(width - geometry.width) <= 1 / 64 &&
                 Math.abs(height - geometry.height) <= 1 / 64;
-            const scale = boxMatches ? messageListViewportScale(element, width) : 0;
+            const scale = boxMatches ? messageListViewportScale(element, width, windowZoom) : 0;
             const zoomChanged =
                 scale > 0 &&
                 viewportScale.current > 0 &&
@@ -2719,7 +2736,7 @@ export function MessageList(props: MessageListProps) {
         const previouslyFloored = pendingAnchor.current?.floored ?? modelFloored(previous.height);
         const scale =
             element && nextWidth > 0
-                ? messageListViewportScale(element, nextWidth)
+                ? messageListViewportScale(element, nextWidth, windowZoom)
                 : viewportScale.current;
         const zoomChanged =
             viewportScale.current > 0 && Math.abs(scale / viewportScale.current - 1) > 0.01;
@@ -3472,6 +3489,19 @@ export function MessageList(props: MessageListProps) {
         if (waiting && rowModelCurrent()) {
             const version = rowSizeModel.version;
             viewportGeometryCommit(waiting.width, waiting.height);
+            if (rowSizeModel.version !== version) return;
+        }
+        /* The window's owner reported a new zoom. The scale is read against
+           it now rather than at the scrollport's next resize, which may come
+           long after and would then be taken for the zoom. Whichever of the
+           report and the resized box arrives second finds the other applied. */
+        if (windowZoom !== windowZoomRead.current && rowModelCurrent()) {
+            windowZoomRead.current = windowZoom;
+            const version = rowSizeModel.version;
+            viewportGeometryCommit(
+                messageListViewportWidth(element),
+                messageListViewportHeight(element),
+            );
             if (rowSizeModel.version !== version) return;
         }
         /* A pending row TanStack has just rendered in view is laid out now,

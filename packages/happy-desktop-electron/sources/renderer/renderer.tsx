@@ -100,6 +100,7 @@ import {
     ThemeScope,
     CloudWebSignInScreen,
     WelcomeScreen,
+    WindowZoomProvider,
     ZoomIndicator,
     ConnectionShell,
     CloudConnectScreen,
@@ -1500,6 +1501,18 @@ function DesktopZoomIndicator(): ReactNode {
     const asks = useSyncExternalStore(zoomSubscribe, () => zoomAsks);
     return asks === 0 ? undefined : <ZoomIndicator key={asks} percent={zoomPercent} />;
 }
+/* What the View menu last set the zoom to, for the surfaces that lay out by
+   it. They would otherwise have to infer zoom from the device pixel ratio,
+   which also changes when the window moves to a display of another density.
+   A browser tab zooms itself and reports nothing, so there it stays inferred. */
+function DesktopWindowZoom(props: { children: ReactNode; reported: boolean }): ReactNode {
+    const percent = useSyncExternalStore(zoomSubscribe, () => zoomPercent);
+    return props.reported ? (
+        <WindowZoomProvider percent={percent}>{props.children}</WindowZoomProvider>
+    ) : (
+        props.children
+    );
+}
 // The preview window is this same document, launched with the reduced bridge and
 // loaded with the view it should mount. Deciding it here rather than after a
 // round trip means the first frame is already the file instead of the whole
@@ -2171,52 +2184,54 @@ if (mediaPreviewBridge) {
                 <DesktopCloudSignInNotice store={notices} />
                 <DesktopHappyLinkNotice store={happyLinkInbox} />
                 <CodeHighlightWorkers>
-                    <DesktopRenderer
-                        connectionUis={connectionUis}
-                        appearance={appearance}
-                        commandPalette={commandPalette}
-                        {...(daemon ? { daemon } : {})}
-                        debug={debug}
-                        {...(livePerformance ? { performance: livePerformance } : {})}
-                        profiler={profiler}
-                        onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
-                        browserContent={browserLocal ? undefined : desktopBrowserContentRender}
-                        htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
-                        artifactPage={browserLocal ? undefined : desktopArtifactPageRender}
-                        bridge={desktopBridge}
-                        mediaWindow={
-                            browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
-                        }
-                        experiments={experiments}
-                        mobilePairingMethod={mobilePairingMethod}
-                        projectsVisibility={projectsVisibility}
-                        statusBar={statusBar}
-                        gptLive={gptLive}
-                        usageAnalytics={analytics.preference}
-                        {...(cloudConnect ? { cloudConnect } : {})}
-                        keepAwake={keepAwake}
-                        navigationOrder={navigationOrder}
-                        sidebarCollapse={sidebarCollapse}
-                        sidebarVisibility={sidebarVisibility}
-                        attention={attention}
-                        // Only the Electron window hides its title bar; the browser
-                        // development server renders the same tree with web chrome.
-                        platform={browserLocal ? "web" : "desktop"}
-                        happyAgentRouter={happyAgentRouter}
-                        happyAgents={happyAgents}
-                        localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                        settings={settings}
-                        titleShimmer={titleShimmer}
-                        startupValues={startupValuesStoreCreate()}
-                        store={runtimeStore}
-                        welcome={welcome}
-                        windowState={windowState}
-                        surfaceWindowState={surfaceWindowState}
-                        agentUpdate={agentUpdate}
-                        agentReleaseNotes={agentReleaseNotes}
-                        agentBroken={agentBroken}
-                        agentOutage={agentOutage}
-                    />
+                    <DesktopWindowZoom reported={!browserLocal}>
+                        <DesktopRenderer
+                            connectionUis={connectionUis}
+                            appearance={appearance}
+                            commandPalette={commandPalette}
+                            {...(daemon ? { daemon } : {})}
+                            debug={debug}
+                            {...(livePerformance ? { performance: livePerformance } : {})}
+                            profiler={profiler}
+                            onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
+                            browserContent={browserLocal ? undefined : desktopBrowserContentRender}
+                            htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
+                            artifactPage={browserLocal ? undefined : desktopArtifactPageRender}
+                            bridge={desktopBridge}
+                            mediaWindow={
+                                browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
+                            }
+                            experiments={experiments}
+                            mobilePairingMethod={mobilePairingMethod}
+                            projectsVisibility={projectsVisibility}
+                            statusBar={statusBar}
+                            gptLive={gptLive}
+                            usageAnalytics={analytics.preference}
+                            {...(cloudConnect ? { cloudConnect } : {})}
+                            keepAwake={keepAwake}
+                            navigationOrder={navigationOrder}
+                            sidebarCollapse={sidebarCollapse}
+                            sidebarVisibility={sidebarVisibility}
+                            attention={attention}
+                            // Only the Electron window hides its title bar; the browser
+                            // development server renders the same tree with web chrome.
+                            platform={browserLocal ? "web" : "desktop"}
+                            happyAgentRouter={happyAgentRouter}
+                            happyAgents={happyAgents}
+                            localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                            settings={settings}
+                            titleShimmer={titleShimmer}
+                            startupValues={startupValuesStoreCreate()}
+                            store={runtimeStore}
+                            welcome={welcome}
+                            windowState={windowState}
+                            surfaceWindowState={surfaceWindowState}
+                            agentUpdate={agentUpdate}
+                            agentReleaseNotes={agentReleaseNotes}
+                            agentBroken={agentBroken}
+                            agentOutage={agentOutage}
+                        />
+                    </DesktopWindowZoom>
                 </CodeHighlightWorkers>
                 {/* After the app, not before it: the window folds drag regions in
                     tree order and later ones win, so the app's title-bar band would

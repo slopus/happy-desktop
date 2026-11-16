@@ -865,6 +865,7 @@ export {
 } from "./BrowserPanel";
 export { WindowCover } from "./WindowOverlay";
 export { ZoomIndicator } from "./ZoomIndicator";
+export { WindowZoomProvider, useWindowZoom } from "./WindowZoom";
 export {
     HappyAgentInboxPage,
     type HappyAgentInboxAnswerMap,
