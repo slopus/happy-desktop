@@ -574,7 +574,7 @@ export {
     type LottieScenePlay,
     type LottieSceneProps,
 } from "./LottieScene";
-export { type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
+export { type TabCloseQuestion, type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
 export { TabbedPane, type TabbedPaneProps } from "./TabbedPane";
 export {
     DeferredPane,

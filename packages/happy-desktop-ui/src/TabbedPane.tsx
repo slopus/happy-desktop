@@ -2,7 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { KeyboardShortcut } from "./keyboardShortcut";
 import { type MenuItem } from "./Menu";
-import { Tabs, type TabItem, type TabsSize } from "./Tabs";
+import { Tabs, type TabCloseQuestion, type TabItem, type TabsSize } from "./Tabs";
 import type { TabTransferTarget } from "./tabTransfer";
 
 export type TabbedPaneProps = {
@@ -24,6 +24,8 @@ export type TabbedPaneProps = {
     closeLabel?: string;
     /** Non-visual shortcut announced on the active tab's close control. */
     closeShortcut?: KeyboardShortcut;
+    /** A question asked below one tab before it closes; see `Tabs`. */
+    closeQuestion?: TabCloseQuestion;
     closePresentation?: "trailing" | "overlay";
     closeRevealedId?: string;
     /** Full titles scroll at their natural widths instead of sharing equal cells. */
@@ -82,6 +84,7 @@ export function TabbedPane(props: TabbedPaneProps) {
         "children",
         "className",
         "closeLabel",
+        "closeQuestion",
         "closeShortcut",
         "closePresentation",
         "closeRevealedId",
@@ -185,6 +188,7 @@ export function TabbedPane(props: TabbedPaneProps) {
                             activeId={local.activeId}
                             className="happy-tabbed-pane__tabs"
                             closeLabel={local.closeLabel}
+                            closeQuestion={local.closeQuestion}
                             closeShortcut={local.closeShortcut}
                             closePresentation={local.closePresentation}
                             closeRevealedId={local.closeRevealedId}

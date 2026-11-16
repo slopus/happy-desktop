@@ -10,6 +10,7 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { CountBadge } from "./Badge";
+import { ConfirmPopover, type ConfirmPopoverTone } from "./ConfirmPopover";
 import { fixedBlockMeasure } from "./fixedBlock";
 import { haptic } from "./haptics";
 import { FileKindIcon } from "./FileKindIcon";
@@ -174,6 +175,20 @@ function tabActivityMark(tab: TabItem, size: 12 | 14) {
         );
     return null;
 }
+/** A question about closing one tab; see `TabsProps.closeQuestion`. */
+export type TabCloseQuestion = {
+    /** The tab the question is about. Missing from the strip, it hangs below the strip. */
+    tabId: string;
+    title: string;
+    message?: string;
+    confirmLabel: string;
+    tone?: ConfirmPopoverTone;
+    /** Which answer Enter gives; see `ConfirmPopover`. */
+    initialFocus?: "cancel" | "confirm";
+    onConfirm: () => void;
+    /** Cancel, Escape, and a press anywhere outside the card. */
+    onCancel: () => void;
+};
 export type TabsProps = {
     className?: string;
     "data-testid"?: string;
@@ -200,6 +215,13 @@ export type TabsProps = {
     closeLabel?: string;
     /** Non-visual shortcut announced on the active tab's close control. */
     closeShortcut?: KeyboardShortcut;
+    /**
+     * A question the owner asks before closing one tab. It hangs just below
+     * that tab, the way a menu hangs below its button, rather than over the
+     * document the tab holds; the owner decides when to ask and what closing
+     * means.
+     */
+    closeQuestion?: TabCloseQuestion;
     /** Reveal close over the title's trailing edge instead of reserving a lane. */
     closePresentation?: "trailing" | "overlay";
     /** Controlled reveal for a tab whose close affordance should stay discoverable. */
@@ -338,6 +360,7 @@ export function Tabs(props: TabsProps) {
     const [local, rest] = partitionComponentProps(props, [
         "className",
         "closeLabel",
+        "closeQuestion",
         "closeShortcut",
         "closePresentation",
         "closeRevealedId",
@@ -968,6 +991,85 @@ export function Tabs(props: TabsProps) {
                     </div>
                 </WindowOverlay>
             ) : null}
+            {local.closeQuestion ? (
+                // Clipped by the strip like the menu, so it hangs off the
+                // window's overlay lane too, keyed by its tab: a question about
+                // another tab is a new card in a new place.
+                <WindowOverlay>
+                    <div
+                        className="happy-tabs__question"
+                        data-happy-desktop-ui="tabs-question"
+                        key={local.closeQuestion.tabId}
+                        ref={(node) =>
+                            questionPlace(node, list.current, local.closeQuestion?.tabId)
+                        }
+                    >
+                        <ConfirmPopover
+                            confirmLabel={local.closeQuestion.confirmLabel}
+                            initialFocus={local.closeQuestion.initialFocus}
+                            message={local.closeQuestion.message}
+                            onCancel={local.closeQuestion.onCancel}
+                            onConfirm={local.closeQuestion.onConfirm}
+                            title={local.closeQuestion.title}
+                            tone={local.closeQuestion.tone}
+                        />
+                    </div>
+                </WindowOverlay>
+            ) : null}
         </div>
     );
+}
+
+/** Room kept between a floating card and the window's edge. */
+const QUESTION_MARGIN = 8;
+/** The card sits this far below the tab it asks about. */
+const QUESTION_GAP = 4;
+
+/**
+ * Puts a close question just below its tab, starting at the tab's leading
+ * edge and pushed back inside the window, and keeps it there while the window
+ * is resized. A press anywhere outside it answers Cancel, as a click elsewhere
+ * puts a menu away.
+ */
+function questionPlace(
+    node: HTMLDivElement | null,
+    strip: HTMLElement | null,
+    tabId: string | undefined,
+) {
+    if (!node || !strip || tabId === undefined) return;
+    const place = () => {
+        const tab = strip.querySelector<HTMLElement>(
+            `:scope > [data-tab-id="${CSS.escape(tabId)}"]`,
+        );
+        const anchor = (tab ?? strip).getBoundingClientRect();
+        const bounds = node.getBoundingClientRect();
+        // The tab was measured against the window; the card is laid out
+        // against whatever contains it, which is not the window inside a
+        // connection.
+        const block = fixedBlockMeasure(node.parentElement ?? node);
+        const left = Math.max(
+            QUESTION_MARGIN,
+            Math.min(anchor.left, window.innerWidth - bounds.width - QUESTION_MARGIN),
+        );
+        const top = Math.max(
+            QUESTION_MARGIN,
+            Math.min(
+                anchor.bottom + QUESTION_GAP,
+                window.innerHeight - bounds.height - QUESTION_MARGIN,
+            ),
+        );
+        node.style.left = `${String(left - block.left)}px`;
+        node.style.top = `${String(top - block.top)}px`;
+    };
+    place();
+    const outside = (event: PointerEvent) => {
+        if (event.target instanceof Node && node.contains(event.target)) return;
+        node.querySelector<HTMLElement>('button[data-action="cancel"]')?.click();
+    };
+    node.ownerDocument.addEventListener("pointerdown", outside, true);
+    window.addEventListener("resize", place);
+    return () => {
+        node.ownerDocument.removeEventListener("pointerdown", outside, true);
+        window.removeEventListener("resize", place);
+    };
 }
