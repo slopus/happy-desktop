@@ -24,7 +24,10 @@ import {
     happyAgentChiefOfStaffRequestText,
     type HappyAgentChiefOfStaffRequest,
 } from "./happyAgentChiefOfStaffRequest.js";
-import { happyAgentErrorAssistanceText } from "./happyAgentErrorAssistance.js";
+import {
+    happyAgentErrorAssistanceOffer,
+    happyAgentErrorAssistanceText,
+} from "./happyAgentErrorAssistance.js";
 import { happyAgentMentionPlaces } from "./happyAgentMentionPlaces.js";
 import {
     HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL,
@@ -3041,25 +3044,30 @@ export function happyAgentWorkspaceStoreCreate(
     ): readonly ConversationErrorAssistanceEntry[] => {
         const chief = list.get().bots.find((bot) => bot.systemKey === "chief_of_staff");
         const attempts = errorAssistanceAttempts.get(chat.sessionId);
+        const offer = happyAgentErrorAssistanceOffer({
+            sessionId: chat.sessionId,
+            live: chat.connection === "live",
+            ...(chief
+                ? {
+                      chief: {
+                          sessionId: chief.conversation.id,
+                          refusal: list.groupConversationRefusal(chief.workspaceId),
+                      },
+                  }
+                : {}),
+        });
         const projected: ConversationErrorAssistanceEntry[] = [];
-        for (const entry of chat.entries) {
+        for (const entry of offer.kind === "none" ? [] : chat.entries) {
             if (entry.kind !== "notice" || entry.variant !== "notice" || entry.level !== "error")
                 continue;
             if (entry.error !== undefined && !entry.error.recovery.actions.includes("ask_chief"))
                 continue;
             const attempt = attempts?.get(entry.id);
-            const refusal = !chief
-                ? "Chief of Staff is not available on this Happy Agent."
-                : chat.connection !== "live"
-                  ? "This Happy Agent is offline or reconnecting. Try again when it is available."
-                  : chief.conversation.id === chat.sessionId
-                    ? `This is already ${chief.name}'s conversation. Use the composer for follow-up.`
-                    : list.groupConversationRefusal(chief.workspaceId);
             const assistance: ConversationErrorAssistance =
                 attempt?.status === "pending"
                     ? attempt
-                    : refusal
-                      ? { status: "unavailable", reason: refusal }
+                    : offer.kind === "refused"
+                      ? { status: "unavailable", reason: offer.reason }
                       : (attempt ?? { status: "ready" });
             projected.push({
                 entryId: entry.id,

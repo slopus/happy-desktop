@@ -238,6 +238,8 @@ type Screen = {
     readonly source?: ConversationSwitchSource;
     /** A daemon before protocol 32, which is offered no switch at all. */
     readonly olderDaemon?: boolean;
+    /** The Chief of Staff's own conversation, which is offered no handoff to itself. */
+    readonly chiefOwn?: boolean;
     /** The composer's model picker, seeded open beside the card. */
     readonly picker?: ComposerModelControlPreview;
     readonly preview?: { readonly target?: string; readonly menu?: { readonly active?: string } };
@@ -254,6 +256,12 @@ const screens: readonly Screen[] = [
         label: "Sign-in missing · no other account to switch to",
         entries: [...before, ...signinMissing],
         source: SOURCE_ALONE,
+    },
+    {
+        id: "signin-missing-chief-own",
+        label: "Sign-in missing · the Chief of Staff's own conversation, no Ask",
+        entries: [...before, ...signinMissing],
+        chiefOwn: true,
     },
     {
         id: "usage-limit",
@@ -440,7 +448,9 @@ function conversation(screen: Screen): ReactNode {
             conversationId={screen.id}
             elapsedMs={41_000}
             entries={screen.entries}
-            errorAssistance={[{ entryId: "failed", assistance: { status: "ready" } }]}
+            errorAssistance={
+                screen.chiefOwn ? [] : [{ entryId: "failed", assistance: { status: "ready" } }]
+            }
             failureActions={{ onNewChat: noop, onRetry: noop, onSwitch: noop }}
             failureClock={CLOCK}
             {...(screen.olderDaemon ? {} : { failureSwitch: screen.source ?? SOURCE })}

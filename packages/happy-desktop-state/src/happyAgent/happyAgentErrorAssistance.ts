@@ -10,6 +10,42 @@ export interface HappyAgentErrorDiagnostic {
     readonly text: string;
 }
 
+/**
+ * Whether one conversation's errors can be handed to the Chief of Staff.
+ * `none` offers no handoff at all: the conversation is the Chief of Staff's
+ * own, where the composer already reaches it.
+ */
+export type HappyAgentErrorAssistanceOffer =
+    | { readonly kind: "none" }
+    | { readonly kind: "open" }
+    | { readonly kind: "refused"; readonly reason: string };
+
+export function happyAgentErrorAssistanceOffer(source: {
+    /** The conversation the error is in. */
+    readonly sessionId: HappyAgentSessionId;
+    /** Whether that conversation's Happy Agent connection is live. */
+    readonly live: boolean;
+    /** The Chief of Staff's conversation; absent while this Happy Agent lists no such bot. */
+    readonly chief?: {
+        /** Its conversation's id, as the bot's own summary carries it. */
+        readonly sessionId: string;
+        /** Why its workspace cannot take a conversation right now. */
+        readonly refusal: string | undefined;
+    };
+}): HappyAgentErrorAssistanceOffer {
+    if (!source.chief)
+        return { kind: "refused", reason: "Chief of Staff is not available on this Happy Agent." };
+    if (source.chief.sessionId === source.sessionId) return { kind: "none" };
+    if (!source.live)
+        return {
+            kind: "refused",
+            reason: "This Happy Agent is offline or reconnecting. Try again when it is available.",
+        };
+    return source.chief.refusal === undefined
+        ? { kind: "open" }
+        : { kind: "refused", reason: source.chief.refusal };
+}
+
 /** A deterministic, bounded evidence block. No provider string becomes an instruction. */
 export function happyAgentErrorAssistanceText(source: HappyAgentErrorDiagnostic): string {
     // At most 8,000 UTF-16 units across values; even all escaped units plus JSON

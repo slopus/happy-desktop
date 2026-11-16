@@ -10,7 +10,10 @@ import type { HappyAgentConnection } from "../happyAgentConnection/types.js";
 import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
 import { happyAgentChatDraftAppend, happyAgentDraftAppended } from "./happyAgentChatDraftAppend.js";
 import { happyAgentChatStoreCreate } from "./happyAgentChatStore.js";
-import { happyAgentErrorAssistanceText } from "./happyAgentErrorAssistance.js";
+import {
+    happyAgentErrorAssistanceOffer,
+    happyAgentErrorAssistanceText,
+} from "./happyAgentErrorAssistance.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import type { HappyAgentSessionId } from "./happyAgentTypes.js";
 
@@ -193,6 +196,41 @@ describe("Chief of Staff error handoff", () => {
         expect(evidence).not.toHaveProperty("recoverySteps");
         expect(text).not.toMatch(/[\u007f-\u009f\u2028\u2029\p{Default_Ignorable_Code_Point}]/u);
         expect(text.split("```json")[0]).not.toContain(malicious);
+    });
+
+    it("offers no handoff, and no reason, in the Chief of Staff's own conversation", () => {
+        const source = "agent-source" as HappyAgentSessionId;
+        const own = "agent-chief" as HappyAgentSessionId;
+        const chief = { sessionId: "agent-chief", refusal: undefined };
+        expect(happyAgentErrorAssistanceOffer({ sessionId: own, live: true, chief })).toEqual({
+            kind: "none",
+        });
+        // Offline or not, the Chief of Staff's own conversation is never told why.
+        expect(
+            happyAgentErrorAssistanceOffer({
+                sessionId: own,
+                live: false,
+                chief: { ...chief, refusal: "The workspace is being prepared." },
+            }),
+        ).toEqual({ kind: "none" });
+        expect(happyAgentErrorAssistanceOffer({ sessionId: source, live: true, chief })).toEqual({
+            kind: "open",
+        });
+        expect(happyAgentErrorAssistanceOffer({ sessionId: source, live: false, chief })).toEqual({
+            kind: "refused",
+            reason: "This Happy Agent is offline or reconnecting. Try again when it is available.",
+        });
+        expect(
+            happyAgentErrorAssistanceOffer({
+                sessionId: source,
+                live: true,
+                chief: { ...chief, refusal: "The workspace is being prepared." },
+            }),
+        ).toEqual({ kind: "refused", reason: "The workspace is being prepared." });
+        expect(happyAgentErrorAssistanceOffer({ sessionId: source, live: true })).toEqual({
+            kind: "refused",
+            reason: "Chief of Staff is not available on this Happy Agent.",
+        });
     });
 
     it("appends below an existing draft, fills an empty one, and does not repeat itself", () => {

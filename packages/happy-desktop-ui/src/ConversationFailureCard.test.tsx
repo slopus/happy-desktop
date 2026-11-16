@@ -325,12 +325,14 @@ function Row(props: {
     readonly onSwitchOpen?: () => void;
     readonly onRetry?: () => void;
     readonly onNewChat?: () => void;
+    /** The Chief of Staff's own conversation, which the store offers no handoff. */
+    readonly chiefOwn?: boolean;
 }) {
     const [picked, setPicked] = useState<string | undefined>(undefined);
     return (
         <ConversationEntryView
             entry={notice(props.failure)}
-            errorAssistance={{ status: "ready" }}
+            {...(props.chiefOwn ? {} : { errorAssistance: { status: "ready" } })}
             failure={{
                 current: props.current ?? true,
                 clock: CLOCK,
@@ -354,6 +356,7 @@ const modeled = (
     current = true,
     picked?: string,
     targets: readonly ConversationSwitchTarget[] | undefined = TARGETS,
+    chiefOwn = false,
 ) =>
     conversationRowHeight(
         [notice(failure)],
@@ -361,7 +364,7 @@ const modeled = (
         {
             surface: "chat",
             width,
-            errorAssistance: { status: "ready" },
+            ...(chiefOwn ? {} : { errorAssistance: { status: "ready" as const } }),
             failure: {
                 current,
                 actions,
@@ -673,6 +676,74 @@ it("offers only Ask Chief of Staff on a failure the conversation has moved past"
     expect(card.textContent).toContain("claude auth login");
     expect(card.getBoundingClientRect().height).toBe(
         modeled(signin(), 720, { retry: false, newChat: false, switch: false }, false),
+    );
+});
+
+it("offers no Ask Chief of Staff and no note in the Chief of Staff's own conversation", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <Row
+                chiefOwn
+                failure={signin()}
+                onRetry={() => undefined}
+                onSwitch={() => undefined}
+                targets={TARGETS}
+            />
+        ),
+        { width: 720, height: 300 },
+    );
+    await view.ready();
+    const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
+    expect(buttons(card).map((button) => button.text)).toEqual([
+        "Retry",
+        "Switch to claude_work",
+        "Choose another account",
+    ]);
+    expect(card.querySelector(".happy-conversation-failure-card__ask")).toBeNull();
+    expect(card.querySelector(".happy-conversation-failure-card__detail")).toBeNull();
+    expect(card.textContent).not.toContain("Chief of Staff");
+    expect(card.getBoundingClientRect().height).toBe(
+        modeled(
+            signin(),
+            720,
+            { retry: true, newChat: false, switch: true },
+            true,
+            undefined,
+            TARGETS,
+            true,
+        ),
+    );
+});
+
+it("leaves no action row in the Chief of Staff's own conversation when no action remains", async () => {
+    const view = createRenderer();
+    view.render(() => <Row chiefOwn current={false} failure={signin()} />, {
+        width: 720,
+        height: 300,
+    });
+    await view.ready();
+    const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
+    expect(buttons(card)).toEqual([]);
+    expect(card.querySelector('[data-happy-desktop-ui="conversation-failure-actions"]')).toBeNull();
+    /* The frame closes on the message with the same inset it opens with. */
+    const body = card
+        .querySelector<HTMLElement>(".happy-conversation-failure-card__body")!
+        .getBoundingClientRect();
+    const bubble = card
+        .querySelector<HTMLElement>('[data-happy-desktop-ui="conversation-error-bubble"]')!
+        .getBoundingClientRect();
+    expect(body.bottom - bubble.bottom).toBe(bubble.top - body.top);
+    expect(card.getBoundingClientRect().height).toBe(
+        modeled(
+            signin(),
+            720,
+            { retry: false, newChat: false, switch: false },
+            false,
+            undefined,
+            TARGETS,
+            true,
+        ),
     );
 });
 
