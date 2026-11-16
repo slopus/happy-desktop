@@ -88,17 +88,13 @@
 
 /* A turn that is deliberately doing nothing — sitting out a wait, or stopped on
    a question for the reader — wears a still glyph in the same 14px column the
-   ring fills. The clock keeps the muted loader's ink; the question is red, like
-   its marks in the sidebar and tabs, because it is waiting on the reader. */
+   ring fills. Both keep the muted loader's ink: in the transcript the words say
+   what it is waiting on, and only the sidebar and tabs mark it in red. */
 .happy-agent-working-status__icon {
     flex: none;
     align-self: center;
     margin-left: -3px;
     color: var(--text-secondary);
-}
-
-.happy-agent-working-status__icon--question {
-    color: var(--status-error);
 }
 
 .happy-agent-working-status__timer {
