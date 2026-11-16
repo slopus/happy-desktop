@@ -17,6 +17,7 @@ import {
     type ConversationEntry,
     type ConversationErrorAssistance,
     type ConversationErrorAssistanceEntry,
+    type ConversationMessageProjection,
     type ConversationRetrying,
 } from "../conversation/conversationEntry.js";
 import { happyAgentChatDraftAppend } from "./happyAgentChatDraftAppend.js";
@@ -1981,6 +1982,11 @@ export interface HappyAgentWorkspaceStore {
     composerFocusUpdate(scopeId: string, focused: boolean): void;
     composerTextSubmit(): void;
     composerCommandInvoke(commandId: string): void;
+    /**
+     * Restores a prior user-authored prompt (text and still-accessible attachments)
+     * into the composer so it can be edited and resent.
+     */
+    composerPromptRestore(message: ConversationMessageProjection): Promise<void>;
     /**
      * Attaches picked, pasted, or dropped files to the addressed draft. Small
      * images are prepared inline; larger media and ordinary files retain their
@@ -8820,6 +8826,67 @@ export function happyAgentWorkspaceStoreCreate(
         composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
         composerCommandInvoke: (commandId) =>
             (groupComposer ?? composer)?.getState().commandInvoke(commandId),
+        async composerPromptRestore(message) {
+            const target = groupComposer ?? composer;
+            if (!target) return;
+
+            for (const att of [...target.getState().attachments]) {
+                attachmentRemoveFrom(target, att.id);
+            }
+
+            const restoredFiles: File[] = [];
+            for (let i = 0; i < message.attachments.length; i++) {
+                const attachment = message.attachments[i];
+                if (attachment.kind === "inlineImage") {
+                    try {
+                        const binary = atob(attachment.data);
+                        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+                        const ext = attachment.mediaType?.split("/")[1] || "png";
+                        const name = `image-${i + 1}.${ext}`;
+                        const file = new File([bytes], name, {
+                            type: attachment.mediaType || "image/png",
+                        });
+                        restoredFiles.push(file);
+                    } catch {
+                        // Failed to decode base64 or construct file; skip
+                    }
+                } else if (attachment.kind === "linked") {
+                    if (attachment.source && client.attachmentDownload && openId) {
+                        try {
+                            const blob = await client.attachmentDownload(openId, attachment.source);
+                            if (blob) {
+                                const file = new File([blob], attachment.name, {
+                                    type:
+                                        attachment.mediaType ||
+                                        blob.type ||
+                                        "application/octet-stream",
+                                });
+                                restoredFiles.push(file);
+                            }
+                        } catch {
+                            // File is no longer accessible; skip
+                        }
+                    }
+                }
+            }
+
+            if (restoredFiles.length > 0) {
+                attachmentsAddTo(target, restoredFiles);
+            }
+
+            target.getState().textUpdate(message.text);
+            target.getState().focusUpdate(true);
+
+            if (openId) {
+                conversationDraftTexts.set(openId, message.text);
+                attachmentsRemember(conversationAttachments, openId, target);
+                void withAddressedChat(openId, (store) =>
+                    store.draftSet(message.text, nextDraftUpdatedAt(), draftOrigin),
+                ).catch(() => undefined);
+            } else if (openGroupId) {
+                attachmentsRemember(groupAttachments, openGroupId, target);
+            }
+        },
         composerAttachmentsAdd(files) {
             const target = groupComposer ?? composer;
             if (target) attachmentsAddTo(target, files);
