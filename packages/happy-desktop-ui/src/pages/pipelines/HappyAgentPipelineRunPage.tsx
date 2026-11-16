@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import {
     pipelineRunAbortable,
+    pipelineRunChildIds,
+    pipelineRunChildNodes,
     type PipelineNodeLogSnapshot,
     type PipelineRunSnapshot,
 } from "happy-desktop-state";
@@ -14,6 +16,7 @@ import { PipelineGraphLegend } from "./PipelineGraph";
 import { PipelineDetailSection, PipelineFacts, PipelineNodeHeading } from "./PipelineNodeDetail";
 import { PipelineNodeLog } from "./PipelineNodeLog";
 import { PipelineNodeRunFacts, PipelineValue } from "./PipelineNodeRunDetail";
+import { PipelineRunRelativeRow } from "./PipelineRunRelativeRow";
 import { PipelineTimeline } from "./PipelineTimeline";
 import {
     PIPELINE_NODE_STATE_LABEL,
@@ -21,6 +24,7 @@ import {
     PIPELINE_RUN_STATE_LABEL,
     PIPELINE_RUN_STATE_TONE,
     PipelineStateMark,
+    pipelineChildVia,
     pipelineDurationOf,
     pipelineTriggerText,
     type PipelineLabels,
@@ -66,6 +70,7 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
     const shown = shownId === null ? undefined : nodeRuns.get(shownId);
     const shownDefinition = definition?.nodes.find((entry) => entry.id === shownId);
     const abortable = run !== null && pipelineRunAbortable(run.state);
+    const childRunIds = run === null ? [] : pipelineRunChildIds(run);
     const back = props.onBack ? (
         <Button
             aria-label="Back"
@@ -162,6 +167,7 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                     if (nodeId === null && snapshot.nodeSelected === null) return;
                                     props.onNodeSelect(nodeId);
                                 }}
+                                relatives={snapshot.relatives}
                                 run={run}
                                 selectedNodeId={shownId}
                             />
@@ -268,19 +274,67 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                             >
                                                 Open pipeline
                                             </Button>
-                                            {run.parentRunId !== null ? (
-                                                <Button
-                                                    onClick={() =>
-                                                        props.onRunOpen(run.parentRunId!)
-                                                    }
-                                                    size="small"
-                                                    variant="secondary"
-                                                >
-                                                    Open parent run
-                                                </Button>
-                                            ) : null}
                                         </div>
                                     </PipelineDetailSection>
+                                    {run.parentRunId !== null ? (
+                                        <PipelineDetailSection title="Parent run">
+                                            <div className="happy-pipeline-relatives">
+                                                <PipelineRunRelativeRow
+                                                    labels={props.labels}
+                                                    now={props.now}
+                                                    onRunOpen={props.onRunOpen}
+                                                    pipelineId={null}
+                                                    relative={
+                                                        snapshot.relatives.get(run.parentRunId) ??
+                                                        null
+                                                    }
+                                                    runId={run.parentRunId}
+                                                    via={
+                                                        run.trigger?.kind === "pipeline"
+                                                            ? `Started this run from its node ${run.trigger.nodeId}`
+                                                            : "Started this run"
+                                                    }
+                                                />
+                                            </div>
+                                        </PipelineDetailSection>
+                                    ) : null}
+                                    {childRunIds.length > 0 ? (
+                                        <PipelineDetailSection
+                                            title={`Child runs · ${String(childRunIds.length)}`}
+                                        >
+                                            <div className="happy-pipeline-relatives">
+                                                {childRunIds.map((childRunId) => {
+                                                    const nodes = pipelineRunChildNodes(
+                                                        run,
+                                                        childRunId,
+                                                    ).map((node) => node.nodeId);
+                                                    const made = definition?.nodes.find(
+                                                        (node) => node.id === nodes[0],
+                                                    );
+                                                    return (
+                                                        <PipelineRunRelativeRow
+                                                            key={childRunId}
+                                                            labels={props.labels}
+                                                            now={props.now}
+                                                            onRunOpen={props.onRunOpen}
+                                                            pipelineId={
+                                                                made?.kind === "pipeline"
+                                                                    ? made.pipelineId
+                                                                    : null
+                                                            }
+                                                            relative={
+                                                                snapshot.relatives.get(
+                                                                    childRunId,
+                                                                ) ?? null
+                                                            }
+                                                            runId={childRunId}
+                                                            via={pipelineChildVia(nodes)}
+                                                        />
+                                                    );
+                                                })}
+                                            </div>
+                                        </PipelineDetailSection>
+                                    ) : null}
                                     {shown ? (
                                         <div className="happy-pipeline-detail__group">
                                             <h3 className="happy-pipeline-detail__group-title">
@@ -291,7 +345,9 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                                 labels={props.labels}
                                                 leases={run.leases}
                                                 node={shown}
+                                                now={props.now}
                                                 onRunOpen={props.onRunOpen}
+                                                relatives={snapshot.relatives}
                                             />
                                         </div>
                                     ) : null}
@@ -333,33 +389,6 @@ export function HappyAgentPipelineRunPage(props: HappyAgentPipelineRunPageProps)
                                         {run.result ? (
                                             <PipelineDetailSection title="Result">
                                                 <PipelineValue value={run.result.outputs} />
-                                            </PipelineDetailSection>
-                                        ) : null}
-                                        {run.childRunIds.length > 0 ? (
-                                            <PipelineDetailSection title="Child runs">
-                                                <div className="happy-pipeline-detail__actions">
-                                                    {run.childRunIds.map((childRunId) => {
-                                                        const parentNode = run.nodes.find(
-                                                            (node) =>
-                                                                node.childRunId === childRunId,
-                                                        );
-                                                        return (
-                                                            <Button
-                                                                icon="pipeline"
-                                                                key={childRunId}
-                                                                onClick={() =>
-                                                                    props.onRunOpen(childRunId)
-                                                                }
-                                                                size="small"
-                                                                variant="secondary"
-                                                            >
-                                                                {parentNode
-                                                                    ? `From ${parentNode.nodeId}`
-                                                                    : "Child run"}
-                                                            </Button>
-                                                        );
-                                                    })}
-                                                </div>
                                             </PipelineDetailSection>
                                         ) : null}
                                     </div>

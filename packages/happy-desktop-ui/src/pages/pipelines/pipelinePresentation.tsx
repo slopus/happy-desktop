@@ -3,6 +3,7 @@ import type {
     PipelineNode,
     PipelineNodeKind,
     PipelineNodeRunState,
+    PipelineRunRelative,
     PipelineRunState,
     PipelineRunTrigger,
     PipelineSchema,
@@ -82,6 +83,42 @@ export const PIPELINE_NODE_STATE_TONE: Record<PipelineNodeRunState, PipelineTone
     skipped: "neutral",
     aborted: "neutral",
 };
+
+/** How a child run is tied to the run on screen: the nodes waiting on it. */
+export function pipelineChildVia(nodeIds: readonly string[]): string {
+    if (nodeIds.length === 0) return "Started by this run";
+    if (nodeIds.length === 1) return `From its node ${nodeIds[0]!}`;
+    // A batch run several nodes joined.
+    return `Shared by its nodes ${nodeIds.slice(0, -1).join(", ")} and ${nodeIds.at(-1)!}`;
+}
+
+/**
+ * Where a child run stands: `short` for the pipeline node's card on the
+ * timeline, `text` for a row with room for its newest status line, and how far
+ * through its nodes it is when that is known.
+ */
+export function pipelineRunRelativeProgress(relative: PipelineRunRelative): {
+    readonly short: string;
+    readonly text: string;
+    readonly progress: number | null;
+} {
+    if (relative.state === "queued")
+        return { short: "Child queued", text: "Queued behind its group", progress: null };
+    if (relative.state !== "running") {
+        const state = PIPELINE_RUN_STATE_LABEL[relative.state];
+        return { short: `Child ${state.toLowerCase()}`, text: state, progress: null };
+    }
+    const total = relative.nodesTotal;
+    const count =
+        total === null
+            ? `${String(relative.nodesEnded)} ${relative.nodesEnded === 1 ? "node" : "nodes"} done`
+            : `${String(relative.nodesEnded)} of ${String(total)} nodes`;
+    return {
+        short: count,
+        text: relative.status === null ? count : `${count} · ${relative.status.text}`,
+        progress: total === null || total === 0 ? null : relative.nodesEnded / total,
+    };
+}
 
 /** How long something took, or has taken so far while it runs. */
 export function pipelineDurationOf(

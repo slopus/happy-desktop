@@ -4,6 +4,7 @@ import type {
     PipelineNodeRun,
     PipelineRun,
     PipelineRunEntry,
+    PipelineRunRelative,
     PipelineRunSnapshot,
     PipelineDefinition,
     PipelineNode,
@@ -36,7 +37,14 @@ const labels: PipelineLabels = {
     },
     author: (author) =>
         author === null ? "Unknown" : author.kind === "agent" ? "Release bot" : "Steve",
-    pipeline: (id) => (id === "pl_notify" ? "Notify team" : id === "pl_ci" ? "Desktop CI" : id),
+    pipeline: (id) =>
+        ({
+            pl_notify: "Notify team",
+            pl_ci: "Desktop CI",
+            pl_ship: "Ship",
+            pl_deploy: "Deploy",
+            pl_index: "Search index",
+        })[id] ?? id,
     agent: () => "Release bot",
 };
 
@@ -940,14 +948,207 @@ const runSnapshot = (
     run: PipelineRun,
     nodeSelected: string | null = null,
     definition: PipelineDefinition = ci,
+    relatives: readonly PipelineRunRelative[] = [],
 ): PipelineRunSnapshot => ({
     loading: false,
     missing: false,
     run,
     definition: { state: "loaded", definition },
+    relatives: new Map(relatives.map((relative) => [relative.id, relative])),
     nodeSelected,
     abort: { state: "idle" },
 });
+
+/** The notify run the failed run's pipeline node started. */
+const notifyChild: PipelineRunRelative = {
+    id: "run_notify_12",
+    pipelineId: "pl_notify",
+    version: 2,
+    state: "succeeded",
+    startedAt: NOW - 45 * MINUTE,
+    endedAt: NOW - 44 * MINUTE,
+    nodesEnded: 2,
+    nodesRunning: 0,
+    nodesTotal: 2,
+    status: null,
+};
+
+/**
+ * A release made of other pipelines: after the build, Deploy runs once for the
+ * web and once for desktop, and both search-index nodes joined one batch run
+ * of Search index. The desktop deploy waits behind another run of its group.
+ */
+const shipNode = (id: string, pipelineId: string): PipelineNode => ({
+    ...shared,
+    id,
+    kind: "pipeline",
+    pipelineId,
+});
+const ship: PipelineDefinition = {
+    ...ci,
+    concurrency: { group: null, mode: "independent", batch: false },
+    permissions: { ...none, pipelines: ["pl_deploy", "pl_index"] },
+    root: "build",
+    nodes: [
+        { ...unit, id: "build" },
+        shipNode("deploy-web", "pl_deploy"),
+        shipNode("deploy-desktop", "pl_deploy"),
+        shipNode("index-docs", "pl_index"),
+        shipNode("index-api", "pl_index"),
+        { ...release, id: "announce" },
+    ],
+    edges: [
+        { from: "build", on: "success", to: "deploy-web" },
+        { from: "build", on: "success", to: "deploy-desktop" },
+        { from: "build", on: "success", to: "index-docs" },
+        { from: "build", on: "success", to: "index-api" },
+        { from: "deploy-web", on: "success", to: "announce" },
+        { from: "deploy-desktop", on: "success", to: "announce" },
+    ],
+};
+const shipRun: PipelineRun = {
+    ...liveRun,
+    id: "run_ship_21",
+    pipelineId: "pl_ship",
+    rootRunId: "run_ship_21",
+    version: 3,
+    createdAt: NOW - 9 * MINUTE,
+    startedAt: NOW - 9 * MINUTE,
+    group: null,
+    input: { sha: "9f2c1e7" },
+    leases: [],
+    nodes: [
+        nodeRun("build", "code", "succeeded", {
+            input: { sha: "9f2c1e7" },
+            output: { artifact: "happy-9f2c1e7.tar.zst" },
+            startedAt: NOW - 9 * MINUTE,
+            endedAt: NOW - 6 * MINUTE,
+        }),
+        nodeRun("deploy-web", "pipeline", "running", {
+            childRunId: "run_deploy_31",
+            input: { artifact: "happy-9f2c1e7.tar.zst", target: "web" },
+            startedAt: NOW - 6 * MINUTE,
+        }),
+        nodeRun("deploy-desktop", "pipeline", "running", {
+            childRunId: "run_deploy_32",
+            input: { artifact: "happy-9f2c1e7.tar.zst", target: "desktop" },
+            startedAt: NOW - 6 * MINUTE,
+        }),
+        nodeRun("index-docs", "pipeline", "succeeded", {
+            childRunId: "run_index_7",
+            input: { source: "docs" },
+            output: { indexed: 412 },
+            startedAt: NOW - 6 * MINUTE,
+            endedAt: NOW - 4 * MINUTE,
+        }),
+        nodeRun("index-api", "pipeline", "succeeded", {
+            childRunId: "run_index_7",
+            input: { source: "api" },
+            output: { indexed: 412 },
+            startedAt: NOW - 6 * MINUTE,
+            endedAt: NOW - 4 * MINUTE,
+        }),
+        nodeRun("announce", "code", "pending"),
+    ],
+    // Oldest first; the shared batch run once.
+    childRunIds: ["run_deploy_31", "run_deploy_32", "run_index_7"],
+};
+const shipChildren: PipelineRunRelative[] = [
+    {
+        id: "run_deploy_31",
+        pipelineId: "pl_deploy",
+        version: 6,
+        state: "running",
+        startedAt: NOW - 6 * MINUTE,
+        endedAt: null,
+        nodesEnded: 2,
+        nodesRunning: 1,
+        nodesTotal: 5,
+        status: { text: "migrating the database", progress: 0.4, at: NOW - 20 * SECOND },
+    },
+    {
+        id: "run_deploy_32",
+        pipelineId: "pl_deploy",
+        version: 6,
+        state: "queued",
+        startedAt: null,
+        endedAt: null,
+        nodesEnded: 0,
+        nodesRunning: 0,
+        nodesTotal: 5,
+        status: null,
+    },
+    {
+        id: "run_index_7",
+        pipelineId: "pl_index",
+        version: 2,
+        state: "succeeded",
+        startedAt: NOW - 6 * MINUTE,
+        endedAt: NOW - 4 * MINUTE,
+        nodesEnded: 3,
+        nodesRunning: 0,
+        nodesTotal: 3,
+        status: null,
+    },
+];
+
+/** The web deploy, seen from its own page: Ship's deploy-web node made it. */
+const deploy: PipelineDefinition = {
+    ...ci,
+    concurrency: { group: "{{input.target}}", mode: "queue", batch: false },
+    root: "upload",
+    nodes: ["upload", "verify-upload", "migrate", "switch", "smoke"].map(
+        (id) => ({ ...unit, id }) as PipelineNode,
+    ),
+    edges: [
+        { from: "upload", on: "success", to: "verify-upload" },
+        { from: "verify-upload", on: "success", to: "migrate" },
+        { from: "migrate", on: "success", to: "switch" },
+        { from: "switch", on: "success", to: "smoke" },
+    ],
+};
+const deployRun: PipelineRun = {
+    ...liveRun,
+    id: "run_deploy_31",
+    pipelineId: "pl_deploy",
+    rootRunId: "run_ship_21",
+    parentRunId: "run_ship_21",
+    trigger: { kind: "pipeline", runId: "run_ship_21", nodeId: "deploy-web" },
+    version: 6,
+    createdAt: NOW - 6 * MINUTE,
+    startedAt: NOW - 6 * MINUTE,
+    group: "web",
+    input: { artifact: "happy-9f2c1e7.tar.zst", target: "web" },
+    leases: [],
+    nodes: [
+        nodeRun("upload", "code", "succeeded", {
+            startedAt: NOW - 6 * MINUTE,
+            endedAt: NOW - 4 * MINUTE,
+        }),
+        nodeRun("verify-upload", "code", "succeeded", {
+            startedAt: NOW - 4 * MINUTE,
+            endedAt: NOW - 3 * MINUTE,
+        }),
+        nodeRun("migrate", "code", "running", {
+            status: { text: "migrating the database", progress: 0.4, at: NOW - 20 * SECOND },
+            statuses: statuses([["migrating the database", 0.4, 0]]),
+            startedAt: NOW - 3 * MINUTE,
+        }),
+    ],
+    childRunIds: [],
+};
+const deployParent: PipelineRunRelative = {
+    id: "run_ship_21",
+    pipelineId: "pl_ship",
+    version: 3,
+    state: "running",
+    startedAt: NOW - 9 * MINUTE,
+    endedAt: null,
+    nodesEnded: 3,
+    nodesRunning: 2,
+    nodesTotal: 6,
+    status: null,
+};
 
 const list: PipelinesSnapshot = {
     loading: false,
@@ -1160,7 +1361,7 @@ export function HappyAgentPipelinesBlueprintPage() {
                 <HappyAgentPipelineRunPage
                     {...runPage}
                     log={{ nodeId: "unit", snapshot: unitFailedLog }}
-                    run={runSnapshot(failedRun)}
+                    run={runSnapshot(failedRun, null, ci, [notifyChild])}
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
@@ -1173,7 +1374,7 @@ export function HappyAgentPipelinesBlueprintPage() {
                 <HappyAgentPipelineRunPage
                     {...runPage}
                     log={{ nodeId: "notify", snapshot: emptyLog }}
-                    run={runSnapshot(failedRun, "notify")}
+                    run={runSnapshot(failedRun, "notify", ci, [notifyChild])}
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
@@ -1261,6 +1462,45 @@ export function HappyAgentPipelinesBlueprintPage() {
                     {...runPage}
                     log={{ nodeId: "unit", snapshot: unitLiveLog }}
                     run={runSnapshot(batchRun, null, batched)}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A run made of other pipelines. Each pipeline node on the timeline says where its child run is: three of five nodes through, or queued behind its group while the node waits. Beside it, every child run, the batch run two nodes share listed once."
+                label="Run, child runs"
+                number="19"
+                screen="19-run-children-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "build", snapshot: emptyLog }}
+                    run={runSnapshot(shipRun, "build", ship, shipChildren)}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A pipeline node picked: its child run, with how far through it is, opens from the node's facts."
+                label="Run, pipeline node"
+                number="20"
+                screen="20-run-pipeline-node-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "deploy-web", snapshot: emptyLog }}
+                    run={runSnapshot(shipRun, "deploy-web", ship, shipChildren)}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A child run's own page: the parent run that started it, and from which node, opens from beside its facts."
+                label="Run, child"
+                number="21"
+                screen="21-run-child-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPipelineRunPage
+                    {...runPage}
+                    log={{ nodeId: "migrate", snapshot: unitLiveLog }}
+                    run={runSnapshot(deployRun, null, deploy, [deployParent])}
                 />
             </FullScreenSpecimen>
         </ComponentPage>
