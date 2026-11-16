@@ -186,15 +186,33 @@ export function PipelineNodeFacts(props: PipelineNodeFactsProps) {
     );
 }
 
-/** A node's heading over the main column: its glyph, ID, kind, and a way to close it. */
+/**
+ * A node's heading over the main column: its glyph, ID, kind, and a way to
+ * close it. Where the node stands in for something else, such as the
+ * pipeline's runs, `back` names that and returns to it instead of a bare close.
+ */
 export function PipelineNodeHeading(props: {
     readonly id: string;
     readonly kind: PipelineNode["kind"];
     readonly children?: ReactNode;
     readonly onClose?: () => void;
+    readonly back?: { readonly label: string; readonly onBack: () => void };
 }) {
     return (
         <header className="happy-pipeline-pane__header">
+            {props.back ? (
+                <span className="happy-pipeline-pane__back">
+                    <Button
+                        icon="chevron-left"
+                        onClick={props.back.onBack}
+                        size="small"
+                        title={`Back to ${props.back.label.toLowerCase()}`}
+                        variant="ghost"
+                    >
+                        {props.back.label}
+                    </Button>
+                </span>
+            ) : null}
             <span className="happy-pipeline-pane__kind" data-kind={props.kind}>
                 <Icon name={PIPELINE_KIND_ICON[props.kind]} size={14} />
             </span>

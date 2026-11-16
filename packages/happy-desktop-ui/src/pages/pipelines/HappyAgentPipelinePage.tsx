@@ -151,9 +151,12 @@ export function HappyAgentPipelinePage(props: HappyAgentPipelinePageProps) {
                             {node ? (
                                 <>
                                     <PipelineNodeHeading
+                                        back={{
+                                            label: "Runs",
+                                            onBack: () => props.onNodeSelect(null),
+                                        }}
                                         id={node.id}
                                         kind={node.kind}
-                                        onClose={() => props.onNodeSelect(null)}
                                     />
                                     <PipelineNodeWork labels={props.labels} node={node} />
                                 </>
