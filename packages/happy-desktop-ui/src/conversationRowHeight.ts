@@ -66,7 +66,7 @@ import {
     conversationFailureCardLayout,
     conversationFailureMessage,
     type ConversationFailureClock,
-    conversationFailureSwitchLabel,
+    conversationFailureSwitchShortLabel,
     conversationFailureTargetKey,
 } from "./conversationFailureText";
 import type { ConversationSwitchTarget } from "./conversationSwitchTargets";
@@ -436,12 +436,18 @@ const CHAT_FRAME_OUTSET = 12;
 const CHAT_FRAME_TEXT_INSET = CHAT_FRAME_OUTSET - 3;
 /** Failure card: the row's 6px above its message line and below its last line or button. */
 const FAILURE_CHROME = 2 * 6;
-/** Failure card: between the message line and the button row. */
+/** Failure card: between the message line and the detail under it. */
 const FAILURE_SECTION_GAP = 12;
 /** Failure card: between the message line and the record of what was done. */
 const FAILURE_RESOLUTION_GAP = 6;
-/** `.happy-conversation-failure-card__line` gap before the line's own button. */
+/** `.happy-conversation-failure-card__line` row gap, between the message and buttons under it. */
 const FAILURE_LINE_GAP = 8;
+/** The same line's 16px column gap, less the 11px the button group starts back by. */
+const FAILURE_LINE_ACTIONS_LEAD = 16 - 11;
+/** Failure card: one 20px line of message, which the 28px buttons hang 4px over. */
+const FAILURE_LINE_HEIGHT = 20;
+/** The switch's 24px chevron segment, less the 6px its label's trailing padding gives up to it. */
+const FAILURE_SWITCH_MENU_WIDTH = 24 - 6;
 /** A command box: 5px padding per side, the 2px gap and the 20px copy button. */
 const FAILURE_CODE_EXTRA = 32;
 /** Small Button: 28px tall, 10px padding and a 1px border per side, 12/700 at 0.01em. */
@@ -1276,7 +1282,7 @@ export function conversationRowHeight(
                 layout.switchTargets?.find(
                     (candidate) => conversationFailureTargetKey(candidate) === options.target,
                 ) ?? layout.switchTargets?.[0];
-            const switchLabel = target ? conversationFailureSwitchLabel(target) : "";
+            const switchLabel = target ? conversationFailureSwitchShortLabel(target) : "";
             return rowHeightCached(
                 cache,
                 entry,
@@ -1292,11 +1298,19 @@ export function conversationRowHeight(
                     layout.resolution ?? "",
                 ].join(":"),
                 () => {
-                    /* The message's own action and Ask Chief of Staff follow
-                       it on its line, and the message wraps beside them. */
+                    /* The message's own action, the switch and Ask Chief of
+                       Staff follow it on its line while that line has room
+                       for them; otherwise they sit under the message, which
+                       then has the whole measure. */
                     const lineButtons = [
                         ...(layout.lineAction
                             ? [smallButtonWidth(layout.lineAction.label, cache?.text)]
+                            : []),
+                        ...(target
+                            ? [
+                                  smallButtonWidth(switchLabel, cache?.text) +
+                                      FAILURE_SWITCH_MENU_WIDTH,
+                              ]
                             : []),
                         ...(layout.assistance
                             ? [smallButtonWidth(layout.assistance.label, cache?.text)]
@@ -1305,21 +1319,31 @@ export function conversationRowHeight(
                     const lineActions =
                         lineButtons.length === 0
                             ? 0
-                            : FAILURE_LINE_GAP +
+                            : FAILURE_LINE_ACTIONS_LEAD +
                               lineButtons.reduce((total, button) => total + button, 0) +
                               (lineButtons.length - 1) * FAILURE_LINE_ACTIONS_GAP;
-                    let height =
-                        lead +
-                        FAILURE_CHROME +
+                    const messageHeight = (width: number): number =>
                         errorRichTextHeight(
                             segments.map((segment) =>
                                 segment.kind === "code"
                                     ? { code: segment.text, extraWidth: FAILURE_CODE_EXTRA }
                                     : { text: segment.text },
                             ),
-                            measure - lineActions,
+                            width,
                             cache?.text,
                         );
+                    const beside =
+                        lineActions > 0 && measure > lineActions
+                            ? messageHeight(measure - lineActions)
+                            : undefined;
+                    let height =
+                        lead +
+                        FAILURE_CHROME +
+                        (lineActions === 0
+                            ? messageHeight(measure)
+                            : beside === FAILURE_LINE_HEIGHT
+                              ? FAILURE_LINE_HEIGHT
+                              : messageHeight(measure) + FAILURE_LINE_GAP + FAILURE_LINE_HEIGHT);
                     if (layout.resolution !== undefined)
                         return (
                             height +
@@ -1330,9 +1354,6 @@ export function conversationRowHeight(
                         height +=
                             FAILURE_SECTION_GAP +
                             errorTextHeight(layout.assistance.detail, measure, cache?.text);
-                    /* The switch button has the row under the message to
-                       itself; its main segment gives way rather than wrap. */
-                    if (target) height += FAILURE_SECTION_GAP + SMALL_BUTTON_HEIGHT;
                     return height;
                 },
             );

@@ -10,6 +10,7 @@ import { Octicon } from "./vectorIcons/VectorIcon";
 import { WindowOverlay } from "./WindowOverlay";
 import {
     conversationFailureSwitchLabel,
+    conversationFailureSwitchShortLabel,
     conversationFailureTargetGroups,
     conversationFailureTargetKey,
     conversationFailureTargetLabel,
@@ -56,7 +57,8 @@ function Check() {
 }
 
 /**
- * "Switch to {account} · {model} and continue", with its own chevron segment.
+ * "Switch to {account}", a quiet text button with its own chevron segment; its
+ * tooltip and the list name the model too.
  * The list opens out of that segment, trailing edges aligned with the button,
  * upward when it fits above and downward otherwise. A backdrop holds it
  * attached: nothing under it scrolls while it is open.
@@ -161,9 +163,9 @@ export function ConversationSwitchButton(props: ConversationSwitchButtonProps) {
                 onClick={() => props.onSwitch?.(current)}
                 size="small"
                 title={conversationFailureSwitchLabel(current)}
-                variant="primary"
+                variant="ghost"
             >
-                {conversationFailureSwitchLabel(current)}
+                {conversationFailureSwitchShortLabel(current)}
             </Button>
             <Button
                 aria-controls={open ? menuId : undefined}
@@ -183,7 +185,7 @@ export function ConversationSwitchButton(props: ConversationSwitchButtonProps) {
                     }
                 }}
                 size="small"
-                variant="primary"
+                variant="ghost"
             >
                 <Octicon name={open ? "chevron-up" : "chevron-down"} size={12} />
             </Button>

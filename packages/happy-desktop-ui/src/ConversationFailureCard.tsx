@@ -53,11 +53,11 @@ export interface ConversationFailureCardProps extends ConversationFailureActions
 }
 
 /**
- * A failed turn, written by the client from the failure's kind: the message
- * with its own action and Ask Chief of Staff after it as quiet text buttons,
- * then the switch split button on a row of its own that starts on the warning
- * icon. Exactly one button is primary: the switch when it is offered,
- * otherwise the message's own action. Once acted on, the card stays in the
+ * A failed turn, written by the client from the failure's kind: the message,
+ * then its actions on the same line as quiet text buttons — its own action, the
+ * switch split button, and Ask Chief of Staff. Where the line has no room for
+ * them they move under the message together. None of them is filled: the row
+ * reads as quietly as the rows around it. Once acted on, the card stays in the
  * transcript and records what was done.
  */
 export function ConversationFailureCard(props: ConversationFailureCardProps) {
@@ -138,7 +138,7 @@ export function ConversationFailureCard(props: ConversationFailureCardProps) {
                                         ),
                                 )}
                             </span>
-                            {layout.lineAction || layout.assistance ? (
+                            {layout.lineAction || layout.switchTargets || layout.assistance ? (
                                 <span
                                     className="happy-conversation-failure-card__line-actions"
                                     data-happy-desktop-ui="conversation-failure-line-actions"
@@ -152,12 +152,31 @@ export function ConversationFailureCard(props: ConversationFailureCardProps) {
                                                     : props.onNewChat
                                             }
                                             size="small"
-                                            variant={
-                                                layout.lineAction.primary ? "primary" : "ghost"
-                                            }
+                                            variant="ghost"
                                         >
                                             {layout.lineAction.label}
                                         </Button>
+                                    ) : null}
+                                    {layout.switchTargets ? (
+                                        <ConversationSwitchButton
+                                            {...(props.previewMenu
+                                                ? {
+                                                      defaultOpen: true,
+                                                      ...(props.previewMenu.active === undefined
+                                                          ? {}
+                                                          : {
+                                                                previewActive:
+                                                                    props.previewMenu.active,
+                                                            }),
+                                                  }
+                                                : {})}
+                                            onOpen={props.onSwitchOpen}
+                                            onSwitch={props.onSwitch}
+                                            onTargetChange={props.onTargetChange}
+                                            target={props.target}
+                                            targets={layout.switchTargets}
+                                            usageNow={props.usageNow}
+                                        />
                                     ) : null}
                                     {layout.assistance ? (
                                         <Button
@@ -183,29 +202,6 @@ export function ConversationFailureCard(props: ConversationFailureCardProps) {
                         ) : null}
                     </div>
                 </div>
-                {layout.switchTargets ? (
-                    <div
-                        className="happy-conversation-failure-card__actions"
-                        data-happy-desktop-ui="conversation-failure-actions"
-                    >
-                        <ConversationSwitchButton
-                            {...(props.previewMenu
-                                ? {
-                                      defaultOpen: true,
-                                      ...(props.previewMenu.active === undefined
-                                          ? {}
-                                          : { previewActive: props.previewMenu.active }),
-                                  }
-                                : {})}
-                            onOpen={props.onSwitchOpen}
-                            onSwitch={props.onSwitch}
-                            onTargetChange={props.onTargetChange}
-                            target={props.target}
-                            targets={layout.switchTargets}
-                            usageNow={props.usageNow}
-                        />
-                    </div>
-                ) : null}
                 {layout.resolution !== undefined ? (
                     <span
                         className="happy-conversation-failure-card__resolution"

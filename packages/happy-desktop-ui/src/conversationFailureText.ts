@@ -150,9 +150,14 @@ export function conversationFailureTargetLabel(target: {
     return `${target.providerLabel} · ${target.modelName ?? target.modelId}`;
 }
 
-/** The split button's main segment. */
+/** What the split button's main segment does, in full: its tooltip. */
 export function conversationFailureSwitchLabel(target: ConversationSwitchTarget): string {
     return `Switch to ${conversationFailureTargetLabel(target)} and continue`;
+}
+
+/** The split button's main segment as it reads on the message line: the account alone. */
+export function conversationFailureSwitchShortLabel(target: ConversationSwitchTarget): string {
+    return `Switch to ${target.providerLabel}`;
 }
 
 /**
@@ -198,8 +203,8 @@ export function conversationFailureResolutionText(
 
 /** What a failure card shows besides its message, shared with its exact row geometry. */
 export interface ConversationFailureCardLayout {
-    /** The button after the message, and whether it is the card's one primary. */
-    readonly lineAction?: { readonly label: string; readonly primary: boolean };
+    /** The message's own button, first after it. */
+    readonly lineAction?: { readonly label: string };
     /** The switch split button's targets, when switching is offered. */
     readonly switchTargets?: readonly ConversationSwitchTarget[];
     readonly assistance?: ReturnType<typeof conversationErrorAssistanceText>;
@@ -211,8 +216,7 @@ export interface ConversationFailureCardLayout {
  * Which buttons a card carries. A resolved card records what was done and
  * offers nothing; one the conversation has moved past offers only Ask Chief of
  * Staff. Otherwise the switch is offered when the live catalog has another
- * account to move to, and is then the one primary; without it, the message
- * line's own action is.
+ * account to move to, between the message's own action and Ask Chief of Staff.
  */
 export function conversationFailureCardLayout(
     failure: ConversationFailure,
@@ -240,7 +244,7 @@ export function conversationFailureCardLayout(
             : undefined;
     const action = conversationFailureLineAction(failure);
     const lineAction = (action === "retry" ? options.actions.retry : options.actions.newChat)
-        ? { label: LINE_ACTION_LABEL[action], primary: switchTargets === undefined }
+        ? { label: LINE_ACTION_LABEL[action] }
         : undefined;
     return {
         ...(lineAction ? { lineAction } : {}),

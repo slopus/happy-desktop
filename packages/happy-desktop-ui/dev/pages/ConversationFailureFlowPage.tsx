@@ -236,12 +236,12 @@ type Screen = {
 const screens: readonly Screen[] = [
     {
         id: "signin-missing",
-        label: "Sign-in missing · switching is primary",
+        label: "Sign-in missing · Retry, the switch and Ask Chief of Staff",
         entries: [...before, signinMissing],
     },
     {
         id: "signin-missing-no-switch",
-        label: "Sign-in missing · no other account, Retry is primary",
+        label: "Sign-in missing · no other account to switch to",
         entries: [...before, signinMissing],
         source: SOURCE_ALONE,
     },
@@ -459,7 +459,7 @@ export function ConversationFailureFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Failed turns as the client writes them from the failure's kind: the message with Retry or New chat after it, then the switch split button and Ask Chief of Staff. The switch lists the conversation's model picker's own accounts and live usage, never a list stored with the failure. Reset times are told on the viewer's own clock; this page pins it to Los Angeles. Each viewport is named for `pnpm blueprint:screens`."
+            summary="Failed turns as the client writes them from the failure's kind: the message, then Retry or New chat, the switch and Ask Chief of Staff on its line, or together under it when the line has no room. The switch lists the conversation's model picker's own accounts and live usage, never a list stored with the failure. Reset times are told on the viewer's own clock; this page pins it to Los Angeles. Each viewport is named for `pnpm blueprint:screens`."
             title="Conversation failure flow"
         >
             {[

@@ -380,7 +380,7 @@ const buttons = (root: ParentNode) =>
     }));
 
 it.each([360, 720])(
-    "puts Retry on the message line, one primary switch below, and models the row exactly at %ipx",
+    "puts Retry, the switch and Ask Chief of Staff on one line, and models the row exactly at %ipx",
     async (width) => {
         const view = createRenderer();
         const onSwitch = vi.fn();
@@ -404,28 +404,27 @@ it.each([360, 720])(
             .element as HTMLElement;
         expect(buttons(card)).toEqual([
             { text: "Retry", variant: "ghost", height: 28 },
+            { text: "Switch to claude_work", variant: "ghost", height: 28 },
+            { text: "Choose another account", variant: "ghost", height: 28 },
             { text: "Ask Chief of Staff", variant: "ghost", height: 28 },
-            {
-                text: "Switch to claude_work · Opus 5.5 and continue",
-                variant: "primary",
-                height: 28,
-            },
-            { text: "Choose another account", variant: "primary", height: 28 },
         ]);
-        /* Retry follows the message 8px after it, centred on its first 20px line
-           and hanging 4px over it, so the line keeps the icon's height; Ask
-           Chief of Staff follows Retry 4px after it. */
+        /* The three share one line, 4px apart. Beside the message they start
+           16px after it, hanging 4px over its 20px line; with no room there
+           they sit 8px under it, Retry's label on the text's own edge. */
         const message = view.$('[data-happy-desktop-ui="conversation-error-reason"]').bounds();
         const retry = view.$(".happy-conversation-failure-card__line-action").bounds();
+        const split = view.$('[data-happy-desktop-ui="conversation-switch"]').bounds();
         const ask = view.$(".happy-conversation-failure-card__ask").bounds();
-        expect(retry.x - (message.x + message.width)).toBeCloseTo(8, 1);
-        expect(retry.y + retry.height / 2).toBeCloseTo(message.y + 10, 1);
-        expect(ask.x - (retry.x + retry.width)).toBeCloseTo(4, 1);
+        if (retry.y < message.y + message.height) {
+            expect(retry.x - (message.x + message.width)).toBeCloseTo(5, 1);
+            expect(retry.y + retry.height / 2).toBeCloseTo(message.y + 10, 1);
+        } else {
+            expect(retry.x).toBeCloseTo(message.x - 11, 1);
+            expect(retry.y + retry.height / 2).toBeCloseTo(message.y + message.height + 8 + 10, 1);
+        }
+        expect(split.x - (retry.x + retry.width)).toBeCloseTo(4, 1);
+        expect(ask.x - (split.x + split.width)).toBeCloseTo(4, 1);
         expect(ask.y).toBe(retry.y);
-        // The switch row starts on the warning icon's left edge.
-        const icon = view.$('[data-happy-desktop-ui="conversation-error-icon"]').bounds();
-        const actions = view.$('[data-happy-desktop-ui="conversation-failure-actions"]').bounds();
-        expect(actions.x).toBe(icon.x);
         // The command copies itself.
         const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
         card.querySelector<HTMLButtonElement>('[aria-label="Copy claude auth login"]')!.click();
@@ -438,7 +437,7 @@ it.each([360, 720])(
     },
 );
 
-it("makes the message line's own action primary when nothing can be switched to", async () => {
+it("keeps the message line's own action quiet when nothing can be switched to", async () => {
     const view = createRenderer();
     const onNewChat = vi.fn();
     const tooLong: ConversationFailure = {
@@ -454,7 +453,7 @@ it("makes the message line's own action primary when nothing can be switched to"
     await view.ready();
     const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
     expect(buttons(card)).toEqual([
-        { text: "New chat", variant: "primary", height: 28 },
+        { text: "New chat", variant: "ghost", height: 28 },
         { text: "Ask Chief of Staff", variant: "ghost", height: 28 },
     ]);
     card.querySelector<HTMLButtonElement>(".happy-conversation-failure-card__line-action")!.click();
@@ -561,7 +560,7 @@ it("opens the picker's accounts from the chevron, asks for fresh usage, picks wi
         .toBeNull();
     expect(onSwitch).not.toHaveBeenCalled();
     const main = split.querySelector<HTMLButtonElement>(".happy-conversation-switch__main")!;
-    await expect.poll(() => main.textContent).toBe("Switch to codex · GPT-6.1 Sol and continue");
+    await expect.poll(() => main.textContent).toBe("Switch to codex");
     expect(document.activeElement).toBe(chevron);
     const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
     expect(card.getBoundingClientRect().height).toBe(
@@ -884,7 +883,7 @@ it("switches from the conversation's live picker source, follows its usage, and 
     await view.ready();
     const main = () =>
         document.querySelector<HTMLButtonElement>(".happy-conversation-switch__main")?.textContent;
-    await expect.poll(main).toBe("Switch to claude_work · Opus 5.5 and continue");
+    await expect.poll(main).toBe("Switch to claude_work");
     expect(live.held()).toBe(1);
     expect(live.refresh).not.toHaveBeenCalled();
 
@@ -893,7 +892,7 @@ it("switches from the conversation's live picker source, follows its usage, and 
         accounts: new Map([...USAGE.accounts, ["claude_work", week(100, true)]]),
         now: NOW,
     });
-    await expect.poll(main).toBe("Switch to claude_extra · Opus 5.5 and continue");
+    await expect.poll(main).toBe("Switch to claude_extra");
 
     document.querySelector<HTMLButtonElement>(".happy-conversation-switch__menu")!.click();
     await expect
@@ -972,7 +971,7 @@ it("offers Retry alone when the live picker has no other account", async () => {
                 (button) => `${button.textContent}:${(button as HTMLElement).dataset["variant"]}`,
             ),
         )
-        .toEqual(["Retry:primary"]);
+        .toEqual(["Retry:ghost"]);
 });
 
 it("keeps every account reachable in a short window: the list takes the roomier side and scrolls", async () => {
