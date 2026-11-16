@@ -1,6 +1,7 @@
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import { remarkMarkdownFrontmatter } from "./markdownFrontmatter";
 import { sequenceDiff, sequenceDiffMatches } from "./sequenceDiff";
 
 /*
@@ -18,7 +19,7 @@ import { sequenceDiff, sequenceDiffMatches } from "./sequenceDiff";
  * left one place and arrived unchanged at another is a move.
  */
 
-const markdownDiffParser = unified().use(remarkParse).use(remarkGfm);
+const markdownDiffParser = unified().use(remarkParse).use(remarkGfm).use(remarkMarkdownFrontmatter);
 
 /** A parsed Markdown document, in the syntax tree the renderer shares. */
 export type MarkdownDiffRoot = ReturnType<typeof markdownDiffParser.parse>;

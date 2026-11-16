@@ -62,6 +62,26 @@ any width the panel is dragged to.
 3. Chat links reuse the same viewer
 `;
 
+const frontmatter = `---
+name: alexa_smart_home_get_device
+input:
+  endpointId:
+    type: string
+    pattern: ^amzn1.alexa.endpoint.[A-Za-z0-9-]+$
+    description: Alexa endpoint id, e.g. 'amzn1.alexa.endpoint.<uuid>'.
+---
+
+Read the live state of one Alexa smart-home device.
+
+## Returns
+
+The device's reported properties, as the endpoint last sent them.
+
+---
+
+A rule further down is still a rule.
+`;
+
 const tables = [
     "## Agent comparison",
     markdownTableFixtures.agentComparison,
@@ -160,6 +180,15 @@ export function MarkdownDocumentPage() {
                     880,
                     "artifact-happy-links",
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="A document that opens with a `---` block shows it as YAML ahead of the body · a `---` anywhere else is still a rule"
+                label="Frontmatter"
+                number="01c"
+                stage="surface"
+            >
+                {frame(<MarkdownDocument text={frontmatter} />, 460, 880, "frontmatter")}
             </Specimen>
 
             <Specimen

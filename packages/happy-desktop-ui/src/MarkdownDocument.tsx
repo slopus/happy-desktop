@@ -25,6 +25,7 @@ import {
     type FileReference,
 } from "./fileReference";
 import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
+import { remarkMarkdownFrontmatter } from "./markdownFrontmatter";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { markdownTableCodeKeepsLine } from "./messageTextLayout";
 import {
@@ -40,7 +41,7 @@ import { ShimmerText } from "./ShimmerText";
 // react-markdown reparses the document when this plugin list changes identity.
 // Keep the product's fixed GFM configuration stable across streaming/store
 // notifications so unchanged Markdown does not pay a second parse.
-const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkMarkdownFrontmatter];
 
 type MarkdownElement = NonNullable<ExtraProps["node"]>;
 type MarkdownChild = MarkdownElement["children"][number];
