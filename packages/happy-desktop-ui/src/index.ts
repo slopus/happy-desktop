@@ -106,9 +106,12 @@ export {
 } from "./ApprovalCard";
 export {
     AppShell,
+    APP_SHELL_PANEL_BALANCED_MAX_WIDTH,
+    APP_SHELL_PANEL_BALANCED_SHARE,
     APP_SHELL_PANEL_DEFAULT_WIDTH,
     APP_SHELL_SIDEBAR_SHORTCUT,
     type AppShellFocusedPane,
+    type AppShellPanelWidth,
     type AppShellProps,
 } from "./AppShell";
 export {
@@ -235,6 +238,7 @@ export {
     type FileBrowserProps,
     type FileBrowserScope,
 } from "./FileBrowser";
+export { FileSplit, FILE_SPLIT_LIST_DEFAULT_WIDTH, type FileSplitProps } from "./FileSplit";
 export { FilePathLabel, type FilePathLabelProps } from "./FilePathLabel";
 export {
     FilePreview,

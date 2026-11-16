@@ -80,6 +80,7 @@
 @import "./styles/info-panel.css";
 @import "./styles/file-tree.css";
 @import "./styles/file-browser.css";
+@import "./styles/file-split.css";
 @import "./styles/diff-surface.css";
 @import "./styles/file-family.css";
 @import "./styles/diff-file-title.css";
