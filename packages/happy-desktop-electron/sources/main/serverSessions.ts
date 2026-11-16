@@ -80,6 +80,11 @@ export interface ServerSessionsDeps {
          * the operating system. The account's pass is never kept.
          */
         readonly vault?: HappyCloudVault;
+        /**
+         * The one address a kept sign-in may refresh at. One kept for another
+         * is forgotten at launch without being sent anywhere.
+         */
+        readonly refreshUrl: string;
     };
     now?(): number;
 }
@@ -816,6 +821,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
             for (const stored of kept) {
                 if (
                     stored.connectionId === direct.account.connectionId ||
+                    stored.refreshUrl !== direct.refreshUrl ||
                     servers.get(stored.connectionId) !== stored.serverUrl ||
                     sessions.has(stored.connectionId)
                 )

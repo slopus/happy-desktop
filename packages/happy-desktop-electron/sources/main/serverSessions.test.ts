@@ -1,5 +1,6 @@
 import { completeOAuthSignIn } from "@slopus/happy-agent-client";
 import { afterEach, expect, it, vi } from "vitest";
+import type { HappyCloudStoredSession, HappyCloudVault } from "./happyCloudVault";
 import { serverSessionsCreate, type ServerSessionsDeps } from "./serverSessions";
 
 /*
@@ -440,7 +441,7 @@ it("keeps no token that names another server, and refuses a token URL on another
 const ACCOUNTS = "https://accounts.example.com/";
 const CLOUD_SERVER = "https://acme.example.com/";
 
-function cloudCreate(server: ReturnType<typeof serverCreate>) {
+function cloudCreate(server: ReturnType<typeof serverCreate>, vault?: HappyCloudVault) {
     return sessionsCreate(server, {
         direct: {
             servers: () => new Map([["cloud-acme", CLOUD_SERVER]]),
@@ -459,6 +460,8 @@ function cloudCreate(server: ReturnType<typeof serverCreate>) {
                 signInComplete: (signIn, callbackUrl) =>
                     completeOAuthSignIn(signIn, callbackUrl, { fetch: server.fetch }),
             },
+            refreshUrl: "https://login.example.com/token",
+            ...(vault ? { vault } : {}),
         },
     });
 }
@@ -563,4 +566,37 @@ it("holds Happy Cloud's account pass issued without a browser", () => {
     // The pass is never listed, nor handed to the transport.
     expect(context.sessions.get()).toEqual([{ connectionId: "cloud-acme", state: "signedOut" }]);
     expect(context.sessions.tokens()).toEqual({});
+});
+
+it("forgets a kept sign-in that refreshes anywhere but the account API, sending it nowhere", async () => {
+    const server = serverCreate({ audience: [CLOUD_SERVER] });
+    const kept = (refreshUrl: string): HappyCloudStoredSession => ({
+        connectionId: "cloud-acme",
+        serverUrl: CLOUD_SERVER,
+        refreshToken: "kept-refresh",
+        refreshUrl,
+        clientId: "happy",
+        resource: CLOUD_SERVER,
+    });
+    const writes: (readonly HappyCloudStoredSession[])[] = [];
+    const vaultOf = (stored: HappyCloudStoredSession): HappyCloudVault => ({
+        available: () => true,
+        read: () => [stored],
+        write: (sessions) => void writes.push(sessions),
+    });
+
+    const old = cloudCreate(server, vaultOf(kept("https://auth.happy.engineering/token")));
+    old.sessions.directRestore();
+    await vi.waitFor(() => expect(writes).toEqual([[]]));
+    expect(server.tokenRequests).toEqual([]);
+    expect(old.sessions.get()).toEqual([{ connectionId: "cloud-acme", state: "signedOut" }]);
+
+    const current = cloudCreate(server, vaultOf(kept("https://login.example.com/token")));
+    current.sessions.directRestore();
+    await vi.waitFor(() =>
+        expect(current.sessions.get()).toEqual([{ connectionId: "cloud-acme", state: "signedIn" }]),
+    );
+    expect(server.tokenRequests).toEqual([
+        expect.objectContaining({ grant_type: "refresh_token", refresh_token: "kept-refresh" }),
+    ]);
 });

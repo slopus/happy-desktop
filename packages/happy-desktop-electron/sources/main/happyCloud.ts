@@ -273,6 +273,7 @@ export function happyCloudCreate(input: {
         direct: {
             servers,
             ...(input.vault ? { vault: input.vault } : {}),
+            refreshUrl: new URL("token", HAPPY_CLOUD_API_URL).href,
             account: {
                 connectionId: HAPPY_CLOUD_ACCOUNT_ID,
                 serverUrl: HAPPY_CLOUD_API_URL,
