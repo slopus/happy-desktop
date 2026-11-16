@@ -3,6 +3,7 @@ import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { MessageReferences } from "./messageReferences";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
+import { FileOpenInTabButton } from "./FileOpenInTab";
 import { CodeBlock } from "./CodeBlock";
 import { FileTreeFamilyIcon, fileTreeFamily, type FileTreeNode } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
@@ -115,6 +116,8 @@ export type FilePreviewProps = {
      * that refuses to take any.
      */
     editor?: ReactNode;
+    /** Moves the file into a tab of the main content. Absent hides the control. */
+    onOpenInTab?: () => void;
     onClose?: () => void;
     closeLabel?: string;
 };
@@ -264,6 +267,7 @@ export function FilePreview(props: FilePreviewProps) {
         "onMediaWindowOpen",
         "rendered",
         "editor",
+        "onOpenInTab",
         "onClose",
         "closeLabel",
     ]);
@@ -415,6 +419,9 @@ export function FilePreview(props: FilePreviewProps) {
                     <span aria-live="polite" className="happy-visually-hidden">
                         {downloadStatus === undefined ? "" : downloadLabel}
                     </span>
+                    {local.onOpenInTab ? (
+                        <FileOpenInTabButton onClick={() => local.onOpenInTab?.()} />
+                    ) : null}
                     {local.onClose ? (
                         <Button
                             aria-label={local.closeLabel ?? "Close preview"}

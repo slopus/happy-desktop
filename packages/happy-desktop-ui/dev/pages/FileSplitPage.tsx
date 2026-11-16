@@ -87,6 +87,9 @@ function LiveSplit(props: { width: number; initial?: string }) {
                                       ? { type: "unavailable" }
                                       : { type: "text", text: sources[selected] }
                               }
+                              // In the product this moves the file into a main
+                              // tab; here the preview simply gives it up.
+                              onOpenInTab={() => selectedSet(undefined)}
                               path={selected}
                           />
                       ),
@@ -130,7 +133,7 @@ export function FileSplitPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="the picked row carries the selection fill"
+                detail="the picked row carries the selection fill · Open in tab ends the header"
                 label="A file picked"
                 number="02"
                 stage="surface"

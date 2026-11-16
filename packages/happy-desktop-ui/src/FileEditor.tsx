@@ -6,6 +6,7 @@ import {
     type ReactNode,
 } from "react";
 import { Button } from "./Button";
+import { FileOpenInTabButton } from "./FileOpenInTab";
 import { ChangeStats } from "./ChangeStats";
 import { CodeEditor, type CodeEditorReveal } from "./CodeEditor";
 import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
@@ -31,6 +32,8 @@ export type FileEditorProps = {
     onValueChange?: (value: string) => void;
     onSave?: () => void;
     onRevert?: () => void;
+    /** Moves the file into a tab of the main content. Absent hides the control. */
+    onOpenInTab?: () => void;
     onClose?: () => void;
     /** Saves the file to the reader's machine. Absent hides the control. */
     onDownload?: () => void;
@@ -101,6 +104,7 @@ export function FileEditor(props: FileEditorProps) {
         "onValueChange",
         "onSave",
         "onRevert",
+        "onOpenInTab",
         "onClose",
         "onDownload",
         "dirty",
@@ -249,6 +253,9 @@ export function FileEditor(props: FileEditorProps) {
                         >
                             <Ionicon name="download-outline" size={14} />
                         </Button>
+                    ) : null}
+                    {local.onOpenInTab ? (
+                        <FileOpenInTabButton onClick={() => local.onOpenInTab?.()} />
                     ) : null}
                     {local.onClose ? (
                         <Button
