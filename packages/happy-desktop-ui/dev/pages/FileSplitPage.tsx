@@ -116,6 +116,7 @@ function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileD
                           />
                       ),
                       previewRequest: picks,
+                      onOpenInTab: () => selectedSet(undefined),
                   }
                 : {})}
             emptyDescription="Its contents or changes show here, beside the list."
