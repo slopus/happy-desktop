@@ -21,6 +21,7 @@
 @import "./styles/agent-run-card.css";
 @import "./styles/approval-card.css";
 @import "./styles/typed-text.css";
+@import "./styles/arriving-text.css";
 @import "./styles/agent-working-status.css";
 @import "./styles/turn-summary.css";
 @import "./styles/tooltip.css";

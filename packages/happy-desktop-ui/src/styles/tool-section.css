@@ -56,45 +56,42 @@
     line-height: 20px;
     color: var(--warning);
     white-space: nowrap;
-    /* An arriving line grows from where a received message does. */
-    transform-origin: left bottom;
 }
 
-/* A line arrives the way a received message does: it rises a few pixels into
-   place as it fades in, and settles just past its size before resting. */
-.happy-tool-section__item[data-arrives] {
-    animation: happy-tool-section-arrive 360ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+/* A line arrives the way a reply does in the mobile app: a character at a
+   time (see ArrivingText). Its glyph is the first of them, and comes in the
+   same way. */
+.happy-tool-section__item[data-arrives] .happy-agent-activity__glyph,
+.happy-tool-section__item[data-arrives] .happy-tool-section__glyph {
+    animation: happy-arriving-text-glyph 200ms ease-in-out both;
+    animation-delay: var(--happy-arriving-start, 0ms);
 }
 
-@keyframes happy-tool-section-arrive {
-    from {
-        opacity: 0;
-        transform: translateY(10px) scale(0.96);
-    }
-
-    to {
-        opacity: 1;
-        transform: none;
-    }
+/* Taking over from another line, it waits for most of that one to be gone, so
+   the first characters do not come up through the last. */
+.happy-tool-section__item[data-state="leaving"] ~ .happy-tool-section__item {
+    --happy-arriving-start: 90ms;
 }
 
-/* The line it replaces goes up and out from where it stood. It leaves the
-   flow as an overlay does, so the arriving line already has the row. Drawn
-   for the first time it is simply gone: only a line that was current moves. */
+/* The line it replaces fades out where it stood, lifting a little. It leaves
+   the flow as an overlay does, so the arriving line already has the row.
+   Drawn for the first time it is simply gone: only a line that was current
+   moves. */
 .happy-tool-section__item[data-state="leaving"] {
     position: absolute;
     top: 0;
     left: 0;
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-4px);
     transition:
-        opacity 200ms ease-out,
-        transform 200ms ease-out;
+        opacity 140ms ease-in-out,
+        transform 140ms ease-in-out;
     pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy-tool-section__item[data-arrives] {
+    .happy-tool-section__item[data-arrives] .happy-agent-activity__glyph,
+    .happy-tool-section__item[data-arrives] .happy-tool-section__glyph {
         animation: none;
     }
 
@@ -126,6 +123,12 @@
 
 .happy-tool-section .happy-tool-section__call button.happy-agent-activity__header {
     cursor: pointer;
+}
+
+/* What an edit added and removed is part of the same grey sentence. */
+.happy-tool-section .happy-tool-section__call .happy-agent-activity__added,
+.happy-tool-section .happy-tool-section__call .happy-agent-activity__deleted {
+    color: inherit;
 }
 
 /* The same fixed square a tool row's glyph takes, on the same column. */

@@ -370,7 +370,7 @@ export function AgentToolSectionPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="One run of tool calls as a single grey transcript line: its latest call while it runs, each new one arriving like a received message, then how long the run took on the same line."
+            summary="One run of tool calls as a single grey transcript line: its latest call while it runs, each new one coming in a character at a time the way a reply arrives in the mobile app, then how long the run took on the same line."
             title="AgentToolSection"
         >
             <Specimen

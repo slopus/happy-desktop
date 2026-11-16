@@ -1,0 +1,54 @@
+/*
+ * ArrivingText: a line that comes in a character at a time, as the mobile app
+ * shows a reply arriving. Each character fades in, rises from 6px below and
+ * grows from half its size in 200ms, ease-in-out, a step behind the one before
+ * it. The numbers are the mobile app's `StreamingRevealMotion`.
+ *
+ * The motion is opacity and transform only, so it runs on the compositor and
+ * the line keeps its box from the first frame: nothing around an arriving line
+ * is laid out again.
+ */
+
+.happy-arriving-text {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- matches TypedText and the still label exactly: one inline text run occupying the same inline box as the label it stands in for, which a flex box would not */
+    display: inline-block;
+    vertical-align: bottom;
+    white-space: nowrap;
+}
+
+/* The words for a reader that is not looking are not there to be selected
+   twice. */
+.happy-arriving-text .happy-visually-hidden {
+    user-select: none;
+}
+
+.happy-arriving-text__glyph {
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- a transform applies to no inline box: each character is an inline-block so it can rise and grow while staying a character of its line */
+    display: inline-block;
+    /* A space is a character of the line too, and keeps its width. */
+    white-space: pre;
+    transform-origin: center;
+    animation: happy-arriving-text-glyph 200ms ease-in-out both;
+    animation-delay: calc(
+        var(--happy-arriving-start, 0ms) + var(--happy-arriving-index, 0) *
+            var(--happy-arriving-step, 25ms)
+    );
+}
+
+@keyframes happy-arriving-text-glyph {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.5);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-arriving-text__glyph {
+        animation: none;
+    }
+}

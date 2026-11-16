@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { ConversationToolCall } from "happy-desktop-state";
 import { AgentActivityRow } from "./AgentActivityRow";
+import { ArrivingText } from "./ArrivingText";
 import type {
     ConversationToolSection,
     ConversationToolSectionEntry,
@@ -25,12 +26,12 @@ export type AgentToolSectionProps = {
  * AgentToolSection — one run of tool calls as a single grey transcript line.
  *
  * While the run is going the line is its latest call and nothing else; each
- * new call takes the line the way a message arrives, rising into place as the
- * one before it leaves. Once the run ends the same line sums it up: how long
- * it took, then how many calls it was. How a call ended is not this line's
- * news: a failed call reads in the same grey as any other, and the summary
- * counts calls without sorting them. The line is one height throughout, so
- * nothing around it ever moves.
+ * new call comes in the way a reply arrives in the mobile app, a character at
+ * a time, as the one before it fades out. Once the run ends the same line sums
+ * it up: how long it took, then how many calls it was. How a call ended is not
+ * this line's news: a failed call reads in the same grey as any other, and the
+ * summary counts calls without sorting them. The line is one height
+ * throughout, so nothing around it ever moves.
  */
 export function AgentToolSection(props: AgentToolSectionProps) {
     const section = props.section;
@@ -39,6 +40,11 @@ export function AgentToolSection(props: AgentToolSectionProps) {
        nothing arrives. */
     const [watched] = useState(section.live);
     const count = section.members.length;
+    /* How long the run took, then how many calls it was. */
+    const facts = [
+        ...(section.durationMs === undefined ? [] : [elapsedTimeFormat(section.durationMs)]),
+        `${String(count)} ${count === 1 ? "tool" : "tools"}`,
+    ].join(" · ");
     const latest = section.members.at(-1)!;
     /* What is leaving the line: the call before the latest, or the latest
        itself once the summary has taken its place. It stays mounted under its
@@ -57,8 +63,9 @@ export function AgentToolSection(props: AgentToolSectionProps) {
             <AgentActivityRow
                 activity={entry.activity}
                 className="happy-tool-section__call"
-                /* The line arrives whole; nothing inside it types. */
-                motion="calm"
+                /* The call comes in a character at a time, and keeps those
+                   characters as it leaves. */
+                motion="arriving"
                 {...(onToolSelect && state === "current"
                     ? { onToolSelect: (tool: ConversationToolCall) => onToolSelect(entry.id, tool) }
                     : {})}
@@ -83,18 +90,11 @@ export function AgentToolSection(props: AgentToolSectionProps) {
                 <span aria-hidden="true" className="happy-tool-section__glyph">
                     <Icon name="zap" size={12} />
                 </span>
-                <span className="happy-tool-section__facts">
-                    {section.durationMs === undefined ? null : (
-                        <>
-                            <span data-happy-desktop-ui="tool-section-duration">
-                                {elapsedTimeFormat(section.durationMs)}
-                            </span>
-                            <span aria-hidden="true">·</span>
-                        </>
-                    )}
-                    <span data-happy-desktop-ui="tool-section-count">
-                        {`${String(count)} ${count === 1 ? "tool" : "tools"}`}
-                    </span>
+                <span
+                    className="happy-tool-section__facts"
+                    data-happy-desktop-ui="tool-section-facts"
+                >
+                    {watched ? <ArrivingText value={facts} /> : facts}
                 </span>
             </div>,
         );

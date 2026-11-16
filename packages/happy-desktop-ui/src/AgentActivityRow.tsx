@@ -13,6 +13,7 @@ import type {
 } from "happy-desktop-state";
 import { happyReferencePlaceholder } from "happy-desktop-state";
 import { compactCount, changeCountLabel } from "./countText";
+import { ArrivingText } from "./ArrivingText";
 import { Avatar } from "./Avatar";
 import { ConversationMedia } from "./ConversationMedia";
 import { CopyButton } from "./CopyButton";
@@ -39,8 +40,12 @@ import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
  * Which live labels type when their value changes. This affects animation
  * only: wording, timestamps, controls, and every other piece of row content
  * stay identical across profiles.
+ *
+ * `arriving` types nothing: the row's verb and subject come in a character at
+ * a time whenever the row appears, the way a reply arrives in the mobile app.
+ * It is for a line drawn while the reader watches, never for settled history.
  */
-export type ActivityMotion = "typewriter" | "verb-typed" | "calm-typed" | "calm";
+export type ActivityMotion = "typewriter" | "verb-typed" | "calm-typed" | "calm" | "arriving";
 
 /**
  * Content treatment independent of animation. `focused` keeps one action word
@@ -395,8 +400,21 @@ function ToolIcon(props: { glyph: ToolGlyph }) {
  * they appear ask for the first value to type too, so the same act looks the
  * same either way.
  */
-function AgentActivityChangingText(props: { value: string; typed?: boolean; typeFirst?: boolean }) {
-    return (props.typed ?? true) ? (
+function AgentActivityChangingText(props: {
+    value: string;
+    typed?: boolean;
+    typeFirst?: boolean;
+    /** The label arrives a character at a time, after `lead` others of a line of `run`. */
+    arriving?: { readonly lead: number; readonly run: number };
+}) {
+    return props.arriving ? (
+        <ArrivingText
+            data-happy-desktop-ui="agent-activity-changing-text"
+            lead={props.arriving.lead}
+            run={props.arriving.run}
+            value={props.value}
+        />
+    ) : (props.typed ?? true) ? (
         <TypedText
             data-happy-desktop-ui="agent-activity-changing-text"
             {...(props.typeFirst ? { typeInitial: true } : {})}
@@ -1068,6 +1086,12 @@ function AgentToolActivity(props: {
         verb = action.verb;
         primaryText = action.subject;
     } else if (focused && presentation?.type !== "fileDiff") verb = toolVerbFocused(verb);
+    /* A line that arrives brings its verb and subject in as one run. */
+    const arrivingRun =
+        motion === "arriving" ? Array.from(verb).length + Array.from(primaryText).length : 0;
+    const verbArriving = motion === "arriving" ? { lead: 0, run: arrivingRun } : undefined;
+    const subjectArriving =
+        motion === "arriving" ? { lead: Array.from(verb).length, run: arrivingRun } : undefined;
     /* Ran outside the sandbox. Said in colour alone — the whole line turns
        amber — because a word in the verb would push the command itself out of
        a row that is already short. A call that stopped or failed never got
@@ -1207,7 +1231,11 @@ function AgentToolActivity(props: {
                 data-empty={verb === "" ? "" : undefined}
                 data-happy-desktop-ui="agent-activity-verb"
             >
-                <AgentActivityChangingText typed={verbTyped && !named} value={verb} />
+                <AgentActivityChangingText
+                    {...(verbArriving ? { arriving: verbArriving } : {})}
+                    typed={verbTyped && !named}
+                    value={verb}
+                />
             </span>
             {stats ? (
                 <span
@@ -1219,6 +1247,7 @@ function AgentToolActivity(props: {
                         data-happy-desktop-ui="agent-activity-text"
                     >
                         <AgentActivityChangingText
+                            {...(subjectArriving ? { arriving: subjectArriving } : {})}
                             typeFirst={running}
                             typed={subjectTyped}
                             value={primaryText}
@@ -1254,6 +1283,7 @@ function AgentToolActivity(props: {
                     data-happy-desktop-ui="agent-activity-text"
                 >
                     <AgentActivityChangingText
+                        {...(subjectArriving ? { arriving: subjectArriving } : {})}
                         typeFirst={running}
                         typed={subjectTyped}
                         value={primaryText}
@@ -2023,8 +2053,12 @@ function AgentLabeledActivity(props: {
     subject?: string;
     status: ConversationActivityStatus;
     mono: boolean;
+    /** The label and subject come in a character at a time, as one run. */
+    arriving?: boolean;
     time?: string;
 }) {
+    const lead = Array.from(props.label).length;
+    const run = lead + Array.from(props.subject ?? "").length;
     return (
         <div
             className="happy-agent-activity"
@@ -2042,14 +2076,20 @@ function AgentLabeledActivity(props: {
                     className="happy-agent-activity__verb"
                     data-happy-desktop-ui="agent-activity-verb"
                 >
-                    <AgentActivityChangingText value={props.label} />
+                    <AgentActivityChangingText
+                        {...(props.arriving ? { arriving: { lead: 0, run } } : {})}
+                        value={props.label}
+                    />
                 </span>
                 {props.subject !== undefined && props.subject.length > 0 ? (
                     <ScrollingText
                         className="happy-agent-activity__text"
                         data-happy-desktop-ui="agent-activity-text"
                     >
-                        <AgentActivityChangingText value={props.subject} />
+                        <AgentActivityChangingText
+                            {...(props.arriving ? { arriving: { lead, run } } : {})}
+                            value={props.subject}
+                        />
                     </ScrollingText>
                 ) : null}
                 <AgentActivityTime time={props.time} />
@@ -2098,6 +2138,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                 />
             ) : activity.kind === "labeled" ? (
                 <AgentLabeledActivity
+                    arriving={props.motion === "arriving"}
                     label={activity.label}
                     mono={activity.mono}
                     status={activity.status}

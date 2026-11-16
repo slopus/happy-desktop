@@ -65,6 +65,7 @@ export { Tooltip, type TooltipAlign, type TooltipPlacement, type TooltipProps } 
 export { CopyButton, type CopyButtonProps } from "./CopyButton";
 export { ScrollingText, type ScrollingTextProps } from "./ScrollingText";
 export { TypedText, type TypedTextProps } from "./TypedText";
+export { ArrivingText, type ArrivingTextProps } from "./ArrivingText";
 export {
     ConversationComputeEvent,
     type ConversationComputeEventProps,
