@@ -32,6 +32,10 @@ renders, lays out, composites, takes input, and produces screenshots and video.
   about 0.7 s on every launch, and the running app's `app.dock.isVisible()`
   briefly read true whenever another app came to the front. A bundle with a
   real signature (a packaged build) is launched as is.
+- Both launchers also pass `--use-mock-keychain`. A run's own home has no
+  keychain, so the app's first encrypted read had macOS put up its keychain
+  dialog (SecurityAgent) in front of the person; Chromium's mock keychain
+  answers in-process instead.
 - Record video with `gymElectronVideoRecord(page, { path, scale })`: it writes
   the hidden window's own compositor frames (CDP screencast) to WebM. Never
   pass Playwright `recordVideo`.
