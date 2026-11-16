@@ -1830,6 +1830,8 @@ export interface HappyAgentWorkspaceStore {
      * and either can name a file that does not exist; opening a tab on it
      * would put an error where the reader expected the file. When the checkout
      * has no such file, nothing opens and `fileOpenFailure` says so.
+     * A file already open as a tab of the main content is selected there, as
+     * `filePanelOpen` does.
      */
     fileReferenceOpen(
         groupId: HappyAgentGroupId,
@@ -7567,6 +7569,30 @@ export function happyAgentWorkspaceStoreCreate(
      * Opens the file a reference named once the checkout says it is there.
      * `generation` is the ask this answers; a later reference supersedes it.
      */
+    /**
+     * Shows a checkout file in the Files preview, beside the listing. A file
+     * the reader already has open as a tab of the main content is there to be
+     * read: the ask goes to that tab, as it is and where it is, and the
+     * panel's preview stays on whatever it was showing. A pick in the listing
+     * and a reference in a message resolve the same way.
+     */
+    const filePanelShow = (
+        groupId: HappyAgentGroupId,
+        path: string,
+        kind: HappyAgentFileTabKind,
+        selection?: HappyAgentFileLineRange,
+    ): void => {
+        const opened = fileTabs.find(
+            (tab) => tab.id === fileTabIdOf(groupId, path) && tab.placement === "main",
+        );
+        if (opened) {
+            fileTabOpen(groupId, path, opened.kind, opened.preview, "main", selection);
+            return;
+        }
+        fileTabOpen(groupId, path, kind, false, "panel", selection);
+        panel.filesPreviewOpen();
+    };
+
     const fileReferenceFollow = (
         generation: number,
         groupId: HappyAgentGroupId,
@@ -7586,8 +7612,7 @@ export function happyAgentWorkspaceStoreCreate(
             () => {
                 if (disposed || generation !== fileReferenceGeneration) return;
                 fileOpenFailure = undefined;
-                fileTabOpen(groupId, path, kind, false, "panel", selection);
-                panel.filesPreviewOpen();
+                filePanelShow(groupId, path, kind, selection);
                 recompute();
             },
             (error: unknown) => {
@@ -8321,18 +8346,7 @@ export function happyAgentWorkspaceStoreCreate(
 
         filePanelOpen(groupId, path, kind, selection) {
             if (disposed) return;
-            // A file the reader already has open as a tab of the main content
-            // is there to be read: the pick goes to that tab, as it is, and the
-            // panel's preview stays on whatever it was showing.
-            const opened = fileTabs.find(
-                (tab) => tab.id === fileTabIdOf(groupId, path) && tab.placement === "main",
-            );
-            if (opened) {
-                fileTabOpen(groupId, path, opened.kind, opened.preview, "main", selection);
-                return;
-            }
-            fileTabOpen(groupId, path, kind, false, "panel", selection);
-            panel.filesPreviewOpen();
+            filePanelShow(groupId, path, kind, selection);
         },
         fileReferenceOpen(groupId, path, kind, selection) {
             if (disposed) return;
