@@ -208,6 +208,127 @@
     gap: 16px;
 }
 
+/*
+ * Providers configured some other way, one row each under the cards: a state
+ * mark, the name, and a box saying what is checked, that it works, or why it
+ * does not. The box is two lines tall in every state, so a check settling
+ * changes words and the mark, never where any row or anything under them is.
+ */
+.happy-setup-assistants__providers {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-setup-assistants__provider {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+    text-align: left;
+}
+
+/* A 16px box on the name's line, whichever mark is in it. */
+.happy-setup-assistants__provider-state {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 20px;
+    color: var(--text-secondary);
+    animation: happy-setup-assistants-fade-in 240ms ease both;
+}
+
+.happy-setup-assistants__provider[data-status="found"] .happy-setup-assistants__provider-state {
+    /* The plain success green reads pale beside the name, as on the cards. */
+    color: color-mix(in srgb, var(--success) 80%, var(--text));
+}
+
+.happy-setup-assistants__provider[data-status="failed"] .happy-setup-assistants__provider-state {
+    color: var(--warning-critical);
+}
+
+.happy-setup-assistants__provider-words {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-setup-assistants__provider-name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-setup-assistants__provider-detail {
+    display: -webkit-box;
+    overflow: hidden;
+    height: 36px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+/* The compact height the cards' state line keeps in a short window. */
+@container (max-height: 699px) {
+    .happy-setup-assistants__provider-detail {
+        height: 32px;
+        line-height: 16px;
+    }
+}
+
+/* A reason is something to read and act on: not stepped back, and
+   selectable, since it names what to run. */
+.happy-setup-assistants__provider[data-status="failed"] .happy-setup-assistants__provider-detail {
+    color: var(--text);
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* A command, profile or variable inside a reason, in the monospace face. */
+.happy-setup-assistants__code-span {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+}
+
+/* Why a card's check failed, under its button, in a slot two lines tall that
+   every Checking, button and done box holds, empty or not; a longer reason
+   ends in an ellipsis and is whole in the tooltip. */
+.happy-setup-assistants__reason {
+    display: -webkit-box;
+    overflow: hidden;
+    flex: none;
+    width: 100%;
+    height: 32px;
+    color: var(--text);
+    font-size: 11px;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
 /* A way in that is none of the cards, one quiet line under them. */
 .happy-setup-assistants__aside {
     display: flex;

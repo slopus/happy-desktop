@@ -721,6 +721,7 @@ export {
     type LocalOnboardingCommandCopy,
     type LocalOnboardingInstallShell,
     type LocalOnboardingCustom,
+    type LocalOnboardingCustomProvider,
     type LocalOnboardingDownload,
     type LocalOnboardingScreenProps,
     type LocalOnboardingView,
@@ -767,6 +768,7 @@ export {
     type SetupAssistantAction,
     type SetupAssistantEntry,
     type SetupAssistantsProps,
+    type SetupAssistantsProvider,
 } from "./SetupAssistants";
 export { SetupCommand, type SetupCommandProps } from "./SetupCommand";
 export { SetupPrompt, type SetupPromptProps } from "./SetupPrompt";

@@ -13,6 +13,11 @@ import { SetupPage } from "../../src/SetupPage";
 import { SplashCover } from "../../src/SplashCover";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import type { DesktopMobilePairingOptions } from "../../src/DesktopMobileSetup";
+import {
+    customProviders,
+    customProvidersAssistants,
+    customProvidersChecking,
+} from "./customProviderFixtures";
 import { direct, relayWaiting } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
 
@@ -228,6 +233,7 @@ const unverifiedSubscriptions: LocalOnboardingView = {
             authentication: "error",
             command: "/opt/homebrew/bin/claude",
             id: "claude",
+            message: "Timed out after 60s",
             status: "found",
         },
         {
@@ -243,7 +249,18 @@ const unverifiedSubscriptions: LocalOnboardingView = {
             status: "missing",
         },
     ],
-    custom: { authentication: "error", providers: ["Claude"] },
+    custom: {
+        authentication: "error",
+        providers: [
+            {
+                authentication: "error",
+                id: "work-proxy",
+                kind: "Claude",
+                message: "Couldn't reach https://llm-proxy.internal: connection refused",
+                name: "Work proxy",
+            },
+        ],
+    },
     kind: "provider-authentication",
     installShell: "posix",
 };
@@ -433,7 +450,39 @@ const screens: readonly {
                         status: "missing",
                     },
                 ],
-                custom: { authentication: "valid", providers: ["Bedrock"] },
+                custom: {
+                    authentication: "valid",
+                    providers: [
+                        {
+                            authentication: "valid",
+                            id: "corp-bedrock",
+                            kind: "Bedrock",
+                            name: "Bedrock · corp-bedrock",
+                        },
+                    ],
+                },
+                kind: "provider-authentication",
+                installShell: "posix",
+            }),
+    },
+    {
+        id: "subscriptions-custom-checking",
+        label: "Subscriptions · custom providers, each checked on its own",
+        render: () =>
+            onboarding({
+                assistants: customProvidersAssistants("checking"),
+                custom: { authentication: "valid", providers: customProvidersChecking },
+                kind: "provider-authentication",
+                installShell: "posix",
+            }),
+    },
+    {
+        id: "subscriptions-custom-settled",
+        label: "Subscriptions · custom providers, each with its own answer",
+        render: () =>
+            onboarding({
+                assistants: customProvidersAssistants("invalid"),
+                custom: { authentication: "valid", providers: customProviders },
                 kind: "provider-authentication",
                 installShell: "posix",
             }),

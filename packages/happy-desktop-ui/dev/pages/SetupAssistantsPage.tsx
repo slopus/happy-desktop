@@ -125,6 +125,69 @@ export function SetupAssistantsPage() {
             </Specimen>
 
             <Specimen
+                detail="Providers configured some other way, one row each under the cards: checking, ready, or the reason it failed, whole, with code spans in the monospace face · a card whose check failed says why under its button"
+                label="Other providers"
+                number="05"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={{ width: "480px" }}>
+                        <SetupAssistants
+                            assistants={[
+                                {
+                                    action: {
+                                        kind: "button",
+                                        label: "Connect again",
+                                        note: "OAuth token has expired",
+                                        onSelect: () => undefined,
+                                    },
+                                    id: "claude",
+                                    mark: "claude",
+                                    name: "Claude Code",
+                                    status: "signed-out",
+                                },
+                                {
+                                    action: { kind: "pending" },
+                                    id: "codex",
+                                    mark: "openai",
+                                    name: "Codex",
+                                    status: "checking",
+                                },
+                                {
+                                    action: { kind: "button", label: "Install" },
+                                    id: "grok",
+                                    mark: "grok",
+                                    name: "Grok",
+                                    status: "missing",
+                                },
+                            ]}
+                            providers={[
+                                {
+                                    detail: "Checking OpenAI-compatible…",
+                                    id: "gateway",
+                                    name: "Internal gateway",
+                                    status: "checking",
+                                },
+                                {
+                                    detail: "No AWS credentials found for profile `corp-sso`. Run `aws sso login --profile corp-sso` or add credentials for that profile, then try again.",
+                                    id: "corp-sso",
+                                    name: "Bedrock · corp-sso",
+                                    status: "failed",
+                                },
+                                {
+                                    detail: "Ready",
+                                    id: "anthropic-key",
+                                    name: "Claude API key",
+                                    status: "found",
+                                },
+                            ]}
+                        />
+                    </div>
+                    <DimensionRule label="20 above · 8 between rows · 16 state box · 20 name + 18 line" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Columns are equal thirds of whatever they are given, and a path breaks at its separators"
                 label="Narrow"
                 number="04"

@@ -766,7 +766,7 @@ it("reports which installs only a refreshed PATH found, as the person continues"
                 claude: "invalid",
                 codex: "valid",
                 complete: true,
-                custom: { providers: [], result: "invalid" },
+                custom: { providers: [], read: true, result: "invalid" },
                 grok: "invalid",
             },
         });

@@ -156,14 +156,26 @@ it("settles a check that never answers as couldn't verify", async () => {
 
     for (const bound of bounds) bound.abort();
 
+    // Each says the check ran out of time, not that its credentials are wrong.
     await vi.waitFor(() =>
         expect(localOnboardingView(store.get())).toMatchObject({
             assistants: [
-                { authentication: "error", id: "claude" },
+                { authentication: "error", id: "claude", message: "Timed out after 60s" },
                 { authentication: "unavailable", id: "codex" },
                 { authentication: "unavailable", id: "grok" },
             ],
-            custom: { authentication: "error", providers: ["Claude"] },
+            custom: {
+                authentication: "error",
+                providers: [
+                    {
+                        authentication: "error",
+                        id: "work-proxy",
+                        kind: "Claude",
+                        message: "Timed out after 60s",
+                        name: "Claude · work-proxy",
+                    },
+                ],
+            },
             kind: "provider-authentication",
         }),
     );
@@ -203,7 +215,10 @@ it("re-verifies a changed custom configuration without waiting out the failure",
 
     await vi.waitFor(() =>
         expect(localOnboardingView(store.get())).toMatchObject({
-            custom: { authentication: "valid", providers: ["Claude"] },
+            custom: {
+                authentication: "valid",
+                providers: [{ authentication: "valid", id: "work-proxy" }],
+            },
         }),
     );
     expect(verifiedIds()).toEqual(["claude", "work-proxy", "work-proxy"]);
@@ -352,7 +367,20 @@ it.each(["error", "invalid"] as const)(
                     status: "missing",
                 },
             ],
-            custom: { authentication: custom, providers: custom === "error" ? ["Claude"] : [] },
+            custom: {
+                authentication: custom,
+                providers:
+                    custom === "error"
+                        ? [
+                              {
+                                  authentication: "error",
+                                  id: "work-proxy",
+                                  kind: "Claude",
+                                  name: "Claude · work-proxy",
+                              },
+                          ]
+                        : [],
+            },
             kind: "provider-authentication",
             installShell: "posix",
         });
@@ -391,3 +419,267 @@ it.each(["error", "invalid"] as const)(
         expect(root.textContent).not.toContain("Checking");
     },
 );
+
+/** A daemon answer to one check: passed, or failed with the reason it gave, if any. */
+function verification(passed: boolean, failure?: { kind: string; message: string }) {
+    return {
+        performedLevel: "inference",
+        requestedLevel: "inference",
+        status: passed ? "passed" : "failed",
+        ...(failure ? { failure } : {}),
+    };
+}
+
+it("checks each custom provider on its own and says why each one failed", async () => {
+    daemon.getConfig.mockResolvedValue({
+        config: {
+            providers: {
+                claude: {
+                    enabled: true,
+                    models: [{ enabled: true, id: "sonnet" }],
+                    type: "claude",
+                },
+                "corp-sso": {
+                    enabled: true,
+                    models: [{ enabled: true, id: "opus" }],
+                    type: "bedrock",
+                },
+                gateway: {
+                    enabled: true,
+                    models: [{ enabled: true, id: "llama" }],
+                    name: "Internal gateway",
+                    type: "openai_compatible",
+                },
+                "anthropic-key": {
+                    enabled: true,
+                    models: [{ enabled: true, id: "sonnet" }],
+                    name: "Claude API key",
+                    type: "claude",
+                },
+                legacy: { enabled: true, models: [{ enabled: true, id: "gpt" }], type: "openai" },
+                empty: { enabled: true, models: [{ enabled: false, id: "gpt" }], type: "openai" },
+                off: { enabled: false, models: [{ enabled: true, id: "gpt" }], type: "openai" },
+                pool: { enabled: true, models: [{ enabled: true, id: "sonnet" }], type: "smart" },
+            },
+        },
+    });
+    // Each answer is held until the test lets it go, to see the rows mid-check.
+    const answers = new Map<string, (answer: unknown) => void>();
+    daemon.verifyProvider.mockImplementation(
+        (id: string) =>
+            new Promise((resolve) => {
+                answers.set(id, resolve);
+            }),
+    );
+    const store = storeOpen();
+
+    await vi.waitFor(() =>
+        expect(verifiedIds()).toEqual(["anthropic-key", "claude", "corp-sso", "gateway", "legacy"]),
+    );
+    // Every provider is its own row from the moment the configuration is
+    // read, named by its display name or by its kind and ID. One with nothing
+    // to check with has its answer already.
+    expect(localOnboardingView(store.get())).toMatchObject({
+        custom: {
+            authentication: "checking",
+            providers: [
+                {
+                    authentication: "checking",
+                    id: "corp-sso",
+                    kind: "Bedrock",
+                    name: "Bedrock · corp-sso",
+                },
+                {
+                    authentication: "checking",
+                    id: "gateway",
+                    kind: "OpenAI-compatible",
+                    name: "Internal gateway",
+                },
+                { authentication: "checking", id: "anthropic-key", name: "Claude API key" },
+                { authentication: "checking", id: "legacy", name: "OpenAI · legacy" },
+                {
+                    authentication: "error",
+                    id: "empty",
+                    message: "No models are enabled",
+                    name: "OpenAI · empty",
+                },
+            ],
+        },
+    });
+    const checking = screenRender(localOnboardingView(store.get()) as LocalOnboardingView);
+    expect(providerRows(checking)).toEqual([
+        "Bedrock · corp-sso|Checking Bedrock…",
+        "Internal gateway|Checking OpenAI-compatible…",
+        "Claude API key|Checking Claude…",
+        "OpenAI · legacy|Checking OpenAI…",
+        "OpenAI · empty|No models are enabled",
+    ]);
+
+    const credentials =
+        "No AWS credentials found for profile `corp-sso`. Run `aws sso login --profile corp-sso` or add credentials for that profile, then try again.";
+    answers.get("corp-sso")?.(
+        verification(false, { kind: "credentials_missing", message: credentials }),
+    );
+    // A kind this screen has never heard of still says what happened.
+    answers.get("gateway")?.(
+        verification(false, { kind: "something_new", message: "The gateway refused the model." }),
+    );
+    // An older daemon says only that it failed.
+    answers.get("legacy")?.(verification(false));
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            custom: {
+                authentication: "checking",
+                providers: [
+                    { authentication: "error", id: "corp-sso", message: credentials },
+                    {
+                        authentication: "error",
+                        id: "gateway",
+                        message: "The gateway refused the model.",
+                    },
+                    { authentication: "checking", id: "anthropic-key" },
+                    { authentication: "error", id: "legacy", message: "The test request failed" },
+                    { authentication: "error", id: "empty" },
+                ],
+            },
+        }),
+    );
+
+    answers.get("anthropic-key")?.(verification(true));
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            custom: {
+                authentication: "valid",
+                providers: [{}, {}, { authentication: "valid", id: "anthropic-key" }, {}, {}],
+            },
+        }),
+    );
+    const settled = screenRender(localOnboardingView(store.get()) as LocalOnboardingView);
+    expect(providerRows(settled)).toEqual([
+        `Bedrock · corp-sso|${credentials.replaceAll("`", "")}`,
+        "Internal gateway|The gateway refused the model.",
+        "Claude API key|Ready",
+        "OpenAI · legacy|The test request failed",
+        "OpenAI · empty|No models are enabled",
+    ]);
+    // The commands and the profile it names are set as code.
+    expect(
+        [...settled.querySelectorAll(".happy-setup-assistants__code-span")].map(
+            (code) => code.textContent,
+        ),
+    ).toEqual(["corp-sso", "aws sso login --profile corp-sso"]);
+    // One provider that works is enough to go on; the failed ones keep their fix.
+    expect(continueButton(settled)?.hasAttribute("disabled")).toBe(false);
+    expect(
+        settled.querySelector(
+            '[data-happy-desktop-ui="setup-assistants-aside"] [data-happy-desktop-ui="setup-assistants-link"]',
+        )?.textContent,
+    ).toBe("Fix with your agent");
+});
+
+it("says why a sign-in could not be verified under its button", async () => {
+    daemon.getConfig.mockResolvedValue({ config: { providers: {} } });
+    daemon.verifyProvider.mockImplementation((_id: string, request: { level: string }) =>
+        Promise.resolve(
+            request.level === "inference"
+                ? verification(false, {
+                      kind: "authentication",
+                      message: "Claude rejected the saved sign-in: OAuth token has expired.",
+                  })
+                : { ...verification(false), performedLevel: "authentication" },
+        ),
+    );
+    const store = storeOpen();
+
+    // The account check that follows had nothing more to say, so the
+    // inference's own reason stands.
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            assistants: [
+                {
+                    authentication: "error",
+                    id: "claude",
+                    message: "Claude rejected the saved sign-in: OAuth token has expired.",
+                },
+                {},
+                {},
+            ],
+        }),
+    );
+    const claude = cardFind(
+        screenRender(localOnboardingView(store.get()) as LocalOnboardingView),
+        "Claude Code",
+    );
+    expect(claude?.querySelector("button")?.textContent).toBe("Connect again");
+    expect(
+        claude?.querySelector('[data-happy-desktop-ui="setup-assistants-reason"]')?.textContent,
+    ).toBe("Claude rejected the saved sign-in: OAuth token has expired.");
+});
+
+it("says the configuration could not be read when Happy Agent does not give it", async () => {
+    daemon.getConfig.mockRejectedValue(new TypeError("Failed to fetch"));
+    daemon.verifyProvider.mockResolvedValue(verification(true));
+    const store = storeOpen();
+
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            custom: {
+                authentication: "error",
+                message: "Couldn't read your provider configuration: Couldn't reach Happy Agent",
+                providers: [],
+            },
+        }),
+    );
+    const aside = screenRender(
+        localOnboardingView(store.get()) as LocalOnboardingView,
+    ).querySelector('[data-happy-desktop-ui="setup-assistants-aside"]');
+    expect(aside?.textContent).toContain(
+        "Couldn't read your provider configuration: Couldn't reach Happy Agent",
+    );
+});
+
+/** Each custom provider row as `name|detail`, in order. */
+function providerRows(root: HTMLElement): readonly string[] {
+    return [...root.querySelectorAll('[data-happy-desktop-ui="setup-assistants-provider"]')].map(
+        (row) =>
+            `${row.querySelector('[data-happy-desktop-ui="setup-assistants-provider-name"]')?.textContent}|${row.querySelector('[data-happy-desktop-ui="setup-assistants-provider-detail"]')?.textContent}`,
+    );
+}
+
+function continueButton(root: HTMLElement): Element | undefined {
+    return [...root.querySelectorAll("button")].find((button) => button.textContent === "Continue");
+}
+
+it("draws Subscriptions only once every row it will hold is known", async () => {
+    // The configuration is still on its way: rows arriving under cards
+    // already drawn would move them, so the setup page stays.
+    let configAnswer: (config: unknown) => void = () => undefined;
+    daemon.getConfig.mockImplementation(
+        () =>
+            new Promise((resolve) => {
+                configAnswer = resolve;
+            }),
+    );
+    daemon.verifyProvider.mockImplementation(() => new Promise(() => undefined));
+    const store = storeOpen();
+    await vi.waitFor(() => expect(daemon.getConfig).toHaveBeenCalled());
+    expect(localOnboardingView(store.get())).toEqual({ kind: "connecting" });
+
+    configAnswer({
+        config: {
+            providers: {
+                "corp-sso": {
+                    enabled: true,
+                    models: [{ enabled: true, id: "opus" }],
+                    type: "bedrock",
+                },
+            },
+        },
+    });
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            custom: { providers: [{ authentication: "checking", id: "corp-sso" }] },
+            kind: "provider-authentication",
+        }),
+    );
+});

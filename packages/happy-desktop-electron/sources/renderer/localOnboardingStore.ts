@@ -37,13 +37,36 @@ interface ProviderAuthenticationSnapshot {
     readonly claude?: ProviderAuthenticationResult;
     readonly codex?: ProviderAuthenticationResult;
     readonly complete: boolean;
-    /** Model access configured some other way, and the kinds it was found to be. */
+    /** Model access configured some other way, each provider with its own check. */
     readonly custom?: {
+        /** The column as a whole: one provider working is enough to go on. */
         readonly result: ProviderAuthenticationResult;
-        readonly providers: readonly string[];
+        readonly providers: readonly CustomProviderCheck[];
+        /**
+         * Happy Agent has answered for its configuration, so `providers` is
+         * every row there is. Until then the page is not drawn: rows arriving
+         * under cards already on screen would move them.
+         */
+        readonly read: boolean;
+        /** Why nothing could be checked, while the configuration cannot be read. */
+        readonly reason?: string;
     };
     readonly grok?: ProviderAuthenticationResult;
     readonly key?: string;
+    /** Why each CLI that could not be verified failed, while it reads that way. */
+    readonly reasons?: Partial<Readonly<Record<LocalAssistantState["id"], string>>>;
+}
+
+/** One configured provider that is none of the three CLIs, and how its check went. */
+interface CustomProviderCheck {
+    readonly id: string;
+    /** Its kind as a person names it, for example "Bedrock". */
+    readonly kind: string;
+    /** The configured display name, or its kind and ID. */
+    readonly name: string;
+    readonly result: Exclude<ProviderAuthenticationResult, "invalid">;
+    /** Why it failed, when it did. */
+    readonly reason?: string;
 }
 
 /**
@@ -205,10 +228,19 @@ export function localOnboardingStoreCreate(
     let verificationRunning = false;
     let verificationGeneration = 0;
     let verificationConnectionId: number | undefined;
-    const verificationRetryAt = new Map<LocalAssistantState["id"], number>();
-    let customVerificationRetryAt = 0;
-    /** The configured custom providers the last inference check was made against. */
-    let customVerificationConfig: string | undefined;
+    /** Each CLI whose check failed: when to check again, and why it failed. */
+    const verificationRetry = new Map<
+        LocalAssistantState["id"],
+        { readonly at: number; readonly reason: string }
+    >();
+    /**
+     * Each custom provider whose check failed: the configuration it was made
+     * against, when to check again, and why it failed.
+     */
+    const customVerificationRetry = new Map<
+        string,
+        { readonly at: number; readonly config: string; readonly reason: string }
+    >();
     let providerRecheck: ReturnType<typeof setInterval> | undefined;
     let providerClisPoll: ReturnType<typeof setInterval> | undefined;
     /** The runtime connection whose provider CLIs have been read. */
@@ -600,9 +632,8 @@ export function localOnboardingStoreCreate(
         const connectionChanged = verificationConnectionId !== runtime.connectionId;
         if (connectionChanged) {
             verificationConnectionId = runtime.connectionId;
-            verificationRetryAt.clear();
-            customVerificationRetryAt = 0;
-            customVerificationConfig = undefined;
+            verificationRetry.clear();
+            customVerificationRetry.clear();
         }
         const previous = connectionChanged ? { complete: false } : snapshot.providerAuthentication;
         const generation = ++verificationGeneration;
@@ -617,10 +648,7 @@ export function localOnboardingStoreCreate(
                     claude: assistantAuthenticationInitial(assistants, "claude", previous),
                     codex: assistantAuthenticationInitial(assistants, "codex", previous),
                     complete: assistants.length === 0,
-                    custom:
-                        previous.custom?.result === "valid"
-                            ? previous.custom
-                            : { providers: [], result: "checking" },
+                    custom: customInitial(previous.custom),
                     grok: assistantAuthenticationInitial(assistants, "grok", previous),
                     key,
                 },
@@ -642,100 +670,183 @@ export function localOnboardingStoreCreate(
         const resultPublish = (
             id: LocalAssistantState["id"],
             result: Exclude<ProviderAuthenticationResult, "checking">,
+            reason?: string,
         ) => {
             if (!current()) return;
             publish({
                 ...snapshot,
                 providerAuthentication: authenticationResultsProject(
                     key,
-                    [{ id, result }],
+                    [{ id, result, ...(reason ? { reason } : {}) }],
                     snapshot.providerAuthentication,
                     false,
                 ),
             });
         };
-        const customPublish = (
-            result: Exclude<ProviderAuthenticationResult, "checking">,
-            providers: readonly string[],
-        ) => {
+        /**
+         * The custom column, from its rows. `reason` is the configuration that
+         * could not be read: nothing more can be checked, and a row still
+         * waiting on that says why it will not be answered.
+         */
+        const customPublish = (providers: readonly CustomProviderCheck[], reason?: string) => {
             if (!current()) return;
-            const previous = snapshot.providerAuthentication.custom;
+            const rows = reason
+                ? providers.map(
+                      (provider): CustomProviderCheck =>
+                          provider.result === "checking"
+                              ? { ...provider, reason, result: "error" }
+                              : provider,
+                  )
+                : providers;
             publish({
                 ...snapshot,
                 providerAuthentication: {
                     ...snapshot.providerAuthentication,
                     custom: {
-                        providers,
-                        result: authenticationResultProject(previous?.result, result),
+                        providers: rows,
+                        read: true,
+                        result: reason && rows.length === 0 ? "error" : customResultProject(rows),
+                        ...(reason ? { reason } : {}),
                     },
                 },
             });
         };
-        // The same proof the three CLIs get, for whatever else is configured:
-        // one real inference through it, backed off after a failure.
+        /** One custom provider's answer, into whatever the column holds by then. */
+        const customProviderPublish = (next: CustomProviderCheck) => {
+            const providers = snapshot.providerAuthentication.custom?.providers ?? [];
+            if (!providers.some((provider) => provider.id === next.id)) return;
+            customPublish(providers.map((provider) => (provider.id === next.id ? next : provider)));
+        };
         // Every request is bounded, so a pass always ends and a check that cannot
         // be made settles as one that failed instead of staying "Checking…".
-        const within = (ms: number) => AbortSignal.any([abort.signal, AbortSignal.timeout(ms)]);
+        // The bound is kept apart so a check it cut short can say so.
+        const within = (ms: number) => {
+            const bound = AbortSignal.timeout(ms);
+            return { bound, signal: AbortSignal.any([abort.signal, bound]) };
+        };
+        /** Why a request that got no answer failed, in words for the screen. */
+        const unansweredReason = (error: unknown, bound: AbortSignal, ms: number) => {
+            if (bound.aborted) return `Timed out after ${Math.round(ms / 1000)}s`;
+            // `fetch` itself refusing is the connection to Happy Agent, never the provider.
+            if (error instanceof TypeError) return "Couldn't reach Happy Agent";
+            return errorMessage(error) || "Couldn't verify";
+        };
+        /**
+         * One verification through a provider, and why it did not pass when it
+         * did not. Undefined when the check was abandoned rather than answered:
+         * that is not a failure.
+         */
+        const verificationCheck = async (
+            id: string,
+            level: "inference" | "authentication",
+        ): Promise<VerificationOutcome | undefined> => {
+            const { bound, signal } = within(providerVerificationTimeoutMs);
+            try {
+                const result = await client.verifyProvider(id, { level }, { signal });
+                // Inference must actually have run; the account answering
+                // at all is what an authentication check asks.
+                return result.status === "passed" &&
+                    (level === "authentication" || result.performedLevel === "inference")
+                    ? { passed: true }
+                    : { answered: true, passed: false, reason: verificationFailureReason(result) };
+            } catch (error) {
+                if (abort.signal.aborted) return undefined;
+                return {
+                    answered: false,
+                    passed: false,
+                    reason: unansweredReason(error, bound, providerVerificationTimeoutMs),
+                };
+            }
+        };
+        // The same proof the three CLIs get, for each provider configured some
+        // other way: one real inference through it, backed off after a failure.
+        // Each one is its own row with its own answer.
         const customCheck = async () => {
-            const config = await client
-                .getConfig({ signal: within(providerDiscoveryTimeoutMs) })
-                .catch(() => undefined);
-            if (!current()) return;
-            if (!config) {
-                customPublish("error", snapshot.providerAuthentication.custom?.providers ?? []);
+            const { bound, signal } = within(providerDiscoveryTimeoutMs);
+            const config = await client.getConfig({ signal }).catch((error: unknown) => {
+                if (abort.signal.aborted) return undefined;
+                return unansweredReason(error, bound, providerDiscoveryTimeoutMs);
+            });
+            if (!current() || config === undefined) return;
+            if (typeof config === "string") {
+                customPublish(
+                    snapshot.providerAuthentication.custom?.providers ?? [],
+                    `Couldn't read your provider configuration: ${config}`,
+                );
                 return;
             }
             const configured = customProvidersFind(config);
-            const providers = [...new Set(configured.map(({ type }) => providerKindLabel(type)))];
-            if (configured.length === 0) {
-                customVerificationRetryAt = 0;
-                customVerificationConfig = undefined;
-                customPublish("invalid", []);
-                return;
-            }
-            if (snapshot.providerAuthentication.custom?.result === "valid") {
-                customPublish("valid", providers);
-                return;
-            }
-            // A changed configuration is a new answer to wait for, not the
-            // failed one backing off: fixing a base URL is noticed on the next poll.
-            const configuredNow = JSON.stringify(
-                configured.map(({ id }) => [id, config.config.providers[id]]),
+            for (const id of customVerificationRetry.keys())
+                if (!configured.some((provider) => provider.id === id))
+                    customVerificationRetry.delete(id);
+            const held = new Map(
+                (snapshot.providerAuthentication.custom?.providers ?? []).map((provider) => [
+                    provider.id,
+                    provider,
+                ]),
             );
-            if (configuredNow !== customVerificationConfig) customVerificationRetryAt = 0;
-            if (Date.now() < customVerificationRetryAt) {
-                customPublish("error", providers);
-                return;
-            }
-            customVerificationConfig = configuredNow;
-            customVerificationRetryAt = Date.now() + providerVerificationRetryMs;
-            const passed = await Promise.all(
-                configured.map(({ id }) =>
-                    client
-                        .verifyProvider(
-                            id,
-                            { level: "inference" },
-                            { signal: within(providerVerificationTimeoutMs) },
-                        )
-                        .then(
-                            (result) =>
-                                result.status === "passed" && result.performedLevel === "inference",
-                            () => false,
-                        ),
-                ),
+            const due: { readonly id: string; readonly config: string }[] = [];
+            const rows = configured.map(
+                ({ id, kind, modelsEnabled, name }): CustomProviderCheck => {
+                    const row = { id, kind, name };
+                    if (!modelsEnabled)
+                        return { ...row, reason: "No models are enabled", result: "error" };
+                    const before = held.get(id);
+                    if (before?.result === "valid") return { ...row, result: "valid" };
+                    // A changed configuration is a new answer to wait for, not the
+                    // failed one backing off: fixing a base URL is noticed on the next poll.
+                    const configNow = JSON.stringify(config.config.providers[id]);
+                    const retry = customVerificationRetry.get(id);
+                    if (retry && retry.config === configNow && Date.now() < retry.at)
+                        return { ...row, reason: retry.reason, result: "error" };
+                    due.push({ config: configNow, id });
+                    // A repeat check leaves the answer on screen where it is while it runs.
+                    return before?.result === "error"
+                        ? {
+                              ...row,
+                              ...(before.reason ? { reason: before.reason } : {}),
+                              result: "error",
+                          }
+                        : { ...row, result: "checking" };
+                },
             );
-            if (passed.includes(true)) customVerificationRetryAt = 0;
-            customPublish(passed.includes(true) ? "valid" : "error", providers);
+            customPublish(rows);
+            await Promise.all(
+                due.map(async ({ config: configNow, id }) => {
+                    const outcome = await verificationCheck(id, "inference");
+                    if (!outcome) return;
+                    if (outcome.passed) customVerificationRetry.delete(id);
+                    else
+                        customVerificationRetry.set(id, {
+                            at: Date.now() + providerVerificationRetryMs,
+                            config: configNow,
+                            reason: outcome.reason,
+                        });
+                    if (!current()) return;
+                    const row = rows.find((provider) => provider.id === id);
+                    if (!row) return;
+                    const { id: _id, kind, name } = row;
+                    customProviderPublish(
+                        outcome.passed
+                            ? { id, kind, name, result: "valid" }
+                            : { id, kind, name, reason: outcome.reason, result: "error" },
+                    );
+                }),
+            );
         };
+        const scanWithin = within(providerDiscoveryTimeoutMs);
         void client
-            .scanProviders({ signal: within(providerDiscoveryTimeoutMs) })
+            .scanProviders({ signal: scanWithin.signal })
             // A failed local scan says nothing about an earlier successful check.
-            .catch(() => undefined)
-            .then((scan) =>
+            .catch((error: unknown) =>
+                unansweredReason(error, scanWithin.bound, providerDiscoveryTimeoutMs),
+            )
+            .then((scanned) =>
                 Promise.all([
                     customCheck(),
                     ...assistants.map(async (assistant) => {
                         if (!current()) return;
+                        const scan = typeof scanned === "string" ? undefined : scanned;
                         // A completed scan lists every provider this Happy Agent
                         // has. One it does not list cannot work here at all, which
                         // is an answer rather than a check that could not be made.
@@ -745,12 +856,18 @@ export function localOnboardingStoreCreate(
                               )?.credentials ?? "missing")
                             : undefined;
                         if (credentials === "missing") {
-                            verificationRetryAt.delete(assistant.id);
+                            verificationRetry.delete(assistant.id);
                             resultPublish(assistant.id, "invalid");
                             return;
                         }
                         if (credentials !== "available") {
-                            resultPublish(assistant.id, "error");
+                            resultPublish(
+                                assistant.id,
+                                "error",
+                                typeof scanned === "string"
+                                    ? `Couldn't look for its sign-in: ${scanned}`
+                                    : "Couldn't read its sign-in",
+                            );
                             return;
                         }
                         if (
@@ -758,8 +875,9 @@ export function localOnboardingStoreCreate(
                             "valid"
                         )
                             return;
-                        if (Date.now() < (verificationRetryAt.get(assistant.id) ?? 0)) {
-                            resultPublish(assistant.id, "error");
+                        const retry = verificationRetry.get(assistant.id);
+                        if (retry && Date.now() < retry.at) {
+                            resultPublish(assistant.id, "error", retry.reason);
                             return;
                         }
                         // Back off failures; the two-second poll is only local discovery.
@@ -767,43 +885,34 @@ export function localOnboardingStoreCreate(
                         // failure, so only an answered one starts the wait: one cut
                         // short by a sign-in landing must not read "Couldn't verify"
                         // for the next thirty seconds.
-                        try {
-                            const result = await client.verifyProvider(
-                                assistant.id,
-                                { level: "inference" },
-                                { signal: within(providerVerificationTimeoutMs) },
-                            );
-                            // The API's failed result includes outages and usage limits;
-                            // it does not prove that the person needs to sign in. The
-                            // account itself answering is what onboarding asks: someone
-                            // over today's limit is still connected.
-                            const passed =
-                                (result.status === "passed" &&
-                                    result.performedLevel === "inference") ||
-                                (
-                                    await client.verifyProvider(
-                                        assistant.id,
-                                        { level: "authentication" },
-                                        { signal: within(providerVerificationTimeoutMs) },
-                                    )
-                                ).status === "passed";
-                            if (passed) verificationRetryAt.delete(assistant.id);
-                            else
-                                verificationRetryAt.set(
-                                    assistant.id,
-                                    Date.now() + providerVerificationRetryMs,
-                                );
-                            if (!current()) return;
-                            resultPublish(assistant.id, passed ? "valid" : "error");
-                        } catch {
-                            if (abort.signal.aborted) return;
-                            verificationRetryAt.set(
-                                assistant.id,
-                                Date.now() + providerVerificationRetryMs,
-                            );
-                            if (!current()) return;
-                            resultPublish(assistant.id, "error");
-                        }
+                        const inference = await verificationCheck(assistant.id, "inference");
+                        // The API's failed result includes outages and usage limits;
+                        // it does not prove that the person needs to sign in. The
+                        // account itself answering is what onboarding asks: someone
+                        // over today's limit is still connected. Its own refusal is
+                        // the reason to show; otherwise the inference's.
+                        const refused = inference?.passed === false && inference.answered;
+                        const authentication = refused
+                            ? await verificationCheck(assistant.id, "authentication")
+                            : undefined;
+                        const outcome: VerificationOutcome | undefined = !refused
+                            ? inference
+                            : !authentication || authentication.passed
+                              ? authentication
+                              : authentication.answered &&
+                                  authentication.reason !== VERIFICATION_FAILED
+                                ? authentication
+                                : { ...authentication, reason: inference.reason };
+                        if (!outcome) return;
+                        if (outcome.passed) verificationRetry.delete(assistant.id);
+                        else
+                            verificationRetry.set(assistant.id, {
+                                at: Date.now() + providerVerificationRetryMs,
+                                reason: outcome.reason,
+                            });
+                        if (!current()) return;
+                        if (outcome.passed) resultPublish(assistant.id, "valid");
+                        else resultPublish(assistant.id, "error", outcome.reason);
                     }),
                 ]),
             )
@@ -895,7 +1004,7 @@ export function localOnboardingStoreCreate(
             signInRequested.delete(cli.id);
         // A sign-in that just worked is checked at once, not after a backoff
         // an earlier failed check started.
-        if (operation?.status === "succeeded") verificationRetryAt.delete(cli.id);
+        if (operation?.status === "succeeded") verificationRetry.delete(cli.id);
         providerClisPollSynchronize();
     }
 
@@ -1148,7 +1257,7 @@ export function localOnboardingStoreCreate(
             publish({ ...snapshot, claudeToken: { phase: "saving" } });
             api.claudeSetupTokenSave(token, crypto.randomUUID()).then(
                 () => {
-                    verificationRetryAt.delete("claude");
+                    verificationRetry.delete("claude");
                     publish({ ...snapshot, claudeToken: { phase: "saved" } });
                 },
                 (error: unknown) => {
@@ -1238,6 +1347,7 @@ export function localOnboardingView(
             };
         case "providersMissing":
         case "assistantsFound":
+            if (customUnread(snapshot)) return { kind: "connecting" };
             return {
                 assistants: assistantsProject(
                     onboarding.assistants,
@@ -1259,7 +1369,9 @@ export function localOnboardingView(
                 ...(onboarding.node ? { nodeVersion: onboarding.node.version } : {}),
             };
         case "examining":
-            return { kind: "examining" };
+            // The rows under the cards are not known yet, and arriving under
+            // cards already drawn would move them.
+            return customReadable(snapshot) ? { kind: "connecting" } : { kind: "examining" };
         case "sandbox": {
             const sandbox = onboarding.sandbox;
             return {
@@ -1408,9 +1520,11 @@ function assistantsProject(
         const cli = providerClis?.get(assistant.id);
         const missing = cli ? !cli.installed : assistant.status === "missing";
         const unavailable = missing && result !== "valid" && result !== "checking";
+        const reason = result === "error" ? authentication.reasons?.[assistant.id] : undefined;
         return {
             authentication: unavailable ? "unavailable" : result,
             ...(assistant.command ? { command: assistant.command } : {}),
+            ...(reason && !unavailable ? { message: reason } : {}),
             // Before Happy Agent has answered, the card still offers its button,
             // read from the shell's own finding, so it never flashes the commands.
             connect: cli
@@ -1485,6 +1599,7 @@ function authenticationResultsProject(
     results: readonly {
         readonly id: LocalAssistantState["id"];
         readonly result: Exclude<ProviderAuthenticationResult, "checking">;
+        readonly reason?: string;
     }[],
     previous: ProviderAuthenticationSnapshot,
     complete: boolean,
@@ -1492,18 +1607,23 @@ function authenticationResultsProject(
     let claude = previous.claude;
     let codex = previous.codex;
     let grok = previous.grok;
+    const reasons = { ...previous.reasons };
     for (const result of results) {
+        let projected: Exclude<ProviderAuthenticationResult, "checking">;
         switch (result.id) {
             case "claude":
-                claude = authenticationResultProject(previous.claude, result.result);
+                projected = claude = authenticationResultProject(previous.claude, result.result);
                 break;
             case "codex":
-                codex = authenticationResultProject(previous.codex, result.result);
+                projected = codex = authenticationResultProject(previous.codex, result.result);
                 break;
             case "grok":
-                grok = authenticationResultProject(previous.grok, result.result);
+                projected = grok = authenticationResultProject(previous.grok, result.result);
                 break;
         }
+        // A reason belongs to the failure it explains, and goes with it.
+        if (projected === "error" && result.reason) reasons[result.id] = result.reason;
+        else delete reasons[result.id];
     }
     return {
         ...(claude ? { claude } : {}),
@@ -1512,25 +1632,70 @@ function authenticationResultsProject(
         ...(previous.custom ? { custom: previous.custom } : {}),
         ...(grok ? { grok } : {}),
         key,
+        ...(Object.keys(reasons).length > 0 ? { reasons } : {}),
     };
 }
 
+type ProviderVerificationResponse = Awaited<ReturnType<HappyAgentClient["verifyProvider"]>>;
+
+/** How one verification went, with the reason when it did not pass. */
+type VerificationOutcome =
+    | { readonly passed: true }
+    | {
+          readonly passed: false;
+          readonly reason: string;
+          /** The daemon answered that it failed, rather than not answering at all. */
+          readonly answered: boolean;
+      };
+
+/** What a failed check says when nobody said why. */
+const VERIFICATION_FAILED = "The test request failed";
+
+/**
+ * Why a check the daemon answered did not pass, in its words when it gave
+ * them. Newer daemons add `failure` to the answer, which the installed client
+ * does not type yet, so it is read here from what actually arrived.
+ */
+function verificationFailureReason(result: ProviderVerificationResponse): string {
+    if (result.status === "passed") return "Happy Agent couldn't run a test request through it";
+    return verificationFailureMessage(result) ?? VERIFICATION_FAILED;
+}
+
+/** The daemon's own reason for a failed check, when it sent one. */
+function verificationFailureMessage(result: ProviderVerificationResponse): string | undefined {
+    const failure: unknown = (result as { readonly failure?: unknown }).failure;
+    if (typeof failure !== "object" || failure === null) return undefined;
+    // Its `kind` is for branching, which this screen does not do; the message
+    // is already worded for the person, so it is shown as it is.
+    const message = (failure as { readonly message?: unknown }).message;
+    return typeof message === "string" && message.trim() !== ""
+        ? message.trim().slice(0, VERIFICATION_REASON_MAX)
+        : undefined;
+}
+
+/** The daemon's messages are at most this long; anything longer is cut there. */
+const VERIFICATION_REASON_MAX = 500;
+
 /**
  * Model access configured some other way than the three CLIs' own sign-ins:
- * every enabled provider with models that is not `claude`, `codex`, or `grok`.
- * Pools are left out because their members are providers of their own.
+ * every enabled provider that is not `claude`, `codex`, or `grok`. One with no
+ * model enabled is listed too, because it is configured and cannot work. Pools
+ * are left out because their members are providers of their own.
  */
-function customProvidersFind(
-    config: Awaited<ReturnType<HappyAgentClient["getConfig"]>>,
-): readonly { readonly id: string; readonly type: string }[] {
-    return Object.entries(config.config.providers).flatMap(([id, provider]) =>
-        !LOCAL_PROVIDER_IDS.has(id) &&
-        provider.type !== "smart" &&
-        provider.enabled &&
-        provider.models.some((model) => model.enabled)
-            ? [{ id, type: provider.type }]
-            : [],
-    );
+function customProvidersFind(config: Awaited<ReturnType<HappyAgentClient["getConfig"]>>): readonly {
+    readonly id: string;
+    readonly kind: string;
+    /** Whether it has a model to check with; one without cannot work at all. */
+    readonly modelsEnabled: boolean;
+    readonly name: string;
+}[] {
+    return Object.entries(config.config.providers).flatMap(([id, provider]) => {
+        if (LOCAL_PROVIDER_IDS.has(id) || provider.type === "smart" || !provider.enabled) return [];
+        const kind = providerKindLabel(provider.type);
+        // Named by its display name, falling back to the kind and ID.
+        const name = provider.name?.trim() || `${kind} · ${id}`;
+        return [{ id, kind, modelsEnabled: provider.models.some((model) => model.enabled), name }];
+    });
 }
 
 const LOCAL_PROVIDER_IDS: ReadonlySet<string> = new Set(["claude", "codex", "grok"]);
@@ -1548,6 +1713,8 @@ function providerKindLabel(type: string): string {
             return "Grok";
         case "openai":
             return "OpenAI";
+        case "openai_compatible":
+            return "OpenAI-compatible";
         default:
             return type;
     }
@@ -1562,7 +1729,74 @@ function customProject(snapshot: LocalOnboardingViewSnapshot): LocalOnboardingCu
     if (providersRefused(snapshot)) return { authentication: "invalid", providers: [] };
     const custom = snapshot.providerAuthentication.custom;
     if (!custom) return { authentication: "checking", providers: [] };
-    return { authentication: custom.result, providers: custom.providers };
+    return {
+        authentication: custom.result,
+        ...(custom.reason ? { message: custom.reason } : {}),
+        providers: custom.providers.map((provider) => ({
+            authentication: provider.result,
+            id: provider.id,
+            kind: provider.kind,
+            ...(provider.result === "error" && provider.reason ? { message: provider.reason } : {}),
+            name: provider.name,
+        })),
+    };
+}
+
+/**
+ * The column as a new pass opens it: a provider that already works keeps its
+ * answer, and every other one is checked again from the start.
+ */
+function customInitial(
+    previous: ProviderAuthenticationSnapshot["custom"],
+): NonNullable<ProviderAuthenticationSnapshot["custom"]> {
+    if (!previous?.read) return { providers: [], read: false, result: "checking" };
+    const providers = previous.providers.map(
+        ({ id, kind, name, result }): CustomProviderCheck => ({
+            id,
+            kind,
+            name,
+            result: result === "valid" ? "valid" : "checking",
+        }),
+    );
+    // What was configured is still known, so the rows hold their places.
+    return providers.length === 0
+        ? previous
+        : { providers, read: true, result: customResultProject(providers) };
+}
+
+/** The column from its providers: any one that works is enough to go on. */
+function customResultProject(
+    providers: readonly CustomProviderCheck[],
+): ProviderAuthenticationResult {
+    if (providers.length === 0) return "invalid";
+    if (providers.some((provider) => provider.result === "valid")) return "valid";
+    if (providers.some((provider) => provider.result === "checking")) return "checking";
+    return "error";
+}
+
+/**
+ * The local Happy Agent can say what is configured besides the three CLIs:
+ * it is the one connected, and there is an assistant row to check beside it.
+ */
+function customReadable(snapshot: LocalOnboardingViewSnapshot): boolean {
+    const runtime = snapshot.runtime;
+    return (
+        runtime?.phase === "ready" &&
+        runtime.mode === "local" &&
+        (snapshot.onboarding?.assistants?.length ?? 0) > 0
+    );
+}
+
+/**
+ * Subscriptions waits, on the setup page before it, for the configuration:
+ * every row it will hold is drawn with the cards, in place from the start.
+ */
+function customUnread(snapshot: LocalOnboardingViewSnapshot): boolean {
+    return (
+        customReadable(snapshot) &&
+        !providersRefused(snapshot) &&
+        snapshot.providerAuthentication.custom?.read !== true
+    );
 }
 
 /** Happy Agent would not start because no inference provider works at all. */

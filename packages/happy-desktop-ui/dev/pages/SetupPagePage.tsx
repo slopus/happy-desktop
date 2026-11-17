@@ -10,6 +10,11 @@ import { SetupPrompt } from "../../src/SetupPrompt";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, FullScreenSpecimen, Specimen } from "../kit";
 import type { MobileRelayPairingState } from "../../src/MobilePairingOptions";
+import {
+    customProviders,
+    customProvidersAssistants,
+    customProvidersChecking,
+} from "./customProviderFixtures";
 import { direct, relayWaiting } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
 
@@ -609,6 +614,7 @@ export function SetupPagePage() {
                                         authentication: "error",
                                         command: "/opt/homebrew/bin/claude",
                                         id: "claude",
+                                        message: "OAuth token has expired",
                                         status: "found",
                                     },
                                     {
@@ -616,6 +622,7 @@ export function SetupPagePage() {
                                         authentication: "error",
                                         command: "/opt/homebrew/bin/codex",
                                         id: "codex",
+                                        message: "Timed out after 60s",
                                         status: "found",
                                     },
                                     {
@@ -625,7 +632,105 @@ export function SetupPagePage() {
                                         status: "missing",
                                     },
                                 ],
-                                custom: { authentication: "error", providers: ["Claude"] },
+                                custom: {
+                                    authentication: "error",
+                                    providers: [
+                                        {
+                                            authentication: "error",
+                                            id: "work-proxy",
+                                            kind: "Claude",
+                                            message:
+                                                "Couldn't reach https://llm-proxy.internal: connection refused",
+                                            name: "Work proxy",
+                                        },
+                                    ],
+                                },
+                                kind: "provider-authentication",
+                                installShell: "posix",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="every configured provider is its own row under the cards · each says what it is checking until its own answer arrives · one that already works turns Continue on without waiting for the rest · rows are two lines in every state, so a check settling moves nothing"
+                label="Custom providers checking"
+                number="14d"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            happyMobilePairingOptions={setupPairingOptions()}
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
+                            view={{
+                                assistants: customProvidersAssistants("checking"),
+                                custom: {
+                                    authentication: "valid",
+                                    providers: customProvidersChecking,
+                                },
+                                kind: "provider-authentication",
+                                installShell: "posix",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="each provider's own answer · a failure shows Happy Agent's reason whole, code spans in the monospace face · one that works is enough to Continue · the failed ones keep Fix with your agent"
+                label="Custom providers settled"
+                number="14e"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            happyMobilePairingOptions={setupPairingOptions()}
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
+                            view={{
+                                assistants: customProvidersAssistants("invalid"),
+                                custom: { authentication: "valid", providers: customProviders },
+                                kind: "provider-authentication",
+                                installShell: "posix",
+                            }}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="nothing configured works yet · every row says why · Continue stays off until one provider passes"
+                label="Custom providers failed"
+                number="14f"
+                stage="surface"
+            >
+                <div style={frame}>
+                    <ThemeScope mode="dark">
+                        <LocalOnboardingScreen
+                            happyMobilePairingOptions={setupPairingOptions()}
+                            appearance="dark"
+                            onAssistantsContinue={noop}
+                            onConnectRetry={noop}
+                            onHappyMobileConnect={noop}
+                            onHappyMobileSkip={noop}
+                            view={{
+                                assistants: customProvidersAssistants("invalid"),
+                                custom: {
+                                    authentication: "error",
+                                    providers: customProviders.filter(
+                                        (provider) => provider.authentication === "error",
+                                    ),
+                                },
                                 kind: "provider-authentication",
                                 installShell: "posix",
                             }}

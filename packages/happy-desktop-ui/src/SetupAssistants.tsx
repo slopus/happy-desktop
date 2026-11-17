@@ -45,6 +45,11 @@ export type SetupAssistantAction =
           /** The press started something that is still going. */
           readonly busy?: boolean;
           readonly onSelect?: () => void;
+          /**
+           * Why the button is offered again, such as the reason a check
+           * failed. Text between backticks in it is set as code.
+           */
+          readonly note?: string;
       }
     /**
      * Nothing left to do, said in words rather than as a disabled button: a
@@ -121,9 +126,29 @@ export interface SetupAssistantsAside {
     readonly action?: Extract<SetupAssistantAction, { readonly kind: "prompts" }>;
 }
 
+/**
+ * One provider configured some other way than the cards, as its own row under
+ * them: what it is called and how its check is going.
+ */
+export interface SetupAssistantsProvider {
+    /** Stable row key. */
+    readonly id: string;
+    readonly name: string;
+    /** `checking` is still being verified, `found` is usable, `failed` is not. */
+    readonly status: "checking" | "found" | "failed";
+    /**
+     * What is being checked, that it works, or why it does not, in a box two
+     * lines tall in every state; a longer reason ends in an ellipsis and is
+     * whole in the tooltip. Text between backticks in it is set as code.
+     */
+    readonly detail: string;
+}
+
 export interface SetupAssistantsProps {
     readonly assistants: readonly SetupAssistantEntry[];
     readonly aside?: SetupAssistantsAside;
+    /** Providers configured some other way, each checked on its own. */
+    readonly providers?: readonly SetupAssistantsProvider[];
     readonly "data-testid"?: string;
     /** Opens an official install page in the host's external browser. */
     readonly onExternalOpen?: (url: string) => void;
@@ -319,12 +344,78 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                                               </a>
                                           </>
                                       )}
+                                      {/* Checking, its button and why its check failed
+                                          share one box whatever the answer, so a reason
+                                          arriving moves nothing: the slot is held empty. */}
+                                      {action.kind === "pending" ||
+                                      action.kind === "button" ||
+                                      action.kind === "done" ? (
+                                          <span
+                                              className="happy-setup-assistants__reason"
+                                              data-happy-desktop-ui="setup-assistants-reason"
+                                              {...(action.kind === "button" && action.note
+                                                  ? { title: action.note.replaceAll("`", "") }
+                                                  : { "aria-hidden": true })}
+                                          >
+                                              {action.kind === "button" && action.note ? (
+                                                  <SetupAssistantsReason text={action.note} />
+                                              ) : null}
+                                          </span>
+                                      ) : null}
                                   </span>
                               ))(assistant.action)
                             : null}
                     </article>
                 ))}
             </div>
+            {props.providers && props.providers.length > 0 ? (
+                <ul
+                    aria-label="Other providers"
+                    className="happy-setup-assistants__providers"
+                    data-happy-desktop-ui="setup-assistants-providers"
+                >
+                    {props.providers.map((provider) => (
+                        <li
+                            className="happy-setup-assistants__provider"
+                            data-happy-desktop-ui="setup-assistants-provider"
+                            data-status={provider.status}
+                            key={provider.id}
+                        >
+                            <span
+                                className="happy-setup-assistants__provider-state"
+                                data-happy-desktop-ui="setup-assistants-provider-state"
+                                // The spinner, the check, and the alert are three
+                                // mounts, so each answer fades in where it stands.
+                                key={provider.status}
+                            >
+                                {provider.status === "checking" ? (
+                                    <Spinner label="Checking" size={14} tone="muted" />
+                                ) : provider.status === "found" ? (
+                                    <Ionicon name="checkmark-circle" size={16} />
+                                ) : (
+                                    <Ionicon name="alert-circle" size={16} />
+                                )}
+                            </span>
+                            <span className="happy-setup-assistants__provider-words">
+                                <span
+                                    className="happy-setup-assistants__provider-name"
+                                    data-happy-desktop-ui="setup-assistants-provider-name"
+                                >
+                                    {provider.name}
+                                </span>
+                                <span
+                                    className="happy-setup-assistants__provider-detail"
+                                    data-happy-desktop-ui="setup-assistants-provider-detail"
+                                    role="status"
+                                    title={provider.detail.replaceAll("`", "")}
+                                >
+                                    <SetupAssistantsReason text={provider.detail} />
+                                </span>
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
             {props.aside ? (
                 <p
                     className="happy-setup-assistants__aside"
@@ -337,6 +428,28 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                 </p>
             ) : null}
         </div>
+    );
+}
+
+/**
+ * A reason as Happy Agent words it: plain sentences, with commands, profile
+ * names and environment variables between backticks, which are set as code.
+ * An unmatched backtick is left as it is.
+ */
+function SetupAssistantsReason(props: { readonly text: string }) {
+    const parts = props.text.split(/`([^`\n]+)`/);
+    return (
+        <>
+            {parts.map((part, index) =>
+                index % 2 === 1 ? (
+                    <code className="happy-setup-assistants__code-span" key={index}>
+                        {part}
+                    </code>
+                ) : (
+                    part
+                ),
+            )}
+        </>
     );
 }
 

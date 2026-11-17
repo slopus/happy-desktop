@@ -16,6 +16,7 @@ import {
     type SetupAssistantAction,
     type SetupAssistantEntry,
     type SetupAssistantsAside,
+    type SetupAssistantsProvider,
 } from "./SetupAssistants";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
@@ -49,6 +50,8 @@ export interface LocalOnboardingAssistant {
     readonly status: "found" | "missing";
     /** Where the machine keeps it, when it has it. */
     readonly command?: string;
+    /** Why it could not be verified, while that is its answer. */
+    readonly message?: string;
     /** What Happy Agent can do about it itself: every card is one button. */
     readonly connect: LocalOnboardingAssistantConnect;
 }
@@ -86,9 +89,24 @@ export interface LocalOnboardingClaudeToken {
  * Bedrock, a gateway, or more accounts. `invalid` means none is configured.
  */
 export interface LocalOnboardingCustom {
+    /** The column as a whole: one provider that works is enough to go on. */
     readonly authentication: "checking" | "valid" | "invalid" | "error";
-    /** What is configured, named by kind, for example "Bedrock". */
-    readonly providers: readonly string[];
+    /** Every provider configured, each with its own check. */
+    readonly providers: readonly LocalOnboardingCustomProvider[];
+    /** Why nothing could be checked, when the configuration could not be read. */
+    readonly message?: string;
+}
+
+/** One configured provider and how its check went. */
+export interface LocalOnboardingCustomProvider {
+    readonly id: string;
+    /** Its display name, or its kind and ID, for example "Bedrock · corp-sso". */
+    readonly name: string;
+    /** What kind it is, as a person names it, for example "Bedrock". */
+    readonly kind: string;
+    readonly authentication: "checking" | "valid" | "error";
+    /** Why it failed, when it did. */
+    readonly message?: string;
 }
 
 /**
@@ -428,13 +446,24 @@ function assistantConnectProject(
     };
 }
 
+/** The card's button, with why its check failed under it when the check said. */
+function assistantActionProject(
+    assistant: LocalOnboardingAssistant,
+    handlers: AssistantCardHandlers,
+): SetupAssistantAction {
+    const action = assistantConnectProject(assistant, handlers);
+    return action.kind === "button" && assistant.authentication === "error" && assistant.message
+        ? { ...action, note: assistant.message }
+        : action;
+}
+
 function assistantAuthenticationEntry(
     assistant: LocalOnboardingAssistant,
     handlers: AssistantCardHandlers,
 ): SetupAssistantEntry {
     const vendor = ASSISTANTS[assistant.id];
     return {
-        action: assistantConnectProject(assistant, handlers),
+        action: assistantActionProject(assistant, handlers),
         id: assistant.id,
         mark: vendor.mark,
         name: vendor.name,
@@ -470,11 +499,12 @@ const AGENT_PROMPTS = [
 
 /**
  * Model access set up some other way, as one quiet line under the three
- * cards rather than a card of its own: what is configured when something is,
- * and the prompts for the coding agent already on the machine. Access that is
- * configured but failed its check gets the same prompts: a base URL or proxy
- * the daemon could not reach is fixed the same way it is set up. While it is
- * still being checked the line is held empty.
+ * cards rather than a card of its own: the prompts for the coding agent
+ * already on the machine. Each configured provider says how its own check
+ * went in its row above this line, so the line says nothing of them. Access
+ * that is configured but failed its check gets the same prompts: a base URL
+ * or proxy the daemon could not reach is fixed the same way it is set up.
+ * While it is still being checked the line is held empty.
  */
 function customAside(
     custom: LocalOnboardingCustom,
@@ -491,21 +521,45 @@ function customAside(
         prompts: AGENT_PROMPTS,
         title: "Paste one into the coding agent you already use",
     });
-    const named = custom.providers.join(", ");
-    switch (custom.authentication) {
-        case "valid":
-            return { detail: `${named || "Custom setup"} ready ✓` };
-        case "checking":
-            // The line is held, empty, so the cards above it never move.
-            return {};
-        case "error":
-            return {
-                action: prompts("Fix with your agent"),
-                detail: `Couldn't verify ${named || "your custom setup"}.`,
-            };
-        case "invalid":
-            return { action: prompts("Use an API key or another provider") };
-    }
+    // The line is held, empty, while anything is checked, so nothing above it moves.
+    if (custom.authentication === "invalid")
+        return { action: prompts("Use an API key or another provider") };
+    if (custom.providers.length === 0)
+        return custom.authentication === "error"
+            ? {
+                  action: prompts("Fix with your agent"),
+                  detail: custom.message ?? "Couldn't verify your custom setup.",
+              }
+            : {};
+    // One that works is enough to go on; one that does not still has its fix.
+    return custom.authentication === "error" ||
+        custom.providers.some((provider) => provider.authentication === "error")
+        ? { action: prompts("Fix with your agent") }
+        : {};
+}
+
+/** Each configured provider as its own row: its name, then what its check found. */
+function customProvidersProject(custom: LocalOnboardingCustom): readonly SetupAssistantsProvider[] {
+    return custom.providers.map((provider) => {
+        switch (provider.authentication) {
+            case "checking":
+                return {
+                    detail: `Checking ${provider.kind}…`,
+                    id: provider.id,
+                    name: provider.name,
+                    status: "checking",
+                };
+            case "valid":
+                return { detail: "Ready", id: provider.id, name: provider.name, status: "found" };
+            case "error":
+                return {
+                    detail: provider.message ?? "Couldn't verify",
+                    id: provider.id,
+                    name: provider.name,
+                    status: "failed",
+                };
+        }
+    });
 }
 
 /** The row shown before authentication resolves: the cards, their buttons held. */
@@ -522,6 +576,7 @@ const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSIS
 interface MachineSetupProjection {
     readonly assistants?: readonly SetupAssistantEntry[];
     readonly aside?: SetupAssistantsAside;
+    readonly providers?: readonly SetupAssistantsProvider[];
     readonly copy?: string;
     /** Whether anything found on this machine can actually be used to work. */
     readonly hasValidAuthentication: boolean;
@@ -573,6 +628,7 @@ function machineSetupProject(
             ),
             aside: customAside(view.custom, promptsOpen, handlers.onCommandCopy),
             copy: SUBSCRIPTIONS_COPY,
+            providers: customProvidersProject(view.custom),
             hasValidAuthentication:
                 view.custom.authentication === "valid" ||
                 view.assistants.some((assistant) => assistant.authentication === "valid"),
@@ -736,6 +792,9 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                             assistants={machineSetup.assistants}
                             {...(machineSetup.aside ? { aside: machineSetup.aside } : {})}
                             data-testid="local-onboarding-assistants"
+                            {...(machineSetup.providers
+                                ? { providers: machineSetup.providers }
+                                : {})}
                             onExternalOpen={props.onExternalOpen}
                         />
                     ) : undefined}
