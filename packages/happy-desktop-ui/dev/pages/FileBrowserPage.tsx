@@ -647,6 +647,26 @@ export function FileBrowserPage() {
                     )}
                 </div>
             </Specimen>
+            <Specimen
+                detail="At the 200px listing minimum, the action group wraps beneath the scope choice; wider listings keep one row."
+                label="Narrow listing"
+                number="13"
+                stage="surface"
+            >
+                {panelFrame(
+                    <FileBrowser
+                        addedLines={totals.added}
+                        count={changed.length}
+                        deletedLines={totals.deleted}
+                        layout="flat"
+                        nodes={fileTreeFlatten(changed)}
+                        onReviewOpen={() => {}}
+                        scope="changed"
+                    />,
+                    320,
+                    200,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }
