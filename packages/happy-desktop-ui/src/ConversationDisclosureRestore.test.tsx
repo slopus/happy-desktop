@@ -163,7 +163,7 @@ function workspaceCreate(cached: boolean) {
 }
 
 it.each([false, true])(
-    "restores a disclosure parked immediately before switching (cached=%s)",
+    "returns a reader who folded a row at the end to the end (cached=%s)",
     async (cached) => {
         const workspace = workspaceCreate(cached);
         const view = createRenderer();
@@ -234,16 +234,23 @@ it.each([false, true])(
             expect(messageListEndOffset(viewport())).toBeLessThanOrEqual(1);
             const parked = button().getBoundingClientRect().top;
             open("b");
+            // The reader never scrolled away from the end, so the chat is
+            // left following it, whatever the disclosure held meanwhile.
             expect(
                 reports.at(-1)?.type,
-                "hiding reports the parked point before another scroll",
-            ).toBe("row");
+                "hiding reports the end the reader is still at, before another scroll",
+            ).toBe("bottom");
             await regressionFrames();
             open("a");
             await regressionFrames();
             expect(viewport() === original).toBe(cached);
             expect(button()).toBeDefined();
-            expect(Math.abs(button().getBoundingClientRect().top - parked)).toBeLessThanOrEqual(1);
+            // A kept view is shown as it was left. One drawn again opens the
+            // row as rows open by default, at the same end.
+            if (cached)
+                expect(Math.abs(button().getBoundingClientRect().top - parked)).toBeLessThanOrEqual(
+                    1,
+                );
             expect(messageListEndOffset(viewport())).toBeLessThanOrEqual(1);
             expect(workspace.get().conversation.type).toBe("ready");
         } finally {

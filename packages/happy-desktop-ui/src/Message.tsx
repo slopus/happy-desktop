@@ -1195,6 +1195,8 @@ export function MessageList(props: MessageListProps) {
         ("type" in restore.current ? restore.current.type === "bottom" : restore.current.following);
     const following = useRef(restoredFollowing);
     const escapedFromFollow = useRef(!restoredFollowing);
+    /* A follower pressed a disclosure and has not scrolled since. */
+    const disclosureFollowed = useRef(false);
     const positionChange = useRef(props.onScrollPositionChange);
     positionChange.current = props.onScrollPositionChange;
     const startReached = useRef(props.onStartReached);
@@ -1328,6 +1330,7 @@ export function MessageList(props: MessageListProps) {
             geometryFollowInset.current = 0;
         }
         wheelScrollPending.current = false;
+        disclosureFollowed.current = false;
         readerScrollTop.current = top;
         pendingAnchor.current = undefined;
         readerAnchor.current = modelAnchorCapture(viewportGeometry.current.height, top) ?? {
@@ -1448,6 +1451,7 @@ export function MessageList(props: MessageListProps) {
            too; otherwise bottom alignment consumes that margin first and
            visually inserts the body above the disclosure. */
         sparseInsetHold();
+        disclosureFollowed.current ||= following.current;
         escapedFromFollow.current = true;
         following.current = false;
         pendingAnchor.current = undefined;
@@ -2271,6 +2275,27 @@ export function MessageList(props: MessageListProps) {
     }
     const positionCurrentRef = useRef(positionCurrent);
     positionCurrentRef.current = positionCurrent;
+    /**
+     * A disclosure holds its row still, so a follower who opens or closes one
+     * at the end stops following while they read it. Leaving the chat still
+     * at the end, without having scrolled, is leaving it at its newest
+     * content: it opens there again, not parked on that row.
+     */
+    function disclosureFollowResume(element: HTMLElement) {
+        if (!disclosureFollowed.current || following.current) return;
+        const height = viewportGeometry.current.height || element.clientHeight;
+        const total = virtualized
+            ? endHeight() + geometrySparseInset.current
+            : element.scrollHeight;
+        if (total - height - readerScrollTop.current > FOLLOW_BOTTOM_THRESHOLD) return;
+        disclosureFollowed.current = false;
+        escapedFromFollow.current = false;
+        following.current = true;
+        pendingAnchor.current = undefined;
+        readerAnchor.current = undefined;
+    }
+    const disclosureFollowResumeCurrent = useRef(disclosureFollowResume);
+    disclosureFollowResumeCurrent.current = disclosureFollowResume;
     const positionReport = () => {
         const element = list.current;
         if (!element || !positionChange.current) return;
@@ -3560,6 +3585,7 @@ export function MessageList(props: MessageListProps) {
             if (event.deltaY < 0) {
                 wheelScrollPending.current = true;
                 geometryFollowInset.current = 0;
+                disclosureFollowed.current = false;
                 escapedFromFollow.current = true;
                 following.current = false;
                 readerAnchor.current = modelAnchorCaptureCurrent.current(
@@ -3758,6 +3784,8 @@ export function MessageList(props: MessageListProps) {
                 (wheelDirection > 0 &&
                     headedEnd !== undefined &&
                     element.scrollTop >= headedEnd - FOLLOW_BOTTOM_THRESHOLD);
+            // The reader's own scroll decides from here on.
+            disclosureFollowed.current = false;
             if (scrollDelta < 0) escapedFromFollow.current = true;
             else if (
                 scrollDelta > 0 &&
@@ -3805,6 +3833,7 @@ export function MessageList(props: MessageListProps) {
             /* Keyboard scrolling animates too, and a follower's next streaming
                commit would write the end and cancel it: like an upward wheel,
                an upward key hands the position to the reader before it moves. */
+            if (wheelDirection < 0) disclosureFollowed.current = false;
             if (wheelDirection < 0 && following.current && element.scrollTop > 0) {
                 geometryFollowInset.current = 0;
                 escapedFromFollow.current = true;
@@ -3853,6 +3882,7 @@ export function MessageList(props: MessageListProps) {
             visibleRowsReported.current = undefined;
             wheelExpiryCancel();
             wheelScrollPending.current = false;
+            disclosureFollowResumeCurrent.current(element);
             // Activity may have disconnected the ref already. Capture from
             // this listener lifetime's element, and retain the held row point
             // so a hidden width change restores the same reader when shown.
