@@ -302,14 +302,16 @@ export function FileEditor(props: FileEditorProps) {
                         <FileOpenInTabButton onClick={() => local.onOpenInTab?.()} />
                     ) : null}
                     {local.onClose ? (
-                        <Button
-                            aria-label={local.closeLabel ?? "Close file"}
-                            icon="close"
-                            iconOnly
-                            onClick={() => local.onClose?.()}
-                            size="small"
-                            variant="ghost"
-                        />
+                        <Tooltip label={local.closeLabel ?? "Close file"} placement="bottom">
+                            <Button
+                                aria-label={local.closeLabel ?? "Close file"}
+                                icon="close"
+                                iconOnly
+                                onClick={() => local.onClose?.()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </Tooltip>
                     ) : null}
                 </span>
             </header>

@@ -1,8 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ResizeHandle } from "./AppShell";
 import { Button } from "./Button";
-import { EmptyState } from "./EmptyState";
 
 /** The listing's width where nobody has dragged it. */
 export const FILE_SPLIT_LIST_DEFAULT_WIDTH = 280;
@@ -21,7 +20,7 @@ export type FileSplitProps = {
     style?: CSSProperties;
     /** The file listing, drawn in the leading column. */
     listing: ReactNode;
-    /** The selected file, drawn beside the listing. Absent, the column says how to fill it. */
+    /** The selected file, drawn beside the listing. Absent, the listing fills the lane. */
     preview?: ReactNode;
     /**
      * How many times the caller has been asked to show a file here, counting
@@ -34,8 +33,6 @@ export type FileSplitProps = {
     listWidth?: number;
     /** Reports the settled width after a drag or keyboard step. */
     onListWidthChange?: (width: number) => void;
-    emptyTitle?: string;
-    emptyDescription?: string;
     /** Names the way back from a stacked preview to the listing. */
     backLabel?: string;
     /**
@@ -55,10 +52,8 @@ function clamp(value: number, min: number, max: number): number {
  * C-351 FileSplit — a file listing and the preview of the file picked in it,
  * side by side inside one lane.
  *
- * The preview column is always there, with a quiet "Select a file" state while
- * nothing is picked, so the first pick fills a column rather than opening one:
- * the listing never moves under the pointer that just clicked it. The divider
- * between the two is the shell's own resize handle.
+ * Picking a file opens its preview; closing it gives its width back to the
+ * retained listing. The divider between them is the shell's resize handle.
  *
  * Narrower than a listing and a readable preview together, the two take turns
  * in the same box instead of squeezing: picking a file shows its preview with
@@ -77,8 +72,6 @@ export function FileSplit(props: FileSplitProps) {
         "previewRequest",
         "listWidth",
         "onListWidthChange",
-        "emptyTitle",
-        "emptyDescription",
         "backLabel",
         "onOpenInTab",
     ]);
@@ -96,9 +89,23 @@ export function FileSplit(props: FileSplitProps) {
     // here waits or measures.
     const pressedInList = useRef(false);
     const clickSwallowed = useRef(false);
+    const root = useRef<HTMLDivElement | null>(null);
+    const previewFocused = useRef(false);
+    const hasPreview = local.preview !== undefined;
+    // eslint-disable-next-line happy-react/no-layout-effect -- closing removes the focused preview control; restore keyboard ownership to its retained listing after the DOM commits
+    useLayoutEffect(() => {
+        if (hasPreview || !previewFocused.current) return;
+        previewFocused.current = false;
+        const listing = root.current?.querySelector(".happy-file-split__list");
+        (
+            listing?.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]') ??
+            listing?.querySelector<HTMLElement>('button[aria-pressed="true"], button')
+        )?.focus({ preventScroll: true });
+    }, [hasPreview]);
     // React Compiler keeps this callback's identity, so the observer lives as
     // long as the node.
     const rootRef = (node: HTMLDivElement | null) => {
+        root.current = node;
         if (node === null) return;
         const observer = new ResizeObserver(([entry]) => {
             if (entry) setWidth(Math.round(entry.contentRect.width));
@@ -114,17 +121,25 @@ export function FileSplit(props: FileSplitProps) {
         listMax,
     );
     const previewRequest = local.previewRequest ?? 0;
-    const showing: "list" | "preview" | "both" = !stacked
-        ? "both"
-        : local.preview !== undefined && listShownFor !== previewRequest
-          ? "preview"
-          : "list";
+    const showing: "list" | "preview" | "both" =
+        local.preview === undefined
+            ? "list"
+            : !stacked
+              ? "both"
+              : local.preview !== undefined && listShownFor !== previewRequest
+                ? "preview"
+                : "list";
     return (
         <div
             className={["happy-file-split", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-split"
             data-showing={showing}
             data-testid={local["data-testid"]}
+            onFocusCapture={(event) => {
+                previewFocused.current =
+                    event.target instanceof Element &&
+                    event.target.closest(".happy-file-split__preview") !== null;
+            }}
             // The rest of a double click taken by the preview: its click and
             // dblclick are over, whichever column is under the pointer once
             // the file has moved to its tab.
@@ -151,10 +166,10 @@ export function FileSplit(props: FileSplitProps) {
                 onMouseDownCapture={() => {
                     pressedInList.current = true;
                 }}
-                style={stacked ? undefined : { width: `${String(listWidth)}px` }}
+                style={showing === "both" ? { width: `${String(listWidth)}px` } : undefined}
             >
                 {local.listing}
-                {stacked ? null : (
+                {showing !== "both" ? null : (
                     <ResizeHandle
                         edge="right"
                         label="Resize file list"
@@ -196,14 +211,7 @@ export function FileSplit(props: FileSplitProps) {
                         </Button>
                     </div>
                 ) : null}
-                {local.preview ?? (
-                    <EmptyState
-                        description={local.emptyDescription}
-                        icon="doc"
-                        size="panel"
-                        title={local.emptyTitle ?? "Select a file to preview"}
-                    />
-                )}
+                {local.preview}
             </div>
         </div>
     );

@@ -8164,7 +8164,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 entities={documentEntities}
                 file={file}
                 tabNamed={preview === undefined}
-                {...(preview ? { onOpenInTab: preview.onOpenInTab } : {})}
+                {...(preview
+                    ? {
+                          onOpenInTab: preview.onOpenInTab,
+                          onClose: () => props.workspace.filePanelClose(),
+                      }
+                    : {})}
                 {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                 {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                 mode={workspace.fileViewMode}
@@ -9281,6 +9286,8 @@ function HappyAgentFileBody(props: {
     tabNamed?: boolean;
     /** Moves a file previewed in the panel into a main-content tab. */
     onOpenInTab?: () => void;
+    /** Closes only the file preview, retaining the Files panel. */
+    onClose?: () => void;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: HappyAgentFileViewMode;
@@ -9348,6 +9355,7 @@ function HappyAgentFileBody(props: {
                 {happyAgentFileRevalidationBanner(file.revalidationError)}
                 <HappyAgentFilePreview
                     document={file.document}
+                    {...(props.onClose ? { onClose: props.onClose } : {})}
                     {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                     key={file.id}
                     {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
@@ -9373,6 +9381,7 @@ function HappyAgentFileBody(props: {
         return (
             <FileEditor
                 banner={happyAgentFileNotices(file)}
+                {...(props.onClose ? { onClose: props.onClose, closeLabel: "Close preview" } : {})}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
@@ -9479,6 +9488,7 @@ function HappyAgentFileBody(props: {
                 {happyAgentFileNotices(file)}
                 <ChangedFileDiff
                     appearance={props.appearance}
+                    {...(props.onClose ? { onClose: props.onClose } : {})}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
                     key={`${file.id}:${file.kind}`}
                     loading={file.revalidating}
@@ -9624,6 +9634,35 @@ function HappyAgentFileBody(props: {
             </>
         );
     }
+    if (props.onClose)
+        return (
+            <FilePreview
+                {...(file.document.type === "error" && props.saveRefusal === undefined
+                    ? {
+                          actions: (
+                              <Button
+                                  onClick={() => {
+                                      if (props.happyAgentOnline()) workspace.fileRetry(file.id);
+                                  }}
+                                  size="small"
+                                  variant="ghost"
+                              >
+                                  Retry
+                              </Button>
+                          ),
+                      }
+                    : {})}
+                content={
+                    file.document.type === "error"
+                        ? { type: "error", message: file.document.error.message }
+                        : props.saveRefusal
+                          ? { type: "error", message: props.saveRefusal }
+                          : { type: "loading" }
+                }
+                onClose={props.onClose}
+                path={file.path}
+            />
+        );
     if (file.document.type === "error")
         return (
             <EmptyState
@@ -9772,6 +9811,7 @@ function HappyAgentFilePreview(props: {
     document: HappyAgentFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
     onOpenInTab?: () => void;
+    onClose?: () => void;
     path: string;
     revalidating: boolean;
 }) {
@@ -9780,6 +9820,7 @@ function HappyAgentFilePreview(props: {
         return (
             <FilePreview
                 content={{ type: "error", message: document.error.message }}
+                {...(props.onClose ? { onClose: props.onClose } : {})}
                 path={props.path}
             />
         );
@@ -9787,10 +9828,22 @@ function HappyAgentFilePreview(props: {
     // face. The request may still fail into the warning banner owned by the
     // surrounding file surface; only a true first load has no content to show.
     if (document.type !== "ready")
-        return <FilePreview content={{ type: "loading" }} path={props.path} />;
+        return (
+            <FilePreview
+                content={{ type: "loading" }}
+                path={props.path}
+                {...(props.onClose ? { onClose: props.onClose } : {})}
+            />
+        );
     const value = document.value;
     if (!("contentType" in value))
-        return <FilePreview content={{ type: "unavailable" }} path={props.path} />;
+        return (
+            <FilePreview
+                content={{ type: "unavailable" }}
+                path={props.path}
+                {...(props.onClose ? { onClose: props.onClose } : {})}
+            />
+        );
     // A format with no viewer is stated as such rather than rendered as an
     // <img> that will only ever show a broken-image glyph.
     const kind = filePreviewKind(props.path);
@@ -9799,6 +9852,7 @@ function HappyAgentFilePreview(props: {
     return (
         <FilePreview
             content={showable ? { type: "url", url: value.url } : { type: "unavailable" }}
+            {...(props.onClose ? { onClose: props.onClose } : {})}
             {...(mediaWindow && showable && mediaWindowShowable(kind)
                 ? {
                       onMediaWindowOpen: () => mediaWindow({ path: props.path, url: value.url }),
@@ -12268,7 +12322,6 @@ function HappyAgentPanelBody(props: {
                                           props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
                                   }
                                 : {})}
-                            emptyDescription="Its contents or changes show here, beside the list."
                             listing={
                                 <FileBrowser
                                     // Only Changes has a complete total and line delta;
