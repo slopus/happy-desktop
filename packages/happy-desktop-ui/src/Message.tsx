@@ -1165,6 +1165,8 @@ type MessageListVirtualAnchor =
           readonly itemEndOffset?: number;
           readonly fallbackKey?: Key;
           readonly viewportInset: number;
+          /** A clicked disclosure stays visible when the composer covers it. */
+          readonly keepVisible?: true;
       }
     | {
           readonly type: "scrollTop";
@@ -1465,10 +1467,11 @@ export function MessageList(props: MessageListProps) {
         /* Held by its row where the model has one, so the control also stays
            put when what is above it reflows, as when a panel opening beside
            the transcript narrows it; otherwise by the scroll offset. */
-        readerAnchor.current = disclosureRowAnchorCurrent.current(element, disclosure, hold) ?? {
-            scrollTop: element.scrollTop,
-            type: "scrollTop",
-        };
+        const anchor = disclosureRowAnchorCurrent.current(element, disclosure, hold);
+        readerAnchor.current =
+            anchor?.type === "item"
+                ? { ...anchor, keepVisible: true }
+                : (anchor ?? { scrollTop: element.scrollTop, type: "scrollTop" });
         readerScrollTop.current = element.scrollTop;
         if (hold === "row-start" || hold === "row-start-or-control") positionReport();
     }).current;
@@ -2907,20 +2910,17 @@ export function MessageList(props: MessageListProps) {
                 if (following.current || wasFloored)
                     inset = Math.min(inset, Math.max(0, nextHeight - naturalHeight));
                 else {
-                    const held =
-                        pendingAnchor.current?.anchor ??
-                        readerAnchor.current ??
-                        modelAnchorCapture(previousHeight);
-                    const heldHeight = pendingAnchor.current?.viewportHeight ?? previousHeight;
-                    const point =
-                        held?.type === "item"
-                            ? heldHeight - held.viewportInset
-                            : previousHeight - Math.min(VIRTUAL_ANCHOR_INSET, previousHeight);
-                    if (point > nextHeight) {
-                        const correction =
-                            point - (nextHeight - Math.min(VIRTUAL_ANCHOR_INSET, nextHeight));
-                        const gap = Math.min(inset, correction);
-                        inset -= gap;
+                    const held = pendingAnchor.current?.anchor ?? readerAnchor.current;
+                    // A parked reading point may be clipped without moving
+                    // its rows. A clicked disclosure explicitly stays visible.
+                    if (held?.type === "item" && held.keepVisible) {
+                        const heldHeight = pendingAnchor.current?.viewportHeight ?? previousHeight;
+                        const point = heldHeight - held.viewportInset;
+                        if (point > nextHeight) {
+                            const correction =
+                                point - (nextHeight - Math.min(VIRTUAL_ANCHOR_INSET, nextHeight));
+                            inset -= Math.min(inset, correction);
+                        }
                     }
                 }
             }
