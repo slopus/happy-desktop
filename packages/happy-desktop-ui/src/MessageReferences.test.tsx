@@ -12,7 +12,12 @@ import { ConversationEntryView } from "./ConversationEntryView";
 import { MarkdownDocument } from "./MarkdownDocument";
 import { conversationRowHeight, conversationRowHeightCacheCreate } from "./conversationRowHeight";
 import { Message } from "./Message";
-import type { MessageReferences, MessageReferenceView } from "./messageReferences";
+import { messageMarkdownParse } from "./messageMarkdownAst";
+import {
+    messageReferencesResolve,
+    type MessageReferences,
+    type MessageReferenceView,
+} from "./messageReferences";
 import { createRenderer } from "./testing";
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -39,6 +44,52 @@ function referencesOf(
 
 const REPORT: MessageReferenceView = { type: "link", label: "Q3 revenue report", busy: false };
 const REPORT_BUSY: MessageReferenceView = { type: "link", label: "Q3 revenue report", busy: true };
+
+it("renders a live title with math delimiters in it as its literal words, never a formula", async () => {
+    const titles = [
+        "Google Play listing update (Android, en-US)",
+        "Pricing at $5 and $x$",
+        "Checklist [x] done",
+        "TeX \\(a\\) and \\[b\\]",
+        "a*b*c_d_ `e` <f> &amp; ~g~",
+    ];
+    const references = referencesOf(
+        Object.fromEntries(
+            titles.map((label, index) => [
+                `artifact:t${index}`,
+                { type: "link", label, busy: false } satisfies MessageReferenceView,
+            ]),
+        ),
+    );
+    const body = titles.map((_, index) => `- [old](happy://artifacts/t${index})`).join("\n");
+    /* The escaped label opens no inline construct, the message's math included. */
+    const ast = JSON.stringify(
+        messageMarkdownParse(messageReferencesResolve(body, references, false)),
+    );
+    expect(ast).not.toContain('"inlineMath"');
+    expect(ast).not.toContain('"math"');
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div data-testid="titles">
+                <Message agent author="Happy" body={body} references={references} />
+            </div>
+        ),
+        { width: 640, height: 240 },
+    );
+    await view.ready();
+    const rendered = view.$(
+        '[data-testid="titles"] [data-happy-desktop-ui="message-body"]',
+    ).element;
+    const links = [
+        ...rendered.querySelectorAll<HTMLAnchorElement>(
+            '[data-happy-desktop-ui="message-md-reference"]',
+        ),
+    ];
+    expect(links.map((link) => link.textContent)).toEqual(titles);
+    for (const link of links) expect(link.children).toHaveLength(0);
+    expect(rendered.querySelector('[data-happy-desktop-ui^="math-formula"]')).toBeNull();
+});
 
 it("renders a Happy link as an underlined link titled with its live label whatever its own, opening a pinned version", async () => {
     const opened: HappyReference[] = [];

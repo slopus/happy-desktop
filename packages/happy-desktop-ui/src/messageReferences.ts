@@ -84,12 +84,16 @@ function referenceView(
     return references === undefined ? placeholderView(reference) : references.view(reference);
 }
 
-/** Escapes a label so Markdown reads every character of it literally. */
+/**
+ * Escapes a label so Markdown reads every character of it literally. Each
+ * punctuation character becomes a numeric character reference, not a
+ * backslash escape: `\(` and `\[` open a formula in a message.
+ */
 function labelEscape(label: string): string {
     return label
         .replace(/\s+/gu, " ")
         .trim()
-        .replace(/[!-/:-@[-`{-~]/gu, (character) => `\\${character}`);
+        .replace(/[!-/:-@[-`{-~]/gu, (character) => `&#${character.charCodeAt(0)};`);
 }
 
 /** The words of a link label written as Markdown, for a surface that shows plain text. */
