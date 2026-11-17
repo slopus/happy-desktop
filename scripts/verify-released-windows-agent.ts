@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { happyDaemonPaths } from "../packages/happy-desktop-electron/sources/main/happyAgentBinaryPaths.js";
 import { happyAgentBinarySelected } from "../packages/happy-desktop-electron/sources/main/happyAgentBinaryConfig.js";
@@ -24,6 +25,7 @@ if (channel !== "stable" && channel !== "preview")
 const run = promisify(execFile);
 const temporaryRoot = resolve(tmpdir());
 const root = await mkdtemp(join(temporaryRoot, "happy-published-agent-"));
+assert.ok(root.startsWith(temporaryRoot + "\\"), "Unexpected cleanup path.");
 const environment: NodeJS.ProcessEnv = {
     ...process.env,
     HAPPY_HOME_DIR: join(root, ".happy"),
@@ -99,7 +101,25 @@ async function releasedAgentSignatureVerify(binary: string): Promise<void> {
     }
 }
 
+/** A shutdown response precedes process exit, which releases Windows' executable lock. */
+async function releasedAgentExitAwait(pid: number): Promise<void> {
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+        try {
+            process.kill(pid, 0);
+        } catch (error) {
+            if (error instanceof Error && "code" in error && error.code === "ESRCH") return;
+            throw error;
+        }
+        if (Date.now() >= deadline) {
+            throw new Error(`Published Happy Agent process ${pid} did not exit after shutdown.`);
+        }
+        await delay(100);
+    }
+}
+
 let executable: string | undefined;
+let client: HappyAgentDaemonClient | undefined;
 try {
     const release = await happyAgentReleaseLatest({ channel, fetch: releaseLookupFetch });
     console.log(`Verifying Happy Agent ${release.version}, the newest on the ${channel} channel.`);
@@ -121,7 +141,7 @@ try {
     });
     const token = (await readFile(paths.tokenPath, "utf8")).trim();
     assert.ok(token);
-    const client = new HappyAgentDaemonClient({ socketPath: paths.socketPath, token });
+    client = new HappyAgentDaemonClient({ socketPath: paths.socketPath, token });
     const health = await client.health(AbortSignal.timeout(30_000));
     assert.equal(health.healthy, true);
     assert.equal(health.version.daemon, release.version);
@@ -136,10 +156,14 @@ try {
         }),
     );
 } finally {
-    if (executable) {
+    if (client) {
+        const { pid } = await client.shutdown(AbortSignal.timeout(10_000));
+        await releasedAgentExitAwait(pid);
+    } else if (executable) {
         await run(executable, ["stop"], { env: environment, windowsHide: true, timeout: 75_000 });
     }
-    if (!resolve(root).startsWith(temporaryRoot + "\\"))
-        throw new Error("Unexpected cleanup path.");
-    await rm(root, { recursive: true, force: true });
+    // Defender and child-process handles can briefly retain files after the daemon exits.
+    // Node retries only transient removal errors, and still fails when this budget expires.
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+    console.log("Published Happy Agent stopped and temporary files removed.");
 }
