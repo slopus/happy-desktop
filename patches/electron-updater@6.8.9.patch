@@ -1,3 +1,33 @@
+diff --git a/out/BaseUpdater.js b/out/BaseUpdater.js
+--- a/out/BaseUpdater.js
++++ b/out/BaseUpdater.js
+@@ -130,7 +130,8 @@
+         this._logger.info(`Executing: ${cmd} with args: ${args}`);
+         return new Promise((resolve, reject) => {
+             try {
+-                const params = { stdio, env, detached: true };
++                // Happy: the installer and elevate.exe run silently, with no window or console on Windows.
++                const params = { stdio, env, detached: true, windowsHide: true };
+                 const p = (0, child_process_1.spawn)(cmd, args, params);
+                 p.on("error", error => {
+                     reject(error);
+diff --git a/out/NsisUpdater.js b/out/NsisUpdater.js
+--- a/out/NsisUpdater.js
++++ b/out/NsisUpdater.js
+@@ -136,12 +136,8 @@
+             if (errorCode === "UNKNOWN" || errorCode === "EACCES") {
+                 callUsingElevation();
+             }
+-            else if (errorCode === "ENOENT") {
+-                require("electron")
+-                    .shell.openPath(installerPath)
+-                    .catch((err) => this.dispatchError(err));
+-            }
+             else {
++                // Happy: never fall back to opening the installer's own window.
+                 this.dispatchError(e);
+             }
+         });
 diff --git a/out/windowsExecutableCodeSignatureVerifier.js b/out/windowsExecutableCodeSignatureVerifier.js
 --- a/out/windowsExecutableCodeSignatureVerifier.js
 +++ b/out/windowsExecutableCodeSignatureVerifier.js

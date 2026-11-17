@@ -132,10 +132,11 @@ export function desktopUpdaterCreate(input: {
             if (!updateReady) return false;
             updateReady = false;
             autoUpdater.autoRunAppAfterInstall = runAfterInstall;
-            // Windows shows the installer's progress after an explicit restart,
-            // but installs silently when the person is only quitting. macOS
+            // Windows always installs silently: nothing but Happy's own update UI
+            // is ever shown (master-plans/12-windows.md). A restart reopens Happy
+            // once the installer finishes; a plain quit leaves it closed. macOS
             // ignores the silent flag.
-            autoUpdater.quitAndInstall(!runAfterInstall, runAfterInstall);
+            autoUpdater.quitAndInstall(true, runAfterInstall);
             return true;
         },
     };

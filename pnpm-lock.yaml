@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   electron-updater@6.8.9:
-    hash: 20a62b58162034cc5de9fc0d471c77f8b0337379e02f87cff05be0cd18fc058c
+    hash: 5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457
     path: patches/electron-updater@6.8.9.patch
   react-dom@19.2.7:
     hash: 14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979
@@ -163,7 +163,7 @@ importers:
         version: 0.0.181
       electron-updater:
         specifier: ^6.8.9
-        version: 6.8.9(patch_hash=20a62b58162034cc5de9fc0d471c77f8b0337379e02f87cff05be0cd18fc058c)
+        version: 6.8.9(patch_hash=5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457)
       koffi:
         specifier: 3.3.4
         version: 3.3.4
@@ -8583,7 +8583,7 @@ snapshots:
 
   electron-to-chromium@1.5.393: {}
 
-  electron-updater@6.8.9(patch_hash=20a62b58162034cc5de9fc0d471c77f8b0337379e02f87cff05be0cd18fc058c):
+  electron-updater@6.8.9(patch_hash=5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457):
     dependencies:
       builder-util-runtime: 9.7.0
       fs-extra: 10.1.0
