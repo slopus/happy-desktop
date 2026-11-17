@@ -36,6 +36,70 @@ function historicalElements(content: MessageBlock[]) {
     });
 }
 
+it("restores direct Gen UI from persisted tool content and keeps it outside folded traces", () => {
+    const document = {
+        genuiRender: 1,
+        compiler: "1.0.0",
+        root: "label",
+        fallback: "Ready",
+        elements: { label: { type: "text", props: { spans: [{ text: "Ready" }] } } },
+    } satisfies Extract<
+        NonNullable<Extract<MessageBlock, { type: "tool_call" }>["presentation"]>,
+        { type: "gen_ui" }
+    >["document"];
+    const elements = historicalElements([
+        {
+            type: "tool_call",
+            id: "prepare",
+            name: "exec_command",
+            status: "completed",
+            arguments: { cmd: "prepare" },
+        },
+        {
+            type: "tool_call",
+            id: "direct",
+            name: "gen_ui",
+            status: "completed",
+            arguments: {},
+            presentation: { type: "gen_ui", document },
+        },
+        { type: "text", text: "Done." },
+    ]);
+    const tool = elements.find(
+        (element) => element.kind === "tool_call" && element.toolCallId === "direct",
+    );
+    expect(tool?.kind === "tool_call" && tool.presentation).toEqual({ kind: "gen_ui", document });
+    const rows = happyAgentConversationProject({
+        elements,
+        sessionId: "agent-history",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [],
+        answeredUserInputs: [],
+        expandedGroupIds: new Set(),
+        subagents: [],
+    });
+    const shown = rows.find(
+        (entry) =>
+            entry.kind === "agentActivity" &&
+            entry.activity.kind === "tool" &&
+            entry.activity.tool.toolCallId === "direct",
+    );
+    expect(
+        shown?.kind === "agentActivity" &&
+            shown.activity.kind === "tool" &&
+            shown.activity.tool.presentation,
+    ).toEqual({ type: "gen_ui", document });
+    expect(
+        rows.some(
+            (entry) =>
+                entry.kind === "agentActivity" &&
+                entry.activity.kind === "tool" &&
+                entry.activity.tool.toolCallId === "prepare",
+        ),
+    ).toBe(false);
+});
+
 it("projects completed historical show_ui and suggest_replies calls as generic tool rows", () => {
     const elements = historicalElements([
         { type: "text", text: "Choose the next step." },

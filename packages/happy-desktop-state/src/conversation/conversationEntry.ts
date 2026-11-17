@@ -1,3 +1,4 @@
+import type { MessageBlock } from "@slopus/happy-agent-client";
 import type {
     HappyAgentArtifactDisplay,
     HappyAgentArtifactId,
@@ -14,6 +15,12 @@ export type ConversationJson =
     | null
     | readonly ConversationJson[]
     | { readonly [key: string]: ConversationJson };
+
+/** The producer's compiled Gen UI document, carried unchanged in a tool message. */
+export type ConversationGenUiDocument = Extract<
+    NonNullable<Extract<MessageBlock, { type: "tool_call" }>["presentation"]>,
+    { type: "gen_ui" }
+>["document"];
 
 /**
  * One reaction bucket on a conversation message: the aggregate counts a reader
@@ -417,6 +424,11 @@ export type ConversationActivityPresentation =
           readonly type: "media";
           readonly items: readonly ConversationMediaItem[];
           readonly layout?: ConversationMediaLayout;
+      }
+    /** Direct message content, with no artifact identity or resource lookup. */
+    | {
+          readonly type: "gen_ui";
+          readonly document: ConversationGenUiDocument;
       }
     /**
      * The artifact a call made, changed, or took up. `shows` is `"latest"`

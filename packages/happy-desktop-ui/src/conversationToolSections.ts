@@ -56,6 +56,7 @@ function toolSectionCall(
     const presentation = tool.presentation?.type;
     return (
         presentation !== "media" &&
+        presentation !== "gen_ui" &&
         presentation !== "artifact" &&
         presentation !== "page" &&
         presentation !== "preview" &&

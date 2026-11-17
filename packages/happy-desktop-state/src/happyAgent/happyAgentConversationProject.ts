@@ -1202,6 +1202,7 @@ function happyAgentConnectGroupProject(
             (entry.kind === "agentActivity" &&
                 entry.activity.kind === "tool" &&
                 (entry.activity.tool.presentation?.type === "media" ||
+                    entry.activity.tool.presentation?.type === "gen_ui" ||
                     entry.activity.tool.presentation?.type === "artifact" ||
                     entry.activity.tool.presentation?.type === "preview" ||
                     entry.activity.tool.presentation?.type === "page")) ||
@@ -1559,6 +1560,8 @@ function presentationProject(
                 items: presentation.items,
                 ...(presentation.layout === undefined ? {} : { layout: presentation.layout }),
             };
+        case "gen_ui":
+            return { type: "gen_ui", document: presentation.document };
         case "artifact":
             return {
                 type: "artifact",

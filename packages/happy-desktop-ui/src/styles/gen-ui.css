@@ -1191,3 +1191,15 @@ button.gen-ui-press[data-role="tile"]:hover:not(:disabled) .gen-ui-image {
     font-size: 13px;
     text-align: end;
 }
+
+.gen-ui-message {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.gen-ui-message__measure {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+}

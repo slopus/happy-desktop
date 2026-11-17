@@ -22,6 +22,8 @@ export type InlinePageRender = (fit: InlinePageFit) => ReactNode;
 export type InlinePagePlacement =
     /** At its full height in the reply, under its title. */
     | "inline"
+    /** Direct message content, measured inline without an artifact title or controls. */
+    | "content"
     /** As its title only, which opens it beside the conversation. */
     | "title";
 
@@ -45,6 +47,7 @@ export const INLINE_PAGE_MAX_HEIGHT = 24_000;
 
 /** The height an inline page adds beneath its call's line, excluding the gap above it. */
 export function inlinePageHeight(geometry: InlinePageGeometry): number {
+    if (geometry.placement === "content") return geometry.height ?? 0;
     const header = INLINE_PAGE_TITLE_HEIGHT + (geometry.statusLine ? INLINE_PAGE_STATUS_HEIGHT : 0);
     if (geometry.placement === "title" || geometry.collapsed || !geometry.height) return header;
     return header + INLINE_PAGE_CONTENT_GAP + geometry.height;

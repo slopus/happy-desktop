@@ -9,6 +9,8 @@ import {
     type GenUiFixture,
 } from "../genUiFixtures";
 import { ComponentPage, Specimen } from "../kit";
+import { ConversationView } from "../../src/ConversationView";
+import { genUiMessageEntry } from "../genUiMessageFixture";
 
 export const componentNumber = "C-342";
 
@@ -83,6 +85,25 @@ export function GenUiPage() {
                 />
             </label>
             <p>{`Last action: ${reported}`}</p>
+            <Specimen
+                label="Direct message"
+                detail="A gen_ui tool result without an artifact catalog or file lookup."
+                number="00"
+                stage="surface"
+            >
+                <div style={{ display: "flex", height: 400, width: GEN_UI_SCREEN_WIDTH }}>
+                    <ConversationView
+                        conversationId="blueprint-direct-gen-ui"
+                        entries={[genUiMessageEntry]}
+                        dock={null}
+                        genUi={{
+                            actionsSupported: new Set(["message", "open", "copy"]),
+                            onAction: (key, action) =>
+                                setReported(`${key} → ${JSON.stringify(action)}`),
+                        }}
+                    />
+                </div>
+            </Specimen>
             <Suspense fallback={<p>Loading documents…</p>}>
                 <Fixtures
                     onAction={(elementKey, action) =>

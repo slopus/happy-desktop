@@ -2059,6 +2059,8 @@ function projectToolPresentation(
                     mediaLayoutProjectSafe(presentation.layout, presentation.items.length),
                 ),
             };
+        case "gen_ui":
+            return { kind: "gen_ui", document: presentation.document };
         case "artifact":
             return {
                 kind: "artifact",

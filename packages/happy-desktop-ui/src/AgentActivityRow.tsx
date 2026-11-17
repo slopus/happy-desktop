@@ -257,6 +257,7 @@ function toolVerb(
     }
     if (presentation?.type === "search") return active ? "Searching" : "Searched";
     if (presentation?.type === "preview") return active ? "Preparing" : "Prepared";
+    if (presentation?.type === "gen_ui") return active ? "Showing" : "Showed";
     /* A read that turned out to be a picture still says it read it; every
        other call that presents files is named by what it presented. */
     if (presentation?.type === "media")
@@ -373,6 +374,7 @@ function toolGlyph(
     if (presentation?.type === "exploration") return { set: "house", name: "search" };
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
     if (presentation?.type === "artifact") return { set: "house", name: "package" };
+    if (presentation?.type === "gen_ui") return { set: "house", name: "image" };
     if (presentation?.type === "page") return { set: "house", name: "globe" };
     if (presentation?.type === "preview") return { set: "house", name: "globe" };
     if (presentation?.type === "checkout") return { set: "house", name: "repository" };
@@ -1003,6 +1005,9 @@ function AgentToolActivity(props: {
     } else if (presentation?.type === "artifact") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.shows === "latest" ? presentation.title : "artifact";
+    } else if (presentation?.type === "gen_ui") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = "UI";
     } else if (presentation?.type === "preview") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = `preview on port ${String(presentation.port)}`;

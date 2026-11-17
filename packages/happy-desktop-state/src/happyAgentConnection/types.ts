@@ -16,7 +16,10 @@ import type {
     SlashCommand,
     Task,
 } from "@slopus/happy-agent-client";
-import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
+import type {
+    ConversationGenUiDocument,
+    ConversationMediaLayout,
+} from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
     HappyAgentAnsweredUserInput,
@@ -125,6 +128,10 @@ export type ToolPresentation =
           title: string;
           /** Absent from older daemons, and any value this build does not know, is a version. */
           shows: "latest" | "version";
+      }
+    | {
+          kind: "gen_ui";
+          document: ConversationGenUiDocument;
       }
     | {
           kind: "page";

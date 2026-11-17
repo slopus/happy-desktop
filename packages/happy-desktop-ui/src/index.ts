@@ -1298,6 +1298,7 @@ export {
     type GenUiSecretHost,
 } from "./genUi/GenUiArtifact";
 export type { GenUiInlineHost } from "./pages/artifacts/ArtifactInlineContent";
+export { GenUiMessage, type GenUiMessageHost } from "./genUi/GenUiMessage";
 export {
     GenUiRenderView,
     type GenUiActionHandler,

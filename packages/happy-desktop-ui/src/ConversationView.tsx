@@ -14,6 +14,8 @@ import {
     type LinkOpenPlacement,
 } from "./MessageMarkdown";
 import type { MessageReferences } from "./messageReferences";
+import { conversationGenUi } from "./conversationGenUi";
+import type { GenUiMessageHost } from "./genUi/GenUiMessage";
 import {
     entryKey,
     entryTrace,
@@ -329,6 +331,8 @@ export type ConversationViewProps = {
      * draw them. Absent, every such call keeps its card.
      */
     inlinePages?: ConversationInlinePages;
+    /** Safe actions for direct Gen UI message content; rendering needs no artifact host. */
+    genUi?: GenUiMessageHost;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -759,16 +763,27 @@ export function ConversationView(props: ConversationViewProps) {
     const inlineLeads = inlinePages
         ? conversationInlineArtifactLeads(steering.transcript)
         : undefined;
-    const inlinePageOf = (entry: ConversationEntry | undefined) =>
-        entry === undefined || inlinePages === undefined || inlineLeads === undefined
-            ? undefined
-            : conversationInlinePage(
-                  entry,
-                  rowExpansionKey(entry),
-                  inlinePages,
-                  inlineLeads,
-                  inlinePageLocal,
-              );
+    const inlinePageOf = (entry: ConversationEntry | undefined) => {
+        if (entry === undefined) return undefined;
+        const direct = conversationGenUi(
+            entry,
+            rowExpansionKey(entry),
+            inlinePageLocal,
+            props.genUi,
+        );
+        return (
+            direct ??
+            (inlinePages === undefined || inlineLeads === undefined
+                ? undefined
+                : conversationInlinePage(
+                      entry,
+                      rowExpansionKey(entry),
+                      inlinePages,
+                      inlineLeads,
+                      inlinePageLocal,
+                  ))
+        );
+    };
     const currentFailureId =
         props.running === true ? undefined : conversationCurrentFailure(transcript);
     /* The switch reads the picker's own catalog and usage, live, the way the

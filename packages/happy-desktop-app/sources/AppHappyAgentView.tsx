@@ -8,6 +8,7 @@ import {
     type ReactNode,
 } from "react";
 import type { ConversationSummary, HappyAgentSystemMonitorStore } from "happy-desktop-state";
+import { conversationGenUiHostCreate } from "./conversationGenUiHost";
 import {
     HappyAgentSystemMonitorSurfacePage,
     FileRevealContext,
@@ -10632,6 +10633,16 @@ function HappyAgentConversationSurface(props: {
     return (
         <ConversationView
             references={references}
+            genUi={conversationGenUiHostCreate({
+                workspace,
+                conversationId: conversation.conversationId,
+                writable:
+                    !props.readOnly &&
+                    props.writeRefusal === undefined &&
+                    props.restarting !== true,
+                online: props.happyAgentOnline,
+                linkOpen: (url) => props.onLinkOpen(url, props.linkOpenDefault),
+            })}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
             agentAuthor={agentAuthor}

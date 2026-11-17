@@ -68,7 +68,7 @@ export function InlinePage(props: InlinePageProps) {
     const [failure, setFailure] = useState<{ key: string; message: string } | undefined>(undefined);
     const page = props.page;
     const pending = page !== undefined && page.key !== shown?.key ? page : undefined;
-    const open = geometry.placement === "inline" && !geometry.collapsed;
+    const open = geometry.placement !== "title" && !geometry.collapsed;
     /* Collapsing, expanding, or opening beside the chat is a reading action:
        the list holds still, so the controls stay under the pointer. */
     const disclosureAnchor = useMessageListDisclosureAnchor();
@@ -114,71 +114,77 @@ export function InlinePage(props: InlinePageProps) {
             data-placement={geometry.placement}
             data-testid={props["data-testid"]}
         >
-            <div
-                className="happy-inline-page__title-line"
-                data-happy-desktop-ui="inline-page-title"
-            >
-                {opener ? (
-                    <button
-                        aria-label={
-                            props.onOpenSide
-                                ? (props.openAriaLabel ?? `Open ${props.title} beside the chat`)
-                                : `${geometry.collapsed ? "Expand" : "Collapse"} ${props.title}`
-                        }
-                        className="happy-inline-page__opener"
-                        disabled={props.openDisabled}
-                        data-happy-desktop-ui="inline-page-opener"
-                        onClick={(event) => {
-                            disclosureAnchor?.(event.currentTarget);
-                            opener();
-                        }}
-                        type="button"
-                    >
-                        {label}
-                    </button>
-                ) : (
-                    <span className="happy-inline-page__opener">{label}</span>
-                )}
-                {toggle ? (
-                    <Button
-                        aria-expanded={!geometry.collapsed}
-                        aria-label={
-                            geometry.collapsed ? `Expand ${props.title}` : `Collapse ${props.title}`
-                        }
-                        data-happy-desktop-ui="inline-page-toggle"
-                        icon={geometry.collapsed ? "chevron-right" : "chevron-down"}
-                        iconOnly
-                        onClick={(event) => {
-                            disclosureAnchor?.(event.currentTarget);
-                            toggle();
-                        }}
-                        size="small"
-                        variant="ghost"
-                    />
-                ) : null}
-                {props.onOpenSide ? (
-                    <Button
-                        aria-label={props.openAriaLabel ?? `Open ${props.title} beside the chat`}
-                        data-happy-desktop-ui="inline-page-open"
-                        disabled={props.openDisabled}
-                        icon="open-external"
-                        {...(props.openLabel === undefined ? { iconOnly: true } : {})}
-                        onClick={(event) => {
-                            disclosureAnchor?.(event.currentTarget);
-                            props.onOpenSide?.();
-                        }}
-                        size="small"
-                        variant="ghost"
-                    >
-                        {props.openLabel}
-                    </Button>
-                ) : null}
-                {/* After the controls, so a status that changes with the
+            {geometry.placement !== "content" ? (
+                <div
+                    className="happy-inline-page__title-line"
+                    data-happy-desktop-ui="inline-page-title"
+                >
+                    {opener ? (
+                        <button
+                            aria-label={
+                                props.onOpenSide
+                                    ? (props.openAriaLabel ?? `Open ${props.title} beside the chat`)
+                                    : `${geometry.collapsed ? "Expand" : "Collapse"} ${props.title}`
+                            }
+                            className="happy-inline-page__opener"
+                            disabled={props.openDisabled}
+                            data-happy-desktop-ui="inline-page-opener"
+                            onClick={(event) => {
+                                disclosureAnchor?.(event.currentTarget);
+                                opener();
+                            }}
+                            type="button"
+                        >
+                            {label}
+                        </button>
+                    ) : (
+                        <span className="happy-inline-page__opener">{label}</span>
+                    )}
+                    {toggle ? (
+                        <Button
+                            aria-expanded={!geometry.collapsed}
+                            aria-label={
+                                geometry.collapsed
+                                    ? `Expand ${props.title}`
+                                    : `Collapse ${props.title}`
+                            }
+                            data-happy-desktop-ui="inline-page-toggle"
+                            icon={geometry.collapsed ? "chevron-right" : "chevron-down"}
+                            iconOnly
+                            onClick={(event) => {
+                                disclosureAnchor?.(event.currentTarget);
+                                toggle();
+                            }}
+                            size="small"
+                            variant="ghost"
+                        />
+                    ) : null}
+                    {props.onOpenSide ? (
+                        <Button
+                            aria-label={
+                                props.openAriaLabel ?? `Open ${props.title} beside the chat`
+                            }
+                            data-happy-desktop-ui="inline-page-open"
+                            disabled={props.openDisabled}
+                            icon="open-external"
+                            {...(props.openLabel === undefined ? { iconOnly: true } : {})}
+                            onClick={(event) => {
+                                disclosureAnchor?.(event.currentTarget);
+                                props.onOpenSide?.();
+                            }}
+                            size="small"
+                            variant="ghost"
+                        >
+                            {props.openLabel}
+                        </Button>
+                    ) : null}
+                    {/* After the controls, so a status that changes with the
                     content under it never moves them. */}
-                {props.status && !geometry.statusLine ? (
-                    <span className="happy-inline-page__status">{props.status}</span>
-                ) : null}
-            </div>
+                    {props.status && !geometry.statusLine ? (
+                        <span className="happy-inline-page__status">{props.status}</span>
+                    ) : null}
+                </div>
+            ) : null}
             {geometry.statusLine ? (
                 <div
                     aria-live="polite"
@@ -194,7 +200,10 @@ export function InlinePage(props: InlinePageProps) {
                     data-happy-desktop-ui="inline-page-content"
                     style={{
                         height,
-                        marginTop: height > 0 ? INLINE_PAGE_CONTENT_GAP : 0,
+                        marginTop:
+                            height > 0 && geometry.placement !== "content"
+                                ? INLINE_PAGE_CONTENT_GAP
+                                : 0,
                         ...(props.background ? { background: props.background } : {}),
                     }}
                 >
@@ -208,7 +217,10 @@ export function InlinePage(props: InlinePageProps) {
                             key={frame.key}
                             style={measuring ? { height: Math.max(1, height) } : undefined}
                         >
-                            {frame.render(fitFor(frame))}
+                            {(geometry.placement === "content" && frame.key === page?.key
+                                ? page
+                                : frame
+                            ).render(fitFor(frame))}
                         </div>
                     ))}
                     {failed ? (
