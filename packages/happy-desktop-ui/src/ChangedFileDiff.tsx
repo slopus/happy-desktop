@@ -84,6 +84,8 @@ export type ChangedFileDiffProps = {
     onWrapChange?: (wrap: boolean) => void;
     /** Moves the file into a tab of the main content. Absent hides the control. */
     onOpenInTab?: () => void;
+    /** Closes only this preview, leaving its owning Files panel open. */
+    onClose?: () => void;
     /**
      * Receives edits to the working-tree text. Without it there is nobody to
      * hand an edit to, so the mode is not offered at all rather than offered
@@ -412,6 +414,18 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                     {props.onOpenInTab ? (
                         <FileOpenInTabButton onClick={() => props.onOpenInTab?.()} />
                     ) : null}
+                    {props.onClose ? (
+                        <Tooltip label="Close preview" placement="bottom">
+                            <Button
+                                aria-label="Close preview"
+                                icon="close"
+                                iconOnly
+                                onClick={() => props.onClose?.()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </Tooltip>
+                    ) : null}
                 </div>
             )}
             <div
@@ -479,6 +493,18 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                     ) : null}
                     {props.onOpenInTab && props.pathShown === false ? (
                         <FileOpenInTabButton onClick={() => props.onOpenInTab?.()} />
+                    ) : null}
+                    {props.onClose && props.pathShown === false ? (
+                        <Tooltip label="Close preview" placement="bottom">
+                            <Button
+                                aria-label="Close preview"
+                                icon="close"
+                                iconOnly
+                                onClick={() => props.onClose?.()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </Tooltip>
                     ) : null}
                 </span>
             </div>

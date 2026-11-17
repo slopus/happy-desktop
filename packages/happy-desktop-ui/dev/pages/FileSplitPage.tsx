@@ -99,11 +99,13 @@ function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileD
                               newContent={sources[selected] ?? ""}
                               oldContent={changedBefore}
                               onModeChange={modeSet}
+                              onClose={() => selectedSet(undefined)}
                               onOpenInTab={() => selectedSet(undefined)}
                               path={selected}
                           />
                       ) : (
                           <FilePreview
+                              onClose={() => selectedSet(undefined)}
                               content={
                                   sources[selected] === undefined
                                       ? { type: "unavailable" }
@@ -119,7 +121,6 @@ function LiveSplit(props: { width: number; initial?: string; mode?: ChangedFileD
                       onOpenInTab: () => selectedSet(undefined),
                   }
                 : {})}
-            emptyDescription="Its contents or changes show here, beside the list."
             listing={
                 <FileBrowser
                     addedLines={164}
@@ -144,7 +145,7 @@ export function FileSplitPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The Files tab as one lane: the listing on the leading side, the picked file's preview filling the rest, meeting on the shell's own resize hairline. The preview column is there before anything is picked, so the first click fills it rather than opening it. Too narrow for both, the two take turns with a way back."
+            summary="The Files tab as one lane: picking a file opens its preview beside the listing, meeting on the shell's resize hairline. Close preview returns its width to the listing. Too narrow for both, the two take turns with a way back."
             title="FileSplit"
         >
             <Specimen
