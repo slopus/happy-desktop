@@ -1160,6 +1160,11 @@ function happyAgentConnectGroupProject(
      * not a step this turn finished but a run still going somewhere else, and
      * the row is how the reader reaches it. A tool-only turn with no child keeps
      * its last real activity row instead of fabricating an empty agent reply.
+     *
+     * And it hides the work, never what the agent said: every reply the turn
+     * wrote stays, in order, not only the last. The answer often builds on
+     * what was said along the way ("the scoped one above"), and the reader
+     * has to have seen that to follow it.
      */
     const firstDelegationIndex = entries.findIndex((entry) => entry.kind === "delegation");
     let lastActivityIndex = -1;
@@ -1182,6 +1187,8 @@ function happyAgentConnectGroupProject(
             entry.kind === "delegation" ||
             index === actualAnchorIndex ||
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
+            (entry.kind === "message" &&
+                (entry.message.text.trim().length > 0 || entry.message.attachments.length > 0)) ||
             // An answered question is the reader's own decision, so it stays with
             // their messages rather than folding away with the work it steered.
             entry.kind === "request" ||

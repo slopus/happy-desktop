@@ -746,10 +746,12 @@ it("renders one author header across inference messages and tools, expanded or c
                 (node) => node.textContent === "Happy",
             ),
         ).toHaveLength(1);
-        const final = store
+        /* Folding keeps everything the agent said, so the turn's first reply
+           is the row that survives it, and carries the control. */
+        const lead = store
             .get()
-            .entries.find((entry) => entry.kind === "message" && entry.message.id === "a:answer");
-        expect(final?.traceFoldAnchorId).toBe("a");
+            .entries.find((entry) => entry.kind === "message" && entry.message.id === "a:opening");
+        expect(lead?.traceFoldAnchorId).toBe("a");
         const status = store.get().entries.filter((entry) => entry.kind === "turnStatus");
         expect(status).toHaveLength(1);
         expect(status[0]).toMatchObject({
