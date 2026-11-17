@@ -1,9 +1,9 @@
-import { execFile } from "node:child_process";
 import type {
     DesktopDaemonInstall,
     DesktopDaemonRestartReason,
     DesktopDrainComponent,
 } from "../shared/desktopContract";
+import { execFileHidden } from "./childProcess";
 import type { HappyAgentBinary } from "./happyAgentBinaryConfig";
 import type { HappyDaemonPaths } from "./happyAgentBinaryPaths";
 import { happyAgentDataRefusal, HappyAgentDataNewerError } from "./happyAgentDataVersion";
@@ -343,12 +343,10 @@ function processExists(pid: number): boolean {
 
 function daemonStartRun(executable: string, environment: NodeJS.ProcessEnv): Promise<void> {
     return new Promise((resolve, reject) => {
-        execFile(
+        execFileHidden(
             executable,
             ["start"],
             {
-                encoding: "utf8",
-                windowsHide: true,
                 env: environment,
                 maxBuffer: MAXIMUM_COMMAND_OUTPUT_BYTES,
                 timeout: START_TIMEOUT_MS,

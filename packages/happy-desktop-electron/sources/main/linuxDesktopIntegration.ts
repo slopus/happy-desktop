@@ -1,6 +1,6 @@
-import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path/posix";
+import { execFileHidden } from "./childProcess";
 
 /*
  * An AppImage is a single downloaded file: nothing tells the desktop it exists,
@@ -153,7 +153,7 @@ export function linuxDesktopIntegrationInstall(input: {
         // The AppImage's bundled libraries must not leak into a system tool.
         const { LD_LIBRARY_PATH: _bundled, ...environment } = input.environment;
         // Optional: GIO reads entries directly, and many systems lack this tool.
-        execFile(
+        execFileHidden(
             "update-desktop-database",
             [join(dataHome, "applications")],
             { env: environment, timeout: 10_000 },

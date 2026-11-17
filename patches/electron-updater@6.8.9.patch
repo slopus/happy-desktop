@@ -1,0 +1,17 @@
+diff --git a/out/windowsExecutableCodeSignatureVerifier.js b/out/windowsExecutableCodeSignatureVerifier.js
+--- a/out/windowsExecutableCodeSignatureVerifier.js
++++ b/out/windowsExecutableCodeSignatureVerifier.js
+@@ -12,10 +12,12 @@
+     // semicolon wont terminate the set command and run chcp thus leading to verification errors on certificats with special chars like german umlauts, so rather
+     //   join commands using & https://github.com/electron-userland/electron-builder/issues/8162
+     const executable = `set "PSModulePath=" & chcp 65001 >NUL & powershell.exe`;
+-    const args = ["-NoProfile", "-NonInteractive", "-InputFormat", "None", "-Command", command];
++    // Happy: Happy has no console, so without windowsHide cmd.exe and powershell.exe open a visible console window.
++    const args = ["-NoProfile", "-NonInteractive", "-InputFormat", "None", "-WindowStyle", "Hidden", "-Command", command];
+     const options = {
+         shell: true,
+         timeout,
++        windowsHide: true,
+     };
+     return [executable, args, options];
+ }

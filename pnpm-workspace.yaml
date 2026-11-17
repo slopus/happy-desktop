@@ -6,4 +6,5 @@ onlyBuiltDependencies:
     - electron
 
 patchedDependencies:
+    electron-updater@6.8.9: patches/electron-updater@6.8.9.patch
     react-dom@19.2.7: patches/react-dom@19.2.7.patch

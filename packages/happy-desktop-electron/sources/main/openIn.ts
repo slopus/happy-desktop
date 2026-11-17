@@ -1,12 +1,9 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { execFileHiddenAsync } from "./childProcess";
 
 /**
  * The applications a project directory can be handed to. The renderer only ever
@@ -208,7 +205,7 @@ const ICON_SIZE = 64;
 async function icnsPathRead(bundlePath: string): Promise<string | undefined> {
     const resources = join(bundlePath, "Contents", "Resources");
     try {
-        const { stdout } = await execFileAsync(
+        const { stdout } = await execFileHiddenAsync(
             "/usr/bin/plutil",
             [
                 "-extract",
@@ -276,7 +273,7 @@ async function iconConvert(bundlePath: string): Promise<string | undefined> {
         `happy-open-in-${createHash("sha1").update(icns).digest("hex")}.png`,
     );
     try {
-        await execFileAsync(
+        await execFileHiddenAsync(
             "/usr/bin/sips",
             [
                 "-s",
@@ -303,7 +300,7 @@ async function iconConvert(bundlePath: string): Promise<string | undefined> {
 /** The bundle's own `CFBundleIdentifier`, or nothing if it cannot be read. */
 async function bundleIdRead(bundlePath: string): Promise<string | undefined> {
     try {
-        const { stdout } = await execFileAsync(
+        const { stdout } = await execFileHiddenAsync(
             "/usr/bin/plutil",
             [
                 "-extract",
@@ -403,7 +400,7 @@ export async function openInTargetsRead(): Promise<readonly OpenInTarget[]> {
  * The bundle is addressed by the path detection found and confirmed, not by a
  * display name `open -a` would have to match and not by a LaunchServices id that
  * may resolve to a copy the reader cannot see. The argument array is passed to
- * `execFile` directly: there is no shell, so there is no quoting to get wrong.
+ * `execFileHiddenAsync` directly: there is no shell, so there is no quoting to get wrong.
  *
  * The caller is responsible for `directory` being a project root it has
  * independently authorized; this function does not take the renderer's word for
@@ -421,7 +418,7 @@ export async function openInRun(targetId: string, directory: string): Promise<vo
     const path = (await detectedRead()).get(target.id)?.path;
     if (path === undefined) throw new Error(`${target.label} does not appear to be installed.`);
     try {
-        await execFileAsync("/usr/bin/open", ["-a", path, directory], { timeout: 10_000 });
+        await execFileHiddenAsync("/usr/bin/open", ["-a", path, directory], { timeout: 10_000 });
     } catch {
         throw new Error(`${target.label} could not open this project.`);
     }
@@ -448,7 +445,7 @@ export async function fileReveal(path: string): Promise<void> {
         throw new Error("That file is not on this Mac.");
     }
     try {
-        await execFileAsync("/usr/bin/open", ["-R", path], { timeout: 10_000 });
+        await execFileHiddenAsync("/usr/bin/open", ["-R", path], { timeout: 10_000 });
     } catch {
         throw new Error("Finder could not show this file.");
     }

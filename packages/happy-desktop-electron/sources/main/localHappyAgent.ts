@@ -1,9 +1,9 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { access, constants, realpath, stat } from "node:fs/promises";
 import { userInfo } from "node:os";
 import { isAbsolute, normalize, posix, resolve, win32 } from "node:path";
 import type { happyAgentProtocol } from "happy-desktop-state";
 import type { LocalAssistantId } from "../shared/desktopContract";
+import { execFileHidden } from "./childProcess";
 import { environmentRead } from "./localApps";
 import { happyDaemonPaths } from "./happyAgentBinaryPaths";
 import { happyAgentDataRefusal, happyAgentDataVersionRequire } from "./happyAgentDataVersion";
@@ -106,12 +106,10 @@ export interface HappyAgentProcessHost {
 export const defaultProcessHost: HappyAgentProcessHost = {
     execFile: (executable, arguments_, options) =>
         new Promise((resolvePromise, reject) => {
-            execFileCallback(
+            execFileHidden(
                 executable,
-                [...arguments_],
+                arguments_,
                 {
-                    encoding: "utf8",
-                    windowsHide: true,
                     env: options.env,
                     maxBuffer: maximumOutputBytes,
                     // The launcher supervises a new daemon for up to 60 seconds.

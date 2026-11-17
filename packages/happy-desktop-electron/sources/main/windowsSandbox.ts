@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFileHidden } from "./childProcess";
 import type { HappyAgentBinary } from "./happyAgentBinaryConfig";
 
 /** Set on a daemon Happy starts, so its sandbox is only ever set up by the person's click. */
@@ -238,14 +238,12 @@ function jsonObjectParse(stdout: string): Record<string, unknown> | undefined {
 
 const commandRun: WindowsSandboxCommandRun = (executable, args, options) =>
     new Promise((resolve, reject) => {
-        execFile(
+        execFileHidden(
             executable,
             args,
             {
-                encoding: "utf8",
                 env: options.env,
                 maxBuffer: MAXIMUM_OUTPUT_BYTES,
-                windowsHide: true,
                 ...(options.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
             },
             (error, stdout) => (error ? reject(error) : resolve(stdout)),

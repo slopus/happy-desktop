@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import type {
     DesktopDaemonDownload,
     DesktopDaemonInstall,
@@ -8,6 +7,7 @@ import type {
     DesktopDaemonVersion,
     DesktopRuntimeSnapshot,
 } from "../shared/desktopContract";
+import { execFileHidden } from "./childProcess";
 import { happyAgentRestartRun } from "./happyAgentRestart";
 import {
     happyAgentDataDowngradeError,
@@ -1129,12 +1129,10 @@ function daemonCommandRun(
     environment: NodeJS.ProcessEnv,
 ): Promise<void> {
     return new Promise((resolve, reject) => {
-        execFile(
+        execFileHidden(
             executable,
             [command],
             {
-                encoding: "utf8",
-                windowsHide: true,
                 env: environment,
                 maxBuffer: MAXIMUM_COMMAND_OUTPUT_BYTES,
                 timeout: DAEMON_COMMAND_TIMEOUT_MS,

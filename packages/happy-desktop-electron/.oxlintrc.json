@@ -1,0 +1,36 @@
+{
+    "$schema": "../../node_modules/oxlint/configuration_schema.json",
+    "extends": ["../../.oxlintrc.json"],
+    "overrides": [
+        {
+            "files": ["sources/**/*.ts", "sources/**/*.tsx"],
+            "rules": {
+                "no-restricted-imports": [
+                    "error",
+                    {
+                        "paths": [
+                            {
+                                "name": "node:child_process",
+                                "message": "Start child processes through sources/main/childProcess.ts, which keeps every console window hidden on Windows."
+                            },
+                            {
+                                "name": "child_process",
+                                "message": "Start child processes through sources/main/childProcess.ts, which keeps every console window hidden on Windows."
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "files": [
+                "sources/main/childProcess.ts",
+                "sources/**/*.test.ts",
+                "sources/**/*.test.tsx"
+            ],
+            "rules": {
+                "no-restricted-imports": "off"
+            }
+        }
+    ]
+}

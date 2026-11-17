@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,6 +6,7 @@ import type {
     DesktopDaemonDownloadFailure,
     DesktopDownloadFailureCode,
 } from "../shared/desktopContract";
+import { execFileHidden } from "./childProcess";
 import { githubReleaseJsonFetch } from "./githubReleaseJsonFetch";
 import {
     happyAgentVersionAllowed,
@@ -780,15 +780,10 @@ async function archiveExtract(
 
 function fileRun(executable: string, arguments_: readonly string[]): Promise<string> {
     return new Promise((resolve, reject) => {
-        execFile(
-            executable,
-            [...arguments_],
-            { encoding: "utf8", maxBuffer: 64 * 1024, windowsHide: true },
-            (error, stdout) => {
-                if (error === null) resolve(stdout);
-                else reject(error);
-            },
-        );
+        execFileHidden(executable, arguments_, { maxBuffer: 64 * 1024 }, (error, stdout) => {
+            if (error === null) resolve(stdout);
+            else reject(error);
+        });
     });
 }
 

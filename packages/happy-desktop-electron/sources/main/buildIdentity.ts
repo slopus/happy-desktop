@@ -1,16 +1,15 @@
-import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import { resolve } from "node:path";
 import type { DesktopBuildIdentity } from "../shared/desktopContract";
+import { execFileHiddenSync } from "./childProcess";
 
 /** Branches that are the baseline rather than a piece of work in progress. */
 const DEFAULT_BRANCHES = new Set(["main", "master"]);
 
 function git(cwd: string, args: readonly string[]): string | undefined {
     try {
-        const output = execFileSync("git", args, {
+        const output = execFileHiddenSync("git", args, {
             cwd,
-            encoding: "utf8",
             stdio: ["ignore", "pipe", "ignore"],
             timeout: 5000,
         }).trim();

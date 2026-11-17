@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -13,6 +12,7 @@ import type {
     DesktopCredentialVendor,
     DesktopServerSignInResult,
 } from "../shared/desktopContract";
+import { execFileHidden } from "./childProcess";
 import type { ServerSessions } from "./serverSessions";
 
 /**
@@ -234,10 +234,10 @@ function awsSecret(input: {
 /** What a program printed, or nothing when it failed. Never logged. */
 function output(file: string, args: readonly string[]): Promise<string | undefined> {
     return new Promise((resolve) => {
-        execFile(
+        execFileHidden(
             file,
-            [...args],
-            { timeout: 10_000, maxBuffer: MAX_FILE_BYTES, encoding: "utf8" },
+            args,
+            { timeout: 10_000, maxBuffer: MAX_FILE_BYTES },
             (error, stdout) => resolve(error ? undefined : stdout),
         );
     });
@@ -250,7 +250,7 @@ function shellEnvironment(): Promise<Record<string, string> | undefined> {
     return new Promise((resolve) => {
         // A marker keeps whatever the shell's startup files print out of the
         // environment that follows it.
-        execFile(
+        execFileHidden(
             shell,
             ["-ilc", "printf '\\0HAPPY_ENV\\0'; env -0"],
             { timeout: SHELL_TIMEOUT_MS, maxBuffer: 4 * MAX_FILE_BYTES },
