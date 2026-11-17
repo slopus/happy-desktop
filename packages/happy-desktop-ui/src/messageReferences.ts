@@ -275,12 +275,12 @@ function linkRelabel(match: HappyLinkMatch, label: string): string | undefined {
  * Where a Happy link was written to point, as written; the canonical address
  * for a legacy tag, which names no destination of its own.
  */
-function linkHref(match: HappyLinkMatch, reference: HappyReference): string | undefined {
+function linkHref(match: HappyLinkMatch, reference?: HappyReference): string | undefined {
     if (match.syntax === "link") {
         const written = /\]\(\s*(\S+?)(?:\s+"[^"]*")?\s*\)$/u.exec(match.source)?.[1];
         if (written !== undefined) return written;
     }
-    return referenceHref(reference);
+    return reference === undefined ? undefined : referenceHref(reference);
 }
 
 // The end of a streaming body that may still become a share link: a link's
@@ -345,9 +345,14 @@ export function messageReferencesResolve(
             const link = match.link;
             if (link === undefined)
                 return providerAddLink(match) ?? labelEscape(linkWords(link, "", references));
-            // What another instance holds is not read or opened here.
-            if (!linkHere(link, references))
+            // Share links still open their server; their placeholder label was set above.
+            // An instance-scoped happy:// link has no external destination to open.
+            if (!linkHere(link, references)) {
+                const href = linkHref(match);
+                if (href !== undefined && happyShareLinkParse(href) !== undefined)
+                    return match.source;
                 return labelEscape(linkWords(link, match.label, references));
+            }
             if (link.type === "file") {
                 if (match.image || match.label.trim().length > 0) return match.source;
                 return `[${labelEscape(link.file.path)}](${formatHappyFileUrl(link.file)})`;
