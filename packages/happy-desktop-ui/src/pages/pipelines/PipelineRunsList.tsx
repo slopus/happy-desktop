@@ -7,6 +7,7 @@ import {
     PipelineStateMark,
     pipelineDurationOf,
     pipelineTriggerText,
+    usePipelineRunIntent,
     type PipelineLabels,
 } from "./pipelinePresentation";
 
@@ -16,6 +17,8 @@ export interface PipelineRunsListProps {
     /** Now, for how long a running run has taken so far. */
     readonly now: number;
     readonly onRunOpen: (runId: string) => void;
+    /** The pointer rests on a run's row, so it is likely opened next. */
+    readonly onRunIntent?: (runId: string) => void;
     readonly onRunsMore: () => void;
 }
 
@@ -25,6 +28,7 @@ export interface PipelineRunsListProps {
  */
 export function PipelineRunsList(props: PipelineRunsListProps) {
     const runs = props.runs;
+    const intent = usePipelineRunIntent(props.onRunIntent);
     return (
         <div className="happy-pipeline-runs" data-happy-desktop-ui="pipeline-runs">
             {runs.error ? (
@@ -46,6 +50,7 @@ export function PipelineRunsList(props: PipelineRunsListProps) {
                                 className="happy-pipeline-run-row"
                                 data-happy-desktop-ui="pipeline-run-row"
                                 onClick={() => props.onRunOpen(run.id)}
+                                {...intent(run.id)}
                                 type="button"
                             >
                                 <span className="happy-pipeline-run-row__state">

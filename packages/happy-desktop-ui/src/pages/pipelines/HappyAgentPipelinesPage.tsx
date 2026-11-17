@@ -20,6 +20,8 @@ export interface HappyAgentPipelinesPageProps {
     readonly now: number;
     readonly onPipelineOpen: (pipelineId: string) => void;
     readonly onRunOpen: (runId: string) => void;
+    /** The pointer rests on a run's row, so it is likely opened next. */
+    readonly onRunIntent?: (runId: string) => void;
     readonly onRunsMore: () => void;
     readonly className?: string;
     readonly "data-testid"?: string;
@@ -101,6 +103,7 @@ export function HappyAgentPipelinesPage(props: HappyAgentPipelinesPageProps) {
                                 now={props.now}
                                 onPipelineOpen={props.onPipelineOpen}
                                 onRunOpen={props.onRunOpen}
+                                {...(props.onRunIntent ? { onRunIntent: props.onRunIntent } : {})}
                                 onRunsMore={props.onRunsMore}
                                 runs={snapshot.runs}
                             />

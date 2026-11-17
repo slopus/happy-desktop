@@ -35,7 +35,8 @@ export interface PipelineNodeLogSnapshot {
  * One node's log in one run, live: read once on screen, then only what came
  * after on every `pipeline.node.log` and every reconnect. Entries rewritten in
  * place, such as a command that finished, replace their earlier copy; every
- * other entry keeps its object.
+ * other entry keeps its object. A log read to its end after its run ended is
+ * final: it stops following, and opening it again reads nothing.
  */
 export interface PipelineNodeLogStore {
     get(): PipelineNodeLogSnapshot;
@@ -74,6 +75,8 @@ export function pipelineNodeLogStoreCreate(deps: {
     readonly nodeId: string;
     readonly request: HappyCloudRequest;
     readonly sync?: HappyAgentSync;
+    /** Whether the run has ended, as far as this window has read it. */
+    readonly runEnded?: () => boolean;
 }): PipelineNodeLogStore {
     const store = createStore<PipelineNodeLogSnapshot>()(() => ({
         loading: true,
@@ -85,11 +88,15 @@ export function pipelineNodeLogStoreCreate(deps: {
     let after = 0;
     let disposed = false;
     let listeners = 0;
+    /** Read to its end after the run ended, so nothing more is written to it. */
+    let complete = false;
 
     const follow = pipelineFollowCreate({
         sync: deps.sync,
         events: ["pipeline.node.log"],
         read: async () => {
+            // Asked before the read, so a run that ends during it is read once more.
+            const ended = deps.runEnded?.() ?? false;
             for (let pages = 0; pages < PAGES_PER_READ; pages++) {
                 let answer: unknown;
                 try {
@@ -102,6 +109,11 @@ export function pipelineNodeLogStoreCreate(deps: {
                     if (error instanceof HappyCloudRequestRefusal && error.status === 404) {
                         if (!disposed && store.getState().loading)
                             store.setState({ loading: false });
+                        // One that never ran in a run that ended never will.
+                        if (ended) {
+                            complete = true;
+                            follow.stop();
+                        }
                         return;
                     }
                     throw error;
@@ -123,7 +135,13 @@ export function pipelineNodeLogStoreCreate(deps: {
                         true,
                     );
                 }
-                if (page.entries.length < PAGE_LIMIT) return;
+                if (page.entries.length < PAGE_LIMIT) {
+                    if (ended) {
+                        complete = true;
+                        follow.stop();
+                    }
+                    return;
+                }
             }
             // A long backlog: the rest is read after other hints get a turn.
             follow.load();
@@ -138,7 +156,7 @@ export function pipelineNodeLogStoreCreate(deps: {
         subscribe(listener) {
             const unsubscribe = store.subscribe(listener);
             listeners += 1;
-            if (listeners === 1 && !disposed) follow.start();
+            if (listeners === 1 && !disposed && !complete) follow.start();
             let released = false;
             return () => {
                 if (released) return;

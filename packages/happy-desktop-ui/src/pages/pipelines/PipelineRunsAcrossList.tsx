@@ -9,6 +9,7 @@ import {
     PipelineStateMark,
     pipelineDurationOf,
     pipelineTriggerText,
+    usePipelineRunIntent,
     type PipelineLabels,
 } from "./pipelinePresentation";
 
@@ -18,6 +19,8 @@ export interface PipelineRunsAcrossListProps {
     /** Now, for how long a running run has taken so far. */
     readonly now: number;
     readonly onRunOpen: (runId: string) => void;
+    /** The pointer rests on a run's row, so it is likely opened next. */
+    readonly onRunIntent?: (runId: string) => void;
     readonly onPipelineOpen: (pipelineId: string) => void;
     readonly onRunsMore: () => void;
 }
@@ -34,6 +37,7 @@ export interface PipelineRunsAcrossListProps {
  */
 export function PipelineRunsAcrossList(props: PipelineRunsAcrossListProps) {
     const runs = props.runs;
+    const intent = usePipelineRunIntent(props.onRunIntent);
     const byId = new Map(runs.entries.map((run) => [run.id, run]));
     /** Who started a run: an agent, or for a child the run and node it came from. */
     const startedBy = (run: PipelineRunListEntry): string => {
@@ -80,6 +84,7 @@ export function PipelineRunsAcrossList(props: PipelineRunsAcrossListProps) {
                                 data-live={live ? "" : undefined}
                                 key={run.id}
                                 role="listitem"
+                                {...intent(run.id)}
                             >
                                 {/* Covers the row, under the pipeline's own button. */}
                                 <button

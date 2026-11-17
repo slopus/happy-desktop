@@ -756,6 +756,8 @@ export interface AppHappyAgentSession {
     readonly pipelineRun?: (
         runId: string,
     ) => import("happy-desktop-state").PipelineRunStore | undefined;
+    /** Reads one pipeline run ahead of a likely open. */
+    readonly pipelineRunPreload?: (runId: string) => void;
     /** One node's log in one run, live; undefined wherever `pipelines` is. */
     readonly pipelineNodeLog?: (
         runId: string,
@@ -5064,6 +5066,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     onPipelineOpen={(pipelineId) => props.onPipelineOpen?.(active.id, pipelineId)}
                     onPipelinesOpen={() => props.onPipelinesOpen?.(active.id)}
                     onRunOpen={(runId) => props.onPipelineRunOpen?.(active.id, runId)}
+                    {...(session.pipelineRunPreload
+                        ? { onRunIntent: session.pipelineRunPreload }
+                        : {})}
                     {...(pipeline ? { pipeline } : {})}
                     {...(run ? { run } : {})}
                     pipelines={pipelines}

@@ -160,6 +160,8 @@ import {
 import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
 import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
 import { pipelineRunStoreCreate, type PipelineRunStore } from "../pipelines/pipelineRunStore.js";
+import { pipelineRunCacheCreate, type PipelineRunCache } from "../pipelines/pipelineRunCache.js";
+import { pipelineRunEnded } from "../pipelines/pipelineTypes.js";
 import {
     pipelineNodeLogStoreCreate,
     type PipelineNodeLogStore,
@@ -328,8 +330,13 @@ export interface HappyAgentWorkspaceClient {
     pipelines(): PipelinesStore | undefined;
     /** One pipeline's page; materialized per pipeline and kept. Undefined where `pipelines()` is. */
     pipeline(pipelineId: string): PipelineStore | undefined;
-    /** One run of any pipeline, live; materialized per run and kept. Undefined where `pipelines()` is. */
+    /**
+     * One run of any pipeline, live; the runs used last are kept, so one read
+     * before opens at once. Undefined where `pipelines()` is.
+     */
     pipelineRun(runId: string): PipelineRunStore | undefined;
+    /** Reads one run ahead of a likely open, such as a pointer resting on its row. */
+    pipelineRunPreload(runId: string): void;
     /** One node's log in one run, live; materialized per node run and kept. Undefined where `pipelines()` is. */
     pipelineNodeLog(runId: string, nodeId: string): PipelineNodeLogStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
@@ -815,7 +822,12 @@ export function happyAgentWorkspaceClientCreate(
     let computeStore: HappyAgentComputeStore | undefined;
     let pipelinesStore: PipelinesStore | undefined;
     const pipelineStores = new Map<string, PipelineStore>();
-    const pipelineRunStores = new Map<string, PipelineRunStore>();
+    let pipelineRunCache: PipelineRunCache | undefined;
+    const pipelineRunCacheOf = (request: HappyCloudRequest): PipelineRunCache =>
+        (pipelineRunCache ??= pipelineRunCacheCreate({
+            create: (runId) =>
+                pipelineRunStoreCreate({ runId, request, sync: deps.connection.sync }),
+        }));
     const pipelineNodeLogStores = new Map<string, PipelineNodeLogStore>();
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
@@ -1328,12 +1340,14 @@ export function happyAgentWorkspaceClientCreate(
             if (!request) return undefined;
             if (!happyAgentHealthCapability(deps.connection.sync.health(), "pipelines"))
                 return undefined;
-            let store = pipelineRunStores.get(runId);
-            if (!store) {
-                store = pipelineRunStoreCreate({ runId, request, sync: deps.connection.sync });
-                pipelineRunStores.set(runId, store);
-            }
-            return store;
+            return pipelineRunCacheOf(request).get(runId);
+        },
+        pipelineRunPreload(runId) {
+            if (disposed) return;
+            const request = deps.cloudRequest;
+            if (!request) return;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "pipelines")) return;
+            pipelineRunCacheOf(request).preload(runId);
         },
         pipelineNodeLog(runId, nodeId) {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -1349,6 +1363,10 @@ export function happyAgentWorkspaceClientCreate(
                     nodeId,
                     request,
                     sync: deps.connection.sync,
+                    runEnded: () => {
+                        const run = pipelineRunCache?.peek(runId)?.get().run;
+                        return run !== undefined && run !== null && pipelineRunEnded(run.state);
+                    },
                 });
                 pipelineNodeLogStores.set(key, store);
             }
@@ -1634,8 +1652,8 @@ export function happyAgentWorkspaceClientCreate(
             pipelinesStore = undefined;
             for (const store of pipelineStores.values()) store[Symbol.dispose]();
             pipelineStores.clear();
-            for (const store of pipelineRunStores.values()) store[Symbol.dispose]();
-            pipelineRunStores.clear();
+            pipelineRunCache?.[Symbol.dispose]();
+            pipelineRunCache = undefined;
             for (const store of pipelineNodeLogStores.values()) store[Symbol.dispose]();
             pipelineNodeLogStores.clear();
             previewsStore?.[Symbol.dispose]();

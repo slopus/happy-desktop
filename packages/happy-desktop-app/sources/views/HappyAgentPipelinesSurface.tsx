@@ -44,6 +44,8 @@ export function HappyAgentPipelinesSurface(props: {
     onPipelineOpen(pipelineId: string): void;
     onPipelinesOpen(): void;
     onRunOpen(runId: string): void;
+    /** The pointer rests on a run's row; reads the run ahead of its open. */
+    onRunIntent?(runId: string): void;
     /** One node's log in one run; absent where the server keeps none. */
     readonly nodeLog?: (runId: string, nodeId: string) => PipelineNodeLogStore | undefined;
 }) {
@@ -96,6 +98,7 @@ export function HappyAgentPipelinesSurface(props: {
                 now={now}
                 onPipelineOpen={props.onPipelineOpen}
                 onRunOpen={props.onRunOpen}
+                {...(props.onRunIntent ? { onRunIntent: props.onRunIntent } : {})}
                 onRunsMore={props.pipelines.runsMore}
                 pipelines={list}
             />
@@ -106,6 +109,7 @@ export function HappyAgentPipelinesSurface(props: {
             now={now}
             onBack={props.onPipelinesOpen}
             onRunOpen={props.onRunOpen}
+            {...(props.onRunIntent ? { onRunIntent: props.onRunIntent } : {})}
             store={props.pipeline}
         />
     );
@@ -117,6 +121,7 @@ function HappyAgentPipelineSurface(props: {
     readonly now: number;
     onBack(): void;
     onRunOpen(runId: string): void;
+    onRunIntent?(runId: string): void;
 }) {
     const store = props.store;
     const snapshot = useSyncExternalStore(store.subscribe, store.get, store.get);
@@ -127,6 +132,7 @@ function HappyAgentPipelineSurface(props: {
             onBack={props.onBack}
             onNodeSelect={store.nodeSelect}
             onRunOpen={props.onRunOpen}
+            {...(props.onRunIntent ? { onRunIntent: props.onRunIntent } : {})}
             onRunsMore={store.runsMore}
             onVersionSelect={store.versionSelect}
             pipeline={snapshot}

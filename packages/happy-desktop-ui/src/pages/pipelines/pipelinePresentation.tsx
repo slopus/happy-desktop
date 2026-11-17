@@ -8,6 +8,7 @@ import type {
     PipelineRunTrigger,
     PipelineSchema,
 } from "happy-desktop-state";
+import { useRef, type PointerEvent } from "react";
 import { elapsedTimeFormat } from "../../elapsedTimeFormat";
 import type { IconName } from "../../Icon";
 
@@ -19,6 +20,32 @@ export interface PipelineLabels {
     readonly pipeline: (pipelineId: string) => string;
     /** An agent's name, for who started a run. */
     readonly agent: (agentId: string) => string;
+}
+
+/** How long the pointer rests on a run's row before the run is read ahead of an open. */
+const PIPELINE_RUN_INTENT_DWELL_MS = 100;
+
+/**
+ * Pointer handlers for a list of run rows: a pointer that rests on a row
+ * reports its run, one only passing over reports nothing, and neither does a
+ * row taken off the screen while the pointer rested. One row can be pointed at
+ * at a time, so one timer serves the list.
+ */
+export function usePipelineRunIntent(onRunIntent: ((runId: string) => void) | undefined) {
+    const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+    return (runId: string) =>
+        onRunIntent === undefined
+            ? {}
+            : {
+                  onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+                      const row = event.currentTarget;
+                      clearTimeout(timer.current);
+                      timer.current = setTimeout(() => {
+                          if (row.isConnected) onRunIntent(runId);
+                      }, PIPELINE_RUN_INTENT_DWELL_MS);
+                  },
+                  onPointerLeave: () => clearTimeout(timer.current),
+              };
 }
 
 export const PIPELINE_KIND_ICON: Record<PipelineNodeKind, IconName> = {

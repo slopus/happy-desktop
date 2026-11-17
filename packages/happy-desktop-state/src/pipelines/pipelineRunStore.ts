@@ -51,15 +51,28 @@ export interface PipelineRunSnapshot {
 }
 
 /**
- * One run, live: read once on screen and again on every `pipeline.run.updated`
- * and `pipeline.node.updated`, so node states, status lines and progress move
- * as the server records them. The graph of the version it pinned is read once.
+ * One run, live: read on every `pipeline.run.updated` and
+ * `pipeline.node.updated`, so node states, status lines and progress move as
+ * the server records them. The graph of the version it pinned is read once.
  * Its parent and children are read beside it on the same hints, each until it
  * ends.
+ *
+ * A run still queued or running keeps following while it is kept, on screen
+ * or not, and a reconnect reads it again. Opening it shows what was read and
+ * reads it again behind that. A run that has ended, with every relative it
+ * shows ended too, never changes again: it stops following, and opening it
+ * reads nothing.
  */
 export interface PipelineRunStore {
     get(): PipelineRunSnapshot;
     subscribe(listener: () => void): () => void;
+    /** Whether a reader is subscribed, which keeps the run from being let go. */
+    subscribed(): boolean;
+    /**
+     * Reads the run ahead of an open, if it has not been read; settles once
+     * the first read answers or fails. Never rejects.
+     */
+    preload(): Promise<void>;
     nodeSelect(nodeId: string | null): void;
     /**
      * Asks the server to abort the run, while it is queued or running. The run
@@ -86,6 +99,9 @@ export function pipelineRunStoreCreate(deps: {
     const path = `v0/pipeline-runs/${encodeURIComponent(deps.runId)}`;
     let disposed = false;
     let listeners = 0;
+    let following = false;
+    /** Preloads still waiting for their first answer, settled if the store goes first. */
+    const disposeWaiters = new Set<() => void>();
 
     const definitionRead = (run: PipelineRun): void => {
         store.setState({ definition: { state: "loading" } });
@@ -190,26 +206,76 @@ export function pipelineRunStoreCreate(deps: {
             if (current.definition === null || current.definition.state === "failed")
                 definitionRead(run);
             await relativesRead(run);
+            followSettle();
         },
         failed: (error) => {
             store.setState({ loading: false, error: happyAgentUserError(error) });
+            followSettle();
         },
     });
+
+    /** Starts following, or reads again behind what is shown when it already follows. */
+    const followStart = (): void => {
+        if (following) {
+            follow.load();
+            return;
+        }
+        following = true;
+        follow.start();
+    };
+    const followStop = (): void => {
+        following = false;
+        follow.stop();
+    };
+    /**
+     * After every read: an ended run stops following, and so, off screen, does
+     * one that is not running, so only live runs are kept current.
+     */
+    const followSettle = (): void => {
+        const current = store.getState();
+        if (pipelineRunSettled(current)) followStop();
+        else if (listeners === 0 && !pipelineRunLive(current)) followStop();
+    };
 
     return {
         get: () => store.getState(),
         subscribe(listener) {
             const unsubscribe = store.subscribe(listener);
             listeners += 1;
-            if (listeners === 1 && !disposed) follow.start();
+            if (listeners === 1 && !disposed) {
+                const current = store.getState();
+                if (!pipelineRunSettled(current)) followStart();
+                else if (current.run !== null && current.definition?.state === "failed")
+                    definitionRead(current.run);
+            }
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 unsubscribe();
                 listeners -= 1;
-                if (listeners === 0) follow.stop();
+                // A read in flight decides when it lands; a live run keeps following.
+                const current = store.getState();
+                if (listeners === 0 && !current.loading && !pipelineRunLive(current)) followStop();
             };
+        },
+        subscribed: () => listeners > 0,
+        preload() {
+            if (disposed || !store.getState().loading) return Promise.resolve();
+            if (!following) followStart();
+            return new Promise((resolve) => {
+                const unsubscribe = store.subscribe((current) => {
+                    if (current.loading && !disposed) return;
+                    unsubscribe();
+                    disposeWaiters.delete(settle);
+                    resolve();
+                });
+                const settle = (): void => {
+                    unsubscribe();
+                    resolve();
+                };
+                disposeWaiters.add(settle);
+            });
         },
         nodeSelect(nodeId) {
             if (disposed || store.getState().nodeSelected === nodeId) return;
@@ -242,7 +308,24 @@ export function pipelineRunStoreCreate(deps: {
         },
         [Symbol.dispose]() {
             disposed = true;
-            follow.stop();
+            followStop();
+            for (const settle of disposeWaiters) settle();
+            disposeWaiters.clear();
         },
     };
+}
+
+/** Queued or running: the server will change it. */
+function pipelineRunLive(snapshot: PipelineRunSnapshot): boolean {
+    return snapshot.run !== null && !pipelineRunEnded(snapshot.run.state);
+}
+
+/** Ended, and every relative it shows read and ended too: nothing on its page changes again. */
+function pipelineRunSettled(snapshot: PipelineRunSnapshot): boolean {
+    const run = snapshot.run;
+    if (run === null || snapshot.error !== undefined || !pipelineRunEnded(run.state)) return false;
+    return pipelineRunRelativeIds(run).every((id) => {
+        const relative = snapshot.relatives.get(id);
+        return relative !== undefined && pipelineRunEnded(relative.state);
+    });
 }
