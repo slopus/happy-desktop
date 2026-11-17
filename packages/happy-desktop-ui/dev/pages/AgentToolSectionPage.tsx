@@ -373,6 +373,47 @@ function ToolSectionPlayer() {
     );
 }
 
+/**
+ * A short conversation whose window grows, as it does when a sent draft's
+ * composer shrinks back, and that then takes one call after another. It still
+ * fits the window, so it never scrolls: the rows rest on the floor, and no
+ * blank is held above them to scroll up into.
+ */
+function FloorPlayer() {
+    const [index, setIndex] = useState(0);
+    const calls = Math.max(0, index - 1);
+    const step: Step = {
+        label: "Floor",
+        entries: [ASK, INTRO, ...(calls === 0 ? [] : firstRun("running", calls))],
+        running: true,
+    };
+    return (
+        <div
+            data-step={index}
+            data-testid="floor-player"
+            style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}
+        >
+            <div style={{ display: "flex", gap: 8, padding: 8, alignItems: "center" }}>
+                <button
+                    data-testid="floor-next"
+                    onClick={() => setIndex((current) => Math.min(7, current + 1))}
+                    type="button"
+                >
+                    Next
+                </button>
+                <span>
+                    {index === 0
+                        ? "Window 560px"
+                        : `Window 700px · ${String(calls)} ${calls === 1 ? "call" : "calls"}`}
+                </span>
+            </div>
+            <div style={{ display: "flex", height: index === 0 ? 560 : 700 }}>
+                <Transcript step={step} testId="floor-transcript" />
+            </div>
+        </div>
+    );
+}
+
 /** The section a fixture run comes to, as the transcript would group it. */
 function sectionOf(
     calls: readonly Call[],
@@ -513,6 +554,15 @@ export function AgentToolSectionPage() {
                 window={{ width: 720, height: 640 }}
             >
                 <Transcript step={STEPS[9]!} testId="narrow" />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A short transcript after its window grows, taking calls: it never scrolls, and nothing is held above it."
+                label="Transcript, short after the window grows"
+                number={`${componentNumber}.12`}
+                screen="12-floor-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <FloorPlayer />
             </FullScreenSpecimen>
         </ComponentPage>
     );

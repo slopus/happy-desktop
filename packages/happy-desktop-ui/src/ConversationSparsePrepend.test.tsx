@@ -39,8 +39,10 @@ const composer: ComposerSnapshot = {
     text: "",
 };
 it.skipIf(server.browser !== "chromium").each([
-    { zoom: 0.67, historyCount: 0, pointSide: "above" },
-    { zoom: 0.67, historyCount: 2, pointSide: "above" },
+    /* Both fit the viewport, so paging up has nothing to scroll: the rows
+       stay on the floor, with no blank held above them to page into. */
+    { zoom: 0.67, historyCount: 0, pointSide: "below" },
+    { zoom: 0.67, historyCount: 2, pointSide: "below" },
     { zoom: 0.67, historyCount: 5, pointSide: "below" },
     { zoom: 1, historyCount: 0, pointSide: "below" },
     { zoom: 1, historyCount: 5, pointSide: "above" },

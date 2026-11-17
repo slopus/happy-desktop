@@ -2156,6 +2156,37 @@ export function MessageList(props: MessageListProps) {
             scrollTopWrite(element, top - inset);
             return;
         }
+        /* A follower sees the end of the transcript, never the gap above it,
+           so rows written under the end take the gap up as they would an
+           unheld spacer: what the follower is about to be carried past is let
+           go in this commit. Held, it would stay scrollable blank above a
+           transcript that still fits the viewport, the rows pushed below it
+           whenever the reader scrolled up. Nothing on screen moves: the gap
+           and the offset shrink together. */
+        const passed =
+            following.current && initialPositionApplied.current && !headerLeads && rowModelCurrent()
+                ? Math.min(
+                      inset,
+                      Math.max(
+                          intendedTop,
+                          endHeight() +
+                              inset -
+                              viewportGeometry.current.height -
+                              geometryFollowInset.current,
+                      ),
+                  )
+                : 0;
+        if (inset > 0 && passed > 0) {
+            const top = intendedTop;
+            if (pendingFollowerTop.current !== undefined)
+                pendingFollowerTop.current = Math.max(0, pendingFollowerTop.current - passed);
+            geometrySparseInset.current = inset - passed;
+            if (geometrySparseInset.current > 0)
+                spacer.current!.style.marginTop = `${String(geometrySparseInset.current)}px`;
+            else spacerHoldRelease();
+            scrollTopWrite(element, Math.max(0, top - passed));
+            return;
+        }
         /* A transcript shorter than the viewport rests on its floor. A gap
            held above it that has come to leave blank under its last row, as
            when its end shrank, is let go: the rows come down to the floor. */
