@@ -57,8 +57,6 @@ interface ConversationGroupCache {
     readonly startIndex: number;
     /** The lookahead this turn's footer depended on. */
     readonly nextOpensOmitted: boolean;
-    /** Whether this turn is a new reply, which its first row then opens. */
-    readonly opensReply: boolean;
     readonly entries: readonly ConversationEntry[];
 }
 
@@ -255,10 +253,9 @@ export function happyAgentConversationProject(
        where the turn sits: its sequence numbers are its place in the finished
        transcript. A turn that keeps its place keeps its key. */
     const groups = new Map<number, ConversationGroupCache>();
-    /* Every run is the agent replying to something new: a message, a press,
-       an event. The one exception is a run that transport steered on from
-       the last, which is the same work going on. */
-    let steeredOn = false;
+    /* Every run opens its own author line, a run transport steered on from
+       the last too: that line is where its traces control lives from the
+       start, so the control never has to bring a header in when it ends. */
     for (let group = 0; group < starts.length; group += 1) {
         const start = starts[group]!;
         const end = starts[group + 1] ?? input.elements.length;
@@ -267,15 +264,12 @@ export function happyAgentConversationProject(
             end,
             omittedInboundMessageIds,
         );
-        const opensReply = !steeredOn;
-        steeredOn = nextOpensOmitted && groupSteered(input.elements, start, end);
         const startIndex = entries.length;
         const cached = contextStands ? cache?.groups.get(group) : undefined;
         if (
             cached !== undefined &&
             cached.startIndex === startIndex &&
             cached.nextOpensOmitted === nextOpensOmitted &&
-            cached.opensReply === opensReply &&
             sameElements(cached.elements, input.elements, start, end)
         ) {
             for (const entry of cached.entries) entries.push(entry);
@@ -291,7 +285,7 @@ export function happyAgentConversationProject(
             delegatedChildByRow,
             nextOpensOmitted,
         );
-        const projected = opensReply ? replyOpened(turn) : turn;
+        const projected = replyOpened(turn);
         // A row's sequence is its place in the finished transcript, so it is
         // assigned here rather than in one pass at the end: a turn whose rows
         // are kept must keep the sequence it was projected with too.
@@ -301,7 +295,6 @@ export function happyAgentConversationProject(
             elements,
             startIndex,
             nextOpensOmitted,
-            opensReply,
             entries: sequenced,
         });
     }
@@ -609,15 +602,6 @@ function groupOpensWithOnlyOmittedUserMessages(
         if (!omittedInboundMessageIds.has(element.id)) return false;
     }
     return found;
-}
-
-/** Whether the turn in `start`..`end` ended because something steered it. */
-function groupSteered(elements: readonly ChatElement[], start: number, end: number): boolean {
-    for (let index = start; index < end; index += 1) {
-        const element = elements[index]!;
-        if (element.kind === "group_end" && element.reason === "steering") return true;
-    }
-    return false;
 }
 
 /**

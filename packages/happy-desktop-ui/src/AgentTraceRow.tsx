@@ -41,7 +41,8 @@ export interface AgentTraceRowProps {
     readonly foldsAway?: boolean;
     /** The same fold affordance for another transcript body. */
     readonly toggleLabels?: { readonly closed: string; readonly open: string };
-    readonly disclosureHold?: "row-start" | "row-start-or-control";
+    /** The visible point held while the trace opens or closes; "above" holds the row above. */
+    readonly disclosureHold?: "above" | "row-start" | "row-start-or-control";
 }
 const KIND_ICONS: Record<AgentTraceRowKind, IconName> = {
     reasoning: "spark",

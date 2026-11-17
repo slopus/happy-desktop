@@ -624,20 +624,29 @@ it("changes nothing on screen when a watched turn finishes with an answer", asyn
     const after = visibleContent(viewport);
     for (const [row, content] of watched)
         expect([label(row), row.isConnected, after.get(row)]).toEqual([label(row), true, content]);
-    // The footer the end brought offers to hide the steps.
-    // Laid out once idle time reaches it, like any row arriving below the reader.
+    // The turn's first row offers to hide the steps; the footer the end
+    // brought only says how it ended. The footer is laid out once idle time
+    // reaches it, like any row arriving below the reader.
     viewport.scrollTop = viewport.scrollHeight;
     await vi.waitFor(() =>
         expect(
             rowsOf(viewport)
                 .reverse()
-                .find((row) => row.textContent?.includes("Completed"))?.textContent,
-        ).toContain("Hide traces"),
+                .find((row) => row.textContent?.includes("Completed")),
+        ).toBeDefined(),
     );
-    const footer = rowsOf(viewport)
-        .reverse()
-        .find((row) => row.textContent?.includes("Completed"))!;
-    footer.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click();
+    expect(
+        rowsOf(viewport)
+            .reverse()
+            .find((row) => row.textContent?.includes("Completed"))?.textContent,
+    ).not.toContain("Hide traces");
+    const lead = [...viewport.querySelectorAll<HTMLButtonElement>("button")].filter((button) =>
+        button.textContent?.includes("Hide traces"),
+    );
+    expect(
+        lead.map((button) => label(button.closest(".happy-message-list__virtual-row")!)),
+    ).toEqual([label(rowWith(viewport, "live-step-0")!)]);
+    lead[0]!.click();
     await frames();
     expect(store.get().expandedTurnIds.size).toBe(0);
     expect(rowWith(viewport, "live-step-0")).toBeUndefined();

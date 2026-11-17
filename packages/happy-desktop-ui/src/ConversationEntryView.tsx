@@ -207,7 +207,9 @@ function traceSettled(trace: AgentTurnTraceSummary | undefined): boolean {
  * The compact "View traces" / "Hide traces" control for the row a settled turn
  * anchored it to. Which row that is belongs to product state — the answer when
  * the turn is folded up, its first row when it is open — so this only renders
- * whatever row was handed the summary.
+ * whatever row was handed the summary. Either way it is the turn's first line,
+ * so the toggle holds the row above the turn: the control stays where it was
+ * clicked even when opening brings the turn's work in before the answer.
  */
 function traceControl(
     trace: AgentTurnTraceSummary | undefined,
@@ -218,6 +220,7 @@ function traceControl(
     return (
         <AgentTraceRow
             entryCount={trace.entryCount}
+            disclosureHold="above"
             foldsAway={trace.foldsAway === true}
             onOpen={onToggle ? () => onToggle(trace.turnId) : undefined}
             open={open}
@@ -390,7 +393,13 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 finalContextTokens={entry.finalContextTokens}
                 reason={entry.reason}
                 status={entry.status}
-                accessory={traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle)}
+                accessory={
+                    /* A turn left open as it ran offers its control on its
+                       first row; the end line only marks where it stopped. */
+                    entry.agentTrace?.quiet
+                        ? undefined
+                        : traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle)
+                }
                 {...(props.activityAuthor ? {} : { style: props.style })}
             />
         );
