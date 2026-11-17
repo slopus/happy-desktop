@@ -1653,24 +1653,22 @@ const VERIFICATION_FAILED = "The test request failed";
 
 /**
  * Why a check the daemon answered did not pass, in its words when it gave
- * them. Newer daemons add `failure` to the answer, which the installed client
- * does not type yet, so it is read here from what actually arrived.
+ * them; a daemon older than `failure` says only that it failed.
  */
 function verificationFailureReason(result: ProviderVerificationResponse): string {
     if (result.status === "passed") return "Happy Agent couldn't run a test request through it";
     return verificationFailureMessage(result) ?? VERIFICATION_FAILED;
 }
 
-/** The daemon's own reason for a failed check, when it sent one. */
+/**
+ * The daemon's own reason for a failed check, when it sent one. Its `kind`
+ * is for branching, which this screen does not do, so a kind added after this
+ * build reads like any other: the message is already worded for the person
+ * and is shown as it is.
+ */
 function verificationFailureMessage(result: ProviderVerificationResponse): string | undefined {
-    const failure: unknown = (result as { readonly failure?: unknown }).failure;
-    if (typeof failure !== "object" || failure === null) return undefined;
-    // Its `kind` is for branching, which this screen does not do; the message
-    // is already worded for the person, so it is shown as it is.
-    const message = (failure as { readonly message?: unknown }).message;
-    return typeof message === "string" && message.trim() !== ""
-        ? message.trim().slice(0, VERIFICATION_REASON_MAX)
-        : undefined;
+    const message = result.failure?.message.trim();
+    return message ? message.slice(0, VERIFICATION_REASON_MAX) : undefined;
 }
 
 /** The daemon's messages are at most this long; anything longer is cut there. */
