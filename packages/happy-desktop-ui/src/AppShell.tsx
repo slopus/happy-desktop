@@ -228,7 +228,7 @@ function clamp(value: number, min: number, max: number): number {
  * and the panel (handle on its left). All resize state is local UI state; the
  * caller receives only clamped width values through `onResize`.
  */
-function ResizeHandle(props: {
+export function ResizeHandle(props: {
     edge: "left" | "right";
     label: string;
     max: number;
