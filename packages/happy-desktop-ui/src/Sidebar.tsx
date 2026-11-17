@@ -2656,9 +2656,9 @@ function SidebarRow({
                             data-happy-desktop-ui="sidebar-item-trailing"
                             data-fixed={item().trailingWidth !== undefined ? "" : undefined}
                             /* `alone` when the controls are all the lane holds: it
-                               takes no width, and the name runs under the controls
-                               and fades out before them while they show. `covers`
-                               when they lie over marks the lane reports at rest. */
+                               takes no width until they show. `covers` when they
+                               lie over marks the lane reports at rest. Either way
+                               the lane claims the same room while they show. */
                             data-swaps={
                                 controls && swaps
                                     ? state ||
