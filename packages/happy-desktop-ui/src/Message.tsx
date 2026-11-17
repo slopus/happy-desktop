@@ -1325,6 +1325,13 @@ export function MessageList(props: MessageListProps) {
         if (following.current) {
             // A follower carried further down is still at the end.
             if (top > readerScrollTop.current) return false;
+            /* An upward wheel or key hands the follower's place to the reader
+               before it moves anything, so only the bar can still carry a
+               follower up here. Otherwise the browser clamped the offset to an
+               end that shrank, perhaps against a laid-out height the model has
+               since corrected, while a downward wheel at the end was still
+               pending: that is not the reader leaving. */
+            if (!scrollbarDragging.current) return false;
             escapedFromFollow.current = true;
             following.current = false;
             geometryFollowInset.current = 0;
