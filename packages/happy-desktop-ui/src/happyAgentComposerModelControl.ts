@@ -20,6 +20,7 @@ import type {
     ComposerModelChoice,
     ComposerModelControlProps,
     ComposerModelService,
+    ComposerModelUsage,
     ComposerModelUsageWatch,
     ComposerModelUsageWindow,
 } from "./ComposerModelControl";
@@ -287,40 +288,74 @@ export function happyAgentComposerModelUsageProject(
 const USAGE_AGE_TICK_MS = 15_000;
 
 /**
- * Feeds the picker's accounts from the provider-usage store. The picker holds
- * the subscription for as long as it is mounted, so its closed pill can warn of
- * a running-out account: the store answers at once with the reading it already
- * holds, follows the daemon's account changes, and passes on the refresh
- * requests the picker makes as its menu opens. The picker shows no token
- * counts, so it does not follow them, and the store keeps following across the
- * remount of every conversation opened in turn rather than reading again.
+ * Feeds the picker's accounts, and a failure card's switch, from the
+ * provider-usage store. `get` projects the reading the store already holds,
+ * so a surface's first frame shows it without waiting on a subscription; one
+ * projection is shared by every reader of the watch and told again only when
+ * the store's reading changes or the clock moves on. A subscriber is held for
+ * as long as it is mounted, so the closed pill can warn of a running-out
+ * account: the store follows the daemon's account changes, and the watch
+ * passes on the refresh requests the picker makes as its menu opens. The
+ * picker shows no token counts, so it does not follow them, and the store
+ * keeps following across the remount of every conversation opened in turn
+ * rather than reading again.
  */
 export function happyAgentComposerModelUsageWatch(
     store: HappyAgentProviderUsageStore,
 ): ComposerModelUsageWatch {
+    /* One entry per subscription, so a listener subscribed twice is released twice. */
+    const listeners = new Set<{ readonly listener: (usage: ComposerModelUsage) => void }>();
+    let held:
+        | { readonly snapshot: HappyAgentProviderUsageSnapshot; readonly usage: ComposerModelUsage }
+        | undefined;
+    let release: (() => void) | undefined;
+    const project = (snapshot: HappyAgentProviderUsageSnapshot): ComposerModelUsage => {
+        const now = Date.now();
+        held = {
+            snapshot,
+            usage: { accounts: happyAgentComposerModelUsageProject(snapshot, now), now },
+        };
+        return held.usage;
+    };
+    // A projection a tick old is told again, so a reset that passed while
+    // nothing was subscribed is not shown as still ahead.
+    const get = (): ComposerModelUsage => {
+        const snapshot = store.get();
+        return held?.snapshot === snapshot && Date.now() - held.usage.now < USAGE_AGE_TICK_MS
+            ? held.usage
+            : project(snapshot);
+    };
+    const notify = (usage: ComposerModelUsage) => {
+        for (const entry of listeners) entry.listener(usage);
+    };
     return {
+        get,
         subscribe(listener) {
-            let last: HappyAgentProviderUsageSnapshot | undefined;
-            const project = (snapshot: HappyAgentProviderUsageSnapshot) => {
-                const now = Date.now();
-                listener({ accounts: happyAgentComposerModelUsageProject(snapshot, now), now });
-            };
-            const emit = () => {
-                const snapshot = store.get();
-                if (snapshot === last) return;
-                last = snapshot;
-                project(snapshot);
-            };
-            // A reset passing is a change of its own, so the clock projects the reading again.
-            const tick = () => {
-                if (last !== undefined) project(last);
-            };
-            const unsubscribe = store.subscribe(emit);
-            emit();
-            const timer = setInterval(tick, USAGE_AGE_TICK_MS);
+            const entry = { listener };
+            listeners.add(entry);
+            if (release === undefined) {
+                // What subscribers were last told of, apart from what `get` has
+                // projected: a reader may project a new reading before the
+                // store gets round to announcing it here.
+                let told = store.get();
+                const unsubscribe = store.subscribe(() => {
+                    const snapshot = store.get();
+                    if (snapshot === told) return;
+                    told = snapshot;
+                    notify(get());
+                });
+                // A reset passing is a change of its own, so the clock projects the reading again.
+                const timer = setInterval(() => notify(project(store.get())), USAGE_AGE_TICK_MS);
+                release = () => {
+                    clearInterval(timer);
+                    unsubscribe();
+                };
+            }
+            listener(get());
             return () => {
-                clearInterval(timer);
-                unsubscribe();
+                if (!listeners.delete(entry) || listeners.size > 0) return;
+                release?.();
+                release = undefined;
             };
         },
         refresh: (accounts) => store.usageRefresh(accounts),

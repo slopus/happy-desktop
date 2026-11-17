@@ -39,7 +39,7 @@ import {
     type ConversationEntryFailureProps,
     type ConversationEntryViewProps,
 } from "./ConversationEntryView";
-import { composerModelListedAccounts } from "./ComposerModelControl";
+import { composerModelListedAccounts, useComposerModelUsage } from "./ComposerModelControl";
 import {
     conversationFailureTargetKey,
     conversationFailureTargetLabel,
@@ -47,11 +47,9 @@ import {
     type ConversationFailureClock,
 } from "./conversationFailureText";
 import {
-    CONVERSATION_SWITCH_USAGE_NONE,
-    conversationSwitchFailed,
+    conversationSwitchFailedProvider,
     conversationSwitchTargetPreferred,
     conversationSwitchTargets,
-    conversationSwitchUsageFeed,
     type ConversationSwitchSource,
     type ConversationSwitchTarget,
 } from "./conversationSwitchTargets";
@@ -773,23 +771,21 @@ export function ConversationView(props: ConversationViewProps) {
               );
     const currentFailureId =
         props.running === true ? undefined : conversationCurrentFailure(transcript);
-    /* The switch reads the picker's own catalog and usage, live. Usage is
-       followed only while the current failure offers a switch, through one
+    /* The switch reads the picker's own catalog and usage, live, the way the
+       picker reads them: the usage its owner already holds on the first frame,
+       so the account the card names is right as the conversation opens. Usage
+       is followed only while the current failure offers a switch, through one
        subscription that sizes the card's row and fills its list alike. */
     const switchSource =
         currentFailureId !== undefined && props.failureActions?.onSwitch !== undefined
             ? props.failureSwitch
             : undefined;
-    const switchFeed = switchSource?.usageWatch
-        ? conversationSwitchUsageFeed(switchSource.usageWatch)
-        : CONVERSATION_SWITCH_USAGE_NONE;
-    const switchUsage = useSyncExternalStore(switchFeed.subscribe, switchFeed.get, switchFeed.get);
+    const switchUsage = useComposerModelUsage(switchSource?.usageWatch);
     const switchTargets = switchSource
         ? conversationSwitchTargets(
               switchSource,
               switchUsage,
-              conversationSwitchFailed(transcript, currentFailureId),
-              switchUsage?.now ?? props.now ?? Date.now(),
+              conversationSwitchFailedProvider(transcript, currentFailureId),
           )
         : undefined;
     const switchPreferred = switchTargets

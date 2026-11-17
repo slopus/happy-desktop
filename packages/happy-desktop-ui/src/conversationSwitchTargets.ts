@@ -4,9 +4,7 @@ import {
     type ComposerModelAccountUsage,
     type ComposerModelControlProps,
     type ComposerModelUsage,
-    type ComposerModelUsageWatch,
 } from "./ComposerModelControl";
-import { localDayTime } from "./localTime";
 
 /**
  * Where a failure card's switch reads its choices: the same services,
@@ -33,52 +31,34 @@ export interface ConversationSwitchTarget {
 }
 
 /**
- * What the conversation's own failures say about its accounts, beside what
- * their usage readings say: the one the failed turn ran on, and those a usage
- * limit stopped here until a known moment.
+ * The account the conversation's current failure ran on, which its switch
+ * never offers back. Whether any other account is usable is the picker's
+ * usage alone, never what earlier failures in the transcript said.
  */
-export interface ConversationSwitchFailed {
-    /** The account the failed turn ran on, which is never offered back. */
-    readonly providerId?: string;
-    /** Accounts a usage limit stopped, and when each is usable again (ms); `null` when unsaid. */
-    readonly limited: ReadonlyMap<string, number | null>;
-}
-
-/**
- * Reads a conversation's failures for its switch: the current failure's
- * account, and every account a usage limit stopped, the latest one saying
- * when it resets.
- */
-export function conversationSwitchFailed(
+export function conversationSwitchFailedProvider(
     transcript: readonly ConversationEntry[],
     currentFailureId: string | undefined,
-): ConversationSwitchFailed {
-    const limited = new Map<string, number | null>();
-    let providerId: string | undefined;
+): string | undefined {
     for (const entry of transcript) {
-        if (entry.kind !== "notice" || entry.variant === "compute" || entry.failure === undefined)
+        if (entry.kind !== "notice" || entry.variant === "compute" || entry.id !== currentFailureId)
             continue;
         const failure = entry.failure;
-        if (failure.kind === "usage_limit") limited.set(failure.provider.id, failure.resetsAt);
-        if (entry.id === currentFailureId && "provider" in failure)
-            providerId = failure.provider.id;
+        return failure !== undefined && "provider" in failure ? failure.provider.id : undefined;
     }
-    return { ...(providerId === undefined ? {} : { providerId }), limited };
+    return undefined;
 }
 
 /**
  * Every account besides the selected one and the one the failed turn ran on,
  * each on the model the picker would move to on it: the selected model where
- * the account offers it, otherwise its top model. An account a usage limit
- * stopped in this conversation reads as spent until that limit resets, or for
- * as long as the conversation shows it when the limit gave no reset. The selected service comes first, then the others in catalog
- * order, accounts in the order the picker lists them.
+ * the account offers it, otherwise its top model, with the picker's own usage
+ * for it. The selected service comes first, then the others in catalog order,
+ * accounts in the order the picker lists them.
  */
 export function conversationSwitchTargets(
     source: ConversationSwitchSource,
     usage: ComposerModelUsage | undefined,
-    failed?: ConversationSwitchFailed,
-    now: number = usage?.now ?? Date.now(),
+    failedProviderId?: string,
 ): readonly ConversationSwitchTarget[] {
     const selection = source.selection;
     const services = [
@@ -87,23 +67,10 @@ export function conversationSwitchTargets(
     ];
     return services.flatMap((service) =>
         service.accounts.flatMap((account): ConversationSwitchTarget[] => {
-            if (account.id === selection?.account || account.id === failed?.providerId) return [];
+            if (account.id === selection?.account || account.id === failedProviderId) return [];
             const model = composerModelAccountModel(account, selection?.model);
             if (model === undefined) return [];
-            const read = usage?.accounts.get(account.id);
-            // A limit this conversation ran into holds until it resets, whatever was last read.
-            const resetsAt = failed?.limited.get(account.id);
-            const limitedHere =
-                resetsAt !== undefined && (resetsAt === null || resetsAt > now) && !read?.limit;
-            const accountUsage: ComposerModelAccountUsage | undefined = limitedHere
-                ? {
-                      ...read,
-                      limit:
-                          resetsAt === null
-                              ? { state: "blocked" }
-                              : { state: "blocked", resets: localDayTime(resetsAt, now) },
-                  }
-                : read;
+            const accountUsage = usage?.accounts.get(account.id);
             return [
                 {
                     service: service.id,
@@ -156,54 +123,4 @@ export function conversationSwitchTargetPreferred(
         }
     }
     return best?.target;
-}
-
-/** A source of usage React can read: one watch, held while anything renders from it. */
-interface ConversationSwitchUsageFeed {
-    subscribe(listener: () => void): () => void;
-    get(): ComposerModelUsage | undefined;
-}
-
-const feeds = new WeakMap<ComposerModelUsageWatch, ConversationSwitchUsageFeed>();
-
-/** Reads nothing, for a conversation with no failure offering a switch. */
-export const CONVERSATION_SWITCH_USAGE_NONE: ConversationSwitchUsageFeed = {
-    subscribe: () => () => undefined,
-    get: () => undefined,
-};
-
-/**
- * The picker's usage watch as an external store. The watch is held exactly
- * while something subscribes, so its owner follows usage only while a failure
- * card that offers a switch is on screen, and one feed per watch keeps every
- * reader on the same subscription. The last usage it delivered outlives the
- * subscription: a card drawn again, as when its conversation is switched back
- * to, opens at the size it had rather than growing after its first frame.
- */
-export function conversationSwitchUsageFeed(
-    watch: ComposerModelUsageWatch,
-): ConversationSwitchUsageFeed {
-    const known = feeds.get(watch);
-    if (known !== undefined) return known;
-    const listeners = new Set<() => void>();
-    let usage: ComposerModelUsage | undefined;
-    let release: (() => void) | undefined;
-    const feed: ConversationSwitchUsageFeed = {
-        subscribe(listener) {
-            listeners.add(listener);
-            release ??= watch.subscribe((next) => {
-                usage = next;
-                for (const notify of listeners) notify();
-            });
-            return () => {
-                listeners.delete(listener);
-                if (listeners.size > 0) return;
-                release?.();
-                release = undefined;
-            };
-        },
-        get: () => usage,
-    };
-    feeds.set(watch, feed);
-    return feed;
 }

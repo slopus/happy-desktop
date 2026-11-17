@@ -773,6 +773,11 @@ export function happyAgentConnectionOpen(input: {
                     search: client.search(),
                     clock,
                 };
+                // Account usage is followed for the connection's lifetime, so a
+                // conversation opens with it already held: its model picker and a
+                // failure card's switch name the right account on the first frame.
+                const providerUsage = session.providerUsage;
+                if (providerUsage) accountKeepWarm.push(providerUsage.subscribe(() => undefined));
                 debugEntry({
                     level: "info",
                     message: "Happy Agent product stores materialized",

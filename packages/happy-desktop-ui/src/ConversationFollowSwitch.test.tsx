@@ -182,6 +182,7 @@ function harness(initial: Shown) {
     let usage: ComposerModelUsage | undefined;
     const usageListeners = new Set<(usage: ComposerModelUsage) => void>();
     const usageWatch: ComposerModelUsageWatch = {
+        get: () => usage,
         subscribe(listener) {
             usageListeners.add(listener);
             if (usage) listener(usage);

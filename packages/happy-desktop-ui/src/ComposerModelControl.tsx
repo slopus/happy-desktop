@@ -1,9 +1,9 @@
 import {
     Fragment,
-    useCallback,
     useLayoutEffect,
     useRef,
     useState,
+    useSyncExternalStore,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type WheelEvent as ReactWheelEvent,
@@ -136,14 +136,22 @@ export type ComposerModelAccountNotice =
           onAsk(): Promise<void>;
       };
 /**
- * Live account usage for the pill and its menu. The control holds one
- * subscription for as long as it is mounted, so the closed pill warns as the
- * selected account runs low; it only follows what the owner already reads and
- * never asks for a refresh while closed. Opening the menu asks for a refresh
- * of every account it lists, and moving the selection onto another account
- * asks for that one; the owner decides what is actually worth reading again.
+ * Live account usage for the pill and its menu, and for a failure card's
+ * switch, which read it the same way through `useComposerModelUsage`. Each
+ * holds one subscription for as long as it is mounted, so the closed pill
+ * warns as the selected account runs low; it only follows what the owner
+ * already reads and never asks for a refresh while closed. Opening the menu
+ * asks for a refresh of every account it lists, and moving the selection onto
+ * another account asks for that one; the owner decides what is actually worth
+ * reading again. `get` and `subscribe` are called detached from the watch.
  */
 export type ComposerModelUsageWatch = {
+    /**
+     * The usage the owner holds now, so a surface's first frame already shows
+     * it. The same value until `subscribe` tells of a change; absent before the
+     * owner has any reading.
+     */
+    get(): ComposerModelUsage | undefined;
     subscribe(listener: (usage: ComposerModelUsage) => void): () => void;
     refresh(accounts: readonly string[]): void;
     /**
@@ -153,6 +161,22 @@ export type ComposerModelUsageWatch = {
      */
     recheck?(): Promise<void>;
 };
+const USAGE_NONE = {
+    get: (): ComposerModelUsage | undefined => undefined,
+    subscribe: () => () => undefined,
+};
+
+/**
+ * Reads a usage watch as the picker does: its held usage on the first frame,
+ * then each change, holding the watch exactly while mounted. A failure card's
+ * switch reads it through this too, so the two never show different usage.
+ */
+export function useComposerModelUsage(
+    watch: ComposerModelUsageWatch | undefined,
+): ComposerModelUsage | undefined {
+    const source = watch ?? USAGE_NONE;
+    return useSyncExternalStore(source.subscribe, source.get, source.get);
+}
 /** The menu's own two rows, and the list each of them opens beside it. */
 export type ComposerModelPanel = "main" | "model" | "effort";
 /**
@@ -1041,7 +1065,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
             ? memberKey(preview.poolMemberHover.pool, preview.poolMemberHover.member)
             : (preview?.accountHover ?? null),
     );
-    const [liveUsage, setLiveUsage] = useState<ComposerModelUsage | null>(null);
+    const liveUsage = useComposerModelUsage(props.usageWatch);
     const [remembered, setRemembered] = useState<ReadonlyMap<string, string>>(() => new Map());
     const gesture = useRef({ target: "", scrolled: 0, last: 0, cooldownUntil: 0 });
     const hasModels =
@@ -1051,24 +1075,6 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
         );
     const usageWatch = props.usageWatch;
     const root = useRef<HTMLDivElement>(null);
-    // Identity contract: the watch runs exactly as long as the control is
-    // mounted, so the closed pill can warn of a running-out account and the
-    // menu opens on usage already at hand. This callback may only change when
-    // the watch itself does — an ordinary re-render must not restart the
-    // owner's usage reads.
-    const rootAttach = useCallback(
-        (node: HTMLDivElement) => {
-            root.current = node;
-            const release = usageWatch?.subscribe(setLiveUsage);
-            return () => {
-                root.current = null;
-                if (release === undefined) return;
-                release();
-                setLiveUsage(null);
-            };
-        },
-        [usageWatch],
-    );
     // A removed catalog closes the picker; restoring it must not reopen an old menu.
     if (!hasModels && panel !== null) setPanel(null);
     const open = panel !== null;
@@ -1487,7 +1493,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                     trigger.current?.focus();
                 }
             }}
-            ref={rootAttach}
+            ref={root}
             style={props.style}
         >
             {props.accountNotice ? (

@@ -145,11 +145,10 @@ it("hangs a pool's accounts under the pool's account, named as the catalog names
 it("nests a pool's accounts under it with their state, and never picks one from there", async () => {
     const onSelect = vi.fn();
     const refresh = vi.fn();
+    const held = { accounts: USAGE, now: NOW };
     const usageWatch: ComposerModelUsageWatch = {
-        subscribe(listener) {
-            listener({ accounts: USAGE, now: NOW });
-            return () => undefined;
-        },
+        get: () => held,
+        subscribe: () => () => undefined,
         refresh,
     };
     const view = createRenderer().render(

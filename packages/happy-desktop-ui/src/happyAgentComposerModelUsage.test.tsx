@@ -318,6 +318,62 @@ it("projects the held reading again as the clock passes a reset, with no new sna
     }
 });
 
+it("answers with the store's held reading before anything subscribes, the same until it changes", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    try {
+        vi.setSystemTime(RESET - 10_000);
+        let held = snapshot([SPENT_WEEK]);
+        const listeners = new Set<() => void>();
+        const store: HappyAgentProviderUsageStore = {
+            get: () => held,
+            subscribe: (listener) => {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            },
+            usageRefresh: () => undefined,
+            usageRecheck: () => Promise.resolve(),
+            tokensFollow: () => () => undefined,
+            [Symbol.dispose]: () => undefined,
+        };
+        const watch = happyAgentComposerModelUsageWatch(store);
+        // A surface's first frame reads it with nothing subscribed yet.
+        const first = watch.get()!;
+        expect(first.accounts.get("claude")?.limit).toEqual({
+            state: "blocked",
+            resets: "4:00 PM",
+        });
+        expect(watch.get()).toBe(first);
+        expect(listeners.size).toBe(0);
+
+        // Every subscriber shares the one store subscription and the one projection.
+        const seen: ComposerModelUsage[] = [];
+        const releaseA = watch.subscribe((usage) => seen.push(usage));
+        const releaseB = watch.subscribe(() => undefined);
+        expect(listeners.size).toBe(1);
+        expect(seen).toEqual([first]);
+        held = snapshot([{ ...SPENT_WEEK, usage: { ...SPENT_WEEK.usage!, exhausted: false } }]);
+        for (const listener of listeners) listener();
+        expect(seen).toHaveLength(2);
+        expect(watch.get()).toBe(seen[1]);
+        expect(watch.get()!.accounts.get("claude")?.limit).toBeUndefined();
+        releaseA();
+        releaseB();
+        expect(listeners.size).toBe(0);
+
+        // Read again after a while unwatched, it is told from the clock as it is now.
+        held = snapshot([SPENT_WEEK]);
+        const before = watch.get()!;
+        vi.setSystemTime(RESET + 10_000);
+        expect(watch.get()).not.toBe(before);
+        expect(watch.get()!.accounts.get("claude")?.limit).toEqual({
+            state: "unconfirmed",
+            reset: "4:00 PM",
+        });
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
 const MODELS = [{ id: "opus", label: "Opus 5.5", efforts: [] }];
 const SERVICES: readonly ComposerModelService[] = [
     {
@@ -339,18 +395,27 @@ const SERVICES: readonly ComposerModelService[] = [
 
 function watchCreate(accounts: ReadonlyMap<string, ComposerModelAccountUsage>) {
     const refresh = vi.fn<(ids: readonly string[]) => void>();
+    let held: ComposerModelUsage = { accounts, now: NOW };
     let emit: ((usage: ComposerModelUsage) => void) | undefined;
     const watch: ComposerModelUsageWatch = {
+        get: () => held,
         subscribe(listener) {
             emit = listener;
-            listener({ accounts, now: NOW });
+            listener(held);
             return () => {
                 emit = undefined;
             };
         },
         refresh,
     };
-    return { watch, refresh, emit: (usage: ComposerModelUsage) => emit?.(usage) };
+    return {
+        watch,
+        refresh,
+        emit: (usage: ComposerModelUsage) => {
+            held = usage;
+            emit?.(usage);
+        },
+    };
 }
 
 function Fixture(props: { usageWatch: ComposerModelUsageWatch }) {

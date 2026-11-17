@@ -59,6 +59,19 @@ type Screen = {
     readonly entries?: readonly ConversationEntry[];
 };
 
+const frameReading = (week: number) => ({
+    week: { label: "Week", usedPercent: week, resets: "resets Thu 8:00 PM" },
+    updatedAt: NOW,
+});
+/* The picker's held usage: the default account half spent, the conversation's spent. */
+const FRAME_USAGE = {
+    accounts: new Map([
+        ["claude", frameReading(50)],
+        ["claude_team", frameReading(100)],
+    ]),
+    now: NOW,
+};
+
 const failureSource: ConversationSwitchSource = {
     services: [
         {
@@ -81,20 +94,8 @@ const failureSource: ConversationSwitchSource = {
     ],
     selection: { service: "claude", account: "claude_team", model: "opus-5-5", effort: "high" },
     usageWatch: {
-        subscribe(listener) {
-            const reading = (week: number) => ({
-                week: { label: "Week", usedPercent: week, resets: "resets Thu 8:00 PM" },
-                updatedAt: NOW,
-            });
-            listener({
-                accounts: new Map([
-                    ["claude", reading(50)],
-                    ["claude_team", reading(100)],
-                ]),
-                now: NOW,
-            });
-            return () => undefined;
-        },
+        get: () => FRAME_USAGE,
+        subscribe: () => () => undefined,
         refresh: noop,
     },
 };

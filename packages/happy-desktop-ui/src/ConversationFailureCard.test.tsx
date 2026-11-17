@@ -21,7 +21,7 @@ import {
     conversationRetryingLabel,
 } from "./conversationFailureText";
 import {
-    conversationSwitchFailed,
+    conversationSwitchFailedProvider,
     conversationSwitchTargetPreferred,
     conversationSwitchTargets,
     type ConversationSwitchSource,
@@ -29,7 +29,6 @@ import {
 } from "./conversationSwitchTargets";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
-import { localClockTime, localWeekdayShort } from "./localTime";
 import { createRenderer } from "./testing";
 import "./styles.css";
 
@@ -816,7 +815,7 @@ it("lists the picker's accounts besides the selected one, and prefers the unspen
     expect(conversationSwitchTargetPreferred([], "claude")).toBeUndefined();
 });
 
-it("never offers back the account that failed, and ranks one a usage limit stopped here last until it resets", () => {
+it("never offers back the account that failed, and reads every other account's state from the picker's usage alone", () => {
     const CODEX: ConversationFailureProvider = {
         id: "codex",
         type: "codex",
@@ -827,54 +826,28 @@ it("never offers back the account that failed, and ranks one a usage limit stopp
         notice({ kind: "usage_limit", provider, resetsAt, message: "Usage limit reached" });
     // The composer shows claude_team while the turn failed on Codex: Codex is not offered back.
     const codexFailed = { ...limit(CODEX, NOW + 3_600_000), id: "codex-failed" };
-    const failed = conversationSwitchFailed([codexFailed], "codex-failed");
-    expect(failed).toEqual({ providerId: "codex", limited: new Map([["codex", NOW + 3_600_000]]) });
-    const targets = conversationSwitchTargets(SOURCE, USAGE, failed, NOW);
-    expect(targets.map((target) => target.providerId)).toEqual([
-        "claude_work",
-        "claude_extra",
-        "grok",
-    ]);
+    const failed = conversationSwitchFailedProvider([codexFailed], "codex-failed");
+    expect(failed).toBe("codex");
+    expect(
+        conversationSwitchTargets(SOURCE, USAGE, failed).map((target) => target.providerId),
+    ).toEqual(["claude_work", "claude_extra", "grok"]);
 
-    // An earlier limit in this conversation holds that account back until it resets,
-    // even with a reading that says it has room, so a funded account ranks first.
+    // An earlier limit in the transcript says nothing the picker does not: claude_work
+    // shows the picker's reading, and ranks by it, until the picker's usage says it is spent.
     const unread = { services: SERVICES, selection: { ...SELECTION, account: "grok" } };
-    const earlier = conversationSwitchFailed(
-        [
-            { ...limit(CLAUDE_WORK, NOW + 3_600_000), id: "earlier" },
-            { ...limit(CODEX, null), id: "now" },
-        ],
-        "now",
+    const transcript = [
+        { ...limit(CLAUDE_WORK, NOW + 3_600_000), id: "earlier" },
+        { ...limit(CODEX, null), id: "now" },
+    ];
+    const ranked = conversationSwitchTargets(
+        unread,
+        USAGE,
+        conversationSwitchFailedProvider(transcript, "now"),
     );
-    const ranked = conversationSwitchTargets(unread, USAGE, earlier, NOW);
-    expect(
-        ranked.find((target) => target.providerId === "claude_work")?.usage?.limit,
-    ).toBeDefined();
-    expect(conversationSwitchTargetPreferred(ranked, "claude")?.providerId).toBe("claude_extra");
-    // Once it has reset, its reading decides again.
-    const after = conversationSwitchTargets(unread, USAGE, earlier, NOW + 3_600_001);
-    expect(
-        after.find((target) => target.providerId === "claude_work")?.usage?.limit,
-    ).toBeUndefined();
-    expect(conversationSwitchTargetPreferred(after, "claude")?.providerId).toBe("claude_work");
-
-    // A weekly limit days away says which day, as the usage readings do.
-    const weekly = NOW + 3 * 86_400_000;
-    const later = conversationSwitchFailed(
-        [
-            { ...limit(CLAUDE_WORK, weekly), id: "weekly" },
-            { ...limit(CODEX, null), id: "now" },
-        ],
-        "now",
+    expect(ranked.find((target) => target.providerId === "claude_work")?.usage).toBe(
+        USAGE.accounts.get("claude_work"),
     );
-    expect(
-        conversationSwitchTargets(unread, USAGE, later, NOW).find(
-            (target) => target.providerId === "claude_work",
-        )?.usage?.limit,
-    ).toEqual({
-        state: "blocked",
-        resets: `${localWeekdayShort(weekly)} ${localClockTime(weekly)}`,
-    });
+    expect(conversationSwitchTargetPreferred(ranked, "claude")?.providerId).toBe("claude_work");
 });
 
 /**
@@ -887,6 +860,7 @@ function liveUsage(initial: ComposerModelUsage) {
     const listeners = new Set<(usage: ComposerModelUsage) => void>();
     const refresh = vi.fn<(accounts: readonly string[]) => void>();
     const watch: ComposerModelUsageWatch = {
+        get: () => usage,
         subscribe(listener) {
             listeners.add(listener);
             listener(usage);
@@ -1001,6 +975,63 @@ it("switches from the conversation's live picker source, follows its usage, and 
     failureSet({ ...signin(), resolution: { action: "retried", at: NOW } });
     await expect.poll(live.held).toBe(0);
     expect(document.querySelector(".happy-conversation-switch")).toBeNull();
+});
+
+it("names its best account on the first frame from the usage the picker's owner already holds", async () => {
+    // The owner holds a reading in which claude_work is spent, and tells of nothing
+    // new: only what `get` answers can put it on the card.
+    const held: ComposerModelUsage = {
+        accounts: new Map([...USAGE.accounts, ["claude_work", week(100, true)]]),
+        now: NOW,
+    };
+    const subscribe = vi.fn(() => () => undefined);
+    const watch: ComposerModelUsageWatch = { get: () => held, subscribe, refresh: () => undefined };
+    const labels: (string | null | undefined)[] = [];
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div
+                ref={(node) => {
+                    if (node === null) return;
+                    // Every label the button is committed with, from its first.
+                    const read = () => {
+                        const label = node.querySelector(
+                            ".happy-conversation-switch__main",
+                        )?.textContent;
+                        if (label !== undefined && labels.at(-1) !== label) labels.push(label);
+                    };
+                    const observer = new MutationObserver(read);
+                    observer.observe(node, { characterData: true, childList: true, subtree: true });
+                    read();
+                    return () => observer.disconnect();
+                }}
+                style={{ display: "flex", height: "600px" }}
+            >
+                <ConversationView
+                    dock={
+                        <ConversationDock
+                            composer={COMPOSER}
+                            onComposerSend={() => undefined}
+                            onComposerValueChange={() => undefined}
+                        />
+                    }
+                    conversationId="failure-first-frame"
+                    entries={[notice(signin())]}
+                    failureActions={{ onRetry: () => undefined, onSwitch: () => undefined }}
+                    failureClock={CLOCK}
+                    failureSwitch={{ ...SOURCE, usageWatch: watch }}
+                />
+            </div>
+        ),
+        { width: 720, height: 600 },
+    );
+    await view.ready();
+    await expect
+        .poll(() => document.querySelector(".happy-conversation-switch__main")?.textContent)
+        .toBe("Switch to claude_extra");
+    expect(labels).toEqual(["Switch to claude_extra"]);
+    // It still follows the owner while the card offers a switch.
+    expect(subscribe).toHaveBeenCalled();
 });
 
 it("offers Retry alone when the live picker has no other account", async () => {

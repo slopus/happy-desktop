@@ -121,11 +121,10 @@ const USAGE_CLAUDE_SPENT: ReadonlyMap<string, ComposerModelAccountUsage> = new M
  * it at once. Nothing here is read again, so a refresh asks nobody.
  */
 function heldUsage(usage: ReadonlyMap<string, ComposerModelAccountUsage>): ComposerModelUsageWatch {
+    const held = { accounts: usage, now: NOW };
     return {
-        subscribe(listener) {
-            listener({ accounts: usage, now: NOW });
-            return () => undefined;
-        },
+        get: () => held,
+        subscribe: () => () => undefined,
         refresh: () => undefined,
     };
 }

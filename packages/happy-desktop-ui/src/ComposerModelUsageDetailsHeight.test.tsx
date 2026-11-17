@@ -95,11 +95,10 @@ const USAGE: ReadonlyMap<string, ComposerModelAccountUsage> = new Map([
     ],
     ["codex", { week: { label: "Week", usedPercent: 18, resets: "resets Mon 9:00 AM" } }],
 ]);
+const HELD = { accounts: USAGE, now: NOW };
 const WATCH: ComposerModelUsageWatch = {
-    subscribe(listener) {
-        listener({ accounts: USAGE, now: NOW });
-        return () => undefined;
-    },
+    get: () => HELD,
+    subscribe: () => () => undefined,
     refresh: () => undefined,
 };
 

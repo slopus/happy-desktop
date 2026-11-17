@@ -165,11 +165,10 @@ const USAGE: ReadonlyMap<string, ComposerModelAccountUsage> = new Map([
  * nothing.
  */
 function heldUsage(usage: ReadonlyMap<string, ComposerModelAccountUsage>): ComposerModelUsageWatch {
+    const held = { accounts: usage, now: NOW };
     return {
-        subscribe(listener) {
-            listener({ accounts: usage, now: NOW });
-            return () => undefined;
-        },
+        get: () => held,
+        subscribe: () => () => undefined,
         refresh: () => undefined,
         recheck: () => Promise.resolve(),
     };
