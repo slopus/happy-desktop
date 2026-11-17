@@ -748,6 +748,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         props.onClaudeTokenSubmit !== undefined &&
         view.kind === "provider-authentication" ? (
             <ClaudeSetupTokenDialog
+                shell={view.installShell}
                 {...((claude.connect?.installed ?? claude.status === "found")
                     ? {}
                     : { installCommand: ASSISTANTS.claude.install[view.installShell] })}

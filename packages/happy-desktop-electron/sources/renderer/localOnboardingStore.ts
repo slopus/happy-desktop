@@ -25,6 +25,7 @@ import type {
 } from "../shared/desktopContract";
 import {
     LocalProviderClisUnavailable,
+    LocalProviderCliRouteMissing,
     LocalProviderCliRefused,
     localProviderClisApiCreate,
     type LocalProviderCli,
@@ -1265,9 +1266,10 @@ export function localOnboardingStoreCreate(
                         ...snapshot,
                         claudeToken: {
                             error:
-                                error instanceof LocalProviderClisUnavailable
+                                error instanceof LocalProviderCliRouteMissing
                                     ? "This version of Happy Agent can't take a setup token yet. Update Happy Agent, then try again."
-                                    : error instanceof LocalProviderCliRefused
+                                    : error instanceof LocalProviderCliRefused ||
+                                        error instanceof LocalProviderClisUnavailable
                                       ? error.message
                                       : "Happy couldn't reach Happy Agent. Try again.",
                             phase: "failed",

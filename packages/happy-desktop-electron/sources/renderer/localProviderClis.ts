@@ -105,6 +105,9 @@ export function localProviderCliRead(value: unknown): LocalProviderCli | undefin
 /** The daemon has no provider CLI routes: it predates them, or runs in team mode. */
 export class LocalProviderClisUnavailable extends Error {}
 
+/** The daemon explicitly reported that this route does not exist. */
+export class LocalProviderCliRouteMissing extends LocalProviderClisUnavailable {}
+
 /** Happy Agent refused the request; `message` is displayable. */
 export class LocalProviderCliRefused extends Error {
     constructor(
@@ -152,18 +155,25 @@ export function localProviderClisApiCreate(input: {
             ...(signal ? { signal } : {}),
         });
         const json = recordOf(await response.json().catch(() => undefined));
-        if (response.status === 404 || response.status === 501)
-            throw new LocalProviderClisUnavailable(
-                "This Happy Agent can't connect assistants for you yet.",
-            );
+        const error = recordOf(json?.error) ?? json;
+        const message =
+            typeof error?.message === "string"
+                ? error.message
+                : typeof json?.error === "string"
+                  ? json.error
+                  : "Happy Agent could not do that.";
+        if (
+            response.status === 404 &&
+            error?.code === "not_found" &&
+            (message === "Route not found." || message === "The requested endpoint does not exist.")
+        )
+            throw new LocalProviderCliRouteMissing(message);
+        if (response.status === 501) throw new LocalProviderClisUnavailable(message);
         if (!response.ok) {
-            const error = recordOf(json?.error) ?? json;
             const cli = localProviderCliRead(json?.providerCli);
             throw new LocalProviderCliRefused(
                 typeof error?.code === "string" ? error.code : "failed",
-                typeof error?.message === "string"
-                    ? error.message
-                    : "Happy Agent could not do that.",
+                message,
                 cli,
             );
         }
@@ -196,7 +206,10 @@ export function localProviderClisApiCreate(input: {
         signIn: (id, mutationId) => one(id, "sign-in", mutationId),
         cancel: (id, mutationId) => one(id, "cancel", mutationId),
         async claudeSetupTokenSave(token, mutationId) {
-            await request("POST", "v0/provider-clis/claude/setup-token", { token, mutationId });
+            await request("POST", "v0/provider-clis/claude/setup-token", {
+                token: token.replace(/[\s\p{White_Space}]/gu, ""),
+                mutationId,
+            });
         },
     };
 }

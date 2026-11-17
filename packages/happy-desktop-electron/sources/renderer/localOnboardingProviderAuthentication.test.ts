@@ -53,6 +53,7 @@ afterEach(() => {
     for (const unsubscribe of unsubscribes.splice(0)) unsubscribe();
     onboardingInitial = undefined;
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
 });
 
@@ -119,6 +120,35 @@ function storeOpen() {
     unsubscribes.push(store.subscribe(() => undefined));
     return store;
 }
+
+it.each([
+    [
+        404,
+        "not_found",
+        "Route not found.",
+        "This version of Happy Agent can't take a setup token yet. Update Happy Agent, then try again.",
+    ],
+    [404, "not_found", "Provider account not found.", "Provider account not found."],
+    [400, "invalid_request", "The setup token is invalid.", "The setup token is invalid."],
+    [501, "unsupported", "Unavailable in team mode.", "Unavailable in team mode."],
+])("shows the correct setup-token failure for %s: %s", async (status, code, error, expected) => {
+    vi.stubGlobal(
+        "fetch",
+        vi
+            .fn()
+            .mockImplementation(async (url: string) =>
+                url.endsWith("/setup-token")
+                    ? Response.json({ code, error }, { status })
+                    : Response.json({ providerClis: [] }),
+            ),
+    );
+    const store = storeOpen();
+    await vi.waitFor(() => expect(store.get().runtime?.phase).toBe("ready"));
+    store.claudeSetupTokenSave("sk-ant-oat01-example");
+    await vi.waitFor(() =>
+        expect(store.get().claudeToken).toEqual({ phase: "failed", error: expected }),
+    );
+});
 
 /**
  * Which providers had a paid inference check, in no particular order. The
@@ -316,15 +346,17 @@ it("counts a sign-in that works as Ready even without the command", async () => 
 });
 
 /** The settled screen as it is drawn, with the custom column's prompts open. */
-function screenRender(view: LocalOnboardingView): HTMLElement {
+function screenRender(view: LocalOnboardingView, claudeDialogOpen = false): HTMLElement {
     const noop = () => undefined;
     const root = document.createElement("div");
     root.innerHTML = renderToStaticMarkup(
         createElement(LocalOnboardingScreen, {
             agentPromptsOpen: true,
             appearance: "dark",
+            claudeDialogOpen,
             happyMobilePairingOptions: { completed: false, verifying: false, view: null },
             onAssistantsContinue: noop,
+            onClaudeTokenSubmit: noop,
             onConnectRetry: noop,
             onHappyMobileConnect: noop,
             onHappyMobileSkip: noop,
@@ -333,6 +365,38 @@ function screenRender(view: LocalOnboardingView): HTMLElement {
     );
     return root;
 }
+
+it.each(["powershell", "posix"] as const)(
+    "passes the %s shell and installer into the Claude token dialog",
+    (installShell) => {
+        const root = screenRender(
+            {
+                kind: "provider-authentication",
+                assistants: [
+                    {
+                        id: "claude",
+                        status: "missing",
+                        authentication: "invalid",
+                        connect: { installed: false, installable: true },
+                    },
+                ],
+                custom: { authentication: "invalid", providers: [] },
+                installShell,
+            },
+            true,
+        );
+        const dialog = root.querySelector('[data-testid="claude-setup-token-dialog"]');
+        const terminal = installShell === "powershell" ? "PowerShell" : "Terminal";
+        const command =
+            installShell === "powershell"
+                ? "irm https://claude.ai/install.ps1 | iex"
+                : "curl -fsSL https://claude.ai/install.sh | bash";
+        expect(dialog?.textContent).toContain(`Install Claude Code. In ${terminal}, run:`);
+        expect(
+            dialog?.querySelector('[aria-label="Claude Code install command"]')?.textContent,
+        ).toBe(command);
+    },
+);
 
 function cardFind(root: HTMLElement, name: string): Element | undefined {
     return [...root.querySelectorAll('[data-happy-desktop-ui="setup-assistants-item"]')].find(

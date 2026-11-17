@@ -9,6 +9,7 @@ import { TextField } from "./TextField";
 const SETUP_TOKEN_COMMAND = "claude setup-token";
 
 export interface ClaudeSetupTokenDialogProps {
+    readonly shell: "powershell" | "posix";
     /**
      * The command that installs Claude Code here, when this machine does not
      * have it yet. Absent, the steps start at making the token.
@@ -42,9 +43,10 @@ export interface ClaudeSetupTokenDialogProps {
 export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
     const [token, tokenSet] = useState("");
     const saving = props.phase === "saving";
-    const trimmed = token.trim();
+    const normalized = token.replace(/[\s\p{White_Space}]/gu, "");
+    const terminal = props.shell === "powershell" ? "PowerShell" : "Terminal";
     const submit = () => {
-        if (trimmed && !saving) props.onTokenSubmit(trimmed);
+        if (normalized && !saving) props.onTokenSubmit(normalized);
     };
     // The steps after installing are numbered on from it when it is there.
     const first = props.installCommand === undefined ? 1 : 2;
@@ -59,7 +61,7 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                             Cancel
                         </Button>
                         <Button
-                            disabled={!trimmed || saving}
+                            disabled={!normalized || saving}
                             loading={saving}
                             onClick={submit}
                             variant="primary"
@@ -82,7 +84,7 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                             <li className="happy-claude-setup-token__step">
                                 <span className="happy-claude-setup-token__number">1</span>
                                 <span className="happy-claude-setup-token__words">
-                                    <span>Install Claude Code. In Terminal, run:</span>
+                                    <span>Install Claude Code. In {terminal}, run:</span>
                                     <SetupCommand
                                         command={props.installCommand}
                                         label="Claude Code install command"
@@ -96,7 +98,7 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                         <li className="happy-claude-setup-token__step">
                             <span className="happy-claude-setup-token__number">{first}</span>
                             <span className="happy-claude-setup-token__words">
-                                <span>In Terminal, run:</span>
+                                <span>In {terminal}, run:</span>
                                 <SetupCommand
                                     command={SETUP_TOKEN_COMMAND}
                                     label="Claude setup token command"
@@ -117,7 +119,7 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                             <span className="happy-claude-setup-token__number">{first + 2}</span>
                             <span className="happy-claude-setup-token__words">
                                 <span>
-                                    Back in Terminal, copy the token it prints. It starts with{" "}
+                                    Back in {terminal}, copy the token it prints. It starts with{" "}
                                     <code>sk-ant-oat01-</code>. Paste it here:
                                 </span>
                                 <TextField
