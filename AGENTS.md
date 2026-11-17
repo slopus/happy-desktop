@@ -52,6 +52,13 @@ If so, it belongs in the agent's prompt, not the client. Layouts, section names,
 "X always sits at the top" are guidance the agent follows and the person can override; the client
 draws what the agent and the person decided.
 
+## Child processes
+
+No console window may ever be shown on Windows. Every child process launch in
+the app goes through `packages/happy-desktop-electron/sources/main/childProcess.ts`,
+which always hides it; lint refuses `node:child_process` anywhere else. See
+[`master-plans/12-windows.md`](master-plans/12-windows.md).
+
 ## Feature development workflow
 
 Treat each feature as one atomic, independently mergeable change, not as the
