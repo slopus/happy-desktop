@@ -387,6 +387,30 @@ it("sends a first message written before the host answered once the task exists"
     });
 });
 
+it("answers a task agent's slash catalog once the host has made it", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const { connection } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+    const release = daemon.pause("createTask");
+
+    const creation = connection.createTask("Review");
+    const skill = {
+        name: "guided-review",
+        description: "Review a change.",
+        hasArguments: true,
+        kind: "skill" as const,
+    };
+    daemon.slashCommandsSeed(creation.agentId, [skill]);
+    const catalog = connection.sessionCreationWait(creation.agentId);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Nothing is read for an agent the host has not made.
+    expect(daemon.callCount("getAgent")).toBe(0);
+
+    release();
+    await expect(catalog).resolves.toEqual([skill]);
+    expect(daemon.calls.find((call) => call.method === "getAgent")?.args[0]).toBe(creation.agentId);
+});
+
 it("withdraws a refused task's row, and sends nothing to its agent", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.taskSeed({ id: "task_a", joinedKey: "5" });

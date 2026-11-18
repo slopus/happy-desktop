@@ -11640,6 +11640,16 @@ function HappyAgentCreateTaskSurface(props: {
                     }
                     composerPlaceholder="What should it work on?"
                     submitDisabled={props.unavailable !== undefined}
+                    // The Happy Agent's global skills, which the first message
+                    // may run before the task's own agent exists.
+                    onCommandInvoke={
+                        props.unavailable === undefined
+                            ? (commandId) => {
+                                  if (props.happyAgentOnline())
+                                      store.taskCreateCommandInvoke(commandId);
+                              }
+                            : undefined
+                    }
                     onComposerAttachmentRemove={(attachmentId) =>
                         store.taskCreateAttachmentRemove(attachmentId)
                     }

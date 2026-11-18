@@ -106,6 +106,7 @@ function store(
     taskRename: (taskId: HappyAgentTaskId, name: string) => Promise<void> = () => Promise.resolve(),
     models?: HappyAgentModelStore,
     overrides: Record<PropertyKey, unknown> = {},
+    listOverrides: Record<PropertyKey, unknown> = {},
 ) {
     const list = {
         projects: { type: "ready", value: [] },
@@ -138,6 +139,7 @@ function store(
                         subscribe: () => () => undefined,
                         taskCreate,
                         taskRename,
+                        ...listOverrides,
                     },
                     {
                         get: (target, property) =>
@@ -147,6 +149,10 @@ function store(
             chat: () => new Promise(() => undefined),
             openInTargetsRead: () => new Promise(() => undefined),
             workspaceFilesSubscribe: () => () => undefined,
+            globalSkills: () => ({
+                get: () => ({ skills: [] }),
+                subscribe: () => () => undefined,
+            }),
             ...overrides,
         } as Record<PropertyKey, unknown>,
         { get: (target, property) => (property in target ? target[property] : inert()) },
@@ -268,6 +274,64 @@ function sendingStore(taskCreate: (input: HappyAgentTaskCreateInput) => HappyAge
     });
     return { ...opened, messageSend };
 }
+
+it("offers the global skills in a task's composer and runs one as its first turn", async () => {
+    const skill = {
+        name: "guided-review",
+        description: "Review a change.",
+        hasArguments: true,
+        kind: "skill" as const,
+    };
+    const messageSend = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const slashCommandInvoke = vi.fn((..._args: unknown[]) => Promise.resolve());
+    const sessionCreationWait = vi.fn((_sessionId: HappyAgentSessionId) =>
+        Promise.resolve([skill]),
+    );
+    const { workspace, unsubscribe } = store(
+        () => creating(),
+        undefined,
+        undefined,
+        {
+            globalSkills: () => ({
+                get: () => ({ skills: [{ name: skill.name, description: skill.description }] }),
+                subscribe: () => () => undefined,
+            }),
+            chat: () =>
+                Promise.resolve({
+                    store: new Proxy(
+                        { messageSend, slashCommandInvoke } as Record<PropertyKey, unknown>,
+                        {
+                            get: (target, property) =>
+                                property in target ? target[property] : inert(),
+                        },
+                    ),
+                    [Symbol.dispose]: () => undefined,
+                }),
+        },
+        { sessionCreationWait },
+    );
+
+    workspace.taskCreateOpen();
+    expect(workspace.get().taskCreate?.composer.get().capabilities.commands).toEqual([
+        {
+            id: "guided-review",
+            label: "/guided-review",
+            description: "Review a change.",
+            hasArguments: true,
+            kind: "skill",
+        },
+    ]);
+    workspace.taskCreateMessageUpdate("/guided-review the last commit");
+    workspace.taskCreateMessageSend();
+
+    // Resolved against the catalog the task's own agent offers, then invoked
+    // the way an open conversation invokes it.
+    await vi.waitFor(() => expect(slashCommandInvoke).toHaveBeenCalledTimes(1));
+    expect(sessionCreationWait).toHaveBeenCalledWith("ses_new");
+    expect(slashCommandInvoke).toHaveBeenCalledWith(skill, "the last commit");
+    expect(messageSend).not.toHaveBeenCalled();
+    unsubscribe();
+});
 
 it("turns the window to the new task and sends its first message before the host answers", async () => {
     const host = deferred();

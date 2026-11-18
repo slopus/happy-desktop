@@ -2140,6 +2140,8 @@ export interface HappyAgentWorkspaceStore {
      * this surface with the reason on its composer.
      */
     taskCreateMessageSend(): void;
+    /** Picks a command from the task draft composer's menu. */
+    taskCreateCommandInvoke(commandId: string): void;
     /** Opens the name dialog for a task. Any member may rename it. */
     taskRenameOpen(taskId: HappyAgentTaskId): void;
     /**
@@ -2715,6 +2717,9 @@ export function happyAgentWorkspaceStoreCreate(
     let botCreateSessionDraft: HappyAgentSessionDraftStore | undefined;
     let botCreateSessionDraftWriter: HappyAgentSessionDraftWriter | undefined;
     let unsubscribeBotCreateSessionDraft: (() => void) | undefined;
+    /** The task draft composer the global skills are offered in, and its follower. */
+    let createSkillsComposer: ComposerStore | undefined;
+    let unsubscribeCreateSkills: (() => void) | undefined;
     /** Invalidates a catalog read still in flight once the draft it was for is put down. */
     let botCreateSessionDraftGeneration = 0;
     /** The parts composed for the snapshot, rebuilt only when one has changed. */
@@ -5960,7 +5965,7 @@ export function happyAgentWorkspaceStoreCreate(
                 const acquired = await client.chat(location.sessionId);
                 try {
                     if (skill === undefined) await acquired.store.messageSend(placed, images);
-                    else await groupSkillRun(acquired.store, location.sessionId, skill, placed);
+                    else await skillFirstRun(acquired.store, location.sessionId, skill, placed);
                 } finally {
                     acquired[Symbol.dispose]();
                 }
@@ -5980,13 +5985,14 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
-     * Runs a global skill as a new conversation's first turn. The skill was
-     * offered from the Happy Agent's global catalog, but the agent decides
-     * what its own name means: a project skill may shadow it, or it may have
-     * been disabled since. So the catalog the daemon created the agent with is
-     * read first, and a name it does not offer goes out as the draft's words.
+     * Runs a global skill as a new conversation's or task's first turn. The
+     * skill was offered from the Happy Agent's global catalog, but the agent
+     * decides what its own name means: a project skill may shadow it, or it
+     * may have been disabled since. So the catalog the daemon created the
+     * agent with is read first, and a name it does not offer goes out as the
+     * draft's words.
      */
-    const groupSkillRun = async (
+    const skillFirstRun = async (
         store: HappyAgentChatStore,
         sessionId: HappyAgentSessionId,
         skill: { readonly name: string; readonly arguments?: string },
@@ -6105,12 +6111,15 @@ export function happyAgentWorkspaceStoreCreate(
         botCreateSessionDraftWriter = undefined;
         botCreateSessionDraftGeneration += 1;
         botCreateDraft = undefined;
+        createSkillsFollow();
     };
 
     /** A first message as the composer hands it over: the words and what is attached to them. */
     interface BotCreateMessage {
         readonly text: string;
         readonly attachments: readonly ComposerAttachment[];
+        /** A global skill the words name, run as the first turn of a task. */
+        readonly skill?: { readonly name: string; readonly arguments?: string };
     }
 
     /**
@@ -6148,6 +6157,7 @@ export function happyAgentWorkspaceStoreCreate(
         botCreateSessionDraftWriter = undefined;
         botCreateSessionDraftGeneration += 1;
         botCreateDraft = undefined;
+        createSkillsFollow();
         return held;
     };
 
@@ -6187,6 +6197,7 @@ export function happyAgentWorkspaceStoreCreate(
         } else if (createKind !== purpose && !createDraftsParked.has(purpose))
             createDraftsParked.set(purpose, held);
         else createDraftHeldRelease(held);
+        createSkillsFollow();
         recompute();
     };
 
@@ -6246,7 +6257,9 @@ export function happyAgentWorkspaceStoreCreate(
                 message.attachments,
             );
             await withAddressedChat(location.sessionId, (store) =>
-                store.messageSend(text, images, undefined, files),
+                message.skill === undefined
+                    ? store.messageSend(text, images, undefined, files)
+                    : skillFirstRun(store, location.sessionId, message.skill, text),
             );
             activityRecord({
                 kind: "messageSent",
@@ -6439,6 +6452,7 @@ export function happyAgentWorkspaceStoreCreate(
             unsubscribeBotCreateSessionDraft = parked.unsubscribeSessionDraft;
             // A catalog read still in flight when it was set aside never landed.
             if (botCreateSessionDraft === undefined) botCreateSessionDraftEnsure();
+            createSkillsFollow();
             recompute();
             return;
         }
@@ -6448,21 +6462,37 @@ export function happyAgentWorkspaceStoreCreate(
         const created: ComposerStore = composerStoreCreate(scope, {
             capabilities: { shellMode: false, commands: [], mentions: false },
             output: (event) => {
-                if (event.type !== "textSubmitted") return;
                 // The composer's own submission lifecycle carries the
                 // whole act: pending while the bot is made and the message
                 // sent, and failed — with the host's reason and a retry —
                 // when the bot could not be made.
-                submitting(
-                    created,
-                    event.revision,
-                    () => botCreateRun({ text: event.text, attachments: event.attachments }),
-                    event.attachments,
+                if (event.type === "textSubmitted") {
+                    submitting(
+                        created,
+                        event.revision,
+                        () => botCreateRun({ text: event.text, attachments: event.attachments }),
+                        event.attachments,
+                    );
+                    return;
+                }
+                // A task's first message that names a global skill runs it, as
+                // a group's does. Only a submitted draft is run: a skill
+                // picked from the menu is written into the draft instead.
+                if (event.type !== "commandInvoked" || event.revision === undefined) return;
+                if (!createKindTask(kind)) return;
+                const text = created.getState().text;
+                const skill = {
+                    name: event.commandId,
+                    ...(event.arguments === undefined ? {} : { arguments: event.arguments }),
+                };
+                submitting(created, event.revision, () =>
+                    botCreateRun({ text, attachments: [], skill }),
                 );
             },
         });
         botCreateComposer = created;
         botCreateSessionDraftEnsure();
+        createSkillsFollow();
         recompute();
     };
 
@@ -6500,20 +6530,39 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
-     * Offers the global skills in the addressed group's composer. Following
-     * starts with a fresh read, so the catalog is current each time the
-     * composer opens, and `skills.updated` keeps it current while it is open.
+     * Offers the global skills in a composer whose conversation does not exist
+     * yet. Following starts with a fresh read, so the catalog is current each
+     * time the composer opens, and `skills.updated` keeps it current while it
+     * is open.
      */
-    const groupSkillsFollow = (target: ComposerStore): void => {
-        unsubscribeGroupSkills?.();
+    const globalSkillsFollow = (target: ComposerStore): (() => void) => {
         const skills = client.globalSkills();
         const reconcile = (): void =>
             target.getState().composerInput({
                 type: "commandsReconciled",
                 commands: globalSkillCommandsProject(skills.get().skills),
             });
-        unsubscribeGroupSkills = skills.subscribe(reconcile);
+        const unsubscribe = skills.subscribe(reconcile);
         reconcile();
+        return unsubscribe;
+    };
+
+    /** Offers the global skills in the addressed group's composer. */
+    const groupSkillsFollow = (target: ComposerStore): void => {
+        unsubscribeGroupSkills?.();
+        unsubscribeGroupSkills = globalSkillsFollow(target);
+    };
+
+    /**
+     * Offers the global skills in the open task draft's composer, as a group's
+     * does: a task's first message may run one. A bot's draft offers none.
+     */
+    const createSkillsFollow = (): void => {
+        const target = createKindTask(createKind) ? botCreateComposer : undefined;
+        if (target === createSkillsComposer) return;
+        unsubscribeCreateSkills?.();
+        createSkillsComposer = target;
+        unsubscribeCreateSkills = target && globalSkillsFollow(target);
     };
 
     /**
@@ -8951,6 +9000,10 @@ export function happyAgentWorkspaceStoreCreate(
         taskCreateMessageSend() {
             if (!createKindTask(createKind) || botCreateDraft?.submitting) return;
             botCreateComposer?.getState().textSubmit();
+        },
+        taskCreateCommandInvoke(commandId) {
+            if (!createKindTask(createKind) || botCreateDraft?.submitting) return;
+            botCreateComposer?.getState().commandInvoke(commandId);
         },
         taskRenameOpen(taskId) {
             if (projectArchive?.submitting) return;

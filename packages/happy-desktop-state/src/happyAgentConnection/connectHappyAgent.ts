@@ -5672,11 +5672,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             const outcome = sessionCreationOutcomes.get(sessionId);
             if (outcome === undefined)
                 return Promise.reject(new Error("This session creation is no longer tracked."));
-            return outcome.then(() => {
+            return outcome.then(async () => {
                 const catalog = sessionCreationCatalogs.get(sessionId);
-                if (catalog === undefined)
-                    throw new Error("This session creation is no longer tracked.");
-                return catalog;
+                if (catalog !== undefined) return catalog;
+                // A task's creation answers with the task rather than its
+                // agent, so that agent's catalog is read once it exists.
+                const { slashCommands } = await client.getAgent(sessionId, {
+                    signal: rootController.signal,
+                });
+                return slashCommands;
             });
         },
         sessionModeSaveWait(mutationId) {
@@ -6453,6 +6457,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             // Both task actions and agent writes depend on successful creation.
             const created = task.then(() => undefined);
             sessionCreations.set(agentId, created);
+            // A first turn may wait on the task's agent as on any created one.
+            sessionCreationOutcomes.set(agentId, created);
+            while (sessionCreationOutcomes.size > 256)
+                sessionCreationOutcomes.delete(sessionCreationOutcomes.keys().next().value!);
             const settled = created.catch(() => undefined);
             const queueKeys = [`agent:${agentId}`, `task:${taskId}`];
             for (const key of queueKeys) mutationQueues.set(key, created);

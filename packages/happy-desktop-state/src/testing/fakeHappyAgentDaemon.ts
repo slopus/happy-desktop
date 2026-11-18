@@ -33,6 +33,7 @@ import {
     type SaveUserSettingRequest,
     type SendMessageRequest,
     type ServiceMessage,
+    type SlashCommand,
     type StoredUserSetting,
     type Task,
     type TaskMembership,
@@ -73,6 +74,8 @@ export interface FakeHappyAgentDaemon {
     /** Seed one agent inside a workspace (or a project's root workspace). */
     agentSeed(workspaceId: string, overrides?: Partial<Agent>): Agent;
     agentGet(agentId: string): Agent;
+    /** Set the slash catalog `getAgent` answers for one agent, which need not exist yet. */
+    slashCommandsSeed(agentId: string, commands: readonly SlashCommand[]): void;
     /**
      * Add a task with its own agent and workspace. `canArchive` is what the
      * task routes and the bootstrap answer for the viewer; `joinedKey` makes
@@ -413,6 +416,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     const agents = new Map<string, Agent>();
     const contexts = new Map<string, AgentContextUsage | null>();
     const drafts = new Map<string, AgentDraftSnapshot>();
+    const slashCommands = new Map<string, readonly SlashCommand[]>();
     const modes = new Map<string, MessageMode | null>();
     const histories = new Map<string, { runs: HistoryRun[]; pending: UserMessage[] }>();
     const hasMore = new Map<string, boolean>();
@@ -1208,7 +1212,10 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async getAgent(agentId: string, ...rest: unknown[]) {
             await record("getAgent", [agentId, ...rest]);
-            return { agent: agentRequired(agentId) };
+            return {
+                agent: agentRequired(agentId),
+                slashCommands: [...(slashCommands.get(agentId) ?? [])],
+            };
         },
         async getAgentMode(agentId: string, ...rest: unknown[]) {
             const mode = modes.get(agentId) ?? null;
@@ -1599,6 +1606,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         workspaceSeed: seedWorkspace,
         agentSeed: seedAgent,
         agentGet: agentRequired,
+        slashCommandsSeed(agentId, commands) {
+            slashCommands.set(agentId, commands);
+        },
         taskSeed: seedTask,
         taskGet: taskRequired,
         taskMembershipGet: (taskId) => memberships.get(taskId) ?? null,

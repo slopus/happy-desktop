@@ -1236,8 +1236,8 @@ export interface HappyAgentConnection {
      */
     createSession(input: CreateSessionInput, checkoutReady?: Promise<unknown>): MutationId;
     /**
-     * Waits for an already-issued creation, resolving with the slash catalog
-     * the daemon's creation response gave the new agent.
+     * Waits for an already-issued session or task creation, resolving with
+     * the slash catalog the daemon gave the new agent.
      */
     sessionCreationWait(sessionId: string): Promise<readonly SlashCommand[]>;
     /** Waits for the host to acknowledge this mode mutation, including a refusal. */
