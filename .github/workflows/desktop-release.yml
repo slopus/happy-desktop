@@ -428,3 +428,47 @@ jobs:
                   if [[ "$RELEASE_SKIP_LOCAL_WEB_X64" == true ]]; then
                     echo 'macOS Nightly (local-web) installs skip this release; manual arm64 download available.' >> "$GITHUB_STEP_SUMMARY"
                   fi
+
+    homebrew:
+        name: Verify stable Homebrew distribution
+        if: ${{ !inputs.prerelease }}
+        needs: [verify, publish]
+        runs-on: ubuntu-latest
+        timeout-minutes: 77
+        permissions: {}
+        env:
+            RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        steps:
+            - name: Wait for the verified cask
+              shell: bash
+              run: |
+                  cask='https://raw.githubusercontent.com/slopus/homebrew-tap/main/Casks/happy.rb'
+                  tap_runs='https://github.com/slopus/homebrew-tap/actions/workflows/update-happy.yml'
+                  latest='https://api.github.com/repos/slopus/happy-desktop/releases/latest'
+                  fetch() { curl --fail --silent --show-error --max-time 15 -H 'Cache-Control: no-cache' "$1"; }
+                  # The tap owns its hourly update, install checks, and commit. Allow one
+                  # scheduled interval plus the time to test the cask on each platform.
+                  deadline=$((SECONDS + 75 * 60))
+                  version=''
+                  while (( SECONDS < deadline )); do
+                    if body=$(fetch "$cask"); then
+                      version=$(sed -nE 's/^[[:space:]]+version "([0-9]+\.[0-9]+\.[0-9]+)"[[:space:]]*$/\1/p' <<< "$body")
+                      if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$(printf '%s\n' "$version" "$RELEASE_VERSION" | sort -V | tail -n 1)" == "$version" ]] &&
+                        latest_tag=$(fetch "$latest" | jq -er .tag_name) && [[ "$latest_tag" == "v$version" ]]; then
+                        if [[ "$version" == "$RELEASE_VERSION" ]]; then
+                          printf 'The [Homebrew cask](%s) now installs Happy %s.\n' "$cask" "$version" >> "$GITHUB_STEP_SUMMARY"
+                        else
+                          printf 'Happy %s has been superseded. The [Homebrew cask](%s) installs the newer stable release, Happy %s.\n' "$RELEASE_VERSION" "$cask" "$version" >> "$GITHUB_STEP_SUMMARY"
+                        fi
+                        exit 0
+                      fi
+                      printf 'Waiting for Homebrew version %s (currently %s).\n' "$RELEASE_VERSION" "${version:-unknown}"
+                    fi
+                    sleep 60
+                  done
+                  {
+                    printf 'Happy %s is published on GitHub; Homebrew has not caught up (last observed: %s).\n\n' "$RELEASE_VERSION" "${version:-unknown}"
+                    printf 'Inspect or run the [tap update](%s). Once the cask is current, rerun this failed job; do not dispatch another Desktop release.\n' "$tap_runs"
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  echo '::error::The Homebrew cask did not reach the published stable Desktop version. See the job summary for recovery.'
+                  exit 1

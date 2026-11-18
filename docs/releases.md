@@ -144,20 +144,26 @@ checks on macOS and Windows, so a Linux preview is installed by downloading its
 AppImage, and stable installations upgrade through Homebrew. All macOS signing and
 Windows checks remain unchanged.
 
-The tap's scheduled/manual update workflow reads the latest stable GitHub release,
-pins each artifact's SHA-256, and tests Homebrew installation, packaged app boot,
-and uninstall on every supported OS/architecture before committing the new cask.
-It uses only the tap's own workflow token, with no cross-repository secret. To
-update the tap immediately after a stable release:
+The tap's hourly update reads the latest stable GitHub release, pins each
+artifact's SHA-256, and tests Homebrew installation, packaged app boot, and
+uninstall on every supported OS/architecture before committing the new cask.
+After GitHub publication, the stable Desktop workflow waits up to 75 minutes
+for the tap's published cask to match the release version. The wait is read-only
+and requires no cross-repository secret. Previews leave the cask alone.
+
+To start the tap update immediately after stable GitHub publication:
 
 ```sh
 gh workflow run update-happy.yml --repo slopus/homebrew-tap --ref main
 ```
 
-Check that workflow and the resulting cask version before reporting Homebrew
-distribution complete. Never disable Gatekeeper or remove quarantine to make a
-cask pass. Linux CI's Chromium sandbox override is test-runner-only, not part of
-the cask or shipped app.
+If the Homebrew verification job times out, the GitHub release is already live.
+Check the tap run, fix and rerun it as needed, then rerun the failed Homebrew
+verification job. Do not dispatch another Desktop release to retry the cask.
+If a newer stable release superseded this one and Homebrew already installs
+that version, the verification reports the newer release without a rollback.
+Never disable Gatekeeper or remove quarantine to make a cask pass. Linux CI's
+Chromium sandbox override is test-runner-only, not part of the cask or shipped app.
 
 ## macOS Universal Links
 
