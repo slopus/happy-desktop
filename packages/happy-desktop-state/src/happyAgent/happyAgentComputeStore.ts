@@ -15,13 +15,13 @@ export const HAPPY_AGENT_COMPUTE_MACHINE_ACCESSES: readonly HappyAgentComputeMac
     "private",
 ];
 
-/** The most agents any computer takes at once. */
-export const HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX = 64;
-
-/** How many agents a new computer takes at once unless the person says otherwise. */
+/**
+ * How many agents a new computer takes at once unless the person says
+ * otherwise; 0 means no limit.
+ */
 export const HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT: Readonly<
     Record<HappyAgentComputeMachineAccess, number>
-> = { shared: 8, private: 1 };
+> = { shared: 0, private: 1 };
 
 /**
  * What the reader may do with compute: add a shared computer and manage every
@@ -69,9 +69,12 @@ export interface HappyAgentComputeMachine {
     readonly os: string | null;
     readonly arch: string | null;
     readonly access: HappyAgentComputeMachineAccessView;
-    /** How many agents it takes at once; it is full once that many are on it. */
+    /**
+     * How many agents it takes at once; it is full once that many are on it.
+     * 0 means no limit, and it is never full.
+     */
     readonly concurrency: number;
-    /** The most `concurrency` may be raised to, when the machine has said. */
+    /** The most `concurrency` may be raised to, when the machine's operator set a ceiling. */
     readonly maxConcurrency: number | null;
     /** The agents on it now. */
     readonly agents: readonly HappyAgentComputeAgent[];
@@ -103,6 +106,7 @@ export type HappyAgentComputeSystem = "linux" | "macos" | "windows";
 /** The one-time install command a new machine joins with. */
 export interface HappyAgentComputeInstall {
     readonly access: HappyAgentComputeMachineAccess;
+    /** 0 means no limit. */
     readonly concurrency: number;
     /** Unix and Windows install commands; null where the server publishes no installer. */
     readonly commands: { readonly unix: string; readonly windows: string } | null;
@@ -226,6 +230,11 @@ function countOrNull(value: unknown): number | null {
     return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
 }
 
+/** A concurrency limit, where 0 means no limit. */
+function limitOrNull(value: unknown): number | null {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
 function computerStatusOf(value: unknown): HappyAgentComputeMachineStatus | undefined {
     return (["online", "offline", "draining", "enrolling"] as const).find(
         (status) => status === value,
@@ -245,17 +254,18 @@ function systemsRead(value: unknown): HappyAgentComputeSystem[] {
 }
 
 /**
- * The concurrency typed into a field, or why it can't be sent: a whole number
- * from 1 to the machine's limit.
+ * The concurrency typed into a field, or why it can't be sent: any whole
+ * number, 0 for no limit, or from 1 to the ceiling the machine's operator set,
+ * which no limit would go past.
  */
 function concurrencyParse(text: string, max: number | null): number | UserError {
-    const limit = Math.min(
-        max ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
-        HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
-    );
     const value = /^\d+$/.test(text.trim()) ? Number(text.trim()) : Number.NaN;
-    if (Number.isInteger(value) && value >= 1 && value <= limit) return value;
-    return new UserError(`How many agents at once is a whole number from 1 to ${String(limit)}.`);
+    if (max === null) {
+        if (Number.isSafeInteger(value)) return value;
+        return new UserError("How many agents at once is a whole number, or 0 for no limit.");
+    }
+    if (Number.isInteger(value) && value >= 1 && value <= max) return value;
+    return new UserError(`How many agents at once is a whole number from 1 to ${String(max)}.`);
 }
 
 /** Who the reader is, for reading the machines they see. */
@@ -312,7 +322,7 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
         os: textOrNull(computer.os),
         arch: textOrNull(computer.arch),
         access,
-        concurrency: countOrNull(computer.concurrency) ?? 1,
+        concurrency: limitOrNull(computer.concurrency) ?? 1,
         maxConcurrency: countOrNull(computer.maxConcurrency),
         agents: listRead(computer, "agents", agentRead),
         boundary: boundaryRead(computer.boundary),
@@ -359,7 +369,7 @@ function installRead(value: unknown): HappyAgentComputeInstall | undefined {
     return {
         access,
         concurrency:
-            countOrNull(answer.concurrency) ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[access],
+            limitOrNull(answer.concurrency) ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[access],
         commands:
             commands && typeof commands.unix === "string" && typeof commands.windows === "string"
                 ? { unix: commands.unix, windows: commands.windows }

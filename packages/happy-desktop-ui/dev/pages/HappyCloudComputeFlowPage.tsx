@@ -47,7 +47,7 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
         detail: "build-01.acme.internal · Linux x86_64",
         description: "General builds and tests. Docker is installed; repos check out under /work.",
         agentCount: 3,
-        concurrency: 8,
+        concurrency: 0,
         manageable: true,
     },
     {
@@ -186,7 +186,7 @@ function Add(props: Partial<HappyAgentComputeMachineAddDialogProps>) {
             onCreate={noop}
             stage={{
                 step: "form",
-                draft: { access: "shared", concurrency: "8" },
+                draft: { access: "shared", concurrency: "0" },
                 creating: false,
             }}
             {...props}
@@ -205,7 +205,7 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
                 concurrency: String(machine.concurrency),
             }}
             machine={machine}
-            maxConcurrency={32}
+            maxConcurrency={null}
             onAgentRemove={noop}
             onClose={noop}
             onConcurrencyChange={noop}
@@ -228,7 +228,7 @@ function install(access: HappyAgentComputeInstallView["access"]): HappyAgentComp
     const sudo = access === "private" ? "" : "sudo ";
     return {
         access,
-        concurrency: access === "private" ? 1 : 8,
+        concurrency: access === "private" ? 1 : 0,
         commands: {
             unix: `curl -fsSL ${BASE}/install.sh | ${sudo}HAPPY_CLUSTER_URL='${CLUSTER}' HAPPY_JOIN_TOKEN='${TOKEN}' HAPPY_COMPUTE_ACCESS='${access}' sh`,
             windows: `$env:HAPPY_CLUSTER_URL='${CLUSTER}'; $env:HAPPY_JOIN_TOKEN='${TOKEN}'; $env:HAPPY_COMPUTE_ACCESS='${access}'; irm ${BASE}/install.ps1 | iex`,
@@ -316,7 +316,7 @@ export function HappyCloudComputeFlowPage() {
                 <Add
                     stage={{
                         step: "form",
-                        draft: { access: "shared", concurrency: "8" },
+                        draft: { access: "shared", concurrency: "0" },
                         creating: false,
                         error: "This server isn't set up to run computers yet.",
                     }}

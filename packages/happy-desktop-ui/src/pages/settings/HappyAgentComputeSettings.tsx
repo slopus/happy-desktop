@@ -38,7 +38,7 @@ export interface HappyAgentComputeMachineRow {
         | { readonly kind: "member"; readonly name: string | null };
     /** How many agents are on it now. */
     readonly agentCount: number;
-    /** How many agents it takes at once. */
+    /** How many agents it takes at once; 0 means no limit. */
     readonly concurrency: number;
     /**
      * Present when it can't keep a restricted command inside its boundary, with
@@ -123,9 +123,18 @@ function ownerText(owner: NonNullable<HappyAgentComputeMachineRow["owner"]>): st
 }
 
 function agentsText(machine: HappyAgentComputeMachineRow): string {
+    if (machine.concurrency === 0)
+        return `${String(machine.agentCount)} ${machine.agentCount === 1 ? "agent" : "agents"} · Unlimited`;
     return `${String(machine.agentCount)} of ${String(machine.concurrency)} ${
         machine.concurrency === 1 ? "agent" : "agents"
     }`;
+}
+
+/** What the "Agents at once" field takes, with or without the operator's ceiling. */
+function concurrencyHint(max: number | null): string {
+    return max === null
+        ? "How many agents can work on it at the same time; 0 means no limit."
+        : `How many agents can work on it at the same time, from 1 to ${String(max)}.`;
 }
 
 /** What a machine's access means, said of its owner where it is someone else's. */
@@ -361,8 +370,8 @@ export interface HappyAgentComputeMachineEditDraft {
 export interface HappyAgentComputeMachineDialogProps {
     readonly machine: HappyAgentComputeMachineRow;
     readonly agents: readonly HappyAgentComputeMachineAgentRow[];
-    /** The most agents it may take at once. */
-    readonly maxConcurrency: number;
+    /** The most agents it may take at once; null when its operator set no ceiling. */
+    readonly maxConcurrency: number | null;
     /** Shown only where `machine.manageable`. */
     readonly draft: HappyAgentComputeMachineEditDraft;
     readonly saving: boolean;
@@ -447,7 +456,9 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                     ) : null}
                     <Box className="happy-agent-compute__agents">
                         <span className="happy-agent-compute__heading">
-                            {`Agents · ${String(machine.agentCount)} of ${String(machine.concurrency)}`}
+                            {machine.concurrency === 0
+                                ? `Agents · ${String(machine.agentCount)} · Unlimited`
+                                : `Agents · ${String(machine.agentCount)} of ${String(machine.concurrency)}`}
                         </span>
                         <Box
                             className="happy-agent-compute__list"
@@ -505,7 +516,7 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                             <TextField
                                 disabled={props.saving}
                                 fullWidth
-                                hint={`How many agents can work on it at the same time, from 1 to ${String(props.maxConcurrency)}.`}
+                                hint={concurrencyHint(props.maxConcurrency)}
                                 inputMode="numeric"
                                 label="Agents at once"
                                 onSubmit={props.onSave}
@@ -533,6 +544,7 @@ export type HappyAgentComputeSystemName = "linux" | "macos" | "windows";
 /** The one-time install, as the dialog shows it. */
 export interface HappyAgentComputeInstallView {
     readonly access: HappyAgentComputeAccessName;
+    /** 0 means no limit. */
     readonly concurrency: number;
     /** Exactly as the server sent them; null where it publishes no installer. */
     readonly commands: { readonly unix: string; readonly windows: string } | null;
@@ -602,11 +614,14 @@ function HappyAgentComputeInstall(props: { readonly install: HappyAgentComputeIn
     const commands = install.commands;
     const unix = unixSystemsText(install.systems);
     const windows = install.systems.length === 0 || install.systems.includes("windows");
-    const agents = `${String(install.concurrency)} ${install.concurrency === 1 ? "agent" : "agents"}`;
+    const taking =
+        install.concurrency === 0
+            ? "taking any number of agents at once"
+            : `taking up to ${String(install.concurrency)} ${install.concurrency === 1 ? "agent" : "agents"} at once`;
     const joins =
         install.access === "shared"
-            ? `joins the computer for the whole team, taking up to ${agents} at once`
-            : `joins the computer as yours, taking up to ${agents} at once`;
+            ? `joins the computer for the whole team, ${taking}`
+            : `joins the computer as yours, ${taking}`;
     // Without a published installer, the supervisor is set up by hand with the address and token.
     const what =
         commands === null
@@ -743,7 +758,7 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                             <TextField
                                 disabled={busy}
                                 fullWidth
-                                hint="How many agents can work on it at the same time, from 1 to 64."
+                                hint={concurrencyHint(null)}
                                 inputMode="numeric"
                                 label="Agents at once"
                                 onSubmit={props.onCreate}

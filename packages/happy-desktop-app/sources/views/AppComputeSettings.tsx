@@ -1,5 +1,4 @@
 import {
-    HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
     type HappyAgentComputeApproval,
     type HappyAgentComputeMachine,
     type HappyAgentComputeMachineAdd,
@@ -68,10 +67,7 @@ export function AppComputeSettings(props: {
                     }))}
                     draft={detail.draft}
                     machine={machineRow(opened)}
-                    maxConcurrency={Math.min(
-                        opened.maxConcurrency ?? HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
-                        HAPPY_AGENT_COMPUTE_CONCURRENCY_MAX,
-                    )}
+                    maxConcurrency={opened.maxConcurrency}
                     onAgentRemove={(agentId) => store.machineAgentRemove(opened.id, agentId)}
                     onClose={() => store.machineDetailClose()}
                     onConcurrencyChange={(value) => store.machineConcurrencyUpdate(value)}
@@ -124,7 +120,7 @@ function machineRow(machine: HappyAgentComputeMachine): HappyAgentComputeMachine
         .filter(Boolean)
         .join(" · ");
     const owner = machine.access.kind === "private" ? machine.access.owner : null;
-    const full = machine.agents.length >= machine.concurrency;
+    const full = machine.concurrency > 0 && machine.agents.length >= machine.concurrency;
     return {
         id: machine.id,
         name: machine.name,
