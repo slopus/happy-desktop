@@ -1105,7 +1105,10 @@ export function Composer(props: ComposerProps) {
                 );
                 return;
             }
-            if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) {
+            if (
+                (event.key === "Enter" && !event.nativeEvent.isComposing) ||
+                (event.key === "Tab" && !event.shiftKey)
+            ) {
                 event.preventDefault();
                 const command = activeCommand();
                 if (command) selectCommand(command.id);
@@ -1133,7 +1136,8 @@ export function Composer(props: ComposerProps) {
                 return;
             }
             if (
-                (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) &&
+                ((event.key === "Enter" && !event.nativeEvent.isComposing) ||
+                    (event.key === "Tab" && !event.shiftKey)) &&
                 list.length > 0
             ) {
                 event.preventDefault();
@@ -1171,7 +1175,7 @@ export function Composer(props: ComposerProps) {
             props.onStop();
             return;
         }
-        if (event.key === "Enter" && !event.shiftKey) {
+        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             send();
         }
