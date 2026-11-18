@@ -385,10 +385,9 @@ explicitly after collecting the artifacts.
 ## Session gym leak mode
 
 `perf/sessionGym.ts` drives the production renderer in Chromium against a perf
-daemon over a copied installation. `PERF_MODE=leak` turns it into a long memory
-and correctness test that nobody has to watch in DevTools. It is the check to run
-before a production release (see `docs/releases.md`). It is opt-in only: it is
-not part of `pnpm test`, `pnpm check`, CI or the normal gym runs.
+daemon over a copied installation. `PERF_MODE=leak` turns it into an optional
+memory and correctness test that nobody has to watch in DevTools. It is not
+part of `pnpm test`, `pnpm check`, CI or the normal gym runs.
 `perf/leakGym.sh` clones the fixture, starts the daemon and the web host with
 `perf/leakProbe.ts` preloaded, and runs it:
 
@@ -400,11 +399,12 @@ PERF_PORT=5741 PERF_SEED=424242 \
 ```
 
 `PERF_FIXTURE` holds `pristine/` (the two SQLite files), `home/`, `fakefs/` and
-`browser-profile/`. Build the renderer with `perf/vite.names.config.ts`, which
+`browser-profile/`. Build the renderer with
+[`perf/vite.names.config.ts`](../happy-desktop-electron/perf/vite.names.config.ts), which
 keeps component names. Keep `PERF_RUN_DIR` short, because the daemon socket
 lives in it.
 
-For a release, the duration is fixed: the defaults give 20 minutes of measurement
+The defaults give 20 minutes of measurement
 (`PERF_LEAK_MINUTES`) after a warm-up of about 25 minutes. The run passes when
 every line is `PASS` or `PLATEAU` and the last line reads
 `leak verdict: PASS`. The script exits non-zero otherwise.

@@ -79,12 +79,6 @@ verify Pages succeeded and the deployed `local-web-version.json` matches the bui
 Do not create native release tags locally, push, restart an app, or deploy merely
 because release tooling was changed.
 
-Before a production release, run the session gym's leak mode on the candidate. It takes about
-45 minutes: 20 minutes of measurement after the warm-up. It passes only when its last line says
-`leak verdict: PASS`. See ["Session gym leak mode"](../packages/happy-desktop-gym/README.md#session-gym-leak-mode).
-It is not part of `pnpm test`, `pnpm check`, CI, or any release workflow, and previews do not need
-it.
-
 Immediately before dispatching production, verify both the explicit user request for this product
 and our actual use of this candidate. Native production uses the same workflow with
 `prerelease=false`, which computes the stable `YYYY.M.C`, shipping both app flavors on macOS and Windows.
