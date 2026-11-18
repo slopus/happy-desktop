@@ -104,6 +104,7 @@ import {
     ZoomIndicator,
     ConnectionShell,
     CloudConnectScreen,
+    ServerConnectScreen,
     CloudSignInNoticeDialog,
     HappyLinkNoticeDialog,
     ConnectionSurface,
@@ -171,6 +172,10 @@ import {
     desktopCloudConnectStoreCreate,
     type DesktopCloudConnectStore,
 } from "./desktopCloudConnectStore";
+import {
+    desktopServerConnectStoreCreate,
+    type DesktopServerConnectStore,
+} from "./desktopServerConnectStore";
 import {
     desktopCloudSignInNoticeStoreCreate,
     type DesktopCloudSignInNoticeStore,
@@ -467,6 +472,8 @@ function HappyAgentBoundary(props: {
     appearance: AppearanceStore;
     commandPalette: CommandPaletteStore;
     daemon?: AppHappyAgentDaemonStore;
+    /** Opens connecting to a team server by its address; to the local surface only. */
+    serverConnectOpen?: () => void;
     /** The local agent's update card; supplied with `daemon`, to the local surface only. */
     agentUpdate?: AppHappyAgentUpdateStore;
     /** What is new in the local agent's offered version; supplied with `daemon`. */
@@ -515,6 +522,7 @@ function HappyAgentBoundary(props: {
                 commandPalette: props.commandPalette,
                 connectionOnboarding: props.connectionOnboarding,
                 ...(props.daemon ? { daemon: props.daemon } : {}),
+                ...(props.serverConnectOpen ? { serverConnectOpen: props.serverConnectOpen } : {}),
                 ...(props.agentUpdate ? { agentUpdate: props.agentUpdate } : {}),
                 ...(props.agentReleaseNotes ? { agentReleaseNotes: props.agentReleaseNotes } : {}),
                 ...(props.agentOutage ? { agentOutage: props.agentOutage } : {}),
@@ -779,6 +787,8 @@ interface DesktopRendererProps {
     usageAnalytics: UsageAnalyticsStore;
     /** The sidebar's "+" to Happy Cloud; absent on a shell that cannot sign in to servers. */
     cloudConnect?: DesktopCloudConnectStore;
+    /** Connecting to a team server by its address; absent where this window can't add one. */
+    serverConnect?: DesktopServerConnectStore;
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -850,6 +860,22 @@ function DesktopRenderer(props: DesktopRendererProps) {
                           secondaryAction: {
                               label: "Connect to Happy Cloud",
                               onAction: () => props.cloudConnect?.welcomeConnectOpen(),
+                          },
+                      }
+                    : {})}
+                // A team server is added to this computer's own Happy Agent, so
+                // Enterprise login sets this computer up as Get started does,
+                // and asks for the server's address once that is done.
+                {...(props.serverConnect
+                    ? {
+                          tertiaryAction: {
+                              label: "Enterprise login",
+                              onAction: () => {
+                                  desktopBootSkip();
+                                  props.onboarding.agentSetupBegin();
+                                  props.welcome.welcomeAcknowledge();
+                                  props.serverConnect?.connectWanted();
+                              },
                           },
                       }
                     : {})}
@@ -1316,6 +1342,7 @@ function DesktopRuntimeContent(
                       daemon: props.daemon,
                   }
                 : {})}
+            {...(props.serverConnect ? { serverConnectOpen: props.serverConnect.connectOpen } : {})}
             debug={props.debug}
             {...(props.performance ? { performance: props.performance } : {})}
             profiler={props.profiler}
@@ -1458,6 +1485,68 @@ function DesktopCloudConnect(props: {
         />
     );
 }
+
+/** Enterprise login: a team server by its address, full window over everything else. */
+function DesktopServerConnect(props: {
+    store: DesktopServerConnectStore;
+    appearance: AppearanceStore;
+}): ReactNode {
+    const view = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
+    if (!view) return null;
+    return (
+        <ServerConnectScreen
+            appearance={appearance.mode}
+            onAddressChange={props.store.addressUpdate}
+            onAddressSubmit={props.store.addressSubmit}
+            onBack={props.store.back}
+            onClose={props.store.connectCancel}
+            onSignIn={props.store.signInStart}
+            view={view}
+        />
+    );
+}
+
+/**
+ * Selects a team server once the window lists it: the host's roster update
+ * that names it can arrive just after the sign-in that waited on it.
+ */
+function desktopServerOpen(
+    happyAgents: HappyAgentDirectoryStore,
+    connectionId: string,
+): Promise<boolean> {
+    const id = `connection:${connectionId}`;
+    const listed = (): boolean => happyAgents.get().happyAgents.some((entry) => entry.id === id);
+    if (listed()) {
+        happyAgents.happyAgentActivate(id);
+        return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+        let settled = false;
+        let unsubscribe: (() => void) | undefined;
+        const settle = (opened: boolean): void => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            unsubscribe?.();
+            if (opened) happyAgents.happyAgentActivate(id);
+            resolve(opened);
+        };
+        const timer = setTimeout(() => settle(listed()), SERVER_LISTED_WAIT_MS);
+        unsubscribe = happyAgents.subscribe(() => {
+            if (listed()) settle(true);
+        });
+        if (settled) unsubscribe();
+    });
+}
+
+/** How long a signed-in server may take to be listed before opening it gives up. */
+const SERVER_LISTED_WAIT_MS = 15_000;
+
 /** Why a Happy link from outside was not opened, centered over everything else. */
 function DesktopHappyLinkNotice(props: { store: HappyLinkInboxStore }): ReactNode {
     const { notice } = useSyncExternalStore(
@@ -1909,6 +1998,45 @@ if (mediaPreviewBridge) {
                       },
                   })
                 : undefined;
+        // A team server added by its address: the host Happy Agent lists it, the
+        // shell signs in to it. The web app has no host to add one to.
+        const serverAdd = happyAgents.happyAgentServerAdd;
+        const serverRemove = happyAgents.happyAgentServerRemove;
+        const serverConnect =
+            serverHost && serverAdd && serverRemove && !cloudWeb
+                ? desktopServerConnectStoreCreate({
+                      serverAdd,
+                      serverRemove,
+                      ...(desktopBridge.serverSignInDescribe
+                          ? { signInDescribe: desktopBridge.serverSignInDescribe }
+                          : {}),
+                      servers: serverHost.source,
+                      sessions: serverHost.sessions,
+                      open: (connectionId) => desktopServerOpen(happyAgents, connectionId),
+                      // Enterprise login from the first screen waits for local
+                      // setup to hand this computer's Happy Agent over.
+                      ready: {
+                          get: () =>
+                              !desktopLocalSetupShown(onboardingStore.get()) &&
+                              happyAgents
+                                  .get()
+                                  .happyAgents.some(
+                                      (entry) =>
+                                          entry.id === LOCAL_HAPPY_AGENT_ID &&
+                                          entry.status === "connected",
+                                  ),
+                          subscribe: (listener) => {
+                              const unsubscribes = [
+                                  happyAgents.subscribe(listener),
+                                  onboardingStore.subscribe(listener),
+                              ];
+                              return () => {
+                                  for (const unsubscribe of unsubscribes) unsubscribe();
+                              };
+                          },
+                      },
+                  })
+                : undefined;
         if (cloudConnect) {
             // An invite is accepted in the browser; coming back to the window
             // brings its server into the list on show.
@@ -2213,6 +2341,7 @@ if (mediaPreviewBridge) {
                             gptLive={gptLive}
                             usageAnalytics={analytics.preference}
                             {...(cloudConnect ? { cloudConnect } : {})}
+                            {...(serverConnect ? { serverConnect } : {})}
                             keepAwake={keepAwake}
                             navigationOrder={navigationOrder}
                             sidebarCollapse={sidebarCollapse}
@@ -2243,6 +2372,9 @@ if (mediaPreviewBridge) {
                     otherwise re-cover the sheet's close button and leave it dead. */}
                 {cloudConnect ? (
                     <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
+                ) : null}
+                {serverConnect ? (
+                    <DesktopServerConnect appearance={appearance} store={serverConnect} />
                 ) : null}
             </DesktopAppearance>,
         );

@@ -33,6 +33,11 @@ import type {
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
 import { happyCloudServerNameOf, happyCloudServerUrl } from "../shared/happyCloud";
+import {
+    desktopServerAddedRead,
+    desktopServerAddRefusal,
+    type DesktopServerAddResult,
+} from "./desktopServerAddress";
 import type { HappyAgentMobilePairingObserve } from "./desktopAnalytics";
 import {
     happyAgentConnectionOpen,
@@ -79,6 +84,8 @@ const connectionsPersistence: HappyAgentConnectionsPersistence = {
         }
     },
 };
+/** What this window names itself by to the loopback bridge, which holds the daemon's real token. */
+const LOCAL_CAPABILITY = "happy-local-capability";
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
 const NO_SUBTASK_FAILURES: HappyAgentSessionListSnapshot["subtaskFailures"] = new Map();
 const NO_BOT_FAILURES: HappyAgentSessionListSnapshot["botFailures"] = new Map();
@@ -175,6 +182,13 @@ export interface HappyAgentDirectoryStore {
     ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
     /** Stops listing a Happy Cloud server the shell removed. */
     happyAgentCloudForget?(connectionId: string): void;
+    /**
+     * Has this computer's Happy Agent add a team server by its normalized
+     * address, or finds it already listed. Present with `happyAgentSignIn`.
+     */
+    happyAgentServerAdd?(url: string, host: string): Promise<DesktopServerAddResult>;
+    /** Has this computer's Happy Agent forget a server added by its address. */
+    happyAgentServerRemove?(connectionId: string): Promise<void>;
 }
 
 /** How long a Happy Cloud server may take to be reported signed in after the shell holds its tokens. */
@@ -717,6 +731,57 @@ export function happyAgentDirectoryStoreCreate(
         };
     };
 
+    /**
+     * Adds a team server through this computer's Happy Agent, which reads
+     * its discovery first and refuses one that doesn't offer a sign-in the
+     * apps can use. The roster's own update lists it everywhere.
+     */
+    const serverAdd = async (url: string, host: string): Promise<DesktopServerAddResult> => {
+        const listed = roster?.get().items.find((item) => item.url === url);
+        if (listed?.remoteId !== undefined)
+            return { ok: true, connectionId: listed.remoteId, name: listed.name, added: false };
+        const base = happyAgent.url;
+        if (base === undefined)
+            return {
+                ok: false,
+                message:
+                    runtime.get()?.phase === "off"
+                        ? "Set up Happy Agent on this computer to connect to a server by its address."
+                        : "The Happy Agent on this computer isn't connected. Try again once it is.",
+            };
+        let response: Response;
+        try {
+            response = await fetch(`${base}/v0/connections/servers`, {
+                method: "POST",
+                headers: {
+                    authorization: `Bearer ${LOCAL_CAPABILITY}`,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({ url }),
+            });
+        } catch {
+            return {
+                ok: false,
+                message: "The Happy Agent on this computer isn't connected. Try again once it is.",
+            };
+        }
+        const body: unknown = await response.json().catch(() => undefined);
+        if (!response.ok)
+            return { ok: false, message: desktopServerAddRefusal(response.status, body, host) };
+        const added = desktopServerAddedRead(body, url);
+        if (!added) return { ok: false, message: "Happy couldn't add this server. Try again." };
+        return { ok: true, ...added, added: true };
+    };
+
+    const serverRemove = async (connectionId: string): Promise<void> => {
+        const base = happyAgent.url;
+        if (base === undefined) return;
+        await fetch(`${base}/v0/connections/${encodeURIComponent(connectionId)}`, {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${LOCAL_CAPABILITY}` },
+        }).catch(() => undefined);
+    };
+
     function cloudForget(connectionId: string): void {
         const wanted = new Set(cloudWanted);
         wanted.delete(connectionId);
@@ -993,7 +1058,7 @@ export function happyAgentDirectoryStoreCreate(
                 const base = value.directHttpUrl.replace(/\/$/u, "");
                 rosterOpen(
                     happyAgentConnectionsDirectStoreCreate(),
-                    new HappyAgentClient({ endpoint: base, token: "happy-local-capability" }),
+                    new HappyAgentClient({ endpoint: base, token: LOCAL_CAPABILITY }),
                     base,
                 );
             }
@@ -1043,7 +1108,7 @@ export function happyAgentDirectoryStoreCreate(
         if (happyAgent.url !== base) {
             const client = new HappyAgentClient({
                 endpoint: base,
-                token: "happy-local-capability",
+                token: LOCAL_CAPABILITY,
             });
             connectionOpen(happyAgent, client, base);
             rosterOpen(
@@ -1218,6 +1283,8 @@ export function happyAgentDirectoryStoreCreate(
                       const remote = remotes.get(id);
                       if (remote) signInCancel(remote);
                   },
+                  happyAgentServerAdd: serverAdd,
+                  happyAgentServerRemove: serverRemove,
                   ...(deps.cloud
                       ? {
                             async happyAgentCloudConnect(connectionId: string) {

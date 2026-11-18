@@ -86,6 +86,7 @@ import {
     keepAwakeStoreCreate,
     statusBarStoreNoop,
     titleShimmerStoreNoop,
+    happyServerCodeFormat,
 } from "happy-desktop-state";
 import {
     happyAgentComposerModelControlProps,
@@ -94,6 +95,8 @@ import {
     HappyAgentGeneralSettings,
     HappyAgentExperimentalSettings,
     HappyAgentConnectionSettingsSection,
+    HappyAgentServerConnectSettings,
+    HappyAgentServerPhoneSettings,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
     HappyAgentFileTierSettings,
@@ -453,6 +456,26 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     payments: "Credit, the card on file and what agents spend",
 };
 
+/**
+ * A team server's code for a phone, once it is signed in and has said which
+ * installation it is; until then, why there is none yet.
+ */
+function serverPhoneCode(
+    host: AppHappyAgentEntry,
+    serverUrl: string,
+): { readonly code: string } | { readonly waiting: string } {
+    if (host.signIn)
+        return { waiting: "Sign in to this server first. Its code appears once you have." };
+    const code =
+        host.instanceId === undefined
+            ? undefined
+            : happyServerCodeFormat(host.instanceId, serverUrl);
+    if (code) return { code };
+    if (!serverUrl.startsWith("https:"))
+        return { waiting: "Phones connect to servers over https only." };
+    return { waiting: "Waiting for this server to say which installation it is." };
+}
+
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
 
@@ -517,6 +540,11 @@ export interface AppHappyAgentSettingsViewProps {
     onUserProfileOpen?(happyAgentId: string, userId: string): void;
     /** Opens one plugin of a Happy Agent, where it is set up and connected. */
     onPluginOpen?(happyAgentId: string, pluginId: string): void;
+    /**
+     * Opens connecting this computer to a team server by its address. Present
+     * only on this computer's own settings, where its Happy Agent can add one.
+     */
+    onServerConnectOpen?(): void;
     platform?: "desktop" | "web";
     section: string;
     settings: HappyAgentSettingsStore;
@@ -729,7 +757,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             : undefined) ?? happyAgentCloudStoreNoop;
     const cloud = useSyncExternalStore(cloudStore.subscribe, cloudStore.get, cloudStore.get);
     const happyIntegrationStore =
-        (section === "mobile-access" || stateOpen
+        ((section === "mobile-access" && host?.serverUrl === undefined) || stateOpen
             ? host?.session?.happyIntegration?.()
             : undefined) ?? happyAgentIntegrationStoreNoop;
     const happyIntegration = useSyncExternalStore(
@@ -749,7 +777,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         !relayLinked &&
         (happyIntegration.pairingOpen || happyIntegration.setup !== undefined);
     const mobileConnectorOwned =
-        section === "mobile-access" ? host?.session?.mobileConnector?.() : undefined;
+        section === "mobile-access" && host?.serverUrl === undefined
+            ? host?.session?.mobileConnector?.()
+            : undefined;
     const mobileConnectorStore =
         relayPageShown && mobileConnectorOwned
             ? happyAgentMobileConnectorStoreUnfollowed
@@ -952,8 +982,15 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const mobileSetup = happyIntegrationStore.mobileSetup;
     // Linking a phone is a page inside Mobile Access: the same Settings
     // window, with its header leading back to the category.
+    // A team server added by its address offers a phone its server code
+    // instead: the phone signs in to that server on its own.
+    const serverUrl = host?.serverUrl;
     const mobileLink =
-        section === "mobile-access" && happyIntegration.setup && mobileSetup && sessionClock
+        section === "mobile-access" &&
+        serverUrl === undefined &&
+        happyIntegration.setup &&
+        mobileSetup &&
+        sessionClock
             ? {
                   step: happyIntegration.setup,
                   setup: mobileSetup,
@@ -985,11 +1022,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             description={
                 mobileLinkHeading
                     ? mobileLinkHeading.description
-                    : section === "secrets" && happyCloud
-                      ? "Keys and credentials agents use without seeing them"
-                      : section === "instructions" && happyCloud
-                        ? "Agent guidance and permission review for this team"
-                        : CATEGORY_DESCRIPTIONS[section]
+                    : section === "mobile-access" && serverUrl !== undefined
+                      ? "Use Happy on your phone with this server"
+                      : section === "secrets" && happyCloud
+                        ? "Keys and credentials agents use without seeing them"
+                        : section === "instructions" && happyCloud
+                          ? "Agent guidance and permission review for this team"
+                          : CATEGORY_DESCRIPTIONS[section]
             }
             onCategorySelect={props.onCategorySelect}
             onClose={props.onClose}
@@ -1149,6 +1188,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         }
                     </>
                 ) : null
+            ) : section === "mobile-access" && host && serverUrl !== undefined ? (
+                <HappyAgentServerPhoneSettings
+                    serverName={host.label}
+                    {...serverPhoneCode(host, serverUrl)}
+                />
             ) : mobileLink ? (
                 <HappyAgentMobileLinkSettings
                     step={mobileLink.step}
@@ -1383,6 +1427,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(profile.saveError ? { saveError: profile.saveError } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
+                    {/* This computer's own Happy Agent adds a team server by its
+                        address; the shell signs in to it. */}
+                    {props.onServerConnectOpen && host?.remoteId === undefined && !happyCloud ? (
+                        <HappyAgentServerConnectSettings
+                            onConnect={props.onServerConnectOpen}
+                            {...(unavailable === undefined ? {} : { unavailable })}
+                        />
+                    ) : null}
                     {/* The web app's Happy Cloud session stands in for the
                         machine's own WorkOS connection, which it has none of. */}
                     {happyCloud || props.cloudWebSession ? null : (

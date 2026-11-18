@@ -186,6 +186,8 @@ const bridge: HappyDesktopBridge = {
     cloudAuthCallbackTake: () => ipcRenderer.invoke(desktopIpc.cloudAuthCallbackTake),
     cloudAuthConfigurationGet: () => ipcRenderer.invoke(desktopIpc.cloudAuthConfigurationGet),
     cloudAuthOpen: (url) => ipcRenderer.invoke(desktopIpc.cloudAuthOpen, url),
+    serverSignInDescribe: (connectionId) =>
+        ipcRenderer.invoke(desktopIpc.serverSignInDescribe, connectionId),
     serverSignInBegin: (connectionId) =>
         ipcRenderer.invoke(desktopIpc.serverSignInBegin, connectionId),
     serverSignInFinish: (attemptId) => ipcRenderer.invoke(desktopIpc.serverSignInFinish, attemptId),

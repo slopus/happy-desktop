@@ -107,6 +107,12 @@ export class ServerSessionError extends Error {
  * operating system's secret store, and only where it has one.
  */
 export interface ServerSessions extends HappyAgentRemoteAuthorization {
+    /**
+     * Reads the server's discovery and says how signing in works there: the
+     * method's name and the host the person signs in at. Opens nothing and
+     * keeps nothing.
+     */
+    signInDescribe(connectionId: string): Promise<{ readonly name: string; readonly host: string }>;
     /** Reads the server's discovery, opens its sign-in page, and names the attempt. */
     signInBegin(
         connectionId: string,
@@ -616,6 +622,35 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         signInRequire(connectionId, rejected) {
             if (sessions.get(connectionId)?.credential.accessToken !== rejected) return;
             sessionEnd(connectionId, "This server asked you to sign in again.");
+        },
+        async signInDescribe(connectionId) {
+            if (closed) throw new ServerSessionError("Happy is closing.", "closed");
+            const url = (await rosterRead(connectionId)).get(connectionId);
+            if (url === undefined)
+                throw new ServerSessionError(
+                    "This server isn't one you sign in to from Happy.",
+                    "not_found",
+                );
+            const method =
+                direct?.account.connectionId === connectionId
+                    ? direct.account.method
+                    : await discoveryRead(url);
+            // Checked and named exactly as `signInBegin` does; the request
+            // itself is dropped, and nothing is opened or kept.
+            try {
+                const { host } = await beginOAuthSignIn(method, {
+                    redirectUri: serverOAuthRedirectUri,
+                    serverUrl: url,
+                });
+                return { name: method.name, host };
+            } catch (error) {
+                throw new ServerSessionError(
+                    error instanceof HappyAgentOAuthError
+                        ? error.message
+                        : "This server's sign-in isn't set up correctly.",
+                    "sign_in_unavailable",
+                );
+            }
         },
         async signInBegin(connectionId) {
             if (closed) throw new ServerSessionError("Happy is closing.", "closed");

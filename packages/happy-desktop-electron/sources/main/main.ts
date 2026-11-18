@@ -2031,6 +2031,12 @@ void app
             desktopDaemonSenderRequire(event.sender);
             return cloudAuthCallbacks.shift();
         });
+        ipcMain.handle(desktopIpc.serverSignInDescribe, (event, connectionId: unknown) => {
+            desktopDaemonSenderRequire(event.sender);
+            if (typeof connectionId !== "string")
+                throw new Error("Happy asked to sign in to an invalid server.");
+            return serverSignInResult(serverSessions.signInDescribe(connectionId));
+        });
         ipcMain.handle(desktopIpc.serverSignInBegin, (event, connectionId: unknown) => {
             desktopDaemonSenderRequire(event.sender);
             if (typeof connectionId !== "string")

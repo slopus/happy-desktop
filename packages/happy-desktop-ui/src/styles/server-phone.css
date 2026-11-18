@@ -1,0 +1,62 @@
+/*
+ * C-353 HappyAgentServerPhoneSettings: a team server's code for a phone, on
+ * one card, the code on the left and what to do with it beside it.
+ */
+
+.happy-server-phone {
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 20px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+}
+
+.happy-server-phone__code {
+    flex: none;
+}
+
+/* The code's place until the server has said which installation it is. */
+.happy-server-phone__placeholder {
+    flex: none;
+    width: 176px;
+    height: 176px;
+    border: 1px dashed var(--divider);
+    border-radius: 12px;
+}
+
+.happy-server-phone__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+}
+
+.happy-server-phone__title {
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+.happy-server-phone__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding-inline-start: 20px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-server-phone__detail {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}

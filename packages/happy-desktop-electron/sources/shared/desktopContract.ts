@@ -1147,6 +1147,14 @@ export interface HappyDesktopBridge {
     /** Settles once the attempt's sign-in finished in the browser, or failed. */
     serverSignInFinish?(attemptId: string): Promise<DesktopServerSignInResult<null>>;
     serverSignInCancel?(attemptId: string): Promise<void>;
+    /**
+     * Reads the server's discovery and says how signing in works there, the
+     * method's name and the host the person signs in at, without opening
+     * anything. Absent on shells older than this field.
+     */
+    serverSignInDescribe?(
+        connectionId: string,
+    ): Promise<DesktopServerSignInResult<{ readonly name: string; readonly host: string }>>;
     /** Drops a removed server's sign-in. */
     serverSessionsGet?(): Promise<readonly ServerSessionSnapshot[]>;
     serverSessionsSubscribe?(listener: () => void): () => void;
@@ -1336,6 +1344,7 @@ export const desktopIpc = {
     cloudAuthCallbackTake: "happy:cloud-auth:callback-take",
     cloudAuthConfigurationGet: "happy:cloud-auth:configuration-get",
     cloudAuthOpen: "happy:cloud-auth:open",
+    serverSignInDescribe: "happy:server-sign-in:describe",
     serverSignInBegin: "happy:server-sign-in:begin",
     serverSignInFinish: "happy:server-sign-in:finish",
     serverSignInCancel: "happy:server-sign-in:cancel",

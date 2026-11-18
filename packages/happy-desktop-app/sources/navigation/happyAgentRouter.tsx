@@ -119,6 +119,8 @@ export interface HappyAgentRouterContext {
     /** Live renderer diagnostics, present only in an explicitly debug-launched desktop window. */
     readonly performance?: LivePerformanceStore;
     readonly daemon?: AppHappyAgentDaemonStore;
+    /** Opens connecting this computer to a team server by its address; local surface only. */
+    readonly serverConnectOpen?: () => void;
     /** The local Happy Agent update card, beside `daemon` and only with it. */
     readonly agentUpdate?: AppHappyAgentUpdateStore;
     readonly agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
@@ -976,6 +978,9 @@ function HappyAgentSettingsRoute() {
                 void navigate({ params: { section }, to: "/settings/$section" })
             }
             onClose={() => happyAgentRouterSettingsClose(router)}
+            {...(context.serverConnectOpen
+                ? { onServerConnectOpen: context.serverConnectOpen }
+                : {})}
             onPluginOpen={(happyAgentId, pluginId) =>
                 void navigate({
                     params: { happyAgentId, pluginId },

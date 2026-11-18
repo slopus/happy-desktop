@@ -25,6 +25,13 @@ export type WelcomeScreenBackdrop =
     /** Native iOS/Android grain gradient, with the matching light/dark palette. */
     | { readonly kind: "sky" };
 
+/** A quiet way in beside the primary action: a ghost button. */
+export interface WelcomeScreenSecondaryAction {
+    readonly label: string;
+    readonly disabled?: boolean;
+    onAction(): void;
+}
+
 export interface WelcomeScreenProps {
     readonly className?: string;
     readonly "data-testid"?: string;
@@ -42,11 +49,9 @@ export interface WelcomeScreenProps {
     readonly decoration?: ReactNode;
     onAction(): void;
     /** A quieter second way in, under the primary action. */
-    readonly secondaryAction?: {
-        readonly label: string;
-        readonly disabled?: boolean;
-        onAction(): void;
-    };
+    readonly secondaryAction?: WelcomeScreenSecondaryAction;
+    /** One more quiet way in, under the second, drawn the same way. */
+    readonly tertiaryAction?: WelcomeScreenSecondaryAction;
     /** Between the deck and the actions, for what a flow reveals there. */
     readonly children?: ReactNode;
     /** A hidden, pointer-only press on the deck's art. */
@@ -119,6 +124,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "decoration",
         "onAction",
         "secondaryAction",
+        "tertiaryAction",
         "children",
         "onArtPress",
         "appearance",
@@ -178,16 +184,19 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                         >
                             {local.actionLabel ?? "Go Happy"}
                         </Button>
-                        {local.secondaryAction ? (
-                            <Button
-                                className="happy-welcome-screen__secondary"
-                                disabled={local.secondaryAction.disabled}
-                                onClick={local.secondaryAction.onAction}
-                                variant="ghost"
-                            >
-                                {local.secondaryAction.label}
-                            </Button>
-                        ) : null}
+                        {[local.secondaryAction, local.tertiaryAction].map((action) =>
+                            action ? (
+                                <Button
+                                    className="happy-welcome-screen__secondary"
+                                    disabled={action.disabled}
+                                    key={action.label}
+                                    onClick={action.onAction}
+                                    variant="ghost"
+                                >
+                                    {action.label}
+                                </Button>
+                            ) : null,
+                        )}
                     </div>
                 </div>
             </ScrollArea>

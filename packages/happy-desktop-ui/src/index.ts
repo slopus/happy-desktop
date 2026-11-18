@@ -643,6 +643,15 @@ export {
     type CloudConnectServer,
     type CloudConnectView,
 } from "./CloudConnectScreen";
+export { ConnectSheet, type ConnectSheetProps } from "./ConnectSheet";
+export {
+    ServerConnectPages,
+    ServerConnectScreen,
+    type ServerConnectPagesProps,
+    type ServerConnectScreenProps,
+    type ServerConnectServer,
+    type ServerConnectView,
+} from "./ServerConnectScreen";
 export {
     HappyLinkNoticeDialog,
     type HappyLinkNoticeDialogProps,
@@ -753,6 +762,7 @@ export {
     WelcomeScreen,
     type WelcomeScreenBackdrop,
     type WelcomeScreenProps,
+    type WelcomeScreenSecondaryAction,
 } from "./WelcomeScreen";
 export { LiquidMetalMark, type LiquidMetalMarkProps } from "./LiquidMetalMark";
 export {
@@ -1037,6 +1047,14 @@ export {
     HappyAgentAccountSettings,
     type HappyAgentAccountSettingsProps,
 } from "./pages/settings/HappyAgentAccountSettings";
+export {
+    HappyAgentServerConnectSettings,
+    type HappyAgentServerConnectSettingsProps,
+} from "./pages/settings/HappyAgentServerConnectSettings";
+export {
+    HappyAgentServerPhoneSettings,
+    type HappyAgentServerPhoneSettingsProps,
+} from "./pages/settings/HappyAgentServerPhoneSettings";
 export {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,

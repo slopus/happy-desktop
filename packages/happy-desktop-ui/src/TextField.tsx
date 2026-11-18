@@ -50,7 +50,7 @@ export type TextFieldProps = {
     name?: string;
     autoComplete?: string;
     /** The on-screen keyboard and input hint, such as `numeric` for a code. */
-    inputMode?: "text" | "email" | "numeric";
+    inputMode?: "text" | "email" | "numeric" | "url";
 };
 /** Leading-icon glyph box by control size (matches Button's 14/16/18 ramp). */
 const iconSizes: Record<TextFieldSize, 14 | 16 | 18> = {
