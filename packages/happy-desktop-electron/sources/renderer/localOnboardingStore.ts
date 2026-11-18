@@ -106,7 +106,14 @@ export interface LocalOnboardingViewSnapshot {
      */
     readonly providerClis?: ReadonlyMap<LocalProviderCliId, LocalProviderCli>;
     /** Saving a pasted Claude setup token; absent until one is pasted. */
-    readonly claudeToken?: LocalOnboardingClaudeToken;
+    readonly claudeToken?:
+        | { readonly phase: Exclude<LocalOnboardingClaudeToken["phase"], "failed"> }
+        | {
+              readonly phase: "failed";
+              readonly error: string;
+              /** The typed cause, separate from Happy Agent's displayable error text. */
+              readonly errorKind: "agent_unsupported" | "refused" | "unreachable";
+          };
 }
 
 export interface LocalOnboardingStore {
@@ -127,9 +134,13 @@ export interface LocalOnboardingStore {
     /** Stops the install or sign-in going on for one assistant. */
     assistantConnectCancel(id: LocalProviderCliId): void;
     /** Hands a pasted Claude setup token to Happy Agent. Never kept here. */
-    claudeSetupTokenSave(token: string): void;
+    claudeSetupTokenSave(token: string): "started" | "busy" | "unavailable";
     /** Forgets how the last token save went, as the dialog opens again. */
     claudeSetupTokenReset(): void;
+    /** The setup-token command was copied from the dialog. */
+    claudeSetupTokenCommandCopy(): void;
+    /** A paste filled the dialog's empty token field. No token is passed. */
+    claudeSetupTokenPaste(): void;
     /** Starts Windows sandbox setup; Windows' administrator prompt opens from here. */
     sandboxSetup(): void;
     happyMobileConnect(): void;
@@ -1254,7 +1265,8 @@ export function localOnboardingStoreCreate(
         },
         claudeSetupTokenSave(token) {
             const api = providerClisApi();
-            if (!api || snapshot.claudeToken?.phase === "saving") return;
+            if (snapshot.claudeToken?.phase === "saving") return "busy";
+            if (!api) return "unavailable";
             publish({ ...snapshot, claudeToken: { phase: "saving" } });
             api.claudeSetupTokenSave(token, crypto.randomUUID()).then(
                 () => {
@@ -1265,6 +1277,12 @@ export function localOnboardingStoreCreate(
                     publish({
                         ...snapshot,
                         claudeToken: {
+                            errorKind:
+                                error instanceof LocalProviderClisUnavailable
+                                    ? "agent_unsupported"
+                                    : error instanceof LocalProviderCliRefused
+                                      ? "refused"
+                                      : "unreachable",
                             error:
                                 error instanceof LocalProviderCliRouteMissing
                                     ? "This version of Happy Agent can't take a setup token yet. Update Happy Agent, then try again."
@@ -1277,11 +1295,14 @@ export function localOnboardingStoreCreate(
                     });
                 },
             );
+            return "started";
         },
         claudeSetupTokenReset() {
             if (snapshot.claudeToken?.phase === "saving") return;
             publish({ ...snapshot, claudeToken: { phase: "idle" } });
         },
+        claudeSetupTokenCommandCopy() {},
+        claudeSetupTokenPaste() {},
         sandboxSetup() {
             attempt(bridge.onboardingSandboxSetup(), "Happy could not start sandbox setup.");
         },

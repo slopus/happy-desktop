@@ -241,6 +241,8 @@ export interface LocalOnboardingScreenProps {
     onClaudeTokenSubmit?(token: string): void;
     /** The Claude dialog opened again: forget how the last save went. */
     onClaudeTokenReset?(): void;
+    onClaudeTokenCommandCopy?(): void;
+    onClaudeTokenPaste?(): void;
 }
 
 /** What a reader is told to run when Happy cannot start their Happy Agent itself. */
@@ -760,6 +762,10 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 {...(claudeToken?.error ? { error: claudeToken.error } : {})}
                 onClose={() => claudeOpenSet(false)}
                 onTokenSubmit={props.onClaudeTokenSubmit}
+                onCommandCopy={(command) => {
+                    if (command === "setup-token") props.onClaudeTokenCommandCopy?.();
+                }}
+                {...(props.onClaudeTokenPaste ? { onTokenPaste: props.onClaudeTokenPaste } : {})}
             />
         ) : null;
 

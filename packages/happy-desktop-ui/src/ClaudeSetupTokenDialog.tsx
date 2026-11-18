@@ -27,6 +27,8 @@ export interface ClaudeSetupTokenDialogProps {
     onTokenSubmit(token: string): void;
     /** A command in the steps was copied. */
     onCommandCopy?(command: "install" | "setup-token"): void;
+    /** A paste fills the empty token field; no token content leaves this callback. */
+    onTokenPaste?(): void;
 }
 
 /**
@@ -117,7 +119,21 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                         </li>
                         <li className="happy-claude-setup-token__step">
                             <span className="happy-claude-setup-token__number">{first + 2}</span>
-                            <span className="happy-claude-setup-token__words">
+                            <span
+                                className="happy-claude-setup-token__words"
+                                onPaste={(event) => {
+                                    if (
+                                        !saving &&
+                                        !normalized &&
+                                        event.target instanceof HTMLInputElement &&
+                                        !event.defaultPrevented &&
+                                        event.clipboardData
+                                            .getData("text")
+                                            .replace(/[\s\p{White_Space}]/gu, "")
+                                    )
+                                        props.onTokenPaste?.();
+                                }}
+                            >
                                 <span>
                                     Back in {terminal}, copy the token it prints. It starts with{" "}
                                     <code>sk-ant-oat01-</code>. Paste it here:

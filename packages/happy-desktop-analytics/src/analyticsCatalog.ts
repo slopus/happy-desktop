@@ -351,6 +351,13 @@ export interface AnalyticsEvents {
     };
     readonly onboarding_mobile: { readonly action: "paired" | "skipped" };
     readonly onboarding_completed: Readonly<Record<never, never>>;
+    readonly claude_setup_token_opened: { readonly source: "onboarding" };
+    readonly claude_setup_token_command_copied: Readonly<Record<never, never>>;
+    readonly claude_setup_token_pasted: Readonly<Record<never, never>>;
+    readonly claude_setup_token_saved: Readonly<Record<never, never>>;
+    readonly claude_setup_token_failed: {
+        readonly error_kind: "agent_unavailable" | "agent_unsupported" | "refused" | "unreachable";
+    };
     /** A phone pairing page showed its Relay | Direct choice. */
     readonly mobile_pairing_options_shown: {
         readonly options: "relay_direct";
@@ -500,6 +507,13 @@ export const ANALYTICS_EVENT_RULES: {
     },
     onboarding_mobile: { action: oneOf(["paired", "skipped"]) },
     onboarding_completed: NONE,
+    claude_setup_token_opened: { source: oneOf(["onboarding"]) },
+    claude_setup_token_command_copied: NONE,
+    claude_setup_token_pasted: NONE,
+    claude_setup_token_saved: NONE,
+    claude_setup_token_failed: {
+        error_kind: oneOf(["agent_unavailable", "agent_unsupported", "refused", "unreachable"]),
+    },
     mobile_pairing_options_shown: {
         options: oneOf(["relay_direct"]),
         default_method: oneOf(ANALYTICS_PAIRING_METHODS),

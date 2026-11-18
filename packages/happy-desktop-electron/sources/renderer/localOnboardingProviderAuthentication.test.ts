@@ -121,32 +121,80 @@ function storeOpen() {
     return store;
 }
 
+it("leaves the snapshot unchanged when a token save has no local Agent API", () => {
+    const store = storeOpen();
+    // The asynchronous runtime read has not supplied an endpoint yet.
+    const before = store.get();
+    expect(store.claudeSetupTokenSave("sk-ant-oat01-example")).toBe("unavailable");
+    expect(store.get()).toBe(before);
+});
+
 it.each([
     [
         404,
         "not_found",
         "Route not found.",
         "This version of Happy Agent can't take a setup token yet. Update Happy Agent, then try again.",
+        "agent_unsupported",
     ],
-    [404, "not_found", "Provider account not found.", "Provider account not found."],
-    [400, "invalid_request", "The setup token is invalid.", "The setup token is invalid."],
-    [501, "unsupported", "Unavailable in team mode.", "Unavailable in team mode."],
-])("shows the correct setup-token failure for %s: %s", async (status, code, error, expected) => {
+    [404, "not_found", "Provider account not found.", "Provider account not found.", "refused"],
+    [
+        400,
+        "invalid_request",
+        "The setup token is invalid.",
+        "The setup token is invalid.",
+        "refused",
+    ],
+    [
+        501,
+        "unsupported",
+        "Unavailable in team mode.",
+        "Unavailable in team mode.",
+        "agent_unsupported",
+    ],
+])(
+    "shows the correct setup-token failure for %s: %s",
+    async (status, code, error, expected, errorKind) => {
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockImplementation(async (url: string) =>
+                    url.endsWith("/setup-token")
+                        ? Response.json({ code, error }, { status })
+                        : Response.json({ providerClis: [] }),
+                ),
+        );
+        const store = storeOpen();
+        await vi.waitFor(() => expect(store.get().runtime?.phase).toBe("ready"));
+        store.claudeSetupTokenSave("sk-ant-oat01-example");
+        await vi.waitFor(() =>
+            expect(store.get().claudeToken).toEqual({
+                phase: "failed",
+                error: expected,
+                errorKind,
+            }),
+        );
+    },
+);
+
+it("classifies a setup-token network failure without changing its displayed message", async () => {
     vi.stubGlobal(
         "fetch",
-        vi
-            .fn()
-            .mockImplementation(async (url: string) =>
-                url.endsWith("/setup-token")
-                    ? Response.json({ code, error }, { status })
-                    : Response.json({ providerClis: [] }),
-            ),
+        vi.fn(async (url: string) => {
+            if (url.endsWith("/setup-token")) throw new Error("private network error");
+            return Response.json({ providerClis: [] });
+        }),
     );
     const store = storeOpen();
     await vi.waitFor(() => expect(store.get().runtime?.phase).toBe("ready"));
     store.claudeSetupTokenSave("sk-ant-oat01-example");
     await vi.waitFor(() =>
-        expect(store.get().claudeToken).toEqual({ phase: "failed", error: expected }),
+        expect(store.get().claudeToken).toEqual({
+            phase: "failed",
+            error: "Happy couldn't reach Happy Agent. Try again.",
+            errorKind: "unreachable",
+        }),
     );
 });
 
