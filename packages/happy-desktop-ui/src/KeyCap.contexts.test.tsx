@@ -9,8 +9,8 @@ import { createRenderer, type RenderedElement } from "./testing";
 
 /*
  * Every shortcut the app shows is the one KeyCap, and in every place it stands
- * the same: ⌘ spans the capital's band from cap line to baseline, and the cap's
- * capitals sit on the centre line of the text they explain.
+ * the same: the command modifier's capital spans the key's cap band, and the
+ * cap's capitals sit on the centre line of the text they explain.
  */
 
 const K = commandShortcut("k");
@@ -79,15 +79,31 @@ it("draws one key cap, on the centre line of its owner's text, in every context"
         const cap = view.$(`${root} [data-happy-desktop-ui="key-cap"]`);
         expect(cap.element.tagName, name).toBe("KBD");
         expect(cap.height(), name).toBe(18);
-        const symbol = await ink(view.$(`${root} [data-happy-desktop-ui="key-cap-symbol"]`));
-        const letter = await ink(view.$(`${root} [data-happy-desktop-ui="key-cap-text"]`));
-        expect(Math.abs(symbol.top - letter.top), `${name}: ⌘ on the cap line`).toBeLessThanOrEqual(
+        expect(cap.element.textContent, name).toBe(K.caps);
+        // macOS renders ⌘K; Windows/Linux render Ctrl+K. Measure the command
+        // glyph or Ctrl's capital C against K, not an absent macOS glyph.
+        const modifier = K.modifier === "Meta" ? "⌘" : "C";
+        const symbol = await ink(
+            view.$(
+                `${root} [data-happy-desktop-ui="key-cap-key"]:first-child [data-happy-desktop-ui="${K.modifier === "Meta" ? "key-cap-symbol" : "key-cap-text"}"]`,
+            ),
+        );
+        const letter = await ink(
+            view.$(
+                `${root} [data-happy-desktop-ui="key-cap-key"]:last-child [data-happy-desktop-ui="key-cap-text"]`,
+            ),
+        );
+        expect(
+            Math.abs(symbol.top - letter.top),
+            `${name}: ${modifier} on the cap line`,
+        ).toBeLessThanOrEqual(0.5);
+        expect(
+            symbol.bottom - letter.bottom,
+            `${name}: ${modifier} on the baseline`,
+        ).toBeGreaterThanOrEqual(0);
+        expect(symbol.bottom - letter.bottom, `${name}: ${modifier} overshoot`).toBeLessThanOrEqual(
             0.5,
         );
-        expect(symbol.bottom - letter.bottom, `${name}: ⌘ on the baseline`).toBeGreaterThanOrEqual(
-            0,
-        );
-        expect(symbol.bottom - letter.bottom, `${name}: ⌘ overshoot`).toBeLessThanOrEqual(0.5);
         // The owner's text, minus the cap inside it for the tooltip bubble.
         const owner = view.$(ownerSelector);
         if (name === "tooltip") continue;
