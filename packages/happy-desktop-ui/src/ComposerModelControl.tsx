@@ -274,12 +274,13 @@ function memberKey(pool: string, member: string) {
 }
 
 /** A list opened from the keyboard takes focus on its current choice. */
-function popupFocus(node: HTMLElement, anchor: HTMLElement | null) {
+function popupFocus(node: HTMLElement, anchor: HTMLElement | null, preferred?: HTMLElement | null) {
     if (anchor === null || document.activeElement !== anchor) return;
     (
+        preferred ??
         node.querySelector<HTMLElement>('[aria-checked="true"]') ??
         node.querySelector<HTMLElement>("[data-menu-item]")
-    )?.focus();
+    )?.focus({ preventScroll: true });
 }
 
 /**
@@ -341,11 +342,34 @@ function placeList(node: HTMLDivElement | null) {
     const { box, pane } = placeBeside(node, "left");
     const room = box.bottom - pane.top - VIEWPORT_GAP;
     node.style.maxHeight = `${Math.max(96, Math.min(MENU_MAX_HEIGHT, room))}px`;
-    popupFocus(node, node.parentElement!.querySelector("[data-panel-anchor]"));
+    const viewport = node.querySelector<HTMLElement>("[data-scrollbar-viewport]");
+    const service = viewport?.querySelector<HTMLElement>("[data-selected-service]");
+    const row = service?.querySelector<HTMLElement>("[data-selected]");
+    const accounts = node.querySelector<HTMLDivElement>(":scope > [data-popup]");
+    // A blueprint seeded with an account panel is already open on its header.
+    if (viewport && service && !accounts) placeOpeningScroll(viewport, service, row);
+    popupFocus(node, node.parentElement!.querySelector("[data-panel-anchor]"), row);
     // React places children first, so an account panel that mounted with this
     // list was placed against where the list was before it moved.
-    const accounts = node.querySelector<HTMLDivElement>(":scope > [data-popup]");
     if (accounts) placeAccounts(accounts);
+}
+
+/** Center the whole service on open. Move only far enough to give the chosen
+ * row two rows of breathing room; in a short viewport share the space equally.
+ * The native scroll range clamps either end. No scroll work on later renders. */
+function placeOpeningScroll(viewport: HTMLElement, service: HTMLElement, row?: HTMLElement | null) {
+    const view = viewport.getBoundingClientRect();
+    const group = service.getBoundingClientRect();
+    let shift = (group.top + group.bottom - view.top - view.bottom) / 2;
+    if (row) {
+        const choice = row.getBoundingClientRect();
+        const margin = Math.min(2 * choice.height, (view.height - choice.height) / 2);
+        shift = Math.max(
+            choice.bottom + margin - view.bottom,
+            Math.min(shift, choice.top - margin - view.top),
+        );
+    }
+    viewport.scrollTo({ top: viewport.scrollTop + shift, behavior: "instant" });
 }
 
 /**
@@ -1610,6 +1634,11 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                                                     aria-label={service.label}
                                                     className="happy-composer-model-control__service"
                                                     data-happy-desktop-ui="composer-model-control-service"
+                                                    data-selected-service={
+                                                        service.id === selection?.service
+                                                            ? ""
+                                                            : undefined
+                                                    }
                                                     role="group"
                                                 >
                                                     <div
