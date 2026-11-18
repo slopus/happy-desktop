@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { CloudConnectScreenProps } from "../../src/CloudConnectScreen";
 import { ServerConnectScreen, type ServerConnectView } from "../../src/ServerConnectScreen";
 import { ThemeScope } from "../../src/ThemeScope";
 import type { WelcomeSlide } from "../../src/WelcomeDeck";
@@ -33,11 +34,50 @@ function frame(children: ReactNode) {
     );
 }
 
-/** The enterprise test server, as its discovery describes it. */
+/** The enterprise test server, a deployment of one server, as its discovery describes it. */
 const ACME = {
     name: "164-90-149-4.sslip.io",
     signIn: { method: "Acme SSO (demo)", host: "auth.164-90-149-4.sslip.io" },
 } as const;
+
+/** An enterprise cloud, as its happy-cloud.json describes it. */
+const ACME_CLOUD = {
+    kind: "enterpriseSignIn",
+    name: "Acme Cloud",
+    signIn: { name: "Acme SSO", host: "sso.acme.example" },
+} as const;
+
+const SERVERS = [
+    { id: "s1", displayName: "Acme Research", name: "research" },
+    { id: "s2", displayName: "Platform", name: "platform" },
+] as const;
+
+/** A cloud's steps take Happy Cloud's handlers; here none of them does anything. */
+const CLOUD_HANDLERS: Omit<CloudConnectScreenProps, "appearance" | "view" | "onClose"> = {
+    onAgentAdd: noop,
+    onBack: noop,
+    onCloudOpen: noop,
+    onContinue: noop,
+    onCreate: noop,
+    onCreateNameChange: noop,
+    onCreateOpen: noop,
+    onLogoPress: noop,
+    onTestLoginChange: noop,
+    onTestPasswordChange: noop,
+    onTestSignIn: noop,
+    onEmailOpen: noop,
+    onEmailChange: noop,
+    onEmailCodeSend: noop,
+    onEmailCodeChange: noop,
+    onEmailCodeVerify: noop,
+    onEmailCodeResend: noop,
+    onEmailChangeOpen: noop,
+    onServerPick: noop,
+    onServersContinue: noop,
+    onInviteOpen: noop,
+    onInviteChange: noop,
+    onInviteAccept: noop,
+};
 
 /* The app's first slide, word for word, so the welcome reads as it ships. */
 const PITCH: readonly WelcomeSlide[] = [
@@ -75,24 +115,87 @@ const STEPS: readonly {
     {
         id: "address",
         label: "Address",
-        detail: "once local setup hands over, or Settings › Account › Connect to a server",
+        detail: "Enterprise login from the first screen, or Settings › Account › Enterprise login",
         view: { kind: "address", address: "" },
     },
     {
         id: "address-checking",
         label: "Address checking",
-        detail: "the host Happy Agent reads the server's discovery and adds it",
-        view: { kind: "address", address: "164-90-149-4.sslip.io", busy: true },
+        detail: "the shell reads /.well-known/happy-cloud.json, then /v0/authentication",
+        view: { kind: "address", address: "acme.example", busy: true },
+    },
+    {
+        id: "cloud-sign-in",
+        label: "Cloud: sign in",
+        detail: "a cloud of servers: its account signs in at the company's identity provider",
+        view: { kind: "cloud", cloud: ACME_CLOUD },
+    },
+    {
+        id: "cloud-signing-in",
+        label: "Cloud: signing in",
+        detail: "the browser is open at the identity provider",
+        view: { kind: "cloud", cloud: { kind: "signingIn", host: "sso.acme.example" } },
+    },
+    {
+        id: "cloud-servers",
+        label: "Cloud: servers",
+        detail: "Happy Cloud's own list, with invites pasted in",
+        view: {
+            kind: "cloud",
+            cloud: {
+                kind: "servers",
+                servers: { status: "ready", servers: SERVERS },
+                joins: new Map([["s1", "joined"]]),
+                invite: true,
+            },
+        },
+    },
+    {
+        id: "cloud-first",
+        label: "Cloud: first server",
+        detail: "an account with no servers yet: bootstrap one, or join with an invite",
+        view: {
+            kind: "cloud",
+            cloud: {
+                kind: "create",
+                name: "research",
+                availability: "available",
+                back: false,
+                invite: true,
+            },
+        },
+    },
+    {
+        id: "cloud-invite",
+        label: "Cloud: join with an invite",
+        detail: "the invite's link, or its code, pasted in",
+        view: {
+            kind: "cloud",
+            cloud: { kind: "invite", link: "https://join.acme.example/#k3Jx9qPz" },
+        },
+    },
+    {
+        id: "cloud-invite-refused",
+        label: "Cloud: invite refused",
+        detail: "the account API's own sentence",
+        view: {
+            kind: "cloud",
+            cloud: {
+                kind: "invite",
+                link: "https://join.acme.example/#k3Jx9qPz",
+                error: "This invitation has expired. Ask for a new invitation.",
+            },
+        },
     },
     {
         id: "sign-in",
-        label: "Sign in",
-        detail: "how signing in works there, from the server's discovery",
+        label: "One server: sign in",
+        detail: "no happy-cloud.json: one server, from its own discovery",
         view: { kind: "signIn", server: ACME },
     },
     {
         id: "signing-in",
-        label: "Signing in",
+        label: "One server: signing in",
         detail: "the browser is open at the organization's sign-in",
         view: { kind: "signingIn", server: ACME, host: "auth.164-90-149-4.sslip.io" },
     },
@@ -103,17 +206,17 @@ const STEPS: readonly {
         view: {
             kind: "address",
             address: "happy acme",
-            error: "That isn’t a web address. Enter one like https://happy.example.com.",
+            error: "That isn’t a web address. Enter one like acme.example.",
         },
     },
     {
-        id: "blocked",
-        label: "Blocked by the edge",
-        detail: "a load balancer answered /v0/authentication with its sign-in page",
+        id: "discovery-invalid",
+        label: "Discovery refused",
+        detail: "happy-cloud.json isn't version 1, or isn't bound to this address",
         view: {
             kind: "address",
-            address: "https://164-90-149-4.sslip.io",
-            error: "This address is not a Happy server, or something in front of it, such as a sign-in page, answered instead.",
+            address: "acme.example",
+            error: "This address doesn't describe a Happy deployment this app can use.",
         },
     },
     {
@@ -122,21 +225,25 @@ const STEPS: readonly {
         detail: "discovery couldn't be reached",
         view: {
             kind: "address",
-            address: "https://164-90-149-4.sslip.io",
-            error: "Happy couldn’t reach 164-90-149-4.sslip.io. Check the address and your network.",
+            address: "acme.example",
+            error: "Happy couldn't reach this address. Check it and your network.",
+        },
+    },
+    {
+        id: "not-happy",
+        label: "One server: not a Happy server",
+        detail: "no happy-cloud.json, and /v0/authentication answered something else",
+        view: {
+            kind: "signIn",
+            server: { name: ACME.name },
+            error: "This address doesn't answer like a Happy server.",
         },
     },
     {
         id: "sign-in-reading",
-        label: "Reading the sign-in",
-        detail: "the server is added; its sign-in method is still being read",
+        label: "One server: reading the sign-in",
+        detail: "its sign-in method is still being read",
         view: { kind: "signIn", server: { name: ACME.name }, busy: true },
-    },
-    {
-        id: "sign-in-older-shell",
-        label: "Sign in, older shell",
-        detail: "a shell that can't read discovery before the browser opens",
-        view: { kind: "signIn", server: { name: ACME.name } },
     },
     {
         id: "cancelled",
@@ -157,16 +264,16 @@ const STEPS: readonly {
 ];
 
 /**
- * P-048 Server connect flow — connecting to a team server by its address,
- * step by step, at the window Happy opens at and its minimum.
+ * P-048 Enterprise login — a company's deployment by its address, step by
+ * step, at the window Happy opens at and its minimum.
  */
 export function ServerConnectFlowPage() {
     return (
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Enterprise login: from the first screen, local setup, then the server’s address, how signing in works there, the browser, and each way it can go wrong."
-            title="Server connect flow"
+            summary="Enterprise login: from the first screen, the company’s address, then a cloud’s own steps or one server’s sign-in, and each way it can go wrong."
+            title="Enterprise login"
         >
             {windows.flatMap((window) =>
                 STEPS.map((step, index) => {
@@ -186,6 +293,7 @@ export function ServerConnectFlowPage() {
                                     {step.view ? (
                                         <ServerConnectScreen
                                             appearance="light"
+                                            cloud={CLOUD_HANDLERS}
                                             onAddressChange={noop}
                                             onAddressSubmit={noop}
                                             onBack={noop}

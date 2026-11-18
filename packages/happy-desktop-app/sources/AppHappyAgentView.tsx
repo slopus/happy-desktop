@@ -594,6 +594,11 @@ export interface AppHappyAgentEntry {
      * of Staff, so nothing here offers to.
      */
     readonly happyCloud?: true;
+    /**
+     * An enterprise server: phones add it by its server code, and a server of
+     * an enterprise cloud also by the cloud's code.
+     */
+    readonly enterprise?: { readonly cloud?: { readonly name: string; readonly url: string } };
     /** This Happy Agent runs no workspaces, so it has no projects to offer. */
     readonly workspacesUnavailable?: true;
     readonly projects: readonly HappyAgentProjectGroup[];

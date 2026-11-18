@@ -124,6 +124,55 @@ export type DesktopCredentialImportResult =
           readonly message: string;
       };
 
+/**
+ * What Enterprise login found at an address: a cloud of servers whose
+ * account signs in at the company's identity provider, or a deployment of
+ * one server, listed under `connectionId` and signed in to on its own.
+ */
+export type DesktopEnterpriseOpened =
+    | {
+          readonly kind: "cloud";
+          /** The deployment's key in this app, which every call about it names. */
+          readonly key: string;
+          /** The address entered, as `https://<base>/`. */
+          readonly url: string;
+          readonly name: string;
+          /** How its account signs in: the identity provider's name and host. */
+          readonly signIn: { readonly name: string; readonly host: string };
+      }
+    | {
+          readonly kind: "server";
+          readonly key: string;
+          readonly url: string;
+          readonly connectionId: string;
+      };
+
+/**
+ * Enterprise deployments, which the shell opens, signs in to and talks to
+ * itself, like Happy Cloud, holding all of it in memory only. An enterprise
+ * cloud's account signs in through `serverSignInBegin` with the account ID
+ * `happyCloudEnterpriseAccountId(key)`; its token never reaches the window.
+ */
+export interface DesktopEnterprise {
+    /** Reads the address's discovery and opens what is there. */
+    open(url: string): Promise<DesktopServerSignInResult<DesktopEnterpriseOpened>>;
+    /** Forgets a deployment of one server, and its sign-in. */
+    serverForget(key: string): Promise<void>;
+    serversList(key: string): Promise<DesktopServerSignInResult<readonly HappyCloudServer[]>>;
+    availability(
+        key: string,
+        name: string,
+    ): Promise<DesktopServerSignInResult<DesktopHappyCloudAvailability>>;
+    serverCreate(key: string, name: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
+    /** Accepts an invite by the token its link carries. */
+    inviteAccept(key: string, token: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
+    serverConnect(key: string, serverId: string): Promise<DesktopServerSignInResult<string>>;
+    imageRead(key: string, serverId: string): Promise<string | undefined>;
+    serverRemove(key: string, name: string): Promise<void>;
+    serverSignOut(key: string, name: string): Promise<void>;
+    accountSignOut(key: string): Promise<void>;
+}
+
 /** The accounts API, asked by the shell with the account's token. */
 export interface DesktopHappyCloud {
     serversList(): Promise<DesktopServerSignInResult<readonly HappyCloudServer[]>>;
@@ -1047,6 +1096,8 @@ export interface HappyDesktopBridge {
      * Absent from production builds and from shells older than this field.
      */
     readonly happyCloud?: DesktopHappyCloud;
+    /** Enterprise login. Absent from shells older than this field. */
+    readonly enterprise?: DesktopEnterprise;
     /** The machine the shell runs on. Absent from shells older than this field. */
     readonly system?: DesktopSystem;
     /**
@@ -1349,6 +1400,17 @@ export const desktopIpc = {
     serverSignInFinish: "happy:server-sign-in:finish",
     serverSignInCancel: "happy:server-sign-in:cancel",
     serverSessionsGet: "happy:server-sessions:get",
+    enterpriseOpen: "happy:enterprise:open",
+    enterpriseServerForget: "happy:enterprise:server-forget",
+    enterpriseServersList: "happy:enterprise:servers-list",
+    enterpriseAvailability: "happy:enterprise:availability",
+    enterpriseServerCreate: "happy:enterprise:server-create",
+    enterpriseInviteAccept: "happy:enterprise:invite-accept",
+    enterpriseServerConnect: "happy:enterprise:server-connect",
+    enterpriseImageRead: "happy:enterprise:image-read",
+    enterpriseServerRemove: "happy:enterprise:server-remove",
+    enterpriseServerSignOut: "happy:enterprise:server-sign-out",
+    enterpriseAccountSignOut: "happy:enterprise:account-sign-out",
     happyCloudServersList: "happy:happy-cloud:servers-list",
     happyCloudAvailability: "happy:happy-cloud:availability",
     happyCloudServerCreate: "happy:happy-cloud:server-create",

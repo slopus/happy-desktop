@@ -125,7 +125,11 @@ import {
     type DesktopUpdateSnapshot,
     type HappyDesktopBridge,
 } from "../shared/desktopContract";
-import { happyCloudServerNameOf } from "../shared/happyCloud";
+import {
+    happyCloudDirectOf,
+    happyCloudEnterpriseAccountId,
+    happyCloudServerNameOf,
+} from "../shared/happyCloud";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { dockUnreadPublish, happyAgentEntryUnreadCount } from "./dockUnread";
 import { happyAgentListedConversations } from "./happyAgentListed";
@@ -171,6 +175,7 @@ import { desktopCloudAuthRouterCreate, type DesktopCloudAuthEvent } from "./desk
 import {
     desktopCloudConnectStoreCreate,
     type DesktopCloudConnectStore,
+    desktopEnterpriseCloud,
 } from "./desktopCloudConnectStore";
 import {
     desktopServerConnectStoreCreate,
@@ -328,7 +333,32 @@ const CLOUD_SERVER_MENU_ITEMS: readonly MenuItem[] = [
     { kind: "item", id: CLOUD_REMOVE_ACTION, label: "Remove from Happy", danger: true },
 ];
 
-/** The Happy Cloud connection a rail entry stands for, by its entry ID. */
+/**
+ * An enterprise server's own menu: no account to sign out of for a
+ * deployment of one server, and the cloud named for one of a cloud's.
+ */
+function enterpriseServerMenuItems(cloudName: string | undefined): readonly MenuItem[] {
+    return [
+        { kind: "separator" },
+        ...(cloudName === undefined
+            ? []
+            : [
+                  {
+                      kind: "item" as const,
+                      id: CLOUD_SERVER_SIGN_OUT_ACTION,
+                      label: "Sign out of this server",
+                  },
+                  {
+                      kind: "item" as const,
+                      id: CLOUD_SIGN_OUT_ACTION,
+                      label: `Sign out of ${cloudName}`,
+                  },
+              ]),
+        { kind: "item", id: CLOUD_REMOVE_ACTION, label: "Remove from Happy", danger: true },
+    ];
+}
+
+/** The Happy Cloud or enterprise connection a rail entry stands for, by its entry ID. */
 function cloudServerConnectionOf(id: string): string | undefined {
     const connectionId = id.startsWith("connection:") ? id.slice("connection:".length) : id;
     return happyCloudServerNameOf(connectionId) === undefined ? undefined : connectionId;
@@ -863,19 +893,13 @@ function DesktopRenderer(props: DesktopRendererProps) {
                           },
                       }
                     : {})}
-                // A team server is added to this computer's own Happy Agent, so
-                // Enterprise login sets this computer up as Get started does,
-                // and asks for the server's address once that is done.
+                // Enterprise login needs nothing of this computer either: the
+                // start page stays behind its sheet until a server is open.
                 {...(props.serverConnect
                     ? {
                           tertiaryAction: {
                               label: "Enterprise login",
-                              onAction: () => {
-                                  desktopBootSkip();
-                                  props.onboarding.agentSetupBegin();
-                                  props.welcome.welcomeAcknowledge();
-                                  props.serverConnect?.connectWanted();
-                              },
+                              onAction: () => props.serverConnect?.connectOpen(),
                           },
                       }
                     : {})}
@@ -998,15 +1022,49 @@ function DesktopScreens(props: DesktopRendererProps) {
                     ...completionSoundMenuItems(
                         happyAgentAttentionConnection(attention, item.id).completionSound,
                     ),
-                    ...(props.cloudConnect && cloudServerConnectionOf(item.id) !== undefined
-                        ? CLOUD_SERVER_MENU_ITEMS
-                        : []),
+                    ...(() => {
+                        const connectionId = cloudServerConnectionOf(item.id);
+                        const direct =
+                            connectionId === undefined
+                                ? undefined
+                                : happyCloudDirectOf(connectionId);
+                        if (direct?.kind === "happyCloud")
+                            return props.cloudConnect ? CLOUD_SERVER_MENU_ITEMS : [];
+                        if (direct === undefined || !props.bridge.enterprise) return [];
+                        const entry = directory.happyAgents.find((found) => found.id === item.id);
+                        return enterpriseServerMenuItems(
+                            direct.kind === "enterpriseCloud"
+                                ? (entry?.enterprise?.cloud?.name ?? "this cloud")
+                                : undefined,
+                        );
+                    })(),
                 ]}
                 onItemMenuSelect={(id, actionId) => {
                     const sound = completionSoundOf(actionId);
                     if (sound) props.attention.completionSoundUpdate(id, sound);
-                    const cloud = props.bridge.happyCloud;
                     const connectionId = cloudServerConnectionOf(id);
+                    const direct =
+                        connectionId === undefined ? undefined : happyCloudDirectOf(connectionId);
+                    const enterprise = props.bridge.enterprise;
+                    if (connectionId !== undefined && direct !== undefined && enterprise) {
+                        const forget = () =>
+                            props.happyAgents.happyAgentCloudForget?.(connectionId);
+                        if (direct.kind === "enterpriseServer") {
+                            if (actionId === CLOUD_REMOVE_ACTION)
+                                void enterprise.serverForget(direct.key).then(forget);
+                            return;
+                        }
+                        if (direct.kind === "enterpriseCloud") {
+                            if (actionId === CLOUD_SIGN_OUT_ACTION)
+                                void enterprise.accountSignOut(direct.key);
+                            if (actionId === CLOUD_SERVER_SIGN_OUT_ACTION)
+                                void enterprise.serverSignOut(direct.key, direct.name);
+                            if (actionId === CLOUD_REMOVE_ACTION)
+                                void enterprise.serverRemove(direct.key, direct.name).then(forget);
+                            return;
+                        }
+                    }
+                    const cloud = props.bridge.happyCloud;
                     if (!cloud || connectionId === undefined) return;
                     if (actionId === CLOUD_SIGN_OUT_ACTION) void cloud.accountSignOut();
                     if (actionId === CLOUD_SERVER_SIGN_OUT_ACTION) {
@@ -1486,7 +1544,7 @@ function DesktopCloudConnect(props: {
     );
 }
 
-/** Enterprise login: a team server by its address, full window over everything else. */
+/** Enterprise login, full window over everything else. */
 function DesktopServerConnect(props: {
     store: DesktopServerConnectStore;
     appearance: AppearanceStore;
@@ -1498,9 +1556,40 @@ function DesktopServerConnect(props: {
         props.appearance.get,
     );
     if (!view) return null;
+    // A cloud's steps are Happy Cloud's, asked of the cloud's own store.
+    const cloud = view.kind === "cloud" ? props.store.cloud() : undefined;
     return (
         <ServerConnectScreen
             appearance={appearance.mode}
+            {...(cloud
+                ? {
+                      cloud: {
+                          onAgentAdd: cloud.agentAdd,
+                          onBack: cloud.back,
+                          onCloudOpen: cloud.cloudOpen,
+                          onContinue: cloud.connectConfirm,
+                          onCreate: cloud.serverCreate,
+                          onCreateNameChange: cloud.createNameUpdate,
+                          onCreateOpen: cloud.createOpen,
+                          onLogoPress: cloud.logoPress,
+                          onTestLoginChange: cloud.testLoginUpdate,
+                          onTestPasswordChange: cloud.testPasswordUpdate,
+                          onTestSignIn: cloud.testSignIn,
+                          onEmailOpen: cloud.emailOpen,
+                          onEmailChange: cloud.emailUpdate,
+                          onEmailCodeSend: cloud.emailCodeSend,
+                          onEmailCodeChange: cloud.emailCodeUpdate,
+                          onEmailCodeVerify: cloud.emailCodeVerify,
+                          onEmailCodeResend: cloud.emailCodeResend,
+                          onEmailChangeOpen: cloud.emailChangeOpen,
+                          onServerPick: cloud.serverPick,
+                          onServersContinue: cloud.serversContinue,
+                          onInviteOpen: cloud.inviteOpen,
+                          onInviteChange: cloud.inviteUpdate,
+                          onInviteAccept: cloud.inviteAccept,
+                      },
+                  }
+                : {})}
             onAddressChange={props.store.addressUpdate}
             onAddressSubmit={props.store.addressSubmit}
             onBack={props.store.back}
@@ -1510,42 +1599,6 @@ function DesktopServerConnect(props: {
         />
     );
 }
-
-/**
- * Selects a team server once the window lists it: the host's roster update
- * that names it can arrive just after the sign-in that waited on it.
- */
-function desktopServerOpen(
-    happyAgents: HappyAgentDirectoryStore,
-    connectionId: string,
-): Promise<boolean> {
-    const id = `connection:${connectionId}`;
-    const listed = (): boolean => happyAgents.get().happyAgents.some((entry) => entry.id === id);
-    if (listed()) {
-        happyAgents.happyAgentActivate(id);
-        return Promise.resolve(true);
-    }
-    return new Promise((resolve) => {
-        let settled = false;
-        let unsubscribe: (() => void) | undefined;
-        const settle = (opened: boolean): void => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            unsubscribe?.();
-            if (opened) happyAgents.happyAgentActivate(id);
-            resolve(opened);
-        };
-        const timer = setTimeout(() => settle(listed()), SERVER_LISTED_WAIT_MS);
-        unsubscribe = happyAgents.subscribe(() => {
-            if (listed()) settle(true);
-        });
-        if (settled) unsubscribe();
-    });
-}
-
-/** How long a signed-in server may take to be listed before opening it gives up. */
-const SERVER_LISTED_WAIT_MS = 15_000;
 
 /** Why a Happy link from outside was not opened, centered over everything else. */
 function DesktopHappyLinkNotice(props: { store: HappyLinkInboxStore }): ReactNode {
@@ -1887,6 +1940,9 @@ if (mediaPreviewBridge) {
             (localWebBuild !== undefined || desktopBridge.buildIdentity !== undefined)
                 ? { cloud: true }
                 : {}),
+            // Enterprise login is in every build, on a shell that reaches
+            // enterprise deployments itself.
+            ...(serverHost && desktopBridge.enterprise && !cloudWeb ? { enterprise: true } : {}),
             attentionFollow(id, source) {
                 preferencesFor(id);
                 const attentionStop = attentionFollow(id, source);
@@ -1998,43 +2054,44 @@ if (mediaPreviewBridge) {
                       },
                   })
                 : undefined;
-        // A team server added by its address: the host Happy Agent lists it, the
-        // shell signs in to it. The web app has no host to add one to.
-        const serverAdd = happyAgents.happyAgentServerAdd;
-        const serverRemove = happyAgents.happyAgentServerRemove;
+        // Enterprise login: a company's deployment by its address, reached and
+        // signed in to by the shell itself, like Happy Cloud. A cloud of
+        // servers goes on in Happy Cloud's own steps; a start page left for it
+        // is acknowledged once a server is open.
+        const enterprise = desktopBridge.enterprise;
+        const enterpriseConnect = async (connectionId: string) => {
+            if (!cloudConnectAction)
+                return { ok: false as const, message: "Happy can't open this server here." };
+            const connected = await cloudConnectAction(connectionId);
+            if (connected.ok && !welcome.get().welcomeAcknowledged) {
+                desktopBootSkip();
+                welcome.welcomeAcknowledge();
+            }
+            return connected;
+        };
         const serverConnect =
-            serverHost && serverAdd && serverRemove && !cloudWeb
+            serverHost && enterprise && cloudConnectAction && !cloudWeb
                 ? desktopServerConnectStoreCreate({
-                      serverAdd,
-                      serverRemove,
+                      enterprise,
                       ...(desktopBridge.serverSignInDescribe
                           ? { signInDescribe: desktopBridge.serverSignInDescribe }
                           : {}),
                       servers: serverHost.source,
                       sessions: serverHost.sessions,
-                      open: (connectionId) => desktopServerOpen(happyAgents, connectionId),
-                      // Enterprise login from the first screen waits for local
-                      // setup to hand this computer's Happy Agent over.
-                      ready: {
-                          get: () =>
-                              !desktopLocalSetupShown(onboardingStore.get()) &&
-                              happyAgents
-                                  .get()
-                                  .happyAgents.some(
-                                      (entry) =>
-                                          entry.id === LOCAL_HAPPY_AGENT_ID &&
-                                          entry.status === "connected",
-                                  ),
-                          subscribe: (listener) => {
-                              const unsubscribes = [
-                                  happyAgents.subscribe(listener),
-                                  onboardingStore.subscribe(listener),
-                              ];
-                              return () => {
-                                  for (const unsubscribe of unsubscribes) unsubscribe();
-                              };
-                          },
-                      },
+                      open: async (connectionId) => (await enterpriseConnect(connectionId)).ok,
+                      cloudCreate: (opened, leave) =>
+                          desktopCloudConnectStoreCreate({
+                              cloud: desktopEnterpriseCloud(enterprise, opened.key),
+                              enterprise: {
+                                  name: opened.name,
+                                  accountId: happyCloudEnterpriseAccountId(opened.key),
+                                  signIn: opened.signIn,
+                                  leave,
+                              },
+                              bridge: desktopBridge,
+                              chiefOfStaffAsk,
+                              connect: enterpriseConnect,
+                          }),
                   })
                 : undefined;
         if (cloudConnect) {

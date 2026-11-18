@@ -32,12 +32,11 @@ import type {
     TerminalColorScheme,
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
-import { happyCloudServerNameOf, happyCloudServerUrl } from "../shared/happyCloud";
 import {
-    desktopServerAddedRead,
-    desktopServerAddRefusal,
-    type DesktopServerAddResult,
-} from "./desktopServerAddress";
+    happyCloudDirectOf,
+    happyCloudServerNameOf,
+    happyCloudServerUrl,
+} from "../shared/happyCloud";
 import type { HappyAgentMobilePairingObserve } from "./desktopAnalytics";
 import {
     happyAgentConnectionOpen,
@@ -84,8 +83,6 @@ const connectionsPersistence: HappyAgentConnectionsPersistence = {
         }
     },
 };
-/** What this window names itself by to the loopback bridge, which holds the daemon's real token. */
-const LOCAL_CAPABILITY = "happy-local-capability";
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
 const NO_SUBTASK_FAILURES: HappyAgentSessionListSnapshot["subtaskFailures"] = new Map();
 const NO_BOT_FAILURES: HappyAgentSessionListSnapshot["botFailures"] = new Map();
@@ -127,6 +124,11 @@ export interface HappyAgentDirectoryEntry {
      * of Staff, so nothing offers to.
      */
     readonly happyCloud?: true;
+    /**
+     * An enterprise server: phones add it by its server code, and a server of
+     * an enterprise cloud also by the cloud's code.
+     */
+    readonly enterprise?: { readonly cloud?: { readonly name: string; readonly url: string } };
     /** This Happy Agent runs no workspaces, so it has no projects to offer. */
     readonly workspacesUnavailable?: true;
     /**
@@ -182,13 +184,6 @@ export interface HappyAgentDirectoryStore {
     ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
     /** Stops listing a Happy Cloud server the shell removed. */
     happyAgentCloudForget?(connectionId: string): void;
-    /**
-     * Has this computer's Happy Agent add a team server by its normalized
-     * address, or finds it already listed. Present with `happyAgentSignIn`.
-     */
-    happyAgentServerAdd?(url: string, host: string): Promise<DesktopServerAddResult>;
-    /** Has this computer's Happy Agent forget a server added by its address. */
-    happyAgentServerRemove?(connectionId: string): Promise<void>;
 }
 
 /** How long a Happy Cloud server may take to be reported signed in after the shell holds its tokens. */
@@ -218,6 +213,12 @@ export interface HappyAgentDirectoryDeps {
      * Each is listed while the shell reports a sign-in state for it.
      */
     readonly cloud?: boolean;
+    /**
+     * Whether this window lists enterprise servers, which the shell also
+     * reaches itself. Each server of a cloud is listed while the shell
+     * reports it; a deployment of one server once it has been signed in to.
+     */
+    readonly enterprise?: boolean;
     /** The cloud web app, where this window's own Happy Agent is a Happy Cloud server. */
     readonly localHappyCloud?: boolean;
     /** What this window's own Happy Agent is called, where it is not "This Mac". */
@@ -465,21 +466,40 @@ export function happyAgentDirectoryStoreCreate(
     let roster: HappyAgentConnectionsStore | undefined;
     // Happy Cloud was asked for in this window, before the shell has listed it.
     let cloudWanted: ReadonlySet<string> = new Set();
-    /** Happy Cloud's servers as connections, in the order the shell reported them. */
+    /**
+     * Happy Cloud's and enterprise servers as connections, in the order the
+     * shell reported them. Only the shell knows an enterprise server's address.
+     */
     const cloudItems = (connectionIds: Iterable<string>): HappyAgentConnectionItem[] =>
         [...new Set(connectionIds)].flatMap((connectionId) => {
-            const name = happyCloudServerNameOf(connectionId);
-            return name === undefined
-                ? []
-                : [
-                      {
-                          id: `connection:${connectionId}`,
-                          remoteId: connectionId,
-                          name: `@${name}`,
-                          url: happyCloudServerUrl(name),
-                      },
-                  ];
+            const direct = happyCloudDirectOf(connectionId);
+            const item = (name: string, url: string): HappyAgentConnectionItem[] => [
+                { id: `connection:${connectionId}`, remoteId: connectionId, name, url },
+            ];
+            if (direct?.kind === "happyCloud")
+                return deps.cloud ? item(`@${direct.name}`, happyCloudServerUrl(direct.name)) : [];
+            if (direct === undefined || !deps.enterprise) return [];
+            const session = deps.serverSessions?.get().sessions.get(connectionId);
+            if (session?.serverUrl === undefined) return [];
+            if (direct.kind === "enterpriseCloud")
+                return item(`@${direct.name}`, session.serverUrl);
+            // A deployment of one server is on the rail once it was signed in
+            // to; before that it is only Enterprise login's.
+            if (
+                session.state === "signedOut" &&
+                session.message === undefined &&
+                !cloudWanted.has(connectionId)
+            )
+                return [];
+            return item(new URL(session.serverUrl).host, session.serverUrl);
         });
+    /** The shell's word on an enterprise server, for its entry. */
+    const enterpriseOf = (remoteId: string): Pick<HappyAgentDirectoryEntry, "enterprise"> => {
+        const direct = happyCloudDirectOf(remoteId);
+        if (direct === undefined || direct.kind === "happyCloud") return {};
+        const cloud = deps.serverSessions?.get().sessions.get(remoteId)?.cloud;
+        return { enterprise: cloud ? { cloud } : {} };
+    };
     let rosterUnsubscribe: (() => void) | undefined;
     let sessionsUnsubscribe: (() => void) | undefined;
 
@@ -667,7 +687,7 @@ export function happyAgentDirectoryStoreCreate(
     const sessionsReconcile = (): void => {
         const sessions = deps.serverSessions?.get();
         if (!sessions?.loaded) return;
-        if (deps.cloud)
+        if (deps.cloud || deps.enterprise)
             roster?.connectionsDirectSet(cloudItems([...sessions.sessions.keys(), ...cloudWanted]));
         for (const remote of remotes.values()) {
             if (remote.entry.serverUrl === undefined || remote.entry.remoteId === undefined)
@@ -731,57 +751,6 @@ export function happyAgentDirectoryStoreCreate(
         };
     };
 
-    /**
-     * Adds a team server through this computer's Happy Agent, which reads
-     * its discovery first and refuses one that doesn't offer a sign-in the
-     * apps can use. The roster's own update lists it everywhere.
-     */
-    const serverAdd = async (url: string, host: string): Promise<DesktopServerAddResult> => {
-        const listed = roster?.get().items.find((item) => item.url === url);
-        if (listed?.remoteId !== undefined)
-            return { ok: true, connectionId: listed.remoteId, name: listed.name, added: false };
-        const base = happyAgent.url;
-        if (base === undefined)
-            return {
-                ok: false,
-                message:
-                    runtime.get()?.phase === "off"
-                        ? "Set up Happy Agent on this computer to connect to a server by its address."
-                        : "The Happy Agent on this computer isn't connected. Try again once it is.",
-            };
-        let response: Response;
-        try {
-            response = await fetch(`${base}/v0/connections/servers`, {
-                method: "POST",
-                headers: {
-                    authorization: `Bearer ${LOCAL_CAPABILITY}`,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({ url }),
-            });
-        } catch {
-            return {
-                ok: false,
-                message: "The Happy Agent on this computer isn't connected. Try again once it is.",
-            };
-        }
-        const body: unknown = await response.json().catch(() => undefined);
-        if (!response.ok)
-            return { ok: false, message: desktopServerAddRefusal(response.status, body, host) };
-        const added = desktopServerAddedRead(body, url);
-        if (!added) return { ok: false, message: "Happy couldn't add this server. Try again." };
-        return { ok: true, ...added, added: true };
-    };
-
-    const serverRemove = async (connectionId: string): Promise<void> => {
-        const base = happyAgent.url;
-        if (base === undefined) return;
-        await fetch(`${base}/v0/connections/${encodeURIComponent(connectionId)}`, {
-            method: "DELETE",
-            headers: { authorization: `Bearer ${LOCAL_CAPABILITY}` },
-        }).catch(() => undefined);
-    };
-
     function cloudForget(connectionId: string): void {
         const wanted = new Set(cloudWanted);
         wanted.delete(connectionId);
@@ -789,11 +758,16 @@ export function happyAgentDirectoryStoreCreate(
         sessionsReconcile();
     }
 
-    /** Removes a Happy Cloud server the reader no longer belongs to. */
+    /** Removes a Happy Cloud or enterprise server the reader no longer belongs to. */
     const cloudServerForgetOf = (connectionId: string) => async (): Promise<void> => {
-        const name = happyCloudServerNameOf(connectionId);
-        if (name === undefined || !bridge.happyCloud) return;
-        await bridge.happyCloud.serverRemove(name);
+        const direct = happyCloudDirectOf(connectionId);
+        if (direct?.kind === "happyCloud" && bridge.happyCloud)
+            await bridge.happyCloud.serverRemove(direct.name);
+        else if (direct?.kind === "enterpriseCloud" && bridge.enterprise)
+            await bridge.enterprise.serverRemove(direct.key, direct.name);
+        else if (direct?.kind === "enterpriseServer" && bridge.enterprise)
+            await bridge.enterprise.serverForget(direct.key);
+        else return;
         cloudForget(connectionId);
     };
 
@@ -835,12 +809,20 @@ export function happyAgentDirectoryStoreCreate(
             // Only the shell reads this computer's credentials, and only a
             // Happy Cloud server takes them. Leaving or deleting the server
             // takes it out of this window, as removing it from the rail does.
-            ...(bridge.happyCloud && cloudName !== undefined && happyAgent.entry.remoteId
+            ...(bridge.happyCloud &&
+            happyAgent.entry.remoteId !== undefined &&
+            happyCloudDirectOf(happyAgent.entry.remoteId)?.kind === "happyCloud"
                 ? {
                       credentialImportHost: desktopCredentialImportHostCreate(
                           bridge.happyCloud,
                           happyAgent.entry.remoteId,
                       ),
+                  }
+                : {}),
+            ...((bridge.happyCloud || bridge.enterprise) &&
+            cloudName !== undefined &&
+            happyAgent.entry.remoteId
+                ? {
                       cloudServer: {
                           name: cloudName,
                           forget: cloudServerForgetOf(happyAgent.entry.remoteId),
@@ -1058,7 +1040,7 @@ export function happyAgentDirectoryStoreCreate(
                 const base = value.directHttpUrl.replace(/\/$/u, "");
                 rosterOpen(
                     happyAgentConnectionsDirectStoreCreate(),
-                    new HappyAgentClient({ endpoint: base, token: LOCAL_CAPABILITY }),
+                    new HappyAgentClient({ endpoint: base, token: "happy-local-capability" }),
                     base,
                 );
             }
@@ -1108,7 +1090,7 @@ export function happyAgentDirectoryStoreCreate(
         if (happyAgent.url !== base) {
             const client = new HappyAgentClient({
                 endpoint: base,
-                token: LOCAL_CAPABILITY,
+                token: "happy-local-capability",
             });
             connectionOpen(happyAgent, client, base);
             rosterOpen(
@@ -1171,6 +1153,7 @@ export function happyAgentDirectoryStoreCreate(
                             ...(happyCloudServerNameOf(item.remoteId) === undefined
                                 ? {}
                                 : { happyCloud: true as const }),
+                            ...enterpriseOf(item.remoteId),
                             label: item.name,
                             bots: [],
                             botsCreating: [],
@@ -1283,14 +1266,11 @@ export function happyAgentDirectoryStoreCreate(
                       const remote = remotes.get(id);
                       if (remote) signInCancel(remote);
                   },
-                  happyAgentServerAdd: serverAdd,
-                  happyAgentServerRemove: serverRemove,
-                  ...(deps.cloud
+                  ...(deps.cloud || deps.enterprise
                       ? {
                             async happyAgentCloudConnect(connectionId: string) {
-                                const item = cloudItems([connectionId])[0];
                                 const sessions = deps.serverSessions;
-                                if (!item || !sessions)
+                                if (happyCloudDirectOf(connectionId) === undefined || !sessions)
                                     return {
                                         ok: false,
                                         message: "That server isn't on Happy Cloud.",
@@ -1318,7 +1298,10 @@ export function happyAgentDirectoryStoreCreate(
                                         resolve(true);
                                     });
                                 });
-                                if (!signedIn)
+                                // Only now does the shell's word name an
+                                // enterprise server's address.
+                                const item = cloudItems([connectionId])[0];
+                                if (!signedIn || !item)
                                     return {
                                         ok: false,
                                         message: "Happy couldn't finish signing in to this server.",

@@ -15,6 +15,10 @@ const WINDOW = { width: 1100, height: 760 } as const;
 /** The enterprise test server's own code, as its health and roster name it. */
 const CODE = "happy://iihxypnnrwxxnqhrdnpap3g4/server?url=https%3A%2F%2F164-90-149-4.sslip.io%2F";
 const SERVER = "164-90-149-4.sslip.io";
+/** A server of an enterprise cloud, and the cloud's own code. */
+const CLOUD_SERVER_CODE =
+    "happy://iihxypnnrwxxnqhrdnpap3g4/server?url=https%3A%2F%2Fresearch.acme.example%2F";
+const CLOUD = { name: "Acme Cloud", code: "happy://cloud?url=https%3A%2F%2Facme.example%2F" };
 
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
@@ -57,16 +61,16 @@ function Screen(props: {
 }
 
 /**
- * C-353 Team server settings — a team server reached by its address: the
- * Account row on this computer that starts connecting to one, and the code a
- * phone scans to add that server.
+ * C-353 Enterprise settings — the Account row on this computer that starts
+ * Enterprise login, and the codes a phone scans: an enterprise server's, and
+ * for a server of an enterprise cloud, the cloud's.
  */
 export function HappyAgentServerSettingsPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            title="Team server settings"
-            summary="A team server reached by its address: the Account row that starts connecting to one, and the code a phone scans to add it."
+            title="Enterprise settings"
+            summary="The Account row that starts Enterprise login, and the codes a phone scans: a server’s, and a cloud’s."
         >
             <Screen
                 description="Your name, photo and Happy account"
@@ -94,9 +98,22 @@ export function HappyAgentServerSettingsPage() {
             <Screen
                 description="Use Happy on your phone with this server"
                 id="mobile-access"
-                label="Team server › Mobile access, signed out"
+                label="Cloud server › Mobile access"
                 number="03"
-                screen="03-server-phone-waiting"
+                screen="03-cloud-phone-codes"
+            >
+                <HappyAgentServerPhoneSettings
+                    cloud={CLOUD}
+                    code={CLOUD_SERVER_CODE}
+                    serverName="@research"
+                />
+            </Screen>
+            <Screen
+                description="Use Happy on your phone with this server"
+                id="mobile-access"
+                label="Team server › Mobile access, signed out"
+                number="04"
+                screen="04-server-phone-waiting"
             >
                 <HappyAgentServerPhoneSettings
                     serverName={SERVER}

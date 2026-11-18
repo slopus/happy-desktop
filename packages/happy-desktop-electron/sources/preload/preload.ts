@@ -116,6 +116,27 @@ const bridge: HappyDesktopBridge = {
               },
           }
         : {}),
+    enterprise: {
+        open: (url: string) => ipcRenderer.invoke(desktopIpc.enterpriseOpen, url),
+        serverForget: (key: string) => ipcRenderer.invoke(desktopIpc.enterpriseServerForget, key),
+        serversList: (key: string) => ipcRenderer.invoke(desktopIpc.enterpriseServersList, key),
+        availability: (key: string, name: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseAvailability, key, name),
+        serverCreate: (key: string, name: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseServerCreate, key, name),
+        inviteAccept: (key: string, token: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseInviteAccept, key, token),
+        serverConnect: (key: string, serverId: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseServerConnect, key, serverId),
+        imageRead: (key: string, serverId: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseImageRead, key, serverId),
+        serverRemove: (key: string, name: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseServerRemove, key, name),
+        serverSignOut: (key: string, name: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseServerSignOut, key, name),
+        accountSignOut: (key: string) =>
+            ipcRenderer.invoke(desktopIpc.enterpriseAccountSignOut, key),
+    },
     system: systemRead(),
     doNotTrack: process.argv.includes(doNotTrackArgument),
     debugMetricsEnabled,

@@ -4,13 +4,11 @@ import { IconTile } from "../../IconTile";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentServerConnectSettingsProps {
-    /** Why this computer's Happy Agent can't add a server right now. */
-    readonly unavailable?: string;
-    /** Opens the "+" sheet on a server's address. */
+    /** Opens Enterprise login on the company's address. */
     onConnect(): void;
 }
 
-/** A team server reached by its address: one row that starts connecting to one. */
+/** Enterprise login, for a computer already set up: one row that starts it. */
 export function HappyAgentServerConnectSettings(props: HappyAgentServerConnectSettingsProps) {
     return (
         <HappyAgentSettingsSection>
@@ -18,17 +16,16 @@ export function HappyAgentServerConnectSettings(props: HappyAgentServerConnectSe
                 control={
                     <Button
                         data-testid="happy-agent-server-connect"
-                        disabled={props.unavailable !== undefined}
                         onClick={props.onConnect}
                         size="small"
                         variant="secondary"
                     >
-                        Connect to a server…
+                        Enterprise login…
                     </Button>
                 }
-                description="Sign in to your organization’s Happy server by its address"
-                icon={<IconTile ionicon="server-outline" tone="indigo" />}
-                label="Team server"
+                description="Sign in to your company’s Happy by its address"
+                icon={<IconTile ionicon="business-outline" tone="indigo" />}
+                label="Enterprise"
             />
         </HappyAgentSettingsSection>
     );

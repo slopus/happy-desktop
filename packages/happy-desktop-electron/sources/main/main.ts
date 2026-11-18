@@ -30,7 +30,7 @@ import { desktopQuitListen } from "./desktopQuit";
 import { happyAgentDaemonPathsResolve } from "./happyAgentDaemonClient";
 import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
-import { happyCloudCreate } from "./happyCloud";
+import { happyCloudCreate, happyCloudEnterprisesCreate } from "./happyCloud";
 import { happyCloudVaultCreate } from "./happyCloudVault";
 import { happyCloudServerNameOf } from "../shared/happyCloud";
 import { browserPermissionsInstall } from "./browserPermissions";
@@ -505,9 +505,19 @@ const happyCloud =
               }),
           })
         : undefined;
+/**
+ * Enterprise deployments, reached like Happy Cloud from here and never
+ * through the host Happy Agent, in every build. Unlike Happy Cloud nothing
+ * of them is kept: each run signs in again.
+ */
+const enterprises = happyCloudEnterprisesCreate({
+    fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
+    sessions: () => serverSessions,
+});
 const serverSessions = serverSessionsCreate({
     roster: () => runtime.serverRoster(),
     ...(happyCloud ? { direct: happyCloud.direct } : {}),
+    enterprise: enterprises.enterprise,
     fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
     async browserOpen(url) {
         await shell.openExternal(url);
@@ -541,6 +551,86 @@ function serverOAuthCallbackRead(candidate: string): string | undefined {
     } catch {
         return undefined;
     }
+}
+
+/**
+ * Enterprise login's calls: opening a deployment by its address, and each
+ * open cloud's account API by its key, as Happy Cloud's are by none.
+ */
+function enterpriseIpcRegister(): void {
+    const cloudOf = (key: unknown) => {
+        const cloud = typeof key === "string" ? enterprises.cloud(key) : undefined;
+        if (!cloud) throw new Error("Happy asked about a deployment it hasn't opened.");
+        return cloud;
+    };
+    const name = (value: unknown): string => {
+        if (typeof value !== "string" || value.length > 64)
+            throw new Error("Happy asked about an invalid server name.");
+        return value;
+    };
+    ipcMain.handle(desktopIpc.enterpriseOpen, (event, url: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        if (typeof url !== "string" || url.length > 2048)
+            throw new Error("Happy asked to open an invalid address.");
+        let address: URL;
+        try {
+            address = new URL(url);
+        } catch {
+            throw new Error("Happy asked to open an invalid address.");
+        }
+        const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(address.hostname);
+        if (
+            (address.protocol !== "https:" && !(address.protocol === "http:" && loopback)) ||
+            address.username !== "" ||
+            address.password !== ""
+        )
+            throw new Error("Happy asked to open an invalid address.");
+        return enterprises.open(address.href);
+    });
+    ipcMain.handle(desktopIpc.enterpriseServerForget, (event, key: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        if (typeof key === "string") enterprises.serverForget(key);
+    });
+    ipcMain.handle(desktopIpc.enterpriseServersList, (event, key: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        return cloudOf(key).serversList();
+    });
+    ipcMain.handle(desktopIpc.enterpriseAvailability, (event, key: unknown, value: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        return cloudOf(key).availability(name(value));
+    });
+    ipcMain.handle(desktopIpc.enterpriseServerCreate, (event, key: unknown, value: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        return cloudOf(key).serverCreate(name(value));
+    });
+    ipcMain.handle(desktopIpc.enterpriseInviteAccept, (event, key: unknown, token: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        if (typeof token !== "string" || token.length === 0 || token.length > 512)
+            throw new Error("Happy asked to accept an invalid invite.");
+        return cloudOf(key).inviteAccept(token);
+    });
+    ipcMain.handle(desktopIpc.enterpriseServerConnect, (event, key: unknown, value: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        if (typeof value !== "string" || value.length > 128)
+            throw new Error("Happy asked to connect to an invalid server.");
+        return cloudOf(key).serverConnect(value);
+    });
+    ipcMain.handle(desktopIpc.enterpriseImageRead, (event, key: unknown, value: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        return typeof value === "string" ? cloudOf(key).imageRead(value) : undefined;
+    });
+    ipcMain.handle(desktopIpc.enterpriseServerRemove, (event, key: unknown, value: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        return cloudOf(key).serverRemove(name(value));
+    });
+    ipcMain.handle(desktopIpc.enterpriseServerSignOut, (event, key: unknown, value: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        return cloudOf(key).serverSignOut(name(value));
+    });
+    ipcMain.handle(desktopIpc.enterpriseAccountSignOut, (event, key: unknown) => {
+        desktopDaemonSenderRequire(event.sender);
+        cloudOf(key).accountSignOut();
+    });
 }
 
 /** A sign-in step's outcome for the window, with only a displayable sentence on failure. */
@@ -1897,11 +1987,9 @@ void app
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
                 ...(artifactSites ? { artifactSite: artifactSites } : {}),
                 deviceBridges,
-                // Happy Cloud servers' pages need no Happy Agent, only the
-                // person's sign-in, which stays here.
-                ...(happyCloud
-                    ? { happyCloudBrowser: happyCloudBrowserCreate({ remote: serverSessions }) }
-                    : {}),
+                // Happy Cloud's and enterprise servers' pages need no Happy
+                // Agent, only the person's sign-in, which stays here.
+                happyCloudBrowser: happyCloudBrowserCreate({ remote: serverSessions }),
                 ...(desktopDebugEnabled ? { debug: desktopDebugLog } : {}),
             },
         );
@@ -2053,6 +2141,7 @@ void app
             desktopDaemonSenderRequire(event.sender);
             if (typeof attemptId === "string") serverSessions.signInCancel(attemptId);
         });
+        enterpriseIpcRegister();
         if (happyCloud) {
             const cloud = happyCloud;
             // The secret store answers only once the app is ready.

@@ -8,6 +8,10 @@ export interface ServerSession {
      */
     readonly state: "signedIn" | "signedOut" | "restoring";
     readonly message?: string;
+    /** An enterprise server's address, which only the shell knows. */
+    readonly serverUrl?: string;
+    /** The enterprise cloud such a server belongs to, with the address phones add it by. */
+    readonly cloud?: { readonly name: string; readonly url: string };
 }
 
 /** Where the shell's team-server sign-ins are read from. */

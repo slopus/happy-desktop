@@ -73,8 +73,30 @@ export type CloudConnectView =
               readonly error?: string;
           };
       }
+    /**
+     * An enterprise cloud's first step, in place of Happy Cloud's welcome:
+     * where its account signs in, before the browser opens.
+     */
+    | {
+          readonly kind: "enterpriseSignIn";
+          /** The cloud's own name, such as "Acme Cloud". */
+          readonly name: string;
+          /** The company's identity provider: its name and the host it signs in at. */
+          readonly signIn: { readonly name: string; readonly host: string };
+      }
     /** The account sign-in is open in the browser. */
-    | { readonly kind: "signingIn" }
+    | {
+          readonly kind: "signingIn";
+          /** An enterprise cloud's: the host the browser signs in at. */
+          readonly host?: string;
+      }
+    /** An invite's link or code, pasted in to join its server. */
+    | {
+          readonly kind: "invite";
+          readonly link: string;
+          readonly busy?: boolean;
+          readonly error?: string;
+      }
     /** Signing in without the browser: the email a code goes to. */
     | {
           readonly kind: "email";
@@ -112,6 +134,8 @@ export type CloudConnectView =
            */
           readonly joins: ReadonlyMap<string, CloudConnectJoin>;
           readonly error?: string;
+          /** Invites are pasted in here rather than opened in the browser. */
+          readonly invite?: true;
       }
     | {
           readonly kind: "create";
@@ -124,6 +148,8 @@ export type CloudConnectView =
           readonly back: boolean;
           readonly busy?: boolean;
           readonly error?: string;
+          /** Invites are pasted in here rather than opened in the browser. */
+          readonly invite?: true;
       }
     /** Signing in to the chosen server; once in, the screen is gone. */
     | { readonly kind: "connecting"; readonly server: CloudConnectServer }
@@ -168,6 +194,11 @@ export interface CloudConnectScreenProps {
     onEmailCodeResend(): void;
     /** From the code back to the email, to send the code somewhere else. */
     onEmailChangeOpen(): void;
+    /** Join with an invite, where invites are pasted in. */
+    onInviteOpen?(): void;
+    onInviteChange?(link: string): void;
+    /** Joins the server the pasted invite is for. */
+    onInviteAccept?(): void;
 }
 
 /** `m:ss`, the way a countdown reads. */
@@ -378,8 +409,13 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
     );
 }
 
-/** Happy Cloud's own steps, each a page of the sheet. */
-function CloudConnectPages(props: CloudConnectScreenProps & { readonly dismiss: () => void }) {
+/**
+ * Happy Cloud's own steps, each a page of the sheet. Enterprise login shows
+ * an enterprise cloud's in its own sheet.
+ */
+export function CloudConnectPages(
+    props: CloudConnectScreenProps & { readonly dismiss: () => void },
+) {
     const { view, dismiss } = props;
     const frame = {
         backdrop: { appearance: props.appearance, kind: "sky" },
@@ -527,11 +563,38 @@ function CloudConnectPages(props: CloudConnectScreenProps & { readonly dismiss: 
                 </WelcomeScreen>
             );
         }
+        case "enterpriseSignIn":
+            return (
+                <SetupPage
+                    {...frame}
+                    action={{ autoFocus: true, label: "Continue", onSelect: props.onContinue }}
+                    copy={
+                        <>
+                            Sign in with{" "}
+                            <strong className="happy-cloud-connect__email">
+                                {view.signIn.name}
+                            </strong>{" "}
+                            at{" "}
+                            <strong className="happy-cloud-connect__email">
+                                {view.signIn.host}
+                            </strong>{" "}
+                            in your browser.
+                        </>
+                    }
+                    scene="closed-lock"
+                    secondary={back()}
+                    title={`Sign in to ${view.name}`}
+                />
+            );
         case "signingIn":
             return (
                 <SetupPage
                     {...frame}
-                    copy="Sign in or create an account in your browser, then come back here."
+                    copy={
+                        view.host
+                            ? `Finish signing in at ${view.host} in your browser, then come back here.`
+                            : "Sign in or create an account in your browser, then come back here."
+                    }
                     scene="closed-lock"
                     secondary={{ label: "Cancel", onSelect: props.onBack }}
                     status={{ busy: true, label: "Waiting for your browser…" }}
@@ -660,7 +723,11 @@ function CloudConnectPages(props: CloudConnectScreenProps & { readonly dismiss: 
                               },
                           }
                         : {})}
-                    copy="Your account is already on these servers. Join as many as you like. Got an invite? Open its link, and its server appears here."
+                    copy={
+                        view.invite
+                            ? "Your account is already on these servers. Join as many as you like, or paste an invite you were sent."
+                            : "Your account is already on these servers. Join as many as you like. Got an invite? Open its link, and its server appears here."
+                    }
                     placement="centered"
                     secondary={back(joins.includes("joining"))}
                     {...(view.servers.status === "loading"
@@ -716,6 +783,11 @@ function CloudConnectPages(props: CloudConnectScreenProps & { readonly dismiss: 
                             <Button icon="plus" onClick={props.onCreateOpen} variant="secondary">
                                 Bootstrap a new one
                             </Button>
+                            {view.invite && props.onInviteOpen ? (
+                                <Button onClick={props.onInviteOpen} variant="ghost">
+                                    Join with an invite
+                                </Button>
+                            ) : null}
                         </div>
                     </div>
                 </SetupPage>
@@ -735,7 +807,9 @@ function CloudConnectPages(props: CloudConnectScreenProps & { readonly dismiss: 
                     copy={
                         view.back
                             ? "Name your team’s new server. You can change it later."
-                            : "Your account has no servers yet. Name your team’s first one, or open an invite link you were sent."
+                            : view.invite
+                              ? "Your account has no servers yet. Name your team’s first one, or join with an invite you were sent."
+                              : "Your account has no servers yet. Name your team’s first one, or open an invite link you were sent."
                     }
                     placement="centered"
                     secondary={back(view.busy)}
@@ -771,10 +845,60 @@ function CloudConnectPages(props: CloudConnectScreenProps & { readonly dismiss: 
                         >
                             {hint}
                         </p>
+                        {view.invite && !view.back && props.onInviteOpen ? (
+                            <div className="happy-cloud-connect__links">
+                                <Button
+                                    disabled={view.busy}
+                                    onClick={props.onInviteOpen}
+                                    variant="ghost"
+                                >
+                                    Join with an invite
+                                </Button>
+                            </div>
+                        ) : null}
                     </div>
                 </SetupPage>
             );
         }
+        case "invite":
+            return (
+                <SetupPage
+                    {...frame}
+                    action={{
+                        busy: view.busy,
+                        disabled: view.link.trim() === "",
+                        label: "Join",
+                        onSelect: () => props.onInviteAccept?.(),
+                    }}
+                    copy="Paste the invite link or code you were sent. You join its server with the account you signed in with."
+                    placement="centered"
+                    secondary={back(view.busy)}
+                    title="Join with an invite"
+                >
+                    <div className="happy-cloud-connect__column">
+                        <TextField
+                            aria-label="Invite link or code"
+                            autoComplete="off"
+                            autoFocus
+                            className="happy-cloud-connect__handle"
+                            disabled={view.busy}
+                            fullWidth
+                            onSubmit={() => props.onInviteAccept?.()}
+                            onValueChange={(link) => props.onInviteChange?.(link)}
+                            placeholder="https://join.example.com/#…"
+                            size="large"
+                            value={view.link}
+                        />
+                        <p
+                            className="happy-cloud-connect__hint"
+                            data-tone={view.error ? "attention" : undefined}
+                            role="status"
+                        >
+                            {view.error}
+                        </p>
+                    </div>
+                </SetupPage>
+            );
         case "failed":
             return (
                 <SetupPage

@@ -29,6 +29,13 @@ export interface ServerSessionSnapshot {
      */
     readonly state: "signedIn" | "signedOut" | "restoring";
     readonly message?: string;
+    /**
+     * An enterprise server's address, which only main knows: this app
+     * reaches it itself, and no roster lists it.
+     */
+    readonly serverUrl?: string;
+    /** The enterprise cloud such a server belongs to, with the address phones add it by. */
+    readonly cloud?: { readonly name: string; readonly url: string };
 }
 
 /**

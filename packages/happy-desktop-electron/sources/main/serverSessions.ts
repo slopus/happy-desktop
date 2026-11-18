@@ -38,6 +38,25 @@ const SERVER_MOVED = "This server's address changed. Sign in again.";
 const SETTLED_LIFETIME_MS = 60_000;
 const SETTLED_MAX = 16;
 
+/**
+ * A cloud's account sign-in: its ID, its address, and its method, which is
+ * known rather than discovered, with how the browser's answer becomes the
+ * account's tokens. It is never listed, and its token is never handed to the
+ * transport.
+ */
+export interface ServerSessionsAccount {
+    readonly connectionId: string;
+    readonly serverUrl: string;
+    readonly method: OAuthAuthenticationMethod;
+    signInComplete(signIn: OAuthSignIn, callbackUrl: string): Promise<OAuthCredential>;
+}
+
+/** An enterprise server this app reaches itself, and the cloud it belongs to, if any. */
+export interface ServerSessionsEnterpriseServer {
+    readonly url: string;
+    readonly cloud?: { readonly name: string; readonly url: string };
+}
+
 export interface ServerSessionsDeps {
     /**
      * Every `oauth` connection's address, normalized, as the host Happy
@@ -63,18 +82,8 @@ export interface ServerSessionsDeps {
          * Each is listed, and wants a sign-in until it has one.
          */
         servers(): ReadonlyMap<string, string>;
-        /**
-         * The account sign-in: its ID, its address, and its method, which is
-         * known rather than discovered, with how the browser's answer becomes
-         * the account's tokens. It is never listed, and its token is never
-         * handed to the transport.
-         */
-        readonly account: {
-            readonly connectionId: string;
-            readonly serverUrl: string;
-            readonly method: OAuthAuthenticationMethod;
-            signInComplete(signIn: OAuthSignIn, callbackUrl: string): Promise<OAuthCredential>;
-        };
+        /** The account sign-in. */
+        readonly account: ServerSessionsAccount;
         /**
          * Where the servers' sign-ins are kept across restarts, encrypted by
          * the operating system. The account's pass is never kept.
@@ -85,6 +94,15 @@ export interface ServerSessionsDeps {
          * is forgotten at launch without being sent anywhere.
          */
         readonly refreshUrl: string;
+    };
+    /**
+     * Enterprise deployments, also reached from here and never through the
+     * host: each cloud's servers and account, and each deployment that is
+     * one server. Only in this process's memory; none of it is kept.
+     */
+    enterprise?(): {
+        readonly servers: ReadonlyMap<string, ServerSessionsEnterpriseServer>;
+        readonly accounts: readonly ServerSessionsAccount[];
     };
     now?(): number;
 }
@@ -215,10 +233,21 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     /** Whether the kept sign-ins were read: until then nothing may overwrite them. */
     let restored = false;
 
-    /** Happy Cloud's own addresses: every added server, and the account. */
+    const enterprise = (): ReturnType<NonNullable<ServerSessionsDeps["enterprise"]>> =>
+        deps.enterprise?.() ?? { servers: new Map(), accounts: [] };
+    /** Every cloud's account sign-in: Happy Cloud's and each enterprise cloud's. */
+    const accounts = (): ServerSessionsAccount[] => [
+        ...(direct ? [direct.account] : []),
+        ...enterprise().accounts,
+    ];
+    const accountOf = (connectionId: string): ServerSessionsAccount | undefined =>
+        accounts().find((account) => account.connectionId === connectionId);
+    /** The addresses this app reaches itself: every added server, and every account. */
     const directServers = (): Map<string, string> => {
         const servers = new Map(direct?.servers());
-        if (direct) servers.set(direct.account.connectionId, direct.account.serverUrl);
+        for (const [connectionId, server] of enterprise().servers)
+            servers.set(connectionId, server.url);
+        for (const account of accounts()) servers.set(account.connectionId, account.serverUrl);
         return servers;
     };
     const directIs = (connectionId: string): boolean => directServers().has(connectionId);
@@ -234,25 +263,35 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     };
 
     const publish = (): void => {
+        const enterpriseServers = enterprise().servers;
         const ids = new Set([
             ...sessions.keys(),
             ...endings.keys(),
             ...(direct?.servers().keys() ?? []),
+            ...enterpriseServers.keys(),
         ]);
-        if (direct) ids.delete(direct.account.connectionId);
+        const accountIds = new Set(accounts().map((account) => account.connectionId));
+        for (const id of accountIds) ids.delete(id);
         // A Happy Cloud server never signed in to in this run is signed out
-        // with nothing to say about why.
+        // with nothing to say about why. An enterprise server says where it
+        // is, since nothing else does.
         snapshot = [...ids].sort().map((connectionId) => {
-            if (sessions.has(connectionId)) return { connectionId, state: "signedIn" as const };
-            if (restoring.has(connectionId)) return { connectionId, state: "restoring" as const };
+            const server = enterpriseServers.get(connectionId);
+            const where = server
+                ? { serverUrl: server.url, ...(server.cloud ? { cloud: server.cloud } : {}) }
+                : {};
+            if (sessions.has(connectionId))
+                return { connectionId, state: "signedIn" as const, ...where };
+            if (restoring.has(connectionId))
+                return { connectionId, state: "restoring" as const, ...where };
             const message = endings.get(connectionId);
             return message === undefined
-                ? { connectionId, state: "signedOut" as const }
-                : { connectionId, state: "signedOut" as const, message };
+                ? { connectionId, state: "signedOut" as const, ...where }
+                : { connectionId, state: "signedOut" as const, message, ...where };
         });
         tokens = Object.fromEntries(
             [...sessions]
-                .filter(([connectionId]) => connectionId !== direct?.account.connectionId)
+                .filter(([connectionId]) => !accountIds.has(connectionId))
                 .map(([connectionId, session]) => [
                     connectionId,
                     { accessToken: session.credential.accessToken, serverUrl: session.serverUrl },
@@ -409,7 +448,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         const expiresAt = session.credential.expiresAt;
         // The account's token is a short pass that is never refreshed: it
         // simply ends when it expires, and the next use signs in again.
-        if (connectionId === direct?.account.connectionId) {
+        if (accountOf(connectionId)) {
             if (expiresAt === null || closed) return;
             session.timer = setTimeout(
                 () => {
@@ -466,7 +505,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         const session = sessions.get(connectionId);
         if (!session) return Promise.resolve(undefined);
         // Nothing refreshes the account; a refused account token ends it.
-        if (connectionId === direct?.account.connectionId) {
+        if (accountOf(connectionId)) {
             if (rejected === undefined || session.credential.accessToken === rejected)
                 sessionEnd(connectionId, undefined);
             return Promise.resolve(undefined);
@@ -599,11 +638,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
             if (!session) return undefined;
             // An expired account pass is gone even before its timer says so.
             const expiresAt = session.credential.expiresAt;
-            if (
-                connectionId === direct?.account.connectionId &&
-                expiresAt !== null &&
-                expiresAt <= now()
-            )
+            if (accountOf(connectionId) && expiresAt !== null && expiresAt <= now())
                 return undefined;
             return credentialOf(session);
         },
@@ -631,10 +666,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     "This server isn't one you sign in to from Happy.",
                     "not_found",
                 );
-            const method =
-                direct?.account.connectionId === connectionId
-                    ? direct.account.method
-                    : await discoveryRead(url);
+            const method = accountOf(connectionId)?.method ?? (await discoveryRead(url));
             // Checked and named exactly as `signInBegin` does; the request
             // itself is dropped, and nothing is opened or kept.
             try {
@@ -660,10 +692,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     "This server isn't one you sign in to from Happy.",
                     "not_found",
                 );
-            const method =
-                direct?.account.connectionId === connectionId
-                    ? direct.account.method
-                    : await discoveryRead(url);
+            const method = accountOf(connectionId)?.method ?? (await discoveryRead(url));
             let signIn: OAuthSignIn;
             try {
                 // The token must name this address in its audience, so a server
@@ -711,12 +740,12 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 try {
                     await bound();
                     try {
-                        credential =
-                            direct?.account.connectionId === connectionId
-                                ? await direct.account.signInComplete(signIn, callbackUrl)
-                                : await completeOAuthSignIn(signIn, callbackUrl, {
-                                      fetch: deps.fetch,
-                                  });
+                        const account = accountOf(connectionId);
+                        credential = account
+                            ? await account.signInComplete(signIn, callbackUrl)
+                            : await completeOAuthSignIn(signIn, callbackUrl, {
+                                  fetch: deps.fetch,
+                              });
                     } catch (error) {
                         throw new ServerSessionError(
                             error instanceof HappyAgentOAuthError

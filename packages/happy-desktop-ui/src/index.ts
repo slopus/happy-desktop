@@ -635,6 +635,7 @@ export {
     type CloudOnboardingView,
 } from "./CloudOnboardingScreen";
 export {
+    CloudConnectPages,
     CloudConnectScreen,
     type CloudConnectAvailability,
     type CloudConnectJoin,

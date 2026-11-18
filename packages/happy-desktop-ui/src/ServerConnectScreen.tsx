@@ -1,9 +1,14 @@
+import {
+    CloudConnectPages,
+    type CloudConnectScreenProps,
+    type CloudConnectView,
+} from "./CloudConnectScreen";
 import { ConnectSheet } from "./ConnectSheet";
 import { SetupPage } from "./SetupPage";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
 
-/** A team server added by its address, as the sign-in steps name it. */
+/** A deployment of one server, as its sign-in steps name it. */
 export interface ServerConnectServer {
     /** What the server is listed as: its host, unless it was given a name. */
     readonly name: string;
@@ -16,15 +21,15 @@ export interface ServerConnectServer {
 }
 
 export type ServerConnectView =
-    /** The server's address, typed in. */
+    /** The deployment's address, typed in. */
     | {
           readonly kind: "address";
           readonly address: string;
-          /** The address is being checked and added. */
+          /** What is at the address is being read. */
           readonly busy?: boolean;
           readonly error?: string;
       }
-    /** The server is added: how signing in works there, before the browser opens. */
+    /** A deployment of one server: how signing in works there, before the browser opens. */
     | {
           readonly kind: "signIn";
           readonly server: ServerConnectServer;
@@ -39,13 +44,15 @@ export type ServerConnectView =
           readonly server: ServerConnectServer;
           /** The host the browser opened at, once the shell says. */
           readonly host?: string;
-      };
+      }
+    /** A cloud of servers: its own steps, from signing in to its account on. */
+    | { readonly kind: "cloud"; readonly cloud: CloudConnectView };
 
 export interface ServerConnectPagesProps {
     readonly appearance: ThemeMode;
     readonly view: ServerConnectView;
     onAddressChange(address: string): void;
-    /** Continue on the address: checks it and adds the server. */
+    /** Continue on the address: reads what is there. */
     onAddressSubmit(): void;
     /** Continue on the sign-in step: opens the browser. */
     onSignIn(): void;
@@ -54,11 +61,15 @@ export interface ServerConnectPagesProps {
 }
 
 /**
- * The steps of connecting to a team server by its address, as pages of the
- * "+" sheet: the address, how signing in works there, then the browser. Once
- * signed in the sheet is gone and the server is open.
+ * Enterprise login's own steps, as pages of its sheet: the address, then for
+ * a deployment of one server how signing in works there and the browser.
+ * Once signed in the sheet is gone and the server is open.
  */
-export function ServerConnectPages(props: ServerConnectPagesProps) {
+export function ServerConnectPages(
+    props: ServerConnectPagesProps & {
+        readonly view: Exclude<ServerConnectView, { kind: "cloud" }>;
+    },
+) {
     const { view } = props;
     const frame = {
         backdrop: { appearance: props.appearance, kind: "sky" },
@@ -77,13 +88,13 @@ export function ServerConnectPages(props: ServerConnectPagesProps) {
                         label: "Continue",
                         onSelect: props.onAddressSubmit,
                     }}
-                    copy="Enter your team server’s address. You’ll sign in with your organization’s account."
+                    copy="Enter your company’s Happy address. You’ll sign in with your company’s account."
                     placement="centered"
-                    title="Connect to a server"
+                    title="Enterprise login"
                 >
                     <div className="happy-cloud-connect__column">
                         <TextField
-                            aria-label="Server address"
+                            aria-label="Address"
                             autoComplete="url"
                             autoFocus
                             className="happy-cloud-connect__handle"
@@ -92,7 +103,7 @@ export function ServerConnectPages(props: ServerConnectPagesProps) {
                             inputMode="url"
                             onSubmit={props.onAddressSubmit}
                             onValueChange={props.onAddressChange}
-                            placeholder="https://happy.example.com"
+                            placeholder="acme.example"
                             size="large"
                             value={view.address}
                         />
@@ -167,17 +178,35 @@ export function ServerConnectPages(props: ServerConnectPagesProps) {
 export interface ServerConnectScreenProps extends ServerConnectPagesProps {
     /** The close button and Esc: back to the app. */
     onClose(): void;
+    /** A cloud's steps' handlers, while `view` is a cloud's. */
+    readonly cloud?: Omit<CloudConnectScreenProps, "appearance" | "view" | "onClose">;
 }
 
 /**
- * C-352 ServerConnectScreen — connecting to a team server by its address, in
- * the "+" sheet on its own, where Happy Cloud isn't offered.
+ * C-352 ServerConnectScreen — Enterprise login, full window on the onboarding
+ * sky: the company's address, then either one server's sign-in or a cloud's
+ * own steps, the same ones Happy Cloud has, in one sheet.
  */
 export function ServerConnectScreen(props: ServerConnectScreenProps) {
-    const { onClose, ...pages } = props;
+    const { onClose, cloud, ...pages } = props;
+    const { view } = props;
     return (
-        <ConnectSheet appearance={props.appearance} label="Connect to a server" onClose={onClose}>
-            {() => <ServerConnectPages {...pages} />}
+        <ConnectSheet appearance={props.appearance} label="Enterprise login" onClose={onClose}>
+            {(dismiss) =>
+                view.kind === "cloud" ? (
+                    cloud ? (
+                        <CloudConnectPages
+                            {...cloud}
+                            appearance={props.appearance}
+                            dismiss={dismiss}
+                            onClose={onClose}
+                            view={view.cloud}
+                        />
+                    ) : null
+                ) : (
+                    <ServerConnectPages {...pages} view={view} />
+                )
+            }
         </ConnectSheet>
     );
 }

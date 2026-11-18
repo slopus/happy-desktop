@@ -87,6 +87,7 @@ import {
     statusBarStoreNoop,
     titleShimmerStoreNoop,
     happyServerCodeFormat,
+    happyCloudCodeFormat,
 } from "happy-desktop-state";
 import {
     happyAgentComposerModelControlProps,
@@ -476,6 +477,15 @@ function serverPhoneCode(
     return { waiting: "Waiting for this server to say which installation it is." };
 }
 
+/** An enterprise cloud's own code, for a server of one: phones add the whole cloud by it. */
+function enterpriseCloudCode(host: AppHappyAgentEntry): {
+    readonly cloud?: { readonly name: string; readonly code: string };
+} {
+    const cloud = host.enterprise?.cloud;
+    const code = cloud ? happyCloudCodeFormat(cloud.url) : undefined;
+    return cloud && code ? { cloud: { name: cloud.name, code } } : {};
+}
+
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
 
@@ -541,8 +551,8 @@ export interface AppHappyAgentSettingsViewProps {
     /** Opens one plugin of a Happy Agent, where it is set up and connected. */
     onPluginOpen?(happyAgentId: string, pluginId: string): void;
     /**
-     * Opens connecting this computer to a team server by its address. Present
-     * only on this computer's own settings, where its Happy Agent can add one.
+     * Opens Enterprise login, for a computer already set up. Offered on this
+     * computer's own Account settings.
      */
     onServerConnectOpen?(): void;
     platform?: "desktop" | "web";
@@ -632,6 +642,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const host = hostHappyAgent(directory);
     const happyCloud = host?.happyCloud === true;
+    const enterprise = host?.enterprise !== undefined;
     // Followed while Settings is open: whether Administration is listed at all
     // depends on the server reporting onboarding settings.
     const onboardingSettingsStore = host?.session?.onboardingSettings?.();
@@ -683,7 +694,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const owner = members.roleId === "owner";
     const adminAbsent = !membersStore || (!members.loading && !owner);
     const section =
-        happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
+        happyAgentSettingsCategoryAvailable(props.section, happyCloud, enterprise) &&
         !(ADMIN_CATEGORIES.has(props.section) && adminAbsent) &&
         !(props.section === "administration" && onboardingAbsent) &&
         !(props.section === "payments" && paymentsAbsent) &&
@@ -697,7 +708,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
         (category) =>
-            happyAgentSettingsCategoryAvailable(category.id, happyCloud) &&
+            happyAgentSettingsCategoryAvailable(category.id, happyCloud, enterprise) &&
             (category.id !== "instructions" || instructionsShown) &&
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
@@ -1192,6 +1203,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 <HappyAgentServerPhoneSettings
                     serverName={host.label}
                     {...serverPhoneCode(host, serverUrl)}
+                    {...enterpriseCloudCode(host)}
                 />
             ) : mobileLink ? (
                 <HappyAgentMobileLinkSettings
@@ -1427,13 +1439,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(profile.saveError ? { saveError: profile.saveError } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
-                    {/* This computer's own Happy Agent adds a team server by its
-                        address; the shell signs in to it. */}
+                    {/* Enterprise login, once the start page is behind this computer. */}
                     {props.onServerConnectOpen && host?.remoteId === undefined && !happyCloud ? (
-                        <HappyAgentServerConnectSettings
-                            onConnect={props.onServerConnectOpen}
-                            {...(unavailable === undefined ? {} : { unavailable })}
-                        />
+                        <HappyAgentServerConnectSettings onConnect={props.onServerConnectOpen} />
                     ) : null}
                     {/* The web app's Happy Cloud session stands in for the
                         machine's own WorkOS connection, which it has none of. */}

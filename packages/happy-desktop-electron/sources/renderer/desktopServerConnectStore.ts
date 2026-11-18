@@ -1,65 +1,64 @@
 import type { ServerSessionsStore, ServerSource } from "happy-desktop-state";
 import type { ServerConnectServer, ServerConnectView } from "happy-desktop-ui";
-import type { DesktopServerSignInResult } from "../shared/desktopContract";
-import { desktopServerAddressRead, type DesktopServerAddResult } from "./desktopServerAddress";
+import type {
+    DesktopEnterprise,
+    DesktopEnterpriseOpened,
+    DesktopServerSignInResult,
+} from "../shared/desktopContract";
+import type { DesktopCloudConnectStore } from "./desktopCloudConnectStore";
+import { desktopServerAddressRead } from "./desktopServerAddress";
 
 export interface DesktopServerConnectStore {
     /** The step on show, or nothing. */
     get(): ServerConnectView | undefined;
     subscribe(listener: () => void): () => void;
-    /** Settings' Connect to a server: the address, at once. */
+    /** The open cloud's own steps, while the view is a cloud's. */
+    cloud(): DesktopCloudConnectStore | undefined;
+    /** Enterprise login, from the start page or Settings: the address, at once. */
     connectOpen(): void;
-    /**
-     * Enterprise login on the first screen, before this computer has a Happy
-     * Agent to add the server to: the address opens once `ready` says this
-     * computer's agent is connected and its setup has handed over.
-     */
-    connectWanted(): void;
     addressUpdate(address: string): void;
-    /** Checks the address, has the host add the server, and reads how it signs in. */
+    /** Reads what is at the address: a cloud's steps, or one server's sign-in. */
     addressSubmit(): void;
     /** Opens the server's sign-in in the browser; once signed in, the server opens. */
     signInStart(): void;
     /** From the sign-in step to the address; while the browser is open, stops waiting for it. */
     back(): void;
-    /** The close button and Esc: the flow ends, and a server it added unused is forgotten. */
+    /** The close button and Esc: the flow ends, and a server it opened unused is forgotten. */
     connectCancel(): void;
 }
 
-/** A server this flow is signing in to. */
+/** A deployment of one server this flow is signing in to. */
 interface Pending {
+    readonly key: string;
     readonly connectionId: string;
     readonly url: string;
     readonly server: ServerConnectServer;
-    /** This flow added it, so leaving before signing in forgets it again. */
-    readonly added: boolean;
 }
 
 const CANCELLED = "Signing in was cancelled.";
 
 /**
- * Connecting this window to a team server by its address. The host Happy
- * Agent adds the server, after reading its discovery; the shell then signs in
- * to it and keeps the tokens, so the window never holds one. Once signed in,
- * the server is opened behind the sheet and the sheet is gone.
+ * Enterprise login. The person enters their company's address and the shell
+ * reads what is there. A cloud of servers goes on in its own steps, the same
+ * ones Happy Cloud has, in this sheet. A deployment of one server is signed
+ * in to here, then opened behind the sheet, and the sheet is gone. The shell
+ * holds every sign-in; the window never holds a token.
  */
 export function desktopServerConnectStoreCreate(input: {
-    readonly serverAdd: (url: string, host: string) => Promise<DesktopServerAddResult>;
-    readonly serverRemove: (connectionId: string) => Promise<void>;
-    /**
-     * How signing in works on a listed server, read from its discovery
-     * without opening anything. Absent on shells older than it, where the
-     * sign-in host is said once the browser is open.
-     */
+    readonly enterprise: DesktopEnterprise;
+    /** How signing in works on a deployment of one server, without opening anything. */
     readonly signInDescribe?: (
         connectionId: string,
     ) => Promise<DesktopServerSignInResult<{ readonly name: string; readonly host: string }>>;
     readonly servers: ServerSource;
     readonly sessions: ServerSessionsStore;
-    /** Selects the server once the window lists it; resolves whether it did. */
+    /** Lists a signed-in server and selects it; resolves whether it did. */
     readonly open: (connectionId: string) => Promise<boolean>;
-    /** Whether this computer's Happy Agent is connected, with its setup handed over. */
-    readonly ready: { get(): boolean; subscribe(listener: () => void): () => void };
+    /** A cloud's own steps, which call `leave` when Back takes them to the address. */
+    readonly cloudCreate: (
+        cloud: Extract<DesktopEnterpriseOpened, { kind: "cloud" }>,
+        leave: () => void,
+    ) => DesktopCloudConnectStore;
 }): DesktopServerConnectStore {
     const listeners = new Set<() => void>();
     let view: ServerConnectView | undefined;
@@ -67,8 +66,10 @@ export function desktopServerConnectStoreCreate(input: {
     let generation = 0;
     let pending: Pending | undefined;
     let signIn: AbortController | undefined;
-    // Enterprise login waiting for this computer's Happy Agent.
-    let wantedUnsubscribe: (() => void) | undefined;
+    // The open cloud's steps.
+    let cloud:
+        | { readonly store: DesktopCloudConnectStore; readonly unsubscribe: () => void }
+        | undefined;
 
     const set = (next: ServerConnectView | undefined): void => {
         view = next;
@@ -78,24 +79,22 @@ export function desktopServerConnectStoreCreate(input: {
     const signedIn = (connectionId: string): boolean =>
         input.sessions.get().sessions.get(connectionId)?.state === "signedIn";
 
-    /** Forgets a server this flow added and never signed in to. */
+    /** Forgets a deployment of one server this flow opened and never signed in to. */
     const abandon = (): void => {
         const left = pending;
         pending = undefined;
-        if (left?.added && !signedIn(left.connectionId))
-            void input.serverRemove(left.connectionId).catch(() => undefined);
+        if (left && !signedIn(left.connectionId))
+            void input.enterprise.serverForget(left.key).catch(() => undefined);
     };
     const signInStop = (): void => {
         signIn?.abort();
         signIn = undefined;
     };
-    const connectOpen = (): void => {
-        wantedUnsubscribe?.();
-        wantedUnsubscribe = undefined;
-        if (view !== undefined) return;
-        generation += 1;
-        pending = undefined;
-        set({ kind: "address", address: "" });
+    const cloudClose = (): void => {
+        const left = cloud;
+        cloud = undefined;
+        left?.unsubscribe();
+        left?.store.connectCancel();
     };
     const addressView = (address: string, error?: string): ServerConnectView => ({
         kind: "address",
@@ -104,13 +103,13 @@ export function desktopServerConnectStoreCreate(input: {
     });
 
     /** Opens the signed-in server behind the sheet, then lets the sheet go. */
-    const enter = async (asked: number, connectionId: string): Promise<void> => {
-        const opened = await input.open(connectionId);
-        if (!current(asked) || !pending) return;
+    const enter = async (asked: number, target: Pending): Promise<void> => {
+        const opened = await input.open(target.connectionId);
+        if (!current(asked) || pending !== target) return;
         if (!opened) {
             set({
                 kind: "signIn",
-                server: pending.server,
+                server: target.server,
                 error: "Signed in, but Happy couldn't open this server. Try again.",
             });
             return;
@@ -146,21 +145,43 @@ export function desktopServerConnectStoreCreate(input: {
         set({ kind: "signIn", server: pending.server });
     };
 
+    /** Hands the sheet to a cloud's own steps, from its servers or its sign-in. */
+    const cloudOpen = (opened: Extract<DesktopEnterpriseOpened, { kind: "cloud" }>): void => {
+        cloudClose();
+        let leaving = false;
+        const store = input.cloudCreate(opened, () => {
+            leaving = true;
+        });
+        const unsubscribe = store.subscribe(() => {
+            if (cloud?.store !== store) return;
+            const next = store.get();
+            if (next !== undefined) {
+                set({ kind: "cloud", cloud: next });
+                return;
+            }
+            // Back from the cloud's first step returns to the address; any
+            // other end, a server opened or the sheet closed, ends the flow.
+            unsubscribe();
+            cloud = undefined;
+            generation += 1;
+            set(leaving ? addressView(opened.url) : undefined);
+        });
+        cloud = { store, unsubscribe };
+        store.serversShow();
+    };
+
     return {
         get: () => view,
         subscribe(listener) {
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
-        connectOpen,
-        connectWanted() {
-            if (input.ready.get()) {
-                connectOpen();
-                return;
-            }
-            wantedUnsubscribe ??= input.ready.subscribe(() => {
-                if (input.ready.get()) connectOpen();
-            });
+        cloud: () => cloud?.store,
+        connectOpen() {
+            if (view !== undefined) return;
+            generation += 1;
+            pending = undefined;
+            set({ kind: "address", address: "" });
         },
         addressUpdate(address) {
             if (view?.kind !== "address" || view.busy) return;
@@ -175,42 +196,39 @@ export function desktopServerConnectStoreCreate(input: {
                 set(addressView(typed, address.message));
                 return;
             }
-            // Another address than the one added before Back: that one goes.
+            // Another address than the one opened before Back: that one goes.
             if (pending && pending.url !== address.url) abandon();
             generation += 1;
             const asked = generation;
             set({ ...view, busy: true, error: undefined });
-            void input
-                .serverAdd(address.url, address.host)
+            void input.enterprise
+                .open(address.url)
                 .catch(() => ({
                     ok: false as const,
-                    message:
-                        "The Happy Agent on this computer isn't connected. Try again once it is.",
+                    message: "Happy couldn't reach this address. Check it and your network.",
+                    code: "remote_unavailable",
                 }))
-                .then(async (added) => {
-                    if (!current(asked)) {
-                        // Left while it was being added: nothing should keep it.
-                        if (added.ok && added.added)
-                            void input.serverRemove(added.connectionId).catch(() => undefined);
+                .then(async (opened) => {
+                    if (!current(asked)) return;
+                    if (!opened.ok) {
+                        set(addressView(typed, opened.message));
                         return;
                     }
-                    if (!added.ok) {
-                        set(addressView(typed, added.message));
+                    if (opened.value.kind === "cloud") {
+                        abandon();
+                        cloudOpen(opened.value);
                         return;
                     }
                     const target: Pending = {
-                        connectionId: added.connectionId,
-                        url: address.url,
-                        server: { name: added.name },
-                        // Added earlier in this flow, it is still this flow's to forget.
-                        added:
-                            added.added ||
-                            (pending?.connectionId === added.connectionId && pending.added),
+                        key: opened.value.key,
+                        connectionId: opened.value.connectionId,
+                        url: opened.value.url,
+                        server: { name: address.host },
                     };
                     pending = target;
                     // Already signed in here: nothing to ask, the server opens.
-                    if (signedIn(added.connectionId)) {
-                        await enter(asked, added.connectionId);
+                    if (signedIn(target.connectionId)) {
+                        await enter(asked, target);
                         return;
                     }
                     await describe(asked, target);
@@ -239,7 +257,7 @@ export function desktopServerConnectStoreCreate(input: {
                 .then(
                     () => {
                         if (signIn === controller) signIn = undefined;
-                        if (current(asked)) void enter(asked, target.connectionId);
+                        if (current(asked)) void enter(asked, target);
                     },
                     (error: unknown) => {
                         if (signIn === controller) signIn = undefined;
@@ -270,12 +288,11 @@ export function desktopServerConnectStoreCreate(input: {
             }
         },
         connectCancel() {
-            wantedUnsubscribe?.();
-            wantedUnsubscribe = undefined;
             if (view === undefined) return;
             generation += 1;
             signInStop();
             abandon();
+            cloudClose();
             set(undefined);
         },
     };

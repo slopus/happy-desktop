@@ -6,7 +6,11 @@ import type {
     CloudConnectServer,
     CloudConnectView,
 } from "happy-desktop-ui";
-import type { DesktopHappyCloud, HappyDesktopBridge } from "../shared/desktopContract";
+import type {
+    DesktopEnterprise,
+    DesktopHappyCloud,
+    HappyDesktopBridge,
+} from "../shared/desktopContract";
 import {
     HAPPY_CLOUD_ACCOUNT_ID,
     happyCloudServerNameValid,
@@ -70,6 +74,64 @@ export interface DesktopCloudConnectStore {
     emailCodeResend(): void;
     /** From the code back to the address, kept as typed. */
     emailChangeOpen(): void;
+    /** An enterprise cloud's Join with an invite. */
+    inviteOpen(): void;
+    inviteUpdate(link: string): void;
+    /** Joins the pasted invite's server, then goes into the app on it. */
+    inviteAccept(): void;
+}
+
+/**
+ * The account API the screen asks, by the shell: Happy Cloud's own, or an
+ * enterprise cloud's bound to its key. Test and email sign-in are Happy
+ * Cloud's alone.
+ */
+export type DesktopCloudConnectCloud = Pick<
+    DesktopHappyCloud,
+    | "serversList"
+    | "availability"
+    | "serverCreate"
+    | "serverConnect"
+    | "imageRead"
+    | "accountSignOut"
+> &
+    Partial<Pick<DesktopHappyCloud, "passwordSignIn" | "emailCodeStart" | "emailCodeVerify">> & {
+        /** Accepts an invite by its token; only where invites are pasted in. */
+        inviteAccept?(token: string): ReturnType<DesktopHappyCloud["serverCreate"]>;
+    };
+
+/** An enterprise cloud's account API, bound to its key, as the screen asks it. */
+export function desktopEnterpriseCloud(
+    enterprise: DesktopEnterprise,
+    key: string,
+): DesktopCloudConnectCloud {
+    return {
+        serversList: () => enterprise.serversList(key),
+        availability: (name) => enterprise.availability(key, name),
+        serverCreate: (name) => enterprise.serverCreate(key, name),
+        serverConnect: (serverId) => enterprise.serverConnect(key, serverId),
+        imageRead: (serverId) => enterprise.imageRead(key, serverId),
+        accountSignOut: () => enterprise.accountSignOut(key),
+        inviteAccept: (token) => enterprise.inviteAccept(key, token),
+    };
+}
+
+/**
+ * The token an invite carries: the fragment of its link, or the code as
+ * pasted. `undefined` for nothing usable.
+ */
+function inviteTokenRead(link: string): string | undefined {
+    const typed = link.trim();
+    if (typed === "") return undefined;
+    if (!/^https?:\/\//iu.test(typed)) return /^[A-Za-z0-9._~-]+$/u.test(typed) ? typed : undefined;
+    let url: URL;
+    try {
+        url = new URL(typed);
+    } catch {
+        return undefined;
+    }
+    const token = decodeURIComponent(url.hash.replace(/^#/u, ""));
+    return token === "" ? undefined : token;
 }
 
 /** Presses on the logo, all within the window, that reveal test sign-in. */
@@ -94,7 +156,18 @@ const AVAILABILITY_DELAY_MS = 300;
  * accepted in the browser from its link; its server then appears here.
  */
 export function desktopCloudConnectStoreCreate(input: {
-    readonly cloud: DesktopHappyCloud;
+    readonly cloud: DesktopCloudConnectCloud;
+    /**
+     * An enterprise cloud, in place of Happy Cloud: its account signs in
+     * under `accountId` at the company's identity provider, offered on its
+     * own first step, and invites are pasted in. Back from that step `leave`s.
+     */
+    readonly enterprise?: {
+        readonly name: string;
+        readonly accountId: string;
+        readonly signIn: { readonly name: string; readonly host: string };
+        readonly leave: () => void;
+    };
     readonly bridge: Pick<
         HappyDesktopBridge,
         "serverSignInBegin" | "serverSignInFinish" | "serverSignInCancel"
@@ -111,7 +184,10 @@ export function desktopCloudConnectStoreCreate(input: {
 }): DesktopCloudConnectStore {
     const now = input.now ?? Date.now;
     let logoPresses: number[] = [];
-    const { cloud, bridge } = input;
+    const { cloud, bridge, enterprise } = input;
+    const accountId = enterprise?.accountId ?? HAPPY_CLOUD_ACCOUNT_ID;
+    const cloudName = enterprise?.name ?? "Happy Cloud";
+    const unreachableMessage = `${cloudName} isn't reachable right now.`;
     const { emailCodeStart, emailCodeVerify } = cloud;
     const emailSignIn =
         emailCodeStart !== undefined && emailCodeVerify !== undefined
@@ -123,12 +199,18 @@ export function desktopCloudConnectStoreCreate(input: {
     let fromStart = false;
     const welcome = (
         testSignIn?: Extract<CloudConnectView, { kind: "welcome" }>["testSignIn"],
-    ): CloudConnectView => ({
-        kind: "welcome",
-        ...(fromStart ? { start: true } : {}),
-        ...(emailSignIn ? { emailSignIn: true } : {}),
-        ...(testSignIn ? { testSignIn } : {}),
-    });
+    ): CloudConnectView =>
+        enterprise
+            ? { kind: "enterpriseSignIn", name: enterprise.name, signIn: enterprise.signIn }
+            : {
+                  kind: "welcome",
+                  ...(fromStart ? { start: true } : {}),
+                  ...(emailSignIn ? { emailSignIn: true } : {}),
+                  ...(testSignIn ? { testSignIn } : {}),
+              };
+    const signingIn: CloudConnectView = enterprise
+        ? { kind: "signingIn", host: enterprise.signIn.host }
+        : { kind: "signingIn" };
     // Each opening of the screen; an answer for an earlier one changes nothing.
     let generation = 0;
     let attemptId: string | undefined;
@@ -177,6 +259,7 @@ export function desktopCloudConnectStoreCreate(input: {
         servers: { status: "ready", servers: servers.map(serverView) },
         joins,
         ...(error === undefined ? {} : { error }),
+        ...(enterprise && cloud.inviteAccept ? { invite: true as const } : {}),
     });
     const imagesRead = (asked: number): void => {
         for (const server of servers) {
@@ -193,10 +276,11 @@ export function desktopCloudConnectStoreCreate(input: {
         }
     };
     /** Where create goes back to, and where a first look lands. */
+    const invite = enterprise && cloud.inviteAccept ? { invite: true as const } : {};
     const home = (): CloudConnectView =>
         servers.length > 0
             ? serversView()
-            : { kind: "create", name: "", availability: "idle", back: false };
+            : { kind: "create", name: "", availability: "idle", back: false, ...invite };
 
     const list = async (asked: number): Promise<"signInRequired" | "done"> => {
         const answer = await cloud.serversList();
@@ -208,6 +292,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 kind: "servers",
                 servers: { status: "error", message: answer.message },
                 joins,
+                ...invite,
             });
             return "done";
         }
@@ -219,14 +304,14 @@ export function desktopCloudConnectStoreCreate(input: {
 
     const signIn = async (asked: number): Promise<boolean> => {
         if (!bridge.serverSignInBegin || !bridge.serverSignInFinish) return false;
-        const begun = await bridge.serverSignInBegin(HAPPY_CLOUD_ACCOUNT_ID);
+        const begun = await bridge.serverSignInBegin(accountId);
         if (!current(asked)) return false;
         if (!begun.ok) {
             set({ kind: "failed", message: begun.message });
             return false;
         }
         attemptId = begun.value.attemptId;
-        set({ kind: "signingIn" });
+        set(signingIn);
         const finished = await bridge.serverSignInFinish(begun.value.attemptId);
         attemptId = undefined;
         if (!current(asked)) return false;
@@ -243,9 +328,10 @@ export function desktopCloudConnectStoreCreate(input: {
         if (await signIn(asked)) await list(asked);
     };
 
-    /** A failed create stays on its own step, saying why. */
+    /** A failed create or invite stays on its own step, saying why. */
     const failed = (message: string): void => {
-        if (view?.kind === "create") set({ ...view, busy: undefined, error: message });
+        if (view?.kind === "create" || view?.kind === "invite")
+            set({ ...view, busy: undefined, error: message });
     };
 
     /**
@@ -256,12 +342,11 @@ export function desktopCloudConnectStoreCreate(input: {
         generation += 1;
         const asked = generation;
         if (availabilityTimer) clearTimeout(availabilityTimer);
-        set({ kind: "signingIn" });
+        set(signingIn);
         void (async () => {
             if (await signIn(asked)) await list(asked);
         })().catch(() => {
-            if (current(asked))
-                set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+            if (current(asked)) set({ kind: "failed", message: unreachableMessage });
         });
     };
     /** An accounts answer that failed: a sign-in again, or a word on the current step. */
@@ -290,7 +375,7 @@ export function desktopCloudConnectStoreCreate(input: {
         const asked = generation;
         const answer = await enter(server).catch(() => ({
             ok: false as const,
-            message: "Happy Cloud isn't reachable right now.",
+            message: unreachableMessage,
         }));
         if (!current(asked)) return;
         if (!answer.ok) {
@@ -388,7 +473,7 @@ export function desktopCloudConnectStoreCreate(input: {
             waiting = { until: now() + answer.retryAfter * 1000, message: answer.message };
         emailSet({ ...next, error: answer.message });
     };
-    const unreachable = { message: "Happy Cloud isn't reachable right now." } as const;
+    const unreachable = { message: unreachableMessage };
     /** Sends a code; `resend` stays on the code step either way. */
     const emailCodeRequest = (email: string, from: EmailView, resend: boolean): void => {
         if (!emailSignIn) return;
@@ -487,13 +572,17 @@ export function desktopCloudConnectStoreCreate(input: {
             set(undefined);
         },
         connectConfirm() {
-            if (view?.kind !== "welcome" && view?.kind !== "failed") return;
+            if (
+                view?.kind !== "welcome" &&
+                view?.kind !== "enterpriseSignIn" &&
+                view?.kind !== "failed"
+            )
+                return;
             generation += 1;
             const asked = generation;
-            set({ kind: "signingIn" });
+            set(signingIn);
             void open(asked).catch(() => {
-                if (current(asked))
-                    set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+                if (current(asked)) set({ kind: "failed", message: unreachableMessage });
             });
         },
         serverPick(id) {
@@ -506,7 +595,7 @@ export function desktopCloudConnectStoreCreate(input: {
             void enter(server)
                 .catch(() => ({
                     ok: false as const,
-                    message: "Happy Cloud isn't reachable right now.",
+                    message: unreachableMessage,
                 }))
                 .then((answer) => {
                     if (!current(asked)) return;
@@ -544,8 +633,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 // Signing in is the person's step on the welcome, not the link's.
                 if ((await list(asked)) === "signInRequired" && current(asked)) set(welcome());
             })().catch(() => {
-                if (current(asked))
-                    set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+                if (current(asked)) set({ kind: "failed", message: unreachableMessage });
             });
         },
         createOpen() {
@@ -553,6 +641,18 @@ export function desktopCloudConnectStoreCreate(input: {
             set({ kind: "create", name: "", availability: "idle", back: servers.length > 0 });
         },
         back() {
+            // An enterprise cloud's first step leaves it, for Enterprise login's address.
+            if (view?.kind === "enterpriseSignIn") {
+                generation += 1;
+                enterprise?.leave();
+                set(undefined);
+                return;
+            }
+            if (view?.kind === "invite") {
+                if (view.busy) return;
+                set(home());
+                return;
+            }
             // Leaving the browser sign-in, an email step, or a failure lands
             // on the Cloud's welcome.
             if (view?.kind === "email" || view?.kind === "emailCode") {
@@ -656,12 +756,13 @@ export function desktopCloudConnectStoreCreate(input: {
         testSignIn() {
             if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
             const { login, password } = view.testSignIn;
-            if (login.trim() === "" || password === "") return;
+            const { passwordSignIn } = cloud;
+            if (login.trim() === "" || password === "" || !passwordSignIn) return;
             generation += 1;
             const asked = generation;
             // The password leaves this store with the request and is not kept.
             set(welcome({ login, password: "", busy: true }));
-            const request = () => cloud.passwordSignIn(login.trim(), password);
+            const request = () => passwordSignIn(login.trim(), password);
             void (signedOut ? signedOut.then(request) : request())
                 .then(async (answer) => {
                     if (!current(asked)) return;
@@ -678,7 +779,7 @@ export function desktopCloudConnectStoreCreate(input: {
                             welcome({
                                 login,
                                 password: "",
-                                error: "Happy Cloud isn't reachable right now.",
+                                error: unreachableMessage,
                             }),
                         );
                 });
@@ -730,8 +831,7 @@ export function desktopCloudConnectStoreCreate(input: {
                         });
                 })
                 .catch(() => {
-                    if (current(asked))
-                        set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+                    if (current(asked)) set({ kind: "failed", message: unreachableMessage });
                 });
         },
         emailCodeResend() {
@@ -743,6 +843,35 @@ export function desktopCloudConnectStoreCreate(input: {
             if (view?.kind !== "emailCode" || view.busy) return;
             generation += 1;
             emailSet({ kind: "email", email: view.email });
+        },
+        inviteOpen() {
+            if (!enterprise || !cloud.inviteAccept) return;
+            if (view?.kind !== "servers" && view?.kind !== "create") return;
+            if (view.kind === "create" && (view.busy || view.back)) return;
+            if (availabilityTimer) clearTimeout(availabilityTimer);
+            set({ kind: "invite", link: "" });
+        },
+        inviteUpdate(link) {
+            if (view?.kind !== "invite" || view.busy) return;
+            set({ ...view, link, error: undefined });
+        },
+        inviteAccept() {
+            const accept = cloud.inviteAccept;
+            if (view?.kind !== "invite" || view.busy || !accept) return;
+            const token = inviteTokenRead(view.link);
+            if (token === undefined) {
+                set({ ...view, error: "That isn’t an invite link or code." });
+                return;
+            }
+            const asked = generation;
+            set({ ...view, busy: true, error: undefined });
+            void accept(token)
+                .catch(() => ({ ok: false as const, code: "remote_unavailable", ...unreachable }))
+                .then((answer) => {
+                    if (!current(asked)) return;
+                    if (!answer.ok) refused(answer);
+                    else void connect(answer.value);
+                });
         },
     };
 }
