@@ -23,7 +23,11 @@ vi.mock("happy-desktop-state", () => ({
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LocalOnboardingScreen, type LocalOnboardingView } from "happy-desktop-ui";
+import {
+    LocalOnboardingScreen,
+    localOnboardingStage,
+    type LocalOnboardingView,
+} from "happy-desktop-ui";
 import { localOnboardingStoreCreate, localOnboardingView } from "./localOnboardingStore";
 import type {
     DesktopRuntimeSnapshot,
@@ -714,9 +718,9 @@ function continueButton(root: HTMLElement): Element | undefined {
     return [...root.querySelectorAll("button")].find((button) => button.textContent === "Continue");
 }
 
-it("draws Subscriptions only once every row it will hold is known", async () => {
+it("answers Subscriptions only once every row it will hold is known", async () => {
     // The configuration is still on its way: rows arriving under cards
-    // already drawn would move them, so the setup page stays.
+    // already answered would move them, so the cards are still being checked.
     let configAnswer: (config: unknown) => void = () => undefined;
     daemon.getConfig.mockImplementation(
         () =>
@@ -727,7 +731,7 @@ it("draws Subscriptions only once every row it will hold is known", async () => 
     daemon.verifyProvider.mockImplementation(() => new Promise(() => undefined));
     const store = storeOpen();
     await vi.waitFor(() => expect(daemon.getConfig).toHaveBeenCalled());
-    expect(localOnboardingView(store.get())).toEqual({ kind: "connecting" });
+    expect(localOnboardingView(store.get())).toEqual({ kind: "examining" });
 
     configAnswer({
         config: {
@@ -746,4 +750,45 @@ it("draws Subscriptions only once every row it will hold is known", async () => 
             kind: "provider-authentication",
         }),
     );
+});
+
+it("stays on Subscriptions from the moment it opens while the configuration is read", async () => {
+    let configAnswer: (config: unknown) => void = () => undefined;
+    daemon.getConfig.mockImplementation(
+        () =>
+            new Promise((resolve) => {
+                configAnswer = resolve;
+            }),
+    );
+    daemon.verifyProvider.mockImplementation(() => new Promise(() => undefined));
+    // A launch that lands on Subscriptions: the shell examines the machine
+    // before it has found the assistants on it.
+    const { assistants: _assistants, ...examining } = subscriptionsStep();
+    onboardingGetSet({ ...examining, busy: true, stage: "examining" } as LocalOnboardingSnapshot);
+    const store = storeOpen();
+    const seen: string[] = [];
+    const record = () => {
+        const view = localOnboardingView(store.get());
+        const step = view ? `${localOnboardingStage(view)}:${view.kind}` : "none";
+        if (seen.at(-1) !== step) seen.push(step);
+    };
+    record();
+    unsubscribes.push(store.subscribe(record));
+    await vi.waitFor(() => expect(store.get().runtime?.phase).toBe("ready"));
+    await vi.waitFor(() => expect(store.get().onboarding?.stage).toBe("examining"));
+
+    onboardingPush({ ...subscriptionsStep(), busy: true, stage: "examining" });
+    onboardingPush(subscriptionsStep());
+    await vi.waitFor(() => expect(daemon.getConfig).toHaveBeenCalled());
+    configAnswer({ config: { providers: {} } });
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())?.kind).toBe("provider-authentication"),
+    );
+
+    // Setup is never drawn between them: the step bar does not go back a step.
+    expect(seen).toEqual([
+        "setup:checking",
+        "subscriptions:examining",
+        "subscriptions:provider-authentication",
+    ]);
 });

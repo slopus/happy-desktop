@@ -1349,7 +1349,11 @@ export function localOnboardingView(
             };
         case "providersMissing":
         case "assistantsFound":
-            if (customUnread(snapshot)) return { kind: "connecting" };
+            // Until the configuration is read the rows under the cards are not
+            // known, so the cards are drawn still being checked: the step is
+            // already Subscriptions, and drawing Setup meanwhile would put the
+            // person back a step and forward again.
+            if (customUnread(snapshot)) return { kind: "examining" };
             return {
                 assistants: assistantsProject(
                     onboarding.assistants,
@@ -1371,9 +1375,7 @@ export function localOnboardingView(
                 ...(onboarding.node ? { nodeVersion: onboarding.node.version } : {}),
             };
         case "examining":
-            // The rows under the cards are not known yet, and arriving under
-            // cards already drawn would move them.
-            return customReadable(snapshot) ? { kind: "connecting" } : { kind: "examining" };
+            return { kind: "examining" };
         case "sandbox": {
             const sandbox = onboarding.sandbox;
             return {
@@ -1788,8 +1790,8 @@ function customReadable(snapshot: LocalOnboardingViewSnapshot): boolean {
 }
 
 /**
- * Subscriptions waits, on the setup page before it, for the configuration:
- * every row it will hold is drawn with the cards, in place from the start.
+ * Subscriptions waits, on its own skeleton, for the configuration: every row
+ * it will hold is drawn with the answered cards, in place from the start.
  */
 function customUnread(snapshot: LocalOnboardingViewSnapshot): boolean {
     return (
