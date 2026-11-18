@@ -477,6 +477,153 @@ const setupScreens: readonly {
     },
 ];
 
+/**
+ * The Settings pairing dialog through one pairing's whole life, as the app
+ * opens it: Direct | Relay at the top, Direct first. The dialog keeps one size
+ * through all of them, so `pnpm blueprint:screens` can lay them side by side.
+ */
+const dialogScreens: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly pairing: PairingVariant;
+}[] = [
+    {
+        id: "dialog-generating",
+        label: "Dialog · reading the connection",
+        pairing: { direct: direct.loading, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-opening",
+        label: "Dialog · direct socket opening",
+        pairing: { direct: direct.starting, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-direct",
+        label: "Dialog · direct code",
+        pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-relay-starting",
+        label: "Dialog · relay code coming",
+        pairing: { direct: direct.waiting, relay: { kind: "starting" }, method: "relay" },
+    },
+    {
+        id: "dialog-relay",
+        label: "Dialog · relay code",
+        pairing: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
+    },
+    {
+        id: "dialog-connected",
+        label: "Dialog · phone connected, verifying",
+        pairing: { direct: direct.connected, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-emoji",
+        label: "Dialog · emoji match",
+        pairing: { direct: direct.verifying, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-emoji-waiting",
+        label: "Dialog · emoji confirmed here, waiting for the phone",
+        pairing: { direct: direct.desktopConfirmed, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-completed",
+        label: "Dialog · paired",
+        pairing: { direct: direct.completed, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-rejected",
+        label: "Dialog · rejected by the phone",
+        pairing: { direct: direct.rejected, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-expired",
+        label: "Dialog · verification timed out",
+        pairing: { direct: direct.expiredVerifying, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-code-expired",
+        label: "Dialog · code expired",
+        pairing: { direct: direct.expiredBeforeScan, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-failed",
+        label: "Dialog · pairing failed",
+        pairing: { direct: direct.failed, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "dialog-relay-failed",
+        label: "Dialog · relay failed",
+        pairing: {
+            direct: direct.waiting,
+            relay: { kind: "failed", message: "Happy couldn't reach its server." },
+            method: "relay",
+        },
+    },
+];
+
+/** Onboarding's pairing step through the same pairing, Direct | Relay at the top. */
+const setupMethodScreens: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly pairing: PairingVariant;
+}[] = [
+    {
+        id: "setup-generating",
+        label: "Onboarding · reading the connection",
+        pairing: { direct: direct.loading, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "setup-direct",
+        label: "Onboarding · direct code",
+        pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "setup-relay",
+        label: "Onboarding · relay code",
+        pairing: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
+    },
+    {
+        id: "setup-emoji",
+        label: "Onboarding · emoji match",
+        pairing: { direct: direct.verifying, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "setup-paired",
+        label: "Onboarding · paired",
+        pairing: { direct: direct.completed, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "setup-failed",
+        label: "Onboarding · pairing failed",
+        pairing: { direct: direct.failed, relay: relayWaiting, method: "direct" },
+    },
+];
+
+/** A remote Happy Agent's onboarding pairs on the same panel. */
+const remoteMethodScreens: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly pairing: PairingVariant;
+}[] = [
+    {
+        id: "remote-direct",
+        label: "Remote onboarding · direct code",
+        pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "remote-relay",
+        label: "Remote onboarding · relay code",
+        pairing: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
+    },
+    {
+        id: "remote-emoji",
+        label: "Remote onboarding · emoji match",
+        pairing: { direct: direct.verifying, relay: relayWaiting, method: "direct" },
+    },
+];
+
 /** Settings screens also shown in the dark appearance, at the window Happy opens at. */
 const darkSettingsScreens = new Set(["link-relay", "link-direct"]);
 
@@ -556,6 +703,43 @@ export function MobilePairingFlowPage() {
                     );
                 }),
             )}
+            {[defaultWindow, minimumWindow].flatMap((window) => {
+                const size = `${String(window.width)}x${String(window.height)}`;
+                const first = settingsScreens.length + setupScreens.length + 1;
+                return [
+                    ...dialogScreens.map((screen, index) => ({
+                        screen,
+                        number: String(first + index),
+                        render: () => settings({ direct: direct.closed, pairing: screen.pairing }),
+                        mode: "light" as const,
+                    })),
+                    ...setupMethodScreens.map((screen, index) => ({
+                        screen,
+                        number: String(first + dialogScreens.length + index),
+                        render: () => setup(screen.pairing),
+                        mode: "dark" as const,
+                    })),
+                    ...remoteMethodScreens.map((screen, index) => ({
+                        screen,
+                        number: String(
+                            first + dialogScreens.length + setupMethodScreens.length + index,
+                        ),
+                        render: () => remote(screen.pairing),
+                        mode: "dark" as const,
+                    })),
+                ].map(({ screen, number, render, mode }) => (
+                    <FullScreenSpecimen
+                        detail={`${String(window.width)} × ${String(window.height)}`}
+                        key={`${size}-${screen.id}`}
+                        label={screen.label}
+                        number={number}
+                        screen={`${number}-${screen.id}-${size}`}
+                        window={window}
+                    >
+                        <ThemeScope mode={mode}>{contained(render())}</ThemeScope>
+                    </FullScreenSpecimen>
+                ));
+            })}
         </ComponentPage>
     );
 }
