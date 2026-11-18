@@ -742,6 +742,66 @@ it("takes the install shell from the desktop, and from the renderer's OS only on
     expect(subscriptions({})).toMatchObject({ installShell: "posix" });
 });
 
+it("reports one Setup and one Subscriptions while Subscriptions reads the configuration", () => {
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate([{ id: "local", status: "connected", bots: [] }]),
+        client,
+    });
+    const { store, welcome, publish } = onboardingCreate();
+    const unsubscribe = analytics.onboardingObserve(store, welcome).subscribe(() => undefined);
+    const ready = {
+        activeTarget: { happyAgentHttpUrl: "http://happy-agent.test", mode: "local" },
+        activeTargetId: "local",
+        connectionId: 1,
+        mode: "local",
+        phase: "ready",
+        targets: [],
+        update: { status: "idle" },
+    } as unknown as DesktopRuntimeSnapshot;
+    const assistants = [
+        { id: "claude", status: "found" },
+        { id: "codex", status: "missing" },
+        { id: "grok", status: "missing" },
+    ] as const;
+    const unread = { complete: false, custom: { providers: [], read: false, result: "checking" } };
+    // Setup starting Happy Agent, then the snapshots the store goes through
+    // as Subscriptions opens: the machine examined, the assistants found, and
+    // the configuration read.
+    publish(view({ onboarding: onboarding("connecting") }));
+    publish(view({ onboarding: onboarding("examining"), runtime: ready }));
+    publish(view({ onboarding: onboarding("examining", { assistants }), runtime: ready }));
+    publish(
+        view({
+            onboarding: onboarding("assistantsFound", { assistants }),
+            providerAuthentication: unread,
+            runtime: ready,
+        } as Partial<LocalOnboardingViewSnapshot>),
+    );
+    publish(
+        view({
+            onboarding: onboarding("assistantsFound", { assistants }),
+            providerAuthentication: {
+                ...unread,
+                custom: { providers: [], read: true, result: "invalid" },
+            },
+            runtime: ready,
+        } as Partial<LocalOnboardingViewSnapshot>),
+    );
+    unsubscribe();
+    analytics.dispose();
+
+    const sent = (event: string, property: string) =>
+        client.captured
+            .filter((c) => c.event === event)
+            .map(({ properties }) => properties[property]);
+    expect({
+        results: sent("onboarding_setup_result", "result"),
+        steps: sent("onboarding_step_viewed", "step"),
+    }).toEqual({ results: ["ok"], steps: ["setup", "subscriptions"] });
+});
+
 it("reports which installs only a refreshed PATH found, as the person continues", () => {
     const client = clientCreate();
     const analytics = desktopAnalyticsCreate({
