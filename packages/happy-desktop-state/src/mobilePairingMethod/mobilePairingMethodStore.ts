@@ -4,17 +4,12 @@ export type MobilePairingMethod = "relay" | "direct";
 /** Which pairing page: first-run onboarding, or Settings → Mobile Access. */
 export type MobilePairingSurface = "onboarding" | "mobile_access";
 
-/** The operating system the desktop runs on, as the pairing default reads it. */
-export type MobilePairingDesktopOs = "mac" | "win" | "linux";
-
 /**
- * The method a pairing page opens on for `os`: Direct on macOS, Relay on
- * Windows and Linux for now. A Happy Agent that does not offer Direct shows
- * Relay alone whatever this says.
+ * The method a pairing page opens on: Direct, on every operating system. The
+ * Direct | Relay control above the code keeps Relay one click away for older
+ * phone apps, and a Happy Agent that does not offer Direct shows Relay alone.
  */
-export function mobilePairingMethodDefault(os: MobilePairingDesktopOs): MobilePairingMethod {
-    return os === "mac" ? "direct" : "relay";
-}
+export const MOBILE_PAIRING_METHOD_DEFAULT: MobilePairingMethod = "direct";
 
 export interface MobilePairingMethodSnapshot {
     /** The method the open pairing page shows: the person's pick on it, else the default. */

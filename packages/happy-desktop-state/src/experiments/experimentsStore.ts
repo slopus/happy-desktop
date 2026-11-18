@@ -2,7 +2,6 @@
 export const EXPERIMENTAL_FEATURES = [
     { id: "inbox", label: "Inbox" },
     { id: "voice", label: "Voice calls" },
-    { id: "directConnection", label: "Direct phone connection" },
 ] as const;
 
 export type ExperimentalFeature = (typeof EXPERIMENTAL_FEATURES)[number]["id"];
@@ -37,7 +36,6 @@ export interface ExperimentsStore {
 const DISABLED: ExperimentsSnapshot = {
     inbox: false,
     voice: false,
-    directConnection: false,
 };
 
 /**
@@ -56,7 +54,6 @@ function documentParse(value: unknown): ExperimentsSnapshot {
     return {
         inbox: enabled("inbox"),
         voice: enabled("voice"),
-        directConnection: enabled("directConnection"),
     };
 }
 

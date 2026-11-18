@@ -1,9 +1,7 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import {
-    experimentsStoreNoop,
     happyAgentMobileConnectorStoreUnfollowed,
     type AppearanceStore,
-    type ExperimentsStore,
     type HappyAgentCloudProvidersStore,
     type HappyAgentPaymentsStore,
     type HappyAgentProvidersStore,
@@ -38,8 +36,6 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly placeholderSeed: string;
     /** Which pairing method shows: this computer's default until the person picks on the page. */
     readonly mobilePairingMethod: MobilePairingMethodStore;
-    /** Whether Direct is offered beside Relay; absent, only Relay. */
-    readonly experiments?: ExperimentsStore;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
     /** A Happy Cloud server's AI connections, plugins and payments, for its gates. */
@@ -71,20 +67,11 @@ export function HappyAgentOnboardingBoundary(props: {
         props.store.mobile.get,
     );
     const methodStore = props.mobilePairingMethod;
-    const methodSnapshot = useSyncExternalStore(
+    const { method } = useSyncExternalStore(
         methodStore.subscribe,
         methodStore.get,
         methodStore.get,
     );
-    const experimentsStore = props.experiments ?? experimentsStoreNoop;
-    const experiments = useSyncExternalStore(
-        experimentsStore.subscribe,
-        experimentsStore.get,
-        experimentsStore.get,
-    );
-    // Until Direct is turned on in Experiments, pairing is Relay alone.
-    const relayOnly = !experiments.directConnection;
-    const method = relayOnly ? "relay" : methodSnapshot.method;
     const online = props.online;
     // The relay offer leads to methods: the direct pairing opens with it,
     // and the connector is read only while Direct is on screen.
@@ -94,7 +81,6 @@ export function HappyAgentOnboardingBoundary(props: {
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
         method,
-        relayOnly,
         // Choosing Direct asks for a direct code.
         onMethodSelect: (next) => {
             if (next === "direct") props.store.mobile.direct.pairingOpen();

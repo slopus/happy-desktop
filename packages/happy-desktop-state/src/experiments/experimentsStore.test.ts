@@ -26,3 +26,11 @@ it.each([false, true])(
         expect(experimentsStoreCreate(persistence).get()).toEqual(store.get());
     },
 );
+
+it("reads a document saved with the retired Direct phone connection switch", () => {
+    const store = experimentsStoreCreate({
+        read: () => ({ inbox: true, voice: false, directConnection: true }),
+        write: () => undefined,
+    });
+    expect(store.get()).toEqual({ inbox: true, voice: false });
+});

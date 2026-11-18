@@ -2,7 +2,7 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import {
     EXPERIMENTAL_FEATURES,
-    mobilePairingMethodDefault,
+    MOBILE_PAIRING_METHOD_DEFAULT,
     happyAgentMobileConnectorStoreCreate,
     happyAgentMobileConnectorStoreNoop,
     mobilePairingMethodStoreCreate,
@@ -20,9 +20,8 @@ import { appMobilePairingOptions } from "../../sources/components/AppMobilePairi
 
 /*
  * Onboarding and Mobile Access show a Direct | Relay control at the top. Every
- * pairing page opens on this computer's default, Direct on macOS and Relay on
- * Windows and Linux; a pick on the control lasts only while that page is open,
- * and nothing is kept. A Happy Agent that does not offer Direct shows Relay
+ * pairing page opens on Direct, the default on every computer; a pick on the
+ * control lasts only while that page is open, and nothing is kept. A Happy Agent that does not offer Direct shows Relay
  * alone. Relay shows only the
  * relay code and nothing asks the daemon for a direct pairing; Direct shows the
  * direct code and emoji step in the same place, with a way back to Relay for
@@ -120,14 +119,12 @@ function options(
     });
 }
 
-it.each([
-    ["mac", "direct"],
-    ["win", "relay"],
-    ["linux", "relay"],
-] as const)("opens pairing on %s's default, %s", (os, method) => {
-    expect(EXPERIMENTAL_FEATURES.map((feature) => feature.id)).not.toContain("mobileDirect");
-    expect(mobilePairingMethodDefault(os)).toBe(method);
-    const store = mobilePairingMethodStoreCreate({ defaultMethod: mobilePairingMethodDefault(os) });
+it("opens pairing on Direct, with no experiment in the way", () => {
+    const method = "direct";
+    const features: readonly string[] = EXPERIMENTAL_FEATURES.map((feature) => feature.id);
+    expect(features).not.toContain("directConnection");
+    expect(MOBILE_PAIRING_METHOD_DEFAULT).toBe(method);
+    const store = mobilePairingMethodStoreCreate({ defaultMethod: MOBILE_PAIRING_METHOD_DEFAULT });
     for (const layout of ["setup", "settings", "dialog"] as const) {
         const shown = options(layout, store.get().method);
         expect(shown.method).toBe(method);

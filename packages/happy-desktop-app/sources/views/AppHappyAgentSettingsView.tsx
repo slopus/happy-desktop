@@ -553,14 +553,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         experimentsStore.get,
     );
     const methodStore = props.mobilePairingMethod ?? mobilePairingMethodStoreNoop;
-    const { method: pairingMethodPicked } = useSyncExternalStore(
+    const { method: pairingMethod } = useSyncExternalStore(
         methodStore.subscribe,
         methodStore.get,
         methodStore.get,
     );
-    // Until Direct is turned on in Experiments, pairing is Relay alone.
-    const pairingRelayOnly = !experiments.directConnection;
-    const pairingMethod = pairingRelayOnly ? "relay" : pairingMethodPicked;
     const projectsVisibilityStore = props.projectsVisibility ?? projectsVisibilityStoreNoop;
     const projectsVisibility = useSyncExternalStore(
         projectsVisibilityStore.subscribe,
@@ -960,7 +957,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                   pairingOptions: appMobilePairingOptions({
                       layout: "settings",
                       method: pairingMethod,
-                      relayOnly: pairingRelayOnly,
                       onMethodSelect: pairingMethodSelect,
                       relay:
                           happyIntegration.setup.kind === "link"
@@ -1215,7 +1211,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                               pairingOptions: appMobilePairingOptions({
                                   layout: "dialog",
                                   method: pairingMethod,
-                                  relayOnly: pairingRelayOnly,
                                   onMethodSelect: pairingMethodSelect,
                                   relay: appMobileRelayFromIntegration(happyIntegration),
                                   relayStarting: happyIntegration.pairingStarting,
