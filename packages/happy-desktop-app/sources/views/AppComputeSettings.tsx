@@ -53,6 +53,7 @@ export function AppComputeSettings(props: {
                     onClose={() => store.machineAddClose()}
                     onConcurrencyChange={(value) => store.machineAddConcurrencyUpdate(value)}
                     onCreate={() => store.machineAddCreate()}
+                    onLimitedChange={(limited) => store.machineAddLimitedUpdate(limited)}
                     stage={addStage(add)}
                 />
             ) : null}
@@ -72,6 +73,7 @@ export function AppComputeSettings(props: {
                     onClose={() => store.machineDetailClose()}
                     onConcurrencyChange={(value) => store.machineConcurrencyUpdate(value)}
                     onDescriptionChange={(value) => store.machineDescriptionUpdate(value)}
+                    onLimitedChange={(limited) => store.machineLimitedUpdate(limited)}
                     onNameChange={(value) => store.machineNameUpdate(value)}
                     onSave={() => store.machineSave()}
                     saving={detail.step === "saving"}

@@ -1724,6 +1724,58 @@
     line-height: 16px;
 }
 
+.happy-agent-compute__concurrency {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.happy-agent-compute__field-label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* "Limit to [N] agents at once": the radio is the label's button; the row is the option. */
+.happy-agent-compute__limit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-agent-compute__limit > .happy-agent-compute__option {
+    flex: none;
+    width: auto;
+    padding-right: 0;
+}
+
+.happy-agent-compute__limit > .happy-agent-compute__option,
+.happy-agent-compute__limit > .happy-agent-compute__option:hover:not(:disabled),
+.happy-agent-compute__limit > .happy-agent-compute__option[aria-checked="true"] {
+    background: transparent;
+}
+
+.happy-agent-compute__limit:hover:not(:has(> .happy-agent-compute__option:disabled)) {
+    background: var(--surface-ripple);
+}
+
+.happy-agent-compute__limit:has(> .happy-agent-compute__option[aria-checked="true"]) {
+    background: var(--surface-selected);
+}
+
+.happy-agent-compute__limit-field {
+    flex: none;
+    width: 64px;
+}
+
+.happy-agent-compute__limit-unit {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
 .happy-agent-compute__note {
     margin: 0;
     color: var(--text-secondary);

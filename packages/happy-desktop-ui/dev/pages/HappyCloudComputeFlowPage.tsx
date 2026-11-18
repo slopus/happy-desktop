@@ -184,9 +184,10 @@ function Add(props: Partial<HappyAgentComputeMachineAddDialogProps>) {
             onClose={noop}
             onConcurrencyChange={noop}
             onCreate={noop}
+            onLimitedChange={noop}
             stage={{
                 step: "form",
-                draft: { access: "shared", concurrency: "0" },
+                draft: { access: "shared", limited: false, concurrency: "8" },
                 creating: false,
             }}
             {...props}
@@ -202,7 +203,8 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
             draft={{
                 name: machine.name,
                 description: machine.description ?? "",
-                concurrency: String(machine.concurrency),
+                limited: machine.concurrency > 0,
+                concurrency: String(machine.concurrency > 0 ? machine.concurrency : 8),
             }}
             machine={machine}
             maxConcurrency={null}
@@ -210,6 +212,7 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
             onClose={noop}
             onConcurrencyChange={noop}
             onDescriptionChange={noop}
+            onLimitedChange={noop}
             onNameChange={noop}
             onSave={noop}
             saving={false}
@@ -276,7 +279,7 @@ export function HappyCloudComputeFlowPage() {
                     accesses="private"
                     stage={{
                         step: "form",
-                        draft: { access: "private", concurrency: "1" },
+                        draft: { access: "private", limited: true, concurrency: "1" },
                         creating: false,
                     }}
                 />
@@ -316,7 +319,7 @@ export function HappyCloudComputeFlowPage() {
                 <Add
                     stage={{
                         step: "form",
-                        draft: { access: "shared", concurrency: "0" },
+                        draft: { access: "shared", limited: false, concurrency: "8" },
                         creating: false,
                         error: "This server isn't set up to run computers yet.",
                     }}
@@ -331,6 +334,29 @@ export function HappyCloudComputeFlowPage() {
                 <Add
                     accesses="private"
                     stage={{ step: "install", install: { ...install("private"), commands: null } }}
+                />
+            </Screen>
+            <Screen
+                detail="managing a computer with a limit"
+                number="14"
+                screen="14-manage-limited"
+            >
+                <List add="any" />
+                <Detail
+                    agents={agents.slice(0, 2).map((agent) => ({ ...agent, removing: false }))}
+                    machine={{ ...machines[3]!, boundary: undefined }}
+                />
+            </Screen>
+            <Screen
+                detail="a computer whose operator set a ceiling"
+                number="15"
+                screen="15-manage-ceiling"
+            >
+                <List add="any" />
+                <Detail
+                    agents={agents.slice(0, 2).map((agent) => ({ ...agent, removing: false }))}
+                    machine={{ ...machines[3]!, boundary: undefined }}
+                    maxConcurrency={16}
                 />
             </Screen>
         </ComponentPage>

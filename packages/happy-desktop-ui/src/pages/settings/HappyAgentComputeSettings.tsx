@@ -77,6 +77,82 @@ export interface HappyAgentComputeSettingsProps {
     onRequestAnswer: (key: string, approve: boolean) => void;
 }
 
+/**
+ * How many agents a machine takes at once: no limit, or "Limit to [N] agents
+ * at once", whose number can be typed only while the limit is chosen. A
+ * ceiling the machine's operator set rules out no limit.
+ */
+function HappyAgentComputeConcurrency(props: {
+    readonly limited: boolean;
+    readonly concurrency: string;
+    readonly maxConcurrency: number | null;
+    readonly disabled: boolean;
+    onLimitedChange: (limited: boolean) => void;
+    onConcurrencyChange: (value: string) => void;
+    onSubmit: () => void;
+}) {
+    const ceiling = props.maxConcurrency;
+    return (
+        <Box className="happy-agent-compute__concurrency">
+            <span className="happy-agent-compute__field-label" id="happy-agent-compute-concurrency">
+                Agents at once
+            </span>
+            <Box
+                aria-labelledby="happy-agent-compute-concurrency"
+                className="happy-agent-compute__options"
+                role="radiogroup"
+            >
+                <button
+                    aria-checked={!props.limited}
+                    className="happy-agent-compute__option"
+                    data-happy-desktop-ui="compute-concurrency-unlimited"
+                    disabled={props.disabled || ceiling !== null}
+                    onClick={() => props.onLimitedChange(false)}
+                    role="radio"
+                    type="button"
+                >
+                    <span aria-hidden="true" className="happy-agent-compute__radio" />
+                    <span className="happy-agent-compute__option-text">
+                        <span className="happy-agent-compute__option-label">No limit</span>
+                        <span className="happy-agent-compute__option-description">
+                            {ceiling === null
+                                ? "Any number of agents can work on it at the same time."
+                                : `Its operator set a ceiling of ${String(ceiling)} ${ceiling === 1 ? "agent" : "agents"} at once.`}
+                        </span>
+                    </span>
+                </button>
+                <Box className="happy-agent-compute__limit">
+                    <button
+                        aria-checked={props.limited}
+                        className="happy-agent-compute__option"
+                        data-happy-desktop-ui="compute-concurrency-limited"
+                        disabled={props.disabled}
+                        onClick={() => props.onLimitedChange(true)}
+                        role="radio"
+                        type="button"
+                    >
+                        <span aria-hidden="true" className="happy-agent-compute__radio" />
+                        <span className="happy-agent-compute__option-label">Limit to</span>
+                    </button>
+                    <TextField
+                        aria-label="Most agents at once"
+                        className="happy-agent-compute__limit-field"
+                        disabled={props.disabled || !props.limited}
+                        inputMode="numeric"
+                        onSubmit={props.onSubmit}
+                        onValueChange={props.onConcurrencyChange}
+                        size="small"
+                        value={props.concurrency}
+                    />
+                    <span className="happy-agent-compute__limit-unit">
+                        {props.concurrency.trim() === "1" ? "agent at once" : "agents at once"}
+                    </span>
+                </Box>
+            </Box>
+        </Box>
+    );
+}
+
 /** Each access's name and the sentence that says what it means. */
 const ACCESSES: Readonly<
     Record<HappyAgentComputeAccessName, { readonly label: string; readonly description: string }>
@@ -128,13 +204,6 @@ function agentsText(machine: HappyAgentComputeMachineRow): string {
     return `${String(machine.agentCount)} of ${String(machine.concurrency)} ${
         machine.concurrency === 1 ? "agent" : "agents"
     }`;
-}
-
-/** What the "Agents at once" field takes, with or without the operator's ceiling. */
-function concurrencyHint(max: number | null): string {
-    return max === null
-        ? "How many agents can work on it at the same time; 0 means no limit."
-        : `How many agents can work on it at the same time, from 1 to ${String(max)}.`;
 }
 
 /** What a machine's access means, said of its owner where it is someone else's. */
@@ -364,6 +433,9 @@ export interface HappyAgentComputeMachineAgentRow {
 export interface HappyAgentComputeMachineEditDraft {
     readonly name: string;
     readonly description: string;
+    /** False for no limit. */
+    readonly limited: boolean;
+    /** The limit as typed, kept while no limit is chosen. */
     readonly concurrency: string;
 }
 
@@ -381,6 +453,7 @@ export interface HappyAgentComputeMachineDialogProps {
     readonly actionError?: string;
     onNameChange: (value: string) => void;
     onDescriptionChange: (value: string) => void;
+    onLimitedChange: (limited: boolean) => void;
     onConcurrencyChange: (value: string) => void;
     onSave: () => void;
     onAgentRemove: (agentId: string) => void;
@@ -513,15 +586,14 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                                 rows={3}
                                 value={props.draft.description}
                             />
-                            <TextField
+                            <HappyAgentComputeConcurrency
+                                concurrency={props.draft.concurrency}
                                 disabled={props.saving}
-                                fullWidth
-                                hint={concurrencyHint(props.maxConcurrency)}
-                                inputMode="numeric"
-                                label="Agents at once"
+                                limited={props.draft.limited}
+                                maxConcurrency={props.maxConcurrency}
+                                onConcurrencyChange={props.onConcurrencyChange}
+                                onLimitedChange={props.onLimitedChange}
                                 onSubmit={props.onSave}
-                                onValueChange={props.onConcurrencyChange}
-                                value={props.draft.concurrency}
                             />
                         </>
                     ) : null}
@@ -534,7 +606,9 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
 /** What a new machine will be, as the form holds it. */
 export interface HappyAgentComputeMachineAddDraft {
     readonly access: HappyAgentComputeAccessName;
-    /** As typed. */
+    /** False for no limit. */
+    readonly limited: boolean;
+    /** The limit as typed, kept while no limit is chosen. */
     readonly concurrency: string;
 }
 
@@ -573,6 +647,7 @@ export interface HappyAgentComputeMachineAddDialogProps {
     readonly accesses: "any" | "private";
     readonly stage: HappyAgentComputeMachineAddStage;
     onAccessChange: (access: HappyAgentComputeAccessName) => void;
+    onLimitedChange: (limited: boolean) => void;
     onConcurrencyChange: (value: string) => void;
     onCreate: () => void;
     onClose: () => void;
@@ -755,15 +830,14 @@ export function HappyAgentComputeMachineAddDialog(props: HappyAgentComputeMachin
                                     );
                                 })}
                             </Box>
-                            <TextField
+                            <HappyAgentComputeConcurrency
+                                concurrency={stage.draft.concurrency}
                                 disabled={busy}
-                                fullWidth
-                                hint={concurrencyHint(null)}
-                                inputMode="numeric"
-                                label="Agents at once"
+                                limited={stage.draft.limited}
+                                maxConcurrency={null}
+                                onConcurrencyChange={props.onConcurrencyChange}
+                                onLimitedChange={props.onLimitedChange}
                                 onSubmit={props.onCreate}
-                                onValueChange={props.onConcurrencyChange}
-                                value={stage.draft.concurrency}
                             />
                         </>
                     )}

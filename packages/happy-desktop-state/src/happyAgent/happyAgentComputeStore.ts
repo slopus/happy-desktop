@@ -121,11 +121,19 @@ export interface HappyAgentComputeInstall {
     readonly expiresAt: number;
 }
 
-/** What a new machine will be. It joins under its hostname. */
-export interface HappyAgentComputeMachineDraft {
-    readonly access: HappyAgentComputeMachineAccess;
-    /** As typed; sent once it is a whole number in range. */
+/**
+ * How many agents a machine takes at once, as chosen: no limit, or the limit
+ * as typed, which is kept while no limit is chosen so switching back finds it.
+ */
+export interface HappyAgentComputeConcurrencyDraft {
+    readonly limited: boolean;
+    /** As typed; sent while `limited` once it is a whole number in range. */
     readonly concurrency: string;
+}
+
+/** What a new machine will be. It joins under its hostname. */
+export interface HappyAgentComputeMachineDraft extends HappyAgentComputeConcurrencyDraft {
+    readonly access: HappyAgentComputeMachineAccess;
 }
 
 /** Adding a machine, while its dialog is open. */
@@ -141,10 +149,9 @@ export type HappyAgentComputeMachineAdd =
     | { readonly step: "shown"; readonly install: HappyAgentComputeInstall };
 
 /** A machine's editable fields, as typed. */
-export interface HappyAgentComputeMachineEditDraft {
+export interface HappyAgentComputeMachineEditDraft extends HappyAgentComputeConcurrencyDraft {
     readonly name: string;
     readonly description: string;
-    readonly concurrency: string;
 }
 
 /** One machine's dialog, while it is open: its agents, and its fields for a reader who may edit them. */
@@ -194,6 +201,8 @@ export interface HappyAgentComputeStore {
     machineAddOpen(): void;
     machineAddClose(): void;
     machineAddAccessUpdate(access: HappyAgentComputeMachineAccess): void;
+    /** Chooses no limit, or a limit, keeping the number typed. */
+    machineAddLimitedUpdate(limited: boolean): void;
     machineAddConcurrencyUpdate(value: string): void;
     /** Mints the machine's one-time join token and its install commands. */
     machineAddCreate(): void;
@@ -201,6 +210,8 @@ export interface HappyAgentComputeStore {
     machineDetailClose(): void;
     machineNameUpdate(value: string): void;
     machineDescriptionUpdate(value: string): void;
+    /** Chooses no limit, or a limit, keeping the number typed. */
+    machineLimitedUpdate(limited: boolean): void;
     machineConcurrencyUpdate(value: string): void;
     /** Saves the open machine's changed fields. */
     machineSave(): void;
@@ -253,19 +264,67 @@ function systemsRead(value: unknown): HappyAgentComputeSystem[] {
     );
 }
 
-/**
- * The concurrency typed into a field, or why it can't be sent: any whole
- * number, 0 for no limit, or from 1 to the ceiling the machine's operator set,
- * which no limit would go past.
- */
-function concurrencyParse(text: string, max: number | null): number | UserError {
+/** The limit a person is offered first when they choose one. */
+const CONCURRENCY_LIMIT_SUGGESTED = 8;
+
+/** A typed limit, when it is a whole number of at least 1 and within the ceiling. */
+function concurrencyLimitOf(text: string, max: number | null): number | undefined {
     const value = /^\d+$/.test(text.trim()) ? Number(text.trim()) : Number.NaN;
-    if (max === null) {
-        if (Number.isSafeInteger(value)) return value;
-        return new UserError("How many agents at once is a whole number, or 0 for no limit.");
+    return Number.isSafeInteger(value) && value >= 1 && (max === null || value <= max)
+        ? value
+        : undefined;
+}
+
+/** The limit suggested when none was typed yet, kept within the ceiling. */
+function concurrencyLimitSuggested(max: number | null): string {
+    return String(Math.min(CONCURRENCY_LIMIT_SUGGESTED, max ?? CONCURRENCY_LIMIT_SUGGESTED));
+}
+
+/**
+ * The choice a concurrency opens as: no limit for 0 unless the machine's
+ * operator set a ceiling, which no limit would go past.
+ */
+function concurrencyDraftOf(
+    concurrency: number,
+    max: number | null,
+): HappyAgentComputeConcurrencyDraft {
+    if (concurrency > 0) return { limited: true, concurrency: String(concurrency) };
+    return { limited: max !== null, concurrency: concurrencyLimitSuggested(max) };
+}
+
+/** Choosing a limit keeps the number last typed while it is valid, or suggests one. */
+function concurrencyLimitedDraft(
+    draft: HappyAgentComputeConcurrencyDraft,
+    limited: boolean,
+    max: number | null,
+): HappyAgentComputeConcurrencyDraft {
+    if (!limited || concurrencyLimitOf(draft.concurrency, max) !== undefined)
+        return { limited, concurrency: draft.concurrency };
+    return { limited, concurrency: concurrencyLimitSuggested(max) };
+}
+
+/**
+ * The concurrency to send, or why it can't be sent: 0 for no limit, or a whole
+ * number from 1 to the ceiling the machine's operator set.
+ */
+function concurrencyParse(
+    draft: HappyAgentComputeConcurrencyDraft,
+    max: number | null,
+): number | UserError {
+    if (!draft.limited) {
+        return max === null
+            ? 0
+            : new UserError(
+                  `This computer's operator set a ceiling of ${String(max)} agents at once, so it needs a limit.`,
+              );
     }
-    if (Number.isInteger(value) && value >= 1 && value <= max) return value;
-    return new UserError(`How many agents at once is a whole number from 1 to ${String(max)}.`);
+    const value = concurrencyLimitOf(draft.concurrency, max);
+    if (value !== undefined) return value;
+    return new UserError(
+        max === null
+            ? "The limit is a whole number of agents, 1 or more."
+            : `The limit is a whole number of agents from 1 to ${String(max)}.`,
+    );
 }
 
 /** Who the reader is, for reading the machines they see. */
@@ -618,7 +677,10 @@ export function happyAgentComputeStoreCreate(deps: {
                 step: "choosing",
                 draft: {
                     access: machineAccess,
-                    concurrency: String(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[machineAccess]),
+                    ...concurrencyDraftOf(
+                        HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[machineAccess],
+                        null,
+                    ),
                 },
             });
         },
@@ -632,16 +694,25 @@ export function happyAgentComputeStoreCreate(deps: {
             const add = snapshot.machineAdd;
             if (access !== "private" && snapshot.access !== "manage") return;
             if (!add || add.step === "shown" || add.draft.access === access) return;
-            // An untouched count follows the access's own default.
+            // An untouched choice follows the access's own default.
+            const before = concurrencyDraftOf(
+                HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[add.draft.access],
+                null,
+            );
             const untouched =
-                add.draft.concurrency.trim() ===
-                String(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[add.draft.access]);
+                add.draft.limited === before.limited &&
+                add.draft.concurrency.trim() === before.concurrency;
             machineAddDraftUpdate({
                 access,
                 ...(untouched
-                    ? { concurrency: String(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[access]) }
+                    ? concurrencyDraftOf(HAPPY_AGENT_COMPUTE_CONCURRENCY_DEFAULT[access], null)
                     : {}),
             });
+        },
+        machineAddLimitedUpdate(limited) {
+            const add = store.getState().machineAdd;
+            if (!add || add.step === "shown") return;
+            machineAddDraftUpdate(concurrencyLimitedDraft(add.draft, limited, null));
         },
         machineAddConcurrencyUpdate(value) {
             machineAddDraftUpdate({ concurrency: value });
@@ -649,7 +720,7 @@ export function happyAgentComputeStoreCreate(deps: {
         machineAddCreate() {
             const add = store.getState().machineAdd;
             if (disposed || !add || (add.step !== "choosing" && add.step !== "failed")) return;
-            const concurrency = concurrencyParse(add.draft.concurrency, null);
+            const concurrency = concurrencyParse(add.draft, null);
             if (concurrency instanceof UserError) {
                 machineAddSet({ step: "failed", draft: add.draft, error: concurrency });
                 return;
@@ -698,7 +769,7 @@ export function happyAgentComputeStoreCreate(deps: {
                     draft: {
                         name: machine.name,
                         description: machine.description ?? "",
-                        concurrency: String(machine.concurrency),
+                        ...concurrencyDraftOf(machine.concurrency, machine.maxConcurrency),
                     },
                 },
             });
@@ -713,6 +784,16 @@ export function happyAgentComputeStoreCreate(deps: {
         },
         machineDescriptionUpdate(value) {
             machineDraftUpdate({ description: value });
+        },
+        machineLimitedUpdate(limited) {
+            const snapshot = store.getState();
+            const detail = snapshot.machineDetail;
+            const machine = snapshot.machines.find((entry) => entry.id === detail?.machineId);
+            if (!detail || !machine) return;
+            if (!limited && machine.maxConcurrency !== null) return;
+            machineDraftUpdate(
+                concurrencyLimitedDraft(detail.draft, limited, machine.maxConcurrency),
+            );
         },
         machineConcurrencyUpdate(value) {
             machineDraftUpdate({ concurrency: value });
@@ -732,7 +813,7 @@ export function happyAgentComputeStoreCreate(deps: {
                 return;
             }
             const description = detail.draft.description.trim();
-            const concurrency = concurrencyParse(detail.draft.concurrency, machine.maxConcurrency);
+            const concurrency = concurrencyParse(detail.draft, machine.maxConcurrency);
             if (concurrency instanceof UserError) {
                 refuse(concurrency);
                 return;
@@ -850,12 +931,14 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     machineAddOpen: () => undefined,
     machineAddClose: () => undefined,
     machineAddAccessUpdate: () => undefined,
+    machineAddLimitedUpdate: () => undefined,
     machineAddConcurrencyUpdate: () => undefined,
     machineAddCreate: () => undefined,
     machineDetailOpen: () => undefined,
     machineDetailClose: () => undefined,
     machineNameUpdate: () => undefined,
     machineDescriptionUpdate: () => undefined,
+    machineLimitedUpdate: () => undefined,
     machineConcurrencyUpdate: () => undefined,
     machineSave: () => undefined,
     machineAgentRemove: () => undefined,
