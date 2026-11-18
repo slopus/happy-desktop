@@ -167,12 +167,15 @@ it("keeps the fold on one column and the status right after the name, through ho
                 : [parts(target)];
         await userEvent.hover(target);
         finish(target);
+        const own = isRow ? foldOf(target) : ui(target, "sidebar-section-fold")!;
+        // Moving the pointer can finish before the browser paints :hover.
+        // Measure the revealed state, not an intermediate opacity frame.
+        if (own) await expect.poll(() => getComputedStyle(own).opacity).toBe("1");
         const after =
             isRow && target.hasAttribute("data-foldable")
                 ? steady.map((el) => parts(el))
                 : [parts(target)];
         expect(after, `${target.textContent} moved on hover`).toEqual(before);
-        const own = isRow ? foldOf(target) : ui(target, "sidebar-section-fold")!;
         if (!own) continue;
         expect(getComputedStyle(own).opacity).toBe("1");
         for (const el of steady) {
