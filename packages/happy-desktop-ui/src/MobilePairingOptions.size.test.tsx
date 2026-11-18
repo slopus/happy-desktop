@@ -22,6 +22,7 @@ type State = {
     readonly method: "direct" | "relay";
     readonly direct: MobileDirectConnectorState;
     readonly relay: MobileRelayPairingState;
+    readonly unavailable?: string;
 };
 
 const STATES: readonly State[] = [
@@ -38,6 +39,13 @@ const STATES: readonly State[] = [
     { id: "expired", method: "direct", direct: direct.expiredVerifying, relay: relayWaiting },
     { id: "code-expired", method: "direct", direct: direct.expiredBeforeScan, relay: relayWaiting },
     { id: "failed", method: "direct", direct: direct.failed, relay: relayWaiting },
+    {
+        id: "unavailable",
+        method: "direct",
+        direct: direct.waiting,
+        relay: relayWaiting,
+        unavailable: "Happy Agent is reconnecting. Actions return when it is back.",
+    },
     {
         id: "relay-failed",
         method: "relay",
@@ -59,6 +67,7 @@ function options(layout: "dialog" | "setup", state: State) {
             onMethodSelect={noop}
             onRelayRetry={noop}
             relay={state.relay}
+            {...(state.unavailable === undefined ? {} : { unavailable: state.unavailable })}
         />
     );
 }

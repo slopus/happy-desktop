@@ -180,6 +180,14 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
         />
     );
+    const unavailable = props.unavailable ? (
+        <Banner tone="warning" title="Happy Agent unavailable">
+            {props.unavailable}
+        </Banner>
+    ) : null;
+    // A dialog showing one method keeps one size, so its warning stands in the
+    // slots' fixed room rather than above them.
+    const fixedDialog = props.layout === "dialog" && single;
     const completed =
         method !== "relay" &&
         props.direct.kind === "ready" &&
@@ -205,11 +213,7 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
                     </Button>
                 </Box>
             ) : null}
-            {props.layout !== "setup" && props.unavailable ? (
-                <Banner tone="warning" title="Happy Agent unavailable">
-                    {props.unavailable}
-                </Banner>
-            ) : null}
+            {props.layout !== "setup" && !fixedDialog ? unavailable : null}
             {!switchable ? null : (
                 <SegmentedControl
                     aria-label="Pairing method"
@@ -225,6 +229,7 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
                 />
             )}
             <Box className="happy-mobile-pairing-options__slots">
+                {fixedDialog ? unavailable : null}
                 {engaged || method === "direct" ? null : (
                     <PairingSlot
                         detail={RELAY_DETAIL}

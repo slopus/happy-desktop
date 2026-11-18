@@ -553,6 +553,16 @@ const dialogScreens: readonly {
         pairing: { direct: direct.failed, relay: relayWaiting, method: "direct" },
     },
     {
+        id: "dialog-unavailable",
+        label: "Dialog · Happy Agent reconnecting",
+        pairing: {
+            direct: direct.waiting,
+            relay: relayWaiting,
+            method: "direct",
+            unavailable: "Happy Agent is reconnecting. Actions return when it is back.",
+        },
+    },
+    {
         id: "dialog-relay-failed",
         label: "Dialog · relay failed",
         pairing: {
