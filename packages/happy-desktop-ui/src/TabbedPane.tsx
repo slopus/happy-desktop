@@ -86,7 +86,12 @@ export type TabbedPaneProps = {
  */
 const TABBED_PANE_SELF_HELD_SCROLLPORTS = '[data-happy-desktop-ui="message-list"]';
 
-type TabbedPaneScrollportTop = { readonly element: HTMLElement; readonly top: number };
+type TabbedPaneScrollportTop = {
+    readonly element: HTMLElement;
+    readonly top: number;
+    /** Read before the commit: a body that grows clamps it near the end. */
+    readonly scrollTop: number;
+};
 
 /**
  * The outermost scrollports in `body` and where their top edges are. A
@@ -106,7 +111,11 @@ function tabbedPaneScrollportsRead(body: HTMLElement): TabbedPaneScrollportTop[]
             if (element.clientHeight === 0 && element.clientWidth === 0) continue;
             const overflow = view.getComputedStyle(element).overflowY;
             if (overflow === "auto" || overflow === "scroll") {
-                scrollports.push({ element, top: element.getBoundingClientRect().top });
+                scrollports.push({
+                    element,
+                    top: element.getBoundingClientRect().top,
+                    scrollTop: element.scrollTop,
+                });
                 continue;
             }
             visit(element);
@@ -129,9 +138,13 @@ function tabbedPaneScrollportsHold(before: readonly TabbedPaneScrollportTop[]) {
         .filter((entry) => entry.element.isConnected)
         .map((entry) => ({
             element: entry.element,
+            scrollTop: entry.scrollTop,
             delta: entry.element.getBoundingClientRect().top - entry.top,
         }));
-    for (const move of moves) if (move.delta !== 0) move.element.scrollTop += move.delta;
+    // From the offset read before the commit, not the current one: a body
+    // growing near the end of a scrollport has already clamped that.
+    for (const move of moves)
+        if (move.delta !== 0) move.element.scrollTop = move.scrollTop + move.delta;
 }
 
 /**
