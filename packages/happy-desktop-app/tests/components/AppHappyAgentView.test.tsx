@@ -1,5 +1,5 @@
-import { render } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
 import type {
     HappyAgentClockStore,
     HappyAgentConnectionStore,
@@ -9,6 +9,9 @@ import type {
     HappyAgentPanelStore,
     HappyAgentPanelTabId,
     HappyAgentWorkspaceStore,
+    HappyAgentFileTabSnapshot,
+    HappyAgentGroupId,
+    HappyAgentWorkspaceSnapshot,
 } from "happy-desktop-state";
 import {
     appearanceStoreCreate,
@@ -16,6 +19,7 @@ import {
     HAPPY_AGENT_RETAINED_CONVERSATIONS_NONE,
     happyAgentHostNoop,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
+    HAPPY_AGENT_GROUP_ACCESS_OPEN,
 } from "happy-desktop-state";
 import {
     workspaceCloseTargetFind,
@@ -24,6 +28,25 @@ import {
     type AppHappyAgentDirectorySnapshot,
     type AppHappyAgentDirectoryStore,
 } from "../../sources/AppHappyAgentView";
+
+// The projection must retain the actual editor node and FileEditor's local
+// Source face. A textarea supplies selection/focus in jsdom; the independent
+// hidden-app check exercises CodeMirror's browser integration itself.
+vi.mock("../../../happy-desktop-ui/src/CodeEditor", () => ({
+    CodeEditor: (props: {
+        name: string;
+        value: string;
+        readOnly?: boolean;
+        onValueChange?: (value: string) => void;
+    }) => (
+        <textarea
+            aria-label={props.name}
+            onChange={(event) => props.onValueChange?.(event.currentTarget.value)}
+            readOnly={props.readOnly}
+            value={props.value}
+        />
+    ),
+}));
 
 it("shortens contained Changes paths only at a directory boundary and retains external attribution", () => {
     const root = "/Users/steve/Happy/Tasks/task_66";
@@ -143,6 +166,7 @@ function workspace(): HappyAgentWorkspaceStore {
         panel: panel(),
         subscribe: () => () => undefined,
         conversationOpen: () => undefined,
+        sidebarRowsUpdate: () => undefined,
         conversationClose: () => undefined,
         conversationListRetry: () => undefined,
         conversationRetry: () => undefined,
@@ -167,6 +191,7 @@ const MODELS_LOADING = { type: "loading" } as const;
 function directory(
     host: HappyAgentHost,
     projects: AppHappyAgentDirectorySnapshot["happyAgents"][number]["projects"],
+    workspaceStore = workspace(),
 ) {
     const snapshot: AppHappyAgentDirectorySnapshot = {
         happyAgents: [
@@ -181,7 +206,7 @@ function directory(
                     connection: connection(),
                     host,
                     models: modelStore(),
-                    workspace: workspace(),
+                    workspace: workspaceStore,
                 },
                 status: "connected",
             },
@@ -201,6 +226,7 @@ function view(
         groupId?: string;
         host?: HappyAgentHost;
         onChatSelect?: (happyAgentId: string, groupId: string | undefined, chatId?: string) => void;
+        workspace?: HappyAgentWorkspaceStore;
     } = {},
 ) {
     const projects = (
@@ -222,10 +248,115 @@ function view(
             onFileSelect={() => undefined}
             onSettingsOpen={() => undefined}
             happyAgentId="local"
-            happyAgents={directory(options.host ?? happyAgentHostNoop, projects)}
+            happyAgents={directory(options.host ?? happyAgentHostNoop, projects, options.workspace)}
         />,
     );
 }
+
+it.each(["README.md", "package.json"])(
+    "keeps %s source, exact editor node, focus and selection through accepted save and Git revalidation",
+    async (path) => {
+        const base = workspace();
+        const document = {
+            path,
+            content: path.endsWith(".md") ? "# Fixture\n" : "{}\n",
+            hash: "before",
+        };
+        const id = `file:${path}`;
+        const file: HappyAgentFileTabSnapshot = {
+            id,
+            groupId: "prj_one" as HappyAgentGroupId,
+            path,
+            kind: "file",
+            placement: "main",
+            preview: false,
+            revision: "",
+            presentationId: "read-before",
+            displayedPresentationId: "read-before",
+            displayedKind: "file",
+            displayedPath: path,
+            displayedDocument: document,
+            document: { type: "ready", value: document },
+            loading: false,
+            revalidating: false,
+            saving: false,
+        };
+        let snapshot: HappyAgentWorkspaceSnapshot = {
+            ...base.get(),
+            address: { groupId: file.groupId },
+            groupAccess: HAPPY_AGENT_GROUP_ACCESS_OPEN,
+            activeMainViewId: id,
+            displayedMainViewId: id,
+            fileTabs: [file],
+            fileScope: "all",
+        };
+        const listeners = new Set<() => void>();
+        const publish = (next: HappyAgentFileTabSnapshot) => {
+            snapshot = { ...snapshot, fileTabs: [next] };
+            for (const listener of listeners) listener();
+        };
+        const writes: string[] = [];
+        const store: HappyAgentWorkspaceStore = {
+            ...base,
+            get: () => snapshot,
+            subscribe: (listener) => {
+                listeners.add(listener);
+                return () => {
+                    listeners.delete(listener);
+                };
+            },
+            fileDraftUpdate: (_id, draft) => publish({ ...snapshot.fileTabs[0]!, draft }),
+            fileDraftSave: async () => {
+                const current = snapshot.fileTabs[0]!;
+                writes.push(current.draft!);
+                publish({ ...current, saving: true });
+                await Promise.resolve();
+                const saved = { ...document, content: current.draft!, hash: "after" };
+                publish({
+                    ...current,
+                    saving: false,
+                    draft: undefined,
+                    document: { type: "ready", value: saved },
+                    displayedDocument: saved,
+                });
+                // The read generation changes again when the Git watcher and
+                // fresh authoritative read reconcile the accepted bytes.
+                publish({
+                    ...snapshot.fileTabs[0]!,
+                    revision: "modified",
+                    presentationId: "read-after",
+                    displayedPresentationId: "read-after",
+                });
+            },
+        };
+        const rendered = view({ groupId: "prj_one", workspace: store });
+        if (path.endsWith(".md")) fireEvent.click(rendered.getByRole("button", { name: "Source" }));
+        const editor = rendered.getByRole("textbox", { name: path }) as HTMLTextAreaElement;
+        const text = `${document.content}saved marker\n`;
+        fireEvent.change(editor, { target: { value: text } });
+        await waitFor(() => expect(editor.value).toBe(text));
+        editor.focus();
+        editor.setSelectionRange(2, 7);
+        await act(async () => {
+            fireEvent.keyDown(editor, { key: "s", metaKey: true });
+        });
+        await waitFor(() =>
+            expect(
+                rendered.container
+                    .querySelector('[data-happy-desktop-ui="file-editor"]')
+                    ?.hasAttribute("data-dirty"),
+            ).toBe(false),
+        );
+        expect(writes).toEqual([text]);
+        expect(rendered.getByRole("textbox", { name: path })).toBe(editor);
+        expect(globalThis.document.activeElement).toBe(editor);
+        expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 7]);
+        expect(editor.value).toBe(text);
+        fireEvent.change(editor, { target: { value: `${text}continued typing` } });
+        expect(snapshot.fileTabs[0]?.draft).toBe(`${text}continued typing`);
+        rendered.unmount();
+    },
+);
 
 it("leaves the sidebar head to the window band, with no local-only title", () => {
     const { container } = view();
