@@ -97,6 +97,29 @@
     display: none;
 }
 
+/* Without its bar the body runs to the pane's top edge, under whatever window
+   controls ride there. A fade the height of the bar and more, in the body's own
+   surface, lets what scrolls up there dissolve rather than run into those
+   controls; it is paint only, so it neither moves nor catches anything. */
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden] > .happy-tabbed-pane__body::before {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    right: 0;
+    /* Clear of the 1px hairline a body beside the sidebar draws at its left. */
+    left: 1px;
+    height: calc(var(--happy-tabbed-pane-bar-height) + 32px);
+    background: linear-gradient(
+        to bottom,
+        var(--surface),
+        color-mix(in srgb, var(--surface) 85%, transparent) 35%,
+        color-mix(in srgb, var(--surface) 45%, transparent) 70%,
+        transparent
+    );
+    content: "";
+    pointer-events: none;
+}
+
 .happy-tabbed-pane__scroller {
     display: flex;
     flex: 0 1 auto;
