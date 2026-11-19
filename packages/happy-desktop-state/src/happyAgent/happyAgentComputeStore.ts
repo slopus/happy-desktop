@@ -1,7 +1,10 @@
 import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
-import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import {
+    HappyCloudRequestRefusal,
+    type HappyCloudRequest,
+} from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 
 /**
@@ -168,6 +171,23 @@ export type HappyAgentComputeMachineDetail =
           readonly error: UserError;
       };
 
+/**
+ * Deleting a machine, from its confirmation until the server answers. It keeps
+ * the machine's name, since the machine may leave the list while the request runs.
+ */
+export type HappyAgentComputeMachineDeletion =
+    | {
+          readonly step: "confirming" | "deleting";
+          readonly machineId: string;
+          readonly name: string;
+      }
+    | {
+          readonly step: "failed";
+          readonly machineId: string;
+          readonly name: string;
+          readonly error: UserError;
+      };
+
 export type HappyAgentComputeApprovalAnswer = "approve" | "deny";
 
 export interface HappyAgentComputeSnapshot {
@@ -183,6 +203,9 @@ export interface HappyAgentComputeSnapshot {
     readonly agentRemovals: ReadonlySet<string>;
     readonly machineAdd?: HappyAgentComputeMachineAdd;
     readonly machineDetail?: HappyAgentComputeMachineDetail;
+    readonly machineDeletion?: HappyAgentComputeMachineDeletion;
+    /** What the reader should know about the last action that went through. */
+    readonly actionNotice?: string;
     /** Why the last answer or removal did not go through. */
     readonly actionError?: UserError;
     readonly error?: UserError;
@@ -217,6 +240,14 @@ export interface HappyAgentComputeStore {
     machineSave(): void;
     /** Takes an agent off a machine, freeing its place. */
     machineAgentRemove(machineId: string, agentId: string): void;
+    /** Asks to confirm deleting a machine the reader may manage. */
+    machineDeleteOpen(machineId: string): void;
+    machineDeleteClose(): void;
+    /**
+     * Deletes a machine, which disconnects it at once. It leaves the list, and
+     * its dialog closes, only once the server says it is gone.
+     */
+    machineDelete(machineId: string): void;
     approvalAnswer(key: string, answer: HappyAgentComputeApprovalAnswer): void;
     [Symbol.dispose](): void;
 }
@@ -534,7 +565,7 @@ export function happyAgentComputeStoreCreate(deps: {
         if (access === "manage") await namesRead(computers);
         if (disposed) return;
         const current = store.getState();
-        const { error: _cleared, machineDetail, ...rest } = current;
+        const { error: _cleared, machineDetail, machineDeletion, ...rest } = current;
         const machines = listRead(computers, "computers", (computer) =>
             computerRead(computer, { userId, access, names }),
         ).sort(computerCompare);
@@ -547,6 +578,12 @@ export function happyAgentComputeStoreCreate(deps: {
             {
                 ...rest,
                 ...(detailKept ? { machineDetail } : {}),
+                // A machine gone while its deletion is asked about takes the question with it.
+                ...(machineDeletion &&
+                (machineDeletion.step === "deleting" ||
+                    machines.some((machine) => machine.id === machineDeletion.machineId))
+                    ? { machineDeletion }
+                    : {}),
                 loading: false,
                 access,
                 machines: referencesPreserve(current.machines, machines),
@@ -869,6 +906,7 @@ export function happyAgentComputeStoreCreate(deps: {
             if (disposed || !machine?.manageable || snapshot.agentRemovals.has(key)) return;
             set({
                 agentRemovals: new Set([...snapshot.agentRemovals, key]),
+                actionNotice: undefined,
                 actionError: undefined,
             });
             act(
@@ -884,12 +922,81 @@ export function happyAgentComputeStoreCreate(deps: {
                 }),
             );
         },
+        machineDeleteOpen(machineId) {
+            const snapshot = store.getState();
+            const machine = snapshot.machines.find((entry) => entry.id === machineId);
+            if (disposed || !machine?.manageable) return;
+            if (snapshot.machineDeletion?.step === "deleting") return;
+            if (snapshot.machineDetail?.step === "saving") return;
+            set({ machineDeletion: { step: "confirming", machineId, name: machine.name } });
+        },
+        machineDeleteClose() {
+            const { machineDeletion, ...rest } = store.getState();
+            if (disposed || !machineDeletion || machineDeletion.step === "deleting") return;
+            store.setState(rest, true);
+        },
+        machineDelete(machineId) {
+            const snapshot = store.getState();
+            const machine = snapshot.machines.find((entry) => entry.id === machineId);
+            if (disposed || !machine?.manageable) return;
+            if (snapshot.machineDeletion?.step === "deleting") return;
+            if (snapshot.machineDetail?.step === "saving") return;
+            const deleting: HappyAgentComputeMachineDeletion = {
+                step: "deleting",
+                machineId,
+                name: machine.name,
+            };
+            set({ machineDeletion: deleting, actionNotice: undefined, actionError: undefined });
+            /** Takes the machine, and every dialog about it, out of the snapshot. */
+            const forget = (notice: string | undefined): void => {
+                const { machineDeletion: _deleted, machineDetail, ...rest } = store.getState();
+                store.setState(
+                    {
+                        ...rest,
+                        ...(machineDetail && machineDetail.machineId !== machineId
+                            ? { machineDetail }
+                            : {}),
+                        ...(notice === undefined ? {} : { actionNotice: notice }),
+                        machines: rest.machines.filter((entry) => entry.id !== machineId),
+                        approvals: rest.approvals.filter((entry) => entry.computerId !== machineId),
+                    },
+                    true,
+                );
+                load();
+            };
+            void deps.request("DELETE", `v0/computers/${encodeURIComponent(machineId)}`).then(
+                () => {
+                    if (disposed || store.getState().machineDeletion !== deleting) return;
+                    forget(undefined);
+                },
+                (error: unknown) => {
+                    if (disposed || store.getState().machineDeletion !== deleting) return;
+                    const status =
+                        error instanceof HappyCloudRequestRefusal ? error.status : undefined;
+                    if (status === 404) {
+                        forget(`${machine.name} was already deleted.`);
+                        return;
+                    }
+                    set({
+                        machineDeletion: {
+                            ...deleting,
+                            step: "failed",
+                            error:
+                                status === 403
+                                    ? new UserError("You can't delete this computer.", "forbidden")
+                                    : happyAgentUserError(error),
+                        },
+                    });
+                },
+            );
+        },
         approvalAnswer(key, answer) {
             const snapshot = store.getState();
             const approval = snapshot.approvals.find((entry) => entry.key === key);
             if (disposed || !approval || snapshot.approvalAnswers.has(key)) return;
             set({
                 approvalAnswers: new Map([...snapshot.approvalAnswers, [key, answer]]),
+                actionNotice: undefined,
                 actionError: undefined,
             });
             act(
@@ -942,6 +1049,9 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     machineConcurrencyUpdate: () => undefined,
     machineSave: () => undefined,
     machineAgentRemove: () => undefined,
+    machineDeleteOpen: () => undefined,
+    machineDeleteClose: () => undefined,
+    machineDelete: () => undefined,
     approvalAnswer: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
