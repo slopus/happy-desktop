@@ -26,6 +26,8 @@ import {
     type ConversationRequestSubmission,
     type ConversationRetrying,
     type ConversationToolCall,
+    type HappyAgentChildRequestCard,
+    type HappyAgentChildRequestIdentity,
     type HappyAgentTraceViewer,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
@@ -71,6 +73,7 @@ import {
 import {
     contentWidth,
     conversationReferencesSignature,
+    conversationChildRequestHeight,
     conversationRowHeight,
     conversationWorkingStatusHeight,
     conversationRowHeightCached,
@@ -88,6 +91,7 @@ import {
     type ConversationInlinePageLocal,
     type ConversationInlinePages,
 } from "./conversationInlinePages";
+import { ChildRequestCard } from "./ChildRequestCard";
 import { EmptyState } from "./EmptyState";
 import {
     Message,
@@ -351,10 +355,30 @@ export type ConversationViewProps = {
     requestSelections?: ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>;
     /** Reports each tick to the owner that keeps the selections. */
     onRequestSelectionChange?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
+    /**
+     * The pending requests of this conversation's subtasks, drawn as cards at
+     * the end of the scroll list, above the live status. Each card is addressed
+     * by its parent, child, and request ids; nothing here touches the
+     * conversation's own composer or its own requests.
+     */
+    childRequests?: ConversationChildRequests;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
 };
+
+export interface ConversationChildRequests {
+    readonly cards: readonly HappyAgentChildRequestCard[];
+    readonly onOpenSubtask: (identity: HappyAgentChildRequestIdentity) => void;
+    readonly onAnswer: (
+        identity: HappyAgentChildRequestIdentity,
+        answers: HappyAgentUserInputAnswerMap,
+    ) => void;
+    readonly onSelectionChange: (
+        identity: HappyAgentChildRequestIdentity,
+        answers: HappyAgentUserInputAnswerMap,
+    ) => void;
+}
 
 /** How many recently opened conversations keep their prepared row layout. */
 const ROW_HEIGHT_CACHE_LIMIT = 4;
@@ -1015,6 +1039,64 @@ export function ConversationView(props: ConversationViewProps) {
         ) : (
             workingStatusLine
         );
+    /* Subtask requests are rows of this same scroll list: the footer holds them
+       above the live status, and its height model is theirs plus the status's,
+       so they scroll, anchor, and size like every other row. A card with a
+       keyed identity keeps its DOM across store updates. */
+    const childRequests = props.childRequests;
+    const childCards = childRequests?.cards ?? [];
+    const childRequestFailure = (
+        card: HappyAgentChildRequestCard,
+    ): ConversationRequestFailureRowContext | undefined =>
+        card.content.type === "ready" && card.content.submission?.status === "failed"
+            ? {
+                  message: card.content.submission.error.message,
+                  retry: card.content.request.questions.every(
+                      (question) => question.options.length > 0,
+                  ),
+              }
+            : undefined;
+    const childCardsHeight = (width: number) =>
+        childCards.reduce((total, card) => {
+            const content = card.content;
+            const failure = childRequestFailure(card);
+            return (
+                total +
+                conversationChildRequestHeight(
+                    content.type === "ready"
+                        ? {
+                              type: "ready",
+                              request: content.request,
+                              ...(failure ? { failure } : {}),
+                          }
+                        : { type: content.type },
+                    width,
+                    rowHeightCache.text,
+                )
+            );
+        }, 0);
+    const footerRow =
+        childRequests === undefined || childCards.length === 0 ? (
+            workingStatusRow
+        ) : (
+            <>
+                <div
+                    className="happy-conversation__child-requests"
+                    data-happy-desktop-ui="conversation-child-requests"
+                >
+                    {childCards.map((card) => (
+                        <ChildRequestCard
+                            card={card}
+                            key={`${card.target.parentId}:${card.target.childId}:${card.target.requestId}`}
+                            onAnswer={childRequests.onAnswer}
+                            onOpenSubtask={childRequests.onOpenSubtask}
+                            onSelectionChange={childRequests.onSelectionChange}
+                        />
+                    ))}
+                </div>
+                {workingStatusRow}
+            </>
+        );
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
         const inlinePage = inlinePageOf(entry);
@@ -1219,7 +1301,7 @@ export function ConversationView(props: ConversationViewProps) {
                         })}
                         estimateRowWidth={contentWidth}
                         estimateVersion={textLayoutGeneration}
-                        footer={workingStatusRow}
+                        footer={footerRow}
                         footerBefore={transcript.length}
                         /* The status and any queued message arrive with a
                            send, whoever made it, or with a retry or switch of a
@@ -1236,7 +1318,9 @@ export function ConversationView(props: ConversationViewProps) {
                                   headerLift: props.leadingHeader.lift,
                               }
                             : {})}
-                        footerHeight={workingStatusHeight}
+                        footerHeight={(width: number) =>
+                            workingStatusHeight + childCardsHeight(width)
+                        }
                         initialScrollPosition={props.scrollPosition}
                         rowFallbackKey={(index) => listEntries[index]?.traceFoldTargetId}
                         rowAnchorKey={(index) => listEntries[index]?.traceFoldAnchorId}

@@ -358,6 +358,9 @@ function subtasksProject(tasks: BotGroup["subtasks"]): readonly HappyAgentBotSub
         workspaceId: task.workspaceId as HappyAgentWorktreeId,
         path: task.path,
         ...(task.scope === undefined ? {} : { scope: task.scope }),
+        ...(task.pendingQuestionId === undefined
+            ? {}
+            : { pendingQuestionId: task.pendingQuestionId }),
         conversation: happyAgentConversationSummaryProject(conversationProject(task.session)),
         subtasks: subtasksProject(task.subtasks),
     }));

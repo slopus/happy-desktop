@@ -790,6 +790,8 @@ export interface BotSubtaskGroup {
     path: string;
     /** The repository checkout a Happy Cloud agent is scoped to; absent for one free to work in any. */
     scope?: HappyAgentAgentScope;
+    /** The exact pending request of this visible child, never an ancestor's request. */
+    pendingQuestionId?: string;
     session: GroupSession;
     subtasks: readonly BotSubtaskGroup[];
 }

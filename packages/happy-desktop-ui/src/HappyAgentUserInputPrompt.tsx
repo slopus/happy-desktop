@@ -1,5 +1,9 @@
 import { useId, useState, type CSSProperties } from "react";
-import { userInputRuleText, type HappyAgentUserInputPromptVariant } from "./userInputRule";
+import {
+    userInputRuleText,
+    type HappyAgentUserInputPromptVariant,
+    type HappyAgentUserInputReplyPlace,
+} from "./userInputRule";
 import type { HappyAgentUserInputRequest, UserError } from "happy-desktop-state";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
@@ -13,7 +17,7 @@ export type HappyAgentUserInputAnswerMap = Record<string, string[]>;
  * Whether the prompt follows transcript or inbox spacing. `card` frames the
  * question in the transcript's text column; `flat` inherits the inbox row around it.
  */
-export type { HappyAgentUserInputPromptVariant };
+export type { HappyAgentUserInputPromptVariant, HappyAgentUserInputReplyPlace };
 
 export type HappyAgentUserInputPromptProps = {
     request: HappyAgentUserInputRequest;
@@ -42,6 +46,11 @@ export type HappyAgentUserInputPromptProps = {
     retryAnswers?: Readonly<Record<string, readonly string[]>>;
     /** Defaults to `card`; see `HappyAgentUserInputPromptVariant`. */
     variant?: HappyAgentUserInputPromptVariant;
+    /**
+     * Where a written question is answered. Defaults to this chat's message box
+     * for `card` and to opening the chat for `flat`.
+     */
+    replyPlace?: HappyAgentUserInputReplyPlace;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -173,7 +182,11 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                         className="happy-agent-input__rule"
                                         data-happy-desktop-ui="happy-agent-user-input-rule"
                                     >
-                                        {userInputRuleText(question, props.variant ?? "card")}
+                                        {userInputRuleText(
+                                            question,
+                                            props.replyPlace ??
+                                                (props.variant === "flat" ? "chat" : "messageBox"),
+                                        )}
                                     </span>
                                 </span>
                                 <span className="happy-agent-input__prompt">

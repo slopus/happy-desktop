@@ -7,6 +7,7 @@ import {
     type ConversationMediaLayout,
     type ConversationRequest,
     type ConversationToolCall,
+    type HappyAgentUserInputRequest,
     type HappyReference,
 } from "happy-desktop-state";
 import { toolCheckoutFailureLines } from "./toolCheckoutFailures";
@@ -80,7 +81,7 @@ import {
 } from "./mediaLayout";
 import { mediaItemsFramed, mediaVideoFramesSignature } from "./mediaVideoFrames";
 import { mediaTreeHeight } from "./MediaTree";
-import { userInputRuleText } from "./userInputRule";
+import { userInputRuleText, type HappyAgentUserInputReplyPlace } from "./userInputRule";
 import { conversationMediaRunSignature, type ConversationMediaRun } from "./conversationMediaRuns";
 import {
     conversationMediaVisible,
@@ -960,6 +961,7 @@ function userInputRequestHeight(
     width: number,
     failure: ConversationRequestFailureRowContext | undefined,
     cache?: MessageTextLayoutCache,
+    replyPlace: HappyAgentUserInputReplyPlace = "messageBox",
 ): number {
     const contentWidth = width - USER_INPUT_HORIZONTAL_MARGIN;
     const promptMeasure = contentWidth;
@@ -980,7 +982,7 @@ function userInputRequestHeight(
             USER_INPUT_QUESTION_LEGEND_CHROME +
             userInputEyebrowWrap(
                 question.header,
-                userInputRuleText(question, "card"),
+                userInputRuleText(question, replyPlace),
                 promptMeasure,
                 cache,
             ) +
@@ -1004,6 +1006,50 @@ function userInputRequestHeight(
         total += USER_INPUT_BANNER_GAP + userInputFailureHeight(failure, contentWidth, cache);
     const submitVisible = request.questions.every((question) => question.options.length > 0);
     return 2 * CHAT_FRAME_TEXT_INSET + total + (submitVisible ? USER_INPUT_FOOTER_HEIGHT : 0);
+}
+
+/** `.happy-child-request-card__head`: its 6px top margin and the 28px small Open subtask button. */
+const CHILD_REQUEST_HEAD_HEIGHT = 34;
+/** `.happy-child-request-card__note`: one nowrap 20px line. */
+const CHILD_REQUEST_NOTE_HEIGHT = 20;
+/** `.happy-child-request-card__status`: one nowrap 24px line over the card's 6px bottom margin. */
+const CHILD_REQUEST_STATUS_HEIGHT = 30;
+
+/** What the height of one inline child-request card depends on. */
+export type ConversationChildRequestShape =
+    | { readonly type: "loading" | "unavailable" }
+    | {
+          readonly type: "ready";
+          readonly request: HappyAgentUserInputRequest;
+          readonly failure?: ConversationRequestFailureRowContext;
+      };
+
+/**
+ * Height of one child-request card drawn in the parent's scroll list: a head
+ * row with the subtask's name and Open subtask, then the child's original
+ * question frame as its own transcript sizes it, except that a written
+ * question's rule points to the subtask. Such a question also adds one note
+ * line, because it can only be answered in the subtask.
+ */
+export function conversationChildRequestHeight(
+    shape: ConversationChildRequestShape,
+    width: number,
+    cache?: MessageTextLayoutCache,
+): number {
+    if (shape.type !== "ready") return CHILD_REQUEST_HEAD_HEIGHT + CHILD_REQUEST_STATUS_HEIGHT;
+    const freeform = shape.request.questions.some((question) => question.options.length === 0);
+    return (
+        CHILD_REQUEST_HEAD_HEIGHT +
+        (freeform ? CHILD_REQUEST_NOTE_HEIGHT : 0) +
+        USER_INPUT_CHROME +
+        userInputRequestHeight(
+            { kind: "userInput", status: "pending", ...shape.request },
+            width,
+            shape.failure,
+            cache,
+            "subtask",
+        )
+    );
 }
 
 /**
