@@ -105,10 +105,13 @@
     height: var(--happy-integrated-band-height);
 }
 
+.happy-desktop-app-shell[data-navigation-chrome="integrated"] .happy-tabbed-pane {
+    --happy-tabbed-pane-bar-height: var(--happy-integrated-band-height);
+}
+
 .happy-desktop-app-shell[data-navigation-chrome="integrated"]
     .happy-tabbed-pane
     .happy-tabbed-pane__bar {
-    height: var(--happy-integrated-band-height);
     align-items: center;
     background: var(--groupped-background);
 }
@@ -380,6 +383,48 @@
     padding-right: calc(44px + var(--happy-desktop-app-shell-caption-inset, 0px));
 }
 
+/* A workspace with one document draws no tab strip, and its content reaches
+   the window's top edge. The controls that ride the band keep their places
+   over that content; the band's surface and rules go with the strip, so the
+   controls stand on the content rather than on a patch of the band. */
+.happy-desktop-app-shell[data-panel-toggle]:not([data-panel-open]):has(
+        > .happy-desktop-app-shell__body
+            > .happy-desktop-app-shell__content
+            > .happy-desktop-app-shell__main
+            > .happy-desktop-app-shell__workspace
+            > .happy-tabbed-pane[data-bar-hidden]
+    )
+    > .happy-desktop-app-shell__panel-controls {
+    background: transparent;
+    box-shadow: none;
+}
+
+.happy-desktop-app-shell[data-panel-toggle]:not([data-panel-open]):has(
+        > .happy-desktop-app-shell__body
+            > .happy-desktop-app-shell__content
+            > .happy-desktop-app-shell__main
+            > .happy-desktop-app-shell__workspace
+            > .happy-tabbed-pane[data-bar-hidden]
+    )
+    > .happy-desktop-app-shell__panel-controls::before {
+    content: none;
+}
+
+.happy-desktop-app-shell__main:has(
+        .happy-desktop-app-shell__workspace > .happy-tabbed-pane[data-bar-hidden]
+    )
+    > .happy-desktop-app-shell__sidebar-controls[data-collapsed] {
+    background: transparent;
+}
+
+.happy-desktop-app-shell__main:has(
+        .happy-desktop-app-shell__workspace > .happy-tabbed-pane[data-bar-hidden]
+    )
+    > .happy-desktop-app-shell__sidebar-controls[data-collapsed]
+    > .happy-desktop-app-shell__sidebar-controls-rule {
+    display: none;
+}
+
 /* The collapsed navigation owns a real column, so tabs need no floating-control inset. */
 .happy-desktop-app-shell[data-navigation-chrome="integrated"][data-window-controls][data-sidebar-collapsed]:not(
         [data-sidebar-collapsed-layout="overlay"]
@@ -468,6 +513,18 @@
     > .happy-tabbed-pane
     > .happy-tabbed-pane__bar,
 .happy-desktop-app-shell[data-window-controls] .happy-desktop-app-shell__panel-controls {
+    -webkit-app-region: drag;
+    app-region: drag;
+}
+
+/* Without a strip the main band is gone, so a folded sidebar's control cluster
+   is what is left to hold the window by beside the traffic lights. It is the
+   top band of its column, and its own controls opt out below. */
+.happy-desktop-app-shell[data-window-controls]
+    .happy-desktop-app-shell__main:has(
+        .happy-desktop-app-shell__workspace > .happy-tabbed-pane[data-bar-hidden]
+    )
+    > .happy-desktop-app-shell__sidebar-controls[data-collapsed] {
     -webkit-app-region: drag;
     app-region: drag;
 }

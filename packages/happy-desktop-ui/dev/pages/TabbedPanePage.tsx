@@ -48,6 +48,8 @@ function Pane(props: {
     withClose?: boolean;
     withReorder?: boolean;
     withTrailing?: boolean;
+    barOverlay?: boolean;
+    barHidden?: boolean;
 }) {
     return (
         <div
@@ -73,6 +75,8 @@ function Pane(props: {
                     ) : undefined
                 }
                 activeId={props.active}
+                barHidden={props.barHidden}
+                barOverlay={props.barOverlay}
                 closeLabel="Close session"
                 onClose={props.withClose ? () => {} : undefined}
                 onReorder={props.withReorder ? () => {} : undefined}
@@ -197,6 +201,25 @@ export function TabbedPanePage() {
                     >
                         <Pane active="one" tabs={sessionTabs} withAction withShortcut />
                         <DimensionRule label="action 28 square on hover · cap floats below" />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="The bar floats over the body, which keeps its height clear as top padding. With one tab the bar is left out and the padding goes to zero; the body's box never moves, and its scrollports hold what they show."
+                    label="Overlaid bar, shown and hidden"
+                    number="T-08"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "16px",
+                            padding: "24px",
+                        }}
+                    >
+                        <Pane active="one" barOverlay tabs={sessionTabs} withAction />
+                        <Pane active="one" barHidden barOverlay tabs={sessionTabs.slice(0, 1)} />
+                        <DimensionRule label="bar absolute over the body · body padding-top = bar height, 0 when hidden" />
                     </div>
                 </Specimen>
             </div>

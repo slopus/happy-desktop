@@ -1128,6 +1128,22 @@ function messageListViewportScale(
             : windowZoom / 100)
     );
 }
+/**
+ * The custom property a pane sets to how far its own overlaid chrome covers the
+ * top of its body, keeping that much clear above what it holds (see
+ * `TabbedPane`'s `barOverlay`). When it changes, the list's viewport has grown
+ * or shrunk at its upper edge, and its rows stay where they are on screen.
+ */
+const MESSAGE_LIST_MAIN_INSET_TOP = "--happy-main-inset-top";
+function messageListMainInsetTop(element: HTMLElement): number {
+    return (
+        Number.parseFloat(
+            element.ownerDocument
+                .defaultView!.getComputedStyle(element)
+                .getPropertyValue(MESSAGE_LIST_MAIN_INSET_TOP),
+        ) || 0
+    );
+}
 function messageListViewportHeight(element: HTMLElement): number {
     return Number.parseFloat(element.ownerDocument.defaultView!.getComputedStyle(element).height);
 }
@@ -1233,6 +1249,8 @@ export function MessageList(props: MessageListProps) {
     const pendingViewportGeometry = useRef<{ width: number; height: number } | undefined>(
         undefined,
     );
+    /* The pane's top inset the viewport's geometry was last committed under. */
+    const viewportUpperInset = useRef<number | undefined>(undefined);
     const virtualContent = useRef<HTMLDivElement | null>(null);
     const geometrySparseInset = useRef(0);
     const geometryFollowInset = useRef(0);
@@ -2809,6 +2827,15 @@ export function MessageList(props: MessageListProps) {
         // A zoom rescales every offset; a follower is placed at its end again.
         if (zoomChanged) geometryPlacementPending.current = following.current;
         viewportScale.current = scale;
+        /* How far the pane's own overlaid chrome covers its top (see
+           `MESSAGE_LIST_MAIN_INSET_TOP`). Its change is the part of this
+           resize that moved the viewport's upper edge rather than its lower. */
+        const upperInset = element ? messageListMainInsetTop(element) : 0;
+        const upperShift =
+            previous.height > 0 && viewportUpperInset.current !== undefined
+                ? upperInset - viewportUpperInset.current
+                : 0;
+        viewportUpperInset.current = upperInset;
         if (previous.width === nextWidth && previous.height === nextHeight && !zoomChanged) return;
         const nextRowWidth = messageListRowWidth(nextWidth, estimateRowWidth);
         if (rowSizeModel.width === undefined) {
@@ -2982,7 +3009,11 @@ export function MessageList(props: MessageListProps) {
             }
         }
         // A height change moves the viewport's lower edge, not the reader's
-        // screen position. Carry the same row point through that resize.
+        // screen position. Carry the same row point through that resize. An
+        // upper edge that moved down by `upperShift` closed over the top of
+        // the viewport instead, leaving the point as far above the lower edge
+        // as it was.
+        if (heldAnchor?.type === "item") nextInset += upperShift;
         const anchor =
             heldAnchor?.type === "item"
                 ? {

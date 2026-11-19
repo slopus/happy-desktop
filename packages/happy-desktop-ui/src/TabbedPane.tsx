@@ -56,7 +56,60 @@ export type TabbedPaneProps = {
      * it, so the two line up in one column no matter how many tabs there are.
      */
     trailing?: ReactNode;
+    /**
+     * Floats the bar over the top of the body instead of stacking it above.
+     * The body then fills the whole pane and keeps the bar's height clear as
+     * its own top padding, so the bar can come and go without moving the
+     * body's box.
+     */
+    barOverlay?: boolean;
+    /**
+     * Leaves the bar out, for a pane whose one document needs no strip. With
+     * `barOverlay` the body's top inset goes to zero, and every scrollport in
+     * the body keeps what it shows where it was as the inset changes.
+     */
+    barHidden?: boolean;
 };
+
+/**
+ * Scrollports that already hold their reader's place across a change of their
+ * own height. A transcript is held by its lower edge, so a top inset coming or
+ * going moves none of its rows, and moving it here as well would move them.
+ */
+const TABBED_PANE_SELF_HELD_SCROLLPORTS = '[data-happy-desktop-ui="message-list"]';
+
+/**
+ * Keeps the content of every outermost scrollport in `body` where it was after
+ * the body's top inset changed by `delta`. Each one's top edge moved by
+ * `delta`, so scrolling it by the same amount puts every line back at the
+ * height it was drawn at. A scrollport inside another one rides on its
+ * parent's scroll, so only the outermost are moved. Growing the inset always
+ * has room to hold, since it lengthens the scroll range by just as much; a
+ * shrinking inset can hold only as far as the scrollport is scrolled.
+ */
+function tabbedPaneScrollportsHold(body: HTMLElement, delta: number) {
+    const view = body.ownerDocument.defaultView;
+    if (!view) return;
+    const scrollports: HTMLElement[] = [];
+    const visit = (parent: Element) => {
+        for (const element of parent.children) {
+            if (!(element instanceof view.HTMLElement)) continue;
+            if (element.matches(TABBED_PANE_SELF_HELD_SCROLLPORTS)) continue;
+            // A box with nothing past its edge cannot be scrolled, and one that
+            // is not rendered has nothing to hold.
+            if (element.scrollHeight > element.clientHeight) {
+                const overflow = view.getComputedStyle(element).overflowY;
+                if (overflow === "auto" || overflow === "scroll") {
+                    scrollports.push(element);
+                    continue;
+                }
+            }
+            visit(element);
+        }
+    };
+    visit(body);
+    for (const scrollport of scrollports) scrollport.scrollTop += delta;
+}
 
 /**
  * C-160 TabbedPane — a tab bar over a body that fills the remaining height, for
@@ -74,11 +127,18 @@ export type TabbedPaneProps = {
  * It renders exactly one body — whatever the owner passes as `children` for the
  * active tab — so switching tabs is the owner's state change, not a hidden
  * mount of every tab at once.
+ *
+ * An overlaid bar floats over the body, which keeps the bar's height clear as
+ * top padding. Hiding that bar zeroes the padding, so a pane with one document
+ * gives it the full height, and the body's scrollports are scrolled by the
+ * same amount so nothing they show moves.
  */
 export function TabbedPane(props: TabbedPaneProps) {
     const [local, rest] = partitionComponentProps(props, [
         "actions",
         "activeId",
+        "barHidden",
+        "barOverlay",
         "children",
         "className",
         "closeLabel",
@@ -134,10 +194,39 @@ export function TabbedPane(props: TabbedPaneProps) {
         }
         viewport.scrollTo({ behavior: "auto", left });
     }, [local.activeId, local.tabSizing]);
+    const body = useRef<HTMLDivElement>(null);
+    const bodyLayout = useRef<{ readonly activeId: string; readonly inset: number } | undefined>(
+        undefined,
+    );
+    // eslint-disable-next-line happy-react/no-layout-effect -- the bar coming or going changes the body's top inset in this commit; its scrollports have to be moved by the same amount before that commit paints, or what they show jumps for a frame
+    useLayoutEffect(() => {
+        const node = body.current;
+        if (!node || !local.barOverlay) {
+            bodyLayout.current = undefined;
+            return;
+        }
+        const view = node.ownerDocument.defaultView;
+        if (!view) return;
+        const inset = Number.parseFloat(view.getComputedStyle(node).paddingTop) || 0;
+        const previous = bodyLayout.current;
+        bodyLayout.current = { activeId: local.activeId, inset };
+        // Only a body still showing the same tab has anything on screen to
+        // hold. A bar that comes with a switch, such as a second tab opened
+        // and selected at once, shows another document, which opens at its
+        // own place under the new inset.
+        if (
+            previous !== undefined &&
+            previous.inset !== inset &&
+            previous.activeId === local.activeId
+        )
+            tabbedPaneScrollportsHold(node, inset - previous.inset);
+    }, [local.activeId, local.barHidden, local.barOverlay]);
     return (
         <div
             {...rest}
             className={["happy-tabbed-pane", local.className].filter(Boolean).join(" ")}
+            data-bar-hidden={local.barHidden ? "" : undefined}
+            data-bar-overlay={local.barOverlay ? "" : undefined}
             data-happy-desktop-ui="tabbed-pane"
             data-size={local.size ?? "small"}
             data-tab-sizing={local.tabSizing ?? "equal"}
@@ -220,7 +309,11 @@ export function TabbedPane(props: TabbedPaneProps) {
                     </div>
                 ) : null}
             </div>
-            <div className="happy-tabbed-pane__body" data-happy-desktop-ui="tabbed-pane-body">
+            <div
+                className="happy-tabbed-pane__body"
+                data-happy-desktop-ui="tabbed-pane-body"
+                ref={body}
+            >
                 {local.children}
             </div>
         </div>
