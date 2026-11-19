@@ -1851,7 +1851,7 @@ if (mediaPreviewBridge) {
             // never hears about it again, so every terminal takes the appearance
             // showing at the moment it is opened and keeps it.
             terminalColorScheme: () => appearance.get().appearance,
-            sessionFinished: (happyAgentId, sessionId, stillCurrent) => {
+            sessionFinished: (happyAgentId, sessionId, stillCurrent, kind) => {
                 completionChimePlay(
                     () =>
                         stillCurrent() &&
@@ -1861,6 +1861,7 @@ if (mediaPreviewBridge) {
                             directory: happyAgents.get(),
                             happyAgentId,
                             sessionId,
+                            kind,
                             windowFocused: document.hasFocus(),
                         }),
                 );
