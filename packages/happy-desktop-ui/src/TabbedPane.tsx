@@ -1,5 +1,13 @@
 import { partitionComponentProps } from "./componentProps";
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+    Component,
+    createRef,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type CSSProperties,
+    type ReactNode,
+} from "react";
 import type { KeyboardShortcut } from "./keyboardShortcut";
 import { type MenuItem } from "./Menu";
 import { Tabs, type TabItem, type TabsSize } from "./Tabs";
@@ -78,37 +86,100 @@ export type TabbedPaneProps = {
  */
 const TABBED_PANE_SELF_HELD_SCROLLPORTS = '[data-happy-desktop-ui="message-list"]';
 
+type TabbedPaneScrollportTop = { readonly element: HTMLElement; readonly top: number };
+
 /**
- * Keeps the content of every outermost scrollport in `body` where it was after
- * the body's top inset changed by `delta`. Each one's top edge moved by
- * `delta`, so scrolling it by the same amount puts every line back at the
- * height it was drawn at. A scrollport inside another one rides on its
- * parent's scroll, so only the outermost are moved. Growing the inset always
- * has room to hold, since it lengthens the scroll range by just as much; a
- * shrinking inset can hold only as far as the scrollport is scrolled.
+ * The outermost scrollports in `body` and where their top edges are. A
+ * scrollport inside another one rides on its parent's scroll, so only the
+ * outermost are read. One that cannot scroll yet is still read, since a
+ * shrinking body can give it something to scroll.
  */
-function tabbedPaneScrollportsHold(body: HTMLElement, delta: number) {
+function tabbedPaneScrollportsRead(body: HTMLElement): TabbedPaneScrollportTop[] {
     const view = body.ownerDocument.defaultView;
-    if (!view) return;
-    const scrollports: HTMLElement[] = [];
+    if (!view) return [];
+    const scrollports: TabbedPaneScrollportTop[] = [];
     const visit = (parent: Element) => {
         for (const element of parent.children) {
             if (!(element instanceof view.HTMLElement)) continue;
             if (element.matches(TABBED_PANE_SELF_HELD_SCROLLPORTS)) continue;
-            // A box with nothing past its edge cannot be scrolled, and one that
-            // is not rendered has nothing to hold.
-            if (element.scrollHeight > element.clientHeight) {
-                const overflow = view.getComputedStyle(element).overflowY;
-                if (overflow === "auto" || overflow === "scroll") {
-                    scrollports.push(element);
-                    continue;
-                }
+            // A box that is not rendered has nothing on screen to hold.
+            if (element.clientHeight === 0 && element.clientWidth === 0) continue;
+            const overflow = view.getComputedStyle(element).overflowY;
+            if (overflow === "auto" || overflow === "scroll") {
+                scrollports.push({ element, top: element.getBoundingClientRect().top });
+                continue;
             }
             visit(element);
         }
     };
     visit(body);
-    for (const scrollport of scrollports) scrollport.scrollTop += delta;
+    return scrollports;
+}
+
+/**
+ * Scrolls each scrollport read before the body's top inset changed by as far
+ * as its top edge then moved, which puts every line it shows back at the
+ * height it was drawn at. One whose edge stayed, such as a control pinned to
+ * the pane's bottom, is left alone. Growing the inset always has room to
+ * hold, since it lengthens the scroll range by just as much; a shrinking inset
+ * can hold only as far as the scrollport is scrolled.
+ */
+function tabbedPaneScrollportsHold(before: readonly TabbedPaneScrollportTop[]) {
+    const moves = before
+        .filter((entry) => entry.element.isConnected)
+        .map((entry) => ({
+            element: entry.element,
+            delta: entry.element.getBoundingClientRect().top - entry.top,
+        }));
+    for (const move of moves) if (move.delta !== 0) move.element.scrollTop += move.delta;
+}
+
+/**
+ * The pane's body. A class only for `getSnapshotBeforeUpdate`, the one place
+ * the body's scrollports can be read before the commit that changes its inset
+ * moves them.
+ */
+class TabbedPaneBody extends Component<{
+    readonly activeId: string;
+    readonly children: ReactNode;
+    /** Whether the body's top inset is zero; a change is what is held. */
+    readonly insetHidden: boolean | undefined;
+}> {
+    readonly #body = createRef<HTMLDivElement>();
+    override getSnapshotBeforeUpdate(
+        previous: TabbedPaneBody["props"],
+    ): readonly TabbedPaneScrollportTop[] | null {
+        const body = this.#body.current;
+        // Only a body still showing the same tab has anything on screen to
+        // hold. A bar that comes with a switch, such as a second tab opened
+        // and selected at once, shows another document, which opens at its
+        // own place under the new inset.
+        if (
+            !body ||
+            previous.insetHidden === this.props.insetHidden ||
+            previous.activeId !== this.props.activeId
+        )
+            return null;
+        return tabbedPaneScrollportsRead(body);
+    }
+    override componentDidUpdate(
+        _previous: TabbedPaneBody["props"],
+        _state: unknown,
+        before: readonly TabbedPaneScrollportTop[] | null,
+    ) {
+        if (before) tabbedPaneScrollportsHold(before);
+    }
+    override render() {
+        return (
+            <div
+                className="happy-tabbed-pane__body"
+                data-happy-desktop-ui="tabbed-pane-body"
+                ref={this.#body}
+            >
+                {this.props.children}
+            </div>
+        );
+    }
 }
 
 /**
@@ -194,33 +265,6 @@ export function TabbedPane(props: TabbedPaneProps) {
         }
         viewport.scrollTo({ behavior: "auto", left });
     }, [local.activeId, local.tabSizing]);
-    const body = useRef<HTMLDivElement>(null);
-    const bodyLayout = useRef<{ readonly activeId: string; readonly inset: number } | undefined>(
-        undefined,
-    );
-    // eslint-disable-next-line happy-react/no-layout-effect -- the bar coming or going changes the body's top inset in this commit; its scrollports have to be moved by the same amount before that commit paints, or what they show jumps for a frame
-    useLayoutEffect(() => {
-        const node = body.current;
-        if (!node || !local.barOverlay) {
-            bodyLayout.current = undefined;
-            return;
-        }
-        const view = node.ownerDocument.defaultView;
-        if (!view) return;
-        const inset = Number.parseFloat(view.getComputedStyle(node).paddingTop) || 0;
-        const previous = bodyLayout.current;
-        bodyLayout.current = { activeId: local.activeId, inset };
-        // Only a body still showing the same tab has anything on screen to
-        // hold. A bar that comes with a switch, such as a second tab opened
-        // and selected at once, shows another document, which opens at its
-        // own place under the new inset.
-        if (
-            previous !== undefined &&
-            previous.inset !== inset &&
-            previous.activeId === local.activeId
-        )
-            tabbedPaneScrollportsHold(node, inset - previous.inset);
-    }, [local.activeId, local.barHidden, local.barOverlay]);
     return (
         <div
             {...rest}
@@ -309,13 +353,12 @@ export function TabbedPane(props: TabbedPaneProps) {
                     </div>
                 ) : null}
             </div>
-            <div
-                className="happy-tabbed-pane__body"
-                data-happy-desktop-ui="tabbed-pane-body"
-                ref={body}
+            <TabbedPaneBody
+                activeId={local.activeId}
+                insetHidden={local.barOverlay ? local.barHidden : undefined}
             >
                 {local.children}
-            </div>
+            </TabbedPaneBody>
         </div>
     );
 }
