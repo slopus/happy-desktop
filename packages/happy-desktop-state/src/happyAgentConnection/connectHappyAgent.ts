@@ -4525,15 +4525,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         if (update.event.type === "run.finished") {
                             const { agentId, run } = update.event.payload;
                             const current = currentRuns.get(agentId);
+                            const agent = agentOf(agentId);
                             // A standalone run is no turn: the session finished nothing.
                             if (
                                 run.kind !== "standalone" &&
-                                agentOf(agentId)?.parentAgentId === null &&
+                                agent !== undefined &&
                                 (current === undefined || current === run.id)
                             ) {
                                 // Its start may predate this connection's bootstrap.
                                 currentRuns.set(agentId, run.id);
-                                options.onTopLevelSessionFinished?.(
+                                const finished =
+                                    agent.parentAgentId === null
+                                        ? options.onTopLevelSessionFinished
+                                        : options.onSubtaskSessionFinished;
+                                finished?.(
                                     agentId,
                                     () => !closed && currentRuns.get(agentId) === run.id,
                                 );

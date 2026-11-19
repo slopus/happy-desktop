@@ -87,6 +87,9 @@ export type HappyAgentGeneralSettingsProps = {
      */
     completionSound?: HappyAgentCompletionSound;
     onCompletionSoundChange?: (sound: HappyAgentCompletionSound) => void;
+    /** Desktop-wide subtask default, constrained by each connection's completion sound policy. */
+    subtaskCompletionSound?: boolean;
+    onSubtaskCompletionSoundChange?: (enabled: boolean) => void;
     /** Whether this window sends product analytics events. Absent where the host sends none. */
     usageAnalyticsEnabled?: boolean;
     /** The host refused to keep the last analytics choice. */
@@ -363,6 +366,21 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                         description="Plays when a conversation finishes. Saved per connection."
                         label="Completion sound"
                     />
+                    {props.subtaskCompletionSound !== undefined &&
+                    props.onSubtaskCompletionSoundChange ? (
+                        <FormRow
+                            control={
+                                <Switch
+                                    checked={props.subtaskCompletionSound}
+                                    id="happy-agent-settings-subtask-completion-sound"
+                                    onChange={props.onSubtaskCompletionSoundChange}
+                                />
+                            }
+                            description="Default for all connections on this desktop when completion sound is allowed. Override individual subtasks in their sidebar menu."
+                            htmlFor="happy-agent-settings-subtask-completion-sound"
+                            label="Subtask completion sound"
+                        />
+                    ) : null}
                 </HappyAgentSettingsSection>
             ) : null}
             <HappyAgentSettingsSection title="Links">

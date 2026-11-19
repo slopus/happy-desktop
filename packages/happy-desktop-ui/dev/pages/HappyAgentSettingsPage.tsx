@@ -1140,6 +1140,8 @@ export function HappyAgentSettingsBlueprintPage() {
                             keepAwake="agent"
                             onKeepAwakeChange={noop}
                             completionSound="focused"
+                            subtaskCompletionSound={false}
+                            onSubtaskCompletionSoundChange={() => {}}
                             onCompletionSoundChange={noop}
                             onAgentCheck={noop}
                             onAgentRestart={noop}

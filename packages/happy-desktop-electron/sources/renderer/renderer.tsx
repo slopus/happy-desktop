@@ -1852,7 +1852,7 @@ if (mediaPreviewBridge) {
             // showing at the moment it is opened and keeps it.
             terminalColorScheme: () => appearance.get().appearance,
             viewersActivity: viewersActivityCreate(),
-            sessionFinished: (happyAgentId, sessionId, stillCurrent) => {
+            sessionFinished: (happyAgentId, sessionId, stillCurrent, kind) => {
                 completionChimePlay(
                     () =>
                         stillCurrent() &&
@@ -1862,6 +1862,7 @@ if (mediaPreviewBridge) {
                             directory: happyAgents.get(),
                             happyAgentId,
                             sessionId,
+                            kind,
                             windowFocused: document.hasFocus(),
                         }),
                 );

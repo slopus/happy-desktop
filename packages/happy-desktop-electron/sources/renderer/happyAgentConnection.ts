@@ -250,11 +250,14 @@ export interface HappyAgentSessionDeps {
     /** Observes this connection's phone pairings while a pairing page shows them. */
     readonly mobilePairingObserve?: HappyAgentMobilePairingObserve;
     /**
-     * A top-level session on this connection finished a turn. Delegated
-     * subagent runs never arrive here; whether the window says anything about
-     * it is the owner's to decide.
+     * A session on this connection finished a turn. Its explicit kind keeps
+     * delegated completion choices separate from root conversation sounds.
      */
-    readonly sessionFinished?: (sessionId: string, stillCurrent: () => boolean) => void;
+    readonly sessionFinished?: (
+        sessionId: string,
+        stillCurrent: () => boolean,
+        kind: "root" | "subtask",
+    ) => void;
     /** Announces that this connection's session is ready or has been replaced. */
     readonly changed: () => void;
     readonly unavailable?: (error: unknown) => void;
@@ -517,7 +520,10 @@ export function happyAgentConnectionOpen(input: {
             input.deps.changed();
         },
         onTopLevelSessionFinished: (sessionId, stillCurrent) => {
-            if (!disposed) input.deps.sessionFinished?.(sessionId, stillCurrent);
+            if (!disposed) input.deps.sessionFinished?.(sessionId, stillCurrent, "root");
+        },
+        onSubtaskSessionFinished: (sessionId, stillCurrent) => {
+            if (!disposed) input.deps.sessionFinished?.(sessionId, stillCurrent, "subtask");
         },
     });
     const environmentUnwatch = desktopEnvironmentWatch(window, agentConnection.environmentCheck);
