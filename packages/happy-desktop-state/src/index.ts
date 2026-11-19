@@ -308,4 +308,5 @@ export {
 export * from "./happyAgent/happyAgentWindowStore.js";
 export * from "./happyAgent/happyAgentWorkspaceMemory.js";
 export * from "./happyAgent/happyAgentWorkspaceStore.js";
+export * from "./happyAgent/happyAgentChildRequestStore.js";
 export * from "./happyAgent/happyAgentViewPreferences.js";

@@ -167,6 +167,8 @@ export interface HappyAgentTask {
 export interface HappyAgentBotSubtask {
     readonly workspaceId: HappyAgentWorktreeId;
     readonly path: string;
+    /** Exact current request owned by this visible child, as reported by the server. */
+    readonly pendingQuestionId?: string;
     readonly conversation: ConversationSummary;
     readonly subtasks: readonly HappyAgentBotSubtask[];
 }

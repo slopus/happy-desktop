@@ -1,4 +1,5 @@
 import "./styles.css";
+export { ChildRequestCard, type ChildRequestCardProps } from "./ChildRequestCard";
 export { DitherChart, type DitherChartProps } from "./dither/DitherChart";
 export { DitherSparkline } from "./dither/DitherSparkline";
 export type { DitherSeries, DitherPoint, DitherColor } from "./dither/ditherTypes";
@@ -444,6 +445,7 @@ export {
     ConversationView,
     type ConversationViewProps,
     type ConversationLeadingHeader,
+    type ConversationChildRequests,
 } from "./ConversationView";
 export {
     ComposerFooterBar,

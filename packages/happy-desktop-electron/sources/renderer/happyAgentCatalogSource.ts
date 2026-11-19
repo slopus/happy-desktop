@@ -357,6 +357,9 @@ function subtasksProject(tasks: BotGroup["subtasks"]): readonly HappyAgentBotSub
     return tasks.map((task) => ({
         workspaceId: task.workspaceId as HappyAgentWorktreeId,
         path: task.path,
+        ...(task.pendingQuestionId === undefined
+            ? {}
+            : { pendingQuestionId: task.pendingQuestionId }),
         conversation: happyAgentConversationSummaryProject(conversationProject(task.session)),
         subtasks: subtasksProject(task.subtasks),
     }));
