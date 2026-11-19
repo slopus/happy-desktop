@@ -1158,6 +1158,7 @@ export {
 } from "./pages/settings/HappyAgentPaymentsSettings";
 export {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineDeleteDialog,
     HappyAgentComputeMachineDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeAccessName,
@@ -1168,6 +1169,7 @@ export {
     type HappyAgentComputeMachineAddDraft,
     type HappyAgentComputeMachineAddStage,
     type HappyAgentComputeMachineAgentRow,
+    type HappyAgentComputeMachineDeleteDialogProps,
     type HappyAgentComputeMachineDialogProps,
     type HappyAgentComputeMachineEditDraft,
     type HappyAgentComputeMachineRow,

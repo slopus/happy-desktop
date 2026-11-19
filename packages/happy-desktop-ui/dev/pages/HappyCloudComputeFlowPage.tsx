@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineDeleteDialog,
     HappyAgentComputeMachineDialog,
     HappyAgentComputeSettings,
     HappyAgentSettingsShell,
@@ -9,6 +10,7 @@ import {
     type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddDialogProps,
     type HappyAgentComputeMachineAgentRow,
+    type HappyAgentComputeMachineDeleteDialogProps,
     type HappyAgentComputeMachineDialogProps,
     type HappyAgentComputeMachineRow,
     type HappyAgentSettingsCategory,
@@ -162,12 +164,17 @@ function List(props: {
     add: HappyAgentComputeAddAccess;
     empty?: boolean;
     requests?: readonly HappyAgentComputeJoinRequestRow[];
+    /** A machine already deleted, which the list no longer shows. */
+    without?: string;
+    actionNotice?: string;
 }) {
+    const shown = props.empty ? [] : props.add === "any" ? machines : memberMachines;
     return (
         <HappyAgentComputeSettings
+            {...(props.actionNotice ? { actionNotice: props.actionNotice } : {})}
             add={props.add}
             loading={false}
-            machines={props.empty ? [] : props.add === "any" ? machines : memberMachines}
+            machines={shown.filter((machine) => machine.id !== props.without)}
             onMachineAdd={noop}
             onMachineOpen={noop}
             onRequestAnswer={noop}
@@ -211,11 +218,24 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
             onAgentRemove={noop}
             onClose={noop}
             onConcurrencyChange={noop}
+            onDelete={noop}
             onDescriptionChange={noop}
             onLimitedChange={noop}
             onNameChange={noop}
             onSave={noop}
             saving={false}
+            {...props}
+        />
+    );
+}
+
+function Delete(props: Partial<HappyAgentComputeMachineDeleteDialogProps>) {
+    return (
+        <HappyAgentComputeMachineDeleteDialog
+            deleting={false}
+            name={machines[0]!.name}
+            onClose={noop}
+            onDelete={noop}
             {...props}
         />
     );
@@ -249,7 +269,7 @@ export function HappyCloudComputeFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's compute: the shared and private computers agents join and the agents on them, the agents asking to join the reader's private computers, managing a computer, and adding one with a one-time install command."
+            summary="A Happy Cloud server's compute: the shared and private computers agents join and the agents on them, the agents asking to join the reader's private computers, managing and deleting a computer, and adding one with a one-time install command."
             title="Happy Cloud compute flow"
             width={WINDOWS[0].width + 96}
         >
@@ -358,6 +378,40 @@ export function HappyCloudComputeFlowPage() {
                     machine={{ ...machines[3]!, boundary: undefined }}
                     maxConcurrency={16}
                 />
+            </Screen>
+            <Screen
+                detail="confirming a computer's deletion"
+                number="16"
+                screen="16-delete-confirm"
+            >
+                <List add="any" />
+                <Delete />
+            </Screen>
+            <Screen detail="deleting a computer" number="17" screen="17-delete-deleting">
+                <List add="any" />
+                <Delete deleting />
+            </Screen>
+            <Screen detail="a deletion the server refused" number="18" screen="18-delete-refused">
+                <List add="any" />
+                <Delete error="You can't delete this computer." />
+            </Screen>
+            <Screen
+                detail="a deletion that couldn't be sent"
+                number="19"
+                screen="19-delete-offline"
+            >
+                <List add="any" />
+                <Delete error="Happy couldn't reach the server." />
+            </Screen>
+            <Screen detail="after the computer is deleted" number="20" screen="20-delete-done">
+                <List add="any" without="m1" />
+            </Screen>
+            <Screen
+                detail="a computer that was already deleted"
+                number="21"
+                screen="21-delete-already"
+            >
+                <List actionNotice="build-01 was already deleted." add="any" without="m1" />
             </Screen>
         </ComponentPage>
     );

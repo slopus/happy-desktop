@@ -7,6 +7,7 @@ import {
 } from "happy-desktop-state";
 import {
     HappyAgentComputeMachineAddDialog,
+    HappyAgentComputeMachineDeleteDialog,
     HappyAgentComputeMachineDialog,
     HappyAgentComputeSettings,
     type HappyAgentComputeJoinRequestRow,
@@ -22,6 +23,7 @@ export function AppComputeSettings(props: {
     const { snapshot, store } = props;
     const add = snapshot.machineAdd;
     const detail = snapshot.machineDetail;
+    const deletion = snapshot.machineDeletion;
     const opened = detail
         ? snapshot.machines.find((machine) => machine.id === detail.machineId)
         : undefined;
@@ -30,6 +32,7 @@ export function AppComputeSettings(props: {
             <HappyAgentComputeSettings
                 {...(snapshot.error ? { error: snapshot.error.message } : {})}
                 {...(snapshot.actionError ? { actionError: snapshot.actionError.message } : {})}
+                {...(snapshot.actionNotice ? { actionNotice: snapshot.actionNotice } : {})}
                 add={
                     snapshot.access === "manage"
                         ? "any"
@@ -57,7 +60,16 @@ export function AppComputeSettings(props: {
                     stage={addStage(add)}
                 />
             ) : null}
-            {detail && opened ? (
+            {/* The confirmation takes the computer's own dialog's place while it is up. */}
+            {deletion ? (
+                <HappyAgentComputeMachineDeleteDialog
+                    {...(deletion.step === "failed" ? { error: deletion.error.message } : {})}
+                    deleting={deletion.step === "deleting"}
+                    name={deletion.name}
+                    onClose={() => store.machineDeleteClose()}
+                    onDelete={() => store.machineDelete(deletion.machineId)}
+                />
+            ) : detail && opened ? (
                 <HappyAgentComputeMachineDialog
                     {...(detail.step === "failed" ? { error: detail.error.message } : {})}
                     {...(snapshot.actionError ? { actionError: snapshot.actionError.message } : {})}
@@ -71,6 +83,7 @@ export function AppComputeSettings(props: {
                     maxConcurrency={opened.maxConcurrency}
                     onAgentRemove={(agentId) => store.machineAgentRemove(opened.id, agentId)}
                     onClose={() => store.machineDetailClose()}
+                    onDelete={() => store.machineDeleteOpen(opened.id)}
                     onConcurrencyChange={(value) => store.machineConcurrencyUpdate(value)}
                     onDescriptionChange={(value) => store.machineDescriptionUpdate(value)}
                     onLimitedChange={(limited) => store.machineLimitedUpdate(limited)}

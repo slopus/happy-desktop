@@ -1621,6 +1621,17 @@
     border-bottom: 1px solid var(--divider);
 }
 
+/* Deleting a computer, set apart below its fields. */
+.happy-agent-compute__danger {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--divider);
+}
+
 .happy-agent-compute__options {
     display: flex;
     flex-direction: column;

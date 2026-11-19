@@ -70,6 +70,8 @@ export interface HappyAgentComputeSettingsProps {
     readonly add: HappyAgentComputeAddAccess;
     readonly machines: readonly HappyAgentComputeMachineRow[];
     readonly requests: readonly HappyAgentComputeJoinRequestRow[];
+    /** What the reader should know about the last action that went through. */
+    readonly actionNotice?: string;
     /** Why the last answer or removal did not go through. */
     readonly actionError?: string;
     onMachineAdd: () => void;
@@ -331,6 +333,8 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                 <Banner tone="danger" title="That didn't go through">
                     {props.actionError}
                 </Banner>
+            ) : props.actionNotice ? (
+                <Banner tone="info">{props.actionNotice}</Banner>
             ) : null}
             {props.requests.length > 0 ? (
                 <HappyAgentSettingsSection
@@ -457,6 +461,8 @@ export interface HappyAgentComputeMachineDialogProps {
     onConcurrencyChange: (value: string) => void;
     onSave: () => void;
     onAgentRemove: (agentId: string) => void;
+    /** Asks to delete it; offered only where `machine.manageable`. */
+    onDelete: () => void;
     onClose: () => void;
 }
 
@@ -595,8 +601,84 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                                 onLimitedChange={props.onLimitedChange}
                                 onSubmit={props.onSave}
                             />
+                            <Box className="happy-agent-compute__danger">
+                                <span className="happy-agent-compute__text">
+                                    <span className="happy-agent-compute__name">
+                                        Delete this computer
+                                    </span>
+                                    <span className="happy-agent-compute__meta" data-wrap="">
+                                        It is disconnected right away, and agents on it lose it.
+                                    </span>
+                                </span>
+                                <Button
+                                    disabled={props.saving}
+                                    onClick={props.onDelete}
+                                    size="small"
+                                    variant="danger"
+                                >
+                                    Delete…
+                                </Button>
+                            </Box>
                         </>
                     ) : null}
+                </Box>
+            </Modal>
+        </ModalOverlay>
+    );
+}
+
+export interface HappyAgentComputeMachineDeleteDialogProps {
+    /** The computer's name, as its dialog showed it. */
+    readonly name: string;
+    /** True while the deletion is under way. */
+    readonly deleting: boolean;
+    /** Why the last attempt did not go through. */
+    readonly error?: string;
+    onDelete: () => void;
+    onClose: () => void;
+}
+
+/**
+ * Confirms deleting a computer, and says what happens to the agents on it. It
+ * stays up while the deletion runs, and says so inside itself when it fails.
+ */
+export function HappyAgentComputeMachineDeleteDialog(
+    props: HappyAgentComputeMachineDeleteDialogProps,
+) {
+    const close = props.deleting ? undefined : props.onClose;
+    return (
+        <ModalOverlay onDismiss={close}>
+            <Modal
+                footer={
+                    <>
+                        <Button disabled={props.deleting} onClick={props.onClose} variant="ghost">
+                            Cancel
+                        </Button>
+                        <Button loading={props.deleting} onClick={props.onDelete} variant="danger">
+                            Delete computer
+                        </Button>
+                    </>
+                }
+                icon="trash"
+                onClose={close}
+                size="small"
+                title={`Delete ${props.name}?`}
+                tone="danger"
+            >
+                <Box
+                    className="happy-agent-compute__form"
+                    data-happy-desktop-ui="compute-machine-delete"
+                >
+                    {props.error ? (
+                        <Banner tone="danger" title="Not deleted">
+                            {props.error}
+                        </Banner>
+                    ) : null}
+                    <p className="happy-agent-compute__note">
+                        It is disconnected right away. Agents using it lose access to its files,
+                        terminals and tools, and are told on their next turn. To use this machine
+                        again, install it again with a new join command.
+                    </p>
                 </Box>
             </Modal>
         </ModalOverlay>
