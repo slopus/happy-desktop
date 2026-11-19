@@ -91,8 +91,8 @@ export function happyAgentNotifyingConversations(
 
 /**
  * Whether one session belongs to this window's notification set right now. The
- * chime asks only about top-level sessions, since a delegated run never reports
- * a finish to it, so a listed subtask still finishes silently.
+ * chime applies sound preferences separately; unread and activity eligibility
+ * never depends on a subtask's completion-sound override.
  */
 export function happyAgentDirectoryNotifies(
     snapshot: HappyAgentDirectorySnapshot,

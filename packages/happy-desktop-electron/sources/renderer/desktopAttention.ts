@@ -7,7 +7,8 @@ const ATTENTION_KEY = "happy.attention.v1";
 
 /**
  * Where this machine keeps its copy of which bots the person muted or hid and
- * when each connection chimes. The choices themselves are the person's user
+ * when each connection chimes, plus the desktop-wide subtask completion default.
+ * Connection and per-subtask choices are the person's user
  * settings on each Happy Agent; this record holds the last of them the window
  * knew and the changes not yet sent, so they outlive a connection going away
  * and coming back, plus the device's own choices for a Happy Agent too old to

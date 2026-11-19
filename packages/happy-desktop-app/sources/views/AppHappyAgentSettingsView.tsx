@@ -1802,6 +1802,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                   attentionStore.completionSoundUpdate(host.id, sound),
                           }
                         : {})}
+                    {...(props.attention
+                        ? {
+                              subtaskCompletionSound: attention.subtaskCompletionSound,
+                              onSubtaskCompletionSoundChange:
+                                  attentionStore.subtaskCompletionSoundUpdate,
+                          }
+                        : {})}
                     onScrollbarVisibilityChange={(visibility) =>
                         props.appearance.scrollbarVisibilitySelect(visibility)
                     }

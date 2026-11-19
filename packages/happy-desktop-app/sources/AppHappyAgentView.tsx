@@ -112,6 +112,7 @@ import type {
     HappyAgentAttentionSnapshot,
     HappyAgentAttentionStore,
     HappyAgentBotAttention,
+    HappyAgentSubtaskCompletionSound,
     HappyAgentPanelArtifactView,
     HappyAgentPanelSnapshot,
     HappyAgentRecentTabMemory,
@@ -210,6 +211,7 @@ import {
     happyAgentSidebarCollapseStoreNoop,
     happyAgentSidebarVisibilityStoreNoop,
     happyAgentAttentionStoreNoop,
+    happyAgentAttentionConnection,
     happyAgentBotAttention,
     happyAgentHumanMessageAuthor,
     happyAgentSessionGroupIdOf,
@@ -1600,6 +1602,30 @@ function botAttentionMenuItems(attention: HappyAgentBotAttention): MenuItem[] {
             icon: "bell",
         },
         { kind: "item", id: ROW_MENU_HIDE, label: "Hide from sidebar", icon: "eye-off" },
+    ];
+}
+
+const SUBTASK_SOUND_CHOICES: readonly {
+    id: string;
+    sound: HappyAgentSubtaskCompletionSound;
+    label: string;
+}[] = [
+    { id: "subtask-sound-inherit", sound: "inherit", label: "Use global setting" },
+    { id: "subtask-sound-enabled", sound: "enabled", label: "Enable completion sound" },
+    { id: "subtask-sound-muted", sound: "muted", label: "Mute completion sound" },
+];
+
+function subtaskCompletionSoundMenuItems(sound: HappyAgentSubtaskCompletionSound): MenuItem[] {
+    return [
+        { kind: "label", label: "Subtask completion sound" },
+        ...SUBTASK_SOUND_CHOICES.map(
+            (choice): MenuItem => ({
+                kind: "item",
+                id: choice.id,
+                label: choice.label,
+                checked: choice.sound === sound,
+            }),
+        ),
     ];
 }
 
@@ -4330,6 +4356,21 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (!happyAgent) return [];
+                const subtask =
+                    props.attention &&
+                    happyAgentBotSubtasks([...happyAgent.bots, ...(happyAgent.tasks ?? [])]).find(
+                        (entry) => entry.conversation.id === row.id,
+                    );
+                const subtaskSoundItems = subtask
+                    ? subtaskCompletionSoundMenuItems(
+                          happyAgentAttentionConnection(
+                              attention,
+                              happyAgent.id,
+                          ).subtaskCompletionSounds.get(
+                              subtask.conversation.id as HappyAgentSessionId,
+                          ) ?? "inherit",
+                      )
+                    : [];
                 // A joined Surface is left from its menu, as a task is.
                 const surfaceId = surfaceRowParse(row.id);
                 if (surfaceId !== undefined) {
@@ -4354,23 +4395,26 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ? botAttentionMenuItems(
                               happyAgentBotAttention(attention, happyAgent.id, bot.id),
                           )
-                        : [];
+                        : subtaskSoundItems;
                 }
-                return rowSurfaceMenuItems(
-                    happyAgent,
-                    row.id,
-                    rowMenuItems(
-                        happyAgent.projects,
-                        happyAgent.bots,
-                        happyAgent.tasks ?? [],
-                        { ...item, id: row.id },
-                        happyAgentTaskCreateSupported(happyAgent),
-                        props.attention
-                            ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
-                            : undefined,
-                        happyAgent.happyCloud === true,
+                return [
+                    ...subtaskSoundItems,
+                    ...rowSurfaceMenuItems(
+                        happyAgent,
+                        row.id,
+                        rowMenuItems(
+                            happyAgent.projects,
+                            happyAgent.bots,
+                            happyAgent.tasks ?? [],
+                            { ...item, id: row.id },
+                            happyAgentTaskCreateSupported(happyAgent),
+                            props.attention
+                                ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
+                                : undefined,
+                            happyAgent.happyCloud === true,
+                        ),
                     ),
-                );
+                ];
             }}
             // Each heading makes its own kind of thing on the Happy Agent it
             // names: a bot is named on a surface of its own, a project is chosen
@@ -4436,6 +4480,20 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (!happyAgent) return;
+                const soundChoice = SUBTASK_SOUND_CHOICES.find((choice) => choice.id === actionId);
+                if (soundChoice && props.attention) {
+                    const subtask = happyAgentBotSubtasks([
+                        ...happyAgent.bots,
+                        ...(happyAgent.tasks ?? []),
+                    ]).find((entry) => entry.conversation.id === row.id);
+                    if (subtask)
+                        attentionStore.subtaskCompletionSoundOverrideUpdate(
+                            happyAgent.id,
+                            subtask.conversation.id as HappyAgentSessionId,
+                            soundChoice.sound,
+                        );
+                    return;
+                }
                 const attentionBot = happyAgent.bots.find(
                     (candidate) => candidate.workspaceId === row.id,
                 );
