@@ -1257,13 +1257,24 @@ function windowTitleHold(window: BrowserWindow): void {
     hold();
 }
 
+/*
+ * Minimized and full-screen windows are not remembered: the placement they
+ * leave behind is the one to reopen in. A window is not remembered as it is
+ * created either, because a maximized placement is only applied when it is
+ * revealed (DesktopWindowLifecycle).
+ */
 function windowGeometryRemember(window: BrowserWindow): void {
     const remember = () => {
-        if (!window.isDestroyed()) desktopWindowStateStore.remember(window.getNormalBounds());
+        if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return;
+        desktopWindowStateStore.remember({
+            bounds: window.getNormalBounds(),
+            maximized: window.isMaximized(),
+        });
     };
     window.on("move", remember);
     window.on("resize", remember);
-    remember();
+    window.on("maximize", remember);
+    window.on("unmaximize", remember);
 }
 
 function localWindowCreate(bounds?: DesktopWindowBounds) {
@@ -1605,17 +1616,13 @@ function mediaPreviewRevalidate(): void {
 }
 
 function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): BrowserWindow {
-    const restoredBounds = desktopWindowStateStore.restore(
+    const restored = desktopWindowStateStore.restore(
         screen.getAllDisplays(),
         screen.getPrimaryDisplay(),
     );
-    if (desktopFlavor.kind === "local-web")
-        return windowLifecycle.synchronize("local-web", (bounds) =>
-            localWindowCreate(bounds ?? restoredBounds),
-        );
-    return windowLifecycle.synchronize(desktopWindowTarget(snapshot).key, (bounds) =>
-        localWindowCreate(bounds ?? restoredBounds),
-    );
+    const key =
+        desktopFlavor.kind === "local-web" ? "local-web" : desktopWindowTarget(snapshot).key;
+    return windowLifecycle.synchronize(key, restored, localWindowCreate);
 }
 
 /*
