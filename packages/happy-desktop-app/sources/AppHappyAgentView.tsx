@@ -7850,7 +7850,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // hand. History is repaired before the session leaves the list. It chooses
     // the most recently visited survivor in this workspace; a requested keeper
     // or the nearest surviving session to the left is its fallback.
-    const groupTabsClose = (tabIds: readonly string[], keepId?: string) => {
+    const groupTabsClose = async (tabIds: readonly string[], keepId?: string) => {
         const current = props.workspace.get();
         const currentRows =
             current.list.projects.type === "ready" ? current.list.projects.value : [];
@@ -7904,8 +7904,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         for (const tabId of closeableIds) {
             if (fileIds.has(tabId)) {
                 const file = current.fileTabs.find((tab) => tab.id === tabId);
+                // Preserve both the draft and its route until the reader has
+                // finished the close decision. Cancel stops the whole sweep.
+                if (!(await props.workspace.fileClose(tabId))) return;
                 if (file) props.onFileClose(file.groupId, file.path);
-                props.workspace.fileClose(tabId);
                 continue;
             }
             // A terminal or a page closes where it is drawn: it was moved here,
@@ -7945,7 +7947,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             props.onChatSelect(openGroup?.id, openGroup?.conversations[0]?.id, true);
             return;
         }
-        groupTabsClose([tabId]);
+        void groupTabsClose([tabId]);
     };
     const panelViewClose = (viewId: string) => {
         if (viewId === "files") props.workspace.panel.filesClose();
@@ -8052,7 +8054,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const conversationArchiveRun = (target: HappyAgentConversationArchiveConfirmSnapshot) => {
         switch (target.kind) {
             case "session":
-                groupTabsClose([target.conversationId]);
+                void groupTabsClose([target.conversationId]);
                 return;
             case "task":
                 void props.workspace.taskArchive(target.taskId).catch(() => undefined);
@@ -8066,6 +8068,16 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         const target = props.workspace.get().conversationArchiveConfirm;
         props.workspace.conversationArchiveConfirmClose();
         if (target && happyAgentOnline()) conversationArchiveRun(target);
+    };
+    const fileDraftConfirmTab = workspace.fileTabs.find(
+        (tab) => tab.id === workspace.fileDraftConfirm?.tabId,
+    );
+    const fileDraftConfirmCancel = () => {
+        void props.workspace.fileDraftConfirmAnswer("cancel");
+    };
+    const sidebarFileKind = (path: string): HappyAgentFileTabKind => {
+        const kind = fileTabKind(path);
+        return workspace.fileScope === "changed" && kind === "file" ? "diff" : kind;
     };
     // The strip in the order it is drawn, without the detached subagent: it is
     // addressed rather than listed, so a sweep over "the tabs beside this one"
@@ -8610,14 +8622,14 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         openGroup.id,
                                         props.chatId,
                                         path,
-                                        fileTabKind(path),
+                                        sidebarFileKind(path),
                                     );
                             }}
                             onFileOpen={(path) => {
                                 if (!floatyFromGit && workspace.fileScope === "changed")
                                     props.workspace.panel.changeViewOpen(path);
                                 else if (openGroup && happyAgentOnline()) {
-                                    const kind = fileTabKind(path);
+                                    const kind = sidebarFileKind(path);
                                     // A double click pins the preview; the address
                                     // is unchanged when the first click already
                                     // selected this file.
@@ -8786,6 +8798,72 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     : []),
                             ]}
                         />
+                        {workspace.fileDraftConfirm ? (
+                            // The unsaved-changes question belongs to the whole window, so
+                            // its dim covers the connection rail as well.
+                            <WindowCover>
+                                <ModalOverlay onDismiss={fileDraftConfirmCancel}>
+                                    <Modal
+                                        title={
+                                            workspace.fileDraftConfirm.intent === "close"
+                                                ? "Save changes?"
+                                                : "Discard changes?"
+                                        }
+                                        size="small"
+                                        onClose={fileDraftConfirmCancel}
+                                        footer={
+                                            <>
+                                                <Button
+                                                    onClick={fileDraftConfirmCancel}
+                                                    variant="ghost"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    disabled={fileDraftConfirmTab?.saving}
+                                                    onClick={() =>
+                                                        void props.workspace.fileDraftConfirmAnswer(
+                                                            "discard",
+                                                        )
+                                                    }
+                                                    variant="danger"
+                                                >
+                                                    Discard
+                                                </Button>
+                                                {workspace.fileDraftConfirm.intent === "close" ? (
+                                                    <Button
+                                                        disabled={
+                                                            fileDraftConfirmTab?.saving ||
+                                                            !happyAgentOnline()
+                                                        }
+                                                        onClick={() =>
+                                                            void props.workspace.fileDraftConfirmAnswer(
+                                                                "save",
+                                                            )
+                                                        }
+                                                    >
+                                                        {fileDraftConfirmTab?.saving
+                                                            ? "Saving…"
+                                                            : "Save and close"}
+                                                    </Button>
+                                                ) : null}
+                                            </>
+                                        }
+                                    >
+                                        <p>
+                                            Your changes to {workspace.fileDraftConfirm.path} have
+                                            not been saved.
+                                        </p>
+                                        {fileDraftConfirmTab?.saveError ? (
+                                            <Banner tone="danger" title="Could not save this file">
+                                                {fileDraftConfirmTab.saveError.message} Your edit is
+                                                still here.
+                                            </Banner>
+                                        ) : null}
+                                    </Modal>
+                                </ModalOverlay>
+                            </WindowCover>
+                        ) : null}
                         {workspace.conversationArchiveConfirm ? (
                             // Light on purpose: nothing behind it dims, a press
                             // anywhere else puts it away, and Enter says yes.
@@ -9065,9 +9143,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                     }
                                                   : displayedFile
                                                     ? {
-                                                          id:
-                                                              displayedFile.displayedPresentationId ??
-                                                              displayedFile.presentationId,
+                                                          // A new read updates the same editor.
+                                                          // Presentation generations guard readiness;
+                                                          // they are not React lifetime boundaries.
+                                                          id: `${displayedFile.id}:${displayedFile.kind}`,
                                                           content: mainFileBody(displayedFile),
                                                       }
                                                     : openConversationView
@@ -9426,7 +9505,7 @@ function HappyAgentFileBody(props: {
                 onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
                 path={file.path}
                 pathShown={props.tabNamed !== true}
-                readOnly={file.saving || !writable}
+                readOnly={!writable}
                 {...(file.reveal === undefined ? {} : { reveal: file.reveal })}
                 saveDisabled={saveDisabled}
                 saving={file.saving}

@@ -728,6 +728,12 @@ export interface HappyAgentWorkspaceSnapshot {
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<HappyAgentConversationSnapshot>;
     readonly fileTabs: readonly HappyAgentFileTabSnapshot[];
+    /** A destructive file action waiting for the reader to preserve or discard their edit. */
+    readonly fileDraftConfirm?: {
+        readonly tabId: string;
+        readonly path: string;
+        readonly intent: "close" | "revert";
+    };
     /** Local session and file destinations, newest first, retained after their tabs close. */
     readonly recentTabs: readonly HappyAgentRecentTabMemory[];
     /**
@@ -1891,7 +1897,9 @@ export interface HappyAgentWorkspaceStore {
      * the meantime.
      */
     mainViewDisplay(presentationId: string): void;
-    fileClose(tabId: string): void;
+    /** Resolves false when the reader cancels; callers must keep its navigation entry then. */
+    fileClose(tabId: string): Promise<boolean>;
+    fileDraftConfirmAnswer(answer: "save" | "discard" | "cancel"): Promise<void>;
     fileRetry(tabId: string): void;
     /**
      * Opens the checkout's whole change as one stream, in the main content.
@@ -2529,6 +2537,8 @@ export function happyAgentWorkspaceStoreCreate(
     /** Which submission owns the empty-group confirmation. */
     let groupArchiveSubmission = 0;
     let conversationArchiveConfirm: HappyAgentConversationArchiveConfirmSnapshot | undefined;
+    let fileDraftConfirm: HappyAgentWorkspaceSnapshot["fileDraftConfirm"];
+    let fileDraftConfirmResolve: ((answer: "saved" | "discard" | "cancel") => void) | undefined;
     /** Which submission the pending archive belongs to, so a superseded one's answer is dropped. */
     let projectArchiveSubmission = 0;
     let projectSettings: HappyAgentProjectSettingsSnapshot | undefined;
@@ -3350,6 +3360,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.groupComposer === groupComposerDraft &&
                 snapshot.groupSessionDraft === groupSessionDraft &&
                 snapshot.fileTabs === fileTabs &&
+                snapshot.fileDraftConfirm === fileDraftConfirm &&
                 snapshot.recentTabs === recentTabs &&
                 snapshot.tabOrder === tabOrder &&
                 snapshot.activeMainViewId === activeMainViewId &&
@@ -3421,6 +3432,7 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(projectArchive ? { projectArchive } : {}),
                           ...(groupArchive ? { groupArchive } : {}),
                           ...(conversationArchiveConfirm ? { conversationArchiveConfirm } : {}),
+                          ...(fileDraftConfirm ? { fileDraftConfirm } : {}),
                           ...(projectSettings ? { projectSettings } : {}),
                       },
             true,
@@ -3766,18 +3778,16 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     /**
-     * Resolves every ordinary source-file intent from the live catalog only.
-     * A missing Git snapshot and an unchanged path both deliberately resolve to
-     * the raw file; neither starts a Git read to discover a different answer.
-     * A newly created file has nothing to compare against, so it opens as the
-     * file itself and becomes a diff once a later change has a base.
+     * A source-file request remains source as Git changes. Only an explicit
+     * diff request (Changes) compares against the base; a new or clean file
+     * has no comparison and falls back to its source.
      */
     const fileKindResolve = (
         groupId: HappyAgentGroupId,
         path: string,
         requestedKind: HappyAgentFileTabKind,
     ): HappyAgentFileTabKind => {
-        if (requestedKind === "media" || requestedKind === "document") return requestedKind;
+        if (requestedKind !== "diff") return requestedKind;
         const change = fileChangeFind(groupId, path);
         if (change === undefined || change.status === "added" || change.status === "untracked")
             return "file";
@@ -4700,6 +4710,14 @@ export function happyAgentWorkspaceStoreCreate(
     const panelFileTabClose = (except?: string): void => {
         const held = fileTabs.find((tab) => tab.placement === "panel" && tab.id !== except);
         if (!held) return;
+        // Replacing a preview or navigating away must not discard an edit.
+        // Keep the same tab, with its draft, in the main strip instead.
+        if (held.saving || fileDraftDirty(held)) {
+            fileTabs = fileTabs.map((tab) =>
+                tab.id === held.id ? { ...tab, placement: "main", preview: false } : tab,
+            );
+            return;
+        }
         fileTabCacheStore(held);
         fileTabRelease(held.id);
         fileTabs = fileTabs.filter((tab) => tab.id !== held.id);
@@ -4751,9 +4769,44 @@ export function happyAgentWorkspaceStoreCreate(
         recompute();
     };
 
-    const fileTabClose = (tabId: string): void => {
-        const closing = fileTabs.find((tab) => tab.id === tabId);
-        if (!closing) return;
+    const fileDraftDirty = (tab: HappyAgentFileTabSnapshot): boolean => {
+        if (tab.draft === undefined) return false;
+        if (tab.document.type !== "ready") return true;
+        const document = tab.document.value;
+        return (
+            tab.draft !==
+            ("content" in document
+                ? document.content
+                : "newContent" in document
+                  ? document.newContent
+                  : undefined)
+        );
+    };
+
+    const fileDraftDecision = (
+        tabId: string,
+        intent: "close" | "revert",
+    ): Promise<"saved" | "discard" | "cancel"> => {
+        const tab = fileTabs.find((candidate) => candidate.id === tabId);
+        if (!tab) return Promise.resolve("cancel");
+        if (fileDraftConfirm !== undefined) return Promise.resolve("cancel");
+        fileDraftConfirm = { tabId, path: tab.path, intent };
+        const decision = new Promise<"saved" | "discard" | "cancel">((resolve) => {
+            fileDraftConfirmResolve = resolve;
+        });
+        recompute();
+        return decision;
+    };
+
+    const fileTabClose = async (tabId: string): Promise<boolean> => {
+        let closing = fileTabs.find((tab) => tab.id === tabId);
+        if (!closing) return false;
+        if (closing.saving || fileDraftDirty(closing)) {
+            const decision = await fileDraftDecision(tabId, "close");
+            closing = fileTabs.find((tab) => tab.id === tabId);
+            if (decision === "cancel" || disposed || !closing || closing.saving) return false;
+            if (decision === "saved" && fileDraftDirty(closing)) return false;
+        }
         fileTabCacheStore(closing);
         fileTabRelease(tabId);
         // The neighbours a closed tab can uncover are the ones beside it in its
@@ -4799,6 +4852,7 @@ export function happyAgentWorkspaceStoreCreate(
                 ?.id ?? (closing.groupId === addressedGroupId ? openId : undefined);
         groupTabRemember(closing.groupId, uncovered);
         recompute();
+        return true;
     };
 
     const fileTabsReconcile = (): void => {
@@ -7627,7 +7681,7 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
-    return {
+    const workspaceStore: HappyAgentWorkspaceStore = {
         get: () => snapshotStore.getState(),
         previews: () => client.previews(),
         panel,
@@ -8420,9 +8474,13 @@ export function happyAgentWorkspaceStoreCreate(
         },
         filePanelClose() {
             if (disposed) return;
-            panelFileTabClose();
-            panel.fileViewClose();
-            recompute();
+            const file = fileTabs.find((tab) => tab.placement === "panel");
+            if (!file) return;
+            void fileTabClose(file.id).then((closed) => {
+                if (!closed || disposed) return;
+                if (!fileTabs.some((tab) => tab.placement === "panel")) panel.fileViewClose();
+                recompute();
+            });
         },
         filePreview: (groupId, path, kind) => fileTabOpen(groupId, path, kind, true),
         fileOpen: (groupId, path, kind, selection) =>
@@ -8617,6 +8675,34 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         },
         fileClose: (tabId) => fileTabClose(tabId),
+        async fileDraftConfirmAnswer(answer) {
+            const target = fileDraftConfirm;
+            if (!target) return;
+            const tab = fileTabs.find((candidate) => candidate.id === target.tabId);
+            if (answer !== "cancel" && tab?.saving) return;
+            if (answer === "save") {
+                try {
+                    await workspaceStore.fileDraftSave(target.tabId);
+                } catch (error) {
+                    if (fileDraftConfirm !== target || disposed) return;
+                    fileTabs = fileTabs.map((candidate) =>
+                        candidate.id === target.tabId
+                            ? { ...candidate, saveError: happyAgentUserError(error) }
+                            : candidate,
+                    );
+                    recompute();
+                    return;
+                }
+                if (fileDraftConfirm !== target) return;
+                const current = fileTabs.find((candidate) => candidate.id === target.tabId);
+                if (!current || current.saving || fileDraftDirty(current)) return;
+            }
+            const resolve = fileDraftConfirmResolve;
+            fileDraftConfirm = undefined;
+            fileDraftConfirmResolve = undefined;
+            recompute();
+            resolve?.(answer === "save" ? "saved" : answer);
+        },
         reviewOpen: (groupId) => reviewTabOpen(groupId),
         reviewClose: (groupId) => reviewTabClose(groupId),
         reviewFileNext: (groupId) => reviewFileStep(groupId, 1),
@@ -8770,9 +8856,7 @@ export function happyAgentWorkspaceStoreCreate(
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
             if (!tab || tab.linked || !writeAllowed(groupWorkRefusalFind(tab.groupId))) return;
             fileTabs = fileTabs.map((candidate) =>
-                candidate.id === tabId && !candidate.saving
-                    ? { ...candidate, draft, preview: false }
-                    : candidate,
+                candidate.id === tabId ? { ...candidate, draft, preview: false } : candidate,
             );
             // Typing in the file moves its lines just as surely as the agent
             // rewriting it does, so notes left on it stop describing where they
@@ -8782,14 +8866,19 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         },
         fileDraftRevert(tabId) {
-            // Reverting leaves nothing to write back, so the reason the last
-            // write failed is about text that no longer exists.
-            fileTabs = fileTabs.map((tab) =>
-                tab.id === tabId && !tab.saving && tab.draft !== undefined
-                    ? { ...tab, draft: undefined, saveError: undefined }
-                    : tab,
-            );
-            recompute();
+            const current = fileTabs.find((tab) => tab.id === tabId);
+            if (!current || current.saving || !fileDraftDirty(current)) return;
+            void fileDraftDecision(tabId, "revert").then((answer) => {
+                if (answer !== "discard" || disposed) return;
+                // Reverting leaves nothing to write back, so the reason the last
+                // write failed is about text that no longer exists.
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === tabId && !tab.saving && tab.draft !== undefined
+                        ? { ...tab, draft: undefined, saveError: undefined }
+                        : tab,
+                );
+                recompute();
+            });
         },
         async fileDraftSave(tabId) {
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
@@ -8820,21 +8909,31 @@ export function happyAgentWorkspaceStoreCreate(
                 // a reload answers. That gap was visible: the editor was handed
                 // the old text, replaced what was on screen, and the caret and
                 // scroll the person was holding went with it.
-                fileTabs = fileTabs.map((candidate) =>
-                    candidate.groupId === tab.groupId && candidate.path === tab.path
-                        ? {
-                              ...candidate,
-                              document: fileDocumentSaved(candidate.document, draft, written.hash),
-                              ...(candidate.id === tabId
-                                  ? {
-                                        draft: undefined,
-                                        saving: false,
-                                        saveError: undefined,
-                                    }
-                                  : {}),
-                          }
-                        : candidate,
-                );
+                fileTabs = fileTabs.map((candidate) => {
+                    if (candidate.groupId !== tab.groupId || candidate.path !== tab.path)
+                        return candidate;
+                    const document = fileDocumentSaved(candidate.document, draft, written.hash);
+                    return {
+                        ...candidate,
+                        document,
+                        // The visible body must receive the accepted bytes in
+                        // the same notification that clears the submitted draft.
+                        // Otherwise its retained pre-save document briefly wins.
+                        ...(document.type === "ready" &&
+                        candidate.displayedDocument !== undefined &&
+                        candidate.displayedKind === candidate.kind &&
+                        candidate.displayedPath === candidate.path
+                            ? { displayedDocument: document.value }
+                            : {}),
+                        ...(candidate.id === tabId
+                            ? {
+                                  draft: candidate.draft === draft ? undefined : candidate.draft,
+                                  saving: false,
+                                  saveError: undefined,
+                              }
+                            : {}),
+                    };
+                });
                 recompute();
                 // An accepted write is first-hand knowledge that the bytes on
                 // disk changed, so it reconciles on its own rather than waiting
@@ -9513,6 +9612,9 @@ export function happyAgentWorkspaceStoreCreate(
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            fileDraftConfirmResolve?.("cancel");
+            fileDraftConfirmResolve = undefined;
+            fileDraftConfirm = undefined;
             chiefOfStaffWait?.();
             chiefOfStaffWait = undefined;
             stop();
@@ -9543,6 +9645,7 @@ export function happyAgentWorkspaceStoreCreate(
             listeners.clear();
         },
     };
+    return workspaceStore;
 }
 
 /**
