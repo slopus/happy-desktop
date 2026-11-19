@@ -1,0 +1,72 @@
+/*
+ * A subtask's pending request as a row at the end of the parent's scroll list.
+ * Heights are modeled by `conversationChildRequestHeight`; every line below is
+ * a fixed single line so the model stays exact.
+ */
+
+.happy-conversation__child-requests {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+}
+
+.happy-child-request-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+}
+
+/* 6px above and the 28px small button; its text aligns with the agent's prose. */
+.happy-child-request-card__head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    height: 28px;
+    margin-top: 6px;
+    padding: 0 64px 0 30px;
+    box-sizing: content-box;
+}
+
+.happy-child-request-card__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-child-request-card__head > .happy-button {
+    flex: none;
+}
+
+.happy-child-request-card__note,
+.happy-child-request-card__status {
+    flex: none;
+    margin: 0;
+    padding: 0 64px 0 30px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-child-request-card__note {
+    height: 20px;
+    line-height: 20px;
+}
+
+.happy-child-request-card__status {
+    height: 24px;
+    margin-bottom: 6px;
+    line-height: 24px;
+}

@@ -1022,6 +1022,9 @@ function agentSubtasksProject(
             const workspace = workspaceOf(child.workspaceId);
             return {
                 workspaceId: child.workspaceId,
+                ...(child.pendingQuestionId === null
+                    ? {}
+                    : { pendingQuestionId: child.pendingQuestionId }),
                 path:
                     child.workspaceId === owner.workspaceId
                         ? computePath(owner.compute)

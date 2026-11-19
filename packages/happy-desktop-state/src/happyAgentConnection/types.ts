@@ -770,6 +770,8 @@ export interface BotGroup {
 export interface BotSubtaskGroup {
     workspaceId: string;
     path: string;
+    /** The exact pending request of this visible child, never an ancestor's request. */
+    pendingQuestionId?: string;
     session: GroupSession;
     subtasks: readonly BotSubtaskGroup[];
 }
