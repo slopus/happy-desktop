@@ -5,13 +5,21 @@ export interface DesktopWindowBounds {
     y: number;
 }
 
+/** Where a desktop window sits when not minimized: its normal bounds, and whether it fills the screen. */
+export interface DesktopWindowPlacement {
+    bounds: DesktopWindowBounds;
+    maximized: boolean;
+}
+
 export interface DesktopManagedWindow {
     readonly webContents: {
         once(event: "did-fail-load", listener: () => void): void;
     };
     destroy(): void;
-    getBounds(): DesktopWindowBounds;
+    getNormalBounds(): DesktopWindowBounds;
     isDestroyed(): boolean;
+    isMaximized(): boolean;
+    maximize(): void;
     on(event: "closed", listener: () => void): void;
     once(event: "ready-to-show", listener: () => void): void;
     show(): void;
@@ -24,7 +32,7 @@ export interface DesktopWindowCandidate<Window extends DesktopManagedWindow> {
 
 /** Replaces desktop windows without revealing or retaining superseded candidates. */
 export class DesktopWindowLifecycle<Window extends DesktopManagedWindow> {
-    private active?: { key: string; window: Window };
+    private active?: { key: string; placement?: DesktopWindowPlacement; window: Window };
     private presented?: Window;
 
     constructor(private readonly present: (window: Window) => void = (window) => window.show()) {}
@@ -33,24 +41,38 @@ export class DesktopWindowLifecycle<Window extends DesktopManagedWindow> {
         return live(this.active?.window);
     }
 
+    /**
+     * A replacement takes the placement of the window it replaces; the first
+     * window takes `restored`. Normal bounds are given to `create`, and a maximized
+     * placement is applied just before reveal, since maximizing reveals a
+     * hidden window on Windows.
+     */
     synchronize(
         key: string,
+        restored: DesktopWindowPlacement | undefined,
         create: (bounds?: DesktopWindowBounds) => DesktopWindowCandidate<Window>,
     ): Window {
         const current = live(this.active?.window);
         if (current && this.active?.key === key) return current;
 
         const presented = live(this.presented);
-        const bounds = (presented ?? current)?.getBounds();
+        // An unrevealed candidate has not been maximized yet, so it passes on
+        // the placement it was given rather than its own.
+        const placement = presented
+            ? { bounds: presented.getNormalBounds(), maximized: presented.isMaximized() }
+            : current
+              ? this.active?.placement
+              : restored;
         if (current && current !== presented) current.destroy();
 
-        const candidate = create(bounds);
+        const candidate = create(placement?.bounds);
         const window = candidate.window;
-        this.active = { key, window };
+        this.active = { key, placement, window };
         let revealed = false;
         const reveal = () => {
             if (revealed || window.isDestroyed() || this.active?.window !== window) return;
             revealed = true;
+            if (placement?.maximized) window.maximize();
             this.present(window);
             const previous = live(this.presented);
             this.presented = window;
