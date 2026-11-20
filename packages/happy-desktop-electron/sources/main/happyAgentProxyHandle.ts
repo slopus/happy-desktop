@@ -465,6 +465,8 @@ async function attachmentWrite(
  * the agent are on one machine, so naming the path is the whole of the work.
  * That is why an attachment's size stops mattering — nothing is read, encoded,
  * or written, and a screen recording costs exactly what a text file costs.
+ * A directory counts too: the agent reads it in place with its own tools, the
+ * same as a file, and reading a directory for its bytes cannot work at all.
  *
  * The answer is no when work happens somewhere the reader's disk is not: a
  * container workspace has its own filesystem, and a Happy Agent on another machine
@@ -480,7 +482,8 @@ async function attachmentSourceReachable(
     const { workspace } = await client.getWorkspace(workspaceId);
     if (workspace.compute.type !== "host") return false;
     try {
-        return (await stat(sourcePath)).isFile();
+        const information = await stat(sourcePath);
+        return information.isFile() || information.isDirectory();
     } catch {
         return false;
     }
