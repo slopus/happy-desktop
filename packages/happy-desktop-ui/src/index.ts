@@ -239,7 +239,7 @@ export {
     type CommandShortcut,
     type KeyboardShortcut,
 } from "./keyboardShortcut";
-export { WindowShortcuts, type WindowShortcutAction } from "./WindowShortcuts";
+export { WindowEscape, WindowShortcuts, type WindowShortcutAction } from "./WindowShortcuts";
 export type { HtmlPreviewFailure, HtmlPreviewProps, HtmlPreviewRenderer } from "./htmlPreview";
 export {
     INLINE_PAGE_CONTENT_GAP,
@@ -574,7 +574,7 @@ export {
     type LottieScenePlay,
     type LottieSceneProps,
 } from "./LottieScene";
-export { type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
+export { type TabCloseQuestion, type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
 export { TabbedPane, type TabbedPaneProps } from "./TabbedPane";
 export {
     DeferredPane,

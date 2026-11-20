@@ -37,7 +37,8 @@ export type ConfirmPopoverProps = {
  *
  * Mounting it moves focus to Cancel, so a stray Enter keeps things as they
  * are, unless the host asks for the confirm action instead. Escape cancels,
- * and Tab cycles between its two actions.
+ * and Tab cycles between its two actions. When it goes, focus returns to
+ * whatever held it before, unless the answer moved it on purpose.
  */
 export function ConfirmPopover(props: ConfirmPopoverProps) {
     const titleId = useId();
@@ -45,10 +46,25 @@ export function ConfirmPopover(props: ConfirmPopoverProps) {
     const tone = props.tone ?? "default";
     const initialFocus = props.initialFocus ?? "cancel";
     // The card's commit is the moment its actions exist, so focus moves then
-    // rather than after React's own scheduling.
+    // rather than after React's own scheduling. Whatever held focus before is
+    // remembered here, because by the time a host's own effects run the card
+    // already has it.
     const cardRef = useCallback(
-        (node: HTMLDivElement | null): void => {
-            node?.querySelector<HTMLElement>(`button[data-action="${initialFocus}"]`)?.focus();
+        (node: HTMLDivElement | null) => {
+            if (!node) return;
+            const invoker = node.ownerDocument.activeElement;
+            node.querySelector<HTMLElement>(`button[data-action="${initialFocus}"]`)?.focus();
+            return () => {
+                // Answered or put away: focus goes back to where it was, unless
+                // the answer already took it somewhere on purpose.
+                const focused = node.ownerDocument.activeElement;
+                const lost =
+                    focused === null ||
+                    focused === node.ownerDocument.body ||
+                    node.contains(focused);
+                if (lost && invoker instanceof HTMLElement && invoker.isConnected)
+                    invoker.focus({ preventScroll: true });
+            };
         },
         [initialFocus],
     );
