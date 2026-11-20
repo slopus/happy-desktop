@@ -175,46 +175,48 @@ export function FileBrowser(props: FileBrowserProps) {
                                 </span>
                             ) : null}
                         </span>
-                        <div className="happy-file-browser__layouts" role="group">
-                            <button
-                                aria-label="List files"
-                                aria-pressed={local.layout === "flat"}
-                                className="happy-file-browser__layout"
-                                data-active={local.layout === "flat" ? "" : undefined}
-                                data-happy-desktop-ui="file-browser-layout"
-                                onClick={() => local.onLayoutChange?.("flat")}
-                                type="button"
-                            >
-                                <Icon name="files" size={14} />
-                            </button>
-                            <button
-                                aria-label="Nest files into directories"
-                                aria-pressed={local.layout === "tree"}
-                                className="happy-file-browser__layout"
-                                data-active={local.layout === "tree" ? "" : undefined}
-                                data-happy-desktop-ui="file-browser-layout"
-                                onClick={() => local.onLayoutChange?.("tree")}
-                                type="button"
-                            >
-                                <Icon name="branch" size={14} />
-                            </button>
-                        </div>
-                        {/* Reading the change as a whole, rather than a file at
+                        <div className="happy-file-browser__actions">
+                            <div className="happy-file-browser__layouts" role="group">
+                                <button
+                                    aria-label="List files"
+                                    aria-pressed={local.layout === "flat"}
+                                    className="happy-file-browser__layout"
+                                    data-active={local.layout === "flat" ? "" : undefined}
+                                    data-happy-desktop-ui="file-browser-layout"
+                                    onClick={() => local.onLayoutChange?.("flat")}
+                                    type="button"
+                                >
+                                    <Icon name="files" size={14} />
+                                </button>
+                                <button
+                                    aria-label="Nest files into directories"
+                                    aria-pressed={local.layout === "tree"}
+                                    className="happy-file-browser__layout"
+                                    data-active={local.layout === "tree" ? "" : undefined}
+                                    data-happy-desktop-ui="file-browser-layout"
+                                    onClick={() => local.onLayoutChange?.("tree")}
+                                    type="button"
+                                >
+                                    <Icon name="branch" size={14} />
+                                </button>
+                            </div>
+                            {/* Reading the change as a whole, rather than a file at
                             a time. It sits with the listing it is about; where
                             nothing has changed there is nothing to read, so the
                             control is not offered. */}
-                        {local.onReviewOpen && (local.count ?? 0) > 0 ? (
-                            <button
-                                aria-label="Read every change in one scroll"
-                                className="happy-file-browser__review"
-                                data-happy-desktop-ui="file-browser-review"
-                                data-testid="file-browser-review"
-                                onClick={() => local.onReviewOpen?.()}
-                                type="button"
-                            >
-                                <Icon name="file-diff" size={14} />
-                            </button>
-                        ) : null}
+                            {local.onReviewOpen && (local.count ?? 0) > 0 ? (
+                                <button
+                                    aria-label="Read every change in one scroll"
+                                    className="happy-file-browser__review"
+                                    data-happy-desktop-ui="file-browser-review"
+                                    data-testid="file-browser-review"
+                                    onClick={() => local.onReviewOpen?.()}
+                                    type="button"
+                                >
+                                    <Icon name="file-diff" size={14} />
+                                </button>
+                            ) : null}
+                        </div>
                     </>
                 ) : null}
             </div>

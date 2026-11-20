@@ -50,6 +50,19 @@ export interface HappyAgentGroupViewPreferences {
 export interface HappyAgentViewPreferencesDocument {
     readonly groups: Readonly<Record<string, HappyAgentGroupViewPreferences>>;
     /**
+     * The width the reader last left any checkout's right panel at. A checkout
+     * with a width of its own keeps it; one that was never sized opens at this
+     * one rather than at the product's default, so a reader who widened the
+     * panel once does not widen it again in every new worktree.
+     */
+    readonly panelWidth?: number;
+    /**
+     * How wide the Files tab's listing is beside its preview, in CSS pixels.
+     * One width for every checkout: how much of the panel the file names take
+     * is a habit of the reader's, not a fact about a project.
+     */
+    readonly fileListWidth?: number;
+    /**
      * Sections the Changes listing splits secondary files into, in match order.
      * One list for every project rather than one per project: which files
      * someone counts as secondary is a habit of the reader's, and a pattern that
@@ -122,6 +135,22 @@ function panelWidthParse(value: unknown): number | undefined {
     if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
     const width = Math.round(value);
     return width >= PANEL_WIDTH_MIN && width <= PANEL_WIDTH_MAX ? width : undefined;
+}
+
+type HappyAgentViewPreferencesWidths = Pick<
+    HappyAgentViewPreferencesDocument,
+    "panelWidth" | "fileListWidth"
+>;
+
+/**
+ * The document's own widths, each kept only where it holds one: neither says
+ * anything about the other, or about any group.
+ */
+function widthsOf(document: HappyAgentViewPreferencesWidths): HappyAgentViewPreferencesWidths {
+    return {
+        ...(document.panelWidth === undefined ? {} : { panelWidth: document.panelWidth }),
+        ...(document.fileListWidth === undefined ? {} : { fileListWidth: document.fileListWidth }),
+    };
 }
 
 /**
@@ -239,7 +268,14 @@ export function happyAgentViewPreferencesParse(
     // write leaves the per-project field out, so it is never read again.
     if (changeTiers.length === 0)
         changeTiers.push(...legacyTiersParse((value as { projects?: unknown }).projects));
-    return { groups: parsed, changeTiers: changeTiers.slice(0, HAPPY_AGENT_CHANGE_TIERS_MAX) };
+    return {
+        groups: parsed,
+        changeTiers: changeTiers.slice(0, HAPPY_AGENT_CHANGE_TIERS_MAX),
+        ...widthsOf({
+            panelWidth: panelWidthParse((value as { panelWidth?: unknown }).panelWidth),
+            fileListWidth: panelWidthParse((value as { fileListWidth?: unknown }).fileListWidth),
+        }),
+    };
 }
 
 /**
@@ -275,7 +311,22 @@ export function happyAgentViewPreferencesUpdate(
     const ids = Object.keys(groups);
     if (ids.length > GROUP_MAX)
         for (const id of ids.slice(0, ids.length - GROUP_MAX)) delete groups[id];
-    return { groups, changeTiers: document.changeTiers };
+    // A panel width chosen in one checkout is also the width the next checkout
+    // nobody has sized opens at.
+    return {
+        groups,
+        changeTiers: document.changeTiers,
+        ...widthsOf(document),
+        ...(change.panelWidth === undefined ? {} : { panelWidth: change.panelWidth }),
+    };
+}
+
+/** The remembered arrangements with the Files listing's width replaced. */
+export function happyAgentViewPreferencesFileListWidthUpdate(
+    document: HappyAgentViewPreferencesDocument,
+    fileListWidth: number,
+): HappyAgentViewPreferencesDocument {
+    return { ...document, fileListWidth };
 }
 
 /** The remembered arrangements with the change tiers replaced. */
@@ -283,7 +334,7 @@ export function happyAgentViewPreferencesTiersUpdate(
     document: HappyAgentViewPreferencesDocument,
     changeTiers: readonly HappyAgentChangeTier[],
 ): HappyAgentViewPreferencesDocument {
-    return { groups: document.groups, changeTiers };
+    return { groups: document.groups, changeTiers, ...widthsOf(document) };
 }
 
 export const HAPPY_AGENT_VIEW_PREFERENCES_EMPTY: HappyAgentViewPreferencesDocument = {

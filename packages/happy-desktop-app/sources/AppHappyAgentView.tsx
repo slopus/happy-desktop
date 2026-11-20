@@ -239,7 +239,6 @@ import {
 import {
     type AgentWaitStatus,
     AppShell,
-    APP_SHELL_PANEL_DEFAULT_WIDTH,
     type AppShellFocusedPane,
     Banner,
     BrowserPanel,
@@ -277,6 +276,7 @@ import {
     DeferredPane,
     EmptyState,
     FileBrowser,
+    FileSplit,
     FileEditor,
     FilePreview,
     FormRow,
@@ -8154,13 +8154,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
               }
             : {}),
     });
-    const mainFileBody = (file: HappyAgentFileTabSnapshot): ReactNode => (
+    const mainFileBody = (
+        file: HappyAgentFileTabSnapshot,
+        preview?: { readonly onOpenInTab: () => void },
+    ): ReactNode => (
         <FileRevealContext.Provider key={`${file.id}:${file.kind}`} value={fileTabReveal(file)}>
             <HappyAgentFileBody
                 appearance={appearance.appearance}
                 entities={documentEntities}
                 file={file}
-                tabNamed
+                tabNamed={preview === undefined}
+                {...(preview
+                    ? {
+                          onOpenInTab: preview.onOpenInTab,
+                          onClose: () => props.workspace.filePanelClose(),
+                      }
+                    : {})}
                 {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                 {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                 mode={workspace.fileViewMode}
@@ -8509,11 +8518,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                               shortcut: APP_SHORTCUTS.panelToggle,
                           },
                       })}
-                // The width this checkout was last left at, or the shell's own
-                // default where nobody has sized it. Passed on every render rather
-                // than seeded once, so moving to another project shows that
-                // project's width instead of carrying this one's across.
-                panelWidth={workspace.panelWidth ?? APP_SHELL_PANEL_DEFAULT_WIDTH}
+                // The width this checkout was last left at, else the width any
+                // checkout was last left at, else a balanced lane that follows the
+                // window. Passed on every render rather than seeded once, so moving
+                // to another project shows that project's width instead of
+                // carrying this one's across.
+                panelWidth={workspace.panelWidth ?? "balanced"}
                 onFocusedPaneChange={workspaceFocusedPaneChange}
                 onPanelWidthChange={(width) => {
                     if (openGroup) props.workspace.panelWidthUpdate(openGroup.id, width);
@@ -8605,14 +8615,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 // opens as everything those edits did to it.
                                 if (!floatyFromGit && workspace.fileScope === "changed")
                                     props.workspace.panel.changeViewOpen(path);
+                                // A click previews the file beside the listing,
+                                // leaving the conversation where it was; a double
+                                // click below keeps it as a main-content tab.
                                 else if (openGroup && happyAgentOnline())
-                                    props.onFileSelect(
+                                    props.workspace.filePanelOpen(
                                         openGroup.id,
-                                        props.chatId,
                                         path,
                                         fileTabKind(path),
                                     );
                             }}
+                            {...(workspace.fileListWidth === undefined
+                                ? {}
+                                : { fileListWidth: workspace.fileListWidth })}
+                            onFileListWidthChange={(width) =>
+                                props.workspace.fileListWidthUpdate(width)
+                            }
                             onFileOpen={(path) => {
                                 if (!floatyFromGit && workspace.fileScope === "changed")
                                     props.workspace.panel.changeViewOpen(path);
@@ -9271,6 +9289,10 @@ function HappyAgentFileBody(props: {
     entities: MessageReferences;
     /** The file's tab names it, so its content does not name it again. */
     tabNamed?: boolean;
+    /** Moves a file previewed in the panel into a main-content tab. */
+    onOpenInTab?: () => void;
+    /** Closes only the file preview, retaining the Files panel. */
+    onClose?: () => void;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: HappyAgentFileViewMode;
@@ -9338,8 +9360,10 @@ function HappyAgentFileBody(props: {
                 {happyAgentFileRevalidationBanner(file.revalidationError)}
                 <HappyAgentFilePreview
                     document={file.document}
+                    {...(props.onClose ? { onClose: props.onClose } : {})}
                     {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                     key={file.id}
+                    {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
                     path={file.path}
                     revalidating={file.revalidating}
                 />
@@ -9362,8 +9386,10 @@ function HappyAgentFileBody(props: {
         return (
             <FileEditor
                 banner={happyAgentFileNotices(file)}
+                {...(props.onClose ? { onClose: props.onClose, closeLabel: "Close preview" } : {})}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
+                {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
                 {...(file.kind === "document" && props.htmlPreview
                     ? {
                           rendered: (
@@ -9467,10 +9493,12 @@ function HappyAgentFileBody(props: {
                 {happyAgentFileNotices(file)}
                 <ChangedFileDiff
                     appearance={props.appearance}
+                    {...(props.onClose ? { onClose: props.onClose } : {})}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
                     key={`${file.id}:${file.kind}`}
                     loading={file.revalidating}
                     mode={props.mode}
+                    {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
                     {...(newCacheKey === undefined ? {} : { newCacheKey })}
                     newContent={current}
                     {...(oldCacheKey === undefined ? {} : { oldCacheKey })}
@@ -9559,6 +9587,7 @@ function HappyAgentFileBody(props: {
                               preview: (
                                   <HappyAgentChangedFilePreview
                                       entities={props.entities}
+                                      pathHidden={props.tabNamed !== true}
                                       file={file}
                                       onFileOpen={linkedFileOpen}
                                       onFileLinkOpen={fileLinkOpen}
@@ -9610,6 +9639,35 @@ function HappyAgentFileBody(props: {
             </>
         );
     }
+    if (props.onClose)
+        return (
+            <FilePreview
+                {...(file.document.type === "error" && props.saveRefusal === undefined
+                    ? {
+                          actions: (
+                              <Button
+                                  onClick={() => {
+                                      if (props.happyAgentOnline()) workspace.fileRetry(file.id);
+                                  }}
+                                  size="small"
+                                  variant="ghost"
+                              >
+                                  Retry
+                              </Button>
+                          ),
+                      }
+                    : {})}
+                content={
+                    file.document.type === "error"
+                        ? { type: "error", message: file.document.error.message }
+                        : props.saveRefusal
+                          ? { type: "error", message: props.saveRefusal }
+                          : { type: "loading" }
+                }
+                onClose={props.onClose}
+                path={file.path}
+            />
+        );
     if (file.document.type === "error")
         return (
             <EmptyState
@@ -9701,6 +9759,8 @@ function HappyAgentChangedFilePreview(props: {
     text: string;
     /** The file's characters, editable, where this checkout can be written. */
     editor?: ReactNode;
+    /** Leaves the name to the diff around the preview, which says it above its modes. */
+    pathHidden?: boolean;
 }) {
     const { file } = props;
     // A picture, a recording, or an archive opens as itself rather than as a
@@ -9739,6 +9799,7 @@ function HappyAgentChangedFilePreview(props: {
             onFileLinkOpen={props.onFileLinkOpen}
             entities={props.entities}
             path={file.path}
+            pathHidden={props.pathHidden === true}
         />
     );
 }
@@ -9754,6 +9815,8 @@ function HappyAgentChangedFilePreview(props: {
 function HappyAgentFilePreview(props: {
     document: HappyAgentFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
+    onOpenInTab?: () => void;
+    onClose?: () => void;
     path: string;
     revalidating: boolean;
 }) {
@@ -9762,6 +9825,7 @@ function HappyAgentFilePreview(props: {
         return (
             <FilePreview
                 content={{ type: "error", message: document.error.message }}
+                {...(props.onClose ? { onClose: props.onClose } : {})}
                 path={props.path}
             />
         );
@@ -9769,10 +9833,22 @@ function HappyAgentFilePreview(props: {
     // face. The request may still fail into the warning banner owned by the
     // surrounding file surface; only a true first load has no content to show.
     if (document.type !== "ready")
-        return <FilePreview content={{ type: "loading" }} path={props.path} />;
+        return (
+            <FilePreview
+                content={{ type: "loading" }}
+                path={props.path}
+                {...(props.onClose ? { onClose: props.onClose } : {})}
+            />
+        );
     const value = document.value;
     if (!("contentType" in value))
-        return <FilePreview content={{ type: "unavailable" }} path={props.path} />;
+        return (
+            <FilePreview
+                content={{ type: "unavailable" }}
+                path={props.path}
+                {...(props.onClose ? { onClose: props.onClose } : {})}
+            />
+        );
     // A format with no viewer is stated as such rather than rendered as an
     // <img> that will only ever show a broken-image glyph.
     const kind = filePreviewKind(props.path);
@@ -9781,6 +9857,7 @@ function HappyAgentFilePreview(props: {
     return (
         <FilePreview
             content={showable ? { type: "url", url: value.url } : { type: "unavailable" }}
+            {...(props.onClose ? { onClose: props.onClose } : {})}
             {...(mediaWindow && showable && mediaWindowShowable(kind)
                 ? {
                       onMediaWindowOpen: () => mediaWindow({ path: props.path, url: value.url }),
@@ -9789,6 +9866,7 @@ function HappyAgentFilePreview(props: {
             // A file with no viewer is still a file, and saving it is often the
             // only thing left to do with it.
             onDownload={() => fileDownload(props.path, { type: "url", url: value.url })}
+            {...(props.onOpenInTab ? { onOpenInTab: props.onOpenInTab } : {})}
             path={props.path}
             size={fileSizeFormat(value.size)}
             updating={props.revalidating}
@@ -11878,6 +11956,9 @@ function HappyAgentPanelBody(props: {
     /** Shows the panel viewer's file in Finder, where the host can. */
     onPanelFileReveal?: () => void;
     onFileSelect: (path: string) => void;
+    /** How wide the Files listing is beside its preview, where the reader moved it. */
+    fileListWidth?: number;
+    onFileListWidthChange: (width: number) => void;
     onLayoutChange: (layout: HappyAgentFileLayout) => void;
     /** Opens every change in this checkout as one stream. */
     onReviewOpen: () => void;
@@ -11888,8 +11969,13 @@ function HappyAgentPanelBody(props: {
      * beside a conversation is the identical surface to the file in a
      * main-content tab — same header, same Rendered / Source, same editor,
      * same Command-S.
+     * `preview` is given where no tab names the file — the Files tab's preview —
+     * so the body names it itself and offers to move it into a main tab.
      */
-    fileBody: (file: HappyAgentFileTabSnapshot) => ReactNode;
+    fileBody: (
+        file: HappyAgentFileTabSnapshot,
+        preview?: { readonly onOpenInTab: () => void },
+    ) => ReactNode;
     onPanelFileClose: () => void;
     onScopeChange: (scope: HappyAgentFileScope) => void;
     onToggle: (path: string, expanded: boolean) => void;
@@ -11995,6 +12081,7 @@ function HappyAgentPanelBody(props: {
     const panelTools = toolTabsPlaced(props.panel, "panel");
     const activeToolTab = panelTools.find((tab) => tab.id === props.panel.activeViewId);
     const panelFile = props.panelFile;
+    const filesPreview = panelFile && !panelFile.linked ? panelFile : undefined;
     // The artifact a reference opened here, named by the same live title the
     // reference itself reads as.
     const titlesStore = props.artifacts?.artifacts.titles() ?? artifactTitlesStoreNoop;
@@ -12224,86 +12311,120 @@ function HappyAgentPanelBody(props: {
                               })}
                     />
                     {props.panel.activeViewId === "files" ? (
-                        <FileBrowser
-                            // Only Changes has a complete total and line delta;
-                            // All Files stays visually focused on its lazy tree.
-                            {...(all || changesUnavailable || loading
+                        <FileSplit
+                            {...(props.fileListWidth === undefined
                                 ? {}
-                                : { addedLines, deletedLines })}
-                            count={count}
-                            emptyLabel={
-                                query !== ""
-                                    ? `Nothing matches “${query}”.`
-                                    : all
-                                      ? // A root that failed to read is not an
-                                        // empty folder; it is retried on the
-                                        // next change in the checkout. A
-                                        // checkout with nowhere to list from is
-                                        // neither, and says why.
-                                        props.workspaceFiles?.unavailable === "noCompute"
-                                          ? "No computer joined."
-                                          : props.workspaceFiles?.unavailable === "computeOffline"
-                                            ? "The computer is offline."
-                                            : props.workspaceFiles?.unavailable === "unsupported"
-                                              ? "Files aren't available on this server."
-                                              : props.workspaceFiles?.directories.get("")?.error
-                                                ? "Files could not be loaded."
-                                                : "No files."
-                                      : changesUnavailable
-                                        ? "Git changes are temporarily unavailable."
-                                        : "No changed files."
-                            }
-                            onSearchQueryChange={props.onSearchQueryChange}
-                            searchQuery={query}
-                            searching={props.search.searching}
-                            layout={props.layout}
-                            loading={loading}
-                            nodes={nodes}
-                            {...(changesStale
+                                : { listWidth: props.fileListWidth })}
+                            onListWidthChange={props.onFileListWidthChange}
+                            // A file read out of another workspace keeps its own
+                            // viewer tab; this checkout's file is previewed here,
+                            // beside the listing it belongs to.
+                            {...(filesPreview
                                 ? {
-                                      note: "Showing the last successful Git scan. Retrying automatically…",
+                                      // The same move as dragging the file's
+                                      // tab across, or a double click on its
+                                      // row: its read and any unsaved edit
+                                      // come along.
+                                      preview: props.fileBody(filesPreview, {
+                                          onOpenInTab: () =>
+                                              props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
+                                      }),
+                                      previewRequest: props.panel.filesPreviewRequest,
+                                      // A double click on a row when the
+                                      // listing and the preview take turns:
+                                      // its second click lands on the preview.
+                                      onOpenInTab: () =>
+                                          props.onViewTransfer(HAPPY_AGENT_PANEL_FILE_VIEW_ID),
                                   }
                                 : {})}
-                            {...(props.happyAgentAvailability !== undefined && all
-                                ? {
-                                      fileActionsUnavailable:
-                                          props.happyAgentAvailabilityReason ??
-                                          "Happy Agent must reconnect before opening files.",
-                                  }
-                                : {})}
-                            onLayoutChange={(layout: HappyAgentFileLayout) =>
-                                props.onLayoutChange(layout)
+                            listing={
+                                <FileBrowser
+                                    // Only Changes has a complete total and line delta;
+                                    // All Files stays visually focused on its lazy tree.
+                                    {...(all || changesUnavailable || loading
+                                        ? {}
+                                        : { addedLines, deletedLines })}
+                                    count={count}
+                                    emptyLabel={
+                                        query !== ""
+                                            ? `Nothing matches “${query}”.`
+                                            : all
+                                              ? // A root that failed to read is not an
+                                                // empty folder; it is retried on the
+                                                // next change in the checkout. A
+                                                // checkout with nowhere to list from is
+                                                // neither, and says why.
+                                                props.workspaceFiles?.unavailable === "noCompute"
+                                                  ? "No computer joined."
+                                                  : props.workspaceFiles?.unavailable ===
+                                                      "computeOffline"
+                                                    ? "The computer is offline."
+                                                    : props.workspaceFiles?.unavailable ===
+                                                        "unsupported"
+                                                      ? "Files aren't available on this server."
+                                                      : props.workspaceFiles?.directories.get("")
+                                                              ?.error
+                                                        ? "Files could not be loaded."
+                                                        : "No files."
+                                              : changesUnavailable
+                                                ? "Git changes are temporarily unavailable."
+                                                : "No changed files."
+                                    }
+                                    onSearchQueryChange={props.onSearchQueryChange}
+                                    searchQuery={query}
+                                    searching={props.search.searching}
+                                    layout={props.layout}
+                                    loading={loading}
+                                    nodes={nodes}
+                                    {...(changesStale
+                                        ? {
+                                              note: "Showing the last successful Git scan. Retrying automatically…",
+                                          }
+                                        : {})}
+                                    {...(props.happyAgentAvailability !== undefined && all
+                                        ? {
+                                              fileActionsUnavailable:
+                                                  props.happyAgentAvailabilityReason ??
+                                                  "Happy Agent must reconnect before opening files.",
+                                          }
+                                        : {})}
+                                    onLayoutChange={(layout: HappyAgentFileLayout) =>
+                                        props.onLayoutChange(layout)
+                                    }
+                                    onReviewOpen={props.onReviewOpen}
+                                    onDirectoryPrefetch={props.onDirectoryPrefetch}
+                                    onFilePrefetch={props.onFilePreprocess}
+                                    onReveal={props.onFileReveal}
+                                    onLoadMore={props.onLoadMore}
+                                    {...(props.happyAgentAvailability === undefined
+                                        ? { onOpen: props.onFileOpen }
+                                        : {})}
+                                    onScopeChange={(scope: HappyAgentFileScope) =>
+                                        props.onScopeChange(scope)
+                                    }
+                                    {...(allFilesUnavailable === undefined
+                                        ? {}
+                                        : {
+                                              scopeUnavailable: {
+                                                  all: allFilesUnavailable,
+                                              },
+                                          })}
+                                    onSelect={(path: string) => props.onFileSelect(path)}
+                                    onToggle={(id, expanded) => {
+                                        // A tier's heading folds the tier, which is
+                                        // remembered with the tier rather than with the
+                                        // directories of this checkout.
+                                        const tierId = all
+                                            ? undefined
+                                            : changeListing.sections.get(id);
+                                        if (tierId !== undefined && changeTiersStore !== undefined)
+                                            changeTiersStore.tierCollapsedUpdate(tierId, !expanded);
+                                        else props.onToggle(id, expanded);
+                                    }}
+                                    scope={props.scope}
+                                    selectedId={filesPreview?.path ?? props.selectedPath}
+                                />
                             }
-                            onReviewOpen={props.onReviewOpen}
-                            onDirectoryPrefetch={props.onDirectoryPrefetch}
-                            onFilePrefetch={props.onFilePreprocess}
-                            onReveal={props.onFileReveal}
-                            onLoadMore={props.onLoadMore}
-                            {...(props.happyAgentAvailability === undefined
-                                ? { onOpen: props.onFileOpen }
-                                : {})}
-                            onScopeChange={(scope: HappyAgentFileScope) =>
-                                props.onScopeChange(scope)
-                            }
-                            {...(allFilesUnavailable === undefined
-                                ? {}
-                                : {
-                                      scopeUnavailable: {
-                                          all: allFilesUnavailable,
-                                      },
-                                  })}
-                            onSelect={(path: string) => props.onFileSelect(path)}
-                            onToggle={(id, expanded) => {
-                                // A tier's heading folds the tier, which is
-                                // remembered with the tier rather than with the
-                                // directories of this checkout.
-                                const tierId = all ? undefined : changeListing.sections.get(id);
-                                if (tierId !== undefined && changeTiersStore !== undefined)
-                                    changeTiersStore.tierCollapsedUpdate(tierId, !expanded);
-                                else props.onToggle(id, expanded);
-                            }}
-                            scope={props.scope}
-                            selectedId={props.selectedPath}
                         />
                     ) : props.panel.activeViewId === "artifacts" ? (
                         props.artifacts ? (

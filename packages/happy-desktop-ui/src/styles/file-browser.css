@@ -15,6 +15,7 @@
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
     height: 100%;
     font-family: var(--happy-font-ui);
@@ -29,14 +30,26 @@
 .happy-file-browser__controls {
     display: flex;
     flex: none;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    height: var(--happy-subheader-height);
-    padding: 0 var(--happy-panel-inset);
+    gap: 4px 8px;
+    min-width: 0;
+    min-height: var(--happy-subheader-height);
+    padding: 4px var(--happy-panel-inset);
 }
 
 .happy-file-browser__scopes {
     flex: none;
+}
+
+/* Keep every action reachable at the listing's 200px minimum. The actions
+   travel together onto a second line when the scope choice needs the first. */
+.happy-file-browser__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
 }
 
 .happy-file-browser__layouts {
@@ -99,7 +112,7 @@
    if a very narrow panel cannot state the whole selection or diff total. */
 .happy-file-browser__summary {
     display: flex;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     flex-wrap: wrap;
     align-items: baseline;
     justify-content: flex-end;

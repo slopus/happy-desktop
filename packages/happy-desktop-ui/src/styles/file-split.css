@@ -1,0 +1,58 @@
+/*
+ * C-351 FileSplit — a file listing and its preview side by side in one lane.
+ *
+ * Two flex columns meeting on the shell's own resize hairline. The listing
+ * holds a fixed width; the preview takes the rest. Stacked (too narrow for
+ * both), the column not being shown leaves the flow but stays mounted.
+ */
+
+.happy-file-split {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: row;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+.happy-file-split__list {
+    /* Positioning context for the resize handle on its trailing edge. */
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-file-split__preview {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-file-split[data-showing="list"] > .happy-file-split__list,
+.happy-file-split[data-showing="preview"] > .happy-file-split__preview {
+    flex: 1 1 0%;
+}
+
+.happy-file-split[data-showing="list"] > .happy-file-split__preview,
+.happy-file-split[data-showing="preview"] > .happy-file-split__list {
+    display: none;
+}
+
+/* The way back from a stacked preview: the listing's own 32px control row
+   height, so swapping one for the other keeps the content below on one line. */
+.happy-file-split__back {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 32px;
+    padding-inline: 4px;
+}

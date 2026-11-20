@@ -6,12 +6,15 @@ import {
     type ReactNode,
 } from "react";
 import { Button } from "./Button";
+import { FileOpenInTabButton } from "./FileOpenInTab";
+import { MenuButton } from "./MenuButton";
 import { ChangeStats } from "./ChangeStats";
 import { CodeEditor, type CodeEditorReveal } from "./CodeEditor";
 import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
 import { useFileRevealMenu } from "./FileRevealMenu";
 import { SegmentedControl } from "./SegmentedControl";
+import { Tooltip } from "./Tooltip";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 export type FileEditorProps = {
     className?: string;
@@ -31,6 +34,8 @@ export type FileEditorProps = {
     onValueChange?: (value: string) => void;
     onSave?: () => void;
     onRevert?: () => void;
+    /** Moves the file into a tab of the main content. Absent hides the control. */
+    onOpenInTab?: () => void;
     onClose?: () => void;
     /** Saves the file to the reader's machine. Absent hides the control. */
     onDownload?: () => void;
@@ -101,6 +106,7 @@ export function FileEditor(props: FileEditorProps) {
         "onValueChange",
         "onSave",
         "onRevert",
+        "onOpenInTab",
         "onClose",
         "onDownload",
         "dirty",
@@ -168,7 +174,12 @@ export function FileEditor(props: FileEditorProps) {
                         >
                             <FileTreeFamilyIcon family={family} size={16} />
                         </span>
-                        <FilePathLabel className="happy-file-editor__heading" path={local.path} />
+                        <Tooltip align="start" label={local.path} placement="bottom">
+                            <FilePathLabel
+                                className="happy-file-editor__heading"
+                                path={local.path}
+                            />
+                        </Tooltip>
                     </>
                 )}
                 <span
@@ -206,6 +217,7 @@ export function FileEditor(props: FileEditorProps) {
                     {local.onWrapChange !== undefined && !reading ? (
                         <SegmentedControl
                             aria-label="Whether long lines wrap"
+                            className="happy-file-editor__roomy"
                             data-testid="file-editor-wrap"
                             onChange={(value) => local.onWrapChange?.(value === "wrap")}
                             segments={[
@@ -240,6 +252,7 @@ export function FileEditor(props: FileEditorProps) {
                     {local.onDownload ? (
                         <Button
                             aria-label="Download"
+                            className="happy-file-editor__roomy"
                             data-testid="file-editor-download"
                             iconOnly
                             onClick={() => local.onDownload?.()}
@@ -250,15 +263,55 @@ export function FileEditor(props: FileEditorProps) {
                             <Ionicon name="download-outline" size={14} />
                         </Button>
                     ) : null}
-                    {local.onClose ? (
-                        <Button
-                            aria-label={local.closeLabel ?? "Close file"}
-                            icon="close"
-                            iconOnly
-                            onClick={() => local.onClose?.()}
+                    {/* Where the header is too narrow for the name and every
+                        control, the wrap toggle and the download leave the row
+                        for this menu, so the file name keeps its room. Both
+                        are drawn and the header's width picks one, in CSS. */}
+                    {(local.onWrapChange !== undefined && !reading) || local.onDownload ? (
+                        <MenuButton
+                            align="end"
+                            className="happy-file-editor__compact"
+                            data-testid="file-editor-more"
+                            icon="more"
+                            items={[
+                                ...(local.onWrapChange !== undefined && !reading
+                                    ? [
+                                          {
+                                              kind: "item" as const,
+                                              id: "wrap",
+                                              label: "Wrap long lines",
+                                              checked: local.wrap === true,
+                                          },
+                                      ]
+                                    : []),
+                                ...(local.onDownload
+                                    ? [{ kind: "item" as const, id: "download", label: "Download" }]
+                                    : []),
+                            ]}
+                            label="More"
+                            onSelect={(id) => {
+                                if (id === "wrap") local.onWrapChange?.(local.wrap !== true);
+                                else if (id === "download") local.onDownload?.();
+                            }}
+                            overlay
                             size="small"
                             variant="ghost"
                         />
+                    ) : null}
+                    {local.onOpenInTab ? (
+                        <FileOpenInTabButton onClick={() => local.onOpenInTab?.()} />
+                    ) : null}
+                    {local.onClose ? (
+                        <Tooltip label={local.closeLabel ?? "Close file"} placement="bottom">
+                            <Button
+                                aria-label={local.closeLabel ?? "Close file"}
+                                icon="close"
+                                iconOnly
+                                onClick={() => local.onClose?.()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </Tooltip>
                     ) : null}
                 </span>
             </header>

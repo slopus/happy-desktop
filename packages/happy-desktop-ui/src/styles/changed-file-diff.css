@@ -29,6 +29,22 @@
     box-shadow: inset 0 -1px var(--divider);
 }
 
+/* The file's name above the modes, the way the file editor's header says it:
+   the name holds, its directories give way from their start, and the move to
+   a tab ends the row. */
+.happy-changed-file-diff__title {
+    box-sizing: border-box;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    height: var(--happy-subheader-height);
+    padding: 0 8px 0 16px;
+    background: var(--surface);
+    box-shadow: inset 0 -1px var(--divider);
+}
+
 .happy-changed-file-diff__bar-end {
     display: flex;
     align-items: center;

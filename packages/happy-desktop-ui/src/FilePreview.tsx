@@ -3,6 +3,7 @@ import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { MessageReferences } from "./messageReferences";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
+import { FileOpenInTabButton } from "./FileOpenInTab";
 import { CodeBlock } from "./CodeBlock";
 import { FileTreeFamilyIcon, fileTreeFamily, type FileTreeNode } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
@@ -12,6 +13,7 @@ import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
 import { ScrollArea } from "./Scrollbar";
 import { SegmentedControl } from "./SegmentedControl";
+import { Tooltip } from "./Tooltip";
 import { Spinner } from "./Spinner";
 import { VideoViewer } from "./VideoViewer";
 import { Ionicon } from "./vectorIcons/VectorIcon";
@@ -115,6 +117,8 @@ export type FilePreviewProps = {
      * that refuses to take any.
      */
     editor?: ReactNode;
+    /** Moves the file into a tab of the main content. Absent hides the control. */
+    onOpenInTab?: () => void;
     onClose?: () => void;
     closeLabel?: string;
 };
@@ -264,6 +268,7 @@ export function FilePreview(props: FilePreviewProps) {
         "onMediaWindowOpen",
         "rendered",
         "editor",
+        "onOpenInTab",
         "onClose",
         "closeLabel",
     ]);
@@ -354,7 +359,9 @@ export function FilePreview(props: FilePreviewProps) {
                                 <FileTreeFamilyIcon family={family} size={16} />
                             )}
                         </span>
-                        <FilePathLabel className="happy-file-preview__path" path={local.path} />
+                        <Tooltip align="start" label={local.path} placement="bottom">
+                            <FilePathLabel className="happy-file-preview__path" path={local.path} />
+                        </Tooltip>
                     </>
                 )}
                 {meta ? (
@@ -415,15 +422,20 @@ export function FilePreview(props: FilePreviewProps) {
                     <span aria-live="polite" className="happy-visually-hidden">
                         {downloadStatus === undefined ? "" : downloadLabel}
                     </span>
+                    {local.onOpenInTab ? (
+                        <FileOpenInTabButton onClick={() => local.onOpenInTab?.()} />
+                    ) : null}
                     {local.onClose ? (
-                        <Button
-                            aria-label={local.closeLabel ?? "Close preview"}
-                            icon="close"
-                            iconOnly
-                            onClick={() => local.onClose?.()}
-                            size="small"
-                            variant="ghost"
-                        />
+                        <Tooltip label={local.closeLabel ?? "Close preview"} placement="bottom">
+                            <Button
+                                aria-label={local.closeLabel ?? "Close preview"}
+                                icon="close"
+                                iconOnly
+                                onClick={() => local.onClose?.()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </Tooltip>
                     ) : null}
                 </span>
             </header>
