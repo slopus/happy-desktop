@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 
+import { gymElectronAccessoryExecutable } from "./accessoryBundle.js";
+
 /**
  * The one way a Gym, a test, or an agent's recording script starts the desktop
  * app. The app runs in hidden-window mode (happy-desktop-electron
@@ -48,6 +50,12 @@ export interface GymElectronInvisibility {
  */
 const GYM_AUTOMATION_SWITCH = "--enable-automation";
 /**
+ * Keeps the run off the person's keychain. A run's own home has no keychain,
+ * so the first encrypted read had macOS put up its keychain dialog in front of
+ * the person; Chromium's mock keychain answers in-process instead.
+ */
+const GYM_KEYCHAIN_SWITCH = "--use-mock-keychain";
+/**
  * And turns the app's analytics off outright, from its first event, in builds
  * that know `DO_NOT_TRACK`.
  */
@@ -63,9 +71,9 @@ export async function gymElectronLaunch(
     if ("recordVideo" in options)
         throw new Error("Use gymElectronVideoRecord instead of Playwright recordVideo.");
     const app = await electron.launch({
-        args: [...options.args, GYM_AUTOMATION_SWITCH],
+        args: [...options.args, GYM_AUTOMATION_SWITCH, GYM_KEYCHAIN_SWITCH],
         env: { ...options.env, ...GYM_ENVIRONMENT },
-        executablePath: options.executablePath,
+        executablePath: await gymElectronAccessoryExecutable(options.executablePath),
         timeout: options.timeout ?? 60_000,
         ...(options.cwd ? { cwd: options.cwd } : {}),
     });
@@ -250,7 +258,8 @@ export async function gymElectronProcessRun(
 ): Promise<GymElectronProcessResult> {
     if (!options.args.some((argument) => argument.startsWith("--user-data-dir=")))
         throw new Error("gymElectronProcessRun requires an owned --user-data-dir.");
-    const child = spawn(options.executablePath, [...options.args, GYM_AUTOMATION_SWITCH], {
+    const executable = await gymElectronAccessoryExecutable(options.executablePath);
+    const child = spawn(executable, [...options.args, GYM_AUTOMATION_SWITCH, GYM_KEYCHAIN_SWITCH], {
         env: { ...options.env, ...GYM_ENVIRONMENT },
         stdio: ["ignore", "pipe", "pipe"],
         ...(options.cwd ? { cwd: options.cwd } : {}),

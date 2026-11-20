@@ -24,6 +24,18 @@ renders, lays out, composites, takes input, and produces screenshots and video.
   `gymElectronProcessRun`, with the same hidden mode and owned user data, and
   reads the report the app writes for `HAPPY_DESKTOP_SMOKE_REPORT`
   (`happy-desktop-electron` `sources/main/desktopSmokeReport.ts`).
+- On macOS both launchers run a gym-owned copy of the Electron bundle marked
+  `LSUIElement` (`sources/electron/accessoryBundle.ts`: an APFS clone in the
+  temp directory, signed again ad hoc like the stock bundle). AppKit checks the
+  process in with LaunchServices before any app code runs, as its Info.plist
+  says. The stock Electron.app says nothing, so the Dock drew its tile for
+  about 0.7 s on every launch, and the running app's `app.dock.isVisible()`
+  briefly read true whenever another app came to the front. A bundle with a
+  real signature (a packaged build) is launched as is.
+- Both launchers also pass `--use-mock-keychain`. A run's own home has no
+  keychain, so the app's first encrypted read had macOS put up its keychain
+  dialog (SecurityAgent) in front of the person; Chromium's mock keychain
+  answers in-process instead.
 - Record video with `gymElectronVideoRecord(page, { path, scale })`: it writes
   the hidden window's own compositor frames (CDP screencast) to WebM. Never
   pass Playwright `recordVideo`.
