@@ -3,6 +3,7 @@ import type {
     HappyAgentSync,
     HappyAgentSyncInput,
 } from "../happyAgentConnection/happyAgentSync.js";
+import { HappyCloudRequestRefusal } from "../happyAgent/happyAgentProviderCredentials.js";
 import { pipelineNodeLogStoreCreate, type PipelineNodeLogStore } from "./pipelineNodeLogStore.js";
 import { pipelineRunStoreCreate, type PipelineRunStore } from "./pipelineRunStore.js";
 import type { PipelineRunState } from "./pipelineTypes.js";
@@ -165,6 +166,32 @@ describe("pipeline run cache lifetime", () => {
         live.reconnect();
         await settle();
         expect(fake.runReads()).toBe(reads);
+    });
+
+    it("stops following a preloaded run the server says is not there", async () => {
+        const live = connection();
+        const request = vi.fn(
+            (): Promise<unknown> =>
+                Promise.reject(
+                    new HappyCloudRequestRefusal("Run not found", "not_found", 404, {
+                        error: "Run not found",
+                    }),
+                ),
+        );
+        const store = pipelineRunStoreCreate({ runId: "gone", request, sync: live.sync });
+        disposables.push(store);
+        await store.preload();
+        expect(store.get()).toMatchObject({ loading: false, missing: true, run: null });
+        const reads = request.mock.calls.length;
+
+        // Other pipelines keep running while nobody looks at this one.
+        for (let index = 0; index < 3; index += 1) {
+            live.event("pipeline.run.updated");
+            await settle();
+        }
+        live.reconnect();
+        await settle();
+        expect(request.mock.calls.length).toBe(reads);
     });
 });
 
