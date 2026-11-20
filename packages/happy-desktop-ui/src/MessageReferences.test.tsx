@@ -410,11 +410,28 @@ it("shimmers a busy reference inline without moving its words", async () => {
     expect(busyRects.length).toBe(idleRects.length);
     const idleOrigin = link("idle").closest("[data-testid]")!.getBoundingClientRect();
     const busyOrigin = link("busy").closest("[data-testid]")!.getBoundingClientRect();
+    /*
+     * Chromium lays text out in 1/64px units and rounds the advance of each
+     * text run on its own. The busy link's words are inlines of their own and
+     * the spaces between them separate runs, so its line can end up to one
+     * unit per run away from the idle line, which is one run, even with
+     * kerning and ligatures off (Firefox, which keeps the fractions, measures
+     * both exactly equal). That is the most a word may drift; anything more is
+     * the shimmer moving it.
+     */
+    const words = [...link("busy").querySelectorAll(".happy-shimmer-text__word")];
     for (const [index, idle] of idleRects.entries()) {
         const busy = busyRects[index]!;
-        expect(busy.left - busyOrigin.left).toBeCloseTo(idle.left - idleOrigin.left, 1);
+        const onLine = words.filter((word) =>
+            [...word.getClientRects()].some((rect) => Math.abs(rect.top - busy.top) < 1),
+        ).length;
+        // Each word, and the space after it, is a run.
+        const drift = (onLine * 2) / 64;
+        expect(Math.abs(busy.left - busyOrigin.left - (idle.left - idleOrigin.left))).toBeLessThan(
+            drift,
+        );
         expect(busy.top - busyOrigin.top).toBeCloseTo(idle.top - idleOrigin.top, 1);
-        expect(busy.width).toBeCloseTo(idle.width, 1);
+        expect(Math.abs(busy.width - idle.width)).toBeLessThan(drift);
     }
 });
 
