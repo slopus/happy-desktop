@@ -45,16 +45,23 @@
 
 .happy-usage-activity__months {
     position: relative;
+    display: flex;
     height: 16px;
 }
 
 .happy-usage-activity__months span {
     position: absolute;
     top: 0;
+    flex: none;
     color: var(--text-secondary);
     font-size: 11px;
     line-height: 16px;
     white-space: nowrap;
+}
+
+/* The newest label sizes the row: see the grid. */
+.happy-usage-activity__months span[data-last] {
+    position: static;
 }
 
 .happy-usage-activity__cells {
