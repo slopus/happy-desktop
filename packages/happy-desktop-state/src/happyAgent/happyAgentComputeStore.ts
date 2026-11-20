@@ -714,6 +714,11 @@ export function happyAgentComputeStoreCreate(deps: {
                 followStop();
                 if (timer !== undefined) clearTimeout(timer);
                 timer = undefined;
+                // What the last action came to is told to whoever was there; it
+                // is not kept for a later visit.
+                const { actionNotice, actionError, ...rest } = store.getState();
+                if (actionNotice !== undefined || actionError !== undefined)
+                    store.setState(rest, true);
             };
         },
         machineAddOpen() {
