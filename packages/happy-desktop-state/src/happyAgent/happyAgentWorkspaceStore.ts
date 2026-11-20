@@ -69,6 +69,11 @@ import {
     type HappyAgentViewPreferencesDocument,
     type HappyAgentViewPreferencesPersistence,
 } from "./happyAgentViewPreferences.js";
+import {
+    happyAgentScrollMemoryDocument,
+    happyAgentScrollMemoryParse,
+    type HappyAgentScrollMemoryPersistence,
+} from "./happyAgentScrollMemory.js";
 import type { HappyAgentHost } from "./happyAgentHost.js";
 import type {
     HappyAgentChatSnapshot,
@@ -1479,6 +1484,12 @@ export interface HappyAgentWorkspaceDeps {
      */
     readonly viewPreferences?: HappyAgentViewPreferencesPersistence;
     /**
+     * Where this window keeps the place the reader left each conversation they
+     * had scrolled up in, so a restart reopens it there. Omitted, the places
+     * last as long as the window, which is what Blueprint and tests want.
+     */
+    readonly scrollMemory?: HappyAgentScrollMemoryPersistence;
+    /**
      * How many of the conversations just left are kept for the window to keep
      * their views, and how much those views may hold; see
      * `happyAgentConversationRetentionFor`. Omitted keeps none.
@@ -2772,9 +2783,19 @@ export function happyAgentWorkspaceStoreCreate(
      * Where each conversation was last being read, by conversation id. Switching
      * sessions disposes the transcript that held the position, so it is kept
      * here — outside any component's lifetime — and handed back when that
-     * conversation is opened again.
+     * conversation is opened again. The places above the bottom outlive the
+     * window too: they are read back from the host's storage here, and written
+     * to it as they change.
      */
-    let scrollPositions: ReadonlyMap<HappyAgentSessionId, HappyAgentScrollPosition> = new Map();
+    let scrollPositions: ReadonlyMap<HappyAgentSessionId, HappyAgentScrollPosition> = (() => {
+        try {
+            return happyAgentScrollMemoryParse(deps.scrollMemory?.read());
+        } catch {
+            // Storage the host refused is a window that remembers no places,
+            // which is the same as one that has never been scrolled.
+            return new Map();
+        }
+    })();
     let fileTabs: readonly HappyAgentFileTabSnapshot[] = [];
     let activeMainViewId: string | undefined;
     /** The selected view whose complete pixels are currently on screen. */
@@ -9506,8 +9527,19 @@ export function happyAgentWorkspaceStoreCreate(
             // The transcript reports the same place again on every streamed
             // frame; keeping the stored one leaves the conversation snapshot
             // equal, so the next chat notification republishes nothing.
-            if (!scrollPositionEqual(scrollPositions.get(conversationId), position))
-                scrollPositions = new Map(scrollPositions).set(conversationId, position);
+            if (!scrollPositionEqual(scrollPositions.get(conversationId), position)) {
+                // Moved to the end, so the place left most recently is the
+                // last one storage forgets.
+                const next = new Map(scrollPositions);
+                next.delete(conversationId);
+                scrollPositions = next.set(conversationId, position);
+                try {
+                    deps.scrollMemory?.write(happyAgentScrollMemoryDocument(scrollPositions));
+                } catch {
+                    // A storage-denied window keeps the place for as long as
+                    // it stays open.
+                }
+            }
             if (conversationId === openId) chatStore?.historyFollowingSet(position.type !== "row");
         },
         [Symbol.dispose]() {
