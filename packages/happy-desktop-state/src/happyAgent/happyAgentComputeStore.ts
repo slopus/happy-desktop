@@ -495,6 +495,11 @@ export function happyAgentComputeStoreCreate(deps: {
     let reading = false;
     /** A hint arrived during a read, which may have been answered before it. */
     let readAgain = false;
+    /**
+     * Changes Happy Cloud has confirmed. A read sent before the latest one may
+     * have been answered before it, so it is not applied and is sent again.
+     */
+    let writes = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let follow: AbortController | undefined;
     /** The reader's own user ID, which never changes for this store. */
@@ -548,6 +553,7 @@ export function happyAgentComputeStoreCreate(deps: {
     const reader = (): Reader => ({ userId, access: store.getState().access, names });
 
     const read = async (): Promise<void> => {
+        const sent = writes;
         const [permissions, profile] = await Promise.all([
             deps.request("GET", "v0/permissions"),
             userId === undefined ? deps.request("GET", "v0/profile") : undefined,
@@ -564,6 +570,10 @@ export function happyAgentComputeStoreCreate(deps: {
                   ]);
         if (access === "manage") await namesRead(computers);
         if (disposed) return;
+        if (sent !== writes) {
+            readAgain = true;
+            return;
+        }
         const current = store.getState();
         const { error: _cleared, machineDetail, machineDeletion, ...rest } = current;
         const machines = listRead(computers, "computers", (computer) =>
@@ -674,6 +684,7 @@ export function happyAgentComputeStoreCreate(deps: {
         void request().then(
             () => {
                 if (disposed) return;
+                writes += 1;
                 set(settle(store.getState()));
                 load();
             },
@@ -881,6 +892,7 @@ export function happyAgentComputeStoreCreate(deps: {
                 .then(
                     (answer) => {
                         if (disposed || store.getState().machineDetail !== saving) return;
+                        writes += 1;
                         const saved = computerRead(recordOf(answer)?.computer, reader());
                         if (saved) {
                             const current = store.getState();
@@ -949,6 +961,7 @@ export function happyAgentComputeStoreCreate(deps: {
             set({ machineDeletion: deleting, actionNotice: undefined, actionError: undefined });
             /** Takes the machine, and every dialog about it, out of the snapshot. */
             const forget = (notice: string | undefined): void => {
+                writes += 1;
                 const { machineDeletion: _deleted, machineDetail, ...rest } = store.getState();
                 store.setState(
                     {
