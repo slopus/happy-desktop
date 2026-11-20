@@ -385,7 +385,6 @@ import { APP_SHORTCUTS } from "./appShortcuts";
 import { happyAgentConversationContent } from "happy-desktop-state";
 import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
 import {
-    commandPaletteHeld,
     commandPaletteIndexMove,
     commandPaletteResults,
     commandPaletteRowAt,
@@ -5787,7 +5786,6 @@ function HappyAgentCommandPalette(
         ...(search.status === "ready" && search.query === palette.query.trim()
             ? { remote: search.hits }
             : {}),
-        ...(palette.held === undefined ? {} : { held: palette.held }),
         ...(surfaceCatalog.availability === "available"
             ? {
                   surfaces: {
@@ -5873,7 +5871,7 @@ function HappyAgentCommandPalette(
                 }}
                 onSelectionMove={(direction) => {
                     const index = commandPaletteIndexMove(palette.activeIndex, direction, length);
-                    props.store.activeIndexUpdate(index, commandPaletteHeld(results, index));
+                    props.store.activeIndexUpdate(index);
                     highlightIntent();
                 }}
                 placeholder="Search work, documents, todos, and artifacts…"
@@ -5886,7 +5884,7 @@ function HappyAgentCommandPalette(
                         : { emptyLabel: "Nothing recent yet" })}
                     label="Search results"
                     onActiveIndexChange={(index) => {
-                        props.store.activeIndexUpdate(index, commandPaletteHeld(results, index));
+                        props.store.activeIndexUpdate(index);
                         highlightIntent();
                     }}
                     onSelect={(_id, index) => rowCommit(index)}
@@ -5918,6 +5916,7 @@ function paletteResultsRow(
         kind: "command",
         title: row.title,
         ...(row.meta === undefined ? {} : { meta: row.meta }),
+        ...(row.metaOverflow === undefined ? {} : { metaOverflow: row.metaOverflow }),
         // The lane the computed row already decided: a glyph, the thing's own
         // picture, or the product's mark for what kind of news this row is.
         ...(row.glyph.kind === "icon"
