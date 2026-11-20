@@ -1430,7 +1430,7 @@
        `--happy-label-fade` rather than ellipsizing. The box runs to
        where the name must stop, so a name that fits never reaches the fade.
        A shimmering name fades with it: the mask is on the label it sits in. */
-    mask-image: linear-gradient(to left, transparent, #000 var(--happy-label-fade));
+    mask-image: linear-gradient(to left, transparent, black var(--happy-label-fade));
     transform: translateY(var(--happy-sidebar-label-optical-y, 0px));
 }
 
