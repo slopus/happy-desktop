@@ -175,6 +175,15 @@ function onboardingCreate() {
         agentSetupBegin: () => undefined,
         chiefOfStaffSetup: () => undefined,
         assistantsContinue: () => undefined,
+        claudeSetupTokenReset: vi.fn(() =>
+            publish({ ...snapshot, claudeToken: { phase: "idle" } }),
+        ),
+        claudeSetupTokenSave: vi.fn((_token: string) => {
+            publish({ ...snapshot, claudeToken: { phase: "saving" } });
+            return "started" as const;
+        }),
+        claudeSetupTokenCommandCopy: vi.fn(),
+        claudeSetupTokenPaste: vi.fn(),
         stepBack: () => undefined,
         happyMobileConnect: () => undefined,
         happyMobileSkip: () => undefined,
@@ -198,6 +207,130 @@ beforeEach(() => {
 afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+});
+
+it("reports setup-token actions and each save outcome once, with only catalog properties", () => {
+    vi.stubGlobal("navigator", { platform: "Win32" });
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate([{ id: "local", version: "1.4.0" }]),
+        client,
+    });
+    const { store, welcome, publish } = onboardingCreate();
+    const observed = analytics.onboardingObserve(store, welcome);
+    const stop = observed.subscribe(() => undefined);
+    // A second subscriber and repeated snapshots must not duplicate outcomes.
+    const stopSecond = observed.subscribe(() => undefined);
+    const repeat = () => publish({ ...store.get() });
+    const events = () =>
+        client.captured.filter((sent) => sent.event.startsWith("claude_setup_token_"));
+
+    observed.claudeSetupTokenReset();
+    repeat();
+    observed.claudeSetupTokenCommandCopy();
+    observed.claudeSetupTokenPaste();
+    observed.claudeSetupTokenSave(PRIVATE_TEXT);
+    repeat();
+    publish({ ...store.get(), claudeToken: { phase: "saved" } });
+    repeat();
+    observed.claudeSetupTokenReset();
+    for (const errorKind of ["agent_unsupported", "refused", "unreachable"] as const) {
+        observed.claudeSetupTokenSave(PRIVATE_TEXT);
+        publish({
+            ...store.get(),
+            claudeToken: { phase: "failed", error: PRIVATE_TEXT, errorKind },
+        });
+        repeat();
+    }
+
+    expect(events().map(({ event }) => event)).toEqual([
+        "claude_setup_token_opened",
+        "claude_setup_token_command_copied",
+        "claude_setup_token_pasted",
+        "claude_setup_token_saved",
+        "claude_setup_token_opened",
+        "claude_setup_token_failed",
+        "claude_setup_token_failed",
+        "claude_setup_token_failed",
+    ]);
+    expect(
+        events()
+            .filter(({ event }) => event.endsWith("_failed"))
+            .map(({ properties }) => properties.error_kind),
+    ).toEqual(["agent_unsupported", "refused", "unreachable"]);
+    expect(store.claudeSetupTokenReset).toHaveBeenCalledTimes(2);
+    expect(store.claudeSetupTokenCommandCopy).toHaveBeenCalledOnce();
+    expect(store.claudeSetupTokenPaste).toHaveBeenCalledOnce();
+    expect(store.claudeSetupTokenSave).toHaveBeenCalledTimes(4);
+    for (const sent of events()) {
+        expect(sent.properties).toMatchObject({
+            os: "win",
+            app_version: "0.0.0",
+            happy_agent_version: "1.4.0",
+        });
+        expect(envelopeOf(sent.event, sent.properties)?.properties).toMatchObject(sent.properties);
+        expect(JSON.stringify(sent)).not.toContain(PRIVATE_TEXT);
+        expect(sent.properties).not.toHaveProperty("looks_valid");
+    }
+    expect(events()[0]?.properties.source).toBe("onboarding");
+
+    analytics.preference.usageAnalyticsUpdate(false);
+    const count = events().length;
+    observed.claudeSetupTokenReset();
+    observed.claudeSetupTokenCommandCopy();
+    observed.claudeSetupTokenPaste();
+    observed.claudeSetupTokenSave(PRIVATE_TEXT);
+    publish({ ...store.get(), claudeToken: { phase: "saved" } });
+    expect(events()).toHaveLength(count);
+    stopSecond();
+    stop();
+    analytics.dispose();
+});
+
+it("does not count a setup-token result remembered before observation starts", () => {
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate(),
+        client,
+    });
+    const { store, welcome, publish } = onboardingCreate();
+    publish({ ...store.get(), claudeToken: { phase: "saved" } });
+    const stop = analytics.onboardingObserve(store, welcome).subscribe(() => undefined);
+    expect(client.captured.filter(({ event }) => event.startsWith("claude_setup_token_"))).toEqual(
+        [],
+    );
+    stop();
+    analytics.dispose();
+});
+
+it("reports an unavailable Agent on save and ignores an already-running save", () => {
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate(),
+        client,
+    });
+    const { store, welcome } = onboardingCreate();
+    const observed = analytics.onboardingObserve(store, welcome);
+    const before = store.get();
+    vi.mocked(store.claudeSetupTokenSave).mockReturnValueOnce("unavailable");
+    expect(observed.claudeSetupTokenSave(PRIVATE_TEXT)).toBe("unavailable");
+    expect(store.get()).toBe(before);
+    expect(client.captured).toMatchObject([
+        { event: "claude_setup_token_failed", properties: { error_kind: "agent_unavailable" } },
+    ]);
+    vi.mocked(store.claudeSetupTokenSave).mockReturnValueOnce("busy");
+    expect(observed.claudeSetupTokenSave(PRIVATE_TEXT)).toBe("busy");
+    expect(client.captured).toHaveLength(1);
+    expect(JSON.stringify(client.captured)).not.toContain(PRIVATE_TEXT);
+
+    analytics.preference.usageAnalyticsUpdate(false);
+    vi.mocked(store.claudeSetupTokenSave).mockReturnValueOnce("unavailable");
+    observed.claudeSetupTokenSave(PRIVATE_TEXT);
+    expect(client.captured).toHaveLength(1);
+    analytics.dispose();
 });
 
 it("names each Setup failure by the step that failed, never by its message", () => {
