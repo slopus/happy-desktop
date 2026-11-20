@@ -1481,6 +1481,12 @@ const ROW_MENU_ARCHIVE = "archive";
 /** Edits the existing sidebar label without changing the row's layout. */
 const ROW_MENU_RENAME = "rename";
 const ROW_MENU_SETTINGS = "settings";
+/**
+ * Starts another session in the row's project or worktree. The tab strip's
+ * "+" does the same, but a workspace of one chat leaves its strip out, and
+ * with it the only other place a pointer could ask for one.
+ */
+const ROW_MENU_SESSION_CREATE = "session-create";
 /** Takes a task off the reader's own list; it carries on for everyone else. */
 const ROW_MENU_LEAVE = "leave";
 /** Mutes or unmutes a bot: its unread stops counting anywhere but its own row. */
@@ -1609,7 +1615,7 @@ function botAttentionMenuItems(attention: HappyAgentBotAttention): MenuItem[] {
  * rather than a repository the reader adopted, so hiding it would only bring it
  * straight back the next time a session starts there.
  */
-function rowMenuItems(
+export function rowMenuItems(
     projects: readonly HappyAgentProjectGroup[],
     bots: readonly HappyAgentBot[],
     tasks: readonly HappyAgentTask[],
@@ -1688,8 +1694,20 @@ function rowMenuItems(
     }
     const owner = rowOwnerFind(projects, item.id);
     if (!owner) return [];
+    // Disabled wherever the strip's "+" is: a checkout still being prepared
+    // takes no second session, and one that failed, is going, or lost its
+    // folder takes none.
+    const sessionCreate: MenuItem = {
+        kind: "item",
+        id: ROW_MENU_SESSION_CREATE,
+        label: "New session",
+        icon: "plus",
+        ...(rowSessionCreateRefused(owner) ? { disabled: true } : {}),
+    };
     if (owner.worktreeId)
         return [
+            sessionCreate,
+            { kind: "separator" },
             { kind: "item", id: ROW_MENU_RENAME, label: "Rename workspace", icon: "edit" },
             { kind: "separator" },
             {
@@ -1702,8 +1720,10 @@ function rowMenuItems(
         ];
     // The home project's name is the machine's, not the reader's to set, so it
     // offers neither renaming nor archiving.
-    if (owner.project.kind === "home") return [];
+    if (owner.project.kind === "home") return [sessionCreate];
     return [
+        sessionCreate,
+        { kind: "separator" },
         { kind: "item", id: ROW_MENU_RENAME, label: "Rename project", icon: "edit" },
         { kind: "item", id: ROW_MENU_SETTINGS, label: "Project settings…", icon: "settings" },
         { kind: "separator" },
@@ -1865,6 +1885,19 @@ function rowOwnerFind(
             if (worktree.id === id) return { project, worktreeId: worktree.id };
     }
     return undefined;
+}
+
+/**
+ * Whether the row's checkout refuses a new session. Its write refusal covers
+ * what `sessionCreateAvailable` withholds "+" for: a checkout being prepared,
+ * as well as one that failed, is being removed, or lost its folder.
+ */
+function rowSessionCreateRefused(owner: NonNullable<ReturnType<typeof rowOwnerFind>>): boolean {
+    const group =
+        owner.worktreeId === undefined
+            ? owner.project
+            : owner.project.worktrees.find((worktree) => worktree.id === owner.worktreeId);
+    return group?.writeRefusal !== undefined;
 }
 
 /** A group with no conversation has no transcript; the constant keeps the prop stable. */
@@ -4542,6 +4575,22 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const owner = rowOwnerFind(happyAgent.projects, row.id);
                 if (!owner) return;
+                if (actionId === ROW_MENU_SESSION_CREATE) {
+                    // Checked again on the click, as "+" checks it: the
+                    // checkout or the connection may have changed since the
+                    // menu opened.
+                    if (
+                        rowSessionCreateRefused(owner) ||
+                        !happyAgentEntryAvailability(happyAgent)?.online
+                    )
+                        return;
+                    const group = openGroupFind(happyAgent.projects, [], [], [], row.id);
+                    if (group?.create)
+                        void workspace
+                            .conversationCreate(group.id, group.create, "workspace")
+                            .catch(() => undefined);
+                    return;
+                }
                 if (actionId === ROW_MENU_SETTINGS) {
                     workspace.renameOpen(owner.project.id, undefined);
                     return;
