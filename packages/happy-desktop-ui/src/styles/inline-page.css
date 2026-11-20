@@ -134,6 +134,36 @@ button.happy-inline-page__opener:focus-visible {
     border: 0;
 }
 
+/* A page as tall as the cap may go on below it. Its foot says so over the
+   page's last lines, fading the page into the chat's surface, so the row keeps
+   the height it reserved and nothing under it moves. */
+.happy-inline-page__cut {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    height: 96px;
+    padding-bottom: 8px;
+    box-sizing: border-box;
+    background-image: linear-gradient(to bottom, transparent, var(--surface) 64px);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 28px;
+}
+
+.happy-inline-page__cut-text {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.happy-inline-page__cut > .happy-button {
+    flex: none;
+}
+
 .happy-inline-page__failure {
     color: var(--text-secondary);
     font-size: 13px;
