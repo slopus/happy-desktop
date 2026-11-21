@@ -270,6 +270,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
               }),
         modelId: mode.modelId,
         providerId: mode.providerId,
+        ...(input.mode == null ? {} : { storedModelId: input.mode.modelId }),
         selectionKnown:
             input.intendedMode !== undefined ||
             input.draft?.value != null ||

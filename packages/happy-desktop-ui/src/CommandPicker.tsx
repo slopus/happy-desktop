@@ -131,17 +131,22 @@ const COMMAND_META: Record<string, CommandMeta> = {
     btw: { description: "Ask a side question without adding to the chat", icon: "question" },
 };
 
-/** Presents the composer's supported commands as picker rows, in the order given. */
+/**
+ * Presents the composer's supported commands as picker rows, in the order
+ * given, leaving out those the menu does not offer.
+ */
 export function commandPickerItems(
     commands: readonly ComposerCommand[],
 ): readonly CommandPickerItem[] {
-    return commands.map((command) => {
-        const meta = COMMAND_META[command.id];
-        return {
-            id: command.id,
-            slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
-            description: command.description ?? meta?.description ?? "",
-            icon: meta?.icon ?? "spark",
-        };
-    });
+    return commands
+        .filter((command) => command.unlisted !== true)
+        .map((command) => {
+            const meta = COMMAND_META[command.id];
+            return {
+                id: command.id,
+                slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
+                description: command.description ?? meta?.description ?? "",
+                icon: meta?.icon ?? "spark",
+            };
+        });
 }

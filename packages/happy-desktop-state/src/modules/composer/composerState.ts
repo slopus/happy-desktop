@@ -15,6 +15,12 @@ export interface ComposerCommand {
      * for the text, as picking a skill does, instead of running it bare.
      */
     readonly argumentsRequired?: boolean;
+    /**
+     * Whether the menu leaves the command out. It still runs when a submitted
+     * draft names it, as `/btw` does in a chat whose model gives no side
+     * questions, so it is never sent as a message.
+     */
+    readonly unlisted?: boolean;
     /** Presentation category supplied by the command owner, such as `skill`. */
     readonly kind?: string;
 }
@@ -328,7 +334,9 @@ function commandQueryOf(text: string, commands: readonly ComposerCommand[]): str
     if (!match) return undefined;
     const query = match[1]!;
     const needle = query.toLowerCase();
-    return commands.some((command) => commandMatches(command, needle)) ? query : undefined;
+    return commands.some((command) => command.unlisted !== true && commandMatches(command, needle))
+        ? query
+        : undefined;
 }
 
 /** Whether one offered command answers a typed query, by id or by label. */
@@ -375,6 +383,7 @@ function commandsEqual(
                 command.description === candidate.description &&
                 command.hasArguments === candidate.hasArguments &&
                 command.argumentsRequired === candidate.argumentsRequired &&
+                command.unlisted === candidate.unlisted &&
                 command.kind === candidate.kind
             );
         })

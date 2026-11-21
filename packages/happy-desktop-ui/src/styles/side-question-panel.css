@@ -4,13 +4,14 @@
  * it shows sits 20px from each edge of the frame: the title's ink and the left
  * of the thread, the close glyph's ink on the right and at the top, and the
  * follow-up field and its button at the bottom. The thread scrolls, full-bleed,
- * between the header and the field.
+ * between the header and the field, 12px from each: 8px here and the 4px the
+ * thread keeps inside itself for a focus ring.
  */
 .happy-side-question {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     min-height: 0;
     overflow: hidden;
     background: var(--surface);
@@ -97,13 +98,15 @@
 }
 
 /* The scrollbar's lane is part of the right inset, so the thread's right edge
-   keeps the header's 20px from the frame. */
+   keeps the header's 20px from the frame. Above and below, the 4px a focus ring
+   paints outside a control, so neither the first nor the last control has its
+   ring cut off by the scrolling edge. */
 .happy-side-question__questions {
     display: flex;
     flex-direction: column;
     gap: 20px;
     margin: 0;
-    padding: 0 calc(19px - var(--happy-scrollbar-track)) 0 19px;
+    padding: 4px calc(19px - var(--happy-scrollbar-track)) 4px 19px;
     list-style: none;
 }
 

@@ -72,6 +72,19 @@ const NOTICES: readonly HappyAgentSideQuestion[] = [
     asked("3", "Which test failed first?", { status: "notice", notice: "gone" }),
 ];
 
+const LONG_THREAD: readonly HappyAgentSideQuestion[] = [
+    ...ANSWERED,
+    asked("2", "Why not retry on 429?", {
+        status: "answered",
+        response: FOLLOW_UP_ANSWER,
+        synthetic: false,
+    }),
+    asked("3", "Does that change the upload tests?", { status: "answering" }),
+];
+
+const LONG_DRAFT =
+    "Once the retry lands, also check what happens when the file changes on disk between two attempts: the second attempt should upload the file as it is now, and the progress bar should start again from zero for it, so the person can tell that the upload began again.";
+
 const FAILURES: readonly HappyAgentSideQuestion[] = [
     asked("1", "Summarize the plan so far.", {
         status: "failed",
@@ -196,6 +209,7 @@ function Chat(props: {
     readonly mode: "light" | "dark";
     readonly aside?: ReactNode;
     readonly draft: string;
+    readonly height?: number;
     readonly notice?: readonly string[];
 }) {
     return (
@@ -204,7 +218,7 @@ function Chat(props: {
                 style={{
                     background: "var(--surface)",
                     display: "flex",
-                    height: 620,
+                    height: props.height ?? 620,
                     width: 960,
                 }}
             >
@@ -316,6 +330,19 @@ export function SideQuestionPanelPage() {
                 stage="surface"
             >
                 <Chat draft="" mode="light" notice={["Usage: /btw <your question>"]} />
+            </Specimen>
+            <Specimen
+                detail="A long thread in a short chat stops above the composer, however tall the draft grows, and scrolls"
+                label="Short chat"
+                number="09"
+                stage="surface"
+            >
+                <Chat
+                    aside={<Panel questions={LONG_THREAD} />}
+                    draft={LONG_DRAFT}
+                    height={460}
+                    mode="light"
+                />
             </Specimen>
         </ComponentPage>
     );

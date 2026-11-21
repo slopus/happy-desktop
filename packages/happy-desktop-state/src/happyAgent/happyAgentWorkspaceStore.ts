@@ -225,7 +225,7 @@ export const happyAgentComposerCommands: readonly ComposerCommand[] = [
 
 /**
  * Claude Code's `/btw`, which this window answers with a side question instead
- * of sending: offered only in a chat whose Happy Agent and model answer one.
+ * of sending, in a chat whose Happy Agent and model answer one.
  */
 const happyAgentSideQuestionCommand: ComposerCommand = {
     id: "btw",
@@ -236,16 +236,26 @@ const happyAgentSideQuestionCommand: ComposerCommand = {
 };
 
 /**
+ * The same where the Happy Agent answers side questions but the chat's model
+ * gives none. `/btw` still goes to the agent as a side question, so the agent
+ * can say why there is no answer, but the menu does not offer it.
+ */
+const happyAgentSideQuestionCommandUnlisted: ComposerCommand = {
+    ...happyAgentSideQuestionCommand,
+    unlisted: true,
+};
+
+/**
  * Groups commands ahead of skills while preserving the daemon's order within
- * each group. Where the chat answers side questions, `/btw` is this window's
- * own whatever the agent offers by that name, so it is never sent.
+ * each group. Where the Happy Agent answers side questions, `/btw` is this
+ * window's own whatever the agent offers by that name, so it is never sent.
  */
 function composerCommandsProject(
     commands: HappyAgentChatSnapshot["slashCommands"],
-    sideQuestions: boolean,
+    sideQuestion: ComposerCommand | undefined,
 ): readonly ComposerCommand[] {
     const provided = commands
-        .filter((command) => !sideQuestions || command.name !== happyAgentSideQuestionCommand.id)
+        .filter((command) => sideQuestion === undefined || command.name !== sideQuestion.id)
         .map((command) => ({
             id: command.name,
             label: `/${command.name}`,
@@ -258,7 +268,7 @@ function composerCommandsProject(
     const skillsProvided = provided.filter((command) => command.kind === "skill");
     return [
         ...commandsProvided,
-        ...(sideQuestions ? [happyAgentSideQuestionCommand] : []),
+        ...(sideQuestion === undefined ? [] : [sideQuestion]),
         ...happyAgentComposerCommands.filter((command) => !providedIds.has(command.id)),
         ...skillsProvided,
     ];
@@ -2477,19 +2487,30 @@ export function happyAgentWorkspaceStoreCreate(
         api: () => client.sideQuestions(),
     });
     /**
-     * Whether a chat offers `/btw`: its Happy Agent says it answers side
-     * questions, and the definition of the model the chat runs says that model
-     * does. Decided from what each states, never from the shape of a model's id.
+     * How a chat's composer takes `/btw`, or undefined where its Happy Agent
+     * does not say it answers side questions. Where it does, `/btw <question>`
+     * is asked on the side and never sent, whatever the model. The menu offers
+     * it only where the model the daemon answers with does, as that model's
+     * definition says, never the shape of its id: the model of the chat's
+     * stored mode, which its latest message went with, or in a chat that has
+     * none yet, the draft's pick.
      */
-    const sideQuestionsOffered = (session: HappyAgentChatSnapshot["session"]): boolean => {
-        if (session.type !== "ready" || client.sideQuestions() === undefined) return false;
+    const sideQuestionCommandOf = (
+        session: HappyAgentChatSnapshot["session"],
+    ): ComposerCommand | undefined => {
+        if (client.sideQuestions() === undefined) return undefined;
+        const modelId =
+            session.type === "ready"
+                ? (session.value.storedModelId ?? session.value.modelId)
+                : undefined;
         const models = client.models.get();
-        return (
+        return modelId !== undefined &&
             models.type === "ready" &&
             models.catalog.models.some(
-                (model) => model.id === session.value.modelId && model.sideQuestions === true,
+                (model) => model.id === modelId && model.sideQuestions === true,
             )
-        );
+            ? happyAgentSideQuestionCommand
+            : happyAgentSideQuestionCommandUnlisted;
     };
     /**
      * Who a message to this conversation is addressed to and how deep it sits:
@@ -5089,11 +5110,13 @@ export function happyAgentWorkspaceStoreCreate(
         const run = () =>
             withChatStore((store) => {
                 // `/btw` asks the chat's harness a side question in the chat's
-                // panel and never becomes a message. Without a question it only
-                // says how to use it, on this window, as Claude Code does.
+                // panel and never becomes a message, whatever the model: when
+                // the model gives none, the agent's refusal says so there.
+                // Without a question it only says how to use it, on this
+                // window, as Claude Code does.
                 if (
                     commandId === happyAgentSideQuestionCommand.id &&
-                    sideQuestionsOffered(store.get().session)
+                    client.sideQuestions() !== undefined
                 ) {
                     const conversationId = store.get().sessionId;
                     const question = argumentsValue?.trim() ?? "";
@@ -5397,7 +5420,9 @@ export function happyAgentWorkspaceStoreCreate(
         const created: ComposerStore = composerStoreCreate(conversationId, {
             capabilities: {
                 shellMode: false,
-                commands: happyAgentComposerCommands,
+                // `/btw` is this window's before the chat arrives too, so one
+                // submitted that early is not sent either.
+                commands: composerCommandsProject([], sideQuestionCommandOf({ type: "loading" })),
                 mentions: true,
             },
             ...(carriedText === undefined ? {} : { text: carriedText }),
@@ -5734,7 +5759,7 @@ export function happyAgentWorkspaceStoreCreate(
                         type: "commandsReconciled",
                         commands: composerCommandsProject(
                             state.slashCommands,
-                            sideQuestionsOffered(state.session),
+                            sideQuestionCommandOf(state.session),
                         ),
                     });
                     if (!state.ready) return;
