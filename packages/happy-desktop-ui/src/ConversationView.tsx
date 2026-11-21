@@ -255,6 +255,14 @@ export type ConversationViewProps = {
      * behaves exactly as it otherwise would, empty or full.
      */
     notice?: ReactNode;
+    /**
+     * Something the reader opened beside the conversation rather than in it,
+     * such as a side question's panel. It floats over the top of the transcript
+     * and takes no room, so nothing in the conversation moves when it opens,
+     * grows, or closes, and the transcript, the dock, and the rest of the window
+     * stay usable around it. Only what it draws takes the pointer.
+     */
+    aside?: ReactNode;
     /** Replaces the conversation body while an owner-selected panel is open. */
     panel?: ReactNode;
     /**
@@ -1082,6 +1090,17 @@ export function ConversationView(props: ConversationViewProps) {
                     data-happy-desktop-ui="conversation-notice"
                 >
                     {props.notice}
+                </div>
+            ) : null}
+
+            {props.aside ? (
+                <div
+                    className="happy-conversation__aside"
+                    data-happy-desktop-ui="conversation-aside"
+                >
+                    <div className="happy-conversation__aside-column">
+                        <div className="happy-conversation__aside-measure">{props.aside}</div>
+                    </div>
                 </div>
             ) : null}
 

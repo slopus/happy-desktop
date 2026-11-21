@@ -128,6 +128,7 @@ const COMMAND_META: Record<string, CommandMeta> = {
     ps: { description: "List running background terminals", icon: "terminal" },
     compact: { description: "Summarize older messages to free context", icon: "filter" },
     abort: { description: "Stop the current response", icon: "close" },
+    btw: { description: "Ask a side question without adding to the chat", icon: "question" },
 };
 
 /** Presents the composer's supported commands as picker rows, in the order given. */

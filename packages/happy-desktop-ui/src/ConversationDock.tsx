@@ -238,7 +238,9 @@ export function ConversationDock(props: ConversationDockProps) {
         const command = composer.capabilities.commands.find(
             (candidate) => candidate.id === commandId,
         );
-        if (command?.kind === "skill") {
+        // A skill, or a command that needs words after its name, waits in the
+        // draft for them instead of running bare.
+        if (command?.kind === "skill" || command?.argumentsRequired === true) {
             const slash = command.label.startsWith("/") ? command.label : `/${command.id}`;
             props.onComposerValueChange(`${slash} `);
             return;

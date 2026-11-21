@@ -138,6 +138,7 @@
 @import "./styles/tool-call-preview.css";
 @import "./styles/context-meter.css";
 @import "./styles/conversation.css";
+@import "./styles/side-question-panel.css";
 @import "./styles/chat-conversation.css";
 @import "./styles/happy-agent-usage.css";
 @import "./styles/happy-agent-devices.css";

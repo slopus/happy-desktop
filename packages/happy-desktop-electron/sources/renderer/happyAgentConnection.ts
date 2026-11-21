@@ -6,6 +6,7 @@ import {
     happyAgentWorkspaceClientCreate,
     happyAgentProviderCredentialsApiCreate,
     happyAgentProviderSignInApiCreate,
+    happyAgentSideQuestionsApiCreate,
     happyAgentCloudProvidersApiCreate,
     happyCloudRequestCreate,
     happyAgentClockStoreCreate,
@@ -575,6 +576,10 @@ export function happyAgentConnectionOpen(input: {
                 input.happyCloud !== true &&
                 window.happyDesktop !== undefined,
         },
+        sideQuestions: happyAgentSideQuestionsApiCreate({
+            endpoint: directClient.endpoint,
+            token: "happy-local-capability",
+        }),
         ...(input.credentialImportHost ? { credentialImportHost: input.credentialImportHost } : {}),
         ...(cloudRequest
             ? {
