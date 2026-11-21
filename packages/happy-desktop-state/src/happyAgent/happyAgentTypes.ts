@@ -275,6 +275,12 @@ export interface HappyAgentModel {
      * window. Absent when the daemon predates the field or the model has no curated threshold.
      */
     readonly autoCompactWindow?: number;
+    /**
+     * Present when the model answers side questions (Claude Code's `/btw`), as its
+     * definition in the daemon's configuration says. A daemon that predates side
+     * questions says nothing, and its models answer none.
+     */
+    readonly sideQuestions?: true;
 }
 
 export interface HappyAgentModelProvider {
@@ -877,6 +883,13 @@ export interface HappyAgentSession {
     readonly displayCwd: string;
     readonly providerId: string;
     readonly modelId: string;
+    /**
+     * The model of the session's stored mode, the one its latest message went
+     * with; `modelId` is the draft's pick when the draft has one. The daemon
+     * answers side questions with this one. Absent while the session has no
+     * mode of its own yet.
+     */
+    readonly storedModelId?: string;
     readonly models: readonly HappyAgentModel[];
     readonly effort?: HappyAgentThinkingLevel;
     readonly serviceTier?: HappyAgentServiceTier;

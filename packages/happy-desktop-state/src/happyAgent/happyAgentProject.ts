@@ -37,6 +37,11 @@ function modelProject(
         ...(definition.autoCompactWindow === undefined || definition.autoCompactWindow === null
             ? {}
             : { autoCompactWindow: definition.autoCompactWindow }),
+        // The client package this build follows predates the field, so it is read
+        // here, at the boundary, as the daemon states it.
+        ...((definition as { readonly sideQuestions?: unknown }).sideQuestions === true
+            ? { sideQuestions: true as const }
+            : {}),
     };
 }
 

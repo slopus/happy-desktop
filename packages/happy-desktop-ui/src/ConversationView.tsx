@@ -255,6 +255,15 @@ export type ConversationViewProps = {
      * behaves exactly as it otherwise would, empty or full.
      */
     notice?: ReactNode;
+    /**
+     * Something the reader opened beside the conversation rather than in it,
+     * such as a side question's panel. It floats over the top of the transcript
+     * and takes no room, so nothing in the conversation moves when it opens,
+     * grows, or closes. It stays inside the transcript's own box, however tall
+     * it grows, so the transcript, the dock, and the rest of the window stay
+     * usable around it. Only what it draws takes the pointer.
+     */
+    aside?: ReactNode;
     /** Replaces the conversation body while an owner-selected panel is open. */
     panel?: ReactNode;
     /**
@@ -1069,6 +1078,14 @@ export function ConversationView(props: ConversationViewProps) {
                   startsGroup: props.agentAuthor !== undefined,
                   closesMessage: false,
               });
+    /* What floats beside the conversation is drawn over whichever body shows,
+       inside that body's own box, so however tall it grows it never reaches
+       the dock. */
+    const aside = props.aside ? (
+        <div className="happy-conversation__aside" data-happy-desktop-ui="conversation-aside">
+            <div className="happy-conversation__aside-measure">{props.aside}</div>
+        </div>
+    ) : undefined;
     return (
         <section
             className={["happy-conversation", props.className].filter(Boolean).join(" ")}
@@ -1090,6 +1107,7 @@ export function ConversationView(props: ConversationViewProps) {
                     axes="both"
                     className="happy-conversation__panel"
                     data-happy-desktop-ui="conversation-panel"
+                    overlay={aside}
                     viewportClassName="happy-conversation__panel-viewport"
                 >
                     {props.panel}
@@ -1099,6 +1117,7 @@ export function ConversationView(props: ConversationViewProps) {
                     axes="both"
                     className="happy-conversation__empty happy-conversation__loading"
                     data-happy-desktop-ui="conversation-loading"
+                    overlay={aside}
                     viewportClassName="happy-conversation__empty-viewport"
                 >
                     <Spinner
@@ -1114,6 +1133,7 @@ export function ConversationView(props: ConversationViewProps) {
                     axes="both"
                     className="happy-conversation__empty"
                     data-happy-desktop-ui="conversation-empty"
+                    overlay={aside}
                     viewportClassName="happy-conversation__empty-viewport"
                 >
                     {props.emptyContent ?? (
@@ -1265,6 +1285,7 @@ export function ConversationView(props: ConversationViewProps) {
                             !scheduledWait &&
                             (delegating || props.workingWait === undefined)
                         }
+                        overlay={aside}
                         paddingEnd={24}
                         virtualize
                     >
