@@ -218,6 +218,9 @@ export function TextField(props: TextFieldProps) {
                         onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
                         onKeyDown={(event) => {
                             if (event.key !== "Enter" || local.onSubmit === undefined) return;
+                            // An Enter that settles an input method's composition,
+                            // as Korean or Japanese is typed, belongs to it.
+                            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                             // The Enter is the submit's. Left to the browser, it
                             // would also reach whatever the submit puts focus in —
                             // a new document's text, opened to be written in.

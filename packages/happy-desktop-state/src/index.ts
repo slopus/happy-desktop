@@ -258,6 +258,8 @@ export * from "./happyAgent/happyAgentRepositoriesStore.js";
 export * from "./happyAgent/happyAgentOnboardingSettingsStore.js";
 export * from "./happyAgent/happyAgentPaymentsStore.js";
 export * from "./happyAgent/happyAgentCheckoutsStore.js";
+export * from "./happyAgent/happyAgentSideQuestions.js";
+export * from "./happyAgent/happyAgentSideQuestionsStore.js";
 export * from "./happyAgent/happyAgentPluginsStore.js";
 export * from "./happyAgent/happyAgentDaemonPluginsStore.js";
 export * from "./happyAgent/happyAgentGenUiActions.js";

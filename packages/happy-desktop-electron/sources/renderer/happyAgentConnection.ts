@@ -5,6 +5,7 @@ import {
     HappyAgentClient,
     happyAgentWorkspaceClientCreate,
     happyAgentProviderCredentialsApiCreate,
+    happyAgentSideQuestionsApiCreate,
     happyAgentCloudProvidersApiCreate,
     happyCloudRequestCreate,
     happyAgentClockStoreCreate,
@@ -549,6 +550,10 @@ export function happyAgentConnectionOpen(input: {
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
         providerCredentials: happyAgentProviderCredentialsApiCreate({
+            endpoint: directClient.endpoint,
+            token: "happy-local-capability",
+        }),
+        sideQuestions: happyAgentSideQuestionsApiCreate({
             endpoint: directClient.endpoint,
             token: "happy-local-capability",
         }),

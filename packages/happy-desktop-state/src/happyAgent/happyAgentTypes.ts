@@ -275,6 +275,12 @@ export interface HappyAgentModel {
      * window. Absent when the daemon predates the field or the model has no curated threshold.
      */
     readonly autoCompactWindow?: number;
+    /**
+     * Present when the model answers side questions (Claude Code's `/btw`), as its
+     * definition in the daemon's configuration says. A daemon that predates side
+     * questions says nothing, and its models answer none.
+     */
+    readonly sideQuestions?: true;
 }
 
 export interface HappyAgentModelProvider {

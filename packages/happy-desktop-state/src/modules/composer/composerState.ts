@@ -9,6 +9,12 @@ export interface ComposerCommand {
     readonly description?: string;
     /** Whether opaque text may follow the command name when it is submitted. */
     readonly hasArguments?: boolean;
+    /**
+     * Whether the command needs that text to do its work, as `/btw` needs its
+     * question. Picking it from the menu then writes `/name ` into the draft
+     * for the text, as picking a skill does, instead of running it bare.
+     */
+    readonly argumentsRequired?: boolean;
     /** Presentation category supplied by the command owner, such as `skill`. */
     readonly kind?: string;
 }
@@ -368,6 +374,7 @@ function commandsEqual(
                 command.label === candidate.label &&
                 command.description === candidate.description &&
                 command.hasArguments === candidate.hasArguments &&
+                command.argumentsRequired === candidate.argumentsRequired &&
                 command.kind === candidate.kind
             );
         })
@@ -533,9 +540,15 @@ export function composerStoreCreate(
                 (previous.text.length === 0 && previous.attachments.length === 0)
             )
                 return;
+            const invocation = previous.voiceDraft
+                ? undefined
+                : commandInvocationOf(previous.text, previous.capabilities.commands);
+            // A draft with attachments is a message, except to a command that
+            // needs its words: `/btw` must never be sent, so its owner decides
+            // what the attachments mean.
             const commandInvocation =
-                !previous.voiceDraft && previous.attachments.length === 0
-                    ? commandInvocationOf(previous.text, previous.capabilities.commands)
+                previous.attachments.length === 0 || invocation?.command.argumentsRequired === true
+                    ? invocation
                     : undefined;
             if (commandInvocation !== undefined) {
                 set({ submission: { status: "pending", revision: previous.revision } });

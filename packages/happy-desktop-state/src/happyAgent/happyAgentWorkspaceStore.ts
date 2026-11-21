@@ -103,6 +103,10 @@ import {
     type HappyAgentSessionDraftWriter,
 } from "./happyAgentSessionDraftStore.js";
 import {
+    happyAgentSideQuestionsStoreCreate,
+    type HappyAgentSideQuestionsStore,
+} from "./happyAgentSideQuestionsStore.js";
+import {
     happyAgentGroupAccessOf,
     happyAgentGroupAccessRefused,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
@@ -214,22 +218,42 @@ export const happyAgentComposerCommands: readonly ComposerCommand[] = [
     },
 ];
 
-/** Groups commands ahead of skills while preserving the daemon's order within each group. */
+/**
+ * Claude Code's `/btw`, which this window answers with a side question instead
+ * of sending: offered only in a chat whose Happy Agent and model answer one.
+ */
+const happyAgentSideQuestionCommand: ComposerCommand = {
+    id: "btw",
+    label: "/btw",
+    description: "Ask a side question without adding to the chat.",
+    hasArguments: true,
+    argumentsRequired: true,
+};
+
+/**
+ * Groups commands ahead of skills while preserving the daemon's order within
+ * each group. Where the chat answers side questions, `/btw` is this window's
+ * own whatever the agent offers by that name, so it is never sent.
+ */
 function composerCommandsProject(
     commands: HappyAgentChatSnapshot["slashCommands"],
+    sideQuestions: boolean,
 ): readonly ComposerCommand[] {
-    const provided = commands.map((command) => ({
-        id: command.name,
-        label: `/${command.name}`,
-        description: command.description,
-        hasArguments: command.hasArguments,
-        ...(command.kind === undefined ? {} : { kind: command.kind }),
-    }));
+    const provided = commands
+        .filter((command) => !sideQuestions || command.name !== happyAgentSideQuestionCommand.id)
+        .map((command) => ({
+            id: command.name,
+            label: `/${command.name}`,
+            description: command.description,
+            hasArguments: command.hasArguments,
+            ...(command.kind === undefined ? {} : { kind: command.kind }),
+        }));
     const providedIds = new Set(provided.map((command) => command.id));
     const commandsProvided = provided.filter((command) => command.kind !== "skill");
     const skillsProvided = provided.filter((command) => command.kind === "skill");
     return [
         ...commandsProvided,
+        ...(sideQuestions ? [happyAgentSideQuestionCommand] : []),
         ...happyAgentComposerCommands.filter((command) => !providedIds.has(command.id)),
         ...skillsProvided,
     ];
@@ -1562,6 +1586,13 @@ export interface HappyAgentWorkspaceStore {
      */
     readonly conversationsRetained: HappyAgentRetainedConversationsStore;
     /**
+     * The `/btw` side thread of each chat, and the chats saying how to use it. A
+     * store of its own because a thread outlives the chat it was asked in, as
+     * a kept view does, and its follow-up is typed a keystroke at a time. A
+     * chat's composer opens a thread with `/btw <question>`.
+     */
+    readonly sideQuestions: HappyAgentSideQuestionsStore;
+    /**
      * Reports how much one conversation's view holds while it is out of sight,
      * in the unit `conversationRetention.size` is given in. Kept views that no
      * longer fit together are released, the least recently left first.
@@ -2423,6 +2454,24 @@ export function happyAgentWorkspaceStoreCreate(
             ...(selection.modelId === undefined ? {} : { modelId: selection.modelId }),
             ...(selection.effort === undefined ? {} : { effort: selection.effort }),
         };
+    };
+    const sideQuestions = happyAgentSideQuestionsStoreCreate({
+        api: () => client.sideQuestions(),
+    });
+    /**
+     * Whether a chat offers `/btw`: its Happy Agent says it answers side
+     * questions, and the definition of the model the chat runs says that model
+     * does. Decided from what each states, never from the shape of a model's id.
+     */
+    const sideQuestionsOffered = (session: HappyAgentChatSnapshot["session"]): boolean => {
+        if (session.type !== "ready" || client.sideQuestions() === undefined) return false;
+        const models = client.models.get();
+        return (
+            models.type === "ready" &&
+            models.catalog.models.some(
+                (model) => model.id === session.value.modelId && model.sideQuestions === true,
+            )
+        );
     };
     /**
      * Who a message to this conversation is addressed to and how deep it sits:
@@ -5011,6 +5060,19 @@ export function happyAgentWorkspaceStoreCreate(
     ): void => {
         const run = () =>
             withChatStore((store) => {
+                // `/btw` asks the chat's harness a side question in the chat's
+                // panel and never becomes a message. Without a question it only
+                // says how to use it, on this window, as Claude Code does.
+                if (
+                    commandId === happyAgentSideQuestionCommand.id &&
+                    sideQuestionsOffered(store.get().session)
+                ) {
+                    const conversationId = store.get().sessionId;
+                    const question = argumentsValue?.trim() ?? "";
+                    if (question.length === 0) sideQuestions.usageShow(conversationId);
+                    else sideQuestions.questionAsk(conversationId, question);
+                    return Promise.resolve();
+                }
                 const provided = store
                     .get()
                     .slashCommands.find((command) => command.name === commandId);
@@ -5325,6 +5387,9 @@ export function happyAgentWorkspaceStoreCreate(
                         attachmentsRemember(conversationAttachments, conversationId, created);
                         return;
                     case "textUpdated":
+                        // How to use `/btw` was about the draft just sent; a new one
+                        // has moved on from it.
+                        sideQuestions.usageDismiss(conversationId);
                         if (created.getState().voiceDraft) return;
                         void withAddressedChat(conversationId, (store) =>
                             store.draftSet(event.text, nextDraftUpdatedAt(), draftOrigin),
@@ -5475,6 +5540,24 @@ export function happyAgentWorkspaceStoreCreate(
                         );
                         return;
                     case "commandInvoked":
+                        // Nothing but words reaches a side question. Refused before
+                        // the stored draft is cleared, so the draft and its files
+                        // stay as they were, to take the files out or send it as a
+                        // message.
+                        if (
+                            event.commandId === happyAgentSideQuestionCommand.id &&
+                            event.revision !== undefined &&
+                            created.getState().attachments.length > 0
+                        ) {
+                            submitting(created, event.revision, () =>
+                                Promise.reject(
+                                    new UserError(
+                                        "A side question takes words only. Remove the attachments, or send this without /btw.",
+                                    ),
+                                ),
+                            );
+                            return;
+                        }
                         if (event.revision !== undefined)
                             void withChatStore((store) =>
                                 store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
@@ -5621,7 +5704,10 @@ export function happyAgentWorkspaceStoreCreate(
                     if (!currentComposer) return;
                     currentComposer.getState().composerInput({
                         type: "commandsReconciled",
-                        commands: composerCommandsProject(state.slashCommands),
+                        commands: composerCommandsProject(
+                            state.slashCommands,
+                            sideQuestionsOffered(state.session),
+                        ),
                     });
                     if (!state.ready) return;
                     // A send in flight has already cleared the stored draft, and
@@ -7648,6 +7734,7 @@ export function happyAgentWorkspaceStoreCreate(
         sidebarRowsUpdate: (rows) => client.sidebarRowsUpdate(rows),
 
         conversationsRetained,
+        sideQuestions,
         conversationViewSizeUpdate(conversationId, size) {
             // The open conversation's size is remembered too: a view hidden
             // under a file and then left is measured only that once.
@@ -9535,6 +9622,8 @@ export function happyAgentWorkspaceStoreCreate(
             conversationAttachments.clear();
             conversationDraftTexts.clear();
             voiceComposers.clear();
+            // Nobody can collect an answer through a connection that is going away.
+            sideQuestions[Symbol.dispose]();
             // Disposing the panel stops every terminal it opened: this connection is
             // going away, and a shell nobody can reach again is an orphan.
             unsubscribePanel();
