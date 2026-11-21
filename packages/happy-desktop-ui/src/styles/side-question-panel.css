@@ -92,9 +92,14 @@
     opacity: 1;
 }
 
+/* Bringing an exchange into view, as a new question or answer does and as
+   focus does, stops 4px short of the scrolling edge, where the list's own 4px
+   leaves room for a control's focus ring and the 12px to the header and the
+   field stays whole. */
 .happy-side-question__thread-viewport {
     overflow-x: hidden;
     overflow-y: auto;
+    scroll-padding-block: 4px;
 }
 
 /* The scrollbar's lane is part of the right inset, so the thread's right edge
