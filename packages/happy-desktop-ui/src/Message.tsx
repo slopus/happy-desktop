@@ -904,6 +904,11 @@ export type MessageListProps = {
      * lists show the plain arrow.
      */
     jumpToEndWorking?: boolean;
+    /**
+     * Drawn over the list's own box, fixed while its rows scroll, such as what
+     * the conversation floats over its transcript.
+     */
+    overlay?: ReactNode;
     /** Bottom clearance represented inside the virtualizer's coordinate space. */
     paddingEnd?: number;
     /**
@@ -3994,25 +3999,28 @@ export function MessageList(props: MessageListProps) {
                     viewportClassName="happy-message-list__viewport"
                     viewportRef={list}
                     overlay={
-                        props.jumpToEnd ? (
-                            <div className="happy-message-list__jump" hidden ref={jump}>
-                                <Button
-                                    aria-label="Jump to latest"
-                                    iconOnly
-                                    onClick={jumpToEnd}
-                                    size="small"
-                                    variant="secondary"
-                                >
-                                    {props.jumpToEndWorking ? (
-                                        <ShimmerText sweep="sheen" tone="inherit">
+                        <>
+                            {props.jumpToEnd ? (
+                                <div className="happy-message-list__jump" hidden ref={jump}>
+                                    <Button
+                                        aria-label="Jump to latest"
+                                        iconOnly
+                                        onClick={jumpToEnd}
+                                        size="small"
+                                        variant="secondary"
+                                    >
+                                        {props.jumpToEndWorking ? (
+                                            <ShimmerText sweep="sheen" tone="inherit">
+                                                <Icon name="arrow-down" size={16} />
+                                            </ShimmerText>
+                                        ) : (
                                             <Icon name="arrow-down" size={16} />
-                                        </ShimmerText>
-                                    ) : (
-                                        <Icon name="arrow-down" size={16} />
-                                    )}
-                                </Button>
-                            </div>
-                        ) : undefined
+                                        )}
+                                    </Button>
+                                </div>
+                            ) : null}
+                            {props.overlay}
+                        </>
                     }
                 >
                     <div

@@ -1,8 +1,10 @@
 import { createStore } from "zustand/vanilla";
 import { UserError } from "../types.js";
-import type {
-    HappyAgentSideQuestionExchange,
-    HappyAgentSideQuestionsApi,
+import {
+    HappyAgentSideQuestionTransportError,
+    type HappyAgentSideQuestionAnswer,
+    type HappyAgentSideQuestionExchange,
+    type HappyAgentSideQuestionsApi,
 } from "./happyAgentSideQuestions.js";
 import { happyAgentUserError } from "./happyAgentSupport.js";
 import type { HappyAgentSessionId } from "./happyAgentTypes.js";
@@ -70,6 +72,11 @@ export interface HappyAgentSideQuestionsSnapshot {
  * answered waits its turn, and is then asked with every answer before it as its
  * history, the way a follow-up is.
  *
+ * A dropped connection does not lose an answer being collected: the daemon
+ * keeps a question whose answer it could not deliver, so collecting it is tried
+ * again, after longer and longer pauses, until the daemon forgets the question
+ * ten minutes after it was asked.
+ *
  * Memory-only: a window that was reloaded has no question in flight to rejoin,
  * and the daemon forgets an answer nobody collects.
  */
@@ -95,6 +102,16 @@ export interface HappyAgentSideQuestionsStore {
 /** The most earlier exchanges one question may carry, as the daemon takes them. */
 const HISTORY_LIMIT = 50;
 
+/** How long the daemon keeps a question nobody has collected, after which it is gone. */
+const COLLECT_LIMIT_MS = 10 * 60_000;
+
+/**
+ * The pauses before trying again to collect a question after a request about it
+ * brought nothing back, the last one repeating; one that brings an answer back
+ * starts them over.
+ */
+const RETRY_PAUSES_MS: readonly number[] = [1_000, 2_000, 4_000, 8_000, 15_000];
+
 const QUEUED: HappyAgentSideQuestionState = { status: "queued" };
 const ANSWERING: HappyAgentSideQuestionState = { status: "answering" };
 const NO_ANSWERS: HappyAgentSideQuestionState = {
@@ -111,6 +128,8 @@ interface HappyAgentSideQuestionAsking {
     stopped: boolean;
     /** The daemon's name for it, once the daemon has given one. */
     sideQuestionId?: string;
+    /** Ends the pause before the next try to collect it, while there is one. */
+    pauseEnd?: () => void;
 }
 
 /**
@@ -132,23 +151,27 @@ function historyOf(
 }
 
 /**
- * Why a question got no answer. A refusal of the ask names its reason in its
- * `code`; a question the daemon no longer knows while it is being collected
- * is gone, whatever made it so.
+ * Why a question got no answer. A refusal names its reason in its `code`,
+ * whether the ask or a wait was refused. A question the daemon no longer knows
+ * while it is being collected is gone, whatever made it so; an ask it does not
+ * know names an agent it does not have.
  */
 function failureStateOf(error: unknown, collecting: boolean): HappyAgentSideQuestionState {
     const code = error instanceof UserError ? error.code : undefined;
-    if (!collecting && code === "harness_not_running")
-        return { status: "notice", notice: "harnessNotRunning" };
-    if (!collecting && code === "unsupported") return { status: "notice", notice: "unsupported" };
+    if (code === "harness_not_running") return { status: "notice", notice: "harnessNotRunning" };
+    if (code === "unsupported") return { status: "notice", notice: "unsupported" };
     if (collecting && code === "not_found") return { status: "notice", notice: "gone" };
     return { status: "failed", error: happyAgentUserError(error).message };
 }
 
 /**
  * Asks one question and collects its answer, however many waits that takes.
+ * A wait that brings nothing back is tried again after a pause, until the
+ * daemon would have forgotten the question; an ask that brings nothing back is
+ * not, since the daemon stops a question whose asker never learned its id.
  * Undefined once its thread stopped it: the daemon is told to stop at once when
- * it has named the question, and otherwise as soon as it does.
+ * it has named the question, and otherwise as soon as it does. Giving up on
+ * collecting tells it to stop too, unless it is gone already.
  */
 async function sideQuestionAnswer(
     agentId: HappyAgentSessionId,
@@ -157,26 +180,51 @@ async function sideQuestionAnswer(
     asking: HappyAgentSideQuestionAsking,
 ): Promise<HappyAgentSideQuestionState | undefined> {
     const api = asking.api;
-    let collecting = false;
+    const askedAt = Date.now();
+    let answer: HappyAgentSideQuestionAnswer;
     try {
-        let answer = await api.ask(agentId, question, history);
-        while (answer.status === "answering") {
-            if (asking.stopped) {
-                if (asking.sideQuestionId === undefined)
-                    void api.cancel(agentId, answer.id).catch(() => undefined);
-                return undefined;
-            }
-            asking.sideQuestionId = answer.id;
-            collecting = true;
-            answer = await api.wait(agentId, answer.id);
-        }
-        if (asking.stopped) return undefined;
-        return answer.status === "answered"
-            ? { status: "answered", response: answer.response, synthetic: answer.synthetic }
-            : { status: "failed", error: answer.error };
+        answer = await api.ask(agentId, question, history);
     } catch (error) {
-        return asking.stopped ? undefined : failureStateOf(error, collecting);
+        return asking.stopped ? undefined : failureStateOf(error, false);
     }
+    let lost = 0;
+    while (answer.status === "answering") {
+        if (asking.stopped) {
+            if (asking.sideQuestionId === undefined)
+                void api.cancel(agentId, answer.id).catch(() => undefined);
+            return undefined;
+        }
+        asking.sideQuestionId = answer.id;
+        try {
+            answer = await api.wait(agentId, answer.id);
+            lost = 0;
+        } catch (error) {
+            if (asking.stopped) return undefined;
+            const pause = RETRY_PAUSES_MS[Math.min(lost, RETRY_PAUSES_MS.length - 1)]!;
+            if (
+                !(error instanceof HappyAgentSideQuestionTransportError) ||
+                Date.now() - askedAt + pause >= COLLECT_LIMIT_MS
+            ) {
+                const state = failureStateOf(error, true);
+                if (state.status !== "notice" || state.notice !== "gone")
+                    void api.cancel(agentId, answer.id).catch(() => undefined);
+                return state;
+            }
+            lost += 1;
+            await new Promise<void>((resolve) => {
+                const timer = setTimeout(resolve, pause);
+                asking.pauseEnd = () => {
+                    clearTimeout(timer);
+                    resolve();
+                };
+            });
+            asking.pauseEnd = undefined;
+        }
+    }
+    if (asking.stopped) return undefined;
+    return answer.status === "answered"
+        ? { status: "answered", response: answer.response, synthetic: answer.synthetic }
+        : { status: "failed", error: answer.error };
 }
 
 export function happyAgentSideQuestionsStoreCreate(deps: {
@@ -275,6 +323,7 @@ export function happyAgentSideQuestionsStoreCreate(deps: {
         if (!current) return;
         asking.delete(conversationId);
         current.stopped = true;
+        current.pauseEnd?.();
         if (current.sideQuestionId !== undefined)
             void current.api.cancel(conversationId, current.sideQuestionId).catch(() => undefined);
     };

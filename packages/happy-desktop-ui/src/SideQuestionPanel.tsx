@@ -15,6 +15,7 @@ import {
 import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
 import { TextField } from "./TextField";
+import { focusUnlessWritingElsewhere } from "./useFocusOnType";
 
 export type SideQuestionPanelProps = {
     className?: string;
@@ -49,8 +50,10 @@ export type SideQuestionPanelProps = {
  *
  * It is not a dialog. It floats over the top of the transcript in the
  * conversation's `aside`, and the chat, its composer, and the rest of the
- * window stay usable while it is open; only Close ends the thread. Each answer
- * copies on its own, without its question, to be pasted into the chat.
+ * window stay usable while it is open; only Close ends the thread, and puts the
+ * caret back in the chat's composer. Each answer copies on its own, without
+ * its question, to be pasted into the chat. A screen reader hears each answer
+ * as it lands.
  *
  * Props only: the owner keeps the thread and the follow-up, asks, and closes.
  */
@@ -78,6 +81,15 @@ export function SideQuestionPanel(props: SideQuestionPanelProps) {
     const ask = () => {
         if (canAsk) props.onAsk();
     };
+    // Closing takes the panel away with the control that had focus, so the
+    // keyboard goes back to where the reader writes in the chat it floats over.
+    const close = (control: HTMLElement) => {
+        const composer = control
+            .closest('[data-happy-desktop-ui="conversation-view"]')
+            ?.querySelector<HTMLElement>('[data-happy-desktop-ui="composer-textarea"]');
+        if (composer) focusUnlessWritingElsewhere(composer);
+        props.onClose();
+    };
     return (
         <aside
             aria-label="Side question"
@@ -102,7 +114,7 @@ export function SideQuestionPanel(props: SideQuestionPanelProps) {
                     className="happy-side-question__close"
                     icon="close"
                     iconOnly
-                    onClick={props.onClose}
+                    onClick={(event) => close(event.currentTarget)}
                     size="small"
                     variant="ghost"
                 />
@@ -113,8 +125,12 @@ export function SideQuestionPanel(props: SideQuestionPanelProps) {
                     data-happy-desktop-ui="side-question-thread"
                     data-scrolled={scrolled ? "" : undefined}
                     viewportClassName="happy-side-question__thread-viewport"
+                    // A polite live region around the list, so the list keeps
+                    // its own meaning: a question asked, and the answer that
+                    // replaces its status, are read out as they arrive.
                     viewportProps={{
                         onScroll: (event) => setScrolled(event.currentTarget.scrollTop > 0),
+                        role: "log",
                     }}
                     viewportRef={viewport}
                 >
