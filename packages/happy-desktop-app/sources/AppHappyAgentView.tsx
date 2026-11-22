@@ -264,10 +264,6 @@ import {
     FileChangeDiff,
     CodeEditor,
     ComposerFooterBar,
-    ComputeChip,
-    RepositoryChip,
-    type RepositoryChipRepository,
-    type ComputeChipCompute,
     ComposerModelControl,
     type ComposerModelUsageWatch,
     ConversationDock,
@@ -292,6 +288,8 @@ import {
     ModalOverlayPresence,
     ReviewStream,
     HappyAgentActivityPanel,
+    type HappyAgentActivityCompute,
+    type HappyAgentActivityRepository,
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
@@ -3493,33 +3491,49 @@ const CHECKOUTS_NONE: HappyAgentCheckoutsSnapshot = { status: "loading", checkou
 const checkoutsNoop = () => CHECKOUTS_NONE;
 const checkoutsSubscribeNoop = () => () => undefined;
 
-/** One repository chip in the composer, keyed by what it stands for. */
-interface RepositoryChipEntry {
-    readonly id: string;
-    readonly repository: RepositoryChipRepository;
-}
-
 /**
- * The checkouts the composer's repository chips draw. A failed one has none:
- * the tool call that ran it tells the failure in the transcript.
+ * The checkouts the Activity tab lists. A failed one is not listed: the tool
+ * call that ran it tells the failure in the transcript.
  */
-function checkoutChipsOf(checkouts: readonly HappyAgentCheckout[]): RepositoryChipEntry[] {
+function checkoutRepositoriesOf(
+    checkouts: readonly HappyAgentCheckout[],
+): HappyAgentActivityRepository[] {
     return checkouts.flatMap((checkout) =>
-        checkout.status === "failed"
-            ? []
-            : [{ id: checkout.id, repository: checkoutChipRepository(checkout, checkout.status) }],
+        checkout.status === "failed" ? [] : [checkoutRepository(checkout, checkout.status)],
     );
 }
 
-function checkoutChipRepository(
+/**
+ * The repositories the Activity tab lists: the agent's checkouts, once the
+ * server listed them. A server without checkouts names one on the agent.
+ */
+function activityRepositoriesOf(
+    checkouts: HappyAgentCheckoutsSnapshot,
+    conversation: HappyAgentConversationSnapshot,
+): readonly HappyAgentActivityRepository[] {
+    if (checkouts.status === "ready") return checkoutRepositoriesOf(checkouts.checkouts);
+    const repository = conversation.repository;
+    return repository && repository.checkout !== "failed"
+        ? [
+              {
+                  id: repository.repositoryId,
+                  name: repository.name,
+                  branch: repository.branch,
+                  checkout: repository.checkout,
+              },
+          ]
+        : [];
+}
+
+function checkoutRepository(
     checkout: HappyAgentCheckout,
-    status: RepositoryChipRepository["checkout"],
-): RepositoryChipRepository {
+    status: HappyAgentActivityRepository["checkout"],
+): HappyAgentActivityRepository {
     return {
+        id: checkout.id,
         name: checkout.repository.name,
         branch: checkout.branch,
         checkout: status,
-        ...(checkout.repository.avatar ? { avatarUrl: checkout.repository.avatar.url } : {}),
         ...(checkout.access === "readOnly" ? { readOnly: true } : {}),
         ...(checkout.changes?.comparable
             ? {
@@ -8381,9 +8395,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
-                {...(checkouts.status === "ready"
-                    ? { repositories: checkoutChipsOf(checkouts.checkouts) }
-                    : {})}
                 inlineEngines={{
                     ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
                     ...(props.browserContent ? { browserContent: props.browserContent } : {}),
@@ -8571,6 +8582,14 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             activity={
                                 conversation.type === "ready" ? conversation.value : undefined
                             }
+                            {...(conversation.type === "ready"
+                                ? {
+                                      repositories: activityRepositoriesOf(
+                                          checkouts,
+                                          conversation.value,
+                                      ),
+                                  }
+                                : {})}
                             {...(workList ? { work: workList } : {})}
                             canStartBrowser={
                                 availability.online &&
@@ -9977,11 +9996,6 @@ function HappyAgentConversationBody(props: {
     instanceId: string | undefined;
     activitySelected: boolean;
     /** The machine's artifacts, which the transcript's references name. */
-    /**
-     * The repositories a cloud agent checked out, once the server listed them.
-     * Absent, the conversation's single attached repository is shown instead.
-     */
-    repositories?: readonly RepositoryChipEntry[];
     artifacts?: HappyAgentArtifacts;
     /**
      * The host's engines for pages tool calls show inline, and the connection
@@ -10060,7 +10074,6 @@ function HappyAgentConversationBody(props: {
                 instanceId={props.instanceId}
                 activitySelected={props.activitySelected}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
-                {...(props.repositories ? { repositories: props.repositories } : {})}
                 {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
                 referenceEntities={props.referenceEntities}
                 {...(props.chiefOfStaffName === undefined
@@ -10401,8 +10414,6 @@ function HappyAgentConversationSurface(props: {
     instanceId: string | undefined;
     activitySelected: boolean;
     /** The machine's artifacts, which the transcript's references name. */
-    /** The repositories a cloud agent checked out; see `HappyAgentConversationBody`. */
-    repositories?: readonly RepositoryChipEntry[];
     artifacts?: HappyAgentArtifacts;
     /**
      * The host's engines for pages tool calls show inline, and the connection
@@ -10737,36 +10748,6 @@ function HappyAgentConversationSurface(props: {
                                so the context surface is discoverable. */
                             trailing={
                                 <>
-                                    {/* The repositories the agent checked out, read-only. A
-                                        server without checkouts names one on the agent. */}
-                                    {(
-                                        props.repositories ??
-                                        (conversation.repository &&
-                                        conversation.repository.checkout !== "failed"
-                                            ? [
-                                                  {
-                                                      id: conversation.repository.repositoryId,
-                                                      repository: {
-                                                          name: conversation.repository.name,
-                                                          branch: conversation.repository.branch,
-                                                          checkout:
-                                                              conversation.repository.checkout,
-                                                      },
-                                                  },
-                                              ]
-                                            : [])
-                                    ).map((entry) => (
-                                        <RepositoryChip
-                                            key={entry.id}
-                                            repository={entry.repository}
-                                        />
-                                    ))}
-                                    {/* Where the agent's tools run, on a Happy Cloud server. */}
-                                    {conversation.compute ? (
-                                        <ComputeChip
-                                            compute={computeChipOf(conversation.compute)}
-                                        />
-                                    ) : null}
                                     {conversation.contextGauge ? (
                                         <ContextMeter
                                             approximate={conversation.contextGauge.approximate}
@@ -11815,6 +11796,8 @@ function HappyAgentDevicesSurface(props: { store: HappyAgentDeviceBridgesStore }
 function HappyAgentPanelBody(props: {
     previewContext: ConversationPreviewContext;
     activity?: HappyAgentConversationSnapshot;
+    /** The repositories the open chat's agent checked out, listed in the Activity tab. */
+    repositories?: readonly HappyAgentActivityRepository[];
     /** What the work changed and published, leading the Activity tab when there is any. */
     work?: ReactNode;
     /**
@@ -12360,6 +12343,10 @@ function HappyAgentPanelBody(props: {
                     ) : props.panel.activeViewId === "activity" ? (
                         <HappyAgentActivityPanel
                             backgroundProcesses={activityBackgroundProcesses}
+                            {...(props.activity?.compute
+                                ? { compute: activityComputeOf(props.activity.compute) }
+                                : {})}
+                            {...(props.repositories ? { repositories: props.repositories } : {})}
                             {...(props.activity?.goal ? { goal: props.activity.goal } : {})}
                             {...(props.work === undefined ? {} : { leading: props.work })}
                             now={props.now}
@@ -12807,7 +12794,7 @@ function browserClosureOf(closure: HappyAgentBrowserClosure): BrowserClosure {
           };
 }
 
-function computeChipOf(compute: HappyAgentCompute): ComputeChipCompute {
+function activityComputeOf(compute: HappyAgentCompute): HappyAgentActivityCompute {
     if (compute.kind === "none") return { kind: "none" };
     return {
         kind: "computer",

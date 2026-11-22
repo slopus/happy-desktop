@@ -6,7 +6,11 @@ import type {
     HappyAgentTodo,
 } from "happy-desktop-state";
 import { Button } from "../../src/Button";
-import { HappyAgentActivityPanel } from "../../src/HappyAgentActivityPanel";
+import {
+    HappyAgentActivityPanel,
+    type HappyAgentActivityCompute,
+    type HappyAgentActivityRepository,
+} from "../../src/HappyAgentActivityPanel";
 import { TabbedPane } from "../../src/TabbedPane";
 import { WorkFloaty } from "../../src/WorkFloaty";
 import { ComponentPage, Specimen } from "../kit";
@@ -16,6 +20,34 @@ export const componentNumber = "C-157";
 
 // Fixed "now" keeps subagent elapsed timing deterministic for screenshots.
 const NOW = Date.UTC(2026, 6, 25, 17, 0, 0);
+
+const repositories: readonly HappyAgentActivityRepository[] = [
+    {
+        id: "happy-cluster",
+        name: "happy-cluster",
+        branch: "happy/ymwlmtmr",
+        checkout: "ready",
+        changes: { files: 4, added: 128, deleted: 37 },
+    },
+    {
+        id: "design-system",
+        name: "design-system",
+        branch: "main",
+        checkout: "ready",
+        readOnly: true,
+    },
+    { id: "happy", name: "happy", branch: "happy/ymwlmtmr", checkout: "pending" },
+];
+
+const computes: readonly { label: string; compute: HappyAgentActivityCompute }[] = [
+    { label: "no computer yet", compute: { kind: "none" } },
+    { label: "online", compute: { kind: "computer", label: "build-01", online: true } },
+    { label: "offline", compute: { kind: "computer", label: "a100-box", online: false } },
+    {
+        label: "a long name, status not yet known",
+        compute: { kind: "computer", label: "steve-macbook-pro-with-the-ios-simulators" },
+    },
+];
 
 const goal: HappyAgentGoal = {
     objective:
@@ -197,7 +229,7 @@ export function HappyAgentActivityPanelPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Happy Agent session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): live agents and terminals lead, settled agents stay in a collapsed disclosure, and agent rows can open their session. SSE-reactive."
+            summary="Happy Agent session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): a cloud chat's computer and checkouts head it, live agents and terminals lead, settled agents stay in a collapsed disclosure, and agent rows can open their session. SSE-reactive."
             title="HappyAgentActivityPanel"
         >
             <Specimen
@@ -338,7 +370,7 @@ export function HappyAgentActivityPanelPage() {
             </Specimen>
 
             <Specimen
-                detail="the side panel as the app draws it: Activity is its first tab, always present and never closable, ahead of Files and any opened tool"
+                detail="the side panel as the app draws it: Activity is its first tab, always present and never closable, ahead of Files and any opened tool; a cloud chat's computer and checkouts head it"
                 label="Side panel, Activity first"
                 number="08"
                 stage="surface"
@@ -360,12 +392,14 @@ export function HappyAgentActivityPanelPage() {
                 >
                     <HappyAgentActivityPanel
                         backgroundProcesses={[...backgroundProcesses, ...exitedProcesses]}
+                        compute={{ kind: "computer", label: "build-01", online: true }}
                         goal={goal}
                         leading={workList}
                         now={NOW}
                         onBackgroundProcessStop={() => undefined}
                         onSubagentSelect={() => undefined}
                         placement="panel"
+                        repositories={repositories}
                         subagents={subagents}
                         tasks={tasks}
                     />
@@ -398,6 +432,28 @@ export function HappyAgentActivityPanelPage() {
                         tasks={[]}
                     />
                 </TabbedPane>
+            </Specimen>
+
+            <Specimen
+                detail="where a cloud chat's work happens, heading the panel: the computer its tools run on (none yet · online · offline · unknown), then one row per checkout with its branch, whether it is still checking out, read-only access, and the lines changed"
+                label="Compute and repositories"
+                number="10"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", width: "1000px" }}>
+                    {computes.map((entry, index) => (
+                        <div key={entry.label} style={{ width: "320px" }}>
+                            <HappyAgentActivityPanel
+                                backgroundProcesses={[]}
+                                compute={entry.compute}
+                                now={NOW}
+                                repositories={index === 0 ? [] : repositories}
+                                subagents={[]}
+                                tasks={[]}
+                            />
+                        </div>
+                    ))}
+                </div>
             </Specimen>
         </ComponentPage>
     );

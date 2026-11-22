@@ -8,11 +8,50 @@ import type {
     HappyAgentTaskStatus,
 } from "happy-desktop-state";
 import { Button } from "./Button";
+import { ChangeStats } from "./ChangeStats";
 import { CompactActivityRow } from "./CompactActivityRow";
+import { changeCountLabel } from "./countText";
 import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
 import { ScrollArea } from "./Scrollbar";
 
+/** Where a cloud conversation's shell, file and git tools run. */
+export type HappyAgentActivityCompute =
+    | { readonly kind: "none" }
+    | {
+          readonly kind: "computer";
+          /** The computer's name. */
+          readonly label: string;
+          /** Absent until the server has said. */
+          readonly online?: boolean;
+      };
+
+/**
+ * A repository a cloud conversation's agent checked out, or is checking out. A
+ * failed checkout is not listed: its failure is told on the tool call that ran it.
+ */
+export interface HappyAgentActivityRepository {
+    readonly id: string;
+    readonly name: string;
+    readonly branch: string;
+    readonly checkout: "pending" | "ready";
+    /** The agent may read it but not push to it. */
+    readonly readOnly?: boolean;
+    /** What the agent changed in it, once Git has counted; nothing changed draws no counts. */
+    readonly changes?: {
+        readonly files: number;
+        readonly added: number;
+        readonly deleted: number;
+    };
+}
+
 export type HappyAgentActivityPanelProps = {
+    /**
+     * The computer the conversation's tools run on. Absent where the agent
+     * does not join computers; `none` before it has joined one.
+     */
+    compute?: HappyAgentActivityCompute;
+    /** The repositories the agent checked out, one row each. */
+    repositories?: readonly HappyAgentActivityRepository[];
     /**
      * What the chat changed, published and delegated, listed ahead of the
      * session's own activity. Present, the panel is never empty.
@@ -231,6 +270,107 @@ function BackgroundProcessRow(props: {
     );
 }
 
+function computeLabel(compute: HappyAgentActivityCompute): string {
+    if (compute.kind === "none")
+        return "No computer is joined. The agent joins one when the work needs it.";
+    return `Runs on ${compute.label}${compute.online === false ? ", offline" : ""}`;
+}
+
+function ComputeSection(props: { compute: HappyAgentActivityCompute }) {
+    const { compute } = props;
+    return (
+        <section
+            className="happy-agent-activity__section"
+            data-happy-desktop-ui="happy-agent-activity-compute"
+        >
+            <SectionHeading label="Compute" />
+            <div
+                className="happy-agent-activity__list"
+                data-happy-desktop-ui="happy-agent-activity-list"
+            >
+                <CompactActivityRow
+                    arguments={[compute.kind === "none" ? "None" : compute.label]}
+                    accessibleLabel={computeLabel(compute)}
+                    icon="terminal"
+                    meta={[
+                        compute.kind === "none"
+                            ? "joined when the work needs it"
+                            : compute.online === undefined
+                              ? "runs the agent's tools"
+                              : compute.online
+                                ? "online"
+                                : "offline",
+                    ]}
+                    placement="panel"
+                    verb="Computer"
+                />
+            </div>
+        </section>
+    );
+}
+
+function repositoryLabel(repository: HappyAgentActivityRepository): string {
+    const where = `Works in ${repository.name}, branch ${repository.branch}`;
+    const access = repository.readOnly ? ", read-only" : "";
+    const checkout = repository.checkout === "pending" ? ", checking out" : "";
+    const changes = repository.changes;
+    if (!changes || changes.files === 0) return `${where}${access}${checkout}`;
+    const files = `${String(changes.files)} ${changes.files === 1 ? "file" : "files"} changed`;
+    return `${where}${access}${checkout}. ${files}, ${changeCountLabel(changes.added, changes.deleted)}`;
+}
+
+function RepositoryRow(props: { repository: HappyAgentActivityRepository }) {
+    const { repository } = props;
+    const changes = repository.changes;
+    return (
+        <li
+            className="happy-agent-activity__repository"
+            data-checkout={repository.checkout}
+            data-happy-desktop-ui="happy-agent-activity-repository"
+        >
+            <CompactActivityRow
+                arguments={[repository.name]}
+                accessibleLabel={repositoryLabel(repository)}
+                icon={repository.readOnly ? "lock" : "repository"}
+                meta={[
+                    repository.branch,
+                    ...(repository.checkout === "pending" ? ["checking out"] : []),
+                    ...(repository.readOnly ? ["read-only"] : []),
+                ]}
+                placement="panel"
+                trailing={
+                    repository.checkout === "ready" &&
+                    changes &&
+                    (changes.added > 0 || changes.deleted > 0) ? (
+                        <ChangeStats added={changes.added} deleted={changes.deleted} />
+                    ) : undefined
+                }
+                verb="Repository"
+            />
+        </li>
+    );
+}
+
+function RepositorySection(props: { repositories: readonly HappyAgentActivityRepository[] }) {
+    if (props.repositories.length === 0) return null;
+    return (
+        <section
+            className="happy-agent-activity__section"
+            data-happy-desktop-ui="happy-agent-activity-repositories"
+        >
+            <SectionHeading count={props.repositories.length} label="Repositories" />
+            <ul
+                className="happy-agent-activity__list"
+                data-happy-desktop-ui="happy-agent-activity-list"
+            >
+                {props.repositories.map((repository) => (
+                    <RepositoryRow key={repository.id} repository={repository} />
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 function AgentSection(props: {
     agents: readonly SubagentSummary[];
     now: number;
@@ -289,7 +429,9 @@ function TerminalSection(props: {
 
 /**
  * HappyAgentActivityPanel — the read-only session activity monitor combining the TUI's
- * `/goal`, `/tasks`, `/agents`, and `/ps` views. Live agents and terminals lead;
+ * `/goal`, `/tasks`, `/agents`, and `/ps` views. Where the work happens — the
+ * computer its tools run on and the repositories it checked out — heads the
+ * panel, because it changes least; then live agents and terminals lead;
  * everything that finished stays listed after them as a record, newest first,
  * and nothing is folded away. An optional
  * selection callback turns agent readouts into session-navigation buttons. Every
@@ -339,6 +481,8 @@ export function HappyAgentActivityPanel(props: HappyAgentActivityPanelProps) {
             data-testid={props["data-testid"]}
             style={props.style}
         >
+            {props.compute ? <ComputeSection compute={props.compute} /> : null}
+            {props.repositories ? <RepositorySection repositories={props.repositories} /> : null}
             {props.leading}
             {empty ? (
                 <p

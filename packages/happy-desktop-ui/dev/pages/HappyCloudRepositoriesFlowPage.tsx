@@ -1,4 +1,3 @@
-import { happyLogoBlackUrl } from "../../src/assets";
 import type { ReactNode } from "react";
 import {
     agentAuthor,
@@ -12,21 +11,19 @@ import { ConversationDock } from "../../src/ConversationDock";
 import { ConversationView } from "../../src/ConversationView";
 import {
     ComposerFooterBar,
-    ComputeChip,
-    ContextMeter,
     HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
     HappyAgentRepositoriesSettings,
     HappyAgentRepositoryAddDialog,
     HappyAgentRepositoryDeleteDialog,
     HappyAgentRepositoryDialog,
+    HappyAgentActivityPanel,
     HappyAgentSettingsShell,
-    RepositoryChip,
     type HappyAgentRepositoryCheck,
     type HappyAgentRepositoryDialogProps,
     type HappyAgentRepositoryPlugin,
     type HappyAgentRepositoryRow,
+    type HappyAgentActivityRepository,
     type HappyAgentSettingsCategory,
-    type RepositoryChipRepository,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 
@@ -221,29 +218,30 @@ const managed: HappyAgentRepositoryDialogProps = {
     plugin: githubApp,
 };
 
-/** A repository's own picture, as the server serves it: Happy's, for its own repository. */
-const REPOSITORY_PICTURE = happyLogoBlackUrl;
-
-const chips: readonly { label: string; repositories: readonly RepositoryChipRepository[] }[] = [
+const checkouts: readonly {
+    label: string;
+    repositories: readonly HappyAgentActivityRepository[];
+}[] = [
     {
         label: "checking out",
-        repositories: [{ name: "rig", branch: "juno/fix-login", checkout: "pending" }],
+        repositories: [{ id: "rig", name: "rig", branch: "juno/fix-login", checkout: "pending" }],
     },
     {
         label: "ready",
-        repositories: [{ name: "rig", branch: "juno/fix-login", checkout: "ready" }],
+        repositories: [{ id: "rig", name: "rig", branch: "juno/fix-login", checkout: "ready" }],
     },
     {
-        label: "two checkouts: one changed, with its picture, and one read-only",
+        label: "two checkouts: one changed, and one read-only",
         repositories: [
             {
+                id: "happy-agent",
                 name: "happy-agent",
                 branch: "happy/juno",
                 checkout: "ready",
-                avatarUrl: REPOSITORY_PICTURE,
                 changes: { files: 4, added: 128, deleted: 37 },
             },
             {
+                id: "design-system",
                 name: "design-system",
                 branch: "happy/juno",
                 checkout: "ready",
@@ -254,7 +252,7 @@ const chips: readonly { label: string; repositories: readonly RepositoryChipRepo
 ];
 
 /* A checkout that failed is told on the tool call that ran it, in the
-   transcript, and never as a chip: the composer row shows only what is checked
+   transcript, and is never listed: the Activity tab shows only what is checked
    out or still checking out. */
 
 const CHECKOUT_ERROR = "The branch, tag or commit to start from does not exist in happy.";
@@ -404,11 +402,8 @@ const composer: ComposerSnapshot = {
     agentUserIds: [],
 };
 
-/** A cloud task's chat, its composer row holding the chips for what is checked out. */
-function Transcript(props: {
-    entries: readonly ConversationEntry[];
-    repositories: readonly RepositoryChipRepository[];
-}) {
+/** A cloud task's chat; what is checked out is listed in its Activity tab, not here. */
+function Transcript(props: { entries: readonly ConversationEntry[] }) {
     return (
         <div
             style={{
@@ -427,23 +422,6 @@ function Transcript(props: {
                         composerFooterControl={
                             <ComposerFooterBar
                                 leading={<span style={{ fontSize: 12 }}>Auto</span>}
-                                trailing={
-                                    <>
-                                        {props.repositories.map((repository) => (
-                                            <RepositoryChip
-                                                key={repository.name}
-                                                repository={repository}
-                                            />
-                                        ))}
-                                        <ComputeChip
-                                            compute={{
-                                                kind: "computer",
-                                                label: "build-01",
-                                                online: true,
-                                            }}
-                                        />
-                                    </>
-                                }
                             />
                         }
                         composerPlaceholder="Message Happy…"
@@ -467,7 +445,7 @@ export function HappyCloudRepositoriesFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, a repository a plugin manages, and the read-only chip for the repository a task's agent attached, beside the compute chip."
+            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, a repository a plugin manages, and the repositories a task's agent checked out, listed with its computer in the chat's Activity tab."
             title="Happy Cloud repositories flow"
             width={WINDOWS[0].width + 96}
         >
@@ -573,34 +551,21 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Specimen
-                detail="checking out · checked out · two checkouts, one with the lines it changed and its picture, one read-only · each beside the compute chip, one chip per checkout"
-                label="Repository chip in the composer row"
+                detail="checking out · checked out · two checkouts, one with the lines it changed, one read-only · under the computer the tools run on, one row per checkout"
+                label="Repositories in the Activity tab"
                 number="11"
                 stage="surface"
             >
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {chips.map((chip) => (
-                        <div key={chip.label} style={{ display: "flex", width: "640px" }}>
-                            <ComposerFooterBar
-                                leading={<span style={{ fontSize: 12 }}>Auto</span>}
-                                trailing={
-                                    <>
-                                        {chip.repositories.map((repository) => (
-                                            <RepositoryChip
-                                                key={repository.name}
-                                                repository={repository}
-                                            />
-                                        ))}
-                                        <ComputeChip
-                                            compute={{
-                                                kind: "computer",
-                                                label: "build-01",
-                                                online: true,
-                                            }}
-                                        />
-                                        <ContextMeter totalTokens={500_000} usedTokens={5_900} />
-                                    </>
-                                }
+                <div style={{ display: "flex", gap: "16px" }}>
+                    {checkouts.map((checkout) => (
+                        <div key={checkout.label} style={{ display: "flex", width: "320px" }}>
+                            <HappyAgentActivityPanel
+                                backgroundProcesses={[]}
+                                compute={{ kind: "computer", label: "build-01", online: true }}
+                                now={0}
+                                repositories={checkout.repositories}
+                                subagents={[]}
+                                tasks={[]}
                             />
                         </div>
                     ))}
@@ -687,13 +652,13 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <FullScreenSpecimen
-                detail="the tool call that ran it says why; the composer row shows no chip for it"
+                detail="the tool call that ran it says why; the Activity tab does not list it"
                 label="A checkout failed, in the transcript"
                 number="17"
                 screen="17-checkout-failed-1100x760"
                 window={WINDOWS[0]}
             >
-                <Transcript entries={FAILED_TRANSCRIPT} repositories={[]} />
+                <Transcript entries={FAILED_TRANSCRIPT} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="without compute it ran inside the next command, which still reads as itself; the failure is told beneath it"
@@ -702,21 +667,16 @@ export function HappyCloudRepositoriesFlowPage() {
                 screen="18-checkout-deferred-failed-1100x760"
                 window={WINDOWS[0]}
             >
-                <Transcript entries={DEFERRED_TRANSCRIPT} repositories={[]} />
+                <Transcript entries={DEFERRED_TRANSCRIPT} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="the failed call stays as history; the retry checks it out and its chip appears"
+                detail="the failed call stays as history; the retry checks it out and the Activity tab lists it"
                 label="Retried after a fix"
                 number="19"
                 screen="19-checkout-retried-1100x760"
                 window={WINDOWS[0]}
             >
-                <Transcript
-                    entries={RETRIED_TRANSCRIPT}
-                    repositories={[
-                        { name: "happy", branch: "happy/test-pr-workflow", checkout: "ready" },
-                    ]}
-                />
+                <Transcript entries={RETRIED_TRANSCRIPT} />
             </FullScreenSpecimen>
         </ComponentPage>
     );

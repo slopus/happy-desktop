@@ -423,12 +423,6 @@ export {
     type LinkContextMenuProps,
 } from "./LinkContextMenu";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
-export { ComputeChip, type ComputeChipCompute, type ComputeChipProps } from "./ComputeChip";
-export {
-    RepositoryChip,
-    type RepositoryChipProps,
-    type RepositoryChipRepository,
-} from "./RepositoryChip";
 export {
     fileTreeBuild,
     fileTreeExpanded,
@@ -498,7 +492,9 @@ export {
 } from "./HappyAgentTaskBrowseDialog";
 export {
     HappyAgentActivityPanel,
+    type HappyAgentActivityCompute,
     type HappyAgentActivityPanelProps,
+    type HappyAgentActivityRepository,
 } from "./HappyAgentActivityPanel";
 export {
     SearchField,
