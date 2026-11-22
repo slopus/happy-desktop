@@ -375,6 +375,95 @@ it("keeps the tab bar draggable over controls scrolled out of its pane's body", 
     expect(nativeDragAt(back.x + 4, back.y + 4)).toBe(false);
 });
 
+it("holds the window by the veil where a one-tab workspace hides its strip", async () => {
+    const view = createRenderer().render(
+        () => (
+            <AppShell
+                sidebar={
+                    <Sidebar
+                        activeItemId="general"
+                        onItemSelect={() => undefined}
+                        sections={[
+                            {
+                                id: "chats",
+                                items: [{ id: "general", kind: "channel", label: "General" }],
+                            },
+                        ]}
+                    />
+                }
+                // As the app composes it: one band of window chrome, with the
+                // pane toggle floating over the hidden strip's place.
+                navigationChrome="integrated"
+                panelToggleAction={{ open: false, onClick: () => undefined }}
+                sidebarCollapsedLayout="overlay"
+                sidebarCollapsible
+                windowControls
+            >
+                <TabbedPane
+                    activeId="task"
+                    barHidden
+                    barOverlay
+                    onSelect={() => undefined}
+                    size="medium"
+                    tabSizing="content"
+                    tabs={[{ id: "task", label: "Task" }]}
+                >
+                    {/* A transcript pinned to its latest row, so rows of text
+                        and controls sit under the veil as well as below it. */}
+                    <div
+                        data-testid="transcript"
+                        ref={(node) => {
+                            if (node) node.scrollTop = node.scrollHeight;
+                        }}
+                        style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto" }}
+                    >
+                        {Array.from({ length: 60 }, (_, row) => (
+                            <p key={row} style={{ display: "flex", gap: 8, margin: 8 }}>
+                                Message {row}
+                                <button type="button">Tool call {row}</button>
+                            </p>
+                        ))}
+                    </div>
+                </TabbedPane>
+            </AppShell>
+        ),
+        { height: 600, width: 900 },
+    );
+
+    await view.ready();
+    if (server.browser !== "chromium") return;
+
+    const box = (selector: string) => view.$(selector).element.getBoundingClientRect();
+    const veil = box('[data-happy-desktop-ui="tabbed-pane-veil"]');
+    const body = box('[data-happy-desktop-ui="tabbed-pane-body"]');
+    const toggle = box('button[aria-label="Show secondary pane"]');
+    const onToggle = (x: number, y: number) =>
+        x >= toggle.left && x < toggle.right && y >= toggle.top && y < toggle.bottom;
+    expect(veil.top).toBe(body.top);
+    expect(veil.height).toBeGreaterThan(0);
+    expect(view.$('[data-happy-desktop-ui="tabbed-pane-veil"]').computedStyle("user-select")).toBe(
+        "none",
+    );
+
+    // The toggle really floats over the veil.
+    expect(toggle.top).toBeLessThan(veil.bottom);
+    expect(toggle.left).toBeGreaterThan(veil.left);
+
+    // Every point of the veil holds the window, over text and controls alike.
+    const holes: string[] = [];
+    for (let x = Math.ceil(veil.left); x < veil.right; x += 4)
+        for (const y of [veil.top + 1, veil.top + veil.height / 2, veil.bottom - 1])
+            if (!onToggle(x, y) && !nativeDragAt(x, y)) holes.push(`${String(x)},${String(y)}`);
+    expect(holes).toEqual([]);
+
+    // The pane toggle riding the band still takes presses.
+    expect(nativeDragAt(toggle.x + toggle.width / 2, toggle.y + toggle.height / 2)).toBe(false);
+
+    // Below the veil the transcript is the page's again, to scroll, select, and press.
+    for (let y = veil.bottom + 1; y < body.bottom; y += 16)
+        expect(nativeDragAt(veil.left + veil.width / 2, y)).toBe(false);
+});
+
 it("reserves a non-overlapping drag row for a standalone desktop surface", async () => {
     const view = createRenderer().render(
         () => (

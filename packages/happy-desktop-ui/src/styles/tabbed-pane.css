@@ -98,16 +98,25 @@
 }
 
 /* Without its bar the body runs to the pane's top edge, under whatever window
-   controls ride there. A fade the height of the bar and more, in the body's own
+   controls ride there. A veil the height of the bar and more, in the body's own
    surface, lets what scrolls up there dissolve rather than run into those
-   controls; it is paint only, so it neither moves nor catches anything. */
-.happy-tabbed-pane[data-bar-overlay][data-bar-hidden] > .happy-tabbed-pane__body::before {
+   controls. It never moves anything and takes no pointer, and nothing under
+   it starts a selection; in a desktop window it is also the band the window
+   is held by, in the strip's place (app-shell.css). */
+.happy-tabbed-pane__veil {
+    display: none;
+}
+
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden]
+    > .happy-tabbed-pane__body
+    > .happy-tabbed-pane__veil {
     position: absolute;
     z-index: 3;
     top: 0;
     right: 0;
     /* Clear of the 1px hairline a body beside the sidebar draws at its left. */
     left: 1px;
+    display: block;
     height: calc(var(--happy-tabbed-pane-bar-height) + 32px);
     background: linear-gradient(
         to bottom,
@@ -116,8 +125,8 @@
         color-mix(in srgb, var(--surface) 45%, transparent) 70%,
         transparent
     );
-    content: "";
     pointer-events: none;
+    user-select: none;
 }
 
 .happy-tabbed-pane__scroller {

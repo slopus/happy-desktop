@@ -498,11 +498,20 @@
    strip, so `:first-child` never matched and
    the main band, with or without tabs, stopped moving the window. The side
    panel's strip heads its own column the same way, and the pane toggle's box
-   beside it is chrome around one button. */
+   beside it is chrome around one button. A hidden strip leaves its veil in
+   its place, and the window is held by that instead: a press there used to
+   land on the transcript under it and start a selection. Whatever scrolls up
+   under the veil is out of reach, as it was under the strip; the controls
+   floating over it come later in the tree and punch their own holes. */
 .happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__workspace
     > .happy-tabbed-pane:not(.happy-panel-header ~ *)
     > .happy-tabbed-pane__bar,
+.happy-desktop-app-shell[data-window-controls]
+    .happy-desktop-app-shell__workspace
+    > .happy-tabbed-pane:not(.happy-panel-header ~ *)
+    > .happy-tabbed-pane__body
+    > .happy-tabbed-pane__veil,
 .happy-desktop-app-shell[data-window-controls]
     .happy-desktop-app-shell__panel-content
     > .happy-tabbed-pane

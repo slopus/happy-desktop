@@ -157,6 +157,8 @@ class TabbedPaneBody extends Component<{
     readonly children: ReactNode;
     /** Whether the body's top inset is zero; a change is what is held. */
     readonly insetHidden: boolean | undefined;
+    /** Whether the body keeps a veil for its top edge while the bar is hidden. */
+    readonly veil: boolean;
 }> {
     readonly #body = createRef<HTMLDivElement>();
     override getSnapshotBeforeUpdate(
@@ -189,6 +191,16 @@ class TabbedPaneBody extends Component<{
                 data-happy-desktop-ui="tabbed-pane-body"
                 ref={this.#body}
             >
+                {/* Always mounted with an overlaid bar and shown by the bar
+                    being hidden, so the strip coming and going never adds or
+                    removes a node ahead of the document. */}
+                {this.props.veil ? (
+                    <div
+                        aria-hidden="true"
+                        className="happy-tabbed-pane__veil"
+                        data-happy-desktop-ui="tabbed-pane-veil"
+                    />
+                ) : null}
                 {this.props.children}
             </div>
         );
@@ -369,6 +381,7 @@ export function TabbedPane(props: TabbedPaneProps) {
             <TabbedPaneBody
                 activeId={local.activeId}
                 insetHidden={local.barOverlay ? local.barHidden : undefined}
+                veil={local.barOverlay === true}
             >
                 {local.children}
             </TabbedPaneBody>
