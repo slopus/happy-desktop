@@ -11,9 +11,10 @@ const SCROLL_MEMORY_PREFIX = "happy.happy-agent.scroll-memory.v1:";
  * one Happy Agent, so a restart reopens a conversation read part way up where
  * it was rather than at its newest message.
  *
- * Scrolling reports a new place every frame, so it is written once the
- * scrolling settles. One instance per Happy Agent, for the same reason the
- * view preferences are shared: a second one would race the first's writes.
+ * Scrolling reports a new place every frame, so it is written at most once
+ * every 250 ms while scrolling, and right away when the window is hidden. One
+ * instance per Happy Agent, for the same reason the view preferences are
+ * shared: a second one would race the first's writes.
  */
 const shared = new Map<string, HappyAgentScrollMemoryPersistence>();
 export function desktopScrollMemoryPersistence(

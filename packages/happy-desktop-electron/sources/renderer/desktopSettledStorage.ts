@@ -1,5 +1,5 @@
 /**
- * How long a run of changes is allowed to settle before it is written down.
+ * How long changes are gathered before they are written down.
  *
  * Dragging the panel or scrolling a transcript reports every settled step,
  * which is the right thing for the store — what is on screen must never lag the
@@ -10,7 +10,7 @@
  */
 const WRITE_SETTLE_MS = 250;
 
-/** One document kept in the window's localStorage, written once its changes settle. */
+/** One document kept in the window's localStorage, written at most once per interval. */
 export interface DesktopSettledStorage<Document> {
     read(): Document | undefined;
     write(document: Document): void;
@@ -18,7 +18,9 @@ export interface DesktopSettledStorage<Document> {
 
 /**
  * A document in the window's own storage under `key`, read as it was last
- * written and written once a run of changes settles.
+ * written. The first change starts one timer that is not restarted by later
+ * changes, so a steady run of changes is written at most once every
+ * `WRITE_SETTLE_MS`, plus right away when the window is hidden or left.
  */
 export function desktopSettledStorageCreate<Document>(
     key: string,
