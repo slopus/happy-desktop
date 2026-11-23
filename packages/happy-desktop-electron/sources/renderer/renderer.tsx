@@ -1924,16 +1924,43 @@ if (mediaPreviewBridge) {
                 connectionUis,
             }),
             experiments,
-            // Voice settings and calls both belong to the local host, even while
-            // the window is looking at a remote machine's work.
-            () =>
-                happyAgents
-                    .get()
-                    .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
-                    ?.session?.voiceSettings.get().promptRevision ?? 0,
+            () => {
+                const snapshot = happyAgents.get();
+                const activeId = snapshot.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+                const active =
+                    snapshot.happyAgents.find((entry) => entry.id === activeId) ??
+                    (activeId === LOCAL_HAPPY_AGENT_ID
+                        ? snapshot.happyAgents.find(
+                              (entry) => entry.status === "connected" && entry.session,
+                          )
+                        : undefined);
+                return active?.session?.voiceSettings.get().promptRevision ?? 0;
+            },
         );
         appDisposers.push(gptLiveExperimentsConnect(gptLive, experiments));
         appDisposers.push(() => gptLive[Symbol.dispose]());
+        let previousVoiceActiveId = happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+        let previousVoiceActiveStatus = happyAgents
+            .get()
+            .happyAgents.find((entry) => entry.id === previousVoiceActiveId)?.status;
+        const happyAgentVoiceUnsub = happyAgents.subscribe(() => {
+            const currentSnapshot = happyAgents.get();
+            const currentActiveId = currentSnapshot.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+            const currentActiveStatus = currentSnapshot.happyAgents.find(
+                (entry) => entry.id === currentActiveId,
+            )?.status;
+            if (
+                currentActiveId !== previousVoiceActiveId ||
+                currentActiveStatus !== previousVoiceActiveStatus
+            ) {
+                previousVoiceActiveId = currentActiveId;
+                previousVoiceActiveStatus = currentActiveStatus;
+                if (experiments.get().voice && gptLive.get().gptLiveEnabled) {
+                    gptLive.availabilityRead();
+                }
+            }
+        });
+        appDisposers.push(happyAgentVoiceUnsub);
         // What the surfaces lay out against: the window itself, or the
         // closed-inset arrangement while the rail owns the window's left edge.
         const surfaceWindowState = surfaceWindowStateStoreCreate({
