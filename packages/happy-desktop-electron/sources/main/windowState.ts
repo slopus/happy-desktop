@@ -33,7 +33,10 @@ export class DesktopWindowStateStore {
     ): DesktopWindowBounds | undefined {
         const bounds = this.value?.bounds;
         if (!bounds) return undefined;
-        if (displays.some(({ workArea }) => boundsVisible(bounds, workArea))) return bounds;
+        const overlapping = displays
+            .filter(({ workArea }) => boundsVisible(bounds, workArea))
+            .sort((a, b) => overlapArea(bounds, b.workArea) - overlapArea(bounds, a.workArea))[0];
+        if (overlapping) return boundsFit(bounds, overlapping.workArea);
 
         const { workArea } = primaryDisplay;
         const width = Math.min(bounds.width, workArea.width);
@@ -132,6 +135,25 @@ function boundsVisible(bounds: DesktopWindowBounds, workArea: DesktopWindowBound
         Math.min(bounds.y + bounds.height, workArea.y + workArea.height) -
         Math.max(bounds.y, workArea.y);
     return visibleWidth >= minimumVisibleLength && visibleHeight >= minimumVisibleLength;
+}
+
+function overlapArea(bounds: DesktopWindowBounds, workArea: DesktopWindowBounds): number {
+    const width =
+        Math.min(bounds.x + bounds.width, workArea.x + workArea.width) -
+        Math.max(bounds.x, workArea.x);
+    const height =
+        Math.min(bounds.y + bounds.height, workArea.y + workArea.height) -
+        Math.max(bounds.y, workArea.y);
+    return Math.max(0, width) * Math.max(0, height);
+}
+
+/** Moves (and if needed shrinks) bounds so the whole window, title bar included, lies in the work area. */
+function boundsFit(bounds: DesktopWindowBounds, workArea: DesktopWindowBounds): DesktopWindowBounds {
+    const width = Math.min(bounds.width, workArea.width);
+    const height = Math.min(bounds.height, workArea.height);
+    const x = Math.min(Math.max(bounds.x, workArea.x), workArea.x + workArea.width - width);
+    const y = Math.min(Math.max(bounds.y, workArea.y), workArea.y + workArea.height - height);
+    return { height, width, x, y };
 }
 
 function integerValid(value: unknown): value is number {
