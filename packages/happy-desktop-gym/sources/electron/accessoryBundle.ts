@@ -33,8 +33,7 @@ export async function gymElectronAccessoryExecutable(executablePath: string): Pr
     const infoPath = join(bundle, "Contents", "Info.plist");
     const info = await readFile(infoPath);
     if (await accessoryDeclared(infoPath)) return executablePath;
-    const { stderr } = await exec("codesign", ["--display", "--verbose=2", bundle]);
-    if (!/^Signature=adhoc$/m.test(stderr)) return executablePath;
+    if (!(await adhocSigned(bundle))) return executablePath;
 
     // One copy per bundle and build: a reinstalled Electron gets a fresh one.
     const built = (await stat(executablePath)).mtimeMs;
@@ -75,6 +74,16 @@ export async function gymElectronAccessoryExecutable(executablePath: string): Pr
         await rm(staging, { recursive: true, force: true });
     }
     return copy;
+}
+
+async function adhocSigned(bundle: string): Promise<boolean> {
+    try {
+        const { stderr } = await exec("codesign", ["--display", "--verbose=2", bundle]);
+        return /^Signature=adhoc$/m.test(stderr);
+    } catch {
+        // codesign fails when the bundle is not signed at all.
+        return false;
+    }
 }
 
 async function accessoryDeclared(infoPath: string): Promise<boolean> {
