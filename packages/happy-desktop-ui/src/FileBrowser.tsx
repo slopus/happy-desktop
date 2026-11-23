@@ -1,6 +1,11 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
-import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
+import {
+    FileTree,
+    type FileTreeEmptyAction,
+    type FileTreeNode,
+    type FileTreeProps,
+} from "./FileTree";
 import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 import { SearchField } from "./TitleBar";
@@ -37,6 +42,8 @@ export type FileBrowserProps = {
     loading?: boolean;
     loadingLabel?: string;
     emptyLabel?: string;
+    /** What an empty listing offers to do next, such as switching to every file. */
+    emptyAction?: FileTreeEmptyAction;
     /** Rows the listing holds, stated beside the controls rather than over them. */
     count: number | undefined;
     /** Total lines the listed files gained and lost, when the scope has a diff. */
@@ -100,6 +107,7 @@ export function FileBrowser(props: FileBrowserProps) {
         "loading",
         "loadingLabel",
         "emptyLabel",
+        "emptyAction",
         "count",
         "addedLines",
         "deletedLines",
@@ -249,6 +257,7 @@ export function FileBrowser(props: FileBrowserProps) {
                 how tall the rest would have been. */}
             <div className="happy-file-browser__body" data-happy-desktop-ui="file-browser-body">
                 <FileTree
+                    emptyAction={local.emptyAction}
                     emptyLabel={local.emptyLabel}
                     label={local.scope === "all" ? "All files" : "Changed files"}
                     loading={local.loading}

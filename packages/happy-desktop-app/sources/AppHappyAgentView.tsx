@@ -1208,6 +1208,11 @@ interface OpenGroup {
     readonly conversations: HappyAgentProjectGroup["conversations"];
     readonly changes: NonNullable<HappyAgentProjectGroup["changes"]>;
     readonly changesStatus?: HappyAgentProjectGroup["changesStatus"];
+    /**
+     * A bot's or a task's own folder, which Git does not track: its Changes can
+     * list only what a chat edited through its tools, so the panel says so.
+     */
+    readonly untracked: boolean;
     readonly create?: HappyAgentSessionCreateInput;
     /**
      * Where the open group's checkout is in its own life, for a worktree. A
@@ -2365,6 +2370,7 @@ function openGroupFind(
             home: false,
             conversations: [task.conversation],
             changes: worktree?.changes ?? [],
+            untracked: worktree === undefined,
             ...(worktree?.changesStatus === undefined
                 ? {}
                 : { changesStatus: worktree.changesStatus }),
@@ -2383,6 +2389,7 @@ function openGroupFind(
             home: false,
             conversations: [rootTask.conversation],
             changes: [],
+            untracked: true,
             create: { cwd: rootTask.path, worktreeId: rootTask.workspaceId },
             path: rootTask.displayPath,
         };
@@ -2394,6 +2401,7 @@ function openGroupFind(
             home: false,
             conversations: [bot.conversation],
             changes: [],
+            untracked: true,
             // The bot's folder, so files and attachments land in it. Starting a
             // second conversation here is refused separately: a bot has exactly
             // one, and `sessionCreateAvailable` is what withholds that control.
@@ -2408,6 +2416,7 @@ function openGroupFind(
                 home: project.kind === "home",
                 conversations: project.conversations,
                 changes: project.changes ?? [],
+                untracked: false,
                 ...(project.changesStatus === undefined
                     ? {}
                     : { changesStatus: project.changesStatus }),
@@ -2423,6 +2432,7 @@ function openGroupFind(
                     home: false,
                     conversations: worktree.conversations,
                     changes: worktree.changes ?? [],
+                    untracked: false,
                     ...(worktree.changesStatus === undefined
                         ? {}
                         : { changesStatus: worktree.changesStatus }),
@@ -2442,6 +2452,7 @@ function openGroupFind(
             home: false,
             conversations: [archived.conversation],
             changes: [],
+            untracked: true,
             path: archived.displayPath,
         };
     return undefined;
@@ -9108,6 +9119,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             htmlPreview={props.htmlPreview}
                             mediaWindow={props.mediaWindow}
                             changes={panelChanges}
+                            untracked={openGroup?.untracked === true}
                             {...(openGroup?.changesStatus === undefined || !floatyFromGit
                                 ? {}
                                 : { changesStatus: openGroup.changesStatus })}
@@ -12682,6 +12694,8 @@ function HappyAgentPanelBody(props: {
     };
     changes: readonly HappyAgentPanelChange[];
     changesStatus?: OpenGroup["changesStatus"];
+    /** The folder is one Git does not track, so Changes holds only this chat's edits. */
+    untracked: boolean;
     /**
      * Every checkout the task works in, each listed under its own heading in
      * place of `changes`; absent while it works in its own alone.
@@ -13109,6 +13123,27 @@ function HappyAgentPanelBody(props: {
                             {...(changesStale
                                 ? {
                                       note: "Showing the last successful Git scan. Retrying automatically…",
+                                  }
+                                : !all && props.untracked && changeSections === undefined
+                                  ? {
+                                        // A file saved from a shell, by another
+                                        // chat, or by the reader is in the folder
+                                        // and still not here, so Changes says what
+                                        // it can see rather than passing for Git.
+                                        // Beside other checkouts' sections it also
+                                        // lists their Git changes, and says nothing.
+                                        note: "This folder isn't tracked by Git, so Changes lists only files this chat edited.",
+                                    }
+                                  : {})}
+                            {...(!all &&
+                            props.untracked &&
+                            query === "" &&
+                            allFilesUnavailable === undefined
+                                ? {
+                                      emptyAction: {
+                                          label: "Show all files",
+                                          onClick: () => props.onScopeChange("all"),
+                                      },
                                   }
                                 : {})}
                             {...(props.happyAgentAvailability !== undefined && all

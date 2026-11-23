@@ -478,7 +478,12 @@ export function FileBrowserPage() {
                 )}
             </Specimen>
 
-            <Specimen detail="Loading and empty" label="States" number="06" stage="surface">
+            <Specimen
+                detail="Loading, empty, and empty in a folder Git does not track — it says what Changes can see and offers every file"
+                label="States"
+                number="06"
+                stage="surface"
+            >
                 <div style={{ display: "flex", gap: "12px" }}>
                     {panelFrame(
                         <FileBrowser count={0} layout="flat" loading nodes={[]} scope="all" />,
@@ -490,6 +495,18 @@ export function FileBrowserPage() {
                             emptyLabel="No changed files."
                             layout="flat"
                             nodes={[]}
+                            scope="changed"
+                        />,
+                        260,
+                    )}
+                    {panelFrame(
+                        <FileBrowser
+                            count={0}
+                            emptyAction={{ label: "Show all files", onClick: () => undefined }}
+                            emptyLabel="No changed files."
+                            layout="flat"
+                            nodes={[]}
+                            note="This folder isn't tracked by Git, so Changes lists only files this chat edited."
                             scope="changed"
                         />,
                         260,

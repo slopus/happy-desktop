@@ -223,6 +223,7 @@ export {
     FileTreeFamilyIcon,
     fileTreeFamily,
     type FileTreeCheckout,
+    type FileTreeEmptyAction,
     type FileTreeFamily,
     type FileTreeGitStatus,
     type FileTreeNode,

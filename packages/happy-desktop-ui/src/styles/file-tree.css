@@ -545,3 +545,33 @@
     min-height: 28px;
     padding: 8px 12px;
 }
+
+/* What an empty listing offers next sits under its status line on the same
+   inset, in the link colour of the tree's own "Show more…": a line to follow,
+   not a button competing with the panel's controls above it. */
+.happy-file-tree__empty-action {
+    display: flex;
+    flex: none;
+    align-items: center;
+    align-self: flex-start;
+    height: 28px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: none;
+    color: var(--text-link);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    cursor: pointer;
+}
+
+.happy-file-tree__empty-action:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-file-tree__empty-action:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}

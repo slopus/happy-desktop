@@ -89,6 +89,11 @@ export type FileTreeSelectModifiers = {
     /** Shift: take the run of rows from the last one picked through this one. */
     readonly extend: boolean;
 };
+/** The one thing worth doing next from an empty listing, drawn under its status line. */
+export type FileTreeEmptyAction = {
+    label: string;
+    onClick: () => void;
+};
 export type FileTreeProps = {
     className?: string;
     "data-testid"?: string;
@@ -141,6 +146,7 @@ export type FileTreeProps = {
     loading?: boolean;
     loadingLabel?: string;
     emptyLabel?: string;
+    emptyAction?: FileTreeEmptyAction;
     moreLabel?: string;
 };
 /**
@@ -839,6 +845,7 @@ export function FileTree(props: FileTreeProps) {
         "loading",
         "loadingLabel",
         "emptyLabel",
+        "emptyAction",
         "moreLabel",
     ]);
     const indent = local.indent ?? DEFAULT_INDENT;
@@ -1072,12 +1079,24 @@ export function FileTree(props: FileTreeProps) {
                     {local.loadingLabel ?? "Loading files…"}
                 </div>
             ) : model.rows.length === 0 ? (
-                <div
-                    className="happy-file-tree__status-line"
-                    data-happy-desktop-ui="file-tree-empty"
-                >
-                    {local.emptyLabel ?? "No files to show."}
-                </div>
+                <>
+                    <div
+                        className="happy-file-tree__status-line"
+                        data-happy-desktop-ui="file-tree-empty"
+                    >
+                        {local.emptyLabel ?? "No files to show."}
+                    </div>
+                    {local.emptyAction ? (
+                        <button
+                            className="happy-file-tree__empty-action"
+                            data-happy-desktop-ui="file-tree-empty-action"
+                            onClick={local.emptyAction.onClick}
+                            type="button"
+                        >
+                            {local.emptyAction.label}
+                        </button>
+                    ) : null}
+                </>
             ) : virtualized ? (
                 <div className="happy-file-tree__virtual" data-happy-desktop-ui="file-tree-virtual">
                     {/* The rows leave the flow so the listing can be as tall as
