@@ -10916,6 +10916,21 @@ function HappyAgentConversationSurface(props: {
             onDelegationSelect={(sessionId) =>
                 props.onChatSelect(props.groupId, sessionId as HappyAgentSessionId)
             }
+            onPromptEdit={
+                props.readOnly
+                    ? undefined
+                    : (message) => {
+                          void workspace.composerPromptRestore(message);
+                          const textarea = document.querySelector<HTMLTextAreaElement>(
+                              ".happy-composer__textarea",
+                          );
+                          textarea?.focus();
+                          if (textarea && message.text) {
+                              const len = message.text.length;
+                              textarea.setSelectionRange(len, len);
+                          }
+                      }
+            }
             {...(props.writeRefusal === undefined && props.unavailable === undefined
                 ? {
                       onRequestAnswer: (requestId: string, answers: HappyAgentUserInputAnswerMap) =>

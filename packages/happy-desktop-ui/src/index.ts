@@ -63,6 +63,7 @@ export {
 export { TurnSummary, type TurnSummaryProps } from "./TurnSummary";
 export { Tooltip, type TooltipAlign, type TooltipPlacement, type TooltipProps } from "./Tooltip";
 export { CopyButton, type CopyButtonProps } from "./CopyButton";
+export { EditPromptButton, type EditPromptButtonProps } from "./EditPromptButton";
 export { ScrollingText, type ScrollingTextProps } from "./ScrollingText";
 export { TypedText, type TypedTextProps } from "./TypedText";
 export { ArrivingText, type ArrivingTextProps } from "./ArrivingText";
