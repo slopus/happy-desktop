@@ -107,6 +107,7 @@ function directoryCreate() {
                     subtaskFailures: new Map(),
                     taskFailures: new Map(),
                     tasks: [],
+                    tasksArchived: [],
                 },
             ],
         };

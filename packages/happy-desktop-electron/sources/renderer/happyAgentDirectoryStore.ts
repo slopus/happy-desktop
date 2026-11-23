@@ -141,6 +141,8 @@ export interface HappyAgentDirectoryEntry {
     readonly botFailures: HappyAgentSessionListSnapshot["botFailures"];
     /** This Happy Agent's tasks the reader has joined, in the reader's own order. */
     readonly tasks: HappyAgentSessionListSnapshot["tasks"];
+    /** This Happy Agent's archived tasks, oldest first: its Tasks heading offers them back. */
+    readonly tasksArchived: HappyAgentSessionListSnapshot["tasksArchived"];
     /** Task acts the host refused, with the reason to show. */
     readonly taskFailures: HappyAgentSessionListSnapshot["taskFailures"];
     readonly session?: HappyAgentSession;
@@ -302,6 +304,7 @@ function projectsRead(
     | "subtaskFailures"
     | "botFailures"
     | "tasks"
+    | "tasksArchived"
     | "taskFailures"
 > {
     const workspace = session.workspace.get();
@@ -316,6 +319,7 @@ function projectsRead(
         subtaskFailures: workspace.list.subtaskFailures,
         botFailures: workspace.list.botFailures,
         tasks: workspace.list.tasks,
+        tasksArchived: workspace.list.tasksArchived,
         taskFailures: workspace.list.taskFailures,
     };
 }
@@ -332,6 +336,7 @@ function projectsMatch(
         | "subtaskFailures"
         | "botFailures"
         | "tasks"
+        | "tasksArchived"
         | "taskFailures"
     >,
 ): boolean {
@@ -344,6 +349,7 @@ function projectsMatch(
         entry.subtaskFailures === next.subtaskFailures &&
         entry.botFailures === next.botFailures &&
         entry.tasks === next.tasks &&
+        entry.tasksArchived === next.tasksArchived &&
         entry.taskFailures === next.taskFailures
     );
 }
@@ -443,6 +449,7 @@ export function happyAgentDirectoryStoreCreate(
             subtaskFailures: NO_SUBTASK_FAILURES,
             botFailures: NO_BOT_FAILURES,
             tasks: NO_TASKS,
+            tasksArchived: NO_TASKS,
             taskFailures: NO_TASK_FAILURES,
             status: "connecting",
         },
@@ -714,6 +721,7 @@ export function happyAgentDirectoryStoreCreate(
             subtaskFailures: NO_SUBTASK_FAILURES,
             botFailures: NO_BOT_FAILURES,
             tasks: NO_TASKS,
+            tasksArchived: NO_TASKS,
             taskFailures: NO_TASK_FAILURES,
             session: undefined,
             setup: undefined,
@@ -1119,6 +1127,7 @@ export function happyAgentDirectoryStoreCreate(
                             subtaskFailures: NO_SUBTASK_FAILURES,
                             botFailures: NO_BOT_FAILURES,
                             tasks: NO_TASKS,
+                            tasksArchived: NO_TASKS,
                             taskFailures: NO_TASK_FAILURES,
                             status: "connecting",
                         },
