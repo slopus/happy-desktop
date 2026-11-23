@@ -960,6 +960,61 @@
         }
       }
     },
+    "claude_setup_token_opened": {
+      "tier": "usage",
+      "clients": [
+        "desktop"
+      ],
+      "fires": "The person opens the Claude setup-token dialog during onboarding.",
+      "properties": {
+        "source": {
+          "enum": [
+            "onboarding"
+          ]
+        }
+      }
+    },
+    "claude_setup_token_command_copied": {
+      "tier": "usage",
+      "clients": [
+        "desktop"
+      ],
+      "fires": "The person copies claude setup-token using the onboarding dialog's copy button.",
+      "properties": {}
+    },
+    "claude_setup_token_pasted": {
+      "tier": "usage",
+      "clients": [
+        "desktop"
+      ],
+      "fires": "The person pastes nonempty text into the empty onboarding token field. No token content or format validation is sent.",
+      "properties": {}
+    },
+    "claude_setup_token_saved": {
+      "tier": "usage",
+      "clients": [
+        "desktop"
+      ],
+      "fires": "Happy Agent accepts a setup-token save requested from onboarding.",
+      "properties": {}
+    },
+    "claude_setup_token_failed": {
+      "tier": "error",
+      "clients": [
+        "desktop"
+      ],
+      "fires": "A setup-token save requested from onboarding fails. No error text is sent.",
+      "properties": {
+        "error_kind": {
+          "enum": [
+            "agent_unavailable",
+            "agent_unsupported",
+            "refused",
+            "unreachable"
+          ]
+        }
+      }
+    },
     "onboarding_mobile": {
       "tier": "usage",
       "clients": [

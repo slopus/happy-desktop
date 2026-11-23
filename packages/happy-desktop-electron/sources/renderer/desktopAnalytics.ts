@@ -1264,6 +1264,9 @@ export function desktopAnalyticsCreate(options: {
             let step: AnalyticsEvents["onboarding_step_viewed"]["step"] | undefined;
             let mobile: string | undefined;
             let stage: string | undefined;
+            let claudeTokenPhase:
+                | NonNullable<LocalOnboardingViewSnapshot["claudeToken"]>["phase"]
+                | undefined;
             // While analytics is off nothing is followed, and what was is
             // forgotten, so turning it back on reports only what it then sees.
             offResets.add(() => {
@@ -1271,9 +1274,20 @@ export function desktopAnalyticsCreate(options: {
                 step = undefined;
                 mobile = undefined;
                 stage = undefined;
+                claudeTokenPhase = undefined;
             });
             const observe = (snapshot: LocalOnboardingViewSnapshot): void => {
                 if (!reporting()) return;
+                const claudeToken = snapshot.claudeToken;
+                if (claudeTokenPhase === "saving") {
+                    if (claudeToken?.phase === "saved")
+                        track(LOCAL_HAPPY_AGENT_ID, "claude_setup_token_saved", {});
+                    else if (claudeToken?.phase === "failed")
+                        track(LOCAL_HAPPY_AGENT_ID, "claude_setup_token_failed", {
+                            error_kind: claudeToken.errorKind,
+                        });
+                }
+                claudeTokenPhase = claudeToken?.phase;
                 const view = localOnboardingView(snapshot);
                 if (view && view.kind !== "finishing" && welcome.get().welcomeAcknowledged) {
                     const next = stepOf(localOnboardingStage(view));
@@ -1365,6 +1379,30 @@ export function desktopAnalyticsCreate(options: {
                             });
                     }
                     store.assistantsContinue();
+                },
+                claudeSetupTokenReset() {
+                    if (reporting())
+                        track(LOCAL_HAPPY_AGENT_ID, "claude_setup_token_opened", {
+                            source: "onboarding",
+                        });
+                    store.claudeSetupTokenReset();
+                },
+                claudeSetupTokenSave(token) {
+                    const result = store.claudeSetupTokenSave(token);
+                    if (result === "unavailable" && reporting())
+                        track(LOCAL_HAPPY_AGENT_ID, "claude_setup_token_failed", {
+                            error_kind: "agent_unavailable",
+                        });
+                    return result;
+                },
+                claudeSetupTokenCommandCopy() {
+                    if (reporting())
+                        track(LOCAL_HAPPY_AGENT_ID, "claude_setup_token_command_copied", {});
+                    store.claudeSetupTokenCommandCopy();
+                },
+                claudeSetupTokenPaste() {
+                    if (reporting()) track(LOCAL_HAPPY_AGENT_ID, "claude_setup_token_pasted", {});
+                    store.claudeSetupTokenPaste();
                 },
             };
         },
