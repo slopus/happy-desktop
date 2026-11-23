@@ -148,7 +148,10 @@ function overlapArea(bounds: DesktopWindowBounds, workArea: DesktopWindowBounds)
 }
 
 /** Moves (and if needed shrinks) bounds so the whole window, title bar included, lies in the work area. */
-function boundsFit(bounds: DesktopWindowBounds, workArea: DesktopWindowBounds): DesktopWindowBounds {
+function boundsFit(
+    bounds: DesktopWindowBounds,
+    workArea: DesktopWindowBounds,
+): DesktopWindowBounds {
     const width = Math.min(bounds.width, workArea.width);
     const height = Math.min(bounds.height, workArea.height);
     const x = Math.min(Math.max(bounds.x, workArea.x), workArea.x + workArea.width - width);
