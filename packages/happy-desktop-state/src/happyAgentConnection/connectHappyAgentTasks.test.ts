@@ -6,6 +6,7 @@ import {
     type ServiceMessage,
 } from "@slopus/happy-agent-client";
 import { connectHappyAgent } from "./connectHappyAgent.js";
+import { sessionCwd } from "./projection.js";
 import type {
     HappyAgentConnection,
     MutationRejectedDelta,
@@ -1184,4 +1185,80 @@ it("holds a pre-bootstrap draft save past the 300ms debounce window while loadin
     });
 
     connection.close();
+});
+
+it("roots a task's chat in the task's own folder, which no workspace listing names", async () => {
+    // The daemon lists projects' roots and worktrees as workspaces, not a task's
+    // own folder; the task names that folder itself.
+    const daemon = fakeHappyAgentDaemonCreate();
+    const task = daemon.taskSeed({ id: "task_note", name: "Save a note", joinedKey: "5" });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+
+    const opened = sessionWatch(connection, task.agent.id);
+    await vi.waitFor(() => expect(opened.session().historyLoading).not.toBe(true));
+
+    // A file the chat writes is named against this folder, not by its whole path.
+    expect(opened.session().cwd).toBe("/tmp/tasks/task_note");
+    opened.close();
+});
+
+it("roots a task's chat once the task is listed, when the chat was opened first", async () => {
+    // Cold start: the chat's own read lands before the window's listing does.
+    const daemon = fakeHappyAgentDaemonCreate();
+    const task = daemon.taskSeed({ id: "task_cold", name: "Cold", joinedKey: "5" });
+    const releaseBootstrap = daemon.pause("getDesktopBootstrap");
+    const { connection, watch } = harnessOpen(daemon);
+    const opened = sessionWatch(connection, task.agent.id);
+    await vi.waitFor(() => expect(daemon.callCount("getAgentBootstrap")).toBeGreaterThan(0));
+    // What the chat shows meanwhile names no folder.
+    expect(opened.session().cwd).toBe("");
+    releaseBootstrap();
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    await vi.waitFor(() => expect(opened.session().cwd).toBe("/tmp/tasks/task_cold"));
+    opened.close();
+});
+
+it("roots a task's chat once the task arrives by event, when the chat was opened first", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+    const task = daemon.taskSeed({ id: "task_late", name: "Late" });
+    const opened = sessionWatch(connection, task.agent.id);
+    await vi.waitFor(() => expect(opened.session().historyLoading).not.toBe(true));
+    expect(opened.session().cwd).toBe("");
+
+    const { canArchive: _omitted, ...broadcast } = task;
+    daemon.eventEmit("task.created", { task: broadcast });
+    await vi.waitFor(() => expect(taskIn(watch.tasks, "task_late")).toBeDefined());
+    await vi.waitFor(() => expect(opened.session().cwd).toBe("/tmp/tasks/task_late"));
+    opened.close();
+});
+
+it("roots a task on another computer where its workspace route says its folder is", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const task = daemon.taskSeed({
+        id: "task_remote",
+        joinedKey: "5",
+        compute: { type: "runner", runnerId: "run_1", path: "/home/runner/Happy/Tasks/remote" },
+    });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    const opened = sessionWatch(connection, task.agent.id);
+    await vi.waitFor(() => expect(opened.session().historyLoading).not.toBe(true));
+    expect(opened.session().cwd).toBe("/home/runner/Happy/Tasks/remote");
+    opened.close();
+
+    // The task mirrors its workspace's compute, so every kind of it names the
+    // folder exactly as that workspace, read from its own route, would.
+    const computes = [
+        { type: "host", path: "/Users/reader/Happy/Tasks/note" },
+        { type: "runner", runnerId: "run_1", path: "/home/runner/Happy/Tasks/remote" },
+        { type: "runner", runnerId: "run_1", path: null },
+        { type: "docker", image: "happy/agent" },
+    ] as const;
+    for (const compute of computes)
+        expect(sessionCwd(undefined, compute)).toBe(
+            sessionCwd({ compute } as unknown as Parameters<typeof sessionCwd>[0], undefined),
+        );
 });

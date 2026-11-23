@@ -72,6 +72,7 @@ import {
     RevisedMap,
     projectNumericIdentity,
     projectSession,
+    sessionCwd,
     projectShapeSame,
     projectTasks,
     replaceResource,
@@ -276,6 +277,8 @@ interface SessionEntry {
     /** Context measurement preserved at each observed terminal run boundary. */
     runFinalContextTokens: Map<string, number>;
     hasMore: boolean;
+    /** The folder last published for this session, so a listing that names it can move it. */
+    cwd?: string;
     loading: Promise<void> | undefined;
     loadRequestedRevision: number;
     loadCompletedRevision: number;
@@ -1126,6 +1129,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             subscriber.onChange(groups, state, botGroups, taskGroups, changes);
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
+        // A chat read before its bot or task was listed had no folder to name;
+        // the listing naming it now moves it there.
+        for (const entry of sessions.values()) {
+            if (entry.agent === undefined || entry.cwd === undefined) continue;
+            const workspace = entry.workspace ?? workspaceOf(entry.agent.workspaceId);
+            if (sessionCwd(workspace, ownerComputeOf(entry.agent.workspaceId)) !== entry.cwd)
+                publishSession(entry);
+        }
     };
 
     /**
@@ -1145,9 +1156,23 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const toolCallMediaUrl = (agentId: string, toolCallId: string, index: number): string =>
         client.toolCallMediaUrl(agentId, toolCallId, index);
 
+    /**
+     * Where a bot's or a task's own folder is. It is no listed workspace, so
+     * the bot or task owning it is what names it.
+     */
+    const ownerComputeOf = (workspaceId: string): Task["compute"] | undefined => {
+        const { bots, tasks } = groupsStore.getState();
+        return (
+            tasks.find((task) => task.workspaceId === workspaceId) ??
+            bots.find((bot) => bot.workspaceId === workspaceId)
+        )?.compute;
+    };
+
     const projectionOf = (entry: SessionEntry): SessionProjectionInput | undefined => {
         if (entry.agent === undefined || config === undefined) return undefined;
+        const ownerCompute = ownerComputeOf(entry.agent.workspaceId);
         return {
+            ...(ownerCompute === undefined ? {} : { ownerCompute }),
             agent: entry.agent,
             config,
             connection: groupsStore.getState().connection,
@@ -1221,6 +1246,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const projection = projectionOf(entry);
         if (projection === undefined) return;
         let session = projectSession(projection);
+        entry.cwd = session.cwd;
         if (!entry.historyLoaded) session = { ...session, historyLoading: true };
         if (entry.loadingMore) session = { ...session, loadingMore: true };
         if (entry.loadMoreError !== undefined) {
