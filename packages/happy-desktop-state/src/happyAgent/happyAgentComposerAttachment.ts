@@ -118,7 +118,13 @@ export async function happyAgentWorkspaceAttachmentData(
     attachment: Extract<ComposerAttachment, { kind: "workspaceFile" }>,
 ): Promise<string> {
     attachmentSizeAssert(attachment.name, attachment.size);
-    return base64Encode(new Uint8Array(await attachment.file.arrayBuffer()));
+    // A dropped folder, or a file moved since, has no bytes to read here.
+    const bytes = await attachment.file.arrayBuffer().catch(() => {
+        throw new Error(
+            `${attachment.name} can't be read. It may have moved, or it is a folder, which can be attached only to work on this computer.`,
+        );
+    });
+    return base64Encode(new Uint8Array(bytes));
 }
 
 /**

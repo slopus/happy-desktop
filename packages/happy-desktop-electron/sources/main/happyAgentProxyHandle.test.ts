@@ -1,5 +1,8 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { HappyAgentDeviceBridgeHostState } from "happy-desktop-state";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DeviceBridgeHost } from "./deviceBridgeHost";
@@ -212,5 +215,39 @@ describe("happyAgentProxyHandle bridge routes", () => {
         const response = await fetch(`${base}/bridge-events`);
         expect(response.status).toBe(501);
         expect(response.headers.get("content-type")).toBe("application/json");
+    });
+});
+
+describe("happyAgentProxyHandle attachment-source-reachable", () => {
+    it("names files and folders on a host workspace in place, and nothing else", async () => {
+        const directory = await mkdtemp(join(tmpdir(), "happy-attachment-"));
+        await writeFile(join(directory, "note.txt"), "note");
+        const client = {
+            getWorkspace: async (workspaceId: string) => ({
+                workspace: { compute: { type: workspaceId === "host" ? "host" : "container" } },
+            }),
+        } as unknown as HappyAgentProxyClient;
+        const server = createServer((request, response) => {
+            const url = new URL(request.url ?? "/", "http://127.0.0.1");
+            void happyAgentProxyHandle({
+                client,
+                method: request.method ?? "GET",
+                path: url.pathname,
+                query: url.searchParams,
+                request,
+                response,
+            });
+        });
+        servers.push(server);
+        await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+        const url = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}/attachment-source-reachable`;
+        const reachable = async (workspaceId: string, sourcePath: string) =>
+            (await post(url, { workspaceId, sourcePath })).body.reachable;
+        expect(await reachable("host", join(directory, "note.txt"))).toBe(true);
+        expect(await reachable("host", directory)).toBe(true);
+        expect(await reachable("host", join(directory, "missing"))).toBe(false);
+        expect(await reachable("container", join(directory, "note.txt"))).toBe(false);
+        expect(await reachable("container", directory)).toBe(false);
+        await rm(directory, { recursive: true, force: true });
     });
 });
