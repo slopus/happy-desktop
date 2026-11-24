@@ -9077,11 +9077,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         />
                                     ) : undefined
                                 }
-                                // One document needs no strip: the band floats over the
-                                // content, and without a second tab it goes, giving
-                                // that document the full height without moving it.
+                                // The band floats over the content and stays even with
+                                // one tab: it names the document, holds the "+" and the
+                                // window by its drag, and a second tab arriving or going
+                                // never moves anything under it.
                                 barOverlay
-                                barHidden={groupTabs.length <= 1}
                                 tabSizing="content"
                                 closePresentation="overlay"
                                 overflowFade
