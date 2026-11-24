@@ -20,12 +20,12 @@ const FLOOR = 0.0001;
 export interface GptLiveDropSoundOptions {
     /** Plays nothing at all; for a test or a run that must stay silent. */
     readonly muted?: boolean;
-    /** Where the sound is made; a test passes a spy. */
-    readonly contextCreate?: () => AudioContext;
+    /** Where the sound is made; a check passes an offline context to capture it. */
+    readonly contextCreate?: () => BaseAudioContext;
 }
 
-/** Plays the drop sound once, on a context of its own that closes after it. */
-export function gptLiveDropSoundPlay(context: AudioContext): void {
+/** Plays the drop sound once on `context`, closing a live one after it. */
+export function gptLiveDropSoundPlay(context: BaseAudioContext): void {
     const start = context.currentTime + 0.02;
     const envelope = context.createGain();
     envelope.gain.setValueAtTime(FLOOR, start);
@@ -39,7 +39,8 @@ export function gptLiveDropSoundPlay(context: AudioContext): void {
         tone.start(start + note.delay);
         tone.stop(start + note.delay + NOTE);
     }
-    setTimeout(() => void context.close().catch(() => undefined), (LENGTH + 0.3) * 1000);
+    if (context instanceof AudioContext)
+        setTimeout(() => void context.close().catch(() => undefined), (LENGTH + 0.3) * 1000);
 }
 
 /**
