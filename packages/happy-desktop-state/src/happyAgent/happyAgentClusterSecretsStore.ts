@@ -27,23 +27,40 @@ import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js"
 export type HappyAgentClusterSecretOwner = "me" | "team";
 
 /**
- * How a secret reaches agents: `team` through each grant, `global` to every
- * agent in the team with no grant, and `agent` to the one agent that owns it
- * and the subagents it shares it with.
+ * Who may see a secret: `global` is the cluster's catalog, the team's and each
+ * member's own, and `agent` is one agent's, created by it or through its
+ * request card. Either reaches an agent only through a grant or a share.
  */
-export type HappyAgentClusterSecretScope = "global" | "team" | "agent";
+export type HappyAgentClusterSecretScope = "global" | "agent";
 
-/** The scopes a person may create a secret in; agents alone create `agent` ones. */
-export type HappyAgentClusterSecretCreateScope = Exclude<HappyAgentClusterSecretScope, "agent">;
+/** How an agent holds a secret: a grant, owning it, or its owner sharing it. */
+export type HappyAgentClusterSecretReachVia = "grant" | "owner" | "share";
+
+/** Which agents and workspaces a secret is given to, as the reader may see them. */
+export interface HappyAgentClusterSecretReach {
+    /** An agent secret's owner first, then its subagents; a global one's agent grants. */
+    readonly agents: readonly {
+        readonly id: string;
+        /** The agent's title; `null` for an untitled agent or a subagent. */
+        readonly name: string | null;
+        readonly via: HappyAgentClusterSecretReachVia;
+    }[];
+    /** Workspace grants, each named by its root agent's title. */
+    readonly workspaces: readonly { readonly id: string; readonly name: string | null }[];
+    /** Grants to chats or workspaces of Surfaces the reader may not see: counted, never listed. */
+    readonly hidden: number;
+}
 
 /**
  * The secret fields scopes and expiry add to the cluster's wire contract,
  * which `@slopus/happy-agent-client` does not carry yet; checked here until it
  * does. A cluster from before scopes sends none of them, and its secrets mean
- * what they meant then: team scope, no expiry, deleted by whoever manages.
+ * what they meant then: the global catalog, no expiry, no reach it can name,
+ * deleted by whoever manages.
  */
 interface ClusterSecretScopeFields {
     readonly scope?: HappyAgentClusterSecretScope;
+    readonly reach?: HappyAgentClusterSecretReach;
     readonly owner: HappyAgentClusterSecretOwner | "agent";
     readonly ownerAgentId?: string | null;
     readonly sharedWithAgentIds?: readonly string[];
@@ -63,13 +80,41 @@ function optionalOf(value: unknown, check: (present: unknown) => boolean): boole
 }
 
 const isNumberOrNull = (value: unknown) => value === null || typeof value === "number";
+const isStringOrNull = (value: unknown) => value === null || typeof value === "string";
+
+function isReach(value: unknown): value is HappyAgentClusterSecretReach {
+    if (typeof value !== "object" || value === null) return false;
+    const agents = fieldOf(value, "agents");
+    const workspaces = fieldOf(value, "workspaces");
+    const hidden = fieldOf(value, "hidden");
+    return (
+        Array.isArray(agents) &&
+        agents.every(
+            (agent: unknown) =>
+                typeof agent === "object" &&
+                agent !== null &&
+                typeof fieldOf(agent, "id") === "string" &&
+                isStringOrNull(fieldOf(agent, "name")) &&
+                ["grant", "owner", "share"].includes(fieldOf(agent, "via") as string),
+        ) &&
+        Array.isArray(workspaces) &&
+        workspaces.every(
+            (workspace: unknown) =>
+                typeof workspace === "object" &&
+                workspace !== null &&
+                typeof fieldOf(workspace, "id") === "string" &&
+                isStringOrNull(fieldOf(workspace, "name")),
+        ) &&
+        Number.isInteger(hidden) &&
+        (hidden as number) >= 0
+    );
+}
 
 function isClusterSecretScopeFields(value: object): value is ClusterSecretScopeFields {
     const access = fieldOf(value, "access");
     return (
-        optionalOf(fieldOf(value, "scope"), (scope) =>
-            ["global", "team", "agent"].includes(scope as string),
-        ) &&
+        optionalOf(fieldOf(value, "scope"), (scope) => scope === "global" || scope === "agent") &&
+        optionalOf(fieldOf(value, "reach"), isReach) &&
         ["me", "team", "agent"].includes(fieldOf(value, "owner") as string) &&
         optionalOf(fieldOf(value, "ownerAgentId"), (id) => id === null || typeof id === "string") &&
         optionalOf(
@@ -98,8 +143,10 @@ interface HappyAgentClusterSecretFields {
     readonly name: string;
     readonly description: string;
     readonly scope: HappyAgentClusterSecretScope;
-    /** `agent` exactly when the scope is `agent`; a global secret is always the team's. */
+    /** `agent` exactly when the scope is `agent`; a global secret is the team's or a member's. */
     readonly owner: HappyAgentClusterSecretOwner | "agent";
+    /** Who it is given to, named where the reader may see the name. */
+    readonly reach: HappyAgentClusterSecretReach;
     /** The agent that owns an `agent` secret; `null` for every other scope. */
     readonly ownerAgentId: string | null;
     /** The subagents an `agent` secret is shared with; empty for every other scope. */
@@ -140,16 +187,15 @@ export type HappyAgentClusterSecret = HappyAgentClusterSecretFields &
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 /**
- * A new secret with its write-only material. Role rules are not edited here
- * yet. `scope` defaults to `team`; `expiresIn`, in seconds from when the
- * cluster stores it, is measured on the cluster's clock and so needs no
- * correction for this one's.
+ * A new secret with its write-only material, always global: people never
+ * create an agent's. Role rules are not edited here yet. `expiresIn`, in
+ * seconds from when the cluster stores it, is measured on the cluster's clock
+ * and so needs no correction for this one's.
  */
 export type HappyAgentClusterSecretCreateInput = DistributiveOmit<
     CreateClusterSecretRequest,
     "mutationId" | "roles"
 > & {
-    readonly scope?: HappyAgentClusterSecretCreateScope;
     readonly expiresIn?: number;
 };
 
@@ -596,10 +642,29 @@ function scopeProject(
     fields: ClusterSecretScopeFields,
 ): Pick<
     HappyAgentClusterSecretFields,
-    "scope" | "owner" | "ownerAgentId" | "sharedWithAgentIds" | "expiresAt" | "maxExpiresAt"
+    | "scope"
+    | "owner"
+    | "reach"
+    | "ownerAgentId"
+    | "sharedWithAgentIds"
+    | "expiresAt"
+    | "maxExpiresAt"
 > {
+    const reach = fields.reach;
     return {
-        scope: fields.scope ?? "team",
+        scope: fields.scope ?? "global",
+        reach: {
+            agents: (reach?.agents ?? []).map((agent) => ({
+                id: agent.id,
+                name: agent.name,
+                via: agent.via,
+            })),
+            workspaces: (reach?.workspaces ?? []).map((workspace) => ({
+                id: workspace.id,
+                name: workspace.name,
+            })),
+            hidden: reach?.hidden ?? 0,
+        },
         owner: fields.owner,
         ownerAgentId: fields.ownerAgentId ?? null,
         sharedWithAgentIds: [...(fields.sharedWithAgentIds ?? [])],

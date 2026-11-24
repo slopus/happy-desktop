@@ -29,10 +29,25 @@ import {
 } from "./happyAgentClusterSecretDraft";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
-/** An agent a secret names, by its title where the application knows it. */
+/** An agent or workspace a secret names, by its title where the reader may see it. */
 export interface HappyAgentClusterSecretAgent {
     readonly id: string;
     readonly name?: string;
+}
+
+/** Which agents and workspaces a secret is given to, as the reader may see them. */
+export interface HappyAgentClusterSecretReach {
+    /**
+     * An agent secret's owner first, then the subagents it shares it with; a
+     * global secret's agent grants.
+     */
+    readonly agents: readonly (HappyAgentClusterSecretAgent & {
+        readonly via: "grant" | "owner" | "share";
+    })[];
+    /** Workspace grants, recorded apart from agents', each named by its root agent. */
+    readonly workspaces: readonly HappyAgentClusterSecretAgent[];
+    /** Grants in Surfaces the reader may not see: counted, never named. */
+    readonly hidden: number;
 }
 
 /** One catalog secret as the list shows it. Its value is never part of it. */
@@ -43,11 +58,7 @@ export type HappyAgentClusterSecretRow = HappyAgentClusterSecretDetails & {
     readonly scope: HappyAgentClusterSecretScope;
     /** `agent` exactly when the scope is `agent`. */
     readonly owner: HappyAgentClusterSecretOwner | "agent";
-    /** For an `agent` secret: the agent that owns it and the subagents it shares it with. */
-    readonly agent?: {
-        readonly owner: HappyAgentClusterSecretAgent;
-        readonly sharedWith: readonly HappyAgentClusterSecretAgent[];
-    };
+    readonly reach: HappyAgentClusterSecretReach;
     /** When the cluster deletes it, in epoch milliseconds on the reader's clock. */
     readonly expiresAt?: number;
     readonly access: {
@@ -97,7 +108,8 @@ export interface HappyAgentClusterSecretSettingsProps {
 /**
  * Settings › Secrets on Happy Cloud: the organization's typed catalog of
  * endpoints, git credentials, SSH keys and environment bundles, grouped by
- * how each reaches agents: every agent, by grant, or one agent's own.
+ * who may see each, the whole cluster or one agent, with the agents each is
+ * given to.
  */
 export function HappyAgentClusterSecretSettings(props: HappyAgentClusterSecretSettingsProps) {
     const [dialog, setDialog] = useState(props.initialDialog);
@@ -241,15 +253,9 @@ const SCOPE_GROUPS: readonly {
 }[] = [
     {
         scope: "global",
-        title: "Every agent",
+        title: "Everyone",
         description:
-            "Every agent in the team can use these without a grant, within each role’s rule. Values are write-only.",
-    },
-    {
-        scope: "team",
-        title: "By grant",
-        description:
-            "Credentials agents use without seeing them, given to agents and workspaces one grant at a time. Values are write-only.",
+            "Everyone in the cluster can see these, by each role’s rule. Agents get one only through a grant. Values are write-only.",
     },
     {
         scope: "agent",
@@ -259,9 +265,12 @@ const SCOPE_GROUPS: readonly {
     },
 ];
 
-/** Whose a secret is; the group it is listed in says how it reaches agents. */
+/** Whose a secret is; the group it is listed in says who may see it. */
 export function happyAgentClusterSecretOwnerText(secret: HappyAgentClusterSecretRow): string {
-    if (secret.agent) return agentName(secret.agent.owner);
+    if (secret.owner === "agent") {
+        const owner = secret.reach.agents.find((agent) => agent.via === "owner");
+        return owner ? agentName(owner) : "An agent";
+    }
     return secret.owner === "me" ? "Only you" : "Team";
 }
 
@@ -269,13 +278,32 @@ export function agentName(agent: HappyAgentClusterSecretAgent): string {
     return agent.name ?? `Agent ${agent.id.slice(0, 8)}`;
 }
 
-/** Who else holds an agent's secret, as one phrase. */
-export function happyAgentClusterSecretSharedText(
-    sharedWith: readonly HappyAgentClusterSecretAgent[],
-): string | undefined {
-    if (sharedWith.length === 0) return undefined;
-    if (sharedWith.length === 1) return `Shared with ${agentName(sharedWith[0]!)}`;
-    return `Shared with ${String(sharedWith.length)} subagents`;
+/** How many names a row shows before it counts the rest. */
+const REACH_NAMES_SHOWN = 3;
+
+/**
+ * Who has a secret, on one line: a global secret's agents and workspaces, an
+ * agent secret's subagents. A grant in a Surface the reader can't see is
+ * counted with the rest, never named.
+ */
+export function happyAgentClusterSecretReachText(secret: HappyAgentClusterSecretRow): string {
+    const { reach } = secret;
+    const agents = reach.agents.filter((agent) =>
+        secret.scope === "agent" ? agent.via === "share" : agent.via === "grant",
+    );
+    const shown = agents.slice(0, REACH_NAMES_SHOWN).map(agentName);
+    const more = agents.length - shown.length + reach.hidden;
+    const names = [shown.join(", "), more > 0 ? `+${String(more)}` : ""].filter(Boolean).join(" ");
+    if (secret.scope === "agent")
+        return names ? `Shared with ${names}` : "Not shared with subagents";
+    const workspaces =
+        reach.workspaces.length === 1
+            ? `workspace ${agentName(reach.workspaces[0]!)}`
+            : reach.workspaces.length > 1
+              ? `${String(reach.workspaces.length)} workspaces`
+              : "";
+    if (!names && !workspaces) return "Not given to any agent yet";
+    return `Given to ${[names, workspaces].filter(Boolean).join(" · ")}`;
 }
 
 function SecretRow(props: {
@@ -303,12 +331,15 @@ function SecretRow(props: {
                     {[
                         HAPPY_AGENT_CLUSTER_SECRET_TYPE_TEXT[secret.type].label,
                         happyAgentClusterSecretSummary(secret),
-                        secret.agent
-                            ? happyAgentClusterSecretSharedText(secret.agent.sharedWith)
-                            : undefined,
                     ]
                         .filter(Boolean)
                         .join(" · ")}
+                </span>
+                <span
+                    className="happy-agent-cluster-secrets__reach"
+                    data-happy-desktop-ui="happy-agent-cluster-secret-reach"
+                >
+                    {happyAgentClusterSecretReachText(secret)}
                 </span>
             </span>
             <span className="happy-agent-cluster-secrets__access">

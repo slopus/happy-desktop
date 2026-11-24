@@ -46,25 +46,36 @@ const UPDATED_AT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 /**
  * Catalog metadata with its timestamp localized for the list, and its expiry
  * moved from the cluster's clock onto this one by `serverClockOffset`, so a
- * countdown reaches zero when the cluster stops listing it. Agents are named
- * by ID: the cluster sends no titles, and an owner is often a hidden subagent.
+ * countdown reaches zero when the cluster stops listing it. An agent or
+ * workspace the cluster names no title for is left unnamed.
  */
 export function clusterSecretRow(
     secret: HappyAgentClusterSecret,
     serverClockOffset: number,
 ): HappyAgentClusterSecretRow {
-    const { ownerAgentId, sharedWithAgentIds, expiresAt, maxExpiresAt: _, ...rest } = secret;
+    const {
+        expiresAt,
+        reach,
+        ownerAgentId: _owner,
+        sharedWithAgentIds: _shared,
+        maxExpiresAt: _max,
+        ...rest
+    } = secret;
     return {
         ...rest,
         updatedAt: UPDATED_AT.format(new Date(secret.updatedAt)),
         ...(expiresAt === null ? {} : { expiresAt: expiresAt - serverClockOffset }),
-        ...(secret.scope === "agent" && ownerAgentId !== null
-            ? {
-                  agent: {
-                      owner: { id: ownerAgentId },
-                      sharedWith: sharedWithAgentIds.map((id) => ({ id })),
-                  },
-              }
-            : {}),
+        reach: {
+            agents: reach.agents.map(({ id, name, via }) => ({
+                id,
+                via,
+                ...(name === null ? {} : { name }),
+            })),
+            workspaces: reach.workspaces.map(({ id, name }) => ({
+                id,
+                ...(name === null ? {} : { name }),
+            })),
+            hidden: reach.hidden,
+        },
     };
 }

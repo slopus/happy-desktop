@@ -53,7 +53,17 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             algorithm: { kind: "headers", headers: [{ name: "Authorization", prefix: "Bearer " }] },
         },
         uses: ["egress"],
-        scope: "team",
+        scope: "global",
+        reach: {
+            agents: [
+                { id: "b1i2l3l4i5n6g7a8g9e0n1t2", name: "Billing agent", via: "grant" },
+                { id: "i1n2v3o4i5c6e7b8o9t0a1b2", name: "Invoice bot", via: "grant" },
+                { id: "s1u2p3p4o5r6t7t8r9i0a1g2", name: "Support triage", via: "grant" },
+                { id: "f7k3x9q2m4w8r1t5c6h0v2nb", via: "grant" },
+            ],
+            workspaces: [{ id: "w1b2i3l4l5i6n7g8w9o0r1k2", name: "Billing" }],
+            hidden: 1,
+        },
         owner: "team",
         access: MANAGE,
         version: "v1",
@@ -71,7 +81,15 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             operations: ["read"],
         },
         uses: ["git"],
-        scope: "team",
+        scope: "global",
+        reach: {
+            agents: [{ id: "i1n2f3r4a5o6n7c8a9l0l1a2", name: "Infra on-call", via: "grant" }],
+            workspaces: [
+                { id: "w2i3n4f5r6a7w8o9r0k1s2p3", name: "Infra" },
+                { id: "w3t4e5r6r7a8f9o0r1m2w3s4", name: "Terraform" },
+            ],
+            hidden: 0,
+        },
         owner: "team",
         access: { use: true, manage: false, attach: true, delete: false },
         version: "v2",
@@ -87,7 +105,8 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             fingerprint: "SHA256:3qJ8m0Q1tX6b2Yv9nWc4LdZf7Rk5Hs1Pg8Ta0Ue2Vo4",
         },
         uses: ["ssh"],
-        scope: "team",
+        scope: "global",
+        reach: { agents: [], workspaces: [], hidden: 0 },
         owner: "team",
         access: MANAGE,
         version: "v3",
@@ -100,7 +119,14 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
         description: "",
         public: { variables: ["SENTRY_AUTH_TOKEN", "SENTRY_DSN"] },
         uses: ["environment", "mcp"],
-        scope: "team",
+        scope: "global",
+        reach: {
+            agents: [
+                { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page", via: "grant" },
+            ],
+            workspaces: [],
+            hidden: 0,
+        },
         owner: "me",
         access: MANAGE,
         version: "v4",
@@ -118,7 +144,12 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             operations: ["read", "write"],
         },
         uses: ["git"],
-        scope: "team",
+        scope: "global",
+        reach: {
+            agents: [],
+            workspaces: [{ id: "w4a5c6m7e8d9e0v1w2s3p4a5", name: "acme.dev" }],
+            hidden: 0,
+        },
         owner: "me",
         access: MANAGE,
         version: "v5",
@@ -127,9 +158,9 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
 ];
 
 /**
- * The same admin once agents keep secrets: a global one every agent uses, a
- * team key that expires tonight, and agents' own temporary secrets, one
- * shared with subagents, one minutes from deletion and one just expired.
+ * The same admin once agents keep secrets: a key everyone sees, a team key
+ * that expires tonight, and agents' own temporary secrets, one shared with
+ * subagents, one minutes from deletion and one just expired.
  */
 const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
     {
@@ -143,6 +174,14 @@ const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
         },
         uses: ["egress"],
         scope: "global",
+        reach: {
+            agents: [
+                { id: "c1h2i3e4f5o6f7s8t9a0f1f2", name: "Chief of Staff", via: "grant" },
+                { id: "h3l4p5e6r7a8g9e0n1t2a3b4", name: "Helper", via: "grant" },
+            ],
+            workspaces: [],
+            hidden: 0,
+        },
         owner: "team",
         access: MANAGE,
         version: "v6",
@@ -159,7 +198,12 @@ const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
             algorithm: { kind: "headers", headers: [{ name: "Authorization", prefix: "Bearer " }] },
         },
         uses: ["egress"],
-        scope: "team",
+        scope: "global",
+        reach: {
+            agents: [{ id: "m1i2g3r4a5t6i7o8n9a0g1e2", name: "Billing migration", via: "grant" }],
+            workspaces: [],
+            hidden: 0,
+        },
         owner: "team",
         expiresAt: NOW + 5 * 60 * MINUTE + 12 * MINUTE,
         access: MANAGE,
@@ -174,14 +218,16 @@ const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
         public: { variables: ["VERCEL_TOKEN"] },
         uses: ["environment"],
         scope: "agent",
-        owner: "agent",
-        agent: {
-            owner: { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page" },
-            sharedWith: [
-                { id: "s1u2b3a4g5e6n7t8o9n0e1a2", name: "Preview deploys" },
-                { id: "s2u3b4a5g6e7n8t9t0w1o2b3" },
+        reach: {
+            agents: [
+                { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page", via: "owner" },
+                { id: "s1u2b3a4g5e6n7t8o9n0e1a2", via: "share" },
+                { id: "s2u3b4a5g6e7n8t9t0w1o2b3", via: "share" },
             ],
+            workspaces: [],
+            hidden: 0,
         },
+        owner: "agent",
         expiresAt: NOW + 2 * 24 * 60 * MINUTE + 4 * 60 * MINUTE,
         access: AGENT_OWNED,
         version: "v8",
@@ -200,8 +246,12 @@ const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
         },
         uses: ["git"],
         scope: "agent",
+        reach: {
+            agents: [{ id: "r7e1l2e3a4s5e6b7o8t9a0b1", via: "owner" }],
+            workspaces: [],
+            hidden: 0,
+        },
         owner: "agent",
-        agent: { owner: { id: "r7e1l2e3a4s5e6b7o8t9a0b1" }, sharedWith: [] },
         expiresAt: NOW + 4 * MINUTE + 9_000,
         access: AGENT_OWNED,
         version: "v9",
@@ -215,11 +265,12 @@ const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
         public: { variables: ["SANDBOX_PASSWORD"] },
         uses: ["environment"],
         scope: "agent",
-        owner: "agent",
-        agent: {
-            owner: { id: "q4w5e6r7t8y9u0i1o2p3a4s5", name: "QA the sign-up flow" },
-            sharedWith: [],
+        reach: {
+            agents: [{ id: "q4w5e6r7t8y9u0i1o2p3a4s5", name: "QA the sign-up flow", via: "owner" }],
+            workspaces: [],
+            hidden: 0,
         },
+        owner: "agent",
         expiresAt: NOW - 400,
         access: AGENT_OWNED,
         version: "v10",
@@ -252,10 +303,9 @@ const endpointDraft = filled(happyAgentClusterSecretDraftCreate("endpoint", "tea
     },
 });
 
-const expiringGlobalDraft = filled(endpointDraft, {
+const expiringDraft = filled(endpointDraft, {
     name: "OpenAI",
     description: "Shared inference key",
-    scope: "global",
     lifetime: "7d",
     shape: {
         type: "endpoint",
@@ -325,7 +375,7 @@ export function HappyCloudSecretsFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Settings › Secrets on a Happy Cloud server: the typed catalog of endpoints, git credentials, SSH keys and environment bundles, grouped by scope (every agent, by grant, agents' own) with a countdown on each expiring secret, creating each type with an audience and lifetime, editing one with a replacement value, and deleting it. An agent's temporary request says how long it is kept. A local Happy Agent keeps its environment-bundle page."
+            summary="Settings › Secrets on a Happy Cloud server: the typed catalog of endpoints, git credentials, SSH keys and environment bundles, grouped by who may see them (everyone, or one agent's own), each with the agents and workspaces it is given to and a countdown when it expires, creating each type with an owner and lifetime, editing one with a replacement value, and deleting it. An agent's temporary request says how long it is kept. A local Happy Agent keeps its environment-bundle page."
             title="Happy Cloud secrets flow"
             width={WINDOWS[0].width + 96}
         >
@@ -336,7 +386,7 @@ export function HappyCloudSecretsFlowPage() {
                 <Catalog />
             </Screen>
             <Screen
-                detail="global, team and agents' own secrets, with countdowns"
+                detail="everyone's and agents' own secrets, who has each, and countdowns"
                 number="02b"
                 screen="02b-scopes"
             >
@@ -349,12 +399,12 @@ export function HappyCloudSecretsFlowPage() {
                 <Catalog dialog={{ kind: "create", draft: endpointDraft }} />
             </Screen>
             <Screen
-                detail="a new endpoint every agent can use, kept for 7 days"
+                detail="a new endpoint kept for 7 days"
                 number="04b"
-                screen="04b-create-global-expiring"
+                screen="04b-create-expiring"
             >
                 <Catalog
-                    dialog={{ kind: "create", draft: expiringGlobalDraft }}
+                    dialog={{ kind: "create", draft: expiringDraft }}
                     secrets={scopedSecrets}
                 />
             </Screen>
@@ -401,6 +451,16 @@ export function HappyCloudSecretsFlowPage() {
             </Screen>
             <Screen detail="a secret the reader can only use" number="10" screen="10-view-only">
                 <Catalog dialog={{ kind: "edit", secretId: "m4tq8c2wz0h7k1xv9r3bnj5e" }} />
+            </Screen>
+            <Screen
+                detail="every agent and workspace a secret is given to"
+                number="10a"
+                screen="10a-access"
+            >
+                <Catalog
+                    dialog={{ kind: "edit", secretId: "q2k7v0x3m9bfr1tz8c4hw6na" }}
+                    secrets={scopedSecrets}
+                />
             </Screen>
             <Screen
                 detail="an agent's own secret, shared with subagents"

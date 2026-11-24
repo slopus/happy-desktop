@@ -182,8 +182,9 @@ describe("the Happy Cloud secret catalog", () => {
                         },
                     },
                     uses: ["egress"],
-                    scope: "team",
+                    scope: "global",
                     owner: "team",
+                    reach: { agents: [], workspaces: [], hidden: 0 },
                     ownerAgentId: null,
                     sharedWithAgentIds: [],
                     expiresAt: null,
@@ -200,8 +201,9 @@ describe("the Happy Cloud secret catalog", () => {
                     description: "",
                     public: { variables: ["SENTRY_AUTH_TOKEN", "SENTRY_DSN"] },
                     uses: ["mcp"],
-                    scope: "team",
+                    scope: "global",
                     owner: "me",
+                    reach: { agents: [], workspaces: [], hidden: 0 },
                     ownerAgentId: null,
                     sharedWithAgentIds: [],
                     expiresAt: null,
@@ -491,6 +493,15 @@ const agentToken = {
     owner: "agent",
     ownerAgentId: "k3v9qz0m2wq8rj5t7c1hx4na",
     sharedWithAgentIds: ["s1u2b3a4g5e6n7t8o9n0e1a2", "s2u3b4a5g6e7n8t9t0w1o2b3"],
+    reach: {
+        agents: [
+            { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page", via: "owner" },
+            { id: "s1u2b3a4g5e6n7t8o9n0e1a2", name: null, via: "share" },
+            { id: "s2u3b4a5g6e7n8t9t0w1o2b3", name: null, via: "share" },
+        ],
+        workspaces: [],
+        hidden: 0,
+    },
     expiresAt: SERVER_NOW + 2 * 3_600_000,
     maxExpiresAt: SERVER_NOW + 30 * 86_400_000,
     access: { use: false, manage: false, attach: false, delete: true },
@@ -505,6 +516,11 @@ const globalKey = {
     owner: "team",
     ownerAgentId: null,
     sharedWithAgentIds: [],
+    reach: {
+        agents: [{ id: "h3l4p5e6r7a8g9e0n1t2a3b4", name: "Helper", via: "grant" }],
+        workspaces: [{ id: "w1o2r3k4s5p6a7c8e9b0i1l2", name: "Billing" }],
+        hidden: 1,
+    },
     expiresAt: null,
     maxExpiresAt: null,
     access: { use: true, manage: true, attach: true, delete: true },
@@ -515,7 +531,7 @@ const listAt = (serverTime: number, ...secrets: unknown[]): Answer[] => [
 ];
 
 describe("secret scopes and expiry", () => {
-    it("reads each secret's scope, owning agent, subagents, expiry and the cluster's clock", async () => {
+    it("reads each secret's scope, reach, owning agent, subagents, expiry and the cluster's clock", async () => {
         const { store } = open(
             { "GET /v0/cluster/secrets?limit=100": listAt(SERVER_NOW, globalKey, agentToken) },
             undefined,
@@ -528,6 +544,11 @@ describe("secret scopes and expiry", () => {
         expect(global).toMatchObject({
             scope: "global",
             owner: "team",
+            reach: {
+                agents: [{ id: "h3l4p5e6r7a8g9e0n1t2a3b4", name: "Helper", via: "grant" }],
+                workspaces: [{ id: "w1o2r3k4s5p6a7c8e9b0i1l2", name: "Billing" }],
+                hidden: 1,
+            },
             ownerAgentId: null,
             sharedWithAgentIds: [],
             expiresAt: null,
@@ -537,6 +558,7 @@ describe("secret scopes and expiry", () => {
             owner: "agent",
             ownerAgentId: "k3v9qz0m2wq8rj5t7c1hx4na",
             sharedWithAgentIds: ["s1u2b3a4g5e6n7t8o9n0e1a2", "s2u3b4a5g6e7n8t9t0w1o2b3"],
+            reach: agentToken.reach,
             expiresAt: SERVER_NOW + 2 * 3_600_000,
             maxExpiresAt: SERVER_NOW + 30 * 86_400_000,
             access: { use: false, manage: false, attach: false, delete: true },
@@ -567,7 +589,7 @@ describe("secret scopes and expiry", () => {
             ],
         ]);
 
-        // Team, global and agent secrets announce every change, expiry included, this way.
+        // Team-owned and agent secrets announce every change, grants and expiry included, this way.
         events.event("cluster_secrets.changed", {});
         await vi.waitFor(() =>
             expect(store.get().secrets.map((secret) => secret.name)).toEqual(["OpenAI"]),
@@ -626,7 +648,7 @@ describe("secret scopes and expiry", () => {
         expect(store.get().secrets).toEqual([]);
     });
 
-    it("creates a global secret that expires, with the lifetime measured on the cluster's clock", async () => {
+    it("creates a secret that expires, with the lifetime measured on the cluster's clock", async () => {
         const created = { ...globalKey, expiresAt: SERVER_NOW + 604_800_000 };
         const { store, sent } = open({
             "GET /v0/cluster/secrets?limit=100": listAt(SERVER_NOW, created),
@@ -639,7 +661,6 @@ describe("secret scopes and expiry", () => {
             name: "OpenAI",
             description: "",
             owner: "team",
-            scope: "global",
             expiresIn: 604_800,
             public: {
                 targets: [{ host: "api.openai.com" }],
@@ -652,11 +673,10 @@ describe("secret scopes and expiry", () => {
             material: { Authorization: STRIPE_KEY },
         });
 
-        expect(sent.find((request) => request.method === "POST")?.body).toMatchObject({
-            owner: "team",
-            scope: "global",
-            expiresIn: 604_800,
-        });
+        const body = sent.find((request) => request.method === "POST")?.body;
+        expect(body).toMatchObject({ owner: "team", expiresIn: 604_800 });
+        // What a person creates is global by default; no scope is sent.
+        expect(body).not.toHaveProperty("scope");
         expect(store.get().secrets[0]).toMatchObject({
             scope: "global",
             expiresAt: SERVER_NOW + 604_800_000,
