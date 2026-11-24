@@ -2,18 +2,17 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Display } from "electron";
-import type { DesktopWindowBounds } from "./windowLifecycle";
+import type { DesktopWindowBounds, DesktopWindowPlacement } from "./windowLifecycle";
 
-const windowStateVersion = 1;
+const windowStateVersion = 2;
 const writeDelayMs = 250;
 const minimumVisibleLength = 64;
 
-interface DesktopWindowState {
-    bounds: DesktopWindowBounds;
+interface DesktopWindowState extends DesktopWindowPlacement {
     version: typeof windowStateVersion;
 }
 
-/** Persists the latest normal desktop window geometry without writing on every resize event. */
+/** Persists the latest desktop window placement without writing on every resize event. */
 export class DesktopWindowStateStore {
     private operation = Promise.resolve();
     private pending?: ReturnType<typeof setTimeout>;
@@ -30,24 +29,28 @@ export class DesktopWindowStateStore {
     restore(
         displays: readonly Display[],
         primaryDisplay: Display,
-    ): DesktopWindowBounds | undefined {
-        const bounds = this.value?.bounds;
-        if (!bounds) return undefined;
-        if (displays.some(({ workArea }) => boundsVisible(bounds, workArea))) return bounds;
+    ): DesktopWindowPlacement | undefined {
+        if (!this.value) return undefined;
+        const { bounds, maximized } = this.value;
+        if (displays.some(({ workArea }) => boundsVisible(bounds, workArea)))
+            return { bounds, maximized };
 
         const { workArea } = primaryDisplay;
         const width = Math.min(bounds.width, workArea.width);
         const height = Math.min(bounds.height, workArea.height);
         return {
-            height,
-            width,
-            x: Math.round(workArea.x + (workArea.width - width) / 2),
-            y: Math.round(workArea.y + (workArea.height - height) / 2),
+            bounds: {
+                height,
+                width,
+                x: Math.round(workArea.x + (workArea.width - width) / 2),
+                y: Math.round(workArea.y + (workArea.height - height) / 2),
+            },
+            maximized,
         };
     }
 
-    remember(bounds: DesktopWindowBounds): void {
-        this.value = windowStateValidate({ bounds, version: windowStateVersion });
+    remember(placement: DesktopWindowPlacement): void {
+        this.value = windowStateValidate({ ...placement, version: windowStateVersion });
         if (this.pending) clearTimeout(this.pending);
         this.pending = setTimeout(() => {
             this.pending = undefined;
@@ -102,11 +105,19 @@ async function windowStateWrite(path: string, state: DesktopWindowState): Promis
     }
 }
 
+/** Reads version 2, and version 1 files from before placement was remembered as not maximized. */
 function windowStateValidate(candidate: unknown): DesktopWindowState {
-    if (!isRecord(candidate) || candidate.version !== windowStateVersion)
-        throw new InvalidWindowStateError();
     if (
-        Object.keys(candidate).some((key) => key !== "bounds" && key !== "version") ||
+        !isRecord(candidate) ||
+        (candidate.version !== 1 && candidate.version !== windowStateVersion)
+    )
+        throw new InvalidWindowStateError();
+    const keys =
+        candidate.version === 1 ? ["bounds", "version"] : ["bounds", "maximized", "version"];
+    const maximized = candidate.version === 1 ? false : candidate.maximized;
+    if (
+        Object.keys(candidate).some((key) => !keys.includes(key)) ||
+        typeof maximized !== "boolean" ||
         !isRecord(candidate.bounds) ||
         Object.keys(candidate.bounds).some((key) => !["height", "width", "x", "y"].includes(key))
     )
@@ -121,7 +132,7 @@ function windowStateValidate(candidate: unknown): DesktopWindowState {
         width < 720
     )
         throw new InvalidWindowStateError();
-    return { bounds: { height, width, x, y }, version: windowStateVersion };
+    return { bounds: { height, width, x, y }, maximized, version: windowStateVersion };
 }
 
 function boundsVisible(bounds: DesktopWindowBounds, workArea: DesktopWindowBounds): boolean {
