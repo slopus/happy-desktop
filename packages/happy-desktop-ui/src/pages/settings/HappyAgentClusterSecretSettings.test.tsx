@@ -65,13 +65,23 @@ const globalKey: HappyAgentClusterSecretRow = {
     uses: ["environment"],
     scope: "global",
     owner: "team",
+    reach: {
+        agents: [
+            { id: "c1h2i3e4f5o6f7s8t9a0f1f2", name: "Chief of Staff", via: "grant" },
+            { id: "h3l4p5e6r7a8g9e0n1t2a3b4", name: "Helper", via: "grant" },
+            { id: "b1i2l3l4i5n6g7a8g9e0n1t2", name: "Billing agent", via: "grant" },
+            { id: "f7k3x9q2m4w8r1t5c6h0v2nb", via: "grant" },
+        ],
+        workspaces: [{ id: "w1b2i3l4l5i6n7g8w9o0r1k2", name: "Billing" }],
+        hidden: 1,
+    },
 };
 
 const teamKey: HappyAgentClusterSecretRow = {
     ...globalKey,
     id: "t1e2a3m4k5e6y7s8t9r0i1p2",
     name: "Stripe test mode",
-    scope: "team",
+    reach: { agents: [], workspaces: [], hidden: 0 },
     expiresAt: NOW + 65_000,
 };
 
@@ -81,9 +91,14 @@ const agentToken: HappyAgentClusterSecretRow = {
     name: "Vercel deploy token",
     scope: "agent",
     owner: "agent",
-    agent: {
-        owner: { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page" },
-        sharedWith: [{ id: "s1u2b3a4g5e6n7t8o9n0e1a2" }, { id: "s2u3b4a5g6e7n8t9t0w1o2b3" }],
+    reach: {
+        agents: [
+            { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page", via: "owner" },
+            { id: "s1u2b3a4g5e6n7t8o9n0e1a2", via: "share" },
+            { id: "s2u3b4a5g6e7n8t9t0w1o2b3", via: "share" },
+        ],
+        workspaces: [],
+        hidden: 0,
     },
     expiresAt: NOW + 2 * 86_400_000 + 4 * 3_600_000,
     access: { use: false, manage: false, attach: false, delete: true },
@@ -116,7 +131,7 @@ const rowOf = (container: HTMLElement, name: string) =>
 const expiryOf = (row: HTMLElement | undefined) =>
     row?.querySelector('[data-happy-desktop-ui="happy-agent-cluster-secret-expiry"]')?.textContent;
 
-it("groups secrets by scope and names an agent's own secret's owner and subagents", async () => {
+it("groups secrets by who may see them and says who has each", async () => {
     const time = manualClock();
     const view = createRenderer();
     view.render(
@@ -134,13 +149,20 @@ it("groups secrets by scope and names an agent's own secret's owner and subagent
             '[data-happy-desktop-ui="happy-agent-settings-section-title"]',
         ),
     ].map((heading) => heading.textContent);
-    expect(headings).toEqual(["Every agent", "By grant", "Agents’ own"]);
+    expect(headings).toEqual(["Everyone", "Agents’ own"]);
+    const reachOf = (name: string) =>
+        rowOf(view.container, name)?.querySelector(
+            '[data-happy-desktop-ui="happy-agent-cluster-secret-reach"]',
+        )?.textContent;
+    // Three names, then the fourth and the grant the reader can't see, counted.
+    expect(reachOf("OpenAI")).toBe(
+        "Given to Chief of Staff, Helper, Billing agent +2 · workspace Billing",
+    );
+    expect(reachOf("Stripe test mode")).toBe("Not given to any agent yet");
+    expect(reachOf("Vercel deploy token")).toBe("Shared with Agent s1u2b3a4, Agent s2u3b4a5");
     const agent = rowOf(view.container, "Vercel deploy token");
     expect(agent?.querySelector(".happy-agent-cluster-secrets__owner")?.textContent).toBe(
         "Ship the billing page",
-    );
-    expect(agent?.querySelector(".happy-agent-cluster-secrets__meta")?.textContent).toContain(
-        "Shared with 2 subagents",
     );
     expect(expiryOf(agent)).toBe("Expires in 2d 4h");
 });
@@ -181,4 +203,36 @@ it("ticks every countdown from one clock subscription, and an expired row leaves
     // Nothing expires any more, so nothing listens to the clock.
     rows.set([globalKey]);
     await expect.poll(() => time.listeners()).toBe(0);
+});
+
+it("lists every agent and workspace a secret is given to in its details", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div style={{ position: "relative", height: "760px", width: "1000px" }}>
+                <HappyAgentClusterSecretSettings
+                    clock={manualClock().clock}
+                    initialDialog={{ kind: "edit", secretId: globalKey.id }}
+                    onSecretCreate={resolved}
+                    onSecretDelete={resolved}
+                    onSecretUpdate={resolved}
+                    owners={["team", "me"]}
+                    secrets={[globalKey, agentToken]}
+                />
+            </div>
+        ),
+        { width: 1040, height: 800, padding: 8 },
+    );
+    await view.ready();
+
+    const facts = new Map(
+        [...document.querySelectorAll(".happy-agent-cluster-secret-facts__row")].map((row) => [
+            row.querySelector(".happy-agent-cluster-secret-facts__label")?.textContent,
+            row.querySelector(".happy-agent-cluster-secret-facts__value")?.textContent,
+        ]),
+    );
+    expect(facts.get("Visible to")).toBe("Everyone in the cluster, by each role’s rule");
+    expect(facts.get("Agents")).toBe("Chief of Staff, Helper, Billing agent, Agent f7k3x9q2");
+    expect(facts.get("Workspaces")).toBe("Billing");
+    expect(facts.get("Not shown")).toBe("1 grant in Surfaces you can’t see");
 });

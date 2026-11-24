@@ -44,33 +44,11 @@ import {
     type HappyAgentClusterSecretRow,
 } from "./HappyAgentClusterSecretSettings";
 
-/**
- * Who a new secret is for, as one choice: every agent in the team, the team
- * by grant, or only the reader. The first two need the team owner.
- */
-type Audience = "global" | "team" | "me";
-const AUDIENCE_TEXT: Record<Audience, string> = {
-    global: "Every agent",
-    team: "Team",
-    me: "Only me",
-};
-const AUDIENCE_HINT: Record<Audience, string> = {
-    global: "Every agent in the team can use it without a grant, within each role’s rule.",
-    team: "The team’s secret. Agents get it one grant at a time, and its access follows each role’s rule.",
+const OWNER_TEXT: Record<HappyAgentClusterSecretOwner, string> = { team: "Team", me: "Only me" };
+const OWNER_HINT: Record<HappyAgentClusterSecretOwner, string> = {
+    team: "Everyone in the cluster can see it. Agents get it only through a grant.",
     me: "Yours alone. Only runs you start can use it, and nobody else sees it.",
 };
-
-function audienceOf(draft: HappyAgentClusterSecretCreateDraft): Audience {
-    if (draft.owner === "me") return "me";
-    return draft.scope === "global" ? "global" : "team";
-}
-
-function audiencesFor(owners: readonly HappyAgentClusterSecretOwner[]): Audience[] {
-    return [
-        ...(owners.includes("team") ? (["global", "team"] as const) : []),
-        ...(owners.includes("me") ? (["me"] as const) : []),
-    ];
-}
 const VALUES_HIDDEN =
     "Values are sent once and can’t be read back, by you or anyone else. They never appear in this list.";
 
@@ -248,11 +226,11 @@ export function HappyAgentClusterSecretCreateDialog(
                                     can use it. It’s deleted after that.
                                 </Banner>
                             ) : (
-                                <AudienceField
-                                    audiences={audiencesFor(props.owners)}
+                                <OwnerField
                                     disabled={disabled}
                                     draft={draft}
                                     onChange={change}
+                                    owners={props.owners}
                                 />
                             )}
                             <TextField
@@ -328,38 +306,30 @@ function lifetimeOf(value: string): HappyAgentClusterSecretLifetime {
     );
 }
 
-function AudienceField(props: {
-    readonly audiences: readonly Audience[];
+function OwnerField(props: {
+    readonly owners: readonly HappyAgentClusterSecretOwner[];
     readonly disabled: boolean;
     readonly draft: HappyAgentClusterSecretCreateDraft;
     onChange(draft: HappyAgentClusterSecretCreateDraft): void;
 }) {
     const { draft } = props;
-    const audience = audienceOf(draft);
-    if (props.audiences.length <= 1)
+    if (props.owners.length <= 1)
         return (
-            <span className="happy-agent-cluster-secret-form__hint">{AUDIENCE_HINT[audience]}</span>
+            <span className="happy-agent-cluster-secret-form__hint">{OWNER_HINT[draft.owner]}</span>
         );
     return (
         <Box className="happy-agent-cluster-secret-form__field">
             <SegmentedControl
-                aria-label="Who can use it"
+                aria-label="Owner"
                 disabled={props.disabled}
                 onChange={(value) =>
-                    props.onChange({
-                        ...draft,
-                        owner: value === "me" ? "me" : "team",
-                        scope: value === "global" ? "global" : "team",
-                    })
+                    props.onChange({ ...draft, owner: value === "me" ? "me" : "team" })
                 }
-                segments={props.audiences.map((value) => ({
-                    value,
-                    label: AUDIENCE_TEXT[value],
-                }))}
+                segments={props.owners.map((value) => ({ value, label: OWNER_TEXT[value] }))}
                 size="small"
-                value={audience}
+                value={draft.owner}
             />
-            <span className="happy-agent-cluster-secret-form__hint">{AUDIENCE_HINT[audience]}</span>
+            <span className="happy-agent-cluster-secret-form__hint">{OWNER_HINT[draft.owner]}</span>
         </Box>
     );
 }
@@ -1246,10 +1216,9 @@ function secretFacts(
     const facts: [string, string][] = [
         ["Type", HAPPY_AGENT_CLUSTER_SECRET_TYPE_TEXT[secret.type].label],
         ["Owner", happyAgentClusterSecretOwnerText(secret)],
-        ["Reaches", SCOPE_FACT[secret.scope]],
+        ["Visible to", visibleText(secret)],
+        ...reachFacts(secret),
     ];
-    if (secret.agent && secret.agent.sharedWith.length > 0)
-        facts.push(["Shared with", secret.agent.sharedWith.map(agentName).join(", ")]);
     if (secret.expiresAt !== undefined && now !== undefined)
         facts.push(["Expires", happyAgentClusterSecretExpiryText(secret.expiresAt, now)]);
     if (!secret.access.manage && secret.description)
@@ -1337,11 +1306,39 @@ function secretFacts(
     return facts;
 }
 
-const SCOPE_FACT: Record<HappyAgentClusterSecretRow["scope"], string> = {
-    global: "Every agent in the team, without a grant",
-    team: "Agents and workspaces it is given to",
-    agent: "The owning agent and the subagents it shares it with",
-};
+function visibleText(secret: HappyAgentClusterSecretRow): string {
+    if (secret.scope === "agent") return "The owning agent and the subagents it shares it with";
+    return secret.owner === "me" ? "Only you" : "Everyone in the cluster, by each role’s rule";
+}
+
+/**
+ * Everyone a secret is given to, in full: an agent secret's subagents, or a
+ * global secret's agent grants and, apart from them, its workspace grants.
+ */
+function reachFacts(secret: HappyAgentClusterSecretRow): [string, string][] {
+    const { reach } = secret;
+    const names = (via: "grant" | "share") =>
+        reach.agents.filter((agent) => agent.via === via).map(agentName);
+    if (secret.scope === "agent") {
+        const shared = names("share");
+        return [["Shared with", shared.length > 0 ? shared.join(", ") : "No subagents"]];
+    }
+    const granted = names("grant");
+    return [
+        ["Agents", granted.length > 0 ? granted.join(", ") : "None yet"],
+        ...(reach.workspaces.length > 0
+            ? [["Workspaces", reach.workspaces.map(agentName).join(", ")] as [string, string]]
+            : []),
+        ...(reach.hidden > 0
+            ? [
+                  [
+                      "Not shown",
+                      `${String(reach.hidden)} ${reach.hidden === 1 ? "grant" : "grants"} in Surfaces you can’t see`,
+                  ] as [string, string],
+              ]
+            : []),
+    ];
+}
 
 export function accessText(access: HappyAgentClusterSecretRow["access"]): string {
     const can = [
