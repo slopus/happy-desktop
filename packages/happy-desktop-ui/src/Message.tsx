@@ -3432,6 +3432,12 @@ export function MessageList(props: MessageListProps) {
             )
                 readerAnchor.current = { scrollTop: element.scrollTop, type: "scrollTop" };
         }
+        /* The writes above moved the reader without a scroll of theirs being
+           reported — their own echo is ignored — so the way back to the end is
+           judged again from where they put them. A list reopened part way up
+           otherwise kept the verdict from before its place was restored, and
+           hid the button from a reader far from the end. */
+        endAwayUpdate(element);
         /* A transcript that fits the scrollport has no scrolling left to do, so
            no gesture of the reader's will ever reach past its oldest row. Ask
            for the page before it here — once per content height, so a commit

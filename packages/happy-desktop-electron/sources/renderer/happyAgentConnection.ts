@@ -61,6 +61,7 @@ import {
 } from "happy-desktop-state";
 import { imageCropOpen } from "happy-desktop-ui";
 import { desktopDeviceId, desktopEnvironmentWatch } from "./desktopEnvironment";
+import { desktopScrollMemoryPersistence } from "./desktopScrollMemory";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import {
@@ -661,6 +662,7 @@ export function happyAgentConnectionOpen(input: {
             workspace = happyAgentWorkspaceStoreCreate(client, {
                 host: input.host,
                 viewPreferences: desktopViewPreferencesPersistence(input.happyAgentId),
+                scrollMemory: desktopScrollMemoryPersistence(input.happyAgentId),
                 // How many conversations just left this window keeps mounted is a
                 // property of the machine it runs on, which only the browser can say.
                 conversationRetention: happyAgentConversationRetentionFor(
