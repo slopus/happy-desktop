@@ -1988,6 +1988,17 @@
     min-width: 0;
 }
 
+/* A voice call in the status bar takes the row's free space. The development
+   build menu, which otherwise fills it, keeps only its glyph until the call is
+   put away, so the call is never drawn under the branch name. */
+.happy-sidebar-footer:has(> .happy-gpt-live-call) > .happy-sidebar__dev-build {
+    flex: none;
+}
+
+.happy-sidebar-footer:has(> .happy-gpt-live-call) .happy-dev-build-menu__trigger-label {
+    display: none;
+}
+
 /*
  * The update mark in the sidebar footer: one 28px slot holding a filled orange
  * arrow-up-circle. Every other control on this row is a neutral ghost glyph, so

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "../../src/Button";
 import { GptLiveCallBar, type GptLiveCallBarProps } from "../../src/GptLiveCallBar";
+import { DevBuildMenu } from "../../src/DevBuildMenu";
 import { GptLivePhone } from "../../src/GptLivePhone";
 import { Sidebar } from "../../src/Sidebar";
 import { SidebarBugReport } from "../../src/SidebarBugReport";
@@ -84,6 +85,8 @@ const STATES: readonly {
 /** The status bar as the app draws it, at a sidebar width, in one appearance. */
 function StatusBar(props: {
     call?: ReactNode;
+    /** A development build's branch menu in the footer, as the app shows it in development. */
+    devBuild?: boolean;
     mode: "light" | "dark";
     screen: string;
     width: number;
@@ -113,6 +116,16 @@ function StatusBar(props: {
                                 />
                             }
                             {...(props.call === undefined ? {} : { call: props.call })}
+                            {...(props.devBuild
+                                ? {
+                                      devMenu: (
+                                          <DevBuildMenu
+                                              branch="worktree/voice-call-statusbar"
+                                              onBlueprintOpen={() => {}}
+                                          />
+                                      ),
+                                  }
+                                : {})}
                             onSettingsOpen={() => {}}
                             theme={{
                                 appearance: props.mode,
@@ -232,6 +245,29 @@ export function GptLiveCallBarPage() {
                     {(["light", "dark"] as const).map((mode) => (
                         <StatusBar key={mode} mode={mode} screen={`07-idle-${mode}`} width={330} />
                     ))}
+                </div>
+            </Specimen>
+            <Specimen
+                detail="A development build: the branch menu fills the row with no call and keeps only its glyph beside one"
+                label="Development build"
+                number="09"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    <StatusBar devBuild mode="light" screen="09-dev-idle-light" width={330} />
+                    <StatusBar
+                        call={<GptLiveCallBar {...STATES[1]!.bar} />}
+                        devBuild
+                        mode="light"
+                        screen="09-dev-active-light"
+                        width={330}
+                    />
+                    <StatusBar
+                        call={<GptLiveCallBar {...STATES[0]!.bar} />}
+                        devBuild
+                        mode="dark"
+                        screen="09-dev-connecting-dark"
+                        width={330}
+                    />
                 </div>
             </Specimen>
             <Specimen
