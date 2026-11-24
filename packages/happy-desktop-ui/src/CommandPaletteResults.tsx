@@ -39,6 +39,11 @@ export type CommandPaletteCommandRow = {
     title: string;
     /** The quiet second line: a project/worktree, a settings path, a version. */
     meta?: string;
+    /**
+     * Which end of `meta` gives way when it does not fit. A path loses its
+     * head, so the folders nearest the thing stay readable (default `end`).
+     */
+    metaOverflow?: "end" | "start";
     /** Leading glyph. An `avatar` takes the lane instead when both are given. */
     icon?: IconName;
     avatar?: CommandPaletteResultsAvatar;
@@ -174,8 +179,9 @@ function commandRowContent(row: CommandPaletteCommandRow) {
                     <span
                         className="happy-command-palette-results__meta"
                         data-happy-desktop-ui="command-palette-results-meta"
+                        data-overflow={row.metaOverflow === "start" ? "start" : undefined}
                     >
-                        {row.meta}
+                        {row.metaOverflow === "start" ? <bdi>{row.meta}</bdi> : row.meta}
                     </span>
                 ) : null}
             </span>
