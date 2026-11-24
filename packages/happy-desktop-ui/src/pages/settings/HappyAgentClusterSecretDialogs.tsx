@@ -7,7 +7,14 @@ import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { SecretValueField } from "../../SecretValueField";
 import { SegmentedControl } from "../../SegmentedControl";
+import { Select } from "../../Select";
 import { TextField } from "../../TextField";
+import {
+    HAPPY_AGENT_CLUSTER_SECRET_LIFETIMES,
+    happyAgentClusterSecretExpiryText,
+    happyAgentClusterSecretLifetimeText,
+    type HappyAgentClusterSecretLifetime,
+} from "./happyAgentClusterSecretExpiry";
 import {
     gitValueDraft,
     HAPPY_AGENT_CLUSTER_SECRET_TYPE_TEXT,
@@ -31,13 +38,39 @@ import {
     type HappyAgentClusterSecretUpdateInput,
     type HappyAgentClusterSecretValueDraft,
 } from "./happyAgentClusterSecretDraft";
-import type { HappyAgentClusterSecretRow } from "./HappyAgentClusterSecretSettings";
+import {
+    agentName,
+    happyAgentClusterSecretOwnerText,
+    type HappyAgentClusterSecretRow,
+} from "./HappyAgentClusterSecretSettings";
 
-const OWNER_TEXT: Record<HappyAgentClusterSecretOwner, string> = { team: "Team", me: "Only me" };
-const OWNER_HINT: Record<HappyAgentClusterSecretOwner, string> = {
-    team: "The team’s secret. Its access follows each role’s rule.",
+/**
+ * Who a new secret is for, as one choice: every agent in the team, the team
+ * by grant, or only the reader. The first two need the team owner.
+ */
+type Audience = "global" | "team" | "me";
+const AUDIENCE_TEXT: Record<Audience, string> = {
+    global: "Every agent",
+    team: "Team",
+    me: "Only me",
+};
+const AUDIENCE_HINT: Record<Audience, string> = {
+    global: "Every agent in the team can use it without a grant, within each role’s rule.",
+    team: "The team’s secret. Agents get it one grant at a time, and its access follows each role’s rule.",
     me: "Yours alone. Only runs you start can use it, and nobody else sees it.",
 };
+
+function audienceOf(draft: HappyAgentClusterSecretCreateDraft): Audience {
+    if (draft.owner === "me") return "me";
+    return draft.scope === "global" ? "global" : "team";
+}
+
+function audiencesFor(owners: readonly HappyAgentClusterSecretOwner[]): Audience[] {
+    return [
+        ...(owners.includes("team") ? (["global", "team"] as const) : []),
+        ...(owners.includes("me") ? (["me"] as const) : []),
+    ];
+}
 const VALUES_HIDDEN =
     "Values are sent once and can’t be read back, by you or anyone else. They never appear in this list.";
 
@@ -54,6 +87,12 @@ export interface HappyAgentClusterSecretCreateDialogProps {
     readonly initialValuesShown?: boolean;
     readonly initialAttempted?: boolean;
     readonly unavailable?: string;
+    /**
+     * Set when an agent asked for a temporary secret of its own, kept this
+     * many seconds after saving: the form offers no owner or lifetime, since
+     * the cluster stores it for that agent alone.
+     */
+    readonly temporary?: { readonly expiresIn: number };
     onClose(): void;
     /** Creates the secret; rejects with the reason to show. */
     onSubmit(input: HappyAgentClusterSecretCreateInput): Promise<void>;
@@ -199,32 +238,22 @@ export function HappyAgentClusterSecretCreateDialog(
                                     {error}
                                 </Banner>
                             ) : null}
-                            {props.owners.length > 1 ? (
-                                <Box className="happy-agent-cluster-secret-form__field">
-                                    <SegmentedControl
-                                        aria-label="Owner"
-                                        disabled={disabled}
-                                        onChange={(value) =>
-                                            change({
-                                                ...draft,
-                                                owner: value === "me" ? "me" : "team",
-                                            })
-                                        }
-                                        segments={props.owners.map((value) => ({
-                                            value,
-                                            label: OWNER_TEXT[value],
-                                        }))}
-                                        size="small"
-                                        value={draft.owner}
-                                    />
-                                    <span className="happy-agent-cluster-secret-form__hint">
-                                        {OWNER_HINT[draft.owner]}
-                                    </span>
-                                </Box>
+                            {props.temporary ? (
+                                <Banner
+                                    icon="clock"
+                                    tone="info"
+                                    title={`Kept for ${happyAgentClusterSecretLifetimeText(props.temporary.expiresIn)}`}
+                                >
+                                    Only the agent that asked, and the subagents it shares it with,
+                                    can use it. It’s deleted after that.
+                                </Banner>
                             ) : (
-                                <span className="happy-agent-cluster-secret-form__hint">
-                                    {OWNER_HINT[draft.owner]}
-                                </span>
+                                <AudienceField
+                                    audiences={audiencesFor(props.owners)}
+                                    disabled={disabled}
+                                    draft={draft}
+                                    onChange={change}
+                                />
                             )}
                             <TextField
                                 autoFocus
@@ -247,6 +276,31 @@ export function HappyAgentClusterSecretCreateDialog(
                                 placeholder="Optional"
                                 value={draft.description}
                             />
+                            {props.temporary ? null : (
+                                <Select
+                                    disabled={disabled}
+                                    hint={
+                                        draft.lifetime === "never"
+                                            ? "Kept until someone deletes it."
+                                            : "Deleted for everyone when the time is up."
+                                    }
+                                    label="Expires"
+                                    onValueChange={(value) =>
+                                        change({ ...draft, lifetime: lifetimeOf(value) })
+                                    }
+                                    options={HAPPY_AGENT_CLUSTER_SECRET_LIFETIMES.map(
+                                        (lifetime) => ({
+                                            value: lifetime.value,
+                                            label:
+                                                lifetime.value === "never"
+                                                    ? "Never"
+                                                    : `After ${lifetime.label}`,
+                                        }),
+                                    )}
+                                    size="small"
+                                    value={draft.lifetime}
+                                />
+                            )}
                             <ShapeFields
                                 {...(props.initialValuesShown ? { initialShown: true } : {})}
                                 attempted={attempted}
@@ -264,6 +318,49 @@ export function HappyAgentClusterSecretCreateDialog(
                 </Box>
             </Modal>
         </ModalOverlay>
+    );
+}
+
+function lifetimeOf(value: string): HappyAgentClusterSecretLifetime {
+    return (
+        HAPPY_AGENT_CLUSTER_SECRET_LIFETIMES.find((lifetime) => lifetime.value === value)?.value ??
+        "never"
+    );
+}
+
+function AudienceField(props: {
+    readonly audiences: readonly Audience[];
+    readonly disabled: boolean;
+    readonly draft: HappyAgentClusterSecretCreateDraft;
+    onChange(draft: HappyAgentClusterSecretCreateDraft): void;
+}) {
+    const { draft } = props;
+    const audience = audienceOf(draft);
+    if (props.audiences.length <= 1)
+        return (
+            <span className="happy-agent-cluster-secret-form__hint">{AUDIENCE_HINT[audience]}</span>
+        );
+    return (
+        <Box className="happy-agent-cluster-secret-form__field">
+            <SegmentedControl
+                aria-label="Who can use it"
+                disabled={props.disabled}
+                onChange={(value) =>
+                    props.onChange({
+                        ...draft,
+                        owner: value === "me" ? "me" : "team",
+                        scope: value === "global" ? "global" : "team",
+                    })
+                }
+                segments={props.audiences.map((value) => ({
+                    value,
+                    label: AUDIENCE_TEXT[value],
+                }))}
+                size="small"
+                value={audience}
+            />
+            <span className="happy-agent-cluster-secret-form__hint">{AUDIENCE_HINT[audience]}</span>
+        </Box>
     );
 }
 
@@ -893,6 +990,8 @@ export interface HappyAgentClusterSecretEditDialogProps {
     readonly initialName?: string;
     readonly initialDescription?: string;
     readonly unavailable?: string;
+    /** Now on the reader's clock, for an expiring secret's countdown. */
+    readonly now?: number;
     onClose(): void;
     /** Saves what changed against `version`, the one the form stands on; rejects with the reason to show. */
     onSave(version: string, input: HappyAgentClusterSecretUpdateInput): Promise<void>;
@@ -1017,7 +1116,7 @@ export function HappyAgentClusterSecretEditDialog(props: HappyAgentClusterSecret
                         className="happy-agent-cluster-secret-facts"
                         data-happy-desktop-ui="happy-agent-cluster-secret-facts"
                     >
-                        {secretFacts(secret).map(([label, fact]) => (
+                        {secretFacts(secret, props.now).map(([label, fact]) => (
                             <Box className="happy-agent-cluster-secret-facts__row" key={label}>
                                 <span className="happy-agent-cluster-secret-facts__label">
                                     {label}
@@ -1109,27 +1208,29 @@ export function HappyAgentClusterSecretEditDialog(props: HappyAgentClusterSecret
                                     </>
                                 )}
                             </fieldset>
-                            {props.onDeleteOpen ? (
-                                <Box className="happy-agent-cluster-secret-form__danger">
-                                    <Box className="happy-agent-cluster-secret-form__danger-text">
-                                        <span className="happy-agent-cluster-secret-form__label">
-                                            Delete this secret
-                                        </span>
-                                        <span className="happy-agent-cluster-secret-form__hint">
-                                            Every agent and workspace it was given to loses it.
-                                        </span>
-                                    </Box>
-                                    <Button
-                                        disabled={disabled}
-                                        onClick={() => props.onDeleteOpen?.(base.version)}
-                                        size="small"
-                                        variant="danger"
-                                    >
-                                        Delete…
-                                    </Button>
-                                </Box>
-                            ) : null}
                         </>
+                    ) : null}
+                    {props.onDeleteOpen && secret.access.delete ? (
+                        <Box className="happy-agent-cluster-secret-form__danger">
+                            <Box className="happy-agent-cluster-secret-form__danger-text">
+                                <span className="happy-agent-cluster-secret-form__label">
+                                    Delete this secret
+                                </span>
+                                <span className="happy-agent-cluster-secret-form__hint">
+                                    {secret.scope === "agent"
+                                        ? "The agent and every subagent it shared it with lose it."
+                                        : "Every agent and workspace it was given to loses it."}
+                                </span>
+                            </Box>
+                            <Button
+                                disabled={disabled}
+                                onClick={() => props.onDeleteOpen?.(base.version)}
+                                size="small"
+                                variant="danger"
+                            >
+                                Delete…
+                            </Button>
+                        </Box>
                     ) : null}
                 </Box>
             </Modal>
@@ -1138,11 +1239,19 @@ export function HappyAgentClusterSecretEditDialog(props: HappyAgentClusterSecret
 }
 
 /** The read-only facts of a secret, as label and text pairs. */
-function secretFacts(secret: HappyAgentClusterSecretRow): readonly (readonly [string, string])[] {
+function secretFacts(
+    secret: HappyAgentClusterSecretRow,
+    now: number | undefined,
+): readonly (readonly [string, string])[] {
     const facts: [string, string][] = [
         ["Type", HAPPY_AGENT_CLUSTER_SECRET_TYPE_TEXT[secret.type].label],
-        ["Owner", secret.owner === "me" ? "Only you" : "Team"],
+        ["Owner", happyAgentClusterSecretOwnerText(secret)],
+        ["Reaches", SCOPE_FACT[secret.scope]],
     ];
+    if (secret.agent && secret.agent.sharedWith.length > 0)
+        facts.push(["Shared with", secret.agent.sharedWith.map(agentName).join(", ")]);
+    if (secret.expiresAt !== undefined && now !== undefined)
+        facts.push(["Expires", happyAgentClusterSecretExpiryText(secret.expiresAt, now)]);
     if (!secret.access.manage && secret.description)
         facts.push(["Description", secret.description]);
     switch (secret.type) {
@@ -1228,10 +1337,16 @@ function secretFacts(secret: HappyAgentClusterSecretRow): readonly (readonly [st
     return facts;
 }
 
+const SCOPE_FACT: Record<HappyAgentClusterSecretRow["scope"], string> = {
+    global: "Every agent in the team, without a grant",
+    team: "Agents and workspaces it is given to",
+    agent: "The owning agent and the subagents it shares it with",
+};
+
 export function accessText(access: HappyAgentClusterSecretRow["access"]): string {
     const can = [
         access.use ? "use it in your runs" : undefined,
-        access.manage ? "change and delete it" : undefined,
+        access.manage ? "change and delete it" : access.delete ? "delete it" : undefined,
         access.attach ? "give it to agents" : undefined,
     ].filter((item) => item !== undefined);
     if (can.length === 0) return "See it, but not use it";
@@ -1241,6 +1356,8 @@ export function accessText(access: HappyAgentClusterSecretRow["access"]): string
 
 export interface HappyAgentClusterSecretDeleteDialogProps {
     readonly name: string;
+    /** An agent's own secret, which only that agent and its subagents lose. */
+    readonly agent?: boolean;
     onClose(): void;
     /** Deletes it; rejects with the reason to show. */
     onDelete(): Promise<void>;
@@ -1291,8 +1408,9 @@ export function HappyAgentClusterSecretDeleteDialog(
                     data-happy-desktop-ui="happy-agent-cluster-secret-delete"
                 >
                     <p className="happy-agent-cluster-secret-form__hint">
-                        Every agent and workspace it was given to loses it at once. This can’t be
-                        undone.
+                        {props.agent
+                            ? "The agent and every subagent it shared it with lose it at once. This can’t be undone."
+                            : "Every agent and workspace it was given to loses it at once. This can’t be undone."}
                     </p>
                     {error ? (
                         <Banner tone="danger" title="Not deleted">

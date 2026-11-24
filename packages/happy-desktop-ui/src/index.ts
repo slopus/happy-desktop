@@ -1213,6 +1213,7 @@ export {
 export { SecretValueField, type SecretValueFieldProps } from "./SecretValueField";
 export {
     HappyAgentClusterSecretSettings,
+    type HappyAgentClusterSecretAgent,
     type HappyAgentClusterSecretDialog,
     type HappyAgentClusterSecretRow,
     type HappyAgentClusterSecretSettingsProps,
@@ -1227,6 +1228,7 @@ export {
 } from "./pages/settings/HappyAgentClusterSecretDialogs";
 export {
     happyAgentClusterSecretDraftCreate,
+    type HappyAgentClusterSecretScope,
     type HappyAgentClusterSecretCreateDraft,
     type HappyAgentClusterSecretCreateInput,
     type HappyAgentClusterSecretDetails,
@@ -1235,6 +1237,10 @@ export {
     type HappyAgentClusterSecretUpdateInput,
     type HappyAgentClusterSecretValueDraft,
 } from "./pages/settings/happyAgentClusterSecretDraft";
+export {
+    happyAgentClusterSecretClockAt,
+    type HappyAgentClusterSecretClock,
+} from "./pages/settings/happyAgentClusterSecretExpiry";
 export {
     HappyCloudWebSettings,
     type HappyCloudWebSettingsProps,

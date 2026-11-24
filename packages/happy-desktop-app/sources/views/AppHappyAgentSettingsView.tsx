@@ -1687,6 +1687,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 )
             ) : section === "secrets" && happyCloud ? (
                 <AppClusterSecretSettings
+                    clock={sessionClock}
                     snapshot={clusterSecrets}
                     store={clusterSecretsStore}
                     {...(unavailable === undefined ? {} : { unavailable })}

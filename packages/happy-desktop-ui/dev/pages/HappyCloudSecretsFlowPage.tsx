@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import {
+    HappyAgentClusterSecretCreateDialog,
+    happyAgentClusterSecretClockAt,
     HappyAgentClusterSecretSettings,
     happyAgentClusterSecretDraftCreate,
     HappyAgentSecretSettings,
@@ -27,7 +29,14 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 
 const resolved = () => Promise.resolve();
 const noop = () => undefined;
-const MANAGE = { use: true, manage: true, attach: true } as const;
+const MANAGE = { use: true, manage: true, attach: true, delete: true } as const;
+/** What a person may do with an agent's own secret they created: delete it. */
+const AGENT_OWNED = { use: false, manage: false, attach: false, delete: true } as const;
+
+/** The blueprint's frozen now: countdowns are drawn as they read at this instant. */
+const NOW = Date.UTC(2026, 10, 24, 18, 0, 0);
+const MINUTE = 60_000;
+const clock = happyAgentClusterSecretClockAt(NOW);
 
 /** An admin's view: team secrets of every type, one the role only uses, and their own. */
 const secrets: readonly HappyAgentClusterSecretRow[] = [
@@ -44,6 +53,7 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             algorithm: { kind: "headers", headers: [{ name: "Authorization", prefix: "Bearer " }] },
         },
         uses: ["egress"],
+        scope: "team",
         owner: "team",
         access: MANAGE,
         version: "v1",
@@ -61,8 +71,9 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             operations: ["read"],
         },
         uses: ["git"],
+        scope: "team",
         owner: "team",
-        access: { use: true, manage: false, attach: true },
+        access: { use: true, manage: false, attach: true, delete: false },
         version: "v2",
         updatedAt: "Nov 10, 2026",
     },
@@ -76,6 +87,7 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             fingerprint: "SHA256:3qJ8m0Q1tX6b2Yv9nWc4LdZf7Rk5Hs1Pg8Ta0Ue2Vo4",
         },
         uses: ["ssh"],
+        scope: "team",
         owner: "team",
         access: MANAGE,
         version: "v3",
@@ -88,6 +100,7 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
         description: "",
         public: { variables: ["SENTRY_AUTH_TOKEN", "SENTRY_DSN"] },
         uses: ["environment", "mcp"],
+        scope: "team",
         owner: "me",
         access: MANAGE,
         version: "v4",
@@ -105,10 +118,112 @@ const secrets: readonly HappyAgentClusterSecretRow[] = [
             operations: ["read", "write"],
         },
         uses: ["git"],
+        scope: "team",
         owner: "me",
         access: MANAGE,
         version: "v5",
         updatedAt: "Nov 2, 2026",
+    },
+];
+
+/**
+ * The same admin once agents keep secrets: a global one every agent uses, a
+ * team key that expires tonight, and agents' own temporary secrets, one
+ * shared with subagents, one minutes from deletion and one just expired.
+ */
+const scopedSecrets: readonly HappyAgentClusterSecretRow[] = [
+    {
+        id: "o1p2e3n4a5i6g7l8o9b0a1l2",
+        type: "endpoint",
+        name: "OpenAI",
+        description: "Shared inference key",
+        public: {
+            targets: [{ host: "api.openai.com", pathPrefixes: ["/v1"] }],
+            algorithm: { kind: "headers", headers: [{ name: "Authorization", prefix: "Bearer " }] },
+        },
+        uses: ["egress"],
+        scope: "global",
+        owner: "team",
+        access: MANAGE,
+        version: "v6",
+        updatedAt: "Nov 20, 2026",
+    },
+    ...secrets.slice(0, 2),
+    {
+        id: "t1e2m3p4s5t6r7i8p9e0k1e2",
+        type: "endpoint",
+        name: "Stripe test mode",
+        description: "For tonight's billing migration",
+        public: {
+            targets: [{ host: "api.stripe.com", pathPrefixes: ["/v1"] }],
+            algorithm: { kind: "headers", headers: [{ name: "Authorization", prefix: "Bearer " }] },
+        },
+        uses: ["egress"],
+        scope: "team",
+        owner: "team",
+        expiresAt: NOW + 5 * 60 * MINUTE + 12 * MINUTE,
+        access: MANAGE,
+        version: "v7",
+        updatedAt: "Nov 24, 2026",
+    },
+    {
+        id: "a1g2e3n4t5v6e7r8c9e0l1t2",
+        type: "environment",
+        name: "Vercel deploy token",
+        description: "",
+        public: { variables: ["VERCEL_TOKEN"] },
+        uses: ["environment"],
+        scope: "agent",
+        owner: "agent",
+        agent: {
+            owner: { id: "k3v9qz0m2wq8rj5t7c1hx4na", name: "Ship the billing page" },
+            sharedWith: [
+                { id: "s1u2b3a4g5e6n7t8o9n0e1a2", name: "Preview deploys" },
+                { id: "s2u3b4a5g6e7n8t9t0w1o2b3" },
+            ],
+        },
+        expiresAt: NOW + 2 * 24 * 60 * MINUTE + 4 * 60 * MINUTE,
+        access: AGENT_OWNED,
+        version: "v8",
+        updatedAt: "Nov 22, 2026",
+    },
+    {
+        id: "g1i2t3h4u5b6p7a8t9s0h1o2",
+        type: "git_credential",
+        name: "GitHub PAT for the release",
+        description: "",
+        public: {
+            server: "github.com",
+            method: { kind: "token", username: "x-access-token" },
+            repos: ["slopus/happy-desktop"],
+            operations: ["read", "write"],
+        },
+        uses: ["git"],
+        scope: "agent",
+        owner: "agent",
+        agent: { owner: { id: "r7e1l2e3a4s5e6b7o8t9a0b1" }, sharedWith: [] },
+        expiresAt: NOW + 4 * MINUTE + 9_000,
+        access: AGENT_OWNED,
+        version: "v9",
+        updatedAt: "Nov 24, 2026",
+    },
+    {
+        id: "e1x2p3i4r5e6d7s8e9c0r1e2",
+        type: "environment",
+        name: "Sandbox login",
+        description: "",
+        public: { variables: ["SANDBOX_PASSWORD"] },
+        uses: ["environment"],
+        scope: "agent",
+        owner: "agent",
+        agent: {
+            owner: { id: "q4w5e6r7t8y9u0i1o2p3a4s5", name: "QA the sign-up flow" },
+            sharedWith: [],
+        },
+        expiresAt: NOW - 400,
+        access: AGENT_OWNED,
+        version: "v10",
+        updatedAt: "Nov 24, 2026",
     },
 ];
 
@@ -134,6 +249,18 @@ const endpointDraft = filled(happyAgentClusterSecretDraftCreate("endpoint", "tea
         headers: [
             { id: 1, name: "Authorization", prefix: "Bearer ", value: "sk_live_0123456789abcdef" },
         ],
+    },
+});
+
+const expiringGlobalDraft = filled(endpointDraft, {
+    name: "OpenAI",
+    description: "Shared inference key",
+    scope: "global",
+    lifetime: "7d",
+    shape: {
+        type: "endpoint",
+        targets: [{ id: 1, host: "api.openai.com", path: "/v1" }],
+        mcp: false,
     },
 });
 
@@ -198,7 +325,7 @@ export function HappyCloudSecretsFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Settings › Secrets on a Happy Cloud server: the typed catalog of endpoints, git credentials, SSH keys and environment bundles, creating each type, editing one with a replacement value, and deleting it. A local Happy Agent keeps its environment-bundle page."
+            summary="Settings › Secrets on a Happy Cloud server: the typed catalog of endpoints, git credentials, SSH keys and environment bundles, grouped by scope (every agent, by grant, agents' own) with a countdown on each expiring secret, creating each type with an audience and lifetime, editing one with a replacement value, and deleting it. An agent's temporary request says how long it is kept. A local Happy Agent keeps its environment-bundle page."
             title="Happy Cloud secrets flow"
             width={WINDOWS[0].width + 96}
         >
@@ -208,11 +335,28 @@ export function HappyCloudSecretsFlowPage() {
             <Screen detail="team and personal secrets of every type" number="02" screen="02-list">
                 <Catalog />
             </Screen>
+            <Screen
+                detail="global, team and agents' own secrets, with countdowns"
+                number="02b"
+                screen="02b-scopes"
+            >
+                <Catalog secrets={scopedSecrets} />
+            </Screen>
             <Screen detail="choosing the type of a new secret" number="03" screen="03-type-picker">
                 <Catalog dialog={{ kind: "create" }} />
             </Screen>
             <Screen detail="a new endpoint" number="04" screen="04-create-endpoint">
                 <Catalog dialog={{ kind: "create", draft: endpointDraft }} />
+            </Screen>
+            <Screen
+                detail="a new endpoint every agent can use, kept for 7 days"
+                number="04b"
+                screen="04b-create-global-expiring"
+            >
+                <Catalog
+                    dialog={{ kind: "create", draft: expiringGlobalDraft }}
+                    secrets={scopedSecrets}
+                />
             </Screen>
             <Screen detail="a new git credential with a token" number="05" screen="05-create-git">
                 <Catalog dialog={{ kind: "create", draft: gitDraft }} />
@@ -258,13 +402,50 @@ export function HappyCloudSecretsFlowPage() {
             <Screen detail="a secret the reader can only use" number="10" screen="10-view-only">
                 <Catalog dialog={{ kind: "edit", secretId: "m4tq8c2wz0h7k1xv9r3bnj5e" }} />
             </Screen>
+            <Screen
+                detail="an agent's own secret, shared with subagents"
+                number="10b"
+                screen="10b-agent-secret"
+            >
+                <Catalog
+                    dialog={{ kind: "edit", secretId: "a1g2e3n4t5v6e7r8c9e0l1t2" }}
+                    secrets={scopedSecrets}
+                />
+            </Screen>
             <Screen detail="deleting a secret" number="11" screen="11-delete">
                 <Catalog
                     dialog={{ kind: "delete", secretId: "q2k7v0x3m9bfr1tz8c4hw6na", version: "v1" }}
                 />
             </Screen>
+            <Screen detail="deleting an agent's own secret" number="11b" screen="11b-delete-agent">
+                <Catalog
+                    dialog={{ kind: "delete", secretId: "a1g2e3n4t5v6e7r8c9e0l1t2", version: "v8" }}
+                    secrets={scopedSecrets}
+                />
+            </Screen>
             <Screen detail="the catalog could not be read" number="12" screen="12-error">
                 <Catalog error="Happy Cloud did not answer. Check your connection." secrets={[]} />
+            </Screen>
+            <Screen
+                detail="an agent asks for a temporary secret of its own"
+                number="12b"
+                screen="12b-temporary-request"
+            >
+                <Catalog secrets={scopedSecrets} />
+                <HappyAgentClusterSecretCreateDialog
+                    initialDraft={filled(happyAgentClusterSecretDraftCreate("environment", "me"), {
+                        name: "Vercel deploy token",
+                        description: "To deploy the billing page preview",
+                        value: {
+                            kind: "variables",
+                            variables: [{ id: 1, name: "VERCEL_TOKEN", value: "" }],
+                        },
+                    })}
+                    onClose={noop}
+                    onSubmit={resolved}
+                    owners={BOTH}
+                    temporary={{ expiresIn: 7_200 }}
+                />
             </Screen>
             <Screen
                 description="Environment variables for agents"
@@ -285,6 +466,7 @@ function Catalog(props: {
 }) {
     return (
         <HappyAgentClusterSecretSettings
+            clock={clock}
             {...(props.dialog ? { initialDialog: props.dialog } : {})}
             {...(props.error ? { error: props.error } : {})}
             onSecretCreate={resolved}

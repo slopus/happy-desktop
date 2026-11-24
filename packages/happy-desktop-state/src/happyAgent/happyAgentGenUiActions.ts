@@ -45,6 +45,12 @@ export interface HappyAgentGenUiSecretSaved {
 export interface HappyAgentGenUiClusterSecretForm {
     /** The owners the reader may create a secret for; the first is chosen first. */
     readonly owners: readonly HappyAgentClusterSecretOwner[];
+    /**
+     * Set when the agent asked for a temporary secret of its own: the cluster
+     * stores what the form creates for that agent alone and deletes it
+     * `expiresIn` seconds after it is saved.
+     */
+    readonly temporary: HappyAgentGenUiClusterSecretTemporary | undefined;
     /** The secret a change-mode action names, as it is now; nothing when the action creates one. */
     readonly secret: HappyAgentClusterSecret | undefined;
     create(input: HappyAgentClusterSecretCreateInput): Promise<HappyAgentGenUiSecretSaved>;
@@ -53,6 +59,27 @@ export interface HappyAgentGenUiClusterSecretForm {
         version: string,
         input: HappyAgentClusterSecretUpdateInput,
     ): Promise<HappyAgentGenUiSecretSaved>;
+}
+
+/** An agent's request for a secret only it holds, and for how long. */
+export interface HappyAgentGenUiClusterSecretTemporary {
+    /** Seconds the secret is kept after the person saves it. */
+    readonly expiresIn: number;
+}
+
+/**
+ * The file a Happy Cloud request card's version carries when the agent asked
+ * for a temporary secret of its own; a card without it asks for an ordinary one.
+ */
+const SECRET_REQUEST_FILE = "secret-request.json";
+
+/** `{"scope":"agent","expiresIn":<seconds>}`, at least a minute. */
+function secretRequestExpiresIn(request: unknown): number | undefined {
+    const body = recordOf(request);
+    const expiresIn = body?.expiresIn;
+    return body?.scope === "agent" && Number.isInteger(expiresIn) && (expiresIn as number) >= 60
+        ? (expiresIn as number)
+        : undefined;
 }
 
 /**
@@ -151,12 +178,31 @@ export function happyAgentGenUiClusterActionsCreate(deps: {
             throw error;
         }
     };
+    const temporaryRead = async (
+        source: HappyAgentGenUiSource,
+    ): Promise<HappyAgentGenUiClusterSecretTemporary | undefined> => {
+        let request: unknown;
+        try {
+            request = await deps.request(
+                "GET",
+                `v0/artifacts/${encodeURIComponent(source.artifactId)}/versions/${String(source.version)}/files/${SECRET_REQUEST_FILE}`,
+            );
+        } catch (error) {
+            if (error instanceof UserError && error.code === "not_found") return undefined;
+            throw error;
+        }
+        const expiresIn = secretRequestExpiresIn(request);
+        if (expiresIn === undefined)
+            throw new UserError("The agent's request for a temporary secret can't be read.");
+        return { expiresIn };
+    };
     return {
         backend: "cluster",
         async clusterSecretFormOpen(source, element, secretId) {
-            const [permissions, secret] = await Promise.all([
+            const [permissions, secret, temporary] = await Promise.all([
                 deps.request("GET", "v0/permissions"),
                 secretId === undefined ? undefined : secretRead(secretId),
+                secretId === undefined ? temporaryRead(source) : undefined,
             ]);
             const id = clickId();
             const path = `v0/artifacts/${encodeURIComponent(source.artifactId)}/versions/${String(source.version)}/actions`;
@@ -166,8 +212,14 @@ export function happyAgentGenUiClusterActionsCreate(deps: {
                 );
             return {
                 owners: happyAgentClusterSecretOwnersRead(permissions),
+                temporary,
                 secret,
-                create: (input) => send(input),
+                create: (input) =>
+                    send(
+                        temporary
+                            ? { ...input, scope: "agent", expiresIn: temporary.expiresIn }
+                            : input,
+                    ),
                 update: (version, input) => send({ ...input, version }),
             };
         },
