@@ -137,7 +137,8 @@ export type IconProps = {
  *
  * A `rotation` name paints its glyph turned about the box's centre, for the one
  * affordance whose meaning is the turn itself: the handset laid down to hang up.
- * Like the flip it is presentation of the same upstream drawing.
+ * Like the flip it is presentation of the same upstream drawing. Only the glyph
+ * turns, so the box keeps its square bounds.
  *
  * Every curated name paints at one optical size and one stroke weight: the
  * Ionicons outline drawing, a 1px stroke at 16 with outer shapes in a 14px live
@@ -370,7 +371,13 @@ function glyphContent(glyph: IconGlyph) {
     const character = String.fromCodePoint(codepoint);
     const scale = (glyph.opticalScale ?? 1) * (glyph.set === "octicons" ? OCTICONS_SCALE : 1);
     const offset = glyph.opticalOffset;
-    if (scale === 1 && glyph.minimumSize === undefined && offset === undefined) return character;
+    if (
+        scale === 1 &&
+        glyph.minimumSize === undefined &&
+        offset === undefined &&
+        glyph.rotation === undefined
+    )
+        return character;
     /*
      * The glyph is laid out at the box's own font-size, where its baseline lands
      * on the same pixel as every other glyph, and only then scaled about the
@@ -390,6 +397,7 @@ function glyphContent(glyph: IconGlyph) {
             className="happy-icon__glyph"
             style={{
                 ...(scale === 1 ? null : { scale: String(scale) }),
+                ...(glyph.rotation === undefined ? null : { rotate: `${glyph.rotation}deg` }),
                 ...(offset === undefined
                     ? null
                     : { translate: `${offset.x / 16}em ${offset.y / 16}em` }),
@@ -422,7 +430,6 @@ export function Icon(props: IconProps) {
             data-glyph={glyph.name}
             data-happy-desktop-ui="icon"
             data-mirrored={glyph.mirrored ? "" : undefined}
-            data-rotation={glyph.rotation}
             data-name={local.name}
             data-set={glyph.set}
             data-testid={local["data-testid"]}
