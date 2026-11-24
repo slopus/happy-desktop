@@ -67,11 +67,9 @@
     will-change: transform;
 }
 
-/* A column, so the hidden sizer under the text sets the slot's width. */
 .happy-gpt-live-call__label {
     display: flex;
     flex: none;
-    flex-direction: column;
 }
 
 .happy-gpt-live-call__text {
@@ -85,14 +83,15 @@
     white-space: nowrap;
 }
 
-.happy-gpt-live-call__sizer {
-    height: 0;
-    overflow: hidden;
-    visibility: hidden;
+/* Too narrow for the words: keep the bars and both controls, drop the label.
+   "Connecting…" needs more room than the call's length. */
+@container gpt-live-call (width < 180px) {
+    .happy-gpt-live-call[data-state="connecting"] .happy-gpt-live-call__label {
+        display: none;
+    }
 }
 
-/* Too narrow for the words: keep the bars and both controls, drop the label. */
-@container gpt-live-call (width < 173px) {
+@container gpt-live-call (width < 142px) {
     .happy-gpt-live-call__label {
         display: none;
     }

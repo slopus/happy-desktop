@@ -26,7 +26,7 @@ const STATES: readonly {
     {
         id: "01-connecting",
         label: "Connecting",
-        detail: "Bars at rest · label slot as wide as “Connecting…” · mute live · the pill cancels",
+        detail: "Bars at rest · “Connecting…” · mute live · the pill cancels",
         bar: { state: "connecting", muted: false, ...live },
     },
     {

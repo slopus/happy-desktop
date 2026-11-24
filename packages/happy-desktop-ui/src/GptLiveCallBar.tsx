@@ -55,9 +55,9 @@ export type GptLiveCallBarProps =
  * An ended call keeps its reason here, with a close button, until it is put
  * away.
  *
- * The label slot is as wide as "Connecting…" in every live state, so mute and
- * hang-up stay put when the call connects; where the status bar is too narrow
- * for it, the label is dropped and the controls keep their order.
+ * The bars, the label and mute sit together, so mute and hang-up move once,
+ * as "Connecting…" gives way to the shorter call length. Where the status bar
+ * is too narrow for the label, it is dropped and the controls keep their order.
  */
 export function GptLiveCallBar(props: GptLiveCallBarProps) {
     if (props.state === "ended")
@@ -162,13 +162,6 @@ export function GptLiveCallBar(props: GptLiveCallBarProps) {
                             role="timer"
                         />
                     )}
-                    {/* Holds the slot at the width of its longest live text. */}
-                    <span
-                        aria-hidden="true"
-                        className="happy-gpt-live-call__text happy-gpt-live-call__sizer"
-                    >
-                        Connecting…
-                    </span>
                 </span>
                 <Tooltip label={muteLabel}>
                     <Button
