@@ -1989,13 +1989,10 @@
 }
 
 /* A voice call in the status bar takes the row's free space. The development
-   build menu, which otherwise fills it, keeps only its glyph until the call is
-   put away, so the call is never drawn under the branch name. */
+   build menu, which otherwise fills it, steps aside until the call is put away,
+   so a development window shows the call as a person's window does and the
+   call is never drawn under the branch name. */
 .happy-sidebar-footer:has(> .happy-gpt-live-call) > .happy-sidebar__dev-build {
-    flex: none;
-}
-
-.happy-sidebar-footer:has(> .happy-gpt-live-call) .happy-dev-build-menu__trigger-label {
     display: none;
 }
 

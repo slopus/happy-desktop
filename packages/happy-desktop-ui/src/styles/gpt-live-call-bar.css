@@ -2,8 +2,8 @@
  * C-352 GptLiveCallBar — the voice call in the status bar.
  *
  * Contract: it takes the status bar's free space and lays its content out from
- * the leading edge: the main group (13 × 16 bars, the label, a 28px mute) 6px
- * apart, then 8px, then a 40 × 24 red hang-up pill. The bars stand 7px in from
+ * the leading edge: the main group (13 × 16 bars, the label, a 28px mute) 4px
+ * apart, then 8px, then a 32 × 24 red hang-up pill. The bars stand 7px in from
  * the bar's edge, where a glyph in a 28px slot puts its ink, so they line up
  * with the marks that share the row.
  */
@@ -23,7 +23,7 @@
     display: flex;
     flex: 0 1 auto;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
 }
 
@@ -85,13 +85,13 @@
 
 /* Too narrow for the words: keep the bars and both controls, drop the label.
    "Connecting…" needs more room than the call's length. */
-@container gpt-live-call (width < 180px) {
+@container gpt-live-call (width < 161px) {
     .happy-gpt-live-call[data-state="connecting"] .happy-gpt-live-call__label {
         display: none;
     }
 }
 
-@container gpt-live-call (width < 142px) {
+@container gpt-live-call (width < 123px) {
     .happy-gpt-live-call__label {
         display: none;
     }
@@ -113,7 +113,7 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    width: 40px;
+    width: 32px;
     height: 24px;
     padding: 0;
     border: 0;

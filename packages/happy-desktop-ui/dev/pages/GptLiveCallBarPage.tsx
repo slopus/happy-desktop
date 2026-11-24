@@ -220,6 +220,23 @@ export function GptLiveCallBarPage() {
                 </Specimen>
             ))}
             <Specimen
+                detail="A 290px sidebar, as Happy opens at 1100 × 760: “Connecting…” and the call's length both fit"
+                label="Default window"
+                number="10"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {[STATES[0]!, STATES[1]!].map((state) => (
+                        <StatusBar
+                            call={<GptLiveCallBar {...state.bar} />}
+                            key={state.id}
+                            mode="light"
+                            screen={`10-default-${state.id.slice(3)}`}
+                            width={290}
+                        />
+                    ))}
+                </div>
+            </Specimen>
+            <Specimen
                 detail="A 250px sidebar, the narrowest: the label gives way, the bars and both controls stay"
                 label="Narrowest sidebar"
                 number="06"
@@ -248,7 +265,7 @@ export function GptLiveCallBarPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="A development build: the branch menu fills the row with no call and keeps only its glyph beside one"
+                detail="A development build: the branch menu fills the row with no call and steps aside for one"
                 label="Development build"
                 number="09"
             >
