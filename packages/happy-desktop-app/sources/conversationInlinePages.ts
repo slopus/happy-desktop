@@ -248,7 +248,9 @@ function genUiClusterSecretHostCreate(
             const form = await actions.clusterSecretFormOpen(source, element, secretId);
             return {
                 owners: form.owners,
-                secret: form.secret ? clusterSecretRow(form.secret) : undefined,
+                ...(form.temporary ? { temporary: form.temporary } : {}),
+                // The form shows no countdown, so the secret's expiry needs no clock correction.
+                secret: form.secret ? clusterSecretRow(form.secret, 0) : undefined,
                 create: async (input) => {
                     await form.create(input);
                 },

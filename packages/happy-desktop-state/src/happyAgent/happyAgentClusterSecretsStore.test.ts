@@ -1,5 +1,9 @@
 import { HappyAgentClient } from "@slopus/happy-agent-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+    HappyAgentSync,
+    HappyAgentSyncInput,
+} from "../happyAgentConnection/happyAgentSync.js";
 import {
     happyAgentClusterSecretsStoreCreate,
     type HappyAgentClusterSecretsStore,
@@ -74,9 +78,45 @@ function cluster(routes: Record<string, Answer[]>) {
 
 const opened: HappyAgentClusterSecretsStore[] = [];
 
+/** A connection whose events the test sends one by one. */
+function connection() {
+    const queue: HappyAgentSyncInput[] = [];
+    let wake: (() => void) | undefined;
+    const followed: string[][] = [];
+    const sync: HappyAgentSync = {
+        async *follow({ signal, events }) {
+            followed.push([...events]);
+            while (!signal.aborted) {
+                const next = queue.shift();
+                if (next) {
+                    yield next;
+                    continue;
+                }
+                await new Promise<void>((resume) => {
+                    wake = resume;
+                    signal.addEventListener("abort", () => resume(), { once: true });
+                });
+            }
+        },
+        health: () => undefined,
+    };
+    return {
+        sync,
+        followed,
+        event(type: string, payload: unknown): void {
+            queue.push({
+                kind: "update",
+                update: { kind: "event", event: { type, payload } } as never,
+            });
+            wake?.();
+        },
+    };
+}
+
 function open(
     routes: Record<string, Answer[]>,
     granted: readonly string[] = ["secrets.view", "secrets.own", "secrets.manage"],
+    options: { readonly sync?: HappyAgentSync; readonly now?: () => number } = {},
 ) {
     const wire = cluster(routes);
     const client = new HappyAgentClient({ endpoint: "http://cloud.test", fetch: wire.fetch });
@@ -87,6 +127,7 @@ function open(
             permissionReads.push(`${method} ${path}`);
             return { role: "admin", granted, permissions: [] };
         },
+        ...options,
     });
     opened.push(store);
     const unsubscribe = store.subscribe(() => undefined);
@@ -110,7 +151,12 @@ describe("the Happy Cloud secret catalog", () => {
             ],
             "GET /v0/cluster/secrets?cursor=page-2&limit=100": listOf(sentry),
         });
-        expect(store.get()).toEqual({ loading: true, secrets: [], owners: [] });
+        expect(store.get()).toEqual({
+            loading: true,
+            secrets: [],
+            owners: [],
+            serverClockOffset: 0,
+        });
         await vi.waitFor(() => expect(store.get().loading).toBe(false));
 
         expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual([
@@ -121,6 +167,7 @@ describe("the Happy Cloud secret catalog", () => {
         expect(store.get()).toEqual({
             loading: false,
             owners: ["team", "me"],
+            serverClockOffset: 0,
             secrets: [
                 {
                     id: "q2k7v0x3m9bfr1tz8c4hw6na",
@@ -135,8 +182,13 @@ describe("the Happy Cloud secret catalog", () => {
                         },
                     },
                     uses: ["egress"],
+                    scope: "team",
                     owner: "team",
-                    access: { use: true, manage: true, attach: true },
+                    ownerAgentId: null,
+                    sharedWithAgentIds: [],
+                    expiresAt: null,
+                    maxExpiresAt: null,
+                    access: { use: true, manage: true, attach: true, delete: true },
                     version: "v-stripe-1",
                     createdAt: 1_755_400_000_000,
                     updatedAt: 1_755_400_000_000,
@@ -148,8 +200,13 @@ describe("the Happy Cloud secret catalog", () => {
                     description: "",
                     public: { variables: ["SENTRY_AUTH_TOKEN", "SENTRY_DSN"] },
                     uses: ["mcp"],
+                    scope: "team",
                     owner: "me",
-                    access: { use: true, manage: true, attach: true },
+                    ownerAgentId: null,
+                    sharedWithAgentIds: [],
+                    expiresAt: null,
+                    maxExpiresAt: null,
+                    access: { use: true, manage: true, attach: true, delete: true },
                     version: "v-sentry-1",
                     createdAt: 1_755_400_000_000,
                     updatedAt: 1_755_400_000_000,
@@ -164,7 +221,12 @@ describe("the Happy Cloud secret catalog", () => {
             "secrets.own",
         ]);
         await vi.waitFor(() => expect(store.get().loading).toBe(false));
-        expect(store.get()).toEqual({ loading: false, secrets: [], owners: ["me"] });
+        expect(store.get()).toEqual({
+            loading: false,
+            secrets: [],
+            owners: ["me"],
+            serverClockOffset: 0,
+        });
     });
 
     it("shows why the first read failed", async () => {
@@ -411,5 +473,193 @@ describe("the Happy Cloud secret catalog", () => {
         expect(store.get().secrets).toEqual([
             expect.objectContaining({ description: "Rotated", version: "v-stripe-2" }),
         ]);
+    });
+});
+
+/** The cluster's clock in these tests: 90 seconds ahead of this machine's. */
+const SERVER_NOW = 1_764_000_000_000;
+const SKEW = 90_000;
+
+/** An agent's temporary secret, shared with two subagents, that a person created through a request. */
+const agentToken = {
+    ...sentry,
+    id: "a1g2e3n4t5v6e7r8c9e0l1t2",
+    name: "Vercel deploy token",
+    public: { variables: ["VERCEL_TOKEN"] },
+    uses: ["environment"],
+    scope: "agent",
+    owner: "agent",
+    ownerAgentId: "k3v9qz0m2wq8rj5t7c1hx4na",
+    sharedWithAgentIds: ["s1u2b3a4g5e6n7t8o9n0e1a2", "s2u3b4a5g6e7n8t9t0w1o2b3"],
+    expiresAt: SERVER_NOW + 2 * 3_600_000,
+    maxExpiresAt: SERVER_NOW + 30 * 86_400_000,
+    access: { use: false, manage: false, attach: false, delete: true },
+    version: "v-agent-1",
+};
+
+const globalKey = {
+    ...stripe,
+    id: "o1p2e3n4a5i6g7l8o9b0a1l2",
+    name: "OpenAI",
+    scope: "global",
+    owner: "team",
+    ownerAgentId: null,
+    sharedWithAgentIds: [],
+    expiresAt: null,
+    maxExpiresAt: null,
+    access: { use: true, manage: true, attach: true, delete: true },
+};
+
+const listAt = (serverTime: number, ...secrets: unknown[]): Answer[] => [
+    { status: 200, body: { secrets, nextCursor: null, serverTime } },
+];
+
+describe("secret scopes and expiry", () => {
+    it("reads each secret's scope, owning agent, subagents, expiry and the cluster's clock", async () => {
+        const { store } = open(
+            { "GET /v0/cluster/secrets?limit=100": listAt(SERVER_NOW, globalKey, agentToken) },
+            undefined,
+            { now: () => SERVER_NOW - SKEW },
+        );
+        await vi.waitFor(() => expect(store.get().loading).toBe(false));
+
+        expect(store.get().serverClockOffset).toBe(SKEW);
+        const [global, agent] = store.get().secrets;
+        expect(global).toMatchObject({
+            scope: "global",
+            owner: "team",
+            ownerAgentId: null,
+            sharedWithAgentIds: [],
+            expiresAt: null,
+        });
+        expect(agent).toMatchObject({
+            scope: "agent",
+            owner: "agent",
+            ownerAgentId: "k3v9qz0m2wq8rj5t7c1hx4na",
+            sharedWithAgentIds: ["s1u2b3a4g5e6n7t8o9n0e1a2", "s2u3b4a5g6e7n8t9t0w1o2b3"],
+            expiresAt: SERVER_NOW + 2 * 3_600_000,
+            maxExpiresAt: SERVER_NOW + 30 * 86_400_000,
+            access: { use: false, manage: false, attach: false, delete: true },
+        });
+    });
+
+    it("follows the cluster's secret events and reads the list again on each", async () => {
+        const events = connection();
+        const { store } = open(
+            {
+                "GET /v0/cluster/secrets?limit=100": [
+                    ...listAt(SERVER_NOW, globalKey, agentToken),
+                    ...listAt(SERVER_NOW + 1_000, globalKey),
+                ],
+            },
+            undefined,
+            { sync: events.sync },
+        );
+        await vi.waitFor(() => expect(store.get().secrets).toHaveLength(2));
+        expect(events.followed).toEqual([
+            [
+                "cluster_secret.created",
+                "cluster_secret.updated",
+                "cluster_secret.attached",
+                "cluster_secret.detached",
+                "cluster_secret.removed",
+                "cluster_secrets.changed",
+            ],
+        ]);
+
+        // Team, global and agent secrets announce every change, expiry included, this way.
+        events.event("cluster_secrets.changed", {});
+        await vi.waitFor(() =>
+            expect(store.get().secrets.map((secret) => secret.name)).toEqual(["OpenAI"]),
+        );
+    });
+
+    it("reads the list again just after the soonest expiry on the cluster's clock, which drops it", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        // Two seconds left on the cluster's clock; this machine's runs 90 s behind it.
+        const soon = { ...agentToken, expiresAt: SERVER_NOW + 2_000 };
+        const { store, sent } = open(
+            {
+                "GET /v0/cluster/secrets?limit=100": [
+                    ...listAt(SERVER_NOW, globalKey, soon),
+                    ...listAt(SERVER_NOW + 2_250, globalKey),
+                ],
+            },
+            undefined,
+            { now: () => SERVER_NOW - SKEW },
+        );
+        await vi.waitFor(() => expect(store.get().secrets).toHaveLength(2));
+        const reads = () => sent.filter((request) => request.method === "GET").length;
+        expect(reads()).toBe(1);
+
+        // Not at the 92 s an uncorrected clock would wait, nor before the expiry itself.
+        await vi.advanceTimersByTimeAsync(1_900);
+        expect(reads()).toBe(1);
+        expect(store.get().secrets).toHaveLength(2);
+        await vi.advanceTimersByTimeAsync(400);
+        await vi.waitFor(() =>
+            expect(store.get().secrets.map((secret) => secret.name)).toEqual(["OpenAI"]),
+        );
+        expect(reads()).toBe(2);
+    });
+
+    it("deletes an agent's secret, which a person never manages, without a version", async () => {
+        const { store, sent } = open({
+            "GET /v0/cluster/secrets?limit=100": [
+                ...listAt(SERVER_NOW, agentToken),
+                ...listAt(SERVER_NOW),
+            ],
+            [`DELETE /v0/cluster/secrets/${agentToken.id}`]: [
+                { status: 200, body: { secretId: agentToken.id, deleted: true } },
+            ],
+        });
+        await vi.waitFor(() => expect(store.get().secrets).toHaveLength(1));
+
+        await store.secretDelete(agentToken.id, "v-agent-1");
+
+        expect(sent.find((request) => request.method === "DELETE")).toEqual({
+            method: "DELETE",
+            path: `/v0/cluster/secrets/${agentToken.id}`,
+            ifMatch: null,
+            body: { mutationId: expect.any(String) },
+        });
+        expect(store.get().secrets).toEqual([]);
+    });
+
+    it("creates a global secret that expires, with the lifetime measured on the cluster's clock", async () => {
+        const created = { ...globalKey, expiresAt: SERVER_NOW + 604_800_000 };
+        const { store, sent } = open({
+            "GET /v0/cluster/secrets?limit=100": listAt(SERVER_NOW, created),
+            "POST /v0/cluster/secrets": [{ status: 201, body: { secret: created } }],
+        });
+        await vi.waitFor(() => expect(store.get().loading).toBe(false));
+
+        await store.secretCreate({
+            type: "endpoint",
+            name: "OpenAI",
+            description: "",
+            owner: "team",
+            scope: "global",
+            expiresIn: 604_800,
+            public: {
+                targets: [{ host: "api.openai.com" }],
+                algorithm: {
+                    kind: "headers",
+                    headers: [{ name: "Authorization", prefix: "Bearer " }],
+                },
+            },
+            uses: ["egress"],
+            material: { Authorization: STRIPE_KEY },
+        });
+
+        expect(sent.find((request) => request.method === "POST")?.body).toMatchObject({
+            owner: "team",
+            scope: "global",
+            expiresIn: 604_800,
+        });
+        expect(store.get().secrets[0]).toMatchObject({
+            scope: "global",
+            expiresAt: SERVER_NOW + 604_800_000,
+        });
     });
 });

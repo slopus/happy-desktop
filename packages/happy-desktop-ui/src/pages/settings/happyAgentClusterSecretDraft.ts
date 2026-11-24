@@ -1,7 +1,18 @@
 import type { GenUiClusterSecretPrefill } from "../../genUi/genUiRender";
+import {
+    HAPPY_AGENT_CLUSTER_SECRET_LIFETIMES,
+    type HappyAgentClusterSecretLifetime,
+} from "./happyAgentClusterSecretExpiry";
 
 export type HappyAgentClusterSecretType = "endpoint" | "ssh_key" | "git_credential" | "environment";
+/** Who a person may create a secret for: the team, or only themselves. */
 export type HappyAgentClusterSecretOwner = "me" | "team";
+/**
+ * How a secret reaches agents: `team` through each grant, `global` to every
+ * agent in the team, and `agent` to the agent that owns it and the subagents
+ * it shares it with.
+ */
+export type HappyAgentClusterSecretScope = "global" | "team" | "agent";
 export type HappyAgentClusterSecretUse = "egress" | "git" | "ssh" | "mcp" | "environment";
 export type HappyAgentClusterGitOperation = "read" | "write";
 export type HappyAgentClusterGitMethod = "ssh_key" | "password" | "token";
@@ -46,11 +57,17 @@ export type HappyAgentClusterSecretDetails =
       }
     | { readonly type: "environment"; readonly public: { readonly variables: readonly string[] } };
 
-/** A new secret with its write-only value, shaped as the cluster's create request. */
+/**
+ * A new secret with its write-only value, shaped as the cluster's create
+ * request. `scope` is sent only for a global secret and `expiresIn`, in
+ * seconds, only for one that expires.
+ */
 export type HappyAgentClusterSecretCreateInput = {
     readonly name: string;
     readonly description: string;
     readonly owner: HappyAgentClusterSecretOwner;
+    readonly scope?: "global";
+    readonly expiresIn?: number;
 } & (
     | {
           readonly type: "endpoint";
@@ -163,6 +180,9 @@ export type HappyAgentClusterSecretShapeDraft =
 /** A new secret while its form is open. Its value stays in this draft and nowhere else. */
 export interface HappyAgentClusterSecretCreateDraft {
     readonly owner: HappyAgentClusterSecretOwner;
+    /** Only a team secret may be global. */
+    readonly scope: "team" | "global";
+    readonly lifetime: HappyAgentClusterSecretLifetime;
     readonly name: string;
     readonly description: string;
     readonly shape: HappyAgentClusterSecretShapeDraft;
@@ -229,7 +249,14 @@ export function happyAgentClusterSecretDraftCreate(
     type: HappyAgentClusterSecretType,
     owner: HappyAgentClusterSecretOwner,
 ): HappyAgentClusterSecretCreateDraft {
-    const common = { owner, name: "", description: "", nextId: 2 };
+    const common = {
+        owner,
+        scope: "team" as const,
+        lifetime: "never" as const,
+        name: "",
+        description: "",
+        nextId: 2,
+    };
     switch (type) {
         case "endpoint":
             return {
@@ -484,10 +511,15 @@ export function happyAgentClusterSecretMaterial(
 export function happyAgentClusterSecretCreateInput(
     draft: HappyAgentClusterSecretCreateDraft,
 ): HappyAgentClusterSecretCreateInput {
+    const lifetime = HAPPY_AGENT_CLUSTER_SECRET_LIFETIMES.find(
+        (candidate) => candidate.value === draft.lifetime,
+    )?.milliseconds;
     const common = {
         name: draft.name.trim(),
         description: draft.description.trim(),
         owner: draft.owner,
+        ...(draft.owner === "team" && draft.scope === "global" ? { scope: "global" as const } : {}),
+        ...(lifetime === undefined ? {} : { expiresIn: lifetime / 1_000 }),
     };
     const shape = draft.shape;
     const value = draft.value;

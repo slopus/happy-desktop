@@ -36,6 +36,11 @@ export interface GenUiClusterSecretHost {
 /** One opening of a cluster secret form; every save from it is one click. */
 export interface GenUiClusterSecretForm {
     readonly owners: readonly HappyAgentClusterSecretOwner[];
+    /**
+     * Set when the agent asked for a temporary secret of its own: what the form
+     * creates is that agent's alone, deleted `expiresIn` seconds after saving.
+     */
+    readonly temporary?: { readonly expiresIn: number };
     /** The secret a change-mode action names; nothing when the action creates one. */
     readonly secret: HappyAgentClusterSecretRow | undefined;
     create(input: HappyAgentClusterSecretCreateInput): Promise<void>;
@@ -98,7 +103,10 @@ export function GenUiSecretFormView(props: { readonly open: GenUiSecretFormOpen 
             : open.type === "cluster_secret" &&
                 "form" in open.opened &&
                 open.opened.form.secret === undefined &&
-                open.opened.form.owners.length === 0
+                // An agent's temporary secret is stored the way the reader's own one is.
+                (open.opened.form.temporary
+                    ? !open.opened.form.owners.includes("me")
+                    : open.opened.form.owners.length === 0)
               ? "Your role can’t add secrets to this cluster."
               : undefined;
     if (error !== undefined)
@@ -159,6 +167,7 @@ function ClusterSecretForm(props: {
                 finish(true);
             }}
             owners={form.owners}
+            {...(form.temporary ? { temporary: form.temporary } : {})}
         />
     );
 }

@@ -1485,6 +1485,7 @@ export function happyAgentWorkspaceClientCreate(
             clusterSecretsStore ??= happyAgentClusterSecretsStoreCreate({
                 client: deps.client,
                 request,
+                sync: deps.connection.sync,
             });
             return clusterSecretsStore;
         },
