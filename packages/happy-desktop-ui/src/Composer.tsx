@@ -1061,6 +1061,9 @@ export function Composer(props: ComposerProps) {
         });
     };
     const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        // Safari reports the Enter that confirms an IME candidate with
+        // isComposing false and keyCode 229, so both mean "not ours yet".
+        const composing = event.nativeEvent.isComposing || event.keyCode === 229;
         const historyDirection = historyChordOf(event.nativeEvent);
         if (historyDirection) {
             // Prevented here, the browser runs neither its own Undo nor the
@@ -1106,7 +1109,7 @@ export function Composer(props: ComposerProps) {
                 return;
             }
             if (
-                (event.key === "Enter" && !event.nativeEvent.isComposing) ||
+                (event.key === "Enter" && !composing) ||
                 (event.key === "Tab" && !event.shiftKey)
             ) {
                 event.preventDefault();
@@ -1136,7 +1139,7 @@ export function Composer(props: ComposerProps) {
                 return;
             }
             if (
-                ((event.key === "Enter" && !event.nativeEvent.isComposing) ||
+                ((event.key === "Enter" && !composing) ||
                     (event.key === "Tab" && !event.shiftKey)) &&
                 list.length > 0
             ) {
@@ -1175,7 +1178,7 @@ export function Composer(props: ComposerProps) {
             props.onStop();
             return;
         }
-        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+        if (event.key === "Enter" && !event.shiftKey && !composing) {
             event.preventDefault();
             send();
         }
