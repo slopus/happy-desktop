@@ -34,7 +34,7 @@ import {
     type HappyAgentSidebarProject,
     type HappyShareLinkRole,
 } from "happy-desktop-state";
-import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+import { AppGptLiveCallBar, AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { artifactBesideOpen } from "./artifactOpen";
 import {
     conversationPreviewOpen,
@@ -3706,6 +3706,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         () => gptLiveStore.get().voiceFocus,
         () => gptLiveStore.get().voiceFocus,
     );
+    // Whether the status bar holds a call, which then leads it; the call bar
+    // reads the rest itself.
+    const gptLiveCallHeld = useSyncExternalStore(
+        gptLiveStore.subscribe,
+        () => gptLiveStore.get().call.kind !== "idle",
+        () => gptLiveStore.get().call.kind !== "idle",
+    );
     const windowStateStore = props.windowState ?? happyAgentWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -4120,6 +4127,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : { reportUnavailable: "Connect a Happy Agent to report from here." })}
                     xPostUrl={BUG_REPORT_X_URL}
                 />
+            }
+            call={
+                props.gptLive && gptLiveCallHeld ? (
+                    <AppGptLiveCallBar
+                        store={props.gptLive}
+                        {...(props.experiments ? { experiments: props.experiments } : {})}
+                    />
+                ) : undefined
             }
             voice={
                 props.gptLive && callHost ? (

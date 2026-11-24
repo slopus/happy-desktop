@@ -79,7 +79,12 @@ export {
 export { terminalDriverCreate } from "./terminalDriver";
 export { ghosttyEmulatorCreate, type TerminalEmulator } from "./ghosttyTerminal";
 export { happyAgentWelcomeSlides } from "./onboarding/happyAgentWelcomeSlides";
-export { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+export { AppGptLiveCallBar, AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+export {
+    gptLiveDropSoundConnect,
+    gptLiveDropSoundPlay,
+    type GptLiveDropSoundOptions,
+} from "./gptLive/gptLiveDropSound";
 export { gptLiveMediaOpen } from "./gptLive/gptLiveMedia";
 export { gptLiveBrowserTransport } from "./gptLive/gptLiveBrowserTransport";
 export { viewersActivityCreate } from "./viewersActivity";

@@ -15,6 +15,7 @@ export type IconName =
     | "search"
     | "settings"
     | "call"
+    | "call-end"
     | "clock"
     | "question"
     | "history"
@@ -60,6 +61,7 @@ export type IconName =
     | "smile"
     | "paperclip"
     | "mic"
+    | "mic-off"
     | "users"
     | "star"
     | "reply"
@@ -133,6 +135,10 @@ export type IconProps = {
  * is painted, so the two edges read as one idea instead of borrowing an unrelated
  * symbol for one of them.
  *
+ * A `rotation` name paints its glyph turned about the box's centre, for the one
+ * affordance whose meaning is the turn itself: the handset laid down to hang up.
+ * Like the flip it is presentation of the same upstream drawing.
+ *
  * Every curated name paints at one optical size and one stroke weight: the
  * Ionicons outline drawing, a 1px stroke at 16 with outer shapes in a 14px live
  * area. The keylines follow Lucide's proportions (DESIGN.md, "Icon slots and
@@ -166,6 +172,7 @@ type IconGlyph = (
     | { set: "octicons"; name: OcticonName }
 ) & {
     mirrored?: true;
+    rotation?: 135;
     opticalScale?: number;
     minimumSize?: 16;
     opticalOffset?: { x: number; y: number };
@@ -183,6 +190,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     search: { set: "ionicons", name: "search-outline" },
     settings: { set: "ionicons", name: "settings-outline" },
     call: { set: "ionicons", name: "call-outline" },
+    // Hanging up: the handset laid down, as every phone draws its red end key.
+    // Filled, because it is set in white on that red pill.
+    "call-end": { set: "ionicons", name: "call", rotation: 135 },
     clock: { set: "ionicons", name: "time-outline" },
     // An agent stopped to ask the reader something: the turn is waiting on an
     // answer, not working. The circled outline sits beside `clock` as its pair.
@@ -283,6 +293,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     smile: { set: "ionicons", name: "happy-outline" },
     paperclip: { set: "ionicons", name: "attach-outline" },
     mic: { set: "ionicons", name: "mic-outline" },
+    "mic-off": { set: "ionicons", name: "mic-off-outline" },
     users: { set: "ionicons", name: "people-outline" },
     star: { set: "ionicons", name: "star-outline" },
     reply: { set: "ionicons", name: "arrow-undo-outline" },
@@ -411,6 +422,7 @@ export function Icon(props: IconProps) {
             data-glyph={glyph.name}
             data-happy-desktop-ui="icon"
             data-mirrored={glyph.mirrored ? "" : undefined}
+            data-rotation={glyph.rotation}
             data-name={local.name}
             data-set={glyph.set}
             data-testid={local["data-testid"]}

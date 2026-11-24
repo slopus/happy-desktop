@@ -1,0 +1,152 @@
+/*
+ * C-352 GptLiveCallBar — the voice call in the status bar.
+ *
+ * Contract: it takes the status bar's free space and lays its content out from
+ * the leading edge: the main group (13 × 16 bars, the label, a 28px mute) 6px
+ * apart, then 8px, then a 40 × 24 red hang-up pill. The bars stand 7px in from
+ * the bar's edge, where a glyph in a 28px slot puts its ink, so they line up
+ * with the marks that share the row.
+ */
+.happy-gpt-live-call {
+    container: gpt-live-call / inline-size;
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 28px;
+    padding-inline-start: 7px;
+}
+
+.happy-gpt-live-call__main {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+/* A calm, neutral ink: the same grey as the glyphs beside it on the row.
+   Three 3px bars 2px apart, 16px tall at most and 6px at rest. */
+.happy-gpt-live-call__bars {
+    display: flex;
+    flex: none;
+    gap: 2px;
+    width: 13px;
+    height: 16px;
+    color: var(--button-secondary-tint);
+}
+
+.happy-gpt-live-call__bar {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 3px;
+}
+
+/* Each half of a bar clips a whole pill slid in from that end (gptLiveCallMotion.ts). */
+.happy-gpt-live-call__half {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    height: 8px;
+    overflow: hidden;
+}
+
+.happy-gpt-live-call__half[data-end] {
+    justify-content: flex-end;
+}
+
+.happy-gpt-live-call__pill {
+    flex: none;
+    width: 3px;
+    height: 16px;
+    border-radius: var(--happy-radius-pill);
+    background: currentColor;
+    will-change: transform;
+}
+
+/* A column, so the hidden sizer under the text sets the slot's width. */
+.happy-gpt-live-call__label {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+}
+
+.happy-gpt-live-call__text {
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-synthesis: none;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-gpt-live-call__sizer {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+}
+
+/* Too narrow for the words: keep the bars and both controls, drop the label. */
+@container gpt-live-call (width < 173px) {
+    .happy-gpt-live-call__label {
+        display: none;
+    }
+}
+
+.happy-gpt-live-call[data-muted] .happy-gpt-live-call__mute {
+    background: color-mix(in srgb, var(--text-destructive) 12%, transparent);
+    color: var(--text-destructive);
+}
+
+.happy-gpt-live-call[data-muted] .happy-gpt-live-call__mute:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--text-destructive) 18%, transparent);
+    color: var(--text-destructive);
+}
+
+.happy-gpt-live-call__end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 40px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy-radius-pill);
+    margin: 0;
+    background: var(--status-error);
+    color: var(--happy-call-end-ink);
+    cursor: pointer;
+}
+
+.happy-gpt-live-call__end:hover {
+    background-image: linear-gradient(var(--surface-ripple), var(--surface-ripple));
+}
+
+.happy-gpt-live-call__end:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy-gpt-live-call__mark {
+    display: flex;
+    flex: none;
+    color: var(--text-destructive);
+}
+
+.happy-gpt-live-call__reason-tip {
+    display: flex;
+    min-width: 0;
+}
+
+.happy-gpt-live-call__reason {
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+}

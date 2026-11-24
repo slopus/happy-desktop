@@ -71,6 +71,11 @@
     transform: scaleX(-1);
 }
 
+/* A turned name: the same square, box-centred glyph, rotated about its centre. */
+.happy-icon[data-rotation="135"] {
+    rotate: 135deg;
+}
+
 /*
  * The panel affordance is one control at two edges of the window, and the left
  * one is a 28px chrome button carrying a 16px glyph. A small Button hands its

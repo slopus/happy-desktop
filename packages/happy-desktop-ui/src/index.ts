@@ -39,6 +39,7 @@ export {
     type GptLiveVoiceSpeed,
 } from "./GptLiveVoiceSettings";
 export { GptLivePhone, type GptLivePhoneProps, type GptLivePhoneStatus } from "./GptLivePhone";
+export { GptLiveCallBar, type GptLiveCallBarProps, type GptLiveCallLevels } from "./GptLiveCallBar";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";

@@ -57,6 +57,12 @@ export type SidebarFooterProps = {
     actions?: ReactNode;
     /** Window voice control, after the update offer. */
     voice?: ReactNode;
+    /**
+     * The window's voice call while one is connecting, live, or kept ended: it
+     * leads the status bar and takes its free space, so everything after it
+     * holds its place.
+     */
+    call?: ReactNode;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -76,8 +82,8 @@ export const SIDEBAR_THEME_OPTIONS: readonly { mode: SidebarThemeMode; label: st
 /**
  * SidebarFooter — the identity strip pinned to the bottom of a navigation
  * column: who the surface is rendered for, then the status bar in a fixed
- * order — temporary marks at the left, then call, bug report, theme, keep awake
- * and Settings.
+ * order — a call in progress and temporary marks at the left, then the phone,
+ * bug report, theme, keep awake and Settings.
  *
  * Every affordance is optional, because the surfaces that use this differ in
  * what genuinely exists. A workspace with an account has a profile to open and may
@@ -141,6 +147,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     </span>
                 )
             ) : null}
+            {props.call}
             {props.actions}
             {props.devMenu !== undefined ? (
                 <span
@@ -150,7 +157,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     {props.devMenu}
                 </span>
             ) : null}
-            {identity === undefined && props.devMenu === undefined ? (
+            {identity === undefined && props.devMenu === undefined && props.call === undefined ? (
                 <span style={{ flex: "1 1 auto" }} />
             ) : null}
             {props.voice}

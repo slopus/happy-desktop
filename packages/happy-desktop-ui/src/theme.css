@@ -239,6 +239,8 @@
        mention's own hue, so it outranks the plain dot at a glance. */
     --happy-unread-mention-background: #1a7f99;
     --happy-unread-mention-text: #ffffff;
+    /* The glyph on a voice call's red hang-up pill, white in every theme. */
+    --happy-call-end-ink: #ffffff;
 
     --status-connected: #34c759;
     --status-connecting: #007aff;

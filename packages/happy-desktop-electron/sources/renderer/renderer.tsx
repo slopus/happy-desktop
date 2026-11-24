@@ -26,6 +26,7 @@ import {
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
     happyAgentRouterConnectionChanged,
+    gptLiveDropSoundConnect,
     type AppHappyAgentDaemonStore,
     type AppHappyAgentUpdateStore,
     type AppHappyAgentOutageStore,
@@ -1934,6 +1935,8 @@ if (mediaPreviewBridge) {
                     ?.session?.voiceSettings.get().promptRevision ?? 0,
         );
         appDisposers.push(gptLiveExperimentsConnect(gptLive, experiments));
+        // A dropped call says so out loud, as the phones do.
+        appDisposers.push(gptLiveDropSoundConnect(gptLive));
         appDisposers.push(() => gptLive[Symbol.dispose]());
         // What the surfaces lay out against: the window itself, or the
         // closed-inset arrangement while the rail owns the window's left edge.
