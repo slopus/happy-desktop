@@ -29,6 +29,7 @@ import type {
     HappyAgentProjectGroup,
     HappyAgentSessionListSnapshot,
     HappyAgentSessionLocation,
+    HappyAgentViewersActivity,
     TerminalColorScheme,
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
@@ -258,6 +259,8 @@ export interface HappyAgentDirectoryDeps {
      * so this is read once per shell rather than followed.
      */
     readonly terminalColorScheme: () => TerminalColorScheme;
+    /** Whether the person is at this window, shared by every connection's viewers. */
+    readonly viewersActivity?: HappyAgentViewersActivity;
     /**
      * Keeps one Happy Agent's mute, hide, and completion-sound choices in that
      * daemon's user settings for as long as its connection is open, through
@@ -785,6 +788,7 @@ export function happyAgentDirectoryStoreCreate(
             happyAgentHttpUrl,
             modelPreferencePersistence: deps.modelPreferencePersistence(happyAgent.entry.id),
             terminalColorScheme: deps.terminalColorScheme,
+            ...(deps.viewersActivity ? { viewersActivity: deps.viewersActivity } : {}),
             deps: {
                 conversationOpen: (location) =>
                     deps.conversationOpen(happyAgent.entry.id, location),

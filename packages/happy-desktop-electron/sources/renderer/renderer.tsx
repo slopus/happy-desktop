@@ -34,6 +34,7 @@ import {
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
     type HappyAgentRouter,
+    viewersActivityCreate,
 } from "happy-desktop-app";
 import {
     HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
@@ -1851,6 +1852,7 @@ if (mediaPreviewBridge) {
             // never hears about it again, so every terminal takes the appearance
             // showing at the moment it is opened and keeps it.
             terminalColorScheme: () => appearance.get().appearance,
+            viewersActivity: viewersActivityCreate(),
             sessionFinished: (happyAgentId, sessionId, stillCurrent) => {
                 completionChimePlay(
                     () =>

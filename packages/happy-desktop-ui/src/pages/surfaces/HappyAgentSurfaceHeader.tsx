@@ -14,6 +14,11 @@ export interface HappyAgentSurfaceHeaderProps {
     width?: HappyAgentSurfaceWidthToggle;
     /** A word after the name for what is special about this Surface, such as the team's default vault. */
     marker?: string;
+    /**
+     * Who else is looking at the Surface, as a `ViewerStack`. It keeps one
+     * width whoever is there, so the band lays out the same with nobody.
+     */
+    viewers?: ReactNode;
 }
 
 /**
@@ -97,6 +102,7 @@ export function HappyAgentSurfaceHeader(props: HappyAgentSurfaceHeaderProps) {
                     variant="ghost"
                 />
             ) : null}
+            {props.viewers}
             <SurfaceMemberStack members={props.surface.members} />
             {/* At the edge the chat opens from. */}
             {props.chat ? (

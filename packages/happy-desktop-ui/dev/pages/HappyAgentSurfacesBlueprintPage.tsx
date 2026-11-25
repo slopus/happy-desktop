@@ -1,3 +1,13 @@
+import { ViewerStack } from "../../src/ViewerStack";
+import {
+    VIEWERS_HERE,
+    VIEWERS_MIXED,
+    VIEWERS_NOW,
+    VIEWERS_RECENT,
+    VIEWERS_SEEN,
+    VIEWERS_TEN,
+    VIEWERS_ZONE,
+} from "./viewerStackFixtures";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
     UserError,
@@ -165,6 +175,7 @@ function LiveDocumentPage(props: {
     readonly chat?: HappyAgentSurfaceChatToggle;
     readonly focusKey?: string;
     readonly expanded?: boolean;
+    readonly viewers?: ReactNode;
 }) {
     const window = useDocumentAlone(props.markdown ?? HOUSE_TEXT, READER);
     const [expanded, setExpanded] = useState(props.expanded === true);
@@ -174,6 +185,7 @@ function LiveDocumentPage(props: {
             {...(props.focusKey === undefined ? {} : { focusKey: props.focusKey })}
             content={{ kind: "live", ...window }}
             surface={props.surface ?? HOUSE}
+            viewers={props.viewers}
             width={{ expanded, onToggle: () => setExpanded(!expanded) }}
         />
     );
@@ -325,6 +337,7 @@ function LiveTodoPage(props: {
     readonly chat?: HappyAgentSurfaceChatToggle;
     /** Told how many todos are open after each change, as the sidebar's count is. */
     readonly onActiveCount?: (count: number) => void;
+    readonly viewers?: ReactNode;
 }) {
     const [list, setList] = useState(props.initial ?? LIST);
     const [next, setNext] = useState(10);
@@ -405,6 +418,7 @@ function LiveTodoPage(props: {
                 set({ active: moved });
             }}
             surface={GROCERIES}
+            viewers={props.viewers}
         />
     );
 }
@@ -1087,6 +1101,30 @@ export function HappyAgentSurfacesBlueprintPage() {
                 <LiveTodoPage />
             </FullScreenSpecimen>
 
+            {(
+                [
+                    ["here", VIEWERS_HERE],
+                    ["recent", VIEWERS_RECENT],
+                    ["seen", VIEWERS_SEEN],
+                    ["ten", VIEWERS_TEN],
+                ] as const
+            ).map(([tier, viewers]) => (
+                <FullScreenSpecimen
+                    detail={`Who else is looking, in the header: ${tier}. The title and controls stand where they do with nobody.`}
+                    key={tier}
+                    label={`Todo list, viewers ${tier}`}
+                    number={`01v-${tier}`}
+                    screen={`01v-todo-viewers-${tier}-1100x760`}
+                    window={{ width: 1100, height: 760 }}
+                >
+                    <LiveTodoPage
+                        viewers={
+                            <ViewerStack now={VIEWERS_NOW} viewers={viewers} zone={VIEWERS_ZONE} />
+                        }
+                    />
+                </FullScreenSpecimen>
+            ))}
+
             <FullScreenSpecimen
                 detail="Completed shown, with a heading an agent ticked off among them, and one todo being edited."
                 label="Completed and editing"
@@ -1248,6 +1286,24 @@ export function HappyAgentSurfacesBlueprintPage() {
                 window={{ width: 1100, height: 760 }}
             >
                 <LiveDocumentPage />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Who else is looking, in the header: Kirill here, Anna here six minutes ago, Max seen on Nov 12."
+                label="Document, viewers"
+                number="08v"
+                screen="08v-document-viewers-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <LiveDocumentPage
+                    viewers={
+                        <ViewerStack
+                            now={VIEWERS_NOW}
+                            viewers={VIEWERS_MIXED}
+                            zone={VIEWERS_ZONE}
+                        />
+                    }
+                />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

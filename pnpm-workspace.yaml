@@ -6,5 +6,8 @@ onlyBuiltDependencies:
     - electron
 
 patchedDependencies:
+    # Viewers (`putViewers`, `viewers.updated`) ahead of the client release that
+    # carries them; removed when the dependency moves past 0.0.181.
+    "@slopus/happy-agent-client@0.0.181": patches/@slopus__happy-agent-client@0.0.181.patch
     electron-updater@6.8.9: patches/electron-updater@6.8.9.patch
     react-dom@19.2.7: patches/react-dom@19.2.7.patch

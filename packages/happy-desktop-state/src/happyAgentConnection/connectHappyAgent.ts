@@ -4337,10 +4337,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // to a daemon that stopped. This attempt ends instead, and the
                         // connection's own backoff reopens it from the same cursor.
                         break;
-                    } else if (update.kind === "document") {
-                        // A live document frame carries someone's typing to
-                        // the document stores following it; it has no cursor
-                        // and is never journaled, so nothing here moves.
+                    } else if (update.kind === "document" || update.kind === "viewers") {
+                        // A live document or viewers frame is for the stores
+                        // following it; it has no cursor and is never
+                        // journaled, so nothing here moves.
                     } else {
                         reportDebug({
                             detail: debugDetail(eventDebugOf(update.event)),

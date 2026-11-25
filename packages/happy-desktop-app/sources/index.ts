@@ -82,3 +82,4 @@ export { happyAgentWelcomeSlides } from "./onboarding/happyAgentWelcomeSlides";
 export { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 export { gptLiveMediaOpen } from "./gptLive/gptLiveMedia";
 export { gptLiveBrowserTransport } from "./gptLive/gptLiveBrowserTransport";
+export { viewersActivityCreate } from "./viewersActivity";

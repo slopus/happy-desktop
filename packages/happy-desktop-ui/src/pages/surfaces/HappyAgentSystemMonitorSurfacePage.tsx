@@ -24,6 +24,8 @@ import {
 } from "./systemMonitorFormat";
 
 export interface HappyAgentSystemMonitorSurfacePageProps {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     monitor: HappyAgentSystemMonitorSnapshot;
     onProcessFilterChange: (value: string) => void;
@@ -113,6 +115,7 @@ export function HappyAgentSystemMonitorSurfacePage(props: HappyAgentSystemMonito
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 surface={props.surface}
                 {...(props.chat ? { chat: props.chat } : {})}
             />

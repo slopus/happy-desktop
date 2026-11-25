@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import {
     happyAgentVaultNameShown,
     type HappyAgentVaultDialog,
@@ -35,6 +35,8 @@ import {
 } from "./vaultPresentation";
 
 export interface HappyAgentVaultSurfacePageProps {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     /** The vault as its store holds it, with this window's own changes applied. */
     vault: HappyAgentVaultSnapshot;
@@ -452,6 +454,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 actions={
                     vault.status === "missing" ? undefined : (
                         <>

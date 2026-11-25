@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { HappyAgentSurfaceReferenceKind } from "happy-desktop-state";
 import { EmptyState } from "../../EmptyState";
 import {
@@ -22,6 +22,8 @@ export type HappyAgentSurfaceReferenceView =
     | { readonly phase: "unavailable"; readonly kind: HappyAgentSurfaceReferenceKind };
 
 export interface HappyAgentSurfaceReferencePageProps {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     reference: HappyAgentSurfaceReferenceView;
     /** Opens the target where it always opens, or joins the task first. */
@@ -103,6 +105,7 @@ export function HappyAgentSurfaceReferencePage(props: HappyAgentSurfaceReference
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 {...(props.chat ? { chat: props.chat } : {})}
                 surface={props.surface}
             />

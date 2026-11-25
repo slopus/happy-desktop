@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
     happyAgentTodoHeading,
     type HappyAgentSurfaceActiveTodo,
@@ -46,6 +46,8 @@ const ROW_HEIGHT = 40;
 const ROW_GAP = 4;
 
 export interface HappyAgentTodoSurfacePageProps {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     /** The list as its store holds it, with this window's own changes applied. */
     list: HappyAgentTodoListSnapshot;
@@ -145,6 +147,7 @@ export function HappyAgentTodoSurfacePage(props: HappyAgentTodoSurfacePageProps)
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 {...(props.chat ? { chat: props.chat } : {})}
                 surface={props.surface}
             />

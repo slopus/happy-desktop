@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type * as Y from "yjs";
 import {
     DocumentEditor,
@@ -52,6 +52,8 @@ export type HappyAgentDocumentSurfaceContent =
     | { readonly kind: "readOnly"; readonly text: string };
 
 export interface HappyAgentDocumentSurfacePageProps {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     content: HappyAgentDocumentSurfaceContent;
     /**
@@ -182,6 +184,7 @@ export function HappyAgentDocumentSurfacePage(props: HappyAgentDocumentSurfacePa
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 actions={actions}
                 {...(props.chat ? { chat: props.chat } : {})}
                 {...(props.width ? { width: props.width } : {})}

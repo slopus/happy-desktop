@@ -204,6 +204,8 @@ export {
     happyAgentVaultRows,
 } from "./surfaces/surfaceVaultTree.js";
 export type { HappyAgentSurfaces } from "./surfaces/surfaces.js";
+export * from "./viewers/viewersList.js";
+export * from "./viewers/viewersStore.js";
 export type {
     HappyAgentArtifactTitle,
     HappyAgentArtifactTitlesSnapshot,

@@ -97,6 +97,31 @@
     display: none;
 }
 
+/* An overlaid bar keeps its trailing controls when it hides: the strip and its
+   band go, and they stay where they were, standing on the content the way the
+   window's other header controls do. Nothing under them moves either way. */
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden]
+    > .happy-tabbed-pane__bar:has(> .happy-tabbed-pane__trailing) {
+    /* Over the body's veil, which would otherwise wash the controls out. */
+    z-index: 4;
+    display: flex;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+}
+
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden]
+    > .happy-tabbed-pane__bar
+    > :not(.happy-tabbed-pane__trailing) {
+    visibility: hidden;
+}
+
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden]
+    > .happy-tabbed-pane__bar
+    > .happy-tabbed-pane__trailing {
+    pointer-events: auto;
+}
+
 /* Without its bar the body runs to the pane's top edge, under whatever window
    controls ride there. A veil the height of the bar and more, in the body's own
    surface, lets what scrolls up there dissolve rather than run into those

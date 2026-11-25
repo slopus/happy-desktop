@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type {
     HappyAgentCalendarEventId,
     HappyAgentCalendarSnapshot,
@@ -30,6 +30,8 @@ const POPOVER_EDGE = 16;
 const POPOVER_HEIGHT = 560;
 
 export interface HappyAgentCalendarSurfacePageProps extends HappyAgentCalendarEditorHandlers {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     /** The calendar as its store holds it, with this window's own changes applied. */
     calendar: HappyAgentCalendarSnapshot;
@@ -211,6 +213,7 @@ export function HappyAgentCalendarSurfacePage(props: HappyAgentCalendarSurfacePa
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 {...(props.chat ? { chat: props.chat } : {})}
                 surface={props.surface}
             />

@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import type {
     ComposerSnapshot,
     HappyAgentSurfaceMessage,
@@ -32,6 +32,8 @@ const DELETED_TEXT = "This message was deleted";
 const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
 export interface HappyAgentMessagesSurfacePageProps {
+    /** Who else is looking at the Surface, for its header; see `HappyAgentSurfaceHeader`. */
+    viewers?: ReactNode;
     surface: HappyAgentSurfaceView;
     /** The conversation as its store holds it, with this window's own changes applied. */
     messages: HappyAgentSurfaceMessagesSnapshot;
@@ -323,6 +325,7 @@ export function HappyAgentMessagesSurfacePage(props: HappyAgentMessagesSurfacePa
             style={props.style}
         >
             <HappyAgentSurfaceHeader
+                viewers={props.viewers}
                 {...(props.chat ? { chat: props.chat } : {})}
                 {...(props.width ? { width: props.width } : {})}
                 surface={props.surface}

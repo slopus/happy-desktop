@@ -1,0 +1,340 @@
+/*
+ * C-352 ViewerStack — who else is looking, in a header.
+ *
+ * Contract: a 132 × 36 box whoever is here. Five 24px steps of 28px faces (four
+ * faces and the `+N` count) inside a 4px margin that holds the rings, gathered
+ * against the trailing edge. Every motion is a transform or opacity (and the
+ * greying filter of a face seen before), so nothing here lays anything out
+ * while it moves.
+ *
+ * The dot, the badge, and the gap inside a ring are cut in `--surface`, what
+ * a header stands on, so they part cleanly from the faces behind.
+ */
+
+.happy-viewer-stack,
+.happy-viewer-stack * {
+    box-sizing: border-box;
+}
+
+.happy-viewer-stack {
+    --happy-viewer-step: 24px;
+    --happy-viewer-glide: 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    --happy-viewer-fade: 320ms ease;
+    position: relative;
+    display: flex;
+    flex: none;
+    width: 132px;
+    height: 36px;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
+/* The faces are the trigger that opens the list from the keyboard. */
+.happy-viewer-stack__faces {
+    position: relative;
+    display: flex;
+    flex: 1;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy-radius-pill);
+    background: none;
+    color: inherit;
+    cursor: default;
+    outline: none;
+}
+
+.happy-viewer-stack__faces:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
+.happy-viewer-stack__slot,
+.happy-viewer-stack__more {
+    /* Overlapping faces: each slot sits at a fixed 24px step over the one
+       behind it, and glides between steps by transform, which a flex row
+       cannot do without laying out. */
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 28px;
+    height: 28px;
+    transform: translateX(calc(var(--happy-viewer-slot) * var(--happy-viewer-step)));
+    transition:
+        transform var(--happy-viewer-glide),
+        opacity var(--happy-viewer-fade);
+}
+
+.happy-viewer-stack__slot {
+    z-index: var(--happy-viewer-depth);
+    display: flex;
+}
+
+/* Pushed past the fourth face: it waits under the count, faded, ready to come
+   back or to leave without a jump. */
+.happy-viewer-stack__slot[data-parked] {
+    opacity: 0;
+}
+
+.happy-viewer-stack__face {
+    position: relative;
+    display: flex;
+    flex: 1;
+    transition:
+        transform var(--happy-viewer-glide),
+        opacity var(--happy-viewer-fade),
+        filter var(--happy-viewer-fade);
+}
+
+.happy-viewer-stack__avatar {
+    box-shadow: 0 0 0 1.5px var(--surface);
+}
+
+/* Seen at some point before: smaller, greyed, and behind the others. */
+.happy-viewer-stack__slot[data-tier="seen"] > .happy-viewer-stack__face {
+    filter: grayscale(1);
+    opacity: 0.7;
+    transform: scale(0.78);
+}
+
+/* The ring stands 1.5px off the face in the person's own hue. Its holder fades
+   it in and out; the ring inside breathes only while they are here. */
+.happy-viewer-stack__ring {
+    position: absolute;
+    inset: -3.5px;
+    border: 2px solid var(--happy-tile-gray);
+    border-radius: var(--happy-radius-pill);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--happy-viewer-fade);
+}
+
+.happy-viewer-stack__slot[data-tier="here"] .happy-viewer-stack__ring {
+    opacity: 1;
+    animation: happy-viewer-breathe 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes happy-viewer-breathe {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.12);
+        opacity: 0.45;
+    }
+}
+
+.happy-viewer-stack__dot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--surface);
+    border-radius: var(--happy-radius-pill);
+    background: var(--status-connected);
+    opacity: 0;
+    transform: scale(0.4);
+    transition:
+        opacity var(--happy-viewer-fade),
+        transform var(--happy-viewer-glide);
+}
+
+.happy-viewer-stack__slot[data-tier="here"] .happy-viewer-stack__dot {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Arriving while the reader looks: the face springs up from small and settles. */
+.happy-viewer-stack__slot[data-arrived] > .happy-viewer-stack__face {
+    animation: happy-viewer-pop 640ms
+        linear(
+            0,
+            0.24 6%,
+            0.63 13%,
+            0.98 21%,
+            1.16 28%,
+            1.19 33%,
+            1.14 39%,
+            1.03 49%,
+            0.97 58%,
+            0.98 70%,
+            1 84%,
+            1
+        )
+        both;
+}
+
+@keyframes happy-viewer-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    20% {
+        opacity: 1;
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.happy-viewer-stack__ago {
+    position: absolute;
+    z-index: 1;
+    right: -6px;
+    bottom: -4px;
+    display: flex;
+    align-items: center;
+    height: 14px;
+    padding: 0 3px;
+    border: 1.5px solid var(--surface);
+    border-radius: var(--happy-radius-pill);
+    background: var(--groupped-background);
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 11px;
+    font-synthesis: none;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.happy-viewer-stack__more {
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--happy-radius-pill);
+    background: var(--surface-ripple);
+    box-shadow: 0 0 0 1.5px var(--surface);
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 12px;
+    font-synthesis: none;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+}
+
+.happy-viewer-stack__more[data-shown] {
+    opacity: 1;
+}
+
+.happy-viewer-stack__slot[data-hue="blue"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-blue);
+}
+.happy-viewer-stack__slot[data-hue="green"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-green);
+}
+.happy-viewer-stack__slot[data-hue="orange"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-orange);
+}
+.happy-viewer-stack__slot[data-hue="indigo"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-indigo);
+}
+.happy-viewer-stack__slot[data-hue="purple"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-purple);
+}
+.happy-viewer-stack__slot[data-hue="red"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-red);
+}
+.happy-viewer-stack__slot[data-hue="teal"] .happy-viewer-stack__ring {
+    border-color: var(--happy-tile-teal);
+}
+
+/*
+ * Everyone, with when each was here. It hangs under the stack's trailing edge
+ * as an overlay, so the header never measures it, and it is shown by opacity
+ * alone after the same short dwell a tooltip waits.
+ */
+.happy-viewer-stack__list {
+    /* A popover: it hangs under the stack outside the header's flow. */
+    position: absolute;
+    z-index: var(--happy-z-overlay);
+    top: calc(100% + 4px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+    min-width: 200px;
+    max-width: 280px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    box-shadow: 0 4px 16px var(--shadow-color);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-3px);
+    transition:
+        opacity 90ms ease,
+        transform 90ms ease;
+}
+
+.happy-viewer-stack__rows {
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+}
+
+.happy-viewer-stack:hover > .happy-viewer-stack__list {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    transition-delay: 180ms;
+}
+
+.happy-viewer-stack:has(> .happy-viewer-stack__faces:focus-visible) > .happy-viewer-stack__list,
+.happy-viewer-stack[data-list-open] > .happy-viewer-stack__list {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+}
+
+.happy-viewer-stack__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 28px;
+    padding: 4px;
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 16px;
+    font-synthesis: none;
+}
+
+.happy-viewer-stack__text {
+    display: flex;
+    min-width: 0;
+    white-space: pre;
+}
+
+.happy-viewer-stack__name {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-viewer-stack__when {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-viewer-stack__row[data-tier="seen"] .happy-viewer-stack__name {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-viewer-stack__slot[data-tier="here"] .happy-viewer-stack__ring,
+    .happy-viewer-stack__slot[data-arrived] > .happy-viewer-stack__face {
+        animation: none;
+    }
+}

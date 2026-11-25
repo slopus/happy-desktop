@@ -230,6 +230,7 @@ import {
     type HappyAgentVaultItemId,
     type HappyAgentSearchStore,
     type HappyAgentSurfaces,
+    type HappyAgentViewers,
     type HappyAgentTodoListStore,
     type HappyAgentSurfaceMessagesStore,
     type HappyAgentSurfaceDocumentStore,
@@ -415,6 +416,7 @@ import { HappyAgentPluginsSurface } from "./views/HappyAgentPluginsSurface";
 import { HappyAgentPipelinesSurface } from "./views/HappyAgentPipelinesSurface";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
+import { HappyAgentViewersSlot } from "./views/HappyAgentViewersSlot";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
 import { sidebarReadAheadRows } from "./sidebarReadAhead";
 import type {
@@ -823,6 +825,8 @@ export interface AppHappyAgentSession {
      * without them says so through its catalog, and the sidebar offers none.
      */
     readonly surfaces?: HappyAgentSurfaces;
+    /** Who else on the team is looking at the sessions and Surfaces this window shows. */
+    readonly viewers?: HappyAgentViewers;
     /**
      * What this Happy Agent's search finds for the palette's query, to
      * fuse with what the palette finds itself. Absent, the palette's own
@@ -5152,6 +5156,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentSurfaceContent
                     key={props.surfaceId}
+                    {...(session.viewers ? { viewers: session.viewers } : {})}
                     {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
                     support={surfaceSupport}
                     {...(props.surfaceChat ? { chat: props.surfaceChat } : {})}
@@ -5247,6 +5252,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentWorkspaceSurface
                     instanceId={active.instanceId}
+                    {...(active.session.viewers ? { viewers: active.session.viewers } : {})}
                     {...(active.session.checkouts ? { checkoutsOf: active.session.checkouts } : {})}
                     restarting={
                         active.session.connection.get().drain?.intent === "restart" ||
@@ -6528,6 +6534,8 @@ const SURFACE_CHAT_PANEL_WIDTH = 420;
  */
 function HappyAgentSurfaceContent(props: {
     surfaces: HappyAgentSurfaces;
+    /** Who else is looking at the Surface, for its header. */
+    viewers?: HappyAgentViewers;
     surfaceId: HappyAgentSurfaceId;
     support: HappyAgentSurfaceSupportSnapshot;
     /** The connection's clock, which a calendar's line across today follows. */
@@ -6626,11 +6634,18 @@ function HappyAgentSurfaceContent(props: {
     // Surface's own field gives it up, and keeps it while the chat is still
     // being opened or could not be, and takes it back when the chat closes.
     const conversationShown = chatFound !== undefined && opening?.phase !== "failed";
+    const viewers = (
+        <HappyAgentViewersSlot
+            target={{ type: "surface", id: surface.id }}
+            viewers={props.viewers}
+        />
+    );
     const page = () => {
         if (surface.type.kind === "todo")
             return (
                 <HappyAgentTodoSurface
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     focusOnType={!conversationShown}
                     store={props.surfaces.todoList(surface.id)}
                     surface={view}
@@ -6640,6 +6655,7 @@ function HappyAgentSurfaceContent(props: {
             return (
                 <HappyAgentDocumentSurface
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     focusOnType={!conversationShown}
                     store={props.surfaces.document(surface.id)}
                     surface={view}
@@ -6651,6 +6667,7 @@ function HappyAgentSurfaceContent(props: {
             return support.systemMonitors !== "unsupported" ? (
                 <HappyAgentSystemMonitorSurface
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     enabled={support.systemMonitors === "supported"}
                     store={props.surfaces.systemMonitor(surface.id)}
                     surface={view}
@@ -6664,6 +6681,7 @@ function HappyAgentSurfaceContent(props: {
             return (
                 <HappyAgentMessagesSurface
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     focusOnType={!conversationShown}
                     store={props.surfaces.messages(surface.id)}
                     surface={view}
@@ -6676,6 +6694,7 @@ function HappyAgentSurfaceContent(props: {
             return (
                 <HappyAgentVaultSurface
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     clock={props.clock}
                     {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
                     store={props.surfaces.vault(surface.id)}
@@ -6687,6 +6706,7 @@ function HappyAgentSurfaceContent(props: {
             return (
                 <HappyAgentCalendarSurface
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     clock={props.clock}
                     store={props.surfaces.calendar(surface.id)}
                     surface={view}
@@ -6700,6 +6720,7 @@ function HappyAgentSurfaceContent(props: {
             return (
                 <HappyAgentSurfaceReferencePage
                     {...(chat ? { chat } : {})}
+                    viewers={viewers}
                     onOpen={() => props.onTargetOpen(surface)}
                     reference={surfaceReferenceView(surface, props.places)}
                     surface={view}
@@ -6879,6 +6900,8 @@ function surfaceReferenceView(
 
 /** A document Surface, read from its own store for as long as it is on screen. */
 function HappyAgentDocumentSurface(props: {
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     store: HappyAgentSurfaceDocumentStore;
     surface: HappyAgentSurfaceView;
     user: DocumentEditorUser;
@@ -6912,6 +6935,7 @@ function HappyAgentDocumentSurface(props: {
     })();
     return (
         <HappyAgentDocumentSurfacePage
+            viewers={props.viewers}
             {...(props.chat ? { chat: props.chat } : {})}
             content={content}
             // A document made here opens with the caret in its empty first line.
@@ -6927,6 +6951,8 @@ function HappyAgentDocumentSurface(props: {
 
 /** One visibility-scoped subscription owns the machine's telemetry polling. */
 function HappyAgentSystemMonitorSurface(props: {
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     store: HappyAgentSystemMonitorStore;
     surface: HappyAgentSurfaceView;
     enabled: boolean;
@@ -6960,6 +6986,7 @@ function HappyAgentSystemMonitorSurface(props: {
     const monitor = useSyncExternalStore(subscribe, store.get, store.get);
     return (
         <HappyAgentSystemMonitorSurfacePage
+            viewers={props.viewers}
             surface={props.surface}
             monitor={monitor}
             onProcessFilterChange={store.processFilterUpdate}
@@ -6976,6 +7003,8 @@ function clockMinuteOf(clock: HappyAgentClockStore): number {
 
 /** A calendar Surface, read from its own store for as long as it is on screen. */
 function HappyAgentCalendarSurface(props: {
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     store: HappyAgentCalendarStore;
     surface: HappyAgentSurfaceView;
     clock: HappyAgentClockStore;
@@ -6990,6 +7019,7 @@ function HappyAgentCalendarSurface(props: {
     );
     return (
         <HappyAgentCalendarSurfacePage
+            viewers={props.viewers}
             {...(props.chat ? { chat: props.chat } : {})}
             calendar={calendar}
             now={now}
@@ -7023,6 +7053,8 @@ function HappyAgentCalendarSurface(props: {
 
 /** A vault Surface, read from its own store for as long as it is on screen. */
 function HappyAgentVaultSurface(props: {
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     store: HappyAgentVaultStore;
     surface: HappyAgentSurfaceView;
     viewer?: { readonly userId: string | null };
@@ -7040,6 +7072,7 @@ function HappyAgentVaultSurface(props: {
     );
     return (
         <HappyAgentVaultSurfacePage
+            viewers={props.viewers}
             {...(props.chat ? { chat: props.chat } : {})}
             genUi={genUiViewerHost}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
@@ -7082,6 +7115,8 @@ function HappyAgentVaultSurface(props: {
 
 /** A chat Surface, read from its own store for as long as it is on screen. */
 function HappyAgentMessagesSurface(props: {
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     store: HappyAgentSurfaceMessagesStore;
     surface: HappyAgentSurfaceView;
     viewer?: { readonly userId: string | null };
@@ -7094,6 +7129,7 @@ function HappyAgentMessagesSurface(props: {
     const messages = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentMessagesSurfacePage
+            viewers={props.viewers}
             {...(props.chat ? { chat: props.chat } : {})}
             focusOnType={props.focusOnType}
             messages={messages}
@@ -7116,6 +7152,8 @@ function HappyAgentMessagesSurface(props: {
 
 /** A todo list Surface, read from its own store for as long as it is on screen. */
 function HappyAgentTodoSurface(props: {
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     store: HappyAgentTodoListStore;
     surface: HappyAgentSurfaceView;
     chat?: HappyAgentSurfaceChatToggle;
@@ -7125,6 +7163,7 @@ function HappyAgentTodoSurface(props: {
     const list = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentTodoSurfacePage
+            viewers={props.viewers}
             {...(props.chat ? { chat: props.chat } : {})}
             focusOnType={props.focusOnType}
             list={list}
@@ -7354,6 +7393,8 @@ function HappyAgentArtifactsPanelSurface(props: {
 interface HappyAgentWorkspaceSurfaceProps {
     /** This Happy Agent runs no workspaces, so its empty pane offers no project. */
     workspacesUnavailable?: true;
+    /** Who else is looking at the session on screen, for its tab strip. */
+    viewers?: HappyAgentViewers;
     /**
      * The instance this machine's health named, which a link naming an
      * instance must match to resolve here; absent while it has not said.
@@ -8890,6 +8931,18 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     ) : null
                                 }
                                 activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
+                                // Who else is looking at the session, while the
+                                // session is what the main pane shows.
+                                trailing={
+                                    props.chatId !== undefined &&
+                                    (workspace.activeMainViewId ?? props.chatId) ===
+                                        props.chatId ? (
+                                        <HappyAgentViewersSlot
+                                            target={{ type: "agent", id: props.chatId }}
+                                            viewers={props.viewers}
+                                        />
+                                    ) : undefined
+                                }
                                 // One document needs no strip: the band floats over the
                                 // content, and without a second tab it goes, giving
                                 // that document the full height without moving it.

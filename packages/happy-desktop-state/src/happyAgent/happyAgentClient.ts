@@ -214,6 +214,11 @@ import {
 import { happyAgentSurfaceChatGroupsCreate } from "../surfaces/surfaceChatGroups.js";
 import { happyAgentSurfacesCreate, type HappyAgentSurfaces } from "../surfaces/surfaces.js";
 import {
+    happyAgentViewersCreate,
+    type HappyAgentViewers,
+    type HappyAgentViewersActivity,
+} from "../viewers/viewersStore.js";
+import {
     happyAgentSearchStoreCreate,
     type HappyAgentSearchStore,
 } from "../commandPalette/searchStore.js";
@@ -405,6 +410,12 @@ export interface HappyAgentWorkspaceClient {
      * Surfaces says so through the catalog's availability.
      */
     surfaces(): HappyAgentSurfaces;
+    /**
+     * Who else on the team views the agent sessions and Surfaces this window
+     * shows. Materialized on first access; outside team mode, or on a server
+     * without viewers, each target says it is unavailable.
+     */
+    viewers(): HappyAgentViewers;
     /** The other people on the team `@` offers, held since the connection's bootstrap. */
     teammates(): readonly HappyAgentTeammate[];
     /** Everyone on the team, the reader included, held since the connection's bootstrap. */
@@ -666,6 +677,8 @@ export interface HappyAgentWorkspaceClientDeps {
      * appearance was current when it started.
      */
     readonly terminalColorScheme: () => TerminalColorScheme;
+    /** Whether the person is at this window, for what it says it views; omitted counts them always there. */
+    readonly viewersActivity?: HappyAgentViewersActivity;
 }
 
 interface ChatBinding {
@@ -856,6 +869,7 @@ export function happyAgentWorkspaceClientCreate(
         }));
     let surfaces: HappyAgentSurfaces | undefined;
     let search: HappyAgentSearchStore | undefined;
+    let viewers: HappyAgentViewers | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     const deviceBridgeStores = new Map<HappyAgentGroupId, HappyAgentDeviceBridgesStore>();
     let deviceBridgeSupport: HappyAgentDeviceBridgeSupportStore | undefined;
@@ -1085,6 +1099,15 @@ export function happyAgentWorkspaceClientCreate(
         feed() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             return feedOf();
+        },
+        viewers() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            return (viewers ??= happyAgentViewersCreate({
+                client: deps.client,
+                sync: deps.connection.sync,
+                team: () => deps.connection.team(),
+                ...(deps.viewersActivity ? { activity: deps.viewersActivity } : {}),
+            }));
         },
         teammates: () => deps.connection.teammates(),
         team: () => deps.connection.team(),
@@ -1695,6 +1718,8 @@ export function happyAgentWorkspaceClientCreate(
             surfaces?.[Symbol.dispose]();
             search?.[Symbol.dispose]();
             surfaces = undefined;
+            viewers?.[Symbol.dispose]();
+            viewers = undefined;
             deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {
                 chatDeactivate(binding);

@@ -440,7 +440,9 @@ function connectionSlotsCreate(slots: number): {
                                     ? sse("hello", frame.hello)
                                     : frame.kind === "event"
                                       ? sse(frame.event.type, frame.event, frame.cursor)
-                                      : sse(frame.frame.type, frame.frame.data),
+                                      : frame.kind === "viewers"
+                                        ? sse("viewers.updated", frame.frame)
+                                        : sse(frame.frame.type, frame.frame.data),
                             ),
                         );
                     },

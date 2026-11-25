@@ -114,6 +114,12 @@ export {
     type ToneName,
 } from "./Avatar";
 export {
+    ViewerStack,
+    type ViewerStackPerson,
+    type ViewerStackProps,
+    type ViewerStackTier,
+} from "./ViewerStack";
+export {
     AVATAR_PLACEHOLDER_COUNT,
     AvatarPlaceholder,
     avatarPlaceholderIndex,

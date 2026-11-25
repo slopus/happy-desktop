@@ -48,6 +48,8 @@ import {
     type HappyAgentArtifacts,
     type HappyAgentSearchStore,
     type HappyAgentSurfaces,
+    type HappyAgentViewers,
+    type HappyAgentViewersActivity,
     type HappyAgentSessionLocation,
     type HappyAgentWorkspaceMemoryDocument,
     type HappyAgentFeedFilterPersistence,
@@ -204,6 +206,8 @@ export interface HappyAgentSession {
     readonly feed: import("happy-desktop-state").HappyAgentFeed;
     /** This Happy Agent's shared Surfaces, such as todo lists, materialized as they open. */
     readonly surfaces: HappyAgentSurfaces;
+    /** Who else is looking at what this window shows, materialized as headers open. */
+    readonly viewers: HappyAgentViewers;
     /** What this Happy Agent's search finds for the command palette's query. */
     readonly search: HappyAgentSearchStore;
     readonly clock: HappyAgentClockStore;
@@ -439,6 +443,8 @@ export function happyAgentConnectionOpen(input: {
      * connection opens. A terminal is started in it and keeps it afterwards.
      */
     readonly terminalColorScheme: () => TerminalColorScheme;
+    /** Whether the person is at this window, for what it tells the Happy Agent it views. */
+    readonly viewersActivity?: HappyAgentViewersActivity;
 }): HappyAgentConnectionHandle {
     let disposed = false;
     let session: HappyAgentSession | undefined;
@@ -608,6 +614,7 @@ export function happyAgentConnectionOpen(input: {
         },
         terminalDriverCreate,
         terminalColorScheme: input.terminalColorScheme,
+        ...(input.viewersActivity ? { viewersActivity: input.viewersActivity } : {}),
         // Chromium's own viewer shows a PDF inline when this window has one;
         // anything else is offered as a download.
         artifactDocumentInline: (mimeType) =>
@@ -772,6 +779,7 @@ export function happyAgentConnectionOpen(input: {
                     artifacts: client.artifacts(),
                     feed: client.feed(),
                     surfaces: client.surfaces(),
+                    viewers: client.viewers(),
                     search: client.search(),
                     clock,
                 };

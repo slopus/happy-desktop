@@ -57,6 +57,8 @@ export interface HappyAgentSync {
          * would otherwise crowd every other follower's queue.
          */
         readonly documents?: boolean;
+        /** Opts into live `viewers.updated` frames, which only the viewers store reads. */
+        readonly viewers?: boolean;
         /** Opts into narrow startup reads, without releasing protected surface reads. */
         readonly onOnboarding?: (input: HappyAgentOnboardingInput | undefined) => void;
     }): AsyncIterable<HappyAgentSyncInput>;
@@ -96,7 +98,7 @@ export function happyAgentSyncCreate() {
         for (const listener of listeners) listener(input);
     };
     const source: HappyAgentSync = {
-        async *follow({ signal, events, documents, onOnboarding }) {
+        async *follow({ signal, events, documents, viewers, onOnboarding }) {
             if (closed || signal.aborted) return;
             // Every follower sees every event of the connection; most want few kinds.
             const wanted = new Set(events);
@@ -116,6 +118,7 @@ export function happyAgentSyncCreate() {
                     return;
                 if (input.kind === "update" && input.update.kind === "document" && !documents)
                     return;
+                if (input.kind === "update" && input.update.kind === "viewers" && !viewers) return;
                 if (input.kind === "bootstrap") queue.length = 0;
                 // A slow endpoint cannot accumulate an unbounded journal. The
                 // authoritative narrow read repairs discarded delivery hints.
