@@ -3,6 +3,10 @@ import type { BadgeVariant } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import {
+    ClaudeSetupTokenDialog,
+    type ClaudeSetupTokenDialogProps,
+} from "../../ClaudeSetupTokenDialog";
 import { TextField } from "../../TextField";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
@@ -14,6 +18,11 @@ import {
     happyAgentCustomProviderProtocolOffered,
     type HappyAgentCustomProviderProtocolId,
 } from "./HappyAgentCustomProviderDialog";
+import {
+    HappyAgentProviderSignIn,
+    type HappyAgentProviderSignInMethodId,
+    type HappyAgentProviderSignInRow,
+} from "./HappyAgentProviderSignIn";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
@@ -80,7 +89,17 @@ export interface HappyAgentProviderRow {
     readonly keys?: HappyAgentProviderKeys;
     /** A provider the team added itself, with the protocol it speaks. */
     readonly custom?: { readonly protocol: HappyAgentCustomProviderProtocolId };
+    /** A Codex, Claude, or Grok account's credential, where the daemon can sign it in. */
+    readonly signIn?: HappyAgentProviderSignInRow;
 }
+
+/** The Claude setup token dialog, while one account's token is being updated. */
+export type HappyAgentProviderTokenEditorProps = Pick<
+    ClaudeSetupTokenDialogProps,
+    "shell" | "phase" | "error" | "onClose" | "onTokenSubmit"
+> & {
+    readonly providerName: string;
+};
 
 export type HappyAgentProviderSettingsProps = {
     providers: readonly HappyAgentProviderRow[];
@@ -101,6 +120,16 @@ export type HappyAgentProviderSettingsProps = {
     onCustomProviderCreate?: () => void;
     /** Opens one of the team's own providers for editing; absent when the reader may not. */
     onCustomProviderEdit?: (providerId: string) => void;
+    /** Why only the team owner may change how accounts sign in, once that is known. */
+    signInLocked?: string;
+    onSignInStart?: (providerId: string, method?: HappyAgentProviderSignInMethodId) => void;
+    onSignInCodeSubmit?: (providerId: string, code: string) => void;
+    onSignInCancel?: (providerId: string) => void;
+    onTokenEditorOpen?: (providerId: string) => void;
+    /** The setup token dialog, while it is open. */
+    tokenEditor?: HappyAgentProviderTokenEditorProps;
+    /** Opens a vendor's sign-in page; a browser tab when absent. */
+    onExternalOpen?: (url: string) => void;
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
@@ -218,6 +247,25 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 }
                             />
                         </header>
+                        {provider.signIn ? (
+                            <HappyAgentProviderSignIn
+                                providerName={provider.name}
+                                signIn={provider.signIn}
+                                unavailable={props.unavailable !== undefined}
+                                {...(props.signInLocked === undefined
+                                    ? {}
+                                    : { locked: props.signInLocked })}
+                                {...(props.onExternalOpen
+                                    ? { onExternalOpen: props.onExternalOpen }
+                                    : {})}
+                                onCancel={() => props.onSignInCancel?.(provider.id)}
+                                onCodeSubmit={(code) =>
+                                    props.onSignInCodeSubmit?.(provider.id, code)
+                                }
+                                onStart={(method) => props.onSignInStart?.(provider.id, method)}
+                                onTokenEditorOpen={() => props.onTokenEditorOpen?.(provider.id)}
+                            />
+                        ) : null}
                         <Box className="happy-agent-provider__models">
                             {provider.models.map((model) => (
                                 <Box
@@ -310,6 +358,20 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     </Box>
                 ) : null}
             </HappyAgentSettingsSection>
+            {props.tokenEditor ? (
+                <ClaudeSetupTokenDialog
+                    {...(props.tokenEditor.error === undefined
+                        ? {}
+                        : { error: props.tokenEditor.error })}
+                    lead={`Paste a new setup token for ${props.tokenEditor.providerName}. Happy uses it instead of the system login.`}
+                    onClose={props.tokenEditor.onClose}
+                    onTokenSubmit={props.tokenEditor.onTokenSubmit}
+                    phase={props.tokenEditor.phase}
+                    shell={props.tokenEditor.shell}
+                    submitLabel="Update token"
+                    title={`Update token · ${props.tokenEditor.providerName}`}
+                />
+            ) : null}
         </>
     );
 }
@@ -325,6 +387,9 @@ function providerHint(provider: HappyAgentProviderRow): string | undefined {
     if (provider.keys?.addable && provider.keys.source === null)
         return "Add a team API key to use its models.";
     if (provider.keys) return undefined;
+    // An account that can sign in here says how under its name instead.
+    if (provider.status === "not_authenticated" && provider.signIn?.methods.length)
+        return undefined;
     return STATUS_HINTS[provider.status];
 }
 

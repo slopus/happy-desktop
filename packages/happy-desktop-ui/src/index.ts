@@ -1112,7 +1112,18 @@ export {
     type HappyAgentProviderKeys,
     type HappyAgentProviderSettingsProps,
     type HappyAgentProviderStatus,
+    type HappyAgentProviderTokenEditorProps,
 } from "./pages/settings/HappyAgentProviderSettings";
+export {
+    HappyAgentProviderSignIn,
+    type HappyAgentProviderCredentialSourceId,
+    type HappyAgentProviderSignInCliId,
+    type HappyAgentProviderSignInFailure,
+    type HappyAgentProviderSignInFlow,
+    type HappyAgentProviderSignInMethodId,
+    type HappyAgentProviderSignInProps,
+    type HappyAgentProviderSignInRow,
+} from "./pages/settings/HappyAgentProviderSignIn";
 export {
     HappyAgentCustomProviderDialog,
     type HappyAgentCustomProviderDialogProps,

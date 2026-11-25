@@ -5,6 +5,7 @@ import {
     HappyAgentClient,
     happyAgentWorkspaceClientCreate,
     happyAgentProviderCredentialsApiCreate,
+    happyAgentProviderSignInApiCreate,
     happyAgentCloudProvidersApiCreate,
     happyCloudRequestCreate,
     happyAgentClockStoreCreate,
@@ -155,6 +156,9 @@ export interface HappyAgentSession {
     readonly profile: () => HappyAgentProfileStore | undefined;
     readonly providerUsage: HappyAgentProviderUsageStore | undefined;
     readonly providers: HappyAgentProvidersStore;
+    readonly providerSignIn: () =>
+        | import("happy-desktop-state").HappyAgentProviderSignInStore
+        | undefined;
     readonly members: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
     readonly userProfile: (
         userId: string,
@@ -559,6 +563,18 @@ export function happyAgentConnectionOpen(input: {
             endpoint: directClient.endpoint,
             token: "happy-local-capability",
         }),
+        providerSignIn: {
+            api: happyAgentProviderSignInApiCreate({
+                endpoint: directClient.endpoint,
+                token: "happy-local-capability",
+            }),
+            // Only the desktop window on the daemon's own computer can finish a
+            // sign-in whose page the daemon serves there.
+            daemonLocal:
+                input.happyAgentId === "local" &&
+                input.happyCloud !== true &&
+                window.happyDesktop !== undefined,
+        },
         ...(input.credentialImportHost ? { credentialImportHost: input.credentialImportHost } : {}),
         ...(cloudRequest
             ? {
@@ -751,6 +767,7 @@ export function happyAgentConnectionOpen(input: {
                     profile: () => profileStore,
                     providerUsage: client.providerUsage(),
                     providers: client.providers(),
+                    providerSignIn: () => client.providerSignIn(),
                     credentialImport: () => client.credentialImport(),
                     cloudProviders: () => client.cloudProviders(),
                     repositories: () => client.repositories(),

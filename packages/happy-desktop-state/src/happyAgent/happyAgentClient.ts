@@ -121,6 +121,11 @@ import {
     happyAgentProvidersStoreCreate,
     type HappyAgentProvidersStore,
 } from "./happyAgentProvidersStore.js";
+import type { HappyAgentProviderSignInApi } from "./happyAgentProviderSignIn.js";
+import {
+    happyAgentProviderSignInStoreCreate,
+    type HappyAgentProviderSignInStore,
+} from "./happyAgentProviderSignInStore.js";
 import {
     happyAgentCredentialImportStoreCreate,
     type HappyAgentCredentialImportHost,
@@ -295,6 +300,13 @@ export interface HappyAgentWorkspaceClient {
      * catalog `models` holds, so a provider switched off stops being offered.
      */
     providers(): HappyAgentProvidersStore;
+    /**
+     * Settings › Inference's account sign-ins: signing a Codex, Claude, or
+     * Grok account in to a credential only this installation uses.
+     * Materialized on first access and shared; undefined where the daemon's
+     * health does not report provider sign-in.
+     */
+    providerSignIn(): HappyAgentProviderSignInStore | undefined;
     /**
      * Settings › Inference › Import: copies credentials found on this computer
      * to the server. Only a Happy Cloud server reached from a desktop shell
@@ -602,6 +614,12 @@ export interface HappyAgentWorkspaceClientDeps {
     readonly client: HappyAgentClient;
     /** Happy Cloud's team key routes over this connection's transport. */
     readonly providerCredentials?: HappyAgentProviderCredentialsApi;
+    /** The daemon's provider sign-in routes over this connection's transport. */
+    readonly providerSignIn?: {
+        readonly api: HappyAgentProviderSignInApi;
+        /** Whether the daemon runs on this computer, where a browser sign-in can finish. */
+        readonly daemonLocal: boolean;
+    };
     /** The desktop shell's credential import, for a Happy Cloud server. */
     readonly credentialImportHost?: HappyAgentCredentialImportHost;
     /**
@@ -825,6 +843,7 @@ export function happyAgentWorkspaceClientCreate(
     let teamsStore: HappyAgentTeamsStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
+    let providerSignInStore: HappyAgentProviderSignInStore | undefined;
     let credentialImportStore: HappyAgentCredentialImportStore | undefined;
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let repositoriesStore: HappyAgentRepositoriesStore | undefined;
@@ -1250,6 +1269,20 @@ export function happyAgentWorkspaceClientCreate(
             });
             return providersStore;
         },
+        providerSignIn() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const signIn = deps.providerSignIn;
+            if (!signIn) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "providerSignIn"))
+                return undefined;
+            providerSignInStore ??= happyAgentProviderSignInStoreCreate({
+                client: deps.client,
+                api: signIn.api,
+                sync: deps.connection.sync,
+                daemonLocal: signIn.daemonLocal,
+            });
+            return providerSignInStore;
+        },
         credentialImport() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!deps.credentialImportHost || !deps.providerCredentials) return undefined;
@@ -1658,6 +1691,8 @@ export function happyAgentWorkspaceClientCreate(
             profileStore = undefined;
             providersStore?.[Symbol.dispose]();
             providersStore = undefined;
+            providerSignInStore?.[Symbol.dispose]();
+            providerSignInStore = undefined;
             credentialImportStore?.[Symbol.dispose]();
             credentialImportStore = undefined;
             cloudProvidersStore?.[Symbol.dispose]();

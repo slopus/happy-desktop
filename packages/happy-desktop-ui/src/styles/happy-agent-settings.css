@@ -471,6 +471,110 @@
     gap: 8px;
 }
 
+/* A Codex, Claude, or Grok account's credential sits under the provider's
+   name, on the models' indent, closed by the hairline the models open under.
+   A running sign-in unfolds below its row, on the same indent. */
+.happy-agent-provider__sign-in {
+    box-sizing: border-box;
+    display: flex;
+    gap: 12px;
+    padding: 8px 0 12px 40px;
+    border-bottom: 1px solid var(--divider);
+}
+
+/* The source's mark stands beside the first line only, so everything under
+   that line, the note and a running sign-in, starts where its words do. */
+.happy-agent-provider__sign-in-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 32px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-provider__sign-in-body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-agent-provider__sign-in-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 32px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-provider__sign-in-meta {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider__sign-in-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.happy-agent-provider__sign-in-flow .happy-text-field {
+    align-self: stretch;
+}
+
+.happy-agent-provider__sign-in-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-provider__sign-in-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-agent-provider__sign-in-text {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-provider__sign-in-note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider__sign-in-code {
+    font-family: var(--happy-font-mono);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 28px;
+    user-select: all;
+}
+
+.happy-agent-provider__sign-in-done .happy-icon {
+    color: var(--status-connected);
+}
+
+.happy-agent-provider__sign-in-failed .happy-icon {
+    color: var(--status-error);
+}
+
+.happy-agent-provider__sign-in-error {
+    color: var(--status-error);
+    font-size: 12px;
+    line-height: 16px;
+}
+
 /* ---- Members ------------------------------------------------------------- */
 
 /* The page's sections, spaced as the settings column spaces any page's. */

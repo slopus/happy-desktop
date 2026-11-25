@@ -47,11 +47,22 @@ export type HappyCloudEventType =
     | "pipeline.node.updated"
     | "pipeline.node.log";
 
+/**
+ * Events the daemon sends that the published protocol package does not name
+ * yet. Their payloads are read at the follower's own boundary; each leaves
+ * this list when the client that names it is adopted.
+ */
+export type HappyAgentPendingEventType = "provider_sign_in.updated";
+
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {
     follow(options: {
         readonly signal: AbortSignal;
-        readonly events: readonly (HappyAgentEvent["type"] | HappyCloudEventType)[];
+        readonly events: readonly (
+            | HappyAgentEvent["type"]
+            | HappyCloudEventType
+            | HappyAgentPendingEventType
+        )[];
         /**
          * Opts into live document frames, which carry typing as it happens and
          * would otherwise crowd every other follower's queue.

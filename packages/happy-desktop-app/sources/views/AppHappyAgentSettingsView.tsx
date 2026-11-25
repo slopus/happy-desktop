@@ -20,6 +20,7 @@ import type {
     HappyAgentCloudConnection,
     HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
+    HappyAgentProviderSignInAccount,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
     HappyAgentTaskSettingsSnapshot,
@@ -57,6 +58,7 @@ import {
     happyAgentProviderUsageStoreNoop,
     type HappyAgentProviderUsageStore,
     happyAgentProvidersStoreNoop,
+    happyAgentProviderSignInStoreNoop,
     happyAgentCredentialImportStoreNoop,
     happyAgentCloudProvidersStoreNoop,
     happyAgentRepositoriesStoreNoop,
@@ -126,6 +128,7 @@ import {
     HappyAgentUsageSettings,
     providerAccountName,
     type HappyAgentProviderRow,
+    type HappyAgentProviderSignInRow,
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
@@ -805,6 +808,15 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         providersStore.subscribe,
         providersStore.get,
         providersStore.get,
+    );
+    // Each account's sign-in is followed only while the category is on screen.
+    const providerSignInStore =
+        (section === "providers" ? host?.session?.providerSignIn?.() : undefined) ??
+        happyAgentProviderSignInStoreNoop;
+    const providerSignIn = useSyncExternalStore(
+        providerSignInStore.subscribe,
+        providerSignInStore.get,
+        providerSignInStore.get,
     );
     // Import exists only on a Happy Cloud server reached from a desktop, and
     // looks for nothing until the person asks it to.
@@ -1579,7 +1591,62 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             settings,
                             selection,
                             cloudProvidersStore !== undefined,
+                            providerSignIn.accounts,
                         )}
+                        {...(providerSignIn.forbidden ||
+                        (membersStore && !members.loading && !owner)
+                            ? {
+                                  signInLocked:
+                                      "Only the team owner can change how accounts sign in.",
+                              }
+                            : {})}
+                        onSignInStart={(providerId, method) => {
+                            if (happyAgentOnline())
+                                providerSignInStore.signInStart(providerId, method);
+                        }}
+                        onSignInCodeSubmit={(providerId, code) => {
+                            if (happyAgentOnline())
+                                providerSignInStore.signInCodeSubmit(providerId, code);
+                        }}
+                        onSignInCancel={(providerId) => {
+                            if (happyAgentOnline()) providerSignInStore.signInCancel(providerId);
+                        }}
+                        onTokenEditorOpen={(providerId) => {
+                            if (happyAgentOnline()) providerSignInStore.tokenEditorOpen(providerId);
+                        }}
+                        {...(providerSignIn.tokenEditor
+                            ? {
+                                  tokenEditor: {
+                                      providerName: providerAccountName(
+                                          providerSignIn.tokenEditor.providerId,
+                                          providers.providers.find(
+                                              (provider) =>
+                                                  provider.id ===
+                                                  providerSignIn.tokenEditor?.providerId,
+                                          )?.name ?? providerSignIn.tokenEditor.providerId,
+                                      ),
+                                      shell: navigator.platform.toLowerCase().startsWith("win")
+                                          ? "powershell"
+                                          : "posix",
+                                      phase: providerSignIn.tokenEditor.saving
+                                          ? "saving"
+                                          : providerSignIn.tokenEditor.error
+                                            ? "failed"
+                                            : "idle",
+                                      ...(providerSignIn.tokenEditor.error
+                                          ? { error: providerSignIn.tokenEditor.error.message }
+                                          : {}),
+                                      onClose: () => providerSignInStore.tokenEditorClose(),
+                                      onTokenSubmit: (token: string) => {
+                                          if (happyAgentOnline())
+                                              providerSignInStore.tokenSave(token);
+                                      },
+                                  },
+                              }
+                            : {})}
+                        {...(props.externalLinkOpen
+                            ? { onExternalOpen: props.externalLinkOpen }
+                            : {})}
                         {...(providers.error ? { error: providers.error.message } : {})}
                         {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
@@ -2220,14 +2287,65 @@ function providerRows(
     settings: HappyAgentSettingsSnapshot,
     selection: { readonly providerId: string; readonly modelId: string } | undefined,
     aiProviders: boolean,
+    signIns: ReadonlyMap<string, HappyAgentProviderSignInAccount>,
 ): readonly HappyAgentProviderRow[] {
     return providers.map((entry) => {
         const provider: HappyAgentProviderEntry =
             aiProviders && !entry.custom
                 ? (({ credentials: _credentials, ...rest }) => rest)(entry)
                 : entry;
-        return providerRow(provider, settings, selection);
+        const row = providerRow(provider, settings, selection);
+        const signIn = signIns.get(provider.id);
+        return signIn ? { ...row, signIn: providerSignInRow(signIn) } : row;
     });
+}
+
+/** One account's credential and sign-in, as its provider card shows them. */
+function providerSignInRow(account: HappyAgentProviderSignInAccount): HappyAgentProviderSignInRow {
+    const operation = account.operation;
+    const live = operation?.status === "running" || operation?.status === "waiting";
+    const flow: HappyAgentProviderSignInRow["flow"] =
+        live && operation.authorization
+            ? {
+                  kind: "waiting",
+                  method: operation.authorization.method,
+                  url: operation.authorization.url,
+                  ...(operation.authorization.userCode
+                      ? { userCode: operation.authorization.userCode }
+                      : {}),
+                  acceptsCode: operation.authorization.acceptsCode,
+                  openedByProgram: operation.authorization.openedByProgram,
+              }
+            : live || account.request === "start"
+              ? { kind: "starting" }
+              : account.outcomeShown && operation?.status === "succeeded"
+                ? { kind: "succeeded" }
+                : account.outcomeShown && operation?.status === "failed"
+                  ? {
+                        kind: "failed",
+                        failure:
+                            operation.error?.code === "expired" ||
+                            operation.error?.code === "save_failed"
+                                ? operation.error.code
+                                : "failed",
+                        message: operation.error?.message || operation.message,
+                    }
+                  : undefined;
+    const signedIn =
+        account.credential.source === "internal" && account.account
+            ? [account.account.email, account.account.plan].filter(Boolean).join(" · ")
+            : "";
+    return {
+        cli: account.cli,
+        source: account.credential.source,
+        ...(signedIn ? { account: signedIn } : {}),
+        methods: account.methods,
+        acceptsToken: account.credential.acceptsToken,
+        installed: account.installed !== false,
+        ...(flow ? { flow } : {}),
+        ...(account.request ? { busy: account.request } : {}),
+        ...(account.error ? { error: account.error.message } : {}),
+    };
 }
 
 function providerRow(

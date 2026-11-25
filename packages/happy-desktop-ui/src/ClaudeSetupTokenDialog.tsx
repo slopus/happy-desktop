@@ -22,6 +22,12 @@ export interface ClaudeSetupTokenDialogProps {
      */
     readonly phase: "idle" | "saving" | "failed";
     readonly error?: string;
+    /** The dialog's title; "Connect Claude" when absent. */
+    readonly title?: string;
+    /** The submit button's words; "Connect Claude" when absent. */
+    readonly submitLabel?: string;
+    /** The opening sentence, for a caller replacing a token rather than connecting. */
+    readonly lead?: string;
     onClose(): void;
     /** The pasted token. It goes to Happy Agent and is not kept here. */
     onTokenSubmit(token: string): void;
@@ -66,18 +72,18 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                             onClick={submit}
                             variant="primary"
                         >
-                            Connect Claude
+                            {props.submitLabel ?? "Connect Claude"}
                         </Button>
                     </>
                 }
                 onClose={props.onClose}
                 size="medium"
-                title="Connect Claude"
+                title={props.title ?? "Connect Claude"}
             >
                 <div className="happy-claude-setup-token__body">
                     <p className="happy-claude-setup-token__lead">
-                        Happy connects to Claude with a setup token: a key Claude Code makes for
-                        your own Claude account. It takes about a minute.
+                        {props.lead ??
+                            "Happy connects to Claude with a setup token: a key Claude Code makes for your own Claude account. It takes about a minute."}
                     </p>
                     <ol className="happy-claude-setup-token__steps">
                         {props.installCommand === undefined ? null : (

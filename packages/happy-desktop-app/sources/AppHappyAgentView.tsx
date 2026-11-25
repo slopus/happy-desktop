@@ -733,6 +733,13 @@ export interface AppHappyAgentSession {
      * machine's configuration, which leaves that category saying so.
      */
     readonly providers?: HappyAgentProvidersStore;
+    /**
+     * Signing Codex, Claude, and Grok accounts in to a credential only this
+     * installation uses; absent or undefined where the daemon does not offer it.
+     */
+    readonly providerSignIn?: () =>
+        | import("happy-desktop-state").HappyAgentProviderSignInStore
+        | undefined;
     /** Settings › Members, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly members?: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
     /** One member's profile, on Happy Cloud; absent or undefined elsewhere. */
