@@ -552,10 +552,11 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
             said !== null && Math.abs(said - age) <= 2,
             `said ${said} min, actual ${age} min: ${t6.assistant}`,
         );
-        check(context, "S1 t6 no clock time", !/\d{1,2}:\d{2}/.test(t6.assistant), t6.assistant);
+        check(context, "S1 t6 no clock time", !/\d{1,2} ?:\d{2}/.test(t6.assistant), t6.assistant);
         const t7 = await call.say("What time exactly?", { tier: "context" });
         const finished = new Date(ship.seededAt);
-        const clock = /(\d{1,2})[:.](\d{2})/.exec(t7.assistant);
+        // Transcripts sometimes space the colon: "3 :38".
+        const clock = /(\d{1,2}) ?[:.](\d{2})/.exec(t7.assistant);
         const minutesOfDay = (hours: number, minutes: number) => hours * 60 + minutes;
         const actual = minutesOfDay(finished.getHours() % 12, finished.getMinutes());
         check(
