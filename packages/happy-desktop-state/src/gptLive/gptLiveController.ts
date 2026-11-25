@@ -65,19 +65,28 @@ export const GPT_LIVE_DESKTOP_CAPABILITIES = [
     "taskCreate",
     "sessionModelChange",
     "failureReasons",
+    "agentTargets",
 ] as const;
 
 /**
- * A daemon agent's own conversation is addressed only with `agentTargets`,
- * which this desktop does not offer; one named anyway is refused.
+ * A daemon agent's own conversation, named by its agent ID. With
+ * `agentTargets` it is found in the window's whole list, past the hundred rows
+ * the context carries; without it, it is refused.
  */
 const agentTarget = (target: object): target is LiveAgentTarget =>
     "kind" in target && target.kind === "agent";
 const agentTargetRefusal = (): Refusal =>
     new Refusal(
         "unavailable",
-        "This desktop cannot address the Happy Agent's own conversation. Nothing was done.",
+        "This call did not enable addressing conversations by agent ID. Nothing was done.",
     );
+type ConversationTarget = Extract<LiveDesktopTarget, { kind: "session" | "bot" | "task" }>;
+/** The session reference alone, as session actions and updates name it. */
+const sessionRef = (target: ConversationTarget): LiveSessionRef => ({
+    connectionId: target.connectionId,
+    groupId: target.groupId,
+    sessionId: target.sessionId,
+});
 
 /** How long a navigation target stays highlighted before the window turns to it. */
 export const GPT_LIVE_NAVIGATION_HOLD_MS = 500;
@@ -240,6 +249,78 @@ export function gptLiveControllerCreate(options: {
         context.sessions.some((item) => refKey(item.target) === refKey(target)) ||
         context.bots.some((item) => refKey(item.target) === refKey(target)) ||
         (context.activeSession !== null && refKey(context.activeSession.target) === refKey(target));
+    /**
+     * One conversation found by its ID in the window's whole list: every joined,
+     * browsable and archived task, every bot, and every project and workspace
+     * conversation. The context carries at most a hundred of these.
+     */
+    const conversationLocate = (
+        connectionId: string,
+        sessionId: string,
+    ): { target: ConversationTarget; title: string; status: string } | undefined => {
+        const list = source
+            .get()
+            .connections.find((item) => item.id === connectionId)
+            ?.workspace?.get().list;
+        if (!list) return undefined;
+        for (const task of [...list.tasks, ...list.taskDirectory, ...list.tasksArchived])
+            if (task.conversation.id === sessionId)
+                return {
+                    target: {
+                        kind: "task",
+                        connectionId,
+                        groupId: task.workspaceId,
+                        sessionId,
+                        taskId: task.id,
+                    },
+                    title: task.name,
+                    status: task.conversation.activity,
+                };
+        for (const bot of list.bots)
+            if (bot.conversation.id === sessionId)
+                return {
+                    target: {
+                        kind: "bot",
+                        connectionId,
+                        groupId: bot.workspaceId,
+                        sessionId,
+                        botId: bot.id,
+                    },
+                    title: bot.name,
+                    status: bot.conversation.activity,
+                };
+        if (list.projects.type !== "ready") return undefined;
+        for (const project of list.projects.value)
+            for (const group of [project, ...project.worktrees])
+                for (const conversation of group.conversations)
+                    if (conversation.id === sessionId)
+                        return {
+                            target: { kind: "session", connectionId, groupId: group.id, sessionId },
+                            title: conversation.title,
+                            status: conversation.activity,
+                        };
+        return undefined;
+    };
+    /** Conversations this call reached by agent ID; they stand as listed while the window still has them. */
+    const agentResolved = new Set<string>();
+    const agentResolve = (target: LiveAgentTarget): ConversationTarget => {
+        if (!capabilities.has("agentTargets")) throw agentTargetRefusal();
+        connectionFind(target.connectionId);
+        const found = conversationLocate(target.connectionId, target.agentId);
+        if (!found)
+            throw new Refusal(
+                "notFound",
+                "That conversation is not in this Desktop's list. Nothing was done.",
+            );
+        agentResolved.add(refKey(found.target));
+        return found.target;
+    };
+    /** A conversation reached by agent ID, found again in the window's whole list. */
+    const agentListed = (target: LiveSessionRef) => {
+        if (!agentResolved.has(refKey(target))) return undefined;
+        const found = conversationLocate(target.connectionId, target.sessionId);
+        return found && refKey(found.target) === refKey(target) ? found : undefined;
+    };
     const send = (message: LiveControlClientMessage) => {
         if (closed) return;
         if (gptLiveSerializedBytes(message) > GPT_LIVE_FRAME_BYTES)
@@ -264,6 +345,11 @@ export function gptLiveControllerCreate(options: {
             return current.projects.some((item) => targetEqual(item.target, target));
         if (target.kind === "workspace")
             return current.workspaces.some((item) => targetEqual(item.target, target));
+        if (
+            (target.kind === "session" || target.kind === "bot" || target.kind === "task") &&
+            agentListed(target)
+        )
+            return true;
         if (target.kind === "bot")
             return current.bots.some((item) => targetEqual(item.target, target));
         if (target.kind === "task")
@@ -500,21 +586,27 @@ export function gptLiveControllerCreate(options: {
         const current = contextRead().context;
         const row = current.sessions.find((item) => refKey(item.target) === refKey(target));
         const bot = current.bots.find((item) => refKey(item.target) === refKey(target));
+        const located = row || bot ? undefined : agentListed(target);
         if (
             !row &&
             !bot &&
+            !located &&
             !(current.activeSession && refKey(current.activeSession.target) === refKey(target))
         )
             throw new Refusal(
                 "notFound",
                 "That conversation is not listed in this Desktop context.",
             );
-        if (writing && (row?.status === "awaitingInput" || bot?.status === "awaitingInput"))
+        const status = row?.status ?? bot?.status ?? located?.status;
+        if (writing && status === "awaitingInput")
             throw new Refusal(
                 "forbidden",
                 "A human must answer the pending question before adding voice text.",
             );
-        return { ...connection, title: row?.title ?? bot?.name ?? "Conversation" };
+        return {
+            ...connection,
+            title: row?.title ?? bot?.name ?? located?.title ?? "Conversation",
+        };
     };
     const activeCheck = (target: LiveSessionRef, workspace: HappyAgentWorkspaceStore) => {
         const current = source.get();
@@ -775,8 +867,9 @@ export function gptLiveControllerCreate(options: {
                 "This Happy Agent has not enabled model changes by voice. Nothing was changed.",
             );
         if (action.type === "sessionWatch" && !action.enabled) {
-            const watched = action.target;
-            if (agentTarget(watched)) throw agentTargetRefusal();
+            const watched = agentTarget(action.target)
+                ? sessionRef(agentResolve(action.target))
+                : action.target;
             const key = refKey(watched);
             const watch = watches.get(key);
             if (watch) watchRelease(watch);
@@ -795,8 +888,8 @@ export function gptLiveControllerCreate(options: {
             );
         check(request.contextRevision, signal);
         if (action.type === "desktopOpen") {
-            const target = action.target;
-            if (target.kind === "agent") throw agentTargetRefusal();
+            const target =
+                action.target.kind === "agent" ? agentResolve(action.target) : action.target;
             if (!targetListed(target))
                 throw new Refusal(
                     "notFound",
@@ -813,13 +906,26 @@ export function gptLiveControllerCreate(options: {
                     "The requested target left the Desktop context before the view moved.",
                 );
             await duringCall(Promise.resolve(source.targetOpen(target)), signal);
-            if (!targetEqual(contextRead().context.activeTarget, target))
+            const arrived = contextRead().context.activeTarget;
+            // A task the person has not joined, or one archived, shows as its
+            // conversation; reached by agent ID, the conversation is what counts.
+            const conversation =
+                target.kind === "session" || target.kind === "bot" || target.kind === "task";
+            if (
+                !targetEqual(arrived, target) &&
+                !(
+                    conversation &&
+                    agentListed(target) &&
+                    arrived !== null &&
+                    "sessionId" in arrived &&
+                    refKey(arrived) === refKey(target)
+                )
+            )
                 throw new Refusal(
                     "failed",
                     "Navigation was requested, but the view changed before the target could be verified. Inspect the current Desktop state.",
                 );
-            if (target.kind === "session" || target.kind === "bot" || target.kind === "task")
-                await conversationLoaded(target, signal);
+            if (conversation) await conversationLoaded(target, signal);
             options.receive({ type: "actionStatusUpdated", message: `Opened ${target.kind}.` });
             return { status: "succeeded", output: { type: "ack" } };
         }
@@ -872,8 +978,9 @@ export function gptLiveControllerCreate(options: {
                 signal,
             );
         }
-        const target = action.target;
-        if (agentTarget(target)) throw agentTargetRefusal();
+        const target = agentTarget(action.target)
+            ? sessionRef(agentResolve(action.target))
+            : action.target;
         if (action.type === "sessionModelChange") {
             connectionFind(target.connectionId, true);
             sessionFind(target);

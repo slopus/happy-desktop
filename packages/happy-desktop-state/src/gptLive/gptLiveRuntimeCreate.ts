@@ -120,6 +120,9 @@ const CLEANUP_MS = 30_000;
 
 /** Construction starts no transport, permission request, subscription, or timer. */
 export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptLiveRuntime {
+    /** This window's connection ID for the agent hosting the call. */
+    const hostingConnectionId = () =>
+        options.source.get().connections.find((item) => item.kind === "local")?.id;
     const unsupported = (reason: string, problem: GptLiveProblem) => ({
         availability: { supported: false, reason, problem, accounts: [] },
         capabilities: undefined,
@@ -145,8 +148,15 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                     "notSetUp",
                 );
             const offered = health.capabilities.desktopLiveCapabilities;
+            // Agent IDs resolve against this window's own list for the hosting
+            // agent, so they come only with AppState and that connection named.
+            const hosting = hostingConnectionId() !== undefined;
             const capabilities = offered
-                ? GPT_LIVE_DESKTOP_CAPABILITIES.filter((item) => offered.includes(item))
+                ? GPT_LIVE_DESKTOP_CAPABILITIES.filter(
+                      (item) =>
+                          offered.includes(item) &&
+                          (item !== "agentTargets" || (hosting && offered.includes("appState"))),
+                  )
                 : undefined;
             const { config } = await client.getConfig({ signal });
             // The daemon lists exactly the accounts a call can use, with the
@@ -624,6 +634,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 });
                 const initial = controller.contextRead();
                 revision = initial.revision;
+                const hostingId = hostingConnectionId();
                 const request = {
                     id: resourceId,
                     windowId: options.windowId,
@@ -639,9 +650,14 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                     context: initial.context,
                     // Offered only to a Happy Agent that listed them; voice
                     // starts out knowing the window when AppState is among them.
+                    ...(hostingId !== undefined && capabilities?.includes("agentTargets")
+                        ? { localConnectionId: hostingId }
+                        : {}),
                     ...(capabilities
                         ? {
-                              desktopCapabilities: [...capabilities],
+                              desktopCapabilities: capabilities.filter(
+                                  (item) => item !== "agentTargets" || hostingId !== undefined,
+                              ),
                               ...(capabilities.includes("appState")
                                   ? { appState: controller.appStateRead() }
                                   : {}),
