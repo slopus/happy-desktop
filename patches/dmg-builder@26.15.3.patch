@@ -1,0 +1,25 @@
+diff --git a/out/dmgUtil.js b/out/dmgUtil.js
+index 490d088acde7a303001a013390dbe445fc15d5e5..19934b33008b1376d5bf155af2921877d56e7f9a 100644
+--- a/out/dmgUtil.js
++++ b/out/dmgUtil.js
+@@ -176,6 +176,20 @@ async function customizeDmg({ appPath, artifactPath, volumeName, specification,
+         const size = await getImageSizeUsingSips(settings.background);
+         settings.window = { position: { x: 400, y: Math.round((1440 - size.height) / 2) }, size, ...settings.window };
+     }
++    // dmgbuild writes the background and volume icon at the volume root, where Finder shows them
++    // as icons above the layout whenever hidden files are shown. Flag them hidden and place them
++    // below the window, so neither appears inside it either way.
++    const hiddenY = (settings.window?.size?.height ?? 380) + 120;
++    const hiddenNames = [];
++    if (!(0, builder_util_1.isEmptyOrSpaces)(settings.background)) {
++        hiddenNames.push(`.background${path.extname(settings.background)}`);
++    }
++    if (settings.icon != null || settings["badge-icon"] != null) {
++        hiddenNames.push(".VolumeIcon.icns");
++    }
++    hiddenNames.forEach((name, index) => {
++        settings.contents.push({ path: name, x: 100 + index * 120, y: hiddenY, name, type: "position", hidden: true });
++    });
+     const workspaceRoot = await packager.info.getWorkspaceRoot();
+     for (const item of (_f = settings.contents) !== null && _f !== void 0 ? _f : []) {
+         if (item.type === "file" && item.path && path.isAbsolute(item.path)) {

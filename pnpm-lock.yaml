@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  dmg-builder@26.15.3:
+    hash: 11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7
+    path: patches/dmg-builder@26.15.3.patch
   electron-updater@6.8.9:
     hash: 5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457
     path: patches/electron-updater@6.8.9.patch
@@ -7923,7 +7926,7 @@ snapshots:
 
   ansi-styles@6.2.3: {}
 
-  app-builder-lib@26.15.3(dmg-builder@26.15.3):
+  app-builder-lib@26.15.3(dmg-builder@26.15.3(patch_hash=11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7)):
     dependencies:
       '@electron/asar': 3.4.1
       '@electron/fuses': 1.8.0
@@ -7944,7 +7947,7 @@ snapshots:
       chromium-pickle-js: 0.2.0
       ci-info: 4.3.1
       debug: 4.4.3
-      dmg-builder: 26.15.3
+      dmg-builder: 26.15.3(patch_hash=11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7)
       dotenv: 16.6.1
       dotenv-expand: 11.0.7
       ejs: 3.1.10
@@ -8512,9 +8515,9 @@ snapshots:
       minimatch: 3.1.5
       p-limit: 3.1.0
 
-  dmg-builder@26.15.3:
+  dmg-builder@26.15.3(patch_hash=11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7):
     dependencies:
-      app-builder-lib: 26.15.3(dmg-builder@26.15.3)
+      app-builder-lib: 26.15.3(dmg-builder@26.15.3(patch_hash=11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7))
       builder-util: 26.15.3
       fs-extra: 10.1.0
       js-yaml: 4.3.0
@@ -8552,12 +8555,12 @@ snapshots:
 
   electron-builder@26.15.3:
     dependencies:
-      app-builder-lib: 26.15.3(dmg-builder@26.15.3)
+      app-builder-lib: 26.15.3(dmg-builder@26.15.3(patch_hash=11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7))
       builder-util: 26.15.3
       builder-util-runtime: 9.7.0
       chalk: 4.1.2
       ci-info: 4.4.0
-      dmg-builder: 26.15.3
+      dmg-builder: 26.15.3(patch_hash=11ffba544ba41d1f7803f89510ef59ae6cd159061bc3f1526e84e0c7e9d66bd7)
       fs-extra: 10.1.0
       lazy-val: 1.0.5
       simple-update-notifier: 2.0.0

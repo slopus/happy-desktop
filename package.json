@@ -18,7 +18,7 @@
         "dev:profile": "node scripts/dev-desktop.mjs --profile",
         "dev:sandbox": "node scripts/dev-desktop-sandbox.mjs",
         "dev:sandbox:subscriptions": "node scripts/dev-desktop-sandbox.mjs --real-home --name=subscriptions",
-        "desktop:assets": "node scripts/create-mac-icon.mjs",
+        "desktop:assets": "node scripts/create-mac-icon.mjs && node scripts/create-dmg-background.mjs",
         "desktop:update-manifest": "node scripts/create-mac-update-manifest.mjs standard",
         "desktop:mac:release": "node scripts/build-mac-apps.mjs",
         "desktop:win:release": "node scripts/build-windows-app.mjs",
