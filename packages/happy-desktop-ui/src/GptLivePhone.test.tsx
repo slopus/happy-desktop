@@ -8,7 +8,7 @@ import { SidebarFooter } from "./SidebarFooter";
 import { createRenderer } from "./testing";
 import "./styles.css";
 
-it("starts only on trusted click, hands the call to the status bar, and keeps the existing composer", async () => {
+it("starts only on trusted click, hangs up in the phone's own slot without moving a button, and keeps the existing composer", async () => {
     let receive: (event: GptLiveRuntimeEvent) => void = () => {};
     const open = vi.fn(async (_input, listener) => {
         receive = listener;
@@ -41,7 +41,9 @@ it("starts only on trusted click, hands the call to the status bar, and keeps th
     function Fixture() {
         const state = useSyncExternalStore(subscribe, store.get, store.get);
         const call = state.call;
-        // As the app composes them: the phone while no call runs, the call bar while one does.
+        // As the app composes them: what the call is doing at the left, and the
+        // phone's slot, which hangs up and mutes while a call runs.
+        const live = call.kind === "connecting" || call.kind === "active";
         return (
             <div
                 style={{
@@ -55,31 +57,27 @@ it("starts only on trusted click, hands the call to the status bar, and keeps th
                 <input aria-label="Existing composer" defaultValue="Keep my text" ref={mounted} />
                 <SidebarFooter
                     call={
-                        state.gptLiveEnabled && call.kind === "active" ? (
-                            <GptLiveCallBar
-                                muted={call.muted}
-                                onEnd={store.callEnd}
-                                onMutedChange={store.microphoneMutedUpdate}
-                                since={call.since}
-                                state="active"
-                            />
-                        ) : state.gptLiveEnabled && call.kind === "connecting" ? (
-                            <GptLiveCallBar
-                                muted={call.muted}
-                                onEnd={store.callEnd}
-                                onMutedChange={store.microphoneMutedUpdate}
-                                state="connecting"
-                            />
+                        call.kind === "active" ? (
+                            <GptLiveCallBar since={call.since} state="active" />
+                        ) : call.kind === "connecting" ? (
+                            <GptLiveCallBar state="connecting" />
                         ) : undefined
                     }
                     onSettingsOpen={() => {}}
                     voice={
-                        state.gptLiveEnabled && (call.kind === "idle" || call.kind === "ended") ? (
+                        !state.gptLiveEnabled ? undefined : live ? (
                             <GptLivePhone
+                                muted={call.muted}
+                                onEnd={store.callEnd}
+                                onMutedChange={store.microphoneMutedUpdate}
                                 status={call.kind}
-                                onStart={() => store.callStart("local")}
                             />
-                        ) : undefined
+                        ) : (
+                            <GptLivePhone
+                                onStart={() => store.callStart("local")}
+                                status={call.kind === "ended" ? "ended" : "idle"}
+                            />
+                        )
                     }
                 />
             </div>
@@ -115,10 +113,25 @@ it("starts only on trusted click, hands the call to the status bar, and keeps th
                 view.$('[aria-label="Start voice call"]').bounds().x -
                 28,
         ).toBe(4);
+        // Every button's box, which no state may move.
+        const box = (label: string) => {
+            const bounds = view.$(`[aria-label="${label}"]`).bounds();
+            return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+        };
+        const phoneBox = box("Start voice call");
+        const settingsBox = box("Settings");
+        const muteBox = { ...phoneBox, x: phoneBox.x - 28 - 4 };
         phone.click();
         expect(open).not.toHaveBeenCalled();
         await userEvent.click(phone);
         await expect.poll(() => open.mock.calls.length).toBe(1);
+        // Connecting: the phone's slot cancels, mute appears before it, nothing moves.
+        await expect
+            .poll(() => document.querySelector('[aria-label="Cancel voice call"]') !== null)
+            .toBe(true);
+        expect(box("Cancel voice call")).toEqual(phoneBox);
+        expect(box("Mute microphone")).toEqual(muteBox);
+        expect(box("Settings")).toEqual(settingsBox);
         receive({ type: "callActive" });
         receive({
             type: "actionStatusUpdated",
@@ -132,11 +145,19 @@ it("starts only on trusted click, hands the call to the status bar, and keeps th
         expect(input.value).toBe("Keep my text");
         expect(mounts).toBe(1);
         expect(subscriptions).toBe(1);
-        // The live call is the status bar's: the phone is gone, its hang-up is the bar's.
-        expect(document.querySelector(".happy-gpt-live-phone")).toBeNull();
-        expect(
-            view.$('[aria-label="End voice call"]').element.closest(".happy-gpt-live-call"),
-        ).not.toBeNull();
+        // Live: hang-up is the phone's own box, mute just before it, and the
+        // call's length at the left moves neither.
+        expect(box("End voice call")).toEqual(phoneBox);
+        expect(box("Mute microphone")).toEqual(muteBox);
+        expect(box("Settings")).toEqual(settingsBox);
+        expect(document.querySelector(".happy-gpt-live-call__time")).not.toBeNull();
+        await userEvent.click(view.$('[aria-label="Mute microphone"]').element);
+        await expect
+            .poll(() => store.get().call.kind === "active" && store.get().call)
+            .toMatchObject({ muted: true });
+        expect(box("Unmute microphone")).toEqual(muteBox);
+        expect(box("End voice call")).toEqual(phoneBox);
+        expect(box("Settings")).toEqual(settingsBox);
         input.focus();
         input.setSelectionRange(2, 7);
         receive({
@@ -149,6 +170,19 @@ it("starts only on trusted click, hands the call to the status bar, and keeps th
         expect(input.selectionEnd).toBe(7);
         expect(view.$("input").element).toBe(input);
         await view.screenshot("GptLivePhone.composer.test");
+        // The hang-up handset paints in the phone glyph's own 14px box.
+        const handset = view.$('[data-name="call-end"]');
+        expect(handset.bounds().width).toBe(14);
+        expect(handset.bounds().height).toBe(14);
+        expect((await handset.visibleMetrics()).pixelCount).toBeGreaterThan(0);
+        // Hung up, the phone is back in the very same box.
+        await userEvent.click(view.$('[aria-label="End voice call"]').element);
+        await expect
+            .poll(() => document.querySelector('[aria-label="Start voice call"]') !== null)
+            .toBe(true);
+        expect(document.querySelector('[aria-label="Unmute microphone"]')).toBeNull();
+        expect(box("Start voice call")).toEqual(phoneBox);
+        expect(box("Settings")).toEqual(settingsBox);
     } finally {
         view.destroy();
         store[Symbol.dispose]();

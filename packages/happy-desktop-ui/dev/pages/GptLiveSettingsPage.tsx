@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { Box } from "../../src/Box";
 import { GptLiveSettings } from "../../src/GptLiveSettings";
-import { GptLivePhone, type GptLivePhoneStatus } from "../../src/GptLivePhone";
+import { GptLivePhone } from "../../src/GptLivePhone";
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "P-012b";
 /**
- * Each phone state, with the message its tooltip carries and its specimen
- * number. A call that connects or runs is the status bar's (`GptLiveCallBar`).
+ * The phone with no call to show, with the message its tooltip carries and
+ * its specimen number. A live call's hang-up and mute are on the call bar's
+ * page (C-352).
  */
-const phones: readonly { status: GptLivePhoneStatus; number: string; message?: string }[] = [
+const phones: readonly { status: "idle" | "ended"; number: string; message?: string }[] = [
     { status: "idle", number: "03" },
     { status: "ended", number: "04", message: "Microphone access was denied." },
 ];

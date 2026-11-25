@@ -6,21 +6,30 @@ import {
     type GptLiveProblem,
     type GptLiveStore,
 } from "happy-desktop-state";
-import { GptLiveCallBar, GptLivePhone, type GptLivePhoneStatus } from "happy-desktop-ui";
+import { GptLiveCallBar, GptLivePhone, type GptLivePhoneProps } from "happy-desktop-ui";
 
 /**
- * The window's one call as this agent's phone shows it. While a call is
- * connecting or live, on any agent, the status bar's call bar stands in for
- * the phone, so there is none.
+ * The window's one call as this agent's phone slot shows it. A call that is
+ * connecting or live, on any agent, turns the slot into its hang-up and mute,
+ * since it is the window's one call; an ended call is kept here only on the
+ * agent that hosted it.
  */
 function phoneOf(
+    store: GptLiveStore,
     call: GptLiveCallState,
     connectionId: string,
-): { status: GptLivePhoneStatus; message?: string } | undefined {
-    if (call.kind === "idle") return { status: "idle" };
-    if (call.kind === "connecting" || call.kind === "active") return undefined;
-    if (call.connectionId !== connectionId) return { status: "idle" };
-    return { status: "ended", message: call.message };
+): GptLivePhoneProps {
+    if (call.kind === "connecting" || call.kind === "active")
+        return {
+            status: call.kind,
+            muted: call.muted,
+            onMutedChange: (muted) => store.microphoneMutedUpdate(muted),
+            onEnd: store.callEnd,
+        };
+    const onStart = () => store.callStart(connectionId);
+    if (call.kind === "ended" && call.connectionId === connectionId)
+        return { status: "ended", message: call.message, onStart };
+    return { status: "idle", onStart };
 }
 
 /** Whether the voice experiment is on; the window's own opt-in is in the call's snapshot. */
@@ -29,7 +38,7 @@ function useGptLiveExperimental(experiments: ExperimentsStore | undefined): bool
     return useSyncExternalStore(source.subscribe, source.get, source.get).voice;
 }
 
-/** One agent's phone: a call started here is hosted by that agent. */
+/** One agent's phone slot: a call started here is hosted by that agent. */
 export function AppGptLivePhone(props: {
     store: GptLiveStore;
     connectionId: string;
@@ -38,9 +47,8 @@ export function AppGptLivePhone(props: {
     // One subscription; this small control re-renders with the snapshot.
     const state = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const experimental = useGptLiveExperimental(props.experiments);
-    const phone = phoneOf(state.call, props.connectionId);
-    if (!experimental || !state.gptLiveEnabled || !phone) return null;
-    return <GptLivePhone {...phone} onStart={() => props.store.callStart(props.connectionId)} />;
+    if (!experimental || !state.gptLiveEnabled) return null;
+    return <GptLivePhone {...phoneOf(props.store, state.call, props.connectionId)} />;
 }
 
 /** The few words the status bar keeps for why a call stopped. */
@@ -53,8 +61,9 @@ const ENDED_REASONS: Record<GptLiveProblem, string> = {
 };
 
 /**
- * The window's call in the status bar, whichever agent hosts it: mute and
- * hang-up act on that one call, and the bars read its received voice.
+ * What the window's call is doing, at the left of the status bar, whichever
+ * agent hosts it; the bars read its received voice. Its hang-up and mute are
+ * in the phone's slot.
  */
 export function AppGptLiveCallBar(props: { store: GptLiveStore; experiments?: ExperimentsStore }) {
     // One subscription; the bar's levels are read on demand, never through it.
@@ -71,15 +80,9 @@ export function AppGptLiveCallBar(props: { store: GptLiveStore; experiments?: Ex
                 state="ended"
             />
         );
-    const live = {
-        muted: call.muted,
-        onEnd: props.store.callEnd,
-        onMutedChange: (muted: boolean) => props.store.microphoneMutedUpdate(muted),
-    };
-    if (call.kind === "connecting") return <GptLiveCallBar {...live} state="connecting" />;
+    if (call.kind === "connecting") return <GptLiveCallBar state="connecting" />;
     return (
         <GptLiveCallBar
-            {...live}
             levelsRead={props.store.outputLevelsRead}
             since={call.since}
             state="active"

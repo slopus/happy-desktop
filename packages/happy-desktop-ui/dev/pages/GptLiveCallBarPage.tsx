@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Button } from "../../src/Button";
-import { GptLiveCallBar, type GptLiveCallBarProps } from "../../src/GptLiveCallBar";
 import { DevBuildMenu } from "../../src/DevBuildMenu";
-import { GptLivePhone } from "../../src/GptLivePhone";
+import { GptLiveCallBar, type GptLiveCallBarProps } from "../../src/GptLiveCallBar";
+import { GptLivePhone, type GptLivePhoneProps } from "../../src/GptLivePhone";
 import { Sidebar } from "../../src/Sidebar";
 import { SidebarBugReport } from "../../src/SidebarBugReport";
 import { SidebarFooter } from "../../src/SidebarFooter";
@@ -12,85 +12,94 @@ import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-352";
 
-const live = { onEnd: () => {}, onMutedChange: () => {} };
 /* A call 1 minute 23 seconds in, on a pinned clock. */
 const clock = () => 83_000;
 const speaking = () => [0.95, 0.55, 0.36] as const;
 const silent = () => [0, 0, 0] as const;
+const idlePhone: GptLivePhoneProps = { status: "idle", onStart: () => {} };
+const livePhone = (status: "connecting" | "active", muted = false): GptLivePhoneProps => ({
+    status,
+    muted,
+    onMutedChange: () => {},
+    onEnd: () => {},
+});
 
-const STATES: readonly {
-    id: string;
-    label: string;
-    detail: string;
-    bar: GptLiveCallBarProps;
-}[] = [
+/** One status bar: what the call is doing at its left, and the voice slot. */
+interface CallState {
+    readonly call?: GptLiveCallBarProps;
+    readonly phone: GptLivePhoneProps;
+}
+
+const STATES: readonly { id: string; label: string; detail: string; state: CallState }[] = [
     {
-        id: "01-connecting",
-        label: "Connecting",
-        detail: "Bars at rest · “Connecting…” · mute live · the pill cancels",
-        bar: { state: "connecting", muted: false, ...live },
+        id: "01-idle",
+        label: "Idle",
+        detail: "No call: the phone sits before the bug report, theme and Settings",
+        state: { phone: idlePhone },
     },
     {
-        id: "02-active-speaking",
+        id: "02-connecting",
+        label: "Connecting",
+        detail: "The phone's slot turns red to cancel, mute appears before it · bars at rest, “Connecting…”",
+        state: { call: { state: "connecting" }, phone: livePhone("connecting") },
+    },
+    {
+        id: "03-active-speaking",
         label: "Active, agent speaking",
         detail: "Each bar one band of the received voice: mid, low, high",
-        bar: {
-            state: "active",
-            muted: false,
-            since: 0,
-            clock,
-            levelsRead: speaking,
-            ...live,
+        state: {
+            call: { state: "active", since: 0, clock, levelsRead: speaking },
+            phone: livePhone("active"),
         },
     },
     {
-        id: "03-active-silent",
+        id: "04-active-silent",
         label: "Active, agent silent",
         detail: "Bars at rest: 3 × 6px pills, 2px apart, in the row's grey",
-        bar: {
-            state: "active",
-            muted: false,
-            since: 0,
-            clock,
-            levelsRead: silent,
-            ...live,
+        state: {
+            call: { state: "active", since: 0, clock, levelsRead: silent },
+            phone: livePhone("active"),
         },
     },
     {
-        id: "04-muted",
+        id: "05-muted",
         label: "Muted",
         detail: "Microphone slashed on a red wash, pressed",
-        bar: {
-            state: "active",
-            muted: true,
-            since: 0,
-            clock,
-            levelsRead: speaking,
-            ...live,
+        state: {
+            call: { state: "active", since: 0, clock, levelsRead: speaking },
+            phone: livePhone("active", true),
         },
     },
     {
-        id: "05-ended-connection",
+        id: "06-ended-connection",
         label: "Ended: dropped",
-        detail: "Reason, its full message behind it, and a close button, until closed",
-        bar: {
-            state: "ended",
-            reason: "Call dropped",
-            message: "The voice media connection ended. Start a new call to reconnect.",
-            onClose: () => {},
+        detail: "The reason and a close button at the left until closed; the phone is back in its slot",
+        state: {
+            call: {
+                state: "ended",
+                reason: "Call dropped",
+                message: "The voice media connection ended. Start a new call to reconnect.",
+                onClose: () => {},
+            },
+            phone: {
+                status: "ended",
+                message: "The voice media connection ended. Start a new call to reconnect.",
+                onStart: () => {},
+            },
         },
     },
 ];
 
 /** The status bar as the app draws it, at a sidebar width, in one appearance. */
 function StatusBar(props: {
-    call?: ReactNode;
+    state: CallState;
     /** A development build's branch menu in the footer, as the app shows it in development. */
     devBuild?: boolean;
     mode: "light" | "dark";
     screen: string;
     width: number;
 }) {
+    const call = props.state.call;
     return (
         <ThemeScope mode={props.mode}>
             <div
@@ -115,7 +124,7 @@ function StatusBar(props: {
                                     xPostUrl="https://x.com/intent/post?text=%40happy__eng"
                                 />
                             }
-                            {...(props.call === undefined ? {} : { call: props.call })}
+                            {...(call === undefined ? {} : { call: <GptLiveCallBar {...call} /> })}
                             {...(props.devBuild
                                 ? {
                                       devMenu: (
@@ -132,11 +141,7 @@ function StatusBar(props: {
                                 mode: props.mode,
                                 onModeSelect: () => {},
                             }}
-                            voice={
-                                props.call === undefined ? (
-                                    <GptLivePhone onStart={() => {}} status="idle" />
-                                ) : undefined
-                            }
+                            voice={<GptLivePhone {...props.state.phone} />}
                         />
                     }
                     onItemSelect={() => {}}
@@ -158,18 +163,21 @@ function SyntheticCall(props: { mode: "light" | "dark" }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <StatusBar
-                call={
-                    <GptLiveCallBar
-                        muted={muted}
-                        onEnd={() => setSpeaking(false)}
-                        onMutedChange={setMuted}
-                        since={since}
-                        state="active"
-                        {...(speaking ? { levelsRead: syntheticLevels } : {})}
-                    />
-                }
                 mode={props.mode}
                 screen={`09-live-${props.mode}`}
+                state={{
+                    call: {
+                        state: "active",
+                        since,
+                        ...(speaking ? { levelsRead: syntheticLevels } : {}),
+                    },
+                    phone: {
+                        status: "active",
+                        muted,
+                        onMutedChange: setMuted,
+                        onEnd: () => setSpeaking(false),
+                    },
+                }}
                 width={330}
             />
             <Button onClick={() => setSpeaking(!speaking)} size="small" variant="secondary">
@@ -183,23 +191,23 @@ export function GptLiveCallBarPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The window's voice call in the status bar: three bars that follow the agent's voice, the call's length, mute, and a red hang-up pill, from the bar's leading edge."
+            summary="The window's voice call in the status bar: three bars that follow the agent's voice and the call's length at its left; hang-up in the phone's own slot, with mute just before it. No button moves between states."
             title="Voice call bar"
         >
-            {STATES.map((state) => (
+            {STATES.map((entry) => (
                 <Specimen
-                    detail={state.detail}
-                    key={state.id}
-                    label={state.label}
-                    number={state.id.slice(0, 2)}
+                    detail={entry.detail}
+                    key={entry.id}
+                    label={entry.label}
+                    number={entry.id.slice(0, 2)}
                 >
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                         {(["light", "dark"] as const).map((mode) => (
                             <StatusBar
-                                call={<GptLiveCallBar {...state.bar} />}
                                 key={mode}
                                 mode={mode}
-                                screen={`${state.id}-${mode}`}
+                                screen={`${entry.id}-${mode}`}
+                                state={entry.state}
                                 width={330}
                             />
                         ))}
@@ -207,40 +215,22 @@ export function GptLiveCallBarPage() {
                 </Specimen>
             ))}
             <Specimen
-                detail="No call: the phone sits before the theme menu and Settings"
-                label="Idle"
-                number="06"
-            >
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    {(["light", "dark"] as const).map((mode) => (
-                        <StatusBar key={mode} mode={mode} screen={`06-idle-${mode}`} width={330} />
-                    ))}
-                </div>
-            </Specimen>
-            <Specimen
-                detail="290px, the sidebar at Happy's 1100 × 760 window: “Connecting…” and the call's length fit · 250px, the narrowest: the label gives way"
+                detail="290px, the sidebar at Happy's 1100 × 760 window · 250px, the narrowest: “Connecting…” ends in an ellipsis, the call's length stays whole or goes"
                 label="Sidebar widths"
                 number="07"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    <StatusBar
-                        call={<GptLiveCallBar {...STATES[0]!.bar} />}
-                        mode="light"
-                        screen="07-default-connecting"
-                        width={290}
-                    />
-                    <StatusBar
-                        call={<GptLiveCallBar {...STATES[1]!.bar} />}
-                        mode="light"
-                        screen="07-default-active"
-                        width={290}
-                    />
-                    <StatusBar
-                        call={<GptLiveCallBar {...STATES[1]!.bar} />}
-                        mode="light"
-                        screen="07-narrowest-active"
-                        width={250}
-                    />
+                    {([290, 250] as const).flatMap((width) =>
+                        [STATES[1]!, STATES[2]!].map((entry) => (
+                            <StatusBar
+                                key={`${String(width)}-${entry.id}`}
+                                mode="light"
+                                screen={`07-${String(width)}-${entry.id.slice(3)}`}
+                                state={entry.state}
+                                width={width}
+                            />
+                        )),
+                    )}
                 </div>
             </Specimen>
             <Specimen
@@ -249,12 +239,18 @@ export function GptLiveCallBarPage() {
                 number="08"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    <StatusBar devBuild mode="light" screen="08-dev-idle" width={330} />
                     <StatusBar
-                        call={<GptLiveCallBar {...STATES[1]!.bar} />}
+                        devBuild
+                        mode="light"
+                        screen="08-dev-idle"
+                        state={STATES[0]!.state}
+                        width={330}
+                    />
+                    <StatusBar
                         devBuild
                         mode="light"
                         screen="08-dev-active"
+                        state={STATES[2]!.state}
                         width={330}
                     />
                 </div>

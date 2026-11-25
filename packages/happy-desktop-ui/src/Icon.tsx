@@ -191,9 +191,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     search: { set: "ionicons", name: "search-outline" },
     settings: { set: "ionicons", name: "settings-outline" },
     call: { set: "ionicons", name: "call-outline" },
-    // Hanging up: the handset laid down, as every phone draws its red end key.
-    // Filled, because it is set in white on that red pill.
-    "call-end": { set: "ionicons", name: "call", rotation: 135 },
+    // Hanging up: the phone's own handset laid down, as every phone draws its
+    // red end key, so the button that started a call is the one that ends it.
+    "call-end": { set: "ionicons", name: "call-outline", rotation: 135 },
     clock: { set: "ionicons", name: "time-outline" },
     // An agent stopped to ask the reader something: the turn is waiting on an
     // answer, not working. The circled outline sits beside `clock` as its pair.
