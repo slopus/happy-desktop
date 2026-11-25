@@ -403,4 +403,40 @@ describe("GPT-Live call lifetime", () => {
         f.store.callEnd();
         expect(f.store.outputLevelsRead()).toEqual([0, 0, 0]);
     });
+
+    it("a Start right after End waits for the earlier close, then opens; End meanwhile cancels it", async () => {
+        const f = fixture();
+        await f.start();
+        f.opening.resolve(f.call);
+        await Promise.resolve();
+        f.receive({ type: "callActive" });
+        const closing = pending<void>();
+        vi.mocked(f.call.close).mockReturnValue(closing.promise);
+        f.store.callEnd();
+        f.store.callStart("local");
+        expect(f.store.get().call).toMatchObject({
+            kind: "connecting",
+            connectionId: "local",
+            step: "checking",
+        });
+        expect(f.runtime.callOpen).toHaveBeenCalledTimes(1);
+        closing.resolve();
+        await vi.waitFor(() => expect(f.runtime.callOpen).toHaveBeenCalledTimes(2));
+
+        const g = fixture();
+        await g.start();
+        g.opening.resolve(g.call);
+        await Promise.resolve();
+        g.receive({ type: "callActive" });
+        const held = pending<void>();
+        vi.mocked(g.call.close).mockReturnValue(held.promise);
+        g.store.callEnd();
+        g.store.callStart("local");
+        g.store.callEnd();
+        held.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(g.store.get().call).toEqual({ kind: "idle" });
+        expect(g.runtime.callOpen).toHaveBeenCalledTimes(1);
+    });
 });

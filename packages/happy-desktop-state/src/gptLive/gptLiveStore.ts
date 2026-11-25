@@ -491,14 +491,7 @@ export function gptLiveStoreCreate(
             publish(next);
         },
         callStart(connectionId) {
-            if (
-                disposed ||
-                !allowed() ||
-                !snapshot.gptLiveEnabled ||
-                live() ||
-                callController ||
-                cleanupPending
-            )
+            if (disposed || !allowed() || !snapshot.gptLiveEnabled || live() || callController)
                 return;
             if (!runtimes) {
                 settle({
@@ -506,6 +499,28 @@ export function gptLiveStoreCreate(
                     problem: "unsupportedWindow",
                     message: "This desktop build does not support GPT-Live calls.",
                 });
+                return;
+            }
+            if (cleanupPending) {
+                // Calling again right after End waits for that call's close
+                // to be confirmed, showing the new call connecting meanwhile.
+                const epoch = generation;
+                publish({
+                    ...snapshot,
+                    call: {
+                        kind: "connecting",
+                        connectionId,
+                        step: "checking",
+                        restarting: false,
+                        muted: false,
+                    },
+                });
+                void cleanup
+                    .catch(() => undefined)
+                    .then(() => {
+                        if (disposed || epoch !== generation || !snapshot.gptLiveEnabled) return;
+                        start(connectionId, false);
+                    });
                 return;
             }
             start(connectionId, false);
