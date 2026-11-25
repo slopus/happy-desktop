@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { Cuid2 } from "@slopus/happy-agent-client";
 import { gymRunPathsCreate } from "./paths.js";
@@ -220,6 +220,11 @@ async function scenarioRun(name: LiveVoiceEval, authFile: string, artifactDirect
         await window?.app.close().catch(() => undefined);
         await runtime.stop().catch(() => undefined);
         await inference.stop().catch(() => undefined);
+        // The hosting daemon's own record of every delegation, action and push.
+        await copyFile(
+            join(paths.agentHome, "observation", "agent.log"),
+            join(paths.artifacts, "agent.log"),
+        ).catch(() => undefined);
         await writeFile(join(paths.artifacts, "outcome.json"), JSON.stringify(outcome, null, 2));
     }
     return outcome;
