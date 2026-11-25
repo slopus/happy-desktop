@@ -5,6 +5,7 @@ import { gptLiveRuntimeFixtureCreate } from "./testing/gptLiveRuntimeFixture";
 import type {
     GptLiveAvailability,
     GptLiveCall,
+    GptLiveOutputLevels,
     GptLiveRuntime,
     GptLiveRuntimeEvent,
 } from "./gptLiveRuntime";
@@ -34,7 +35,7 @@ function fixture() {
     const call: GptLiveCall = {
         close: vi.fn(async () => {}),
         microphoneMutedUpdate: vi.fn(),
-        outputLevelsRead: () => [0, 0, 0],
+        outputLevelsRead: vi.fn((): GptLiveOutputLevels => [0, 0, 0]),
     };
     const runtime: GptLiveRuntime = {
         availabilityRead: vi.fn(async () => available),
@@ -387,7 +388,7 @@ describe("GPT-Live call lifetime", () => {
 
     it("reads the call's received levels only while active, and never notifies for them", async () => {
         const f = fixture();
-        vi.mocked(f.call).outputLevelsRead = () => [0.1, 0.2, 0.3];
+        vi.mocked(f.call.outputLevelsRead).mockReturnValue([0.1, 0.2, 0.3]);
         expect(f.store.outputLevelsRead()).toEqual([0, 0, 0]);
         await f.start();
         f.opening.resolve(f.call);

@@ -1512,6 +1512,13 @@ export interface HappyAgentVoiceSession {
     subscribe(listener: () => void): () => void;
     draftAppend(text: string, expectedDraft: string): Promise<void>;
     /**
+     * Sends exact text to this conversation as the person's message, the way
+     * the composer's Send does, without opening it or touching its composer.
+     * Refused while the conversation is not this person's to write in, or
+     * waits on an answer only the person can give.
+     */
+    messageSend(text: string): Promise<void>;
+    /**
      * Switches the model the next message runs on, the way the composer's
      * model picker does: effort and speed follow the model, and the draft, its
      * attachments, the access mode, and any running turn are left alone.
@@ -8020,6 +8027,20 @@ export function happyAgentWorkspaceStoreCreate(
                             "The composer contains a human draft. Voice left it unchanged.",
                         );
                     current.composerInput({ type: "voiceTextAppended", text });
+                },
+                async messageSend(text) {
+                    guarded();
+                    await new Promise<void>((resolve, reject) => {
+                        let refused = false;
+                        void acquired.store
+                            .messageSend(text, undefined, (error) => {
+                                refused = true;
+                                reject(error);
+                            })
+                            .then(() => {
+                                if (!refused) resolve();
+                            }, reject);
+                    });
                 },
                 async modelChange(input) {
                     // Unlike text, a model change is no answer to a pending

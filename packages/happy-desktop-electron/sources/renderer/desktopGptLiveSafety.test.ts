@@ -1194,6 +1194,31 @@ it("keeps edited voice drafts local across navigation and blocks a later questio
     }
 });
 
+it("sends exact voice text to a conversation off screen without opening it or touching any draft", async () => {
+    const f = await fixture();
+    const other = await f.workspace.voiceSessionAcquire(f.otherId);
+    try {
+        f.workspace.composerTextUpdate(f.id, "Human draft stays");
+        await other.messageSend("Run the benchmark again, please.");
+        await vi.waitFor(() => expect(f.daemon.callCount("sendMessage")).toBe(1));
+        const sent = f.daemon.calls.find((call) => call.method === "sendMessage");
+        expect(sent?.args[0]).toBe(f.otherId);
+        expect(JSON.stringify(sent?.args[1])).toContain(
+            '"text":"Run the benchmark again, please."',
+        );
+        expect(f.workspace.get().address.conversationId).toBe(f.id);
+        expect(f.voice.draftRead()?.text).toBe("Human draft stays");
+        f.question(f.otherId);
+        await vi.waitFor(() => expect(other.get().pendingUserInputs).toHaveLength(1));
+        await expect(other.messageSend("Approve")).rejects.toThrow("pending question");
+        expect(f.daemon.callCount("sendMessage")).toBe(1);
+        expect(f.daemon.callCount("answerQuestion")).toBe(0);
+    } finally {
+        other[Symbol.dispose]();
+        f.voice[Symbol.dispose]();
+    }
+});
+
 it("preserves local text until daemon acceptance, sends slash text literally and never clears another saved draft", async () => {
     const f = await fixture();
     try {
