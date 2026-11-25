@@ -28,6 +28,8 @@ const BEACON =
 
 /** Past the hundred rows a call's context carries: the realistic daemon's last project. */
 const DEEP_TITLE = "Lighthouse Ledger";
+/** Conversations given a newer turn than the deep one, past the directory's hundred. */
+const DEEP_NEWER = 110;
 const DEEP_FACT =
     "The lighthouse ledger code is Cobalt Heron 418, and the east jetty reopens Monday.";
 
@@ -367,9 +369,9 @@ async function harborSeed(paths: GymRunPaths, projectId: string) {
 /**
  * Adds one conversation past the directory voice starts with, once: in the
  * realistic daemon's last project, with a scripted reply holding a fact only
- * it knows. Voice lists each project's most recent conversations, so ten
- * others in that project are then given a newer turn, leaving this one out.
- * Returns its agent ID.
+ * it knows. Voice's directory keeps the conversation on screen, the followed
+ * ones, then the most recently active, so 110 others are given a newer turn,
+ * leaving this one past the hundred. Returns its agent ID.
  */
 async function deepSeed(
     paths: GymRunPaths,
@@ -378,10 +380,10 @@ async function deepSeed(
 ): Promise<string> {
     const marker = join(paths.root, "deep.json");
     const seeded = await readFile(marker, "utf8").then(
-        (text) => JSON.parse(text) as { sessionId: string; buried?: boolean },
+        (text) => JSON.parse(text) as { sessionId: string; newer?: string[] },
         () => undefined,
     );
-    if (seeded?.buried) return seeded.sessionId;
+    if ((seeded?.newer?.length ?? 0) >= DEEP_NEWER) return seeded!.sessionId;
     let sessionId = seeded?.sessionId;
     if (!sessionId) {
         const inference = scriptedInferenceCreate(DEEP_TITLE, `Logged. ${DEEP_FACT}`);
@@ -405,23 +407,18 @@ async function deepSeed(
     try {
         const client = happyAgentClientCreate(runtime.socketPath, runtime.token);
         type AgentId = Parameters<typeof client.getAgent>[0];
-        const group = (await client.getAgent(sessionId as AgentId)).agent.workspaceId;
-        const others: string[] = [];
-        for (const id of [...sessionIds].reverse()) {
-            if (others.length === 10) break;
-            if (id === sessionId) continue;
+        const others = [...(seeded?.newer ?? [])];
+        for (const id of sessionIds) {
+            if (others.length === DEEP_NEWER) break;
+            if (id === sessionId || others.includes(id)) continue;
             const { agent } = await client.getAgent(id as AgentId).catch(() => ({ agent: null }));
-            if (agent?.workspaceId === group && agent.title === "Gym performance session")
-                others.push(id);
+            if (agent?.title === "Gym performance session") others.push(id);
         }
         for (const id of others) {
             const { runId } = await runtime.client.sendMessage(id, "Gym note: nothing to do.");
             await runtime.client.waitForAgentIdle(id, runId, 60_000);
         }
-        await writeFile(
-            marker,
-            JSON.stringify({ sessionId, title: DEEP_TITLE, buried: true, newer: others }),
-        );
+        await writeFile(marker, JSON.stringify({ sessionId, title: DEEP_TITLE, newer: others }));
         return sessionId;
     } finally {
         await runtime.stop();
