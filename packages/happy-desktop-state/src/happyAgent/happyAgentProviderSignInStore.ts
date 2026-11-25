@@ -65,6 +65,8 @@ export interface HappyAgentProviderSignInSnapshot {
      * Everyone may still read where each account stands.
      */
     readonly forbidden: boolean;
+    /** The account whose sign-in dialog is open. */
+    readonly signInDialog?: { readonly providerId: string };
     readonly tokenEditor?: HappyAgentProviderTokenEditor;
 }
 
@@ -83,11 +85,15 @@ export interface HappyAgentProviderSignInStore {
     get(): HappyAgentProviderSignInSnapshot;
     subscribe(listener: () => void): () => void;
     /**
-     * Starts the account's sign-in, by `method` or the first one offered. A
-     * sign-in already running by another method is cancelled first; one by the
-     * same method is joined.
+     * Opens the account's sign-in dialog and starts its sign-in, by `method` or
+     * the first one offered. A sign-in already running by another method is
+     * cancelled first; one by the same method is joined.
      */
     signInStart(providerId: string, method?: HappyAgentProviderSignInMethod): void;
+    /** Opens the dialog of a sign-in already running, from here or another window. */
+    signInDialogOpen(providerId: string): void;
+    /** Closes the sign-in dialog, cancelling a sign-in still running in it. */
+    signInDialogClose(): void;
     /** Hands the code the vendor's page showed to the waiting sign-in. */
     signInCodeSubmit(providerId: string, code: string): void;
     signInCancel(providerId: string): void;
@@ -312,17 +318,27 @@ export function happyAgentProviderSignInStoreCreate(
         );
     };
 
+    const dialogOpenFor = (providerId: string): boolean =>
+        store.getState().signInDialog?.providerId === providerId;
+
+    const cancel = (providerId: string): Promise<boolean> =>
+        request(providerId, "cancel", () => deps.api.signInCancel(providerId, crypto.randomUUID()));
+
     const signInStart = (providerId: string, method?: HappyAgentProviderSignInMethod): void => {
         const account = store.getState().accounts.get(providerId);
-        if (!account) return;
+        if (disposed || !account) return;
         const chosen = method ?? account.methods[0];
         if (chosen === undefined || !account.methods.includes(chosen)) return;
+        if (!dialogOpenFor(providerId)) store.setState({ signInDialog: { providerId } }, false);
         const running =
             account.operation && !terminal(account.operation) ? account.operation : null;
         const start = (): void => {
             void request(providerId, "start", () =>
                 deps.api.signInStart(providerId, chosen, crypto.randomUUID()),
-            );
+            ).then((started) => {
+                // Closed while the start was on its way: nobody is left to finish it.
+                if (started && !dialogOpenFor(providerId)) void cancel(providerId);
+            });
         };
         // Starting while one runs joins it, so another method needs the running one stopped.
         const runningMethod = running?.authorization?.method;
@@ -332,9 +348,7 @@ export function happyAgentProviderSignInStoreCreate(
             runningMethod !== null &&
             runningMethod !== chosen
         ) {
-            void request(providerId, "cancel", () =>
-                deps.api.signInCancel(providerId, crypto.randomUUID()),
-            ).then((cancelled) => {
+            void cancel(providerId).then((cancelled) => {
                 if (cancelled) start();
             });
             return;
@@ -390,8 +404,26 @@ export function happyAgentProviderSignInStoreCreate(
             );
         },
         signInCancel(providerId) {
-            void request(providerId, "cancel", () =>
-                deps.api.signInCancel(providerId, crypto.randomUUID()),
+            void cancel(providerId);
+        },
+        signInDialogOpen(providerId) {
+            if (disposed || !store.getState().accounts.has(providerId)) return;
+            store.setState({ signInDialog: { providerId } }, false);
+        },
+        signInDialogClose() {
+            const providerId = store.getState().signInDialog?.providerId;
+            if (disposed || providerId === undefined) return;
+            const { signInDialog: _closed, ...rest } = store.getState();
+            store.setState(rest, true);
+            const account = rest.accounts.get(providerId);
+            // A start still on its way cancels itself once it lands.
+            if (account?.operation && account.request === undefined && !terminal(account.operation))
+                void cancel(providerId);
+            // What the dialog showed was seen; the next opening starts clean.
+            accountUpdate(providerId, (current) =>
+                current.error || current.outcomeShown
+                    ? { ...errorless(current, current.request), outcomeShown: false }
+                    : current,
             );
         },
         tokenEditorOpen(providerId) {
@@ -454,6 +486,8 @@ export const happyAgentProviderSignInStoreNoop: HappyAgentProviderSignInStore = 
     signInStart: () => undefined,
     signInCodeSubmit: () => undefined,
     signInCancel: () => undefined,
+    signInDialogOpen: () => undefined,
+    signInDialogClose: () => undefined,
     tokenEditorOpen: () => undefined,
     tokenEditorClose: () => undefined,
     tokenSave: () => undefined,

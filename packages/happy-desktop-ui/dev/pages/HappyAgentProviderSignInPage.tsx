@@ -3,6 +3,7 @@ import {
     HappyAgentSettingsShell,
     type HappyAgentProviderRow,
     type HappyAgentProviderSettingsProps,
+    type HappyAgentProviderSignInDialogProps,
     type HappyAgentSettingsCategory,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -62,22 +63,14 @@ function account(
     };
 }
 
-/** The system login with a device code waiting, Happy's own sign-in, a config-file credential, and an expired attempt. */
-const overview: readonly HappyAgentProviderRow[] = [
+/** The system login, Happy's own sign-in with its account, a config-file credential, and a sign-in running from another window. */
+const accounts: readonly HappyAgentProviderRow[] = [
     account("codex", "Codex", "Work", {
         cli: "codex",
         source: "system",
         methods: ["device", "browser"],
         acceptsToken: false,
         installed: true,
-        flow: {
-            kind: "waiting",
-            method: "device",
-            url: "https://auth.openai.com/codex/device",
-            userCode: "KQ7M-4XPD",
-            acceptsCode: false,
-            openedByProgram: false,
-        },
     }),
     account("claude", "Claude", "Personal", {
         cli: "claude",
@@ -104,82 +97,13 @@ const overview: readonly HappyAgentProviderRow[] = [
             methods: ["device"],
             acceptsToken: false,
             installed: true,
-            flow: {
-                kind: "failed",
-                failure: "expired",
-                message: "The code expired before the sign-in finished.",
-            },
+            running: true,
         },
         "not_authenticated",
     ),
 ];
 
-/** Claude waiting for its pasted code, a sign-in starting, one that succeeded, and one that couldn't be saved. */
-const progress: readonly HappyAgentProviderRow[] = [
-    account("claude_team", "Claude", "Team", {
-        cli: "claude",
-        source: "system",
-        methods: ["browser"],
-        acceptsToken: true,
-        installed: true,
-        flow: {
-            kind: "waiting",
-            method: "browser",
-            url: "https://claude.ai/oauth/authorize",
-            acceptsCode: true,
-            openedByProgram: false,
-        },
-    }),
-    account("codex", "Codex", "Work", {
-        cli: "codex",
-        source: "system",
-        methods: ["device"],
-        acceptsToken: false,
-        installed: true,
-        busy: "start",
-        flow: { kind: "starting" },
-    }),
-    account("grok", "Grok", "Current CLI", {
-        cli: "grok",
-        source: "internal",
-        account: "ada@example.com",
-        methods: ["device"],
-        acceptsToken: false,
-        installed: true,
-        flow: { kind: "succeeded" },
-    }),
-    account("codex_lab", "Codex", "Lab", {
-        cli: "codex",
-        source: "system",
-        methods: ["device"],
-        acceptsToken: false,
-        installed: true,
-        flow: {
-            kind: "failed",
-            failure: "save_failed",
-            message: "Codex signed in, but Happy Agent couldn't save its configuration.",
-        },
-    }),
-];
-
-const ownerOnly: readonly HappyAgentProviderRow[] = [
-    account("codex", "Codex", "Work", {
-        cli: "codex",
-        source: "system",
-        methods: ["device"],
-        acceptsToken: false,
-        installed: true,
-    }),
-    account("claude", "Claude", "Personal", {
-        cli: "claude",
-        source: "internal",
-        account: "ada@example.com · Max",
-        methods: ["browser"],
-        acceptsToken: true,
-        installed: true,
-    }),
-];
-
+/** An account whose vendor program is missing. */
 const missing: readonly HappyAgentProviderRow[] = [
     account(
         "grok",
@@ -194,6 +118,95 @@ const missing: readonly HappyAgentProviderRow[] = [
         },
         "not_authenticated",
     ),
+];
+
+const codexDialog = {
+    providerName: "Codex · Work",
+    cli: "codex",
+    methods: ["device", "browser"],
+    onClose: noop,
+    onStart: noop,
+    onCodeSubmit: noop,
+} as const satisfies HappyAgentProviderSignInDialogProps;
+
+const dialogs: readonly {
+    readonly screen: string;
+    readonly label: string;
+    readonly dialog: HappyAgentProviderSignInDialogProps;
+}[] = [
+    {
+        screen: "02-starting",
+        label: "Starting",
+        dialog: { ...codexDialog, busy: "start", flow: { kind: "starting" } },
+    },
+    {
+        screen: "03-device-code",
+        label: "Waiting on a device code",
+        dialog: {
+            ...codexDialog,
+            flow: {
+                kind: "waiting",
+                method: "device",
+                url: "https://auth.openai.com/codex/device",
+                userCode: "KQ7M-4XPD",
+                acceptsCode: false,
+                openedByProgram: false,
+            },
+        },
+    },
+    {
+        screen: "04-claude-code",
+        label: "Claude, waiting for the code its page shows",
+        dialog: {
+            providerName: "Claude · Team",
+            cli: "claude",
+            methods: ["browser"],
+            onClose: noop,
+            onStart: noop,
+            onCodeSubmit: noop,
+            flow: {
+                kind: "waiting",
+                method: "browser",
+                url: "https://claude.ai/oauth/authorize",
+                acceptsCode: true,
+                openedByProgram: false,
+            },
+        },
+    },
+    {
+        screen: "05-succeeded",
+        label: "Signed in",
+        dialog: { ...codexDialog, account: "ada@example.com · Pro", flow: { kind: "succeeded" } },
+    },
+    {
+        screen: "06-expired",
+        label: "Expired",
+        dialog: {
+            ...codexDialog,
+            flow: {
+                kind: "failed",
+                failure: "expired",
+                message: "The code expired before the sign-in finished.",
+            },
+        },
+    },
+    {
+        screen: "07-save-failed",
+        label: "Couldn't save",
+        dialog: {
+            ...codexDialog,
+            flow: {
+                kind: "failed",
+                failure: "save_failed",
+                message: "Codex signed in, but Happy Agent couldn't save its configuration.",
+            },
+        },
+    },
+    {
+        screen: "08-forbidden",
+        label: "Refused: not the team owner",
+        dialog: { ...codexDialog, error: "Only the team owner can change how accounts sign in." },
+    },
 ];
 
 function Inference(
@@ -214,9 +227,7 @@ function Inference(
             <HappyAgentProviderSettings
                 onModelEnabledChange={noop}
                 onProviderEnabledChange={noop}
-                onSignInCancel={noop}
-                onSignInCodeSubmit={noop}
-                onSignInStart={noop}
+                onSignIn={noop}
                 onTokenEditorOpen={noop}
                 {...props}
             />
@@ -228,45 +239,50 @@ export function HappyAgentProviderSignInPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Settings › Inference: where each Codex, Claude, and Grok account's credential comes from, and signing it in again to a login only Happy uses. The flow runs in place under the account's name: the device code, the vendor's page, the code to paste back, and how it ended."
+            summary="Settings › Inference: where each Codex, Claude, and Grok account's credential comes from, as one row on its card, and signing it in again to a login only Happy uses, in a dialog: the device code, the vendor's page, the code to paste back, and how it ended."
             title="HappyAgentProviderSignIn"
             width={1180}
         >
             <FullScreenSpecimen
-                detail="The system login with a device code waiting, Happy's own sign-in, a config-file credential, and an expired attempt"
-                label="Account sign-in"
+                detail="The system login, Happy's own sign-in, a config-file credential, and a sign-in running from another window"
+                label="Account credentials"
                 number="01"
-                screen="01-sign-in"
+                screen="01-accounts"
                 window={WINDOW}
             >
-                <Inference providers={overview} />
+                <Inference providers={accounts} />
             </FullScreenSpecimen>
-            <FullScreenSpecimen
-                detail="Claude waiting for the code its page shows, a sign-in starting, one that succeeded, and one that couldn't be saved"
-                label="Account sign-in in progress"
-                number="02"
-                screen="02-sign-in-progress"
-                window={WINDOW}
-            >
-                <Inference providers={progress} />
-            </FullScreenSpecimen>
+            {dialogs.map((entry, index) => (
+                <FullScreenSpecimen
+                    detail={`The sign-in dialog: ${entry.label.toLowerCase()}`}
+                    key={entry.screen}
+                    label={`Sign in — ${entry.label}`}
+                    number={String(index + 2).padStart(2, "0")}
+                    screen={entry.screen}
+                    window={WINDOW}
+                >
+                    <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                        <Inference providers={accounts} signInDialog={entry.dialog} />
+                    </div>
+                </FullScreenSpecimen>
+            ))}
             <FullScreenSpecimen
                 detail="A team member who isn't the owner sees where each account stands but can't change it"
-                label="Account sign-in, owner only"
-                number="03"
-                screen="03-sign-in-owner-only"
+                label="Account credentials, owner only"
+                number="09"
+                screen="09-owner-only"
                 window={WINDOW}
             >
                 <Inference
-                    providers={ownerOnly}
+                    providers={accounts.slice(0, 2)}
                     signInLocked="Only the team owner can change how accounts sign in."
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="An account whose vendor program isn't installed on the Happy Agent's computer"
-                label="Account sign-in, program missing"
-                number="04"
-                screen="04-sign-in-missing"
+                label="Account credentials, program missing"
+                number="10"
+                screen="10-missing"
                 window={WINDOW}
             >
                 <Inference providers={missing} />
@@ -274,13 +290,13 @@ export function HappyAgentProviderSignInPage() {
             <FullScreenSpecimen
                 detail="Updating a Claude account's setup token, after a malformed one was refused"
                 label="Update a Claude token"
-                number="05"
-                screen="05-sign-in-token"
+                number="11"
+                screen="11-token"
                 window={WINDOW}
             >
                 <div style={{ display: "flex", transform: "translateZ(0)" }}>
                     <Inference
-                        providers={ownerOnly}
+                        providers={accounts}
                         tokenEditor={{
                             error: "That isn't a Claude setup token. It starts with sk-ant-oat01-.",
                             onClose: noop,

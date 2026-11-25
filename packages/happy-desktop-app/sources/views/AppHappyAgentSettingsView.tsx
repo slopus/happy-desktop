@@ -21,6 +21,7 @@ import type {
     HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
     HappyAgentProviderSignInAccount,
+    HappyAgentProviderSignInStore,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
     HappyAgentTaskSettingsSnapshot,
@@ -128,6 +129,7 @@ import {
     HappyAgentUsageSettings,
     providerAccountName,
     type HappyAgentProviderRow,
+    type HappyAgentProviderSignInDialogProps,
     type HappyAgentProviderSignInRow,
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
@@ -1600,17 +1602,43 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                       "Only the team owner can change how accounts sign in.",
                               }
                             : {})}
-                        onSignInStart={(providerId, method) => {
-                            if (happyAgentOnline())
-                                providerSignInStore.signInStart(providerId, method);
+                        onSignIn={(providerId) => {
+                            if (!happyAgentOnline()) return;
+                            const live = providerSignIn.accounts.get(providerId)?.operation;
+                            if (live?.status === "running" || live?.status === "waiting")
+                                providerSignInStore.signInDialogOpen(providerId);
+                            else providerSignInStore.signInStart(providerId);
                         }}
-                        onSignInCodeSubmit={(providerId, code) => {
-                            if (happyAgentOnline())
-                                providerSignInStore.signInCodeSubmit(providerId, code);
-                        }}
-                        onSignInCancel={(providerId) => {
-                            if (happyAgentOnline()) providerSignInStore.signInCancel(providerId);
-                        }}
+                        {...(providerSignIn.signInDialog
+                            ? (() => {
+                                  const providerId = providerSignIn.signInDialog.providerId;
+                                  const account = providerSignIn.accounts.get(providerId);
+                                  const provider = providers.providers.find(
+                                      (entry) => entry.id === providerId,
+                                  );
+                                  return account
+                                      ? {
+                                            signInDialog: providerSignInDialogProps(
+                                                account,
+                                                provider
+                                                    ? [
+                                                          providerTypeName(provider).typeName,
+                                                          providerAccountName(
+                                                              provider.id,
+                                                              provider.name,
+                                                          ),
+                                                      ]
+                                                          .filter(Boolean)
+                                                          .join(" · ")
+                                                    : providerId,
+                                                providerSignInStore,
+                                                happyAgentOnline,
+                                                props.externalLinkOpen,
+                                            ),
+                                        }
+                                      : {};
+                              })()
+                            : {})}
                         onTokenEditorOpen={(providerId) => {
                             if (happyAgentOnline()) providerSignInStore.tokenEditorOpen(providerId);
                         }}
@@ -1643,9 +1671,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                       },
                                   },
                               }
-                            : {})}
-                        {...(props.externalLinkOpen
-                            ? { onExternalOpen: props.externalLinkOpen }
                             : {})}
                         {...(providers.error ? { error: providers.error.message } : {})}
                         {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
@@ -2302,9 +2327,38 @@ function providerRows(
 
 /** One account's credential and sign-in, as its provider card shows them. */
 function providerSignInRow(account: HappyAgentProviderSignInAccount): HappyAgentProviderSignInRow {
+    const status = account.operation?.status;
+    return {
+        cli: account.cli,
+        source: account.credential.source,
+        ...providerSignedInAs(account),
+        methods: account.methods,
+        acceptsToken: account.credential.acceptsToken,
+        installed: account.installed !== false,
+        ...(status === "running" || status === "waiting" ? { running: true } : {}),
+    };
+}
+
+/** The account Happy signed in, worded "email · plan", when the vendor said. */
+function providerSignedInAs(account: HappyAgentProviderSignInAccount): { account?: string } {
+    const signedIn =
+        account.credential.source === "internal" && account.account
+            ? [account.account.email, account.account.plan].filter(Boolean).join(" · ")
+            : "";
+    return signedIn ? { account: signedIn } : {};
+}
+
+/** The sign-in dialog of one account, from where its sign-in stands. */
+function providerSignInDialogProps(
+    account: HappyAgentProviderSignInAccount,
+    providerName: string,
+    store: HappyAgentProviderSignInStore,
+    online: () => boolean,
+    externalLinkOpen: ((url: string) => void) | undefined,
+): HappyAgentProviderSignInDialogProps {
     const operation = account.operation;
     const live = operation?.status === "running" || operation?.status === "waiting";
-    const flow: HappyAgentProviderSignInRow["flow"] =
+    const flow: HappyAgentProviderSignInDialogProps["flow"] =
         live && operation.authorization
             ? {
                   kind: "waiting",
@@ -2331,20 +2385,22 @@ function providerSignInRow(account: HappyAgentProviderSignInAccount): HappyAgent
                         message: operation.error?.message || operation.message,
                     }
                   : undefined;
-    const signedIn =
-        account.credential.source === "internal" && account.account
-            ? [account.account.email, account.account.plan].filter(Boolean).join(" · ")
-            : "";
     return {
+        providerName,
         cli: account.cli,
-        source: account.credential.source,
-        ...(signedIn ? { account: signedIn } : {}),
         methods: account.methods,
-        acceptsToken: account.credential.acceptsToken,
-        installed: account.installed !== false,
         ...(flow ? { flow } : {}),
+        ...providerSignedInAs(account),
         ...(account.request ? { busy: account.request } : {}),
         ...(account.error ? { error: account.error.message } : {}),
+        onClose: () => store.signInDialogClose(),
+        onStart: (method) => {
+            if (online()) store.signInStart(account.providerId, method);
+        },
+        onCodeSubmit: (code) => {
+            if (online()) store.signInCodeSubmit(account.providerId, code);
+        },
+        ...(externalLinkOpen ? { onExternalOpen: externalLinkOpen } : {}),
     };
 }
 

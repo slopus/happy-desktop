@@ -5,7 +5,10 @@ import type {
     HappyAgentSync,
     HappyAgentSyncInput,
 } from "../happyAgentConnection/happyAgentSync.js";
-import { happyAgentProviderSignInApiCreate } from "./happyAgentProviderSignIn.js";
+import {
+    happyAgentProviderSignInApiCreate,
+    happyAgentProviderSignInRead,
+} from "./happyAgentProviderSignIn.js";
 import { happyAgentProviderSignInStoreCreate } from "./happyAgentProviderSignInStore.js";
 
 /* Settings › Inference follows each Codex, Claude, and Grok account's sign-in
@@ -348,4 +351,76 @@ it("asks nothing of a daemon whose health does not report provider sign-in", asy
     expect(store.get().accounts.size).toBe(0);
     expect(getConfig).not.toHaveBeenCalled();
     expect(daemon.routes).toEqual([]);
+});
+
+it("opens the dialog with the sign-in, and cancels a sign-in still running when it closes", async () => {
+    const daemon = daemonCreate(({ method, path }) =>
+        method === "POST" && path.endsWith("/sign-in/cancel")
+            ? {
+                  status: 200,
+                  body: { providerSignIn: signIn("codex", "03", operation("cancelled")) },
+              }
+            : method === "POST"
+              ? {
+                    status: 200,
+                    body: { providerSignIn: signIn("codex", "02", operation("running")) },
+                }
+              : {
+                    status: 200,
+                    body: {
+                        providerSignIn: signIn(path.includes("claude") ? "claude" : "codex", "01"),
+                    },
+                },
+    );
+    const { store, feed } = storeCreate(daemon);
+    feed.reconcile();
+    await vi.waitFor(() => expect(store.get().accounts.get("codex")?.installed).toBe(true));
+
+    store.signInStart("codex");
+    expect(store.get().signInDialog).toEqual({ providerId: "codex" });
+    await vi.waitFor(() =>
+        expect(store.get().accounts.get("codex")?.operation?.status).toBe("running"),
+    );
+
+    store.signInDialogClose();
+    expect(store.get().signInDialog).toBeUndefined();
+    await vi.waitFor(() =>
+        expect(store.get().accounts.get("codex")?.operation?.status).toBe("cancelled"),
+    );
+    expect(daemon.routes.at(-1)).toMatchObject({
+        method: "POST",
+        path: "v0/providers/codex/sign-in/cancel",
+    });
+});
+
+it("cancels a sign-in whose dialog closed before the start was answered", async () => {
+    let answerStart: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => (answerStart = resolve));
+    const routes: string[] = [];
+    const base = daemonCreate(({ path }) => ({
+        status: 200,
+        body: { providerSignIn: signIn(path.includes("claude") ? "claude" : "codex", "01") },
+    }));
+    const api = {
+        ...base.api,
+        signInStart: async () => {
+            routes.push("start");
+            await started;
+            return happyAgentProviderSignInRead(signIn("codex", "02", operation("running")))!;
+        },
+        signInCancel: async () => {
+            routes.push("cancel");
+            return happyAgentProviderSignInRead(signIn("codex", "03", operation("cancelled")))!;
+        },
+    };
+    const { store, feed } = storeCreate({ ...base, api });
+    feed.reconcile();
+    await vi.waitFor(() => expect(store.get().accounts.get("codex")?.installed).toBe(true));
+    store.signInStart("codex");
+    store.signInDialogClose();
+    answerStart?.();
+    await vi.waitFor(() => expect(routes).toEqual(["start", "cancel"]));
+    await vi.waitFor(() =>
+        expect(store.get().accounts.get("codex")?.operation?.status).toBe("cancelled"),
+    );
 });

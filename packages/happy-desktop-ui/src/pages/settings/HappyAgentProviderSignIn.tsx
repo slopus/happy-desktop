@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { CopyButton } from "../../CopyButton";
 import { Icon, type IconName } from "../../Icon";
+import { Modal } from "../../Modal";
+import { ModalOverlay } from "../../ModalOverlay";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
 
@@ -41,7 +44,7 @@ export type HappyAgentProviderSignInFlow =
           readonly message: string;
       };
 
-/** One Codex, Claude, or Grok account's credential and its sign-in. */
+/** One Codex, Claude, or Grok account's credential, as its provider card shows it. */
 export interface HappyAgentProviderSignInRow {
     readonly cli: HappyAgentProviderSignInCliId;
     readonly source: HappyAgentProviderCredentialSourceId;
@@ -53,11 +56,8 @@ export interface HappyAgentProviderSignInRow {
     readonly acceptsToken: boolean;
     /** False when the vendor's program is missing on the daemon's computer. */
     readonly installed: boolean;
-    readonly flow?: HappyAgentProviderSignInFlow;
-    /** A request this window sent that has not been answered. */
-    readonly busy?: "start" | "code" | "cancel";
-    /** Why the last request was refused. */
-    readonly error?: string;
+    /** A sign-in is running, from here or another window; the button goes back to it. */
+    readonly running?: boolean;
 }
 
 export interface HappyAgentProviderSignInProps {
@@ -65,14 +65,11 @@ export interface HappyAgentProviderSignInProps {
     readonly signIn: HappyAgentProviderSignInRow;
     /** Why nothing may be changed here, such as the Happy Agent being offline. */
     readonly unavailable?: boolean;
-    /** Why only the team owner may change it; disables every action and says so. */
-    readonly locked?: string;
-    onStart: (method?: HappyAgentProviderSignInMethodId) => void;
-    onCodeSubmit: (code: string) => void;
-    onCancel: () => void;
+    /** Only the team owner may change it; the settings say why once, above every account. */
+    readonly locked?: boolean;
+    /** Starts a sign-in, or opens the one already running. */
+    onSignIn: () => void;
     onTokenEditorOpen: () => void;
-    /** Opens the vendor's page; a browser tab when absent. */
-    onExternalOpen?: (url: string) => void;
 }
 
 const SOURCE_LABELS: Record<HappyAgentProviderCredentialSourceId, string> = {
@@ -111,136 +108,197 @@ const EXPLAINER =
     "Signing in here gives this account a login only Happy uses, so it stops using the system login.";
 
 /**
- * One account's credential under its provider card: where it comes from, and
- * signing it in again to a login only Happy uses. The flow runs in place: the
- * device code to enter, the vendor's page, the code to paste back, and how it
- * ended. The code typed here goes straight to the handler and is not kept.
+ * One account's credential on its provider card: where it comes from, and
+ * the ways to replace it. The sign-in itself runs in
+ * `HappyAgentProviderSignInDialog`.
  */
 export function HappyAgentProviderSignIn(props: HappyAgentProviderSignInProps) {
     const { signIn } = props;
-    const [code, codeSet] = useState("");
-    const blocked = props.unavailable === true || props.locked !== undefined;
-    const vendor = VENDOR_NAMES[signIn.cli];
-    const flow = signIn.flow;
-    const active = flow?.kind === "starting" || flow?.kind === "waiting";
-    const open = (url: string): void => {
-        if (props.onExternalOpen) props.onExternalOpen(url);
-        else window.open(url, "_blank", "noopener,noreferrer");
-    };
-    const codeSubmit = (): void => {
-        if (!code.trim() || signIn.busy) return;
-        props.onCodeSubmit(code);
-        codeSet("");
-    };
-    const browserInstead =
-        flow?.kind === "waiting" &&
-        flow.method === "device" &&
-        signIn.cli !== "claude" &&
-        signIn.methods.includes("browser");
-    const meta =
-        signIn.source === "internal"
-            ? signIn.account
-            : signIn.source === "system"
-              ? EXPLAINER
-              : undefined;
+    const blocked = props.unavailable === true || props.locked === true;
+    const note =
+        !signIn.installed && signIn.methods.length > 0
+            ? `${PROGRAM_NAMES[signIn.cli]} isn’t installed on the Happy Agent’s computer.`
+            : undefined;
+    const meta = [signIn.account, note].filter(Boolean).join(" · ");
     return (
         <Box
             className="happy-agent-provider__sign-in"
             data-happy-desktop-ui="happy-agent-provider-sign-in"
             data-source={signIn.source}
         >
-            <Box className="happy-agent-provider__sign-in-mark">
-                <Icon name={SOURCE_ICONS[signIn.source]} size={14} />
-            </Box>
-            <Box className="happy-agent-provider__sign-in-body">
-                <Box className="happy-agent-provider__sign-in-row">
-                    <Box className="happy-agent-provider__model-text">
-                        <span
-                            className="happy-agent-provider__model-name"
-                            data-happy-desktop-ui="happy-agent-provider-sign-in-source"
-                        >
-                            {SOURCE_LABELS[signIn.source]}
-                        </span>
-                        {meta ? (
-                            <span
-                                className="happy-agent-provider__sign-in-meta"
-                                data-happy-desktop-ui="happy-agent-provider-sign-in-meta"
-                            >
-                                {meta}
-                            </span>
-                        ) : null}
-                    </Box>
-                    {signIn.acceptsToken ? (
-                        <Button
-                            aria-label={`Update the token for ${props.providerName}`}
-                            disabled={blocked || active}
-                            onClick={props.onTokenEditorOpen}
-                            size="small"
-                            variant="ghost"
-                        >
-                            Update token
-                        </Button>
-                    ) : null}
-                    {signIn.methods.length > 0 ? (
-                        <Button
-                            aria-label={`Sign ${props.providerName} in again`}
-                            disabled={blocked || active || !signIn.installed}
-                            loading={signIn.busy === "start" && !active}
-                            onClick={() => props.onStart()}
-                            size="small"
-                            variant="secondary"
-                        >
-                            Sign in again
-                        </Button>
-                    ) : null}
-                </Box>
-                {props.locked !== undefined ? (
+            <Icon name={SOURCE_ICONS[signIn.source]} size={14} />
+            <Box className="happy-agent-provider__model-text">
+                <span
+                    className="happy-agent-provider__model-name"
+                    data-happy-desktop-ui="happy-agent-provider-sign-in-source"
+                >
+                    {SOURCE_LABELS[signIn.source]}
+                </span>
+                {meta ? (
                     <span
-                        className="happy-agent-provider__sign-in-note"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-locked"
+                        className="happy-agent-provider__sign-in-meta"
+                        data-happy-desktop-ui="happy-agent-provider-sign-in-meta"
                     >
-                        {props.locked}
-                    </span>
-                ) : !signIn.installed && signIn.methods.length > 0 ? (
-                    <span className="happy-agent-provider__sign-in-note">
-                        {PROGRAM_NAMES[signIn.cli]} isn’t installed on the Happy Agent’s computer,
-                        so it can’t sign in from here.
+                        {meta}
                     </span>
                 ) : null}
-                {flow?.kind === "starting" ? (
-                    <Box
-                        className="happy-agent-provider__sign-in-flow"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-flow"
-                        data-flow="starting"
-                    >
-                        <Box className="happy-agent-provider__sign-in-line">
-                            <Spinner size={16} />
-                            <span>Starting the sign-in…</span>
+            </Box>
+            {signIn.acceptsToken ? (
+                <Button
+                    aria-label={`Update the token for ${props.providerName}`}
+                    disabled={blocked || signIn.running === true}
+                    onClick={props.onTokenEditorOpen}
+                    size="small"
+                    variant="ghost"
+                >
+                    Update token
+                </Button>
+            ) : null}
+            {signIn.methods.length > 0 ? (
+                <Button
+                    aria-label={`Sign ${props.providerName} in again`}
+                    disabled={blocked || !signIn.installed}
+                    onClick={props.onSignIn}
+                    size="small"
+                    variant="secondary"
+                >
+                    {signIn.running ? "Continue sign-in" : "Sign in again"}
+                </Button>
+            ) : null}
+        </Box>
+    );
+}
+
+export interface HappyAgentProviderSignInDialogProps {
+    /** The account as its card names it, such as "Codex · Work". */
+    readonly providerName: string;
+    readonly cli: HappyAgentProviderSignInCliId;
+    readonly methods: readonly HappyAgentProviderSignInMethodId[];
+    /** Absent before a sign-in starts, or after one was cancelled. */
+    readonly flow?: HappyAgentProviderSignInFlow;
+    /** The signed-in account after success, already worded. */
+    readonly account?: string;
+    /** A request this window sent that has not been answered. */
+    readonly busy?: "start" | "code" | "cancel";
+    /** Why the last request was refused. */
+    readonly error?: string;
+    /** Closes the dialog; a running sign-in is cancelled with it. */
+    onClose: () => void;
+    onStart: (method?: HappyAgentProviderSignInMethodId) => void;
+    onCodeSubmit: (code: string) => void;
+    /** Opens the vendor's page; a browser tab when absent. */
+    onExternalOpen?: (url: string) => void;
+}
+
+/**
+ * Signing one account in to a login only Happy uses: the device code to
+ * enter, the vendor's page, the code to paste back, and how it ended. The
+ * code typed here goes straight to the handler and is not kept.
+ */
+export function HappyAgentProviderSignInDialog(props: HappyAgentProviderSignInDialogProps) {
+    const [code, codeSet] = useState("");
+    const vendor = VENDOR_NAMES[props.cli];
+    const flow = props.flow;
+    const live = flow?.kind === "starting" || flow?.kind === "waiting";
+    const open = (url: string): void => {
+        if (props.onExternalOpen) props.onExternalOpen(url);
+        else window.open(url, "_blank", "noopener,noreferrer");
+    };
+    const codeSubmit = (): void => {
+        if (!code.trim() || props.busy) return;
+        props.onCodeSubmit(code);
+        codeSet("");
+    };
+    const browserInstead =
+        flow?.kind === "waiting" &&
+        flow.method === "device" &&
+        props.cli !== "claude" &&
+        props.methods.includes("browser");
+    const primary =
+        flow?.kind === "waiting" ? (
+            flow.acceptsCode ? (
+                <Button
+                    disabled={!code.trim()}
+                    loading={props.busy === "code"}
+                    onClick={codeSubmit}
+                    variant="primary"
+                >
+                    Submit code
+                </Button>
+            ) : (
+                <Button icon="open-external" onClick={() => open(flow.url)} variant="primary">
+                    Open {vendor}
+                </Button>
+            )
+        ) : flow?.kind === "succeeded" ? (
+            <Button onClick={props.onClose} variant="primary">
+                Done
+            </Button>
+        ) : flow?.kind === "starting" ? null : (
+            <Button
+                loading={props.busy === "start"}
+                onClick={() => props.onStart()}
+                variant="primary"
+            >
+                {flow?.kind === "failed" ? "Try again" : "Sign in"}
+            </Button>
+        );
+    return (
+        <ModalOverlay onDismiss={props.onClose}>
+            <Modal
+                className="happy-agent-provider-sign-in"
+                data-testid="provider-sign-in-dialog"
+                footer={
+                    <>
+                        {flow?.kind === "succeeded" ? null : (
                             <Button
-                                disabled={blocked || signIn.busy === "start"}
-                                loading={signIn.busy === "cancel"}
-                                onClick={props.onCancel}
-                                size="small"
+                                loading={props.busy === "cancel"}
+                                onClick={props.onClose}
                                 variant="ghost"
                             >
-                                Cancel
+                                {live ? "Cancel" : "Close"}
                             </Button>
+                        )}
+                        {primary}
+                    </>
+                }
+                onClose={props.onClose}
+                size="medium"
+                title={`Sign in · ${props.providerName}`}
+            >
+                <Box
+                    className="happy-agent-provider-sign-in__body"
+                    data-flow={flow?.kind ?? "idle"}
+                >
+                    {flow?.kind === "succeeded" ? (
+                        <Box className="happy-agent-provider-sign-in__done">
+                            <Icon name="check-circle" size={20} />
+                            <Box className="happy-agent-provider-sign-in__done-text">
+                                <span>Signed in</span>
+                                {props.account ? (
+                                    <span className="happy-agent-provider-sign-in__hint">
+                                        {props.account}
+                                    </span>
+                                ) : null}
+                            </Box>
                         </Box>
-                    </Box>
-                ) : flow?.kind === "waiting" ? (
-                    <Box
-                        className="happy-agent-provider__sign-in-flow"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-flow"
-                        data-flow="waiting"
-                    >
-                        {flow.userCode ? (
+                    ) : (
+                        <span className="happy-agent-provider-sign-in__hint">{EXPLAINER}</span>
+                    )}
+                    {flow?.kind === "starting" ? (
+                        <Box className="happy-agent-provider-sign-in__line">
+                            <Spinner size={16} />
+                            <span>Starting the sign-in…</span>
+                        </Box>
+                    ) : flow?.kind === "waiting" ? (
+                        flow.userCode ? (
                             <>
-                                <span className="happy-agent-provider__sign-in-text">
+                                <span className="happy-agent-provider-sign-in__text">
                                     Enter this code at {vendor}, on any device.
                                 </span>
-                                <Box className="happy-agent-provider__sign-in-line">
+                                <Box className="happy-agent-provider-sign-in__line">
                                     <span
-                                        className="happy-agent-provider__sign-in-code"
+                                        className="happy-agent-provider-sign-in__code"
                                         data-happy-desktop-ui="happy-agent-provider-sign-in-code"
                                     >
                                         {flow.userCode}
@@ -252,129 +310,71 @@ export function HappyAgentProviderSignIn(props: HappyAgentProviderSignInProps) {
                                         text={flow.userCode}
                                     />
                                 </Box>
+                                <Box className="happy-agent-provider-sign-in__line happy-agent-provider-sign-in__hint">
+                                    <Spinner size={14} />
+                                    <span>Waiting for you to finish…</span>
+                                </Box>
+                                {browserInstead ? (
+                                    <Box className="happy-agent-provider-sign-in__line">
+                                        <Button
+                                            disabled={props.busy !== undefined}
+                                            onClick={() => props.onStart("browser")}
+                                            size="small"
+                                            variant="secondary"
+                                        >
+                                            Use this computer’s browser instead
+                                        </Button>
+                                    </Box>
+                                ) : null}
                             </>
                         ) : flow.acceptsCode ? (
-                            <span className="happy-agent-provider__sign-in-text">
-                                Sign in to {vendor} in the browser, then paste the code it shows.
-                            </span>
-                        ) : flow.openedByProgram ? (
-                            <span className="happy-agent-provider__sign-in-text">
-                                Finish signing in to {vendor} in the browser that opened on this
-                                computer.
-                            </span>
+                            <>
+                                <span className="happy-agent-provider-sign-in__text">
+                                    Sign in to {vendor} in the browser, then paste the code it
+                                    shows.
+                                </span>
+                                <Box className="happy-agent-provider-sign-in__line">
+                                    <Button
+                                        icon="open-external"
+                                        onClick={() => open(flow.url)}
+                                        size="small"
+                                        variant="secondary"
+                                    >
+                                        Open {vendor}
+                                    </Button>
+                                </Box>
+                                <TextField
+                                    aria-label={`Code from ${vendor}`}
+                                    autoComplete="off"
+                                    disabled={props.busy === "code"}
+                                    onSubmit={codeSubmit}
+                                    onValueChange={codeSet}
+                                    placeholder="Paste the code"
+                                    type="password"
+                                    value={code}
+                                />
+                            </>
                         ) : (
-                            <span className="happy-agent-provider__sign-in-text">
-                                Sign in to {vendor} in the browser on this computer.
-                            </span>
-                        )}
-                        {flow.acceptsCode ? (
-                            <TextField
-                                aria-label={`Code from ${vendor}`}
-                                autoComplete="off"
-                                disabled={blocked || signIn.busy === "code"}
-                                onSubmit={codeSubmit}
-                                onValueChange={codeSet}
-                                placeholder="Paste the code"
-                                size="small"
-                                type="password"
-                                value={code}
-                            />
-                        ) : null}
-                        <Box className="happy-agent-provider__sign-in-actions">
-                            <Button
-                                icon="open-external"
-                                onClick={() => open(flow.url)}
-                                size="small"
-                                variant={flow.acceptsCode ? "secondary" : "primary"}
-                            >
-                                Open {vendor}
-                            </Button>
-                            {flow.acceptsCode ? (
-                                <Button
-                                    disabled={blocked || !code.trim()}
-                                    loading={signIn.busy === "code"}
-                                    onClick={codeSubmit}
-                                    size="small"
-                                    variant="primary"
-                                >
-                                    Submit code
-                                </Button>
-                            ) : null}
-                            {browserInstead ? (
-                                <Button
-                                    disabled={blocked || signIn.busy !== undefined}
-                                    onClick={() => props.onStart("browser")}
-                                    size="small"
-                                    variant="ghost"
-                                >
-                                    Use this computer’s browser
-                                </Button>
-                            ) : null}
-                            <Button
-                                disabled={blocked || signIn.busy === "cancel"}
-                                loading={signIn.busy === "cancel"}
-                                onClick={props.onCancel}
-                                size="small"
-                                variant="ghost"
-                            >
-                                Cancel
-                            </Button>
-                        </Box>
-                        {flow.acceptsCode ? null : (
-                            <Box className="happy-agent-provider__sign-in-line happy-agent-provider__sign-in-note">
-                                <Spinner size={14} />
-                                <span>Waiting for you to finish…</span>
-                            </Box>
-                        )}
-                    </Box>
-                ) : flow?.kind === "succeeded" ? (
-                    <Box
-                        className="happy-agent-provider__sign-in-line happy-agent-provider__sign-in-done"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-flow"
-                        data-flow="succeeded"
-                    >
-                        <Icon name="check-circle" size={16} />
-                        <span>Signed in</span>
-                    </Box>
-                ) : flow?.kind === "failed" ? (
-                    <Box
-                        className="happy-agent-provider__sign-in-flow"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-flow"
-                        data-flow="failed"
-                        role="alert"
-                    >
-                        <Box className="happy-agent-provider__sign-in-line happy-agent-provider__sign-in-failed">
-                            <Icon name="alert" size={16} />
-                            <span>{FAILURE_TITLES[flow.failure]}</span>
-                        </Box>
-                        {flow.message ? (
-                            <span className="happy-agent-provider__sign-in-note">
-                                {flow.message}
-                            </span>
-                        ) : null}
-                        <Box className="happy-agent-provider__sign-in-actions">
-                            <Button
-                                disabled={blocked || !signIn.installed}
-                                loading={signIn.busy === "start"}
-                                onClick={() => props.onStart()}
-                                size="small"
-                                variant="secondary"
-                            >
-                                Try again
-                            </Button>
-                        </Box>
-                    </Box>
-                ) : null}
-                {signIn.error && props.locked === undefined ? (
-                    <span
-                        className="happy-agent-provider__sign-in-error"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-error"
-                        role="alert"
-                    >
-                        {signIn.error}
-                    </span>
-                ) : null}
-            </Box>
-        </Box>
+                            <>
+                                <span className="happy-agent-provider-sign-in__text">
+                                    {flow.openedByProgram
+                                        ? `Finish signing in to ${vendor} in the browser that opened on this computer.`
+                                        : `Sign in to ${vendor} in the browser on this computer.`}
+                                </span>
+                                <Box className="happy-agent-provider-sign-in__line happy-agent-provider-sign-in__hint">
+                                    <Spinner size={14} />
+                                    <span>Waiting for you to finish…</span>
+                                </Box>
+                            </>
+                        )
+                    ) : flow?.kind === "failed" ? (
+                        <Banner tone="danger" title={FAILURE_TITLES[flow.failure]}>
+                            {flow.message}
+                        </Banner>
+                    ) : null}
+                    {props.error ? <Banner tone="danger">{props.error}</Banner> : null}
+                </Box>
+            </Modal>
+        </ModalOverlay>
     );
 }

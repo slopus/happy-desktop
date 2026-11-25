@@ -1116,6 +1116,8 @@ export {
 } from "./pages/settings/HappyAgentProviderSettings";
 export {
     HappyAgentProviderSignIn,
+    HappyAgentProviderSignInDialog,
+    type HappyAgentProviderSignInDialogProps,
     type HappyAgentProviderCredentialSourceId,
     type HappyAgentProviderSignInCliId,
     type HappyAgentProviderSignInFailure,

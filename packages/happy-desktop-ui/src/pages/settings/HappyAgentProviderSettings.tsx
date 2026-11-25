@@ -20,7 +20,8 @@ import {
 } from "./HappyAgentCustomProviderDialog";
 import {
     HappyAgentProviderSignIn,
-    type HappyAgentProviderSignInMethodId,
+    HappyAgentProviderSignInDialog,
+    type HappyAgentProviderSignInDialogProps,
     type HappyAgentProviderSignInRow,
 } from "./HappyAgentProviderSignIn";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
@@ -122,14 +123,13 @@ export type HappyAgentProviderSettingsProps = {
     onCustomProviderEdit?: (providerId: string) => void;
     /** Why only the team owner may change how accounts sign in, once that is known. */
     signInLocked?: string;
-    onSignInStart?: (providerId: string, method?: HappyAgentProviderSignInMethodId) => void;
-    onSignInCodeSubmit?: (providerId: string, code: string) => void;
-    onSignInCancel?: (providerId: string) => void;
+    /** Starts an account's sign-in, or opens the one already running, in its dialog. */
+    onSignIn?: (providerId: string) => void;
     onTokenEditorOpen?: (providerId: string) => void;
+    /** The sign-in dialog, while it is open. */
+    signInDialog?: HappyAgentProviderSignInDialogProps;
     /** The setup token dialog, while it is open. */
     tokenEditor?: HappyAgentProviderTokenEditorProps;
-    /** Opens a vendor's sign-in page; a browser tab when absent. */
-    onExternalOpen?: (url: string) => void;
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
@@ -187,6 +187,7 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     {props.unavailable}
                 </Banner>
             ) : null}
+            {props.signInLocked ? <Banner tone="neutral">{props.signInLocked}</Banner> : null}
             {props.saveError ? (
                 <Banner tone="danger" title="Provider unchanged">
                     {props.saveError}
@@ -252,17 +253,8 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 providerName={provider.name}
                                 signIn={provider.signIn}
                                 unavailable={props.unavailable !== undefined}
-                                {...(props.signInLocked === undefined
-                                    ? {}
-                                    : { locked: props.signInLocked })}
-                                {...(props.onExternalOpen
-                                    ? { onExternalOpen: props.onExternalOpen }
-                                    : {})}
-                                onCancel={() => props.onSignInCancel?.(provider.id)}
-                                onCodeSubmit={(code) =>
-                                    props.onSignInCodeSubmit?.(provider.id, code)
-                                }
-                                onStart={(method) => props.onSignInStart?.(provider.id, method)}
+                                locked={props.signInLocked !== undefined}
+                                onSignIn={() => props.onSignIn?.(provider.id)}
                                 onTokenEditorOpen={() => props.onTokenEditorOpen?.(provider.id)}
                             />
                         ) : null}
@@ -358,6 +350,7 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     </Box>
                 ) : null}
             </HappyAgentSettingsSection>
+            {props.signInDialog ? <HappyAgentProviderSignInDialog {...props.signInDialog} /> : null}
             {props.tokenEditor ? (
                 <ClaudeSetupTokenDialog
                     {...(props.tokenEditor.error === undefined
