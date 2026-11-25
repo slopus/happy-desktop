@@ -755,6 +755,15 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
     async S3(context) {
         const ship = context.harbor.task("Ship the cache");
         const call = await callStart(context);
+        // The greeting is the call's own opening, not news: let it finish before the reply arrives.
+        const greeting = await call.quiet(4_000);
+        check(
+            context,
+            "S3 the greeting is a short hello",
+            greeting.transcripts.join(" ").split(/\s+/).filter(Boolean).length <= 8,
+            greeting.transcripts.join(" ") || "silence",
+            "soft",
+        );
         const client = happyAgentClientCreate(context.runtime.socketPath, context.runtime.token);
         context.inference.script(ship.agentId, "Ship the cache", [
             {
