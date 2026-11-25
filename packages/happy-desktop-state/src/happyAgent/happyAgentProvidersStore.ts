@@ -61,6 +61,8 @@ export interface HappyAgentProvidersSnapshot {
     /** Whether the reader may add, edit, and remove the team's own providers. */
     readonly customProvidersManageable: boolean;
     readonly customProviderEditor?: HappyAgentCustomProviderEditor;
+    /** The account whose details are open, by id. */
+    readonly providerDetail?: { readonly providerId: string };
 }
 
 /**
@@ -78,6 +80,9 @@ export interface HappyAgentProvidersStore {
     subscribe(listener: () => void): () => void;
     /** Asks the daemon to start or stop using one provider machine-wide. */
     providerEnabledUpdate(providerId: string, enabled: boolean): void;
+    /** Opens one account's details: its login, its models, and its keys. */
+    providerDetailOpen(providerId: string): void;
+    providerDetailClose(): void;
     /**
      * Adds a team API key to a Happy Cloud provider. Rejects with the server's
      * reason, such as only the owner being allowed to.
@@ -345,6 +350,11 @@ export function happyAgentProvidersStoreCreate(
                 timerCancel();
                 controller?.abort();
                 controller = undefined;
+                // Coming back to Inference starts at the list, not inside an account.
+                if (store.getState().providerDetail) {
+                    const { providerDetail: _closed, ...rest } = store.getState();
+                    store.setState(rest, true);
+                }
             };
         },
         providerEnabledUpdate(providerId, enabled) {
@@ -390,6 +400,15 @@ export function happyAgentProvidersStoreCreate(
             credentialChange(providerId, credentialId, (api) =>
                 api.credentialRemove(providerId, credentialId),
             );
+        },
+        providerDetailOpen(providerId) {
+            if (disposed) return;
+            store.setState({ providerDetail: { providerId } }, false);
+        },
+        providerDetailClose() {
+            if (disposed || !store.getState().providerDetail) return;
+            const { providerDetail: _closed, ...rest } = store.getState();
+            store.setState(rest, true);
         },
         customProviderCreateOpen() {
             if (disposed || !deps.credentials) return;
@@ -502,6 +521,8 @@ export const happyAgentProvidersStoreNoop: HappyAgentProvidersStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
     providerEnabledUpdate: () => undefined,
+    providerDetailOpen: () => undefined,
+    providerDetailClose: () => undefined,
     credentialAdd: () => Promise.reject(new Error("Not available here.")),
     credentialEnabledUpdate: () => undefined,
     credentialRemove: () => undefined,

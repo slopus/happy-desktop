@@ -8,6 +8,13 @@ import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
+import {
+    happyAgentProviderAgo,
+    happyAgentProviderExpiryWarning,
+    happyAgentProviderSince,
+    happyAgentProviderUntil,
+    type HappyAgentProviderAccountActivity,
+} from "./happyAgentProviderAccountStatus";
 
 /** The assistant whose own program signs the account in. */
 export type HappyAgentProviderSignInCliId = "codex" | "claude" | "grok";
@@ -60,13 +67,18 @@ export interface HappyAgentProviderSignInRow {
     readonly running?: boolean;
 }
 
-export interface HappyAgentProviderSignInProps {
+export interface HappyAgentProviderLoginProps {
     readonly providerName: string;
-    readonly signIn: HappyAgentProviderSignInRow;
+    /** The account's credential, where the daemon can sign it in. */
+    readonly signIn?: HappyAgentProviderSignInRow;
+    /** How the account has been doing, from its usage entry. */
+    readonly activity?: HappyAgentProviderAccountActivity;
+    /** The time the facts are told against, in milliseconds. */
+    readonly now: number;
     /** Why nothing may be changed here, such as the Happy Agent being offline. */
     readonly unavailable?: boolean;
-    /** Only the team owner may change it; the settings say why once, above every account. */
-    readonly locked?: boolean;
+    /** Why only the team owner may change how the account signs in. */
+    readonly locked?: string;
     /** Starts a sign-in, or opens the one already running. */
     onSignIn: () => void;
     onTokenEditorOpen: () => void;
@@ -108,62 +120,129 @@ const EXPLAINER =
     "Signing in here gives this account a login only Happy uses, so it stops using the system login.";
 
 /**
- * One account's credential on its provider card: where it comes from, and
- * the ways to replace it. The sign-in itself runs in
- * `HappyAgentProviderSignInDialog`.
+ * One account's login in its details: where the credential comes from, when
+ * the daemon last refreshed it, when the access token runs out, why
+ * refreshing has been failing, and the ways to replace it. Signing in again
+ * runs in `HappyAgentProviderSignInDialog`.
  */
-export function HappyAgentProviderSignIn(props: HappyAgentProviderSignInProps) {
-    const { signIn } = props;
-    const blocked = props.unavailable === true || props.locked === true;
+export function HappyAgentProviderLogin(props: HappyAgentProviderLoginProps) {
+    const { signIn, activity, now } = props;
+    const blocked = props.unavailable === true || props.locked !== undefined;
+    const login = activity?.login;
+    const refreshError = login?.refreshError ?? null;
+    const expiry = happyAgentProviderExpiryWarning(login, now);
+    const facts: { readonly label: string; readonly value: string; readonly tone?: string }[] = [];
+    if (activity?.lastUsedAt !== undefined)
+        facts.push({
+            label: "Last used",
+            value:
+                activity.lastUsedAt === null
+                    ? "Not used yet"
+                    : happyAgentProviderAgo(activity.lastUsedAt, now),
+        });
+    if (login) {
+        facts.push({
+            label: "Last refresh",
+            value:
+                login.refreshedAt === null
+                    ? "Not yet"
+                    : happyAgentProviderAgo(login.refreshedAt, now),
+        });
+        if (login.expiresAt !== null)
+            facts.push({
+                label: "Access token expires",
+                value: happyAgentProviderUntil(login.expiresAt, now),
+                ...(expiry || login.expiresAt <= now ? { tone: "warning" } : {}),
+            });
+        if (refreshError)
+            facts.push({
+                label: "Last refresh error",
+                value: [
+                    refreshError.code,
+                    refreshError.status === null
+                        ? undefined
+                        : `HTTP ${String(refreshError.status)}`,
+                    `since ${happyAgentProviderSince(refreshError.since, now)}`,
+                    `last tried ${happyAgentProviderAgo(refreshError.at, now)}`,
+                ]
+                    .filter(Boolean)
+                    .join(" · "),
+                tone: refreshError.permanent ? "danger" : "warning",
+            });
+    } else if (login === undefined && activity?.checkedAt !== undefined)
+        facts.push({
+            label: "Last checked",
+            value: happyAgentProviderAgo(activity.checkedAt, now),
+        });
     const note =
-        !signIn.installed && signIn.methods.length > 0
+        signIn && !signIn.installed && signIn.methods.length > 0
             ? `${PROGRAM_NAMES[signIn.cli]} isn’t installed on the Happy Agent’s computer.`
             : undefined;
-    const meta = [signIn.account, note].filter(Boolean).join(" · ");
+    const actions = signIn && (signIn.acceptsToken || signIn.methods.length > 0);
     return (
         <Box
-            className="happy-agent-provider__sign-in"
+            className="happy-agent-provider-login"
             data-happy-desktop-ui="happy-agent-provider-sign-in"
-            data-source={signIn.source}
+            {...(signIn ? { "data-source": signIn.source } : {})}
         >
-            <Icon name={SOURCE_ICONS[signIn.source]} size={14} />
-            <Box className="happy-agent-provider__model-text">
-                <span
-                    className="happy-agent-provider__model-name"
-                    data-happy-desktop-ui="happy-agent-provider-sign-in-source"
-                >
-                    {SOURCE_LABELS[signIn.source]}
-                </span>
-                {meta ? (
+            {signIn ? (
+                <Box className="happy-agent-provider-login__source">
+                    <Icon name={SOURCE_ICONS[signIn.source]} size={14} />
                     <span
-                        className="happy-agent-provider__sign-in-meta"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-meta"
+                        className="happy-agent-provider-login__source-text"
+                        data-happy-desktop-ui="happy-agent-provider-sign-in-source"
                     >
-                        {meta}
+                        {[SOURCE_LABELS[signIn.source], signIn.account].filter(Boolean).join(" · ")}
                     </span>
-                ) : null}
-            </Box>
-            {signIn.acceptsToken ? (
-                <Button
-                    aria-label={`Update the token for ${props.providerName}`}
-                    disabled={blocked || signIn.running === true}
-                    onClick={props.onTokenEditorOpen}
-                    size="small"
-                    variant="ghost"
-                >
-                    Update token
-                </Button>
+                </Box>
             ) : null}
-            {signIn.methods.length > 0 ? (
-                <Button
-                    aria-label={`Sign ${props.providerName} in again`}
-                    disabled={blocked || !signIn.installed}
-                    onClick={props.onSignIn}
-                    size="small"
-                    variant="secondary"
-                >
-                    {signIn.running ? "Continue sign-in" : "Sign in again"}
-                </Button>
+            {facts.length > 0 ? (
+                <dl className="happy-agent-provider-login__facts">
+                    {facts.map((fact) => (
+                        <Box
+                            className="happy-agent-provider-login__fact"
+                            data-tone={fact.tone}
+                            key={fact.label}
+                        >
+                            <dt>{fact.label}</dt>
+                            <dd>{fact.value}</dd>
+                        </Box>
+                    ))}
+                </dl>
+            ) : null}
+            {note ? <span className="happy-agent-provider-login__note">{note}</span> : null}
+            {props.locked && actions ? (
+                <span className="happy-agent-provider-login__note">{props.locked}</span>
+            ) : null}
+            {actions ? (
+                <Box className="happy-agent-provider-login__actions">
+                    {signIn.acceptsToken ? (
+                        <Button
+                            aria-label={`Update the token for ${props.providerName}`}
+                            disabled={blocked || signIn.running === true}
+                            onClick={props.onTokenEditorOpen}
+                            size="small"
+                            variant="ghost"
+                        >
+                            Update token
+                        </Button>
+                    ) : null}
+                    {signIn.methods.length > 0 ? (
+                        <Button
+                            aria-label={`Sign ${props.providerName} in again`}
+                            disabled={blocked || !signIn.installed}
+                            onClick={props.onSignIn}
+                            size="small"
+                            variant={
+                                activity?.signIn === "signed_out" || refreshError?.permanent
+                                    ? "primary"
+                                    : "secondary"
+                            }
+                        >
+                            {signIn.running ? "Continue sign-in" : "Sign in again"}
+                        </Button>
+                    ) : null}
+                </Box>
             ) : null}
         </Box>
     );

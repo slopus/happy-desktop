@@ -95,6 +95,40 @@ export interface HappyAgentProviderUsageEntry {
      * is not an account, and from a daemon too old to say.
      */
     readonly signIn?: "signed_in" | "signed_out";
+    /**
+     * When an agent here last ran on this account, in milliseconds, or null
+     * when none has yet. Absent from a daemon too old to say.
+     */
+    readonly lastUsedAt?: number | null;
+    /**
+     * The account's own login, as the daemon last refreshed it. Null for an
+     * account without one, such as an API key; absent from a daemon too old to
+     * say.
+     */
+    readonly login?: HappyAgentProviderLogin | null;
+}
+
+/** An account login the daemon keeps fresh by refreshing its access token. */
+export interface HappyAgentProviderLogin {
+    /** When the daemon last refreshed the access token, in milliseconds. */
+    readonly refreshedAt: number | null;
+    /** When the current access token stops working, in milliseconds. */
+    readonly expiresAt: number | null;
+    /** Why refreshing has been failing, until a refresh succeeds again. */
+    readonly refreshError: HappyAgentProviderLoginRefreshError | null;
+}
+
+export interface HappyAgentProviderLoginRefreshError {
+    /** The vendor's HTTP status, when it answered at all. */
+    readonly status: number | null;
+    /** The vendor's error code, such as `invalid_grant`. */
+    readonly code: string | null;
+    /** True when retrying cannot help and only signing in again will. */
+    readonly permanent: boolean;
+    /** When refreshing started failing, in milliseconds. */
+    readonly since: number;
+    /** When it was last tried, in milliseconds. */
+    readonly at: number;
 }
 
 /**

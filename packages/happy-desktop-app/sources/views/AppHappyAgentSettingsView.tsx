@@ -21,6 +21,7 @@ import type {
     HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
     HappyAgentProviderSignInAccount,
+    HappyAgentProviderUsageEntry,
     HappyAgentProviderSignInStore,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
@@ -883,9 +884,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // and the clock ticks the time left until each reset, only while that
     // category is the one on screen.
     const usageOpen = section === "usage";
+    // Inference reads the same entries for when each account was last used and
+    // how its login refreshes, without the token counts Usage follows.
     const usageStore =
-        (usageOpen || stateOpen ? host?.session?.providerUsage : undefined) ??
-        happyAgentProviderUsageStoreNoop;
+        (usageOpen || stateOpen || section === "providers"
+            ? host?.session?.providerUsage
+            : undefined) ?? happyAgentProviderUsageStoreNoop;
     const usage = useSyncExternalStore(
         usageOpen ? usageOpenSubscribe(usageStore) : usageStore.subscribe,
         usageStore.get,
@@ -901,7 +905,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     // The clock is not part of raw state: nothing there counts down, and a
     // ticking second would republish every snapshot on the page for nothing.
-    const clockStore = usageOpen ? host?.session?.clock : undefined;
+    const clockStore = usageOpen || section === "providers" ? host?.session?.clock : undefined;
     const currentTime = useSyncExternalStore(
         clockStore?.subscribe ?? noSubscribe,
         clockStore?.get ?? clockStopped,
@@ -1553,6 +1557,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     ) : null}
                     <HappyAgentProviderSettings
                         loading={providers.loading}
+                        currentTime={currentTime}
+                        {...(providers.providerDetail
+                            ? { detail: providers.providerDetail.providerId }
+                            : {})}
+                        onDetailOpen={(providerId) => providersStore.providerDetailOpen(providerId)}
+                        onDetailClose={() => providersStore.providerDetailClose()}
                         onModelEnabledChange={(id, enabled) =>
                             happyAgentOnline()
                                 ? props.settings.modelEnabledUpdate(
@@ -1583,8 +1593,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                           providersStore.customProviderCreateOpen();
                                   },
                                   onCustomProviderEdit: (providerId: string) => {
-                                      if (happyAgentOnline())
-                                          providersStore.customProviderEditOpen(providerId);
+                                      if (!happyAgentOnline()) return;
+                                      // The editor takes the details' place rather than stacking on them.
+                                      providersStore.providerDetailClose();
+                                      providersStore.customProviderEditOpen(providerId);
                                   },
                               }
                             : {})}
@@ -1594,6 +1606,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             selection,
                             cloudProvidersStore !== undefined,
                             providerSignIn.accounts,
+                            usage.providers,
                         )}
                         {...(providerSignIn.forbidden ||
                         (membersStore && !members.loading && !owner)
@@ -2313,7 +2326,9 @@ function providerRows(
     selection: { readonly providerId: string; readonly modelId: string } | undefined,
     aiProviders: boolean,
     signIns: ReadonlyMap<string, HappyAgentProviderSignInAccount>,
+    usage: readonly HappyAgentProviderUsageEntry[],
 ): readonly HappyAgentProviderRow[] {
+    const usageOf = new Map(usage.map((entry) => [entry.providerId, entry]));
     return providers.map((entry) => {
         const provider: HappyAgentProviderEntry =
             aiProviders && !entry.custom
@@ -2321,8 +2336,55 @@ function providerRows(
                 : entry;
         const row = providerRow(provider, settings, selection);
         const signIn = signIns.get(provider.id);
-        return signIn ? { ...row, signIn: providerSignInRow(signIn) } : row;
+        const account = providerAccountRow(provider, signIn, usageOf.get(provider.id));
+        return {
+            ...row,
+            ...account,
+            ...(signIn ? { signIn: providerSignInRow(signIn) } : {}),
+        };
     });
+}
+
+/** The vendor mark a provider type wears, where it is one vendor's account. */
+const PROVIDER_MARKS: Readonly<Record<string, "openai" | "claude" | "grok">> = {
+    codex: "openai",
+    openai: "openai",
+    claude: "claude",
+    "claude-code": "claude",
+    claude_code: "claude",
+    grok: "grok",
+    xai: "grok",
+};
+
+/** The service types whose accounts the list words by how their login is doing. */
+const ACCOUNT_TYPES: ReadonlySet<string> = new Set(["codex", "claude", "grok"]);
+
+/**
+ * A Codex, Claude, or Grok account's mark, plan, and how it has been doing,
+ * from its usage entry. Any other provider only takes its vendor's mark.
+ */
+function providerAccountRow(
+    provider: HappyAgentProviderEntry,
+    signIn: HappyAgentProviderSignInAccount | undefined,
+    usage: HappyAgentProviderUsageEntry | undefined,
+): Pick<HappyAgentProviderRow, "mark" | "plan" | "activity"> {
+    const mark = PROVIDER_MARKS[provider.type];
+    const plan = usage?.usage?.planName ?? signIn?.account?.plan ?? undefined;
+    return {
+        ...(mark ? { mark } : {}),
+        ...(plan ? { plan } : {}),
+        ...(ACCOUNT_TYPES.has(provider.type) && provider.poolMembers === undefined
+            ? {
+                  activity: {
+                      ...(usage?.signIn ? { signIn: usage.signIn } : {}),
+                      ...(signIn?.credential.source === "system" ? { systemLogin: true } : {}),
+                      ...(usage?.lastUsedAt === undefined ? {} : { lastUsedAt: usage.lastUsedAt }),
+                      ...(usage?.login === undefined ? {} : { login: usage.login }),
+                      ...(usage?.refreshedAt === undefined ? {} : { checkedAt: usage.refreshedAt }),
+                  },
+              }
+            : {}),
+    };
 }
 
 /** One account's credential and sign-in, as its provider card shows them. */

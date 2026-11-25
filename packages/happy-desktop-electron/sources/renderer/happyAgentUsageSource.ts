@@ -1,6 +1,8 @@
 import {
     happyAgentSyncRead,
     type HappyAgentClient,
+    type HappyAgentProviderLogin,
+    type HappyAgentProviderLoginRefreshError,
     type HappyAgentProviderModelTokenUsage,
     type HappyAgentProviderTokenCounts,
     type HappyAgentProviderUsageEntry,
@@ -299,8 +301,68 @@ function usageProject(
                 ? { signIn: provider.signIn }
                 : {}),
             ...(reading === undefined ? {} : { usage: reading }),
+            ...accountActivityRead(provider),
         };
     });
+}
+
+/**
+ * When the account was last used and how its login refreshes. Client 0.0.184
+ * does not type these yet, so they are read off the entry here, and a daemon
+ * too old to send them leaves both absent.
+ */
+function accountActivityRead(
+    provider: ProviderUsageEntry | undefined,
+): Pick<HappyAgentProviderUsageEntry, "lastUsedAt" | "login"> {
+    const entry = provider as
+        | { readonly lastUsedAt?: unknown; readonly login?: unknown }
+        | undefined;
+    if (entry === undefined) return {};
+    const login = loginRead(entry.login);
+    return {
+        ...(entry.lastUsedAt === null || typeof entry.lastUsedAt === "number"
+            ? { lastUsedAt: entry.lastUsedAt }
+            : {}),
+        ...(login === undefined ? {} : { login }),
+    };
+}
+
+function loginRead(value: unknown): HappyAgentProviderLogin | null | undefined {
+    if (value === null) return null;
+    if (typeof value !== "object") return undefined;
+    const login = value as {
+        readonly refreshedAt?: unknown;
+        readonly expiresAt?: unknown;
+        readonly refreshError?: unknown;
+    };
+    return {
+        refreshedAt: numberOrNull(login.refreshedAt),
+        expiresAt: numberOrNull(login.expiresAt),
+        refreshError: refreshErrorRead(login.refreshError),
+    };
+}
+
+function refreshErrorRead(value: unknown): HappyAgentProviderLoginRefreshError | null {
+    if (typeof value !== "object" || value === null) return null;
+    const error = value as {
+        readonly status?: unknown;
+        readonly code?: unknown;
+        readonly permanent?: unknown;
+        readonly since?: unknown;
+        readonly at?: unknown;
+    };
+    if (typeof error.since !== "number" || typeof error.at !== "number") return null;
+    return {
+        status: numberOrNull(error.status),
+        code: typeof error.code === "string" && error.code ? error.code : null,
+        permanent: error.permanent === true,
+        since: error.since,
+        at: error.at,
+    };
+}
+
+function numberOrNull(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function accountUsageProject(

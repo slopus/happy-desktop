@@ -42,6 +42,9 @@ import { directSectionSpecimen } from "./mobilePairingSpecimens";
 /** The component plan this page documents. */
 export const componentNumber = "P-012f";
 
+/** The moment the Inference rows are told against. */
+const PROVIDERS_NOW = Date.UTC(2026, 10, 25, 19, 0);
+
 /** Every category the settings window lists, in the app's order. */
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
@@ -281,6 +284,7 @@ export function HappyAgentSettingsFlowPage() {
             </Screen>
             <Screen id="providers" number="08" screen="08-providers">
                 <HappyAgentProviderSettings
+                    currentTime={PROVIDERS_NOW}
                     onModelEnabledChange={noop}
                     onProviderEnabledChange={noop}
                     providers={providers}

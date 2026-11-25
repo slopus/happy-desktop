@@ -43,6 +43,9 @@ import {
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-012";
 
+/** The moment the Inference rows are told against. */
+const PROVIDERS_NOW = Date.UTC(2026, 10, 25, 19, 0);
+
 const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
@@ -1614,6 +1617,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Inference"
                 >
                     <HappyAgentProviderSettings
+                        currentTime={PROVIDERS_NOW}
                         onModelEnabledChange={noop}
                         onProviderEnabledChange={noop}
                         providers={providers}
@@ -1626,23 +1630,27 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="03b"
                 screen="providers-team-keys"
             >
-                <HappyAgentSettingsShell
-                    activeCategoryId="providers"
-                    categories={categories}
-                    description="Every model provider this server knows about"
-                    onCategorySelect={noop}
-                    onClose={noop}
-                    title="Inference"
-                >
-                    <HappyAgentProviderSettings
-                        onKeyAdd={() => Promise.resolve()}
-                        onKeyEnabledChange={noop}
-                        onKeyRemove={noop}
-                        onModelEnabledChange={noop}
-                        onProviderEnabledChange={noop}
-                        providers={cloudProviders}
-                    />
-                </HappyAgentSettingsShell>
+                <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                    <HappyAgentSettingsShell
+                        activeCategoryId="providers"
+                        categories={categories}
+                        description="Every model provider this server knows about"
+                        onCategorySelect={noop}
+                        onClose={noop}
+                        title="Inference"
+                    >
+                        <HappyAgentProviderSettings
+                            currentTime={PROVIDERS_NOW}
+                            detail="openai"
+                            onKeyAdd={() => Promise.resolve()}
+                            onKeyEnabledChange={noop}
+                            onKeyRemove={noop}
+                            onModelEnabledChange={noop}
+                            onProviderEnabledChange={noop}
+                            providers={cloudProviders}
+                        />
+                    </HappyAgentSettingsShell>
+                </div>
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="The team's own providers: one serving models, one on a protocol Happy Cloud doesn't serve yet, and the way to add another"
@@ -1650,25 +1658,29 @@ export function HappyAgentSettingsBlueprintPage() {
                 number="03e"
                 screen="providers-custom"
             >
-                <HappyAgentSettingsShell
-                    activeCategoryId="providers"
-                    categories={categories}
-                    description="Every model provider this server knows about"
-                    onCategorySelect={noop}
-                    onClose={noop}
-                    title="Inference"
-                >
-                    <HappyAgentProviderSettings
-                        onCustomProviderCreate={noop}
-                        onCustomProviderEdit={noop}
-                        onKeyAdd={() => Promise.resolve()}
-                        onKeyEnabledChange={noop}
-                        onKeyRemove={noop}
-                        onModelEnabledChange={noop}
-                        onProviderEnabledChange={noop}
-                        providers={customProviders}
-                    />
-                </HappyAgentSettingsShell>
+                <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                    <HappyAgentSettingsShell
+                        activeCategoryId="providers"
+                        categories={categories}
+                        description="Every model provider this server knows about"
+                        onCategorySelect={noop}
+                        onClose={noop}
+                        title="Inference"
+                    >
+                        <HappyAgentProviderSettings
+                            currentTime={PROVIDERS_NOW}
+                            detail="acme"
+                            onCustomProviderCreate={noop}
+                            onCustomProviderEdit={noop}
+                            onKeyAdd={() => Promise.resolve()}
+                            onKeyEnabledChange={noop}
+                            onKeyRemove={noop}
+                            onModelEnabledChange={noop}
+                            onProviderEnabledChange={noop}
+                            providers={customProviders}
+                        />
+                    </HappyAgentSettingsShell>
+                </div>
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Adding a provider: name and ID, base URL, protocol, and one model"
@@ -1686,6 +1698,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         title="Inference"
                     >
                         <HappyAgentProviderSettings
+                            currentTime={PROVIDERS_NOW}
                             onCustomProviderCreate={noop}
                             onCustomProviderEdit={noop}
                             onModelEnabledChange={noop}
@@ -1718,6 +1731,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         title="Inference"
                     >
                         <HappyAgentProviderSettings
+                            currentTime={PROVIDERS_NOW}
                             onCustomProviderCreate={noop}
                             onCustomProviderEdit={noop}
                             onModelEnabledChange={noop}
@@ -1766,6 +1780,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         teamAllowed
                     />
                     <HappyAgentProviderSettings
+                        currentTime={PROVIDERS_NOW}
+                        detail="openai"
                         onKeyAdd={() => Promise.resolve()}
                         onKeyEnabledChange={noop}
                         onKeyRemove={noop}
@@ -2030,6 +2046,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Inference"
                 >
                     <HappyAgentProviderSettings
+                        currentTime={PROVIDERS_NOW}
                         onModelEnabledChange={noop}
                         onProviderEnabledChange={noop}
                         providers={providers}
@@ -2051,6 +2068,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Inference"
                 >
                     <HappyAgentProviderSettings
+                        currentTime={PROVIDERS_NOW}
                         loading
                         onModelEnabledChange={noop}
                         onProviderEnabledChange={noop}
@@ -2072,6 +2090,7 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Inference"
                 >
                     <HappyAgentProviderSettings
+                        currentTime={PROVIDERS_NOW}
                         error="The Happy Agent daemon could not read its model catalog."
                         onModelEnabledChange={noop}
                         onProviderEnabledChange={noop}

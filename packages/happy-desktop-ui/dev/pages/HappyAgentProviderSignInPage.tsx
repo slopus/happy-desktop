@@ -27,13 +27,19 @@ const noop = () => undefined;
 
 const WINDOW = { width: 1100, height: 900 } as const;
 
-/** One subscription account's card, with one model. */
+/** The moment every line on this page is told against. */
+const NOW = Date.UTC(2026, 10, 25, 19, 0);
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** One subscription account's row, with one model. */
 function account(
     id: string,
     typeName: "Codex" | "Claude" | "Grok",
     name: string,
     signIn: HappyAgentProviderRow["signIn"],
-    status: HappyAgentProviderRow["status"] = "ready",
+    more: Partial<HappyAgentProviderRow> = {},
 ): HappyAgentProviderRow {
     const model =
         typeName === "Claude"
@@ -44,6 +50,7 @@ function account(
     return {
         enabled: true,
         id,
+        mark: typeName === "Claude" ? "claude" : typeName === "Grok" ? "grok" : "openai",
         models: [
             {
                 contextWindow: model.contextWindow,
@@ -58,70 +65,179 @@ function account(
         name,
         typeName,
         serviceTiers: [],
-        status,
+        status: "ready",
         ...(signIn ? { signIn } : {}),
+        ...more,
     };
 }
 
-/** The system login, Happy's own sign-in with its account, a config-file credential, and a sign-in running from another window. */
+const codexSystem = {
+    cli: "codex",
+    source: "system",
+    methods: ["device", "browser"],
+    acceptsToken: false,
+    installed: true,
+} as const;
+
+const claudeInternal = {
+    cli: "claude",
+    source: "internal",
+    account: "ada@example.com · Max",
+    methods: ["browser"],
+    acceptsToken: true,
+    installed: true,
+} as const;
+
+const grokSystem = {
+    cli: "grok",
+    source: "system",
+    methods: ["device"],
+    acceptsToken: false,
+    installed: true,
+} as const;
+
+/** Healthy: Happy's own login, used minutes ago and refreshed since. */
+const healthy = account("personal_steve", "Claude", "personal_steve", claudeInternal, {
+    plan: "Max",
+    activity: {
+        signIn: "signed_in",
+        lastUsedAt: NOW - 4 * MINUTE,
+        login: { refreshedAt: NOW - 12 * MINUTE, expiresAt: NOW + 7 * HOUR, refreshError: null },
+    },
+});
+
+/** Refreshing has failed for an hour; the access token has three hours left. */
+const failing = account("work", "Codex", "work", codexSystem, {
+    plan: "Pro",
+    activity: {
+        signIn: "signed_in",
+        systemLogin: true,
+        lastUsedAt: NOW - 50 * MINUTE,
+        login: {
+            refreshedAt: NOW - 5 * HOUR,
+            expiresAt: NOW + 3 * HOUR,
+            refreshError: {
+                status: 503,
+                code: "server_error",
+                permanent: false,
+                since: NOW - HOUR,
+                at: NOW - 2 * MINUTE,
+            },
+        },
+    },
+});
+
+/** The vendor refused the refresh token: only signing in again helps. */
+const revoked = account(
+    "robotics",
+    "Codex",
+    "robotics",
+    { ...codexSystem, source: "internal" },
+    {
+        plan: "Plus",
+        status: "not_authenticated",
+        activity: {
+            signIn: "signed_out",
+            lastUsedAt: NOW - 3 * DAY,
+            login: {
+                refreshedAt: NOW - 3 * DAY,
+                expiresAt: NOW - 2 * DAY,
+                refreshError: {
+                    status: 400,
+                    code: "invalid_grant",
+                    permanent: true,
+                    since: NOW - 2 * DAY - 3 * HOUR,
+                    at: NOW - 20 * MINUTE,
+                },
+            },
+        },
+    },
+);
+
+/** Every state a row's line can be in, and a pool that keeps its summary. */
 const accounts: readonly HappyAgentProviderRow[] = [
-    account("codex", "Codex", "Work", {
-        cli: "codex",
-        source: "system",
-        methods: ["device", "browser"],
-        acceptsToken: false,
-        installed: true,
+    healthy,
+    account(
+        "claude_cli",
+        "Claude",
+        "claude_cli",
+        { ...claudeInternal, source: "system" },
+        {
+            activity: {
+                signIn: "signed_in",
+                systemLogin: true,
+                lastUsedAt: NOW - 2 * HOUR,
+                login: { refreshedAt: null, expiresAt: null, refreshError: null },
+            },
+        },
+    ),
+    failing,
+    account("grok_lab", "Grok", "grok_lab", grokSystem, {
+        activity: {
+            signIn: "signed_in",
+            systemLogin: true,
+            lastUsedAt: NOW - DAY,
+            login: {
+                refreshedAt: NOW - 9 * HOUR,
+                expiresAt: null,
+                refreshError: {
+                    status: 429,
+                    code: null,
+                    permanent: false,
+                    since: NOW - 30 * MINUTE,
+                    at: NOW - 6 * MINUTE,
+                },
+            },
+        },
     }),
-    account("claude", "Claude", "Personal", {
-        cli: "claude",
-        source: "internal",
-        account: "ada@example.com · Max",
-        methods: ["browser"],
-        acceptsToken: true,
-        installed: true,
-    }),
-    account("codex_robotics", "Codex", "Robotics", {
-        cli: "codex",
-        source: "configured",
-        methods: ["device"],
-        acceptsToken: false,
-        installed: true,
-    }),
+    revoked,
     account(
         "grok",
         "Grok",
-        "Current CLI",
+        "grok",
+        { ...grokSystem, running: true },
         {
-            cli: "grok",
-            source: "system",
-            methods: ["device"],
-            acceptsToken: false,
-            installed: true,
-            running: true,
+            status: "not_authenticated",
+            activity: { signIn: "signed_out", lastUsedAt: null, login: null },
         },
-        "not_authenticated",
     ),
+    account("codex_new", "Codex", "codex_new", codexSystem, {
+        activity: { lastUsedAt: null, login: null },
+    }),
+    account("codex_old", "Codex", "codex_old", undefined, {
+        plan: "Team",
+        activity: { signIn: "signed_in", checkedAt: NOW - 3 * MINUTE },
+    }),
+    account("claude_spare", "Claude", "claude_spare", claudeInternal, {
+        enabled: false,
+        status: "not_enabled",
+        activity: { signIn: "signed_in", lastUsedAt: NOW - 9 * DAY, login: null },
+    }),
+    {
+        enabled: true,
+        id: "claude_pool",
+        models: healthy.models,
+        name: "claude_pool",
+        typeName: "Pool",
+        serviceTiers: ["Priority"],
+        status: "ready",
+    },
 ];
 
 /** An account whose vendor program is missing. */
-const missing: readonly HappyAgentProviderRow[] = [
-    account(
-        "grok",
-        "Grok",
-        "Current CLI",
-        {
-            cli: "grok",
-            source: "system",
-            methods: ["device"],
-            acceptsToken: false,
-            installed: false,
-        },
-        "not_authenticated",
-    ),
-];
+const missing = account(
+    "grok",
+    "Grok",
+    "grok",
+    { ...grokSystem, installed: false },
+    {
+        status: "not_authenticated",
+        activity: { signIn: "signed_out", lastUsedAt: null, login: null },
+    },
+);
 
 const codexDialog = {
-    providerName: "Codex · Work",
+    providerName: "Codex · work",
     cli: "codex",
     methods: ["device", "browser"],
     onClose: noop,
@@ -135,12 +251,12 @@ const dialogs: readonly {
     readonly dialog: HappyAgentProviderSignInDialogProps;
 }[] = [
     {
-        screen: "02-starting",
+        screen: "08-starting",
         label: "Starting",
         dialog: { ...codexDialog, busy: "start", flow: { kind: "starting" } },
     },
     {
-        screen: "03-device-code",
+        screen: "09-device-code",
         label: "Waiting on a device code",
         dialog: {
             ...codexDialog,
@@ -155,10 +271,10 @@ const dialogs: readonly {
         },
     },
     {
-        screen: "04-claude-code",
+        screen: "10-claude-code",
         label: "Claude, waiting for the code its page shows",
         dialog: {
-            providerName: "Claude · Team",
+            providerName: "Claude · personal_steve",
             cli: "claude",
             methods: ["browser"],
             onClose: noop,
@@ -174,12 +290,12 @@ const dialogs: readonly {
         },
     },
     {
-        screen: "05-succeeded",
+        screen: "11-succeeded",
         label: "Signed in",
         dialog: { ...codexDialog, account: "ada@example.com · Pro", flow: { kind: "succeeded" } },
     },
     {
-        screen: "06-expired",
+        screen: "12-expired",
         label: "Expired",
         dialog: {
             ...codexDialog,
@@ -191,7 +307,7 @@ const dialogs: readonly {
         },
     },
     {
-        screen: "07-save-failed",
+        screen: "13-save-failed",
         label: "Couldn't save",
         dialog: {
             ...codexDialog,
@@ -203,7 +319,7 @@ const dialogs: readonly {
         },
     },
     {
-        screen: "08-forbidden",
+        screen: "14-forbidden",
         label: "Refused: not the team owner",
         dialog: { ...codexDialog, error: "Only the team owner can change how accounts sign in." },
     },
@@ -212,8 +328,8 @@ const dialogs: readonly {
 function Inference(
     props: Omit<
         HappyAgentProviderSettingsProps,
-        "onModelEnabledChange" | "onProviderEnabledChange"
-    >,
+        "onModelEnabledChange" | "onProviderEnabledChange" | "providers" | "currentTime"
+    > & { readonly providers?: readonly HappyAgentProviderRow[] },
 ) {
     return (
         <HappyAgentSettingsShell
@@ -225,84 +341,124 @@ function Inference(
             title="Inference"
         >
             <HappyAgentProviderSettings
+                currentTime={NOW}
+                onDetailClose={noop}
+                onDetailOpen={noop}
                 onModelEnabledChange={noop}
                 onProviderEnabledChange={noop}
                 onSignIn={noop}
                 onTokenEditorOpen={noop}
+                providers={accounts}
                 {...props}
             />
         </HappyAgentSettingsShell>
     );
 }
 
+const details: readonly {
+    readonly screen: string;
+    readonly label: string;
+    readonly props: Omit<
+        HappyAgentProviderSettingsProps,
+        "onModelEnabledChange" | "onProviderEnabledChange" | "providers" | "currentTime"
+    > & { readonly providers?: readonly HappyAgentProviderRow[] };
+}[] = [
+    {
+        screen: "02-detail",
+        label: "Signed in to Happy, with its plan, refresh, and expiry",
+        props: { detail: healthy.id },
+    },
+    {
+        screen: "03-detail-failing",
+        label: "Refreshing failing, the login running out within the day",
+        props: { detail: failing.id },
+    },
+    {
+        screen: "04-detail-revoked",
+        label: "Refused for good: signing in again is the way out",
+        props: { detail: revoked.id },
+    },
+    {
+        screen: "05-detail-older-daemon",
+        label: "An older Happy Agent, which only says when it last checked",
+        props: { detail: "codex_old" },
+    },
+    {
+        screen: "06-detail-owner-only",
+        label: "A team member who isn't the owner",
+        props: {
+            detail: healthy.id,
+            signInLocked: "Only the team owner can change how accounts sign in.",
+        },
+    },
+    {
+        screen: "07-detail-missing",
+        label: "The vendor's program isn't installed",
+        props: { detail: missing.id, providers: [missing] },
+    },
+];
+
 export function HappyAgentProviderSignInPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Settings › Inference: where each Codex, Claude, and Grok account's credential comes from, as one row on its card, and signing it in again to a login only Happy uses, in a dialog: the device code, the vendor's page, the code to paste back, and how it ended."
-            title="HappyAgentProviderSignIn"
+            summary="Settings › Inference: one row per account with a dot and one line saying whether it needs anything, and everything else behind the row — the login with its refresh and expiry, signing in again or updating a token as a step of that, and the models."
+            title="HappyAgentProviderSettings"
             width={1180}
         >
             <FullScreenSpecimen
-                detail="The system login, Happy's own sign-in, a config-file credential, and a sign-in running from another window"
-                label="Account credentials"
+                detail="Healthy, system login, refresh failing, HTTP status only, needs sign-in with and without a date, a sign-in running, not used yet, an older daemon, off, and a pool"
+                label="Accounts"
                 number="01"
                 screen="01-accounts"
                 window={WINDOW}
             >
-                <Inference providers={accounts} />
+                <Inference />
             </FullScreenSpecimen>
-            {dialogs.map((entry, index) => (
+            {details.map((entry, index) => (
                 <FullScreenSpecimen
-                    detail={`The sign-in dialog: ${entry.label.toLowerCase()}`}
+                    detail={entry.label}
                     key={entry.screen}
-                    label={`Sign in — ${entry.label}`}
+                    label={`Account details — ${entry.label}`}
                     number={String(index + 2).padStart(2, "0")}
                     screen={entry.screen}
                     window={WINDOW}
                 >
                     <div style={{ display: "flex", transform: "translateZ(0)" }}>
-                        <Inference providers={accounts} signInDialog={entry.dialog} />
+                        <Inference {...entry.props} />
+                    </div>
+                </FullScreenSpecimen>
+            ))}
+            {dialogs.map((entry, index) => (
+                <FullScreenSpecimen
+                    detail={`The sign-in step: ${entry.label.toLowerCase()}`}
+                    key={entry.screen}
+                    label={`Sign in — ${entry.label}`}
+                    number={String(index + 2 + details.length).padStart(2, "0")}
+                    screen={entry.screen}
+                    window={WINDOW}
+                >
+                    <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                        <Inference detail={failing.id} signInDialog={entry.dialog} />
                     </div>
                 </FullScreenSpecimen>
             ))}
             <FullScreenSpecimen
-                detail="A team member who isn't the owner sees where each account stands but can't change it"
-                label="Account credentials, owner only"
-                number="09"
-                screen="09-owner-only"
-                window={WINDOW}
-            >
-                <Inference
-                    providers={accounts.slice(0, 2)}
-                    signInLocked="Only the team owner can change how accounts sign in."
-                />
-            </FullScreenSpecimen>
-            <FullScreenSpecimen
-                detail="An account whose vendor program isn't installed on the Happy Agent's computer"
-                label="Account credentials, program missing"
-                number="10"
-                screen="10-missing"
-                window={WINDOW}
-            >
-                <Inference providers={missing} />
-            </FullScreenSpecimen>
-            <FullScreenSpecimen
                 detail="Updating a Claude account's setup token, after a malformed one was refused"
                 label="Update a Claude token"
-                number="11"
-                screen="11-token"
+                number={String(2 + details.length + dialogs.length).padStart(2, "0")}
+                screen="15-token"
                 window={WINDOW}
             >
                 <div style={{ display: "flex", transform: "translateZ(0)" }}>
                     <Inference
-                        providers={accounts}
+                        detail={healthy.id}
                         tokenEditor={{
                             error: "That isn't a Claude setup token. It starts with sk-ant-oat01-.",
                             onClose: noop,
                             onTokenSubmit: noop,
                             phase: "failed",
-                            providerName: "Personal",
+                            providerName: "personal_steve",
                             shell: "posix",
                         }}
                     />

@@ -196,6 +196,68 @@ it("follows an account's sign-in, and says nothing while the daemon cannot tell"
     expect(daemon.callCount("getUsage")).toBe(1);
 });
 
+it("carries when an account was used and how its login refreshes, and nothing from an older daemon", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    // Client 0.0.184 does not type these yet; the daemon sends them on the same entry.
+    const activity = {
+        lastUsedAt: 1_700_000_000_000,
+        login: {
+            refreshedAt: 1_699_999_000_000,
+            expiresAt: 1_700_010_000_000,
+            refreshError: null,
+        },
+    };
+    usageSet(daemon, [
+        {
+            ...entry({ providerId: "claude" }),
+            ...activity,
+        } as happyAgentProtocol.ProviderUsageEntry,
+        entry({ providerId: "codex", type: "codex" }),
+        {
+            ...entry({ providerId: "grok", type: "grok" }),
+            lastUsedAt: null,
+            login: null,
+        } as happyAgentProtocol.ProviderUsageEntry,
+    ]);
+    const h = harness(daemon);
+    await vi.waitFor(() => expect(h.claude()?.lastUsedAt).toBe(1_700_000_000_000));
+    expect(h.claude()?.login).toEqual(activity.login);
+    const of = (providerId: string) =>
+        h.seen.at(-1)?.providers.find((provider) => provider.providerId === providerId);
+    // A daemon too old to say leaves both off, so the row falls back to when it last checked.
+    expect(of("codex")).not.toHaveProperty("lastUsedAt");
+    expect(of("codex")).not.toHaveProperty("login");
+    // Never used, and no login to refresh, are both said.
+    expect(of("grok")).toMatchObject({ lastUsedAt: null, login: null });
+
+    // Refreshing starts failing; the change arrives as the account's whole entry.
+    daemon.eventEmit("provider.usage.updated", {
+        ...change({ providerId: "claude" }),
+        lastUsedAt: 1_700_000_000_000,
+        login: {
+            refreshedAt: 1_699_999_000_000,
+            expiresAt: 1_700_010_000_000,
+            refreshError: {
+                status: 400,
+                code: "invalid_grant",
+                permanent: true,
+                since: 1_700_000_100_000,
+                at: 1_700_000_200_000,
+            },
+        },
+    } as happyAgentProtocol.ProviderUsageUpdatedPayload);
+    await vi.waitFor(() =>
+        expect(h.claude()?.login?.refreshError).toEqual({
+            status: 400,
+            code: "invalid_grant",
+            permanent: true,
+            since: 1_700_000_100_000,
+            at: 1_700_000_200_000,
+        }),
+    );
+    expect(daemon.callCount("getUsage")).toBe(1);
+});
+
 it("keeps a change that arrives while the first read is still on its way", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     usageSet(daemon, [

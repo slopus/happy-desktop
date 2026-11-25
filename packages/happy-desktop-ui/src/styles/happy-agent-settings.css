@@ -471,27 +471,241 @@
     gap: 8px;
 }
 
-/* A Codex, Claude, or Grok account's credential is one row under the
-   provider's name, on the models' indent, closed by the hairline the models
-   open under. Signing in runs in its own dialog. */
-.happy-agent-provider__sign-in {
+/* Inference is a list of accounts: one row each, the vendor's tile, the
+   account's name, and one line with a dot that says whether it needs
+   anything. A row owns its hairline; the button inside takes the one hover
+   shape every control shares, reaching 8px past the words on each side. */
+.happy-agent-provider-list__item {
     box-sizing: border-box;
     display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 48px;
-    padding: 8px 0 8px 40px;
+    padding-block: 4px;
     border-bottom: 1px solid var(--divider);
-    color: var(--text-secondary);
 }
 
-.happy-agent-provider__sign-in-meta {
+.happy-agent-provider-list__row {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    min-height: 52px;
+    margin-inline: -8px;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-provider-list__row:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-agent-provider-list__row:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 0;
+}
+
+.happy-agent-provider-list__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-provider-list__name {
     overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-provider-list__line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
+}
+
+.happy-agent-provider-list__line-text {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.happy-agent-provider-list__line[data-tone="danger"] {
+    color: var(--status-error);
+}
+
+.happy-agent-provider-list__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--text-secondary);
+}
+
+.happy-agent-provider-list__dot[data-tone="ok"] {
+    background: var(--success);
+}
+
+.happy-agent-provider-list__dot[data-tone="warning"] {
+    background: var(--box-warning-text);
+}
+
+.happy-agent-provider-list__dot[data-tone="danger"] {
+    background: var(--status-error);
+}
+
+.happy-agent-provider-list__dot[data-tone="off"],
+.happy-agent-provider-list__dot[data-tone="unknown"] {
+    opacity: 0.5;
+}
+
+/* One account's details: who it is with its switch, then Login, Models and
+   API keys, each under a small heading. */
+.happy-agent-provider-detail__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-agent-provider-detail__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-agent-provider-detail__header > .happy-agent-provider__naming {
+    flex: 1 1 0%;
+}
+
+/* Inside the details there is room for the whole line, so it wraps. */
+.happy-agent-provider-detail__header .happy-agent-provider-list__line {
+    align-items: flex-start;
+}
+
+.happy-agent-provider-detail__header .happy-agent-provider-list__dot {
+    margin-top: 4px;
+}
+
+.happy-agent-provider-detail__header .happy-agent-provider-list__line-text {
+    white-space: normal;
+}
+
+.happy-agent-provider-detail__section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.happy-agent-provider-detail__heading {
+    margin: 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* Inside the details nothing sits under a tile, so models and keys start at
+   the edge. */
+.happy-agent-provider-detail .happy-agent-provider__models,
+.happy-agent-provider-detail .happy-agent-provider__keys {
+    padding-left: 0;
+}
+
+.happy-agent-provider-detail .happy-agent-provider__hint {
+    padding: 4px 0 0;
+}
+
+.happy-agent-provider-detail__section:not([data-status="ready"])[data-status]
+    .happy-agent-provider__models {
+    opacity: 0.55;
+}
+
+.happy-agent-provider-login {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+.happy-agent-provider-login__source {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-provider-login__source-text {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-provider-login__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+}
+
+.happy-agent-provider-login__fact {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider-login__fact dt {
+    flex: none;
+    width: 140px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-provider-login__fact dd {
+    flex: 1 1 0%;
+    min-width: 0;
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.happy-agent-provider-login__fact[data-tone="warning"] dd {
+    color: var(--box-warning-text);
+}
+
+.happy-agent-provider-login__fact[data-tone="danger"] dd {
+    color: var(--status-error);
+}
+
+.happy-agent-provider-login__note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider-login__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 /* The sign-in dialog: the explainer, then the step the sign-in is on. */
