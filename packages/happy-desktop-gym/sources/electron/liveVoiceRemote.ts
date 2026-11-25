@@ -1,8 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { createServer, type IncomingMessage, type Server } from "node:http";
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import type { AddressInfo } from "node:net";
 import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import type { Page } from "playwright";
@@ -11,10 +9,12 @@ import { happyAgentRuntimeCreate, type StartedHappyAgentRuntime } from "./happyA
 import { happyAgentClientCreate } from "./happyAgentProtocol.js";
 import { completeOnboarding } from "./workloads.js";
 import { liveVoiceSpeakersVerify } from "./liveVoiceSilence.js";
+import { fixtureInferenceCreate, liveConfiguration } from "./liveVoiceFixture.js";
 import {
     callStatusAwait,
     endedDismiss,
     endedMessage,
+    laneFinish,
     liveVoiceWindowOpen,
     phoneStatus,
     railSelect,
@@ -26,7 +26,7 @@ import {
     type LiveVoiceWindow,
     type Turn,
 } from "./liveVoiceWindow.js";
-import type { GymInferenceServer, GymRunPaths } from "./types.js";
+import type { GymRunPaths } from "./types.js";
 
 const exec = promisify(execFile);
 
@@ -113,38 +113,15 @@ export async function gymLiveVoiceRemoteRun(options: {
     let window: LiveVoiceWindow | undefined;
     let failure: unknown;
     const lifetime = setInterval(() => {}, 1_000);
-    const voiceProvider = [
-        "[providers]",
-        "default_enable = false",
-        "[providers.voice]",
-        'type = "codex"',
-        "enabled = true",
-        "credential_isolation = true",
-        `auth_file = ${JSON.stringify(options.authFile)}`,
-        "[defaults]",
-        'provider = "voice"',
-        'model = "openai/gpt-6-astra"',
-        'effort = "medium"',
-    ];
+    // Seed its conversation with a scripted reply, then restart it with a
+    // real voice account: a call hosted there runs on that daemon alone.
+    const remoteInference = fixtureInferenceCreate({
+        title: CONVERSATION_TITLE,
+        reply: remoteReply,
+    });
     try {
         result.stage = "remote-daemon";
         const remoteToken = randomBytes(32).toString("base64url");
-        const remoteBase = [
-            "[settings]",
-            "happy_integration = false",
-            "menu_bar = false",
-            "[node]",
-            `name = "${REMOTE_NODE}"`,
-            "[api]",
-            `token = "${remoteToken}"`,
-            "[feature.tailcat]",
-            "enabled = true",
-            "[feature.mobile_connector]",
-            "enabled = false",
-        ];
-        // Seed its conversation with a scripted reply, then restart it with a
-        // real voice account: a call hosted there runs on that daemon alone.
-        const remoteInference = scriptedInferenceCreate(CONVERSATION_TITLE, remoteReply);
         await remoteInference.start();
         remote = await happyAgentRuntimeCreate(remotePaths, remoteInference);
         await happyAgentClientCreate(remote.socketPath, remote.token).completeOnboarding();
@@ -161,10 +138,15 @@ export async function gymLiveVoiceRemoteRun(options: {
         const { runId } = await remote.client.sendMessage(remoteAgent.id, remoteMessage);
         await remote.client.waitForAgentIdle(remoteAgent.id, runId, 60_000);
         await remote.stop();
+        await remoteInference.stop();
         remote = await happyAgentRuntimeCreate(
             remotePaths,
             undefined,
-            [...remoteBase, ...voiceProvider, ""].join("\n"),
+            liveConfiguration({
+                authFile: options.authFile,
+                node: REMOTE_NODE,
+                serve: remoteToken,
+            }),
         );
         if (remote.environment.HAPPY_GYM_INFERENCE_URL)
             throw new Error("The remote unexpectedly kept deterministic inference.");
@@ -184,24 +166,17 @@ export async function gymLiveVoiceRemoteRun(options: {
         local = await happyAgentRuntimeCreate(
             paths,
             undefined,
-            [
-                "[settings]",
-                "happy_integration = false",
-                "menu_bar = false",
-                "[profile]",
-                'name = "Voice Gym"',
-                'email = "voice-gym@example.invalid"',
-                "[node]",
-                `name = "${LOCAL_NODE}"`,
-                "[feature.mobile_connector]",
-                "enabled = false",
-                ...voiceProvider,
-                `[connections.${REMOTE_CONNECTION}]`,
-                `name = "${REMOTE_NAME}"`,
-                `address = "${address}"`,
-                `token = "${remoteToken}"`,
-                "",
-            ].join("\n"),
+            liveConfiguration({
+                authFile: options.authFile,
+                node: LOCAL_NODE,
+                profile: true,
+                connection: {
+                    id: REMOTE_CONNECTION,
+                    name: REMOTE_NAME,
+                    address,
+                    token: remoteToken,
+                },
+            }),
         );
         if (local.environment.HAPPY_GYM_INFERENCE_URL)
             throw new Error("Live run unexpectedly inherited deterministic inference.");
@@ -317,33 +292,8 @@ export async function gymLiveVoiceRemoteRun(options: {
         if (window) await shot(window.page, paths, "failure").catch(() => undefined);
     } finally {
         clearInterval(lifetime);
-        if (window) {
-            await writeFile(
-                join(paths.artifacts, "control-events.json"),
-                JSON.stringify(window.events, null, 2),
-            );
-            await writeFile(
-                join(paths.artifacts, "requests.json"),
-                JSON.stringify(window.requests, null, 2),
-            );
-        }
-        await window?.app.close().catch(() => undefined);
-        await local?.stop().catch(() => undefined);
-        await remote?.stop().catch(() => undefined);
-        result.finishedAt = new Date().toISOString();
-        await writeFile(join(paths.artifacts, "result.json"), JSON.stringify(result, null, 2));
-        console.log(
-            JSON.stringify(
-                {
-                    status: result.status,
-                    stage: result.stage,
-                    artifactDirectory: paths.artifacts,
-                    error: result.error,
-                },
-                null,
-                2,
-            ),
-        );
+        await remoteInference.stop();
+        await laneFinish({ paths, result, window, runtimes: [local, remote] });
     }
     if (failure) throw failure;
 }
@@ -406,55 +356,4 @@ export async function tailcatAddressRead(paths: GymRunPaths): Promise<string> {
         await new Promise((resolve) => setTimeout(resolve, 250));
     }
     throw new Error("The remote daemon did not publish a Tailcat address.");
-}
-
-/** The remote daemon's only model: one fixed reply and one fixed title, no provider. */
-export function scriptedInferenceCreate(title: string, reply: string): GymInferenceServer {
-    const token = randomBytes(24).toString("hex");
-    let server: Server | undefined;
-    let url: string | undefined;
-    const body = async (request: IncomingMessage) => {
-        const chunks: Buffer[] = [];
-        for await (const chunk of request) chunks.push(chunk as Buffer);
-        return JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
-            options?: { intent?: string; sessionId?: string };
-        };
-    };
-    return {
-        get url() {
-            if (!url) throw new Error("The scripted inference server has not started.");
-            return url;
-        },
-        token,
-        async start() {
-            if (server) return;
-            const created = createServer((request, response) => {
-                void (async () => {
-                    if (request.headers.authorization !== `Bearer ${token}`) {
-                        response.writeHead(401).end();
-                        return;
-                    }
-                    const payload = await body(request);
-                    const text =
-                        payload.options?.intent === "compaction"
-                            ? "Compacted."
-                            : String(payload.options?.sessionId ?? "").endsWith(":title")
-                              ? `<title>${title}</title>\n<recap>A remembered beacon code.</recap>`
-                              : reply;
-                    response.writeHead(200, { "content-type": "application/json" });
-                    response.end(JSON.stringify({ content: [{ type: "text", text }] }));
-                })().catch(() => response.writeHead(500).end());
-            });
-            await new Promise<void>((resolve) => created.listen(0, "127.0.0.1", resolve));
-            server = created;
-            url = `http://127.0.0.1:${(created.address() as AddressInfo).port}/inference`;
-        },
-        async stop() {
-            const current = server;
-            server = undefined;
-            await new Promise<void>((resolve) =>
-                current ? current.close(() => resolve()) : resolve(),
-            );
-        },
-    };
 }

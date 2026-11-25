@@ -7,8 +7,17 @@ import { happyAgentClientCreate } from "./happyAgentProtocol.js";
 import { completeOnboarding } from "./workloads.js";
 import { liveVoiceSpeakersVerify } from "./liveVoiceSilence.js";
 import { socketDelayInsert } from "./liveVoiceDelay.js";
-import { scriptedInferenceCreate, tailcatAddressRead } from "./liveVoiceRemote.js";
+import { tailcatAddressRead } from "./liveVoiceRemote.js";
 import {
+    captureRead,
+    fixtureInferenceCreate,
+    liveConfiguration,
+    liveRecordsRead,
+    voiceSubtaskIds,
+} from "./liveVoiceFixture.js";
+import {
+    laneFinish,
+    liveVoiceWindowClose,
     liveVoiceWindowOpen,
     railSelect,
     settingsBack,
@@ -95,31 +104,11 @@ export async function gymLiveVoiceLatencyRun(options: {
     };
     const token = randomBytes(32).toString("base64url");
     const capturePath = join(paths.artifacts, "live-capture.ndjson");
-    const realisticConfiguration = [
-        "[settings]",
-        "happy_integration = false",
-        "menu_bar = false",
-        "[node]",
-        `name = "${REALISTIC_NODE}"`,
-        "[api]",
-        `token = "${token}"`,
-        "[feature.tailcat]",
-        "enabled = true",
-        "[feature.mobile_connector]",
-        "enabled = false",
-        "[providers]",
-        "default_enable = false",
-        "[providers.voice]",
-        'type = "codex"',
-        "enabled = true",
-        "credential_isolation = true",
-        `auth_file = ${JSON.stringify(options.authFile)}`,
-        "[defaults]",
-        'provider = "voice"',
-        'model = "openai/gpt-6-astra"',
-        'effort = "medium"',
-        "",
-    ].join("\n");
+    const realisticConfiguration = liveConfiguration({
+        authFile: options.authFile,
+        node: REALISTIC_NODE,
+        serve: token,
+    });
     let realistic: StartedHappyAgentRuntime | undefined;
     let host: StartedHappyAgentRuntime | undefined;
     let window: LiveVoiceWindow | undefined;
@@ -225,42 +214,24 @@ export async function gymLiveVoiceLatencyRun(options: {
             const outcome = await lane("local", window, localPaths, REALISTIC_NODE);
             laneResults.local = {
                 ...outcome,
-                daemon: await liveLogRead(realisticPaths, outcome.startedAt, outcome.finishedAt),
+                daemon: await liveRecordsRead(
+                    realisticPaths,
+                    outcome.startedAt,
+                    outcome.finishedAt,
+                ),
             };
-            await window.app.close().catch(() => undefined);
+            await liveVoiceWindowClose(window);
             window = undefined;
         }
         if (lanes.includes("remote")) {
             result.stage = "remote-lane";
             const address = await tailcatAddressRead(realisticPaths);
-            const hostConfiguration = [
-                "[settings]",
-                "happy_integration = false",
-                "menu_bar = false",
-                "[profile]",
-                'name = "Voice Gym"',
-                'email = "voice-gym@example.invalid"',
-                "[node]",
-                `name = "${HOST_NODE}"`,
-                "[feature.mobile_connector]",
-                "enabled = false",
-                "[providers]",
-                "default_enable = false",
-                "[providers.voice]",
-                'type = "codex"',
-                "enabled = true",
-                "credential_isolation = true",
-                `auth_file = ${JSON.stringify(options.authFile)}`,
-                "[defaults]",
-                'provider = "voice"',
-                'model = "openai/gpt-6-astra"',
-                'effort = "medium"',
-                "[connections.remote]",
-                'name = "Realistic"',
-                `address = "${address}"`,
-                `token = "${token}"`,
-                "",
-            ].join("\n");
+            const hostConfiguration = liveConfiguration({
+                authFile: options.authFile,
+                node: HOST_NODE,
+                profile: true,
+                connection: { id: "remote", name: "Realistic", address, token },
+            });
             const roundTrips = async (runtime: StartedHappyAgentRuntime) => {
                 const through = happyAgentClientCreate(
                     runtime.socketPath,
@@ -296,7 +267,11 @@ export async function gymLiveVoiceLatencyRun(options: {
             laneResults.remote = {
                 ...outcome,
                 delayedChunks: delay.chunks(),
-                daemon: await liveLogRead(realisticPaths, outcome.startedAt, outcome.finishedAt),
+                daemon: await liveRecordsRead(
+                    realisticPaths,
+                    outcome.startedAt,
+                    outcome.finishedAt,
+                ),
             };
         }
         result.summary = latencySummary(laneResults);
@@ -309,30 +284,14 @@ export async function gymLiveVoiceLatencyRun(options: {
         if (window) await shot(window.page, paths, "failure").catch(() => undefined);
     } finally {
         clearInterval(lifetime);
-        await window?.app.close().catch(() => undefined);
         await delay?.stop().catch(() => undefined);
-        await host?.stop().catch(() => undefined);
-        await realistic?.stop().catch(() => undefined);
-        result.finishedAt = new Date().toISOString();
-        await writeFile(join(paths.artifacts, "result.json"), JSON.stringify(result, null, 2));
+        await laneFinish({ paths, result, window, runtimes: [host, realistic] });
         if (result.summary)
             await writeFile(
                 join(paths.artifacts, "latency.md"),
                 latencyTable(result.summary as Summary) +
                     (result.deep ? `\n${result.deep as string}` : ""),
             );
-        console.log(
-            JSON.stringify(
-                {
-                    status: result.status,
-                    stage: result.stage,
-                    artifactDirectory: paths.artifacts,
-                    error: result.error,
-                },
-                null,
-                2,
-            ),
-        );
     }
     if (failure) throw failure;
 }
@@ -350,19 +309,28 @@ async function harborSeed(paths: GymRunPaths, projectId: string) {
         )
     )
         return;
-    const inference = scriptedInferenceCreate(CONVERSATION_TITLE, `Noted. ${BEACON}`);
+    const sessionId = await conversationSeed(paths, projectId, CONVERSATION_TITLE, BEACON);
+    await writeFile(marker, JSON.stringify({ sessionId, title: CONVERSATION_TITLE }));
+}
+
+/** One new conversation in `projectId`, titled `title`, whose one turn records `fact`. */
+async function conversationSeed(
+    paths: GymRunPaths,
+    projectId: string,
+    title: string,
+    fact: string,
+) {
+    const inference = fixtureInferenceCreate({ title, reply: `Noted. ${fact}` });
     await inference.start();
     const runtime = await happyAgentRuntimeCreate(paths, inference);
     try {
         const { agent } = await runtime.client.createAgent(projectId);
-        const { runId } = await runtime.client.sendMessage(
-            agent.id,
-            `Remember this for later: ${BEACON}`,
-        );
+        const { runId } = await runtime.client.sendMessage(agent.id, `Remember this: ${fact}`);
         await runtime.client.waitForAgentIdle(agent.id, runId, 60_000);
-        await writeFile(marker, JSON.stringify({ sessionId: agent.id, title: CONVERSATION_TITLE }));
+        return agent.id;
     } finally {
         await runtime.stop();
+        await inference.stop();
     }
 }
 
@@ -384,24 +352,11 @@ async function deepSeed(
         () => undefined,
     );
     if ((seeded?.newer?.length ?? 0) >= DEEP_NEWER) return seeded!.sessionId;
-    let sessionId = seeded?.sessionId;
-    if (!sessionId) {
-        const inference = scriptedInferenceCreate(DEEP_TITLE, `Logged. ${DEEP_FACT}`);
-        await inference.start();
-        const runtime = await happyAgentRuntimeCreate(paths, inference);
-        try {
-            const { agent } = await runtime.client.createAgent(projectId);
-            const { runId } = await runtime.client.sendMessage(agent.id, `Log this: ${DEEP_FACT}`);
-            await runtime.client.waitForAgentIdle(agent.id, runId, 60_000);
-            sessionId = agent.id;
-            await writeFile(marker, JSON.stringify({ sessionId, title: DEEP_TITLE }));
-        } finally {
-            await runtime.stop();
-            await inference.stop();
-        }
-    }
+    const sessionId =
+        seeded?.sessionId ?? (await conversationSeed(paths, projectId, DEEP_TITLE, DEEP_FACT));
+    await writeFile(marker, JSON.stringify({ sessionId, title: DEEP_TITLE }));
     // Their titles stay as they were: a title request answers with the one they have.
-    const inference = scriptedInferenceCreate("Gym performance session", "Noted.");
+    const inference = fixtureInferenceCreate({ title: "Gym performance session", reply: "Noted." });
     await inference.start();
     const runtime = await happyAgentRuntimeCreate(paths, inference);
     try {
@@ -441,26 +396,9 @@ async function voiceToolCalls(
     from: number,
     to: number,
 ): Promise<VoiceToolCall[]> {
-    const ids: string[] = [];
-    const walk = (value: unknown) => {
-        if (Array.isArray(value)) for (const item of value) walk(item);
-        else if (typeof value === "object" && value !== null) {
-            const record = value as Record<string, unknown>;
-            if (
-                record.title === "Voice" &&
-                record.subtask === true &&
-                typeof record.id === "string"
-            )
-                ids.push(record.id);
-            for (const item of Object.values(record)) walk(item);
-        }
-    };
-    walk(await client.listBots());
     const calls: VoiceToolCall[] = [];
-    for (const id of new Set(ids)) {
-        const history = (await client.getMessages(
-            id as Parameters<typeof client.getMessages>[0],
-        )) as unknown as {
+    for (const id of await voiceSubtaskIds(client)) {
+        const history = (await client.getMessages(id)) as unknown as {
             runs: { messages: { createdAt: number; content?: unknown }[] }[];
         };
         for (const run of history.runs)
@@ -501,16 +439,9 @@ async function deepChecks(
     ) as DeepEvent[];
     // The first context voice got for this call, as the daemon captured it.
     const pressedAt = (call.opening as { pressedAt?: number } | undefined)?.pressedAt ?? 0;
-    const pushes = (await readFile(capturePath, "utf8").catch(() => ""))
-        .split("\n")
-        .flatMap((line) => {
-            try {
-                return [JSON.parse(line) as { at: number; kind: string; text: string }];
-            } catch {
-                return [];
-            }
-        });
-    const firstContext = pushes.find((push) => push.kind === "context" && push.at >= pressedAt);
+    const firstContext = (await captureRead(capturePath)).find(
+        (push) => push.kind === "context" && push.at >= pressedAt,
+    );
     const contexts = events.filter((event) => event.frame.type === "desktopContext");
     const opens = events.filter(
         (event) =>
@@ -585,76 +516,10 @@ function deepSummary(lanes: Record<string, unknown>): string {
  * so the next call makes a new one with no memory of earlier calls.
  */
 async function voiceArchive(client: ReturnType<typeof happyAgentClientCreate>): Promise<number> {
-    const found: string[] = [];
-    const walk = (value: unknown) => {
-        if (Array.isArray(value)) for (const item of value) walk(item);
-        else if (typeof value === "object" && value !== null) {
-            const record = value as Record<string, unknown>;
-            if (
-                record.title === "Voice" &&
-                record.subtask === true &&
-                typeof record.id === "string"
-            )
-                found.push(record.id);
-            for (const item of Object.values(record)) walk(item);
-        }
-    };
-    walk(await client.listBots());
-    for (const id of new Set(found))
-        await client.archiveAgent(id as Parameters<typeof client.archiveAgent>[0], {
-            mutationId: randomBytes(12).toString("hex"),
-        });
-    return new Set(found).size;
-}
-
-/** The hosting daemon's own live diagnostics in a time window: actions and delegations. */
-async function liveLogRead(paths: GymRunPaths, from: number, to: number) {
-    const text = await readFile(join(paths.agentHome, "observation", "agent.log"), "utf8").catch(
-        () => "",
-    );
-    const records: Record<string, unknown>[] = [];
-    for (const line of text.split("\n")) {
-        try {
-            const entry = JSON.parse(line) as {
-                module?: string;
-                time?: string | number;
-                msg?: string;
-            };
-            if (
-                entry.module !== "live" ||
-                typeof entry.msg !== "string" ||
-                !entry.msg.startsWith("{")
-            )
-                continue;
-            const at = new Date(entry.time ?? 0).getTime();
-            if (at < from || at > to) continue;
-            const record = JSON.parse(entry.msg) as Record<string, unknown>;
-            if (
-                typeof record.event === "string" &&
-                (record.event.startsWith("action.") ||
-                    record.event.startsWith("delegation.") ||
-                    record.event === "controller.finished" ||
-                    record.event === "provider.ready" ||
-                    record.event === "session.created" ||
-                    record.event === "control.attached" ||
-                    record.event === "context.accepted" ||
-                    record.event === "context.pushed")
-            )
-                records.push({
-                    at,
-                    event: record.event,
-                    actionType: record.actionType,
-                    durationMs: record.durationMs,
-                    elapsedMs: record.elapsedMs,
-                    resultStatus: record.resultStatus,
-                    kind: record.kind,
-                    bytes: record.bytes,
-                });
-        } catch {
-            /* Not a JSON diagnostic line. */
-        }
-    }
-    return records;
+    const ids = await voiceSubtaskIds(client);
+    for (const id of ids)
+        await client.archiveAgent(id, { mutationId: randomBytes(12).toString("hex") });
+    return ids.length;
 }
 
 type Summary = Record<

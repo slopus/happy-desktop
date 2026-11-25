@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { Cuid2 } from "@slopus/happy-agent-client";
 import { gymRunPathsCreate } from "./paths.js";
@@ -7,27 +7,32 @@ import { happyAgentRuntimeCreate, type StartedHappyAgentRuntime } from "./happyA
 import { happyAgentClientCreate } from "./happyAgentProtocol.js";
 import { completeOnboarding } from "./workloads.js";
 import { liveVoiceSpeakersVerify } from "./liveVoiceSilence.js";
-import type { LiveVoiceMedia } from "./liveVoiceMedia.js";
 import {
     BENCHMARK_REPLY,
     BENCHMARK_TASK_REPLY,
+    captureRead,
     conversationTail,
     fixtureInferenceCreate,
     harborSeed,
+    liveConfiguration,
+    liveRecordsRead,
+    voiceSubtaskIds,
     type FixtureInference,
     type HarborFixture,
 } from "./liveVoiceFixture.js";
 import {
+    callPress,
     callStatusAwait,
     endedDismiss,
     endedMessage,
     actionsOf,
+    liveVoiceWindowClose,
     liveVoiceWindowOpen,
     phoneStatus,
     settingsBack,
     shot,
     signInFreshAssert,
-    speechWrite,
+    SPEECH_LEVEL,
     transcriptOf,
     voiceAccountChoose,
     type ControlEvent,
@@ -38,8 +43,6 @@ import type { GymRunPaths } from "./types.js";
 export const LIVE_VOICE_EVALS = ["S1", "S2", "S3", "S4", "S5", "S6"] as const;
 export type LiveVoiceEval = (typeof LIVE_VOICE_EVALS)[number];
 
-/** A received level above this is speech, far above Opus comfort noise. */
-const SPEECH_LEVEL = 1e-4;
 /**
  * GPT-Live has no direct tools, so a turn is answered from what the voice
  * model already holds, or delegated to the controller with an immediate
@@ -57,8 +60,6 @@ export type Check = {
     detail: string;
 };
 
-type LiveRecord = { at: number; event: string; [key: string]: unknown };
-
 type Turn = {
     said: string;
     heard: string[];
@@ -69,6 +70,8 @@ type Turn = {
     tools: string[];
     tier: Tier;
     expectedTier?: Tier;
+    /** Thinking aloud: saying nothing at all is an answer, not a slow one. */
+    quietOk?: boolean;
     /** When the controller's first outcome reached voice, for a delegated turn. */
     deliveredAt: number | null;
     /** When this turn's speech started playing into the microphone, in epoch ms. */
@@ -143,30 +146,12 @@ async function scenarioRun(name: LiveVoiceEval, authFile: string, artifactDirect
     const inference = fixtureInferenceCreate();
     await inference.start();
     const capturePath = join(paths.artifacts, "live-capture.ndjson");
-    const configuration = [
-        "[settings]",
-        "happy_integration = false",
-        "menu_bar = false",
-        "[profile]",
-        'name = "Voice Gym"',
-        'email = "voice-gym@example.invalid"',
-        "[node]",
-        'name = "Harbor Mac"',
-        "[feature.mobile_connector]",
-        "enabled = false",
-        "[providers.voice]",
-        'type = "codex"',
-        "enabled = true",
-        "credential_isolation = true",
-        `auth_file = ${JSON.stringify(authFile)}`,
-        // An explicit endpoint keeps this account live beside the scripted fixture.
-        'base_url = "https://chatgpt.com/backend-api"',
-        "[defaults]",
-        'provider = "voice"',
-        'model = "openai/gpt-6-astra"',
-        'effort = "medium"',
-        "",
-    ].join("\n");
+    const configuration = liveConfiguration({
+        authFile,
+        node: "Harbor Mac",
+        profile: true,
+        beside: true,
+    });
     const runtime = await happyAgentRuntimeCreate(paths, inference, configuration, {
         HAPPY_GYM_LIVE_INFERENCE: "1",
         // The diagnostics build writes each push to voice here as {at, kind, text, speakable}.
@@ -223,7 +208,7 @@ async function scenarioRun(name: LiveVoiceEval, authFile: string, artifactDirect
                 JSON.stringify(window.events, null, 2),
             );
         }
-        await window?.app.close().catch(() => undefined);
+        if (window) await liveVoiceWindowClose(window);
         await runtime.stop().catch(() => undefined);
         await inference.stop().catch(() => undefined);
         // The hosting daemon's own record of every delegation, action and push.
@@ -258,6 +243,7 @@ function tierChecks(turns: readonly Turn[]): Check[] {
                         turn.speechEnd + turn.firstAudioMs < turn.deliveredAt),
                 detail: `first audio ${turn.firstAudioMs ?? "none"} ms, outcome ${turn.deliveredAt === null ? "not seen" : `${turn.deliveredAt - turn.speechEnd} ms`} after speech end`,
             });
+        if (turn.quietOk && turn.firstAudioMs === null) return;
         checks.push({
             id: `${label} first audio within ${FIRST_AUDIO_BUDGET_MS} ms`,
             kind: "soft",
@@ -271,61 +257,39 @@ function tierChecks(turns: readonly Turn[]): Check[] {
 /** The call: press the phone, then speak, listen and act through these helpers. */
 async function callStart(context: Context) {
     const { page } = context.window;
-    await page.evaluate(() =>
-        (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.peersReset(),
+    const call = await callPress(
+        context.window,
+        join(context.paths.artifacts, `call-${Date.now()}`),
     );
-    const pressedAt = Date.now();
-    await page.getByRole("button", { name: "Start voice call", exact: true }).click();
-    while (Date.now() - pressedAt < 90_000) {
-        const status = await phoneStatus(page);
-        if (status === "active" || status === "ended") break;
-        await page.waitForTimeout(25);
-    }
-    const status = await phoneStatus(page);
-    if (status !== "active") throw new Error(`The call did not become active: ${status}`);
-    const activeAt = Date.now();
-    const directory = join(context.paths.artifacts, `call-${activeAt}`);
-    await mkdir(directory, { recursive: true });
-    let spoken = 0;
-    const play = async (text: string) => {
-        const wav = await speechWrite(directory, `turn-${++spoken}`, text);
-        return page.evaluate(
-            (base64) =>
-                (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.microphonePlay(base64),
-            (await readFile(wav)).toString("base64"),
-        );
-    };
-    const firstAudioAfter = (since: number) =>
-        page.evaluate(
-            ([at, level]) =>
-                (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.audioAfter(
-                    at!,
-                    level!,
-                ),
-            [since, SPEECH_LEVEL] as const,
-        );
-    /** Speaks one turn, waits out its answer, and records what it took. */
-    const say = async (
+    if (call.status !== "active") throw new Error(`The call did not become active: ${call.status}`);
+    const record = (
         text: string,
-        options: { tier?: Tier; during?: () => Promise<void> } = {},
-    ): Promise<Turn> => {
-        const fromEvent = context.window.events.length;
-        const playback = await play(text);
-        const speechEnd = playback.startedAt + Math.round(playback.durationSeconds * 1_000);
-        if (options.during) await options.during();
-        await settled(context, fromEvent, speechEnd);
-        return turnRecord(context, text, fromEvent, speechEnd, options.tier, playback.startedAt);
-    };
+        fromEvent: number,
+        speechEnd: number,
+        options: { tier?: Tier; quietOk?: boolean } = {},
+        speechStart?: number,
+    ) => turnRecord(context, call.audioAfter, text, fromEvent, speechEnd, options, speechStart);
     return {
-        activeAt,
-        say,
+        activeAt: call.settledAt,
+        /** Speaks one turn, waits out its answer, and records what it took. */
+        async say(
+            text: string,
+            options: { tier?: Tier; quietOk?: boolean; during?: () => Promise<void> } = {},
+        ): Promise<Turn> {
+            const fromEvent = context.window.events.length;
+            const playback = await call.play(text);
+            const speechEnd = playback.startedAt + Math.round(playback.durationSeconds * 1_000);
+            if (options.during) await options.during();
+            await settled(context, fromEvent, speechEnd);
+            return record(text, fromEvent, speechEnd, options, playback.startedAt);
+        },
         /** Speaks without waiting for an answer: for overlapping requests and barge-in. */
-        play,
+        play: call.play,
         /** Waits for the assistant's audio after `since`, up to `timeoutMs`. */
         async audioAwait(since: number, timeoutMs = 15_000) {
             const deadline = Date.now() + timeoutMs;
             while (Date.now() < deadline) {
-                const at = await firstAudioAfter(since);
+                const at = await call.audioAfter(since);
                 if (at !== null) return at;
                 await page.waitForTimeout(50);
             }
@@ -339,48 +303,14 @@ async function callStart(context: Context) {
             const events = context.window.events.slice(fromEvent);
             return {
                 transcripts: transcriptOf(events, "assistant"),
-                audioAt: await firstAudioAfter(from),
+                audioAt: await call.audioAfter(from),
             };
         },
         turnRecord: (text: string, fromEvent: number, speechEnd: number, tier?: Tier) =>
-            turnRecord(context, text, fromEvent, speechEnd, tier),
+            record(text, fromEvent, speechEnd, { tier }),
         settled: (fromEvent: number, speechEnd: number) => settled(context, fromEvent, speechEnd),
-        async end() {
-            // The received level over the whole call: when voice was actually speaking.
-            const levels = await page
-                .evaluate(
-                    (since) =>
-                        (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.levelsSince(
-                            since,
-                        ),
-                    activeAt - 2_000,
-                )
-                .catch(() => []);
-            await writeFile(join(directory, "call.json"), JSON.stringify({ activeAt, levels }));
-            if ((await phoneStatus(page)) === "active")
-                await page.getByRole("button", { name: "End voice call", exact: true }).click();
-            await page
-                .getByRole("button", { name: "Start voice call", exact: true })
-                .waitFor({ timeout: 30_000 })
-                .catch(() => undefined);
-            const recordings = await page
-                .evaluate(() =>
-                    (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.recordingsFinish(),
-                )
-                .catch(() => []);
-            for (const recording of recordings)
-                await writeFile(
-                    join(directory, `${recording.name}.webm`),
-                    Buffer.from(recording.base64, "base64"),
-                );
-            await page
-                .evaluate(() =>
-                    (
-                        window as Window & { voiceGym?: LiveVoiceMedia }
-                    ).voiceGym!.microphoneRelease(),
-                )
-                .catch(() => undefined);
-        },
+        levels: call.levels,
+        end: call.end,
     };
 }
 
@@ -402,7 +332,7 @@ async function settled(context: Context, fromEvent: number, speechEnd: number) {
         );
         const requested = recent.filter((event) => event.frame.type === "actionRequested").length;
         const finished = recent.filter((event) => event.frame.type === "actionResult").length;
-        const records = await liveRecords(context, speechEnd - 2_000, Date.now());
+        const records = await liveRecordsRead(context.paths, speechEnd - 2_000, Date.now());
         // Queued is logged the moment voice hands off, before the controller starts.
         const open =
             records.filter((record) => record.event === "delegation.queued").length >
@@ -415,15 +345,15 @@ async function settled(context: Context, fromEvent: number, speechEnd: number) {
 
 async function turnRecord(
     context: Context,
+    audioAfter: (since: number) => Promise<number | null>,
     said: string,
     fromEvent: number,
     speechEnd: number,
-    expectedTier?: Tier,
+    { tier: expectedTier, quietOk }: { tier?: Tier; quietOk?: boolean },
     speechStart?: number,
 ): Promise<Turn> {
-    const { page } = context.window;
     const events = context.window.events.slice(fromEvent);
-    const records = await liveRecords(context, speechEnd - 2_000, Date.now());
+    const records = await liveRecordsRead(context.paths, speechEnd - 2_000, Date.now());
     const actions = actionsOf(events);
     const delegations = records.filter((record) => record.event === "delegation.queued").length;
     const tools = records
@@ -434,11 +364,7 @@ async function turnRecord(
     const tier: Tier = delegations > 0 || actions.length > 0 ? "delegated" : "context";
     const deliveredAt =
         records.find((record) => record.event === "delegation.delivered")?.at ?? null;
-    const firstAudioAt = await page.evaluate(
-        ([at, level]) =>
-            (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.audioAfter(at!, level!),
-        [speechEnd, SPEECH_LEVEL] as const,
-    );
+    const firstAudioAt = await audioAfter(speechEnd);
     const firstTranscriptAt =
         events.find(
             (event) =>
@@ -457,6 +383,7 @@ async function turnRecord(
         tools,
         tier,
         ...(expectedTier === undefined ? {} : { expectedTier }),
+        ...(quietOk ? { quietOk } : {}),
         deliveredAt,
         ...(speechStart === undefined ? {} : { speechStart }),
         speechEnd,
@@ -493,72 +420,10 @@ function focusOf(context: Context, events: readonly ControlEvent[]): string | nu
 /** The Voice subtask's conversation, read through the API while the daemon still runs. */
 async function voiceConversationWrite(runtime: StartedHappyAgentRuntime, path: string) {
     const client = happyAgentClientCreate(runtime.socketPath, runtime.token);
-    const ids: string[] = [];
-    const walk = (value: unknown) => {
-        if (Array.isArray(value)) for (const item of value) walk(item);
-        else if (typeof value === "object" && value !== null) {
-            const record = value as Record<string, unknown>;
-            if (
-                record.title === "Voice" &&
-                record.subtask === true &&
-                typeof record.id === "string"
-            )
-                ids.push(record.id);
-            for (const item of Object.values(record)) walk(item);
-        }
-    };
-    walk(await client.listBots());
     const conversations: Record<string, unknown> = {};
-    for (const id of new Set(ids)) conversations[id] = await client.getMessages(id as Cuid2);
+    for (const id of await voiceSubtaskIds(client))
+        conversations[id] = await client.getMessages(id);
     await writeFile(path, JSON.stringify(conversations, null, 2));
-}
-
-/** The hosting daemon's live diagnostics in a time window. */
-async function liveRecords(context: Context, from: number, to: number): Promise<LiveRecord[]> {
-    const text = await readFile(
-        join(context.paths.agentHome, "observation", "agent.log"),
-        "utf8",
-    ).catch(() => "");
-    const records: LiveRecord[] = [];
-    for (const line of text.split("\n")) {
-        try {
-            const entry = JSON.parse(line) as {
-                module?: string;
-                time?: string | number;
-                msg?: string;
-            };
-            if (
-                entry.module !== "live" ||
-                typeof entry.msg !== "string" ||
-                !entry.msg.startsWith("{")
-            )
-                continue;
-            const at = new Date(entry.time ?? 0).getTime();
-            if (at < from || at > to) continue;
-            records.push({
-                ...(JSON.parse(entry.msg) as Record<string, unknown>),
-                at,
-            } as LiveRecord);
-        } catch {
-            /* Not a JSON diagnostic line. */
-        }
-    }
-    return records;
-}
-
-/** What the daemon pushed to the voice model, when a build writes it. */
-async function captureRead(path: string): Promise<unknown[]> {
-    const text = await readFile(path, "utf8").catch(() => "");
-    return text
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-            try {
-                return JSON.parse(line) as unknown;
-            } catch {
-                return line;
-            }
-        });
 }
 
 async function sidebarClick(window: LiveVoiceWindow, name: string) {
@@ -723,9 +588,12 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
         const ship = context.harbor.task("Ship the cache");
         const t1 = await call.say(
             "I'm thinking the cache race might be the two writers sharing one lock. Maybe we should try a mutex first.",
-            { tier: "context" },
+            { tier: "context", quietOk: true },
         );
-        const t2 = await call.say("And, um, also check the eviction path.", { tier: "context" });
+        const t2 = await call.say("And, um, also check the eviction path.", {
+            tier: "context",
+            quietOk: true,
+        });
         for (const [index, turn] of [t1, t2].entries())
             check(
                 context,
@@ -980,11 +848,7 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
         const barge = await call.play("Stop. Just tell me when it ships.");
         const bargeEnd = barge.startedAt + Math.round(barge.durationSeconds * 1_000);
         await page.waitForTimeout(Math.max(0, bargeEnd + 1_000 - Date.now()));
-        const levels = await page.evaluate(
-            (since) =>
-                (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.levelsSince(since),
-            bargeEnd,
-        );
+        const levels = await call.levels(bargeEnd);
         const loud = levels.filter(
             (sample) => sample.at <= bargeEnd + 1_000 && sample.level > SPEECH_LEVEL,
         );

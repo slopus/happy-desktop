@@ -1,22 +1,27 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import type { Cuid2 } from "@slopus/happy-agent-client";
 import { happyAgentClientCreate } from "./happyAgentProtocol.js";
 import type { StartedHappyAgentRuntime } from "./happyAgentRuntime.js";
-import type { GymInferenceResponse, GymInferenceServer } from "./types.js";
+import type { GymInferenceResponse, GymInferenceServer, GymRunPaths } from "./types.js";
 
 /**
  * Scripted inference for fixture conversations only: each conversation, by
- * its agent ID, answers from its own queue of replies, in order. Voice and its
- * controller run on a live account beside it, untouched.
+ * its agent ID, answers from its own queue of replies, in order, and any other
+ * with `fallback`. Voice and its controller run on a live account beside it.
  */
 export type FixtureInference = GymInferenceServer & {
     /** Queues the next replies for one conversation, and the title it is given. */
     script(agentId: string, title: string, replies: readonly GymInferenceResponse[]): void;
 };
 
-export function fixtureInferenceCreate(): FixtureInference {
+export function fixtureInferenceCreate(fallback?: {
+    title: string;
+    reply: string;
+}): FixtureInference {
     const token = randomBytes(24).toString("hex");
     const queues = new Map<string, GymInferenceResponse[]>();
     const titles = new Map<string, string>();
@@ -32,7 +37,10 @@ export function fixtureInferenceCreate(): FixtureInference {
     const reply = (sessionId: string, intent: string | undefined): GymInferenceResponse => {
         if (intent === "compaction") return { content: [{ type: "text", text: "Compacted." }] };
         if (sessionId.endsWith(":title")) {
-            const title = titles.get(sessionId.slice(0, -":title".length)) ?? "Harbor work";
+            const title =
+                titles.get(sessionId.slice(0, -":title".length)) ??
+                fallback?.title ??
+                "Harbor work";
             return {
                 content: [
                     { type: "text", text: `<title>${title}</title>\n<recap>${title}.</recap>` },
@@ -40,7 +48,7 @@ export function fixtureInferenceCreate(): FixtureInference {
             };
         }
         const next = queues.get(sessionId)?.shift();
-        return next ?? { content: [{ type: "text", text: "Done." }] };
+        return next ?? { content: [{ type: "text", text: fallback?.reply ?? "Done." }] };
     };
     return {
         get url() {
@@ -240,4 +248,121 @@ export async function conversationTail(
     const draft = (await client.getAgentDraft(agentId as Cuid2).catch(() => undefined))?.draft
         ?.value as { text?: string } | null | undefined;
     return { userText: users.at(-1) ?? null, draft: draft?.text ?? null };
+}
+
+/**
+ * A daemon's configuration for a live lane: one Codex account, `voice`, as its
+ * default. `serve` publishes its API over Tailcat with that token; `beside`
+ * keeps the scripted fixture provider answering next to the live account; a
+ * `connection` reaches another daemon through this one.
+ */
+export function liveConfiguration(options: {
+    authFile: string;
+    node: string;
+    profile?: boolean;
+    serve?: string;
+    beside?: boolean;
+    connection?: { id: string; name: string; address: string; token: string };
+}): string {
+    const { connection } = options;
+    return [
+        "[settings]",
+        "happy_integration = false",
+        "menu_bar = false",
+        ...(options.profile
+            ? ["[profile]", 'name = "Voice Gym"', 'email = "voice-gym@example.invalid"']
+            : []),
+        "[node]",
+        `name = "${options.node}"`,
+        ...(options.serve
+            ? ["[api]", `token = "${options.serve}"`, "[feature.tailcat]", "enabled = true"]
+            : []),
+        "[feature.mobile_connector]",
+        "enabled = false",
+        ...(options.beside ? [] : ["[providers]", "default_enable = false"]),
+        "[providers.voice]",
+        'type = "codex"',
+        "enabled = true",
+        "credential_isolation = true",
+        `auth_file = ${JSON.stringify(options.authFile)}`,
+        // An explicit endpoint keeps this account live beside the scripted fixture.
+        ...(options.beside ? ['base_url = "https://chatgpt.com/backend-api"'] : []),
+        "[defaults]",
+        'provider = "voice"',
+        'model = "openai/gpt-6-astra"',
+        'effort = "medium"',
+        ...(connection
+            ? [
+                  `[connections.${connection.id}]`,
+                  `name = "${connection.name}"`,
+                  `address = "${connection.address}"`,
+                  `token = "${connection.token}"`,
+              ]
+            : []),
+        "",
+    ].join("\n");
+}
+
+export type LiveRecord = { at: number; event: string; [key: string]: unknown };
+
+/** The daemon's `module: "live"` diagnostics between `from` and `to`, in epoch ms. */
+export async function liveRecordsRead(
+    paths: GymRunPaths,
+    from = 0,
+    to = Number.MAX_SAFE_INTEGER,
+): Promise<LiveRecord[]> {
+    const text = await readFile(join(paths.agentHome, "observation", "agent.log"), "utf8").catch(
+        () => "",
+    );
+    const records: LiveRecord[] = [];
+    for (const line of text.split("\n")) {
+        try {
+            const entry = JSON.parse(line) as { module?: string; time?: string; msg?: string };
+            const at = new Date(entry.time ?? 0).getTime();
+            if (entry.module !== "live" || !entry.msg?.startsWith("{") || at < from || at > to)
+                continue;
+            records.push({ ...(JSON.parse(entry.msg) as { event: string }), at });
+        } catch {
+            /* Not a JSON diagnostic line. */
+        }
+    }
+    return records;
+}
+
+/** What the daemon pushed to the voice model, as `HAPPY_LIVE_CONTEXT_CAPTURE_FILE` builds write it. */
+export async function captureRead(
+    path: string,
+): Promise<{ at: number; kind: string; text: string; speakable: boolean }[]> {
+    const text = await readFile(path, "utf8").catch(() => "");
+    return text.split("\n").flatMap((line) => {
+        try {
+            return [
+                JSON.parse(line) as { at: number; kind: string; text: string; speakable: boolean },
+            ];
+        } catch {
+            return [];
+        }
+    });
+}
+
+/** The daemon's Voice subtasks: the conversation voice hands requests to. */
+export async function voiceSubtaskIds(
+    client: ReturnType<typeof happyAgentClientCreate>,
+): Promise<Cuid2[]> {
+    const ids = new Set<Cuid2>();
+    const walk = (value: unknown) => {
+        if (Array.isArray(value)) for (const item of value) walk(item);
+        else if (typeof value === "object" && value !== null) {
+            const record = value as Record<string, unknown>;
+            if (
+                record.title === "Voice" &&
+                record.subtask === true &&
+                typeof record.id === "string"
+            )
+                ids.add(record.id as Cuid2);
+            for (const item of Object.values(record)) walk(item);
+        }
+    };
+    walk(await client.listBots());
+    return [...ids];
 }

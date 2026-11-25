@@ -520,89 +520,27 @@ they are silent. Chromium reports zero inbound RTP energy while playout is
 muted, so the received track's level is measured by an analyser connected to no
 output (`receivedEnergy`).
 
-### Remote connections
+### Remote connections, latency and evals
 
-A call belongs to the agent whose phone was pressed, and that agent hosts it
-with its own voice settings and account. `live-voice-remote` runs real calls
-with a second owned daemon reached the way a remote Happy Agent is: it opens
-its Tailcat transport and the local daemon dials it through an ordinary
-`[connections.remote]` entry, so the window lists it as the host's published
-peer. Only the remote's seeded conversation reply is scripted; the remote then
-restarts with a real voice account. Scenarios: `remote-call` (the remote hosts,
-reads the conversation on screen and stages a draft there), `local-call` (the
-local agent sees only its own work), `remote-disconnect` (the remote daemon
-stops mid-call) and `remote-offline` (the remote's phone while it is down).
-Each writes its WebM tracks, typed control events, request timings and
-screenshots to its own folder.
+`help` lists each lane's flags. Every lane needs `--auth-file` with a current
+ChatGPT sign-in; an expired one is refused before anything starts.
 
-```sh
-node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-remote \
-  --auth-file /absolute/path/to/codex/auth.json \
-  --artifact-dir "$PWD/.context/live-voice-remote" \
-  [--scenarios remote-call,local-call,remote-disconnect,remote-offline] [--dry]
-```
-
-`--dry` places no call: it checks each agent's Settings → Voice and the phone
-of an offline remote. A ChatGPT sign-in whose access token has expired is
-refused before anything starts, since a call never refreshes it.
-
-### Voice latency on a realistic server
-
-`live-voice-latency` measures real calls hosted by one daemon prepared with
-`prepare --profile realistic`, reached two ways: as the window's own host
-(`local`), and as a remote behind a small host over Tailcat (`remote`), with a
-stream proxy holding each chunk for half the round trip plus jitter in front
-of the remote's socket. The same daemon, data and spoken prompts answer both
-lanes. It reports p50/p90 per hop in `latency.md`: press to active and where
-that time goes (availability, microphone and offer, the create request, SDP
-answer and control socket, hello, provider readiness), end of speech to the
-first received audio and first transcript, each desktop action as the window
-and the hosting daemon saw it, and context sizes.
-
-```sh
-node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts prepare --profile realistic
-node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-latency \
-  --auth-file /absolute/path/to/codex/auth.json --remote-root /prepared/realistic/root \
-  [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
-```
-
-`--scenarios deep` instead asks about a conversation past the hundred rows a
-call's context carries: "Lighthouse Ledger", added once to the realistic
-daemon's last project with a fact only it holds, after which 110 others get a
-newer turn, so the directory's hundred most recent leave it out. Later calls
-start with a fresh Voice, but the daemon's recap of earlier calls can still let
-voice answer without reading. Each call asks for its latest news by name, then
-says "Open it.", and `latency.md` adds k/n for five checks:
-the conversation was missing from the directory in voice's first context (the
-window's AppState lists every conversation), Voice called a tool on its agent
-ID, voice answered with its fact, the window was asked to open it by agent ID
-(`agentTargets`) and succeeded, and the window landed on it. Each call also
-keeps Voice's tool calls and the first context's size. It defaults to the
-`remote` lane; `--calls 3` gives k/3.
-
-### Voice evals
-
-`live-voice-evals` runs scenarios S1–S6 from the desktop voice eval report as
-real calls on the shared "Harbor" fixture: Happy, the tasks Ship the cache
-(finished), Release notes (its turn failed), Fix login redirect (waiting on a
-question), Login page copy and twenty fillers. Fixture conversations answer
-from a scripted provider, by agent ID; GPT-Live and the Voice controller stay
-on the live account, whose explicit `base_url` keeps it live beside them
-(`HAPPY_GYM_LIVE_INFERENCE`). GPT-Live has no direct tools, so each spoken turn
-declares whether it should be answered from context (no delegation, no
-desktop action) or delegated with an acknowledgment that starts before the
-controller's outcome arrives; delegations come from the hosting daemon's
-`module: "live"` diagnostics, and pushed context from
-`HAPPY_LIVE_CONTEXT_CAPTURE_FILE` in builds that write it. Speech end to first
-audio is a soft budget. Each scenario writes `outcome.json` with its checks and
-turns; the run writes `evals.md`.
-
-```sh
-HAPPY_DESKTOP_AGENT_EXECUTABLE=/absolute/path/to/happy-agent \
-node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-evals \
-  --auth-file /absolute/path/to/codex/auth.json --label baseline \
-  --artifact-dir "$PWD/.context/voice-evals" [--scenarios S1,S2,S3,S4,S5,S6]
-```
+- `live-voice-remote`: a second daemon reached through `[connections.remote]`
+  over Tailcat, as a remote Happy Agent is. A call belongs to the agent whose
+  phone was pressed and runs on its settings and account: the remote hosts a
+  call, the local one does, the remote stops mid-call, and its phone while it is
+  down. Only the remote's seeded reply is scripted.
+- `live-voice-latency`: one daemon prepared with `prepare --profile realistic`
+  hosts calls as the window's own agent (`local`) and as a remote behind a small
+  host (`remote`) with a delay proxy on its socket. `latency.md` gives p50/p90
+  per hop, from press to active through each desktop action. `--scenarios deep`
+  instead asks by name about a conversation past the hundred voice is given,
+  then opens it, and counts each step k/n.
+- `live-voice-evals`: scenarios S1–S6 on the "Harbor" fixture, whose
+  conversations answer from a scripted provider beside the live account. Each
+  turn declares whether it should be answered from context or delegated with an
+  acknowledgment first, checked against the daemon's `module: "live"`
+  diagnostics; `HAPPY_DESKTOP_AGENT_EXECUTABLE` picks the agent build.
 
 ## Browser rendering harness
 

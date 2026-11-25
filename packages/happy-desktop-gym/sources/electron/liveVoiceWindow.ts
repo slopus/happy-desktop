@@ -11,12 +11,15 @@ import {
     liveVoiceSpeakersMute,
     liveVoiceSpeakersVerify,
 } from "./liveVoiceSilence.js";
+import type { StartedHappyAgentRuntime } from "./happyAgentRuntime.js";
 import type { GymRunPaths } from "./types.js";
 
 const exec = promisify(execFile);
 
 /** The visible phone: every mounted connection surface draws its own. */
-export const PHONE = ".happy-gpt-live-phone:visible";
+const PHONE = ".happy-gpt-live-phone:visible";
+/** The window's media instrumentation, installed by `liveVoiceWindowOpen`. */
+type GymWindow = Window & { voiceGym?: LiveVoiceMedia };
 
 /** A control frame as the window sent or received it, stamped in epoch ms. */
 export type ControlEvent = {
@@ -78,6 +81,9 @@ export async function liveVoiceWindowOpen(input: {
     });
     await liveVoiceSpeakersMute(app);
     const page = await app.firstWindow();
+    // A window that goes away mid-call says when, and how.
+    page.on("crash", () => console.log(JSON.stringify({ stage: "page-crashed", at: Date.now() })));
+    page.on("close", () => console.log(JSON.stringify({ stage: "page-closed", at: Date.now() })));
     const events: ControlEvent[] = [];
     const requests: RequestTiming[] = [];
     const sockets: number[] = [];
@@ -158,18 +164,13 @@ export async function railSelect(page: Page, node: string) {
     await page.waitForTimeout(1_500);
 }
 
-/** Opens Settings → Voice on the surface on screen. */
-export async function voiceSettingsOpen(page: Page) {
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("button", { name: "Voice", exact: true }).click();
-}
-
 /**
  * Turns calls on (once per window) and chooses this agent's voice account in
  * its own Settings → Voice, then goes back.
  */
 export async function voiceAccountChoose(page: Page, account: string) {
-    await voiceSettingsOpen(page);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Voice", exact: true }).click();
     const calls = page.getByRole("switch", { name: "Enable GPT-Live voice" });
     if ((await calls.getAttribute("aria-checked")) !== "true") await calls.click();
     const select = page.getByRole("combobox", { name: "Voice account" });
@@ -282,7 +283,7 @@ export type Turn = {
  * is connecting, active or ended, otherwise the visible phone's status. Runs in
  * the page; null when neither is on screen.
  */
-export function callStatusRead(): string | null {
+function callStatusRead(): string | null {
     const shown = (element: HTMLElement) => element.getClientRects().length > 0;
     const bar = [...document.querySelectorAll<HTMLElement>(".happy-gpt-live-call")].find(shown);
     if (bar) return bar.getAttribute("data-state");
@@ -336,12 +337,75 @@ export async function endedDismiss(page: Page) {
 }
 
 /** A received level above this is speech, far above Opus comfort noise. */
-const SPEECH_LEVEL = 1e-4;
+export const SPEECH_LEVEL = 1e-4;
 
 /**
- * Presses the visible phone, speaks each turn into the virtual microphone and
- * waits out its answer, then ends the call. Times the opening, and for each
- * turn the end of speech to the first received audio and first transcript.
+ * Presses the visible phone and waits for the call to settle. While it is
+ * active, `play` speaks into the virtual microphone and `audioAfter` reads
+ * when voice was first heard; `end` hangs up and keeps the call's recordings
+ * and received levels in `directory`.
+ */
+export async function callPress(lane: LiveVoiceWindow, directory: string) {
+    const { page } = lane;
+    await mkdir(directory, { recursive: true });
+    await page.evaluate(() => (window as GymWindow).voiceGym!.peersReset());
+    const pressedAt = Date.now();
+    await page.getByRole("button", { name: "Start voice call", exact: true }).click();
+    const status = await callStatusAwait(page, ["active", "ended"], 90_000);
+    const settledAt = Date.now();
+    let spoken = 0;
+    return {
+        pressedAt,
+        settledAt,
+        status,
+        async play(text: string) {
+            const wav = await speechWrite(directory, `turn-${++spoken}`, text);
+            return page.evaluate(
+                (base64) => (window as GymWindow).voiceGym!.microphonePlay(base64),
+                (await readFile(wav)).toString("base64"),
+            );
+        },
+        audioAfter: (since: number) =>
+            page.evaluate(
+                ([at, level]) => (window as GymWindow).voiceGym!.audioAfter(at!, level!),
+                [since, SPEECH_LEVEL] as const,
+            ),
+        /** The received level since `since`: when voice was actually speaking. */
+        levels: (since: number) =>
+            page.evaluate((at) => (window as GymWindow).voiceGym!.levelsSince(at), since),
+        async end() {
+            const levels = await page
+                .evaluate((since) => (window as GymWindow).voiceGym!.levelsSince(since), settledAt)
+                .catch(() => []);
+            await writeFile(
+                join(directory, "call.json"),
+                JSON.stringify({ activeAt: settledAt, levels }),
+            );
+            if ((await phoneStatus(page)) === "active")
+                await page.getByRole("button", { name: "End voice call", exact: true }).click();
+            await page
+                .getByRole("button", { name: "Start voice call", exact: true })
+                .waitFor({ timeout: 30_000 })
+                .catch(() => undefined);
+            const recordings = await page
+                .evaluate(() => (window as GymWindow).voiceGym!.recordingsFinish())
+                .catch(() => []);
+            for (const recording of recordings)
+                await writeFile(
+                    join(directory, `${recording.name}.webm`),
+                    Buffer.from(recording.base64, "base64"),
+                );
+            await page
+                .evaluate(() => (window as GymWindow).voiceGym!.microphoneRelease())
+                .catch(() => undefined);
+        },
+    };
+}
+
+/**
+ * Places a call, speaks each turn and waits out its answer, then ends it.
+ * Times the opening, and for each turn the end of speech to the first
+ * received audio and first transcript.
  */
 export async function voiceCall(input: {
     window: LiveVoiceWindow;
@@ -352,37 +416,22 @@ export async function voiceCall(input: {
     const { paths, name } = input;
     const { app, page, events, requests, sockets } = input.window;
     const directory = join(paths.artifacts, name);
-    await mkdir(directory, { recursive: true });
     const firstEvent = events.length;
     const firstRequest = requests.length;
     const firstSocket = sockets.length;
     const outcome: Record<string, unknown> = { status: "failed", turns: [] };
-    await page.evaluate(() =>
-        (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.peersReset(),
-    );
     console.log(JSON.stringify({ stage: "call-starting", name }));
+    const call = await callPress(input.window, directory);
     try {
-        const pressedAt = Date.now();
-        await page.getByRole("button", { name: "Start voice call", exact: true }).click();
-        let status: string | null = null;
-        let settledAt = pressedAt;
-        while (Date.now() - pressedAt < 90_000) {
-            status = await phoneStatus(page);
-            if (status === "active" || status === "ended") {
-                settledAt = Date.now();
-                break;
-            }
-            await page.waitForTimeout(25);
-        }
-        outcome.phoneStatus = status;
+        outcome.phoneStatus = call.status;
         outcome.opening = openingOf({
-            pressedAt,
-            settledAt,
+            pressedAt: call.pressedAt,
+            settledAt: call.settledAt,
             requests: requests.slice(firstRequest),
             events: events.slice(firstEvent),
             socketAt: sockets[firstSocket] ?? null,
         });
-        if (status !== "active") {
+        if (call.status !== "active") {
             outcome.tooltip = await endedMessage(page);
             await shot(page, paths, `${name}/not-active`);
             return outcome;
@@ -392,26 +441,12 @@ export async function voiceCall(input: {
         for (const [index, turn] of input.turns.entries()) {
             if (turn.before) await turn.before();
             const turnStart = events.length;
-            const wav = await speechWrite(directory, `turn-${index + 1}`, turn.say);
-            const playback = await page.evaluate(
-                (base64) =>
-                    (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.microphonePlay(
-                        base64,
-                    ),
-                (await readFile(wav)).toString("base64"),
-            );
+            const playback = await call.play(turn.say);
             const speechEnd = playback.startedAt + Math.round(playback.durationSeconds * 1_000);
             console.log(JSON.stringify({ stage: "turn", name, index, say: turn.say }));
             await responseSettled(page, events, turnStart, playback.durationSeconds);
             const turnEvents = events.slice(turnStart);
-            const firstAudioAt = await page.evaluate(
-                ([since, threshold]) =>
-                    (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.audioAfter(
-                        since!,
-                        threshold!,
-                    ),
-                [speechEnd, SPEECH_LEVEL] as const,
-            );
+            const firstAudioAt = await call.audioAfter(speechEnd);
             const firstTranscriptAt =
                 turnEvents.find(
                     (event) =>
@@ -433,42 +468,15 @@ export async function voiceCall(input: {
             await shot(page, paths, `${name}/turn-${index + 1}`);
             if ((await phoneStatus(page)) !== "active") break;
         }
-        outcome.media = await page.evaluate(() =>
-            (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.stats(),
-        );
+        outcome.media = await page.evaluate(() => (window as GymWindow).voiceGym!.stats());
         const hello = events.slice(firstEvent).find((event) => event.frame.type === "hello");
         outcome.sessionId = hello?.frame.sessionId;
-        if ((await phoneStatus(page)) === "active") {
-            await page.getByRole("button", { name: "End voice call", exact: true }).click();
-            await page
-                .getByRole("button", { name: "Start voice call", exact: true })
-                .waitFor({ timeout: 30_000 });
-        }
         outcome.status = "ended";
     } catch (error) {
         outcome.error = error instanceof Error ? error.message : String(error);
         await shot(page, paths, `${name}/failure`).catch(() => undefined);
     } finally {
-        const recordings = await page
-            .evaluate(() =>
-                (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.recordingsFinish(),
-            )
-            .catch(() => []);
-        outcome.recordings = [];
-        for (const recording of recordings) {
-            const path = join(directory, `${recording.name}.webm`);
-            await writeFile(path, Buffer.from(recording.base64, "base64"));
-            (outcome.recordings as unknown[]).push({
-                name: recording.name,
-                path,
-                bytes: recording.bytes,
-            });
-        }
-        await page
-            .evaluate(() =>
-                (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.microphoneRelease(),
-            )
-            .catch(() => undefined);
+        await call.end();
         const callEvents = events.slice(firstEvent);
         outcome.desktopContexts = callEvents
             .filter((event) => event.frame.type === "desktopContext")
@@ -497,6 +505,52 @@ export async function voiceCall(input: {
         );
     }
     return outcome;
+}
+
+/**
+ * Closes the window, or ends its process when it will not close: a window
+ * that died mid-call otherwise keeps the gym's process alive.
+ */
+export async function liveVoiceWindowClose(window: LiveVoiceWindow) {
+    const closed = await Promise.race([
+        window.app.close().then(
+            () => true,
+            () => false,
+        ),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 15_000).unref()),
+    ]);
+    if (!closed) window.app.process().kill("SIGKILL");
+}
+
+/**
+ * Ends a lane: keeps the window's control frames and requests, closes it,
+ * stops its daemons, and writes and prints the lane's result.
+ */
+export async function laneFinish(input: {
+    paths: GymRunPaths;
+    result: Record<string, unknown>;
+    window: LiveVoiceWindow | undefined;
+    runtimes: readonly (StartedHappyAgentRuntime | undefined)[];
+}) {
+    const { paths, result, window } = input;
+    if (window) {
+        await writeFile(
+            join(paths.artifacts, "control-events.json"),
+            JSON.stringify(window.events, null, 2),
+        );
+        await writeFile(
+            join(paths.artifacts, "requests.json"),
+            JSON.stringify(window.requests, null, 2),
+        );
+    }
+    if (window) await liveVoiceWindowClose(window);
+    for (const runtime of input.runtimes) await runtime?.stop().catch(() => undefined);
+    result.finishedAt = new Date().toISOString();
+    await writeFile(join(paths.artifacts, "result.json"), JSON.stringify(result, null, 2));
+    const { status, stage, error } = result;
+    console.log(
+        JSON.stringify({ status, stage, artifactDirectory: paths.artifacts, error }, null, 2),
+    );
 }
 
 /**
