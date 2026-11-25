@@ -512,6 +512,60 @@ credentials are excluded from the capture. `--pool-default` exercises a smart
 controller default backed by a hidden concrete Codex account; the voice credential
 remains that concrete account.
 
+Received audio is recorded, never heard. Every live lane launches with
+Chromium's `--mute-audio`, mutes every WebContents from main (including ones
+created later), and locks each media element the page plays muted at volume
+zero; `liveVoiceSpeakersVerify` reads all three and refuses to continue unless
+they are silent. Chromium reports zero inbound RTP energy while playout is
+muted, so the received track's level is measured by an analyser connected to no
+output (`receivedEnergy`).
+
+### Remote connections
+
+A call belongs to the agent whose phone was pressed, and that agent hosts it
+with its own voice settings and account. `live-voice-remote` runs real calls
+with a second owned daemon reached the way a remote Happy Agent is: it opens
+its Tailcat transport and the local daemon dials it through an ordinary
+`[connections.remote]` entry, so the window lists it as the host's published
+peer. Only the remote's seeded conversation reply is scripted; the remote then
+restarts with a real voice account. Scenarios: `remote-call` (the remote hosts,
+reads the conversation on screen and stages a draft there), `local-call` (the
+local agent sees only its own work), `remote-disconnect` (the remote daemon
+stops mid-call) and `remote-offline` (the remote's phone while it is down).
+Each writes its WebM tracks, typed control events, request timings and
+screenshots to its own folder.
+
+```sh
+node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-remote \
+  --auth-file /absolute/path/to/codex/auth.json \
+  --artifact-dir "$PWD/.context/live-voice-remote" \
+  [--scenarios remote-call,local-call,remote-disconnect,remote-offline] [--dry]
+```
+
+`--dry` places no call: it checks each agent's Settings → Voice and the phone
+of an offline remote. A ChatGPT sign-in whose access token has expired is
+refused before anything starts, since a call never refreshes it.
+
+### Voice latency on a realistic server
+
+`live-voice-latency` measures real calls hosted by one daemon prepared with
+`prepare --profile realistic`, reached two ways: as the window's own host
+(`local`), and as a remote behind a small host over Tailcat (`remote`), with a
+stream proxy holding each chunk for half the round trip plus jitter in front
+of the remote's socket. The same daemon, data and spoken prompts answer both
+lanes. It reports p50/p90 per hop in `latency.md`: press to active and where
+that time goes (availability, microphone and offer, the create request, SDP
+answer and control socket, hello, provider readiness), end of speech to the
+first received audio and first transcript, each desktop action as the window
+and the hosting daemon saw it, and context sizes.
+
+```sh
+node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts prepare --profile realistic
+node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-latency \
+  --auth-file /absolute/path/to/codex/auth.json --remote-root /prepared/realistic/root \
+  [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
+```
+
 ## Browser rendering harness
 
 `gym/playwright` owns the reusable real-browser measurement harness. A consumer

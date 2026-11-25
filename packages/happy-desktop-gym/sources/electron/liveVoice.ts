@@ -9,6 +9,11 @@ import { happyAgentRuntimeCreate, type StartedHappyAgentRuntime } from "./happyA
 import { completeOnboarding } from "./workloads.js";
 import { liveVoiceMediaInstall, type LiveVoiceMedia } from "./liveVoiceMedia.js";
 import { happyAgentClientCreate } from "./happyAgentProtocol.js";
+import {
+    LIVE_VOICE_MUTE_SWITCH,
+    liveVoiceSpeakersMute,
+    liveVoiceSpeakersVerify,
+} from "./liveVoiceSilence.js";
 import type { Cuid2 } from "@slopus/happy-agent-client";
 
 const exec = promisify(execFile);
@@ -176,6 +181,7 @@ export async function gymLiveVoiceRun(options: {
                 "--use-fake-device-for-media-stream",
                 "--use-fake-ui-for-media-stream",
                 "--autoplay-policy=no-user-gesture-required",
+                LIVE_VOICE_MUTE_SWITCH,
                 entrypoint.main,
             ],
             cwd: paths.workspaceRoot,
@@ -187,6 +193,7 @@ export async function gymLiveVoiceRun(options: {
             },
             timeout: 60_000,
         });
+        await liveVoiceSpeakersMute(app);
         page = await app.firstWindow();
         page.on("response", (response) => {
             const url = new URL(response.url());
@@ -245,6 +252,7 @@ export async function gymLiveVoiceRun(options: {
         await page.evaluate(
             `(() => { const __name = (value) => value; (${liveVoiceMediaInstall.toString()})(); })()`,
         );
+        result.silenceBeforeCall = await liveVoiceSpeakersVerify(app, page);
         result.stage = "onboarding";
         await completeOnboarding(page);
         await page.screenshot({ path: join(paths.artifacts, "desktop-after-onboarding.png") });
@@ -252,9 +260,10 @@ export async function gymLiveVoiceRun(options: {
         await page.getByText(projectName, { exact: true }).first().waitFor({ timeout: 45_000 });
         result.stage = "settings";
         await page.getByRole("button", { name: "Settings", exact: true }).click();
-        await page.getByRole("switch", { name: "Enable experimental features" }).click();
-        await page.getByRole("button", { name: "Experimental", exact: true }).click();
+        // The Voice page's one switch enables both the experiment and calls.
+        await page.getByRole("button", { name: "Voice", exact: true }).click();
         await page.getByRole("switch", { name: "Enable GPT-Live voice" }).click();
+        await page.getByRole("combobox", { name: "Voice account" }).waitFor({ timeout: 30_000 });
         await page.getByRole("combobox", { name: "Voice account" }).selectOption("voice");
         await page.screenshot({ path: join(paths.artifacts, "voice-settings.png") });
         await page.getByRole("button", { name: "Back", exact: true }).click();
@@ -281,6 +290,7 @@ export async function gymLiveVoiceRun(options: {
             throw new Error(
                 `Call did not become active: ${await page.locator("body").innerText()}; phone=${await page.locator(".happy-gpt-live-phone").evaluate((node) => node.outerHTML)}`,
             );
+        result.silenceDuringCall = await liveVoiceSpeakersVerify(app, page);
         result.activeAt = new Date().toISOString();
         result.stage = "active";
         console.log(JSON.stringify({ stage: "active", projectName }));
@@ -314,8 +324,9 @@ export async function gymLiveVoiceRun(options: {
             await page.waitForTimeout(500);
         }
         // Let the received speaker audio finish before ending a successful call.
-        // Transcript deltas can lead playback; measured RTP audio energy is
-        // the external-media barrier, not an assumed model completion delay.
+        // Transcript deltas can lead playback; the received track's measured
+        // energy is the external-media barrier, not an assumed model completion
+        // delay. Inbound RTP energy reads zero while playout is muted.
         const audioDeadline = Date.now() + 20_000;
         let previousEnergy = -1;
         let lastAudioAt = Date.now();
@@ -323,13 +334,10 @@ export async function gymLiveVoiceRun(options: {
             const stats = await page.evaluate(() =>
                 (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.stats(),
             );
-            const energy = stats.reports
-                .filter((entry) => entry.type === "inbound-rtp")
-                .reduce((sum, entry) => sum + (entry.energy ?? 0), 0);
-            if (energy !== previousEnergy) {
-                previousEnergy = energy;
-                lastAudioAt = Date.now();
-            }
+            const energy = stats.receivedEnergy;
+            // Comfort noise moves the level a little; speech moves it by orders more.
+            if (energy - previousEnergy > 1e-6) lastAudioAt = Date.now();
+            previousEnergy = energy;
             await page.waitForTimeout(250);
         }
         result.media = await page.evaluate(() =>
@@ -359,12 +367,10 @@ export async function gymLiveVoiceRun(options: {
             throw new Error("Spoken response did not greet and describe its capabilities.");
         const stats = result.media as Awaited<ReturnType<LiveVoiceMedia["stats"]>>;
         if (
-            !stats.reports.some(
-                (entry) =>
-                    entry.type === "inbound-rtp" && entry.bytes > 0 && (entry.energy ?? 0) > 0,
-            )
+            !stats.reports.some((entry) => entry.type === "inbound-rtp" && entry.bytes > 0) ||
+            stats.receivedEnergy <= 0
         )
-            throw new Error("No audible real inbound RTP audio was measured.");
+            throw new Error("No real inbound speaker audio was measured.");
         finishedRecordings = await page.evaluate(() =>
             (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.recordingsFinish(),
         );

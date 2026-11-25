@@ -4,6 +4,12 @@ import { gymRunClean, gymRunsRootResolve } from "./paths.js";
 import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
+import {
+    gymLiveVoiceRemoteRun,
+    LIVE_VOICE_REMOTE_SCENARIOS,
+    type LiveVoiceRemoteScenario,
+} from "./liveVoiceRemote.js";
+import { gymLiveVoiceLatencyRun, type LiveVoiceLatencyLane } from "./liveVoiceLatency.js";
 import { gymBrowserPreviewRun, type GymBrowserRoute } from "./browserPreview.js";
 import { gymCloudBrowserRun } from "./cloudBrowser.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
@@ -94,6 +100,41 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         });
         return;
     }
+    if (command === "live-voice-remote") {
+        if (!flags.authFile)
+            throw new Error("live-voice-remote requires --auth-file ABSOLUTE_CODEX_AUTH_PATH.");
+        const scenarios = flags.scenarios?.split(",").map((item) => item.trim());
+        for (const scenario of scenarios ?? [])
+            if (!(LIVE_VOICE_REMOTE_SCENARIOS as readonly string[]).includes(scenario))
+                throw new Error(`Unknown live-voice-remote scenario: ${scenario}`);
+        await gymLiveVoiceRemoteRun({
+            authFile: flags.authFile,
+            artifactDirectory: flags.artifactDir,
+            ...(scenarios ? { scenarios: scenarios as LiveVoiceRemoteScenario[] } : {}),
+            dry: flags.dry === true,
+        });
+        return;
+    }
+    if (command === "live-voice-latency") {
+        if (!flags.authFile)
+            throw new Error("live-voice-latency requires --auth-file ABSOLUTE_CODEX_AUTH_PATH.");
+        if (!flags.remoteRoot)
+            throw new Error("live-voice-latency requires --remote-root PREPARED_REALISTIC_ROOT.");
+        const lanes = flags.lanes?.split(",").map((item) => item.trim());
+        for (const lane of lanes ?? [])
+            if (lane !== "local" && lane !== "remote")
+                throw new Error(`Unknown live-voice-latency lane: ${lane}`);
+        await gymLiveVoiceLatencyRun({
+            authFile: flags.authFile,
+            remoteRoot: flags.remoteRoot,
+            artifactDirectory: flags.artifactDir,
+            ...(flags.calls ? { calls: Number(flags.calls) } : {}),
+            ...(flags.rtt ? { roundTripMs: Number(flags.rtt) } : {}),
+            ...(flags.jitter ? { jitterMs: Number(flags.jitter) } : {}),
+            ...(lanes ? { lanes: lanes as LiveVoiceLatencyLane[] } : {}),
+        });
+        return;
+    }
     if (command === "attach-repository") {
         if (!flags.repository) throw new Error("--repository is required.");
         await gymPublicRepositoryAttach(required(flags, "root"), flags.repository);
@@ -152,6 +193,13 @@ function parseFlags(args: readonly string[]): {
     readonly repository?: string;
     readonly authFile?: string;
     readonly poolDefault?: boolean;
+    readonly scenarios?: string;
+    readonly dry?: boolean;
+    readonly remoteRoot?: string;
+    readonly calls?: string;
+    readonly rtt?: string;
+    readonly jitter?: string;
+    readonly lanes?: string;
     readonly expect?: string;
     readonly fake?: boolean;
     readonly serverUrl?: string;
@@ -177,6 +225,13 @@ function parseFlags(args: readonly string[]): {
         repository?: string;
         authFile?: string;
         poolDefault?: boolean;
+        scenarios?: string;
+        dry?: boolean;
+        remoteRoot?: string;
+        calls?: string;
+        rtt?: string;
+        jitter?: string;
+        lanes?: string;
         expect?: string;
         fake?: boolean;
         serverUrl?: string;
@@ -208,6 +263,15 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--auth-file")
             result.authFile = requiredValue(value, next, () => index++);
         else if (value === "--pool-default") result.poolDefault = true;
+        else if (value === "--scenarios")
+            result.scenarios = requiredValue(value, next, () => index++);
+        else if (value === "--dry") result.dry = true;
+        else if (value === "--remote-root")
+            result.remoteRoot = requiredValue(value, next, () => index++);
+        else if (value === "--calls") result.calls = requiredValue(value, next, () => index++);
+        else if (value === "--rtt") result.rtt = requiredValue(value, next, () => index++);
+        else if (value === "--jitter") result.jitter = requiredValue(value, next, () => index++);
+        else if (value === "--lanes") result.lanes = requiredValue(value, next, () => index++);
         else if (value === "--expect") result.expect = requiredValue(value, next, () => index++);
         else if (value === "--fake") result.fake = true;
         else if (value === "--server-url")
@@ -289,6 +353,10 @@ Commands:
       [--compute-offline CMD --compute-online CMD] [--compute-release CMD --compute-attach CMD]
       [--navigate PATH,PATH,...] [--artifact-dir PATH]   (bearer: HAPPY_GYM_CLOUD_TOKEN, or the options above)
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
+  live-voice-remote --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH]
+      [--scenarios ${LIVE_VOICE_REMOTE_SCENARIOS.join(",")}] [--dry]
+  live-voice-latency --auth-file ABSOLUTE_CODEX_AUTH_PATH --remote-root PREPARED_REALISTIC_ROOT
+      [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
   clean --root PATH
 
 Workloads:
