@@ -1318,7 +1318,8 @@
 }
 
 /* The non-virtual inner content wrapper keeps 12px above the history and a
-   compact 8px clearance beneath its newest message before the composer. It
+   compact 8px clearance beneath its newest message before the composer, below
+   whatever controls the pane stands over its top (`--happy-main-cover-top`). It
    fills the scrollport height so the spacer's `margin-top: auto` still
    bottom-aligns a short thread. */
 .happy-message-list__content {
@@ -1326,7 +1327,7 @@
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
-    padding: 12px 0 8px;
+    padding: calc(12px + var(--happy-main-cover-top, 0px)) 0 8px;
 }
 
 /* A virtual list represents the same clearances as `paddingStart`/`paddingEnd`

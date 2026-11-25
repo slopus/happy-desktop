@@ -77,8 +77,20 @@
     position: relative;
 }
 
+/* A hidden bar leaves the window's controls, and its own trailing ones,
+   standing over the top of the body without taking any of its height. A
+   transcript keeps that much clear above its first row, so scrolled to its
+   start nothing of it is under them; what is scrolled up still passes under
+   the veil. Registered so the transcript can read it as a length. */
+@property --happy-main-cover-top {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
 .happy-tabbed-pane[data-bar-overlay][data-bar-hidden] {
     --happy-main-inset-top: 0px;
+    --happy-main-cover-top: var(--happy-tabbed-pane-bar-height);
 }
 
 .happy-tabbed-pane[data-bar-overlay] > .happy-tabbed-pane__bar {

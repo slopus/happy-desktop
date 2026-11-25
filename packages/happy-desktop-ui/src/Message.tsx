@@ -1144,6 +1144,23 @@ function messageListMainInsetTop(element: HTMLElement): number {
         ) || 0
     );
 }
+/**
+ * The custom property a pane sets to how far its own controls stand over the
+ * top of its body without taking any of its height, as a hidden overlaid bar's
+ * do (see `TabbedPane`'s `barHidden`). The rows start that much lower, so the
+ * first of them scrolls clear of those controls, and what is scrolled up still
+ * passes under them.
+ */
+const MESSAGE_LIST_MAIN_COVER_TOP = "--happy-main-cover-top";
+function messageListMainCoverTop(element: HTMLElement): number {
+    return (
+        Number.parseFloat(
+            element.ownerDocument
+                .defaultView!.getComputedStyle(element)
+                .getPropertyValue(MESSAGE_LIST_MAIN_COVER_TOP),
+        ) || 0
+    );
+}
 function messageListViewportHeight(element: HTMLElement): number {
     return Number.parseFloat(element.ownerDocument.defaultView!.getComputedStyle(element).height);
 }
@@ -1593,7 +1610,7 @@ export function MessageList(props: MessageListProps) {
                 : typeof props.headerLift === "function"
                   ? props.headerLift(rowWidth)
                   : props.headerLift;
-        element.style.maxHeight = `${String(Math.max(0, headerRestLine(height) - MESSAGE_LIST_PADDING_START - lift))}px`;
+        element.style.maxHeight = `${String(Math.max(0, headerRestLine(height) - rowSizeModel.paddingStart - lift))}px`;
     };
     /*
      * This model is the only row-geometry authority. TanStack reads it to build
@@ -1622,6 +1639,9 @@ export function MessageList(props: MessageListProps) {
         exact: [] as boolean[],
         /* How many rows are still placeholders. */
         pending: 0,
+        /* The clearance above the first row: `MESSAGE_LIST_PADDING_START`
+           and whatever the pane's controls cover (`MESSAGE_LIST_MAIN_COVER_TOP`). */
+        paddingStart: MESSAGE_LIST_PADDING_START,
         /* The previous layout's queued footer room, consumed on acceptance. */
         footerReserveHeight: 0,
         /* What the end of the transcript is owed for a queued turn's status,
@@ -1816,7 +1836,7 @@ export function MessageList(props: MessageListProps) {
             for (; index >= 0 && covered < viewportHeight; index -= 1) covered += layout(index);
             first = index + 1;
         } else if (focus.type === "offset") {
-            let start = MESSAGE_LIST_PADDING_START;
+            let start = rowSizeModel.paddingStart;
             let index = 0;
             for (; index < count && start < focus.offset + viewportHeight; index += 1)
                 start += layout(index);
@@ -1903,8 +1923,7 @@ export function MessageList(props: MessageListProps) {
             }
         }
         starts.length = count;
-        let start =
-            moved === 0 ? MESSAGE_LIST_PADDING_START : starts[moved - 1]! + sizes[moved - 1]!;
+        let start = moved === 0 ? model.paddingStart : starts[moved - 1]! + sizes[moved - 1]!;
         for (let index = moved; index < count; index += 1) {
             starts[index] = start;
             start += sizes[index]!;
@@ -2097,7 +2116,7 @@ export function MessageList(props: MessageListProps) {
         const last = rowSizeModel.keys.length - 1;
         return (
             (last < 0
-                ? MESSAGE_LIST_PADDING_START
+                ? rowSizeModel.paddingStart
                 : rowSizeModel.starts[last]! + rowSizeModel.sizes[last]!) + paddingEnd
         );
     };
@@ -2836,7 +2855,38 @@ export function MessageList(props: MessageListProps) {
                 ? upperInset - viewportUpperInset.current
                 : 0;
         viewportUpperInset.current = upperInset;
-        if (previous.width === nextWidth && previous.height === nextHeight && !zoomChanged) return;
+        /* The pane's controls standing over the top (see
+           `MESSAGE_LIST_MAIN_COVER_TOP`) come and go with its bar, together
+           with the inset above, and every row starts that much lower or
+           higher. The reader is held below as for any other resize, at a
+           point read before the rows moved. */
+        const coverShift =
+            (element ? messageListMainCoverTop(element) : 0) +
+            MESSAGE_LIST_PADDING_START -
+            rowSizeModel.paddingStart;
+        if (coverShift !== 0) {
+            if (
+                rowSizeModel.width !== undefined &&
+                previous.height > 0 &&
+                !following.current &&
+                pendingAnchor.current === undefined &&
+                readerAnchor.current === undefined
+            ) {
+                const anchor = modelAnchorCapture(previous.height);
+                if (anchor) pendingAnchor.current = { anchor, viewportHeight: previous.height };
+            }
+            rowSizeModel.paddingStart += coverShift;
+            const starts = rowSizeModel.starts;
+            for (let index = 0; index < starts.length; index += 1) starts[index]! += coverShift;
+            if (virtualized) virtualizer.measure();
+        }
+        if (
+            previous.width === nextWidth &&
+            previous.height === nextHeight &&
+            !zoomChanged &&
+            coverShift === 0
+        )
+            return;
         const nextRowWidth = messageListRowWidth(nextWidth, estimateRowWidth);
         if (rowSizeModel.width === undefined) {
             /* The first report: there is no earlier geometry to keep a reader
@@ -3250,7 +3300,7 @@ export function MessageList(props: MessageListProps) {
          * and restored scroll positions use one coordinate system.
          */
         paddingEnd,
-        paddingStart: MESSAGE_LIST_PADDING_START,
+        paddingStart: rowSizeModel.paddingStart,
     });
     function visibleRowsReport(element: HTMLElement) {
         const range = virtualizer.range;
