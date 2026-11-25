@@ -507,8 +507,16 @@ export function happyAgentClusterSecretsStoreCreate(
     /** Adopts the current secret a `409` carries and says why nothing changed. */
     const conflictAdopt = (error: HappyAgentApiError): UserError => {
         const current = error.body?.secret;
-        if (Value.Check(clusterSecretSchema, current))
-            secretAdopt(happyAgentClusterSecretProject(current));
+        if (Value.Check(clusterSecretSchema, current)) {
+            const secret = happyAgentClusterSecretProject(current);
+            // A conflict's secret carries no reach; the shown one stands until the read after it.
+            const shown = store.getState().secrets.find((each) => each.id === secret.id);
+            secretAdopt(
+                "reach" in current || shown === undefined
+                    ? secret
+                    : { ...secret, reach: shown.reach },
+            );
+        }
         return new UserError(CONFLICT_MESSAGE, "conflict", error);
     };
 
