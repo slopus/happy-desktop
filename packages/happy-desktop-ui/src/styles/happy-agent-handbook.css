@@ -1,0 +1,591 @@
+/*
+ * P-048 Happy Agent handbook: the team's handbook by category, one document's
+ * page with its shared text, and one change request's page.
+ *
+ * Every page reads down the content column under the shared surface header,
+ * as the artifacts catalog does; a document's text sits on the document
+ * measure the shared editor sets itself. Colors, radii, and type come only
+ * from theme roles.
+ */
+
+.happy-handbook,
+.happy-handbook-document,
+.happy-handbook-change {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-handbook__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+.happy-handbook__empty {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+.happy-handbook__scroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-handbook__viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-handbook__column {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 24px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 8px var(--happy-content-gutter) 48px;
+}
+
+.happy-handbook__note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* ---- Categories ---------------------------------------------------------- */
+
+.happy-handbook-category {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-handbook-category__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-inline: 8px;
+}
+
+.happy-handbook-category__heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+}
+
+.happy-handbook-category__name {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-handbook-category__lock {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-category__description,
+.happy-handbook-category__empty {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-category__empty {
+    padding: 8px;
+}
+
+.happy-handbook-category__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* ---- Rows ------------------------------------------------------------- */
+
+.happy-handbook-row-item {
+    display: flex;
+    min-width: 0;
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-handbook-row-item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    gap: 10px;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-handbook-row:focus-visible,
+.happy-handbook-revision:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-handbook-row__glyph {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-row__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-handbook-row__line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 20px;
+}
+
+.happy-handbook-row__title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-handbook-row__version {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+}
+
+.happy-handbook-row__requests {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-row__end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    margin-inline-start: auto;
+}
+
+.happy-handbook-row__time {
+    flex: none;
+    min-width: 32px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-align: end;
+    white-space: nowrap;
+}
+
+.happy-handbook-row__summary {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.happy-handbook-row__summary[data-pending] {
+    font-style: italic;
+}
+
+/* ---- People ----------------------------------------------------------- */
+
+.happy-handbook-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 200px;
+}
+
+.happy-handbook-person__name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- A document's facts ------------------------------------------------ */
+
+.happy-handbook-document__facts {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 8px var(--happy-content-gutter) 12px;
+}
+
+.happy-handbook-document__rename {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-handbook-document__sync {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-handbook-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    margin: 0;
+}
+
+.happy-handbook-facts__item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-handbook-facts__item[data-wide] {
+    flex: 1 0 100%;
+}
+
+.happy-handbook-facts dt {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 14px;
+}
+
+.happy-handbook-facts dd {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    margin: 0;
+}
+
+.happy-handbook-facts__value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-facts__agent {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-handbook-facts__summary {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-facts__pending {
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-style: italic;
+    line-height: 18px;
+}
+
+.happy-handbook-facts__source {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 14px;
+}
+
+.happy-handbook-document__tabs {
+    display: flex;
+    flex: none;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 0 var(--happy-content-gutter) 8px;
+}
+
+/* ---- A document's text ------------------------------------------------- */
+
+.happy-handbook-document__body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-handbook-document__notice {
+    display: flex;
+    flex: none;
+    align-items: center;
+    align-self: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: calc(100% - 2 * var(--happy-content-gutter));
+    max-width: calc(var(--happy-content-measure) - 2 * var(--happy-content-gutter));
+    margin-top: 12px;
+    padding: 8px;
+    border-radius: var(--happy-radius-sm);
+    background: var(--groupped-background);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-document__notice[data-tone="danger"] {
+    color: var(--text-destructive);
+}
+
+.happy-handbook-document__scroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-handbook-document__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+/* ---- History ----------------------------------------------------------- */
+
+.happy-handbook-history {
+    display: flex;
+    flex: 1 1 0%;
+    min-height: 0;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-handbook-history__list {
+    flex: 0 0 280px;
+    min-height: 0;
+    border-inline-end: 1px solid var(--divider);
+    background: var(--groupped-background);
+}
+
+.happy-handbook-history__list-viewport,
+.happy-handbook-history__reading-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-handbook-history__entries {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+}
+
+.happy-handbook-revision {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-handbook-revision:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-revision[aria-pressed="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-handbook-revision__line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-handbook-revision__number {
+    flex: none;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-handbook-revision__kind {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-handbook-revision__actor {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-handbook-history__reading {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-handbook-history__text {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-document-measure);
+    margin-inline: auto;
+    padding: 16px var(--happy-content-gutter) 48px;
+}
+
+/* ---- A change request -------------------------------------------------- */
+
+.happy-handbook-change__description {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    border-radius: var(--happy-radius-md);
+    background: var(--groupped-background);
+}
+
+.happy-handbook-change__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    min-height: 32px;
+}
+
+.happy-handbook-change__heading {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-handbook-change__hint {
+    flex: 1 1 240px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-handbook-change__diff {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* ---- Forms ------------------------------------------------------------- */
+
+.happy-handbook-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-handbook-form__body {
+    margin: 0;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-form__text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.happy-handbook-form__label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-handbook-form__editor {
+    display: flex;
+    flex-direction: column;
+    height: 320px;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-sm);
+}

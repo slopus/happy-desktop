@@ -875,6 +875,27 @@ export {
 } from "./pages/pipelines/pipelineGraphLayout";
 export { type PipelineLabels } from "./pages/pipelines/pipelinePresentation";
 export {
+    HappyAgentHandbookPage,
+    type HappyAgentHandbookPageProps,
+} from "./pages/handbook/HappyAgentHandbookPage";
+export {
+    HappyAgentHandbookDocumentPage,
+    type HappyAgentHandbookDocumentPageProps,
+    type HandbookDocumentContentView,
+    type HandbookDocumentSync,
+    type HandbookDocumentTab,
+} from "./pages/handbook/HappyAgentHandbookDocumentPage";
+export {
+    HappyAgentHandbookChangeRequestPage,
+    type HappyAgentHandbookChangeRequestPageProps,
+    type HandbookChangeRequestView,
+} from "./pages/handbook/HappyAgentHandbookChangeRequestPage";
+export {
+    type HandbookLabels,
+    type HandbookPeople,
+    type HandbookPerson,
+} from "./pages/handbook/handbookPresentation";
+export {
     HappyAgentArtifactsPanel,
     type HappyAgentArtifactsPanelProps,
 } from "./pages/artifacts/HappyAgentArtifactsPanel";
