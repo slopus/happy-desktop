@@ -25,7 +25,7 @@ export interface GptLiveDropSoundOptions {
 }
 
 /** Plays the drop sound once on `context`, closing a live one after it. */
-export function gptLiveDropSoundPlay(context: BaseAudioContext): void {
+function gptLiveDropSoundPlay(context: BaseAudioContext): void {
     const start = context.currentTime + 0.02;
     const envelope = context.createGain();
     envelope.gain.setValueAtTime(FLOOR, start);
