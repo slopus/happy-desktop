@@ -9,6 +9,7 @@ import { happyAgentRuntimeCreate, type StartedHappyAgentRuntime } from "./happyA
 import { completeOnboarding } from "./workloads.js";
 import { liveVoiceMediaInstall, type LiveVoiceMedia } from "./liveVoiceMedia.js";
 import { happyAgentClientCreate } from "./happyAgentProtocol.js";
+import { callStatusAwait, endedMessage } from "./liveVoiceWindow.js";
 import {
     LIVE_VOICE_MUTE_SWITCH,
     liveVoiceSpeakersMute,
@@ -274,22 +275,9 @@ export async function gymLiveVoiceRun(options: {
         result.stage = "starting-call";
         console.log(JSON.stringify({ stage: "starting-call", projectName }));
         await page.getByRole("button", { name: "Start voice call", exact: true }).click();
-        await page.waitForFunction(
-            () => {
-                const phone = document.querySelector(".happy-gpt-live-phone");
-                return (
-                    phone?.getAttribute("data-status") === "active" ||
-                    phone?.getAttribute("data-status") === "error"
-                );
-            },
-            undefined,
-            { timeout: 90_000 },
-        );
-        const status = await page.locator(".happy-gpt-live-phone").getAttribute("data-status");
+        const status = await callStatusAwait(page, ["active", "ended"], 90_000);
         if (status !== "active")
-            throw new Error(
-                `Call did not become active: ${await page.locator("body").innerText()}; phone=${await page.locator(".happy-gpt-live-phone").evaluate((node) => node.outerHTML)}`,
-            );
+            throw new Error(`Call did not become active (${status}): ${await endedMessage(page)}`);
         result.silenceDuringCall = await liveVoiceSpeakersVerify(app, page);
         result.activeAt = new Date().toISOString();
         result.stage = "active";

@@ -277,14 +277,59 @@ export type Turn = {
     readonly before?: () => Promise<void>;
 };
 
-/** The visible phone's status, or null when none is on screen. */
-export async function phoneStatus(page: Page): Promise<string | null> {
-    return page.evaluate(
-        () =>
-            [...document.querySelectorAll<HTMLElement>(".happy-gpt-live-phone")]
-                .find((phone) => phone.offsetParent !== null)
-                ?.getAttribute("data-status") ?? null,
+/**
+ * The window's call as the person sees it: the call bar's state while a call
+ * is connecting, active or ended, otherwise the visible phone's status. Runs in
+ * the page; null when neither is on screen.
+ */
+export function callStatusRead(): string | null {
+    const shown = (element: HTMLElement) => element.getClientRects().length > 0;
+    const bar = [...document.querySelectorAll<HTMLElement>(".happy-gpt-live-call")].find(shown);
+    if (bar) return bar.getAttribute("data-state");
+    return (
+        [...document.querySelectorAll<HTMLElement>(".happy-gpt-live-phone")]
+            .find(shown)
+            ?.getAttribute("data-status") ?? null
     );
+}
+
+export async function phoneStatus(page: Page): Promise<string | null> {
+    return page.evaluate(callStatusRead);
+}
+
+/** Waits until the call shows one of `statuses`; resolves to the status seen last. */
+export async function callStatusAwait(
+    page: Page,
+    statuses: readonly string[],
+    timeoutMs: number,
+): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs;
+    let status = await phoneStatus(page);
+    while (Date.now() < deadline && !statuses.includes(status ?? "")) {
+        await page.waitForTimeout(25);
+        status = await phoneStatus(page);
+    }
+    return status;
+}
+
+/** Why the call ended, as its tooltip says it: the call bar's reason, else the phone's. */
+export async function endedMessage(page: Page): Promise<string> {
+    const reason = page.locator(".happy-gpt-live-call__reason:visible");
+    await ((await reason.count()) > 0 ? reason.first() : page.locator(PHONE).first()).hover();
+    await page.waitForTimeout(700);
+    return (
+        await page
+            .locator('[role="tooltip"]')
+            .allInnerTexts()
+            .catch(() => [])
+    ).join(" | ");
+}
+
+/** Puts an ended call away: the call bar's Close, where the build has one. */
+export async function endedDismiss(page: Page) {
+    if ((await phoneStatus(page)) !== "ended") return;
+    const close = page.getByRole("button", { name: "Close", exact: true });
+    if ((await close.count()) > 0) await close.first().click();
 }
 
 /** A received level above this is speech, far above Opus comfort noise. */
@@ -335,8 +380,7 @@ export async function voiceCall(input: {
             socketAt: sockets[firstSocket] ?? null,
         });
         if (status !== "active") {
-            await page.locator(PHONE).hover();
-            outcome.tooltip = await page.locator('[role="tooltip"]').allInnerTexts();
+            outcome.tooltip = await endedMessage(page);
             await shot(page, paths, `${name}/not-active`);
             return outcome;
         }

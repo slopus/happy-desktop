@@ -12,7 +12,9 @@ import { happyAgentClientCreate } from "./happyAgentProtocol.js";
 import { completeOnboarding } from "./workloads.js";
 import { liveVoiceSpeakersVerify } from "./liveVoiceSilence.js";
 import {
-    PHONE,
+    callStatusAwait,
+    endedDismiss,
+    endedMessage,
     liveVoiceWindowOpen,
     phoneStatus,
     railSelect,
@@ -273,28 +275,15 @@ export async function gymLiveVoiceRemoteRun(options: {
             await sidebarOpen(page, remoteProject);
             const stoppedRemote = remote;
             let stoppedAt = 0;
+            let disconnectMessage = "";
             scenarioResults["remote-disconnect"] = await call("remote-disconnect", [
                 { say: "Say hello in five words or fewer." },
                 {
                     before: async () => {
                         stoppedAt = Date.now();
                         await stoppedRemote.stop();
-                        await page
-                            .waitForFunction(
-                                () =>
-                                    [
-                                        ...document.querySelectorAll<HTMLElement>(
-                                            ".happy-gpt-live-phone",
-                                        ),
-                                    ]
-                                        .find((phone) => phone.offsetParent !== null)
-                                        ?.getAttribute("data-status") === "ended",
-                                undefined,
-                                { timeout: 90_000 },
-                            )
-                            .catch(() => undefined);
-                        await page.locator(PHONE).hover();
-                        await page.waitForTimeout(800);
+                        await callStatusAwait(page, ["ended"], 90_000);
+                        disconnectMessage = await endedMessage(page);
                         await shot(page, paths, "remote-disconnect-ended");
                     },
                     say: "Are you still there?",
@@ -303,34 +292,21 @@ export async function gymLiveVoiceRemoteRun(options: {
             const disconnect = scenarioResults["remote-disconnect"] as Record<string, unknown>;
             disconnect.stoppedAt = stoppedAt;
             disconnect.phoneAfterStop = await phoneStatus(page);
-            disconnect.tooltipAfterStop = await page
-                .locator('[role="tooltip"]')
-                .allInnerTexts()
-                .catch(() => []);
+            disconnect.messageAfterStop = disconnectMessage;
         }
         if (scenarios.includes("remote-offline")) {
-            if (await phoneStatus(page)) {
-                await railSelect(page, REMOTE_NODE);
-                if ((await phoneStatus(page)) === "ended") await page.locator(PHONE).click();
-            }
+            await railSelect(page, REMOTE_NODE);
+            await endedDismiss(page);
             await remote.stop().catch(() => undefined);
             await railSelect(page, REMOTE_NODE);
             await page.waitForTimeout(50_000);
             await shot(page, paths, "remote-offline-before");
             const before = await phoneStatus(page);
             await page.getByRole("button", { name: "Start voice call", exact: true }).click();
-            await page.waitForTimeout(5_000);
-            await page.locator(PHONE).hover();
-            await page.waitForTimeout(1_000);
+            const after = await callStatusAwait(page, ["ended"], 15_000);
+            const message = await endedMessage(page);
             await shot(page, paths, "remote-offline-after-start");
-            scenarioResults["remote-offline"] = {
-                phoneBefore: before,
-                phoneAfter: await phoneStatus(page),
-                tooltip: await page
-                    .locator('[role="tooltip"]')
-                    .allInnerTexts()
-                    .catch(() => []),
-            };
+            scenarioResults["remote-offline"] = { phoneBefore: before, phoneAfter: after, message };
         }
         result.silenceAfterCalls = await liveVoiceSpeakersVerify(window.app, page);
         result.status = "passed";

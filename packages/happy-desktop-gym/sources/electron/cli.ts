@@ -9,6 +9,7 @@ import {
     LIVE_VOICE_REMOTE_SCENARIOS,
     type LiveVoiceRemoteScenario,
 } from "./liveVoiceRemote.js";
+import { gymLiveVoiceEvalsRun, LIVE_VOICE_EVALS, type LiveVoiceEval } from "./liveVoiceEvals.js";
 import { gymLiveVoiceLatencyRun, type LiveVoiceLatencyLane } from "./liveVoiceLatency.js";
 import { gymBrowserPreviewRun, type GymBrowserRoute } from "./browserPreview.js";
 import { gymCloudBrowserRun } from "./cloudBrowser.js";
@@ -115,6 +116,21 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         });
         return;
     }
+    if (command === "live-voice-evals") {
+        if (!flags.authFile)
+            throw new Error("live-voice-evals requires --auth-file ABSOLUTE_CODEX_AUTH_PATH.");
+        const scenarios = flags.scenarios?.split(",").map((item) => item.trim());
+        for (const scenario of scenarios ?? [])
+            if (!(LIVE_VOICE_EVALS as readonly string[]).includes(scenario))
+                throw new Error(`Unknown live-voice-evals scenario: ${scenario}`);
+        await gymLiveVoiceEvalsRun({
+            authFile: flags.authFile,
+            artifactDirectory: flags.artifactDir,
+            ...(scenarios ? { scenarios: scenarios as LiveVoiceEval[] } : {}),
+            ...(flags.label ? { label: flags.label } : {}),
+        });
+        return;
+    }
     if (command === "live-voice-latency") {
         if (!flags.authFile)
             throw new Error("live-voice-latency requires --auth-file ABSOLUTE_CODEX_AUTH_PATH.");
@@ -200,6 +216,7 @@ function parseFlags(args: readonly string[]): {
     readonly rtt?: string;
     readonly jitter?: string;
     readonly lanes?: string;
+    readonly label?: string;
     readonly expect?: string;
     readonly fake?: boolean;
     readonly serverUrl?: string;
@@ -232,6 +249,7 @@ function parseFlags(args: readonly string[]): {
         rtt?: string;
         jitter?: string;
         lanes?: string;
+        label?: string;
         expect?: string;
         fake?: boolean;
         serverUrl?: string;
@@ -272,6 +290,7 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--rtt") result.rtt = requiredValue(value, next, () => index++);
         else if (value === "--jitter") result.jitter = requiredValue(value, next, () => index++);
         else if (value === "--lanes") result.lanes = requiredValue(value, next, () => index++);
+        else if (value === "--label") result.label = requiredValue(value, next, () => index++);
         else if (value === "--expect") result.expect = requiredValue(value, next, () => index++);
         else if (value === "--fake") result.fake = true;
         else if (value === "--server-url")
@@ -355,6 +374,8 @@ Commands:
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   live-voice-remote --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH]
       [--scenarios ${LIVE_VOICE_REMOTE_SCENARIOS.join(",")}] [--dry]
+  live-voice-evals --auth-file ABSOLUTE_CODEX_AUTH_PATH [--scenarios S1,S2,S3,S4,S5,S6]
+      [--label NAME] [--artifact-dir PATH]   (HAPPY_DESKTOP_AGENT_EXECUTABLE picks the agent build)
   live-voice-latency --auth-file ABSOLUTE_CODEX_AUTH_PATH --remote-root PREPARED_REALISTIC_ROOT
       [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
   clean --root PATH

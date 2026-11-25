@@ -566,6 +566,30 @@ node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-
   [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
 ```
 
+### Voice evals
+
+`live-voice-evals` runs scenarios S1–S6 from the desktop voice eval report as
+real calls on the shared "Harbor" fixture: Happy, the tasks Ship the cache
+(finished), Release notes (its turn failed), Fix login redirect (waiting on a
+question), Login page copy and twenty fillers. Fixture conversations answer
+from a scripted provider, by agent ID; GPT-Live and the Voice controller stay
+on the live account, whose explicit `base_url` keeps it live beside them
+(`HAPPY_GYM_LIVE_INFERENCE`). GPT-Live has no direct tools, so each spoken turn
+declares whether it should be answered from context (no delegation, no
+desktop action) or delegated with an acknowledgment that starts before the
+controller's outcome arrives; delegations come from the hosting daemon's
+`module: "live"` diagnostics, and pushed context from
+`HAPPY_LIVE_CONTEXT_CAPTURE_FILE` in builds that write it. Speech end to first
+audio is a soft budget. Each scenario writes `outcome.json` with its checks and
+turns; the run writes `evals.md`.
+
+```sh
+HAPPY_DESKTOP_AGENT_EXECUTABLE=/absolute/path/to/happy-agent \
+node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-evals \
+  --auth-file /absolute/path/to/codex/auth.json --label baseline \
+  --artifact-dir "$PWD/.context/voice-evals" [--scenarios S1,S2,S3,S4,S5,S6]
+```
+
 ## Browser rendering harness
 
 `gym/playwright` owns the reusable real-browser measurement harness. A consumer
