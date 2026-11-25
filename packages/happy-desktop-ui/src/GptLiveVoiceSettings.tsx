@@ -1,13 +1,21 @@
-import { useId } from "react";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { ComposerModelControl, type ComposerModelControlProps } from "./ComposerModelControl";
 import { FormRow } from "./FormRow";
+import { SegmentedControl } from "./SegmentedControl";
 import { Spinner } from "./Spinner";
-import { Switch } from "./Switch";
 import { TextField } from "./TextField";
 import { HappyAgentSettingsSection } from "./pages/settings/HappyAgentSettingsShell";
 import { HappyAgentSettingsStatus } from "./pages/settings/HappyAgentSettingsStatus";
+
+/** How quickly the voice controller answers, slowest first. */
+export type GptLiveVoiceSpeed = "regular" | "fast" | "ultrafast";
+
+const SPEEDS: readonly { value: GptLiveVoiceSpeed; label: string }[] = [
+    { value: "regular", label: "Regular" },
+    { value: "fast", label: "Fast" },
+    { value: "ultrafast", label: "Ultrafast" },
+];
 
 export interface GptLiveVoiceSettingsProps {
     /** Set until the machine has answered, so nothing is shown that it did not say. */
@@ -18,10 +26,13 @@ export interface GptLiveVoiceSettingsProps {
     controller?: ComposerModelControlProps;
     /** Why the controller in effect is not exactly the one chosen, in the machine's words. */
     controllerNotice?: string;
-    fastMode: boolean;
-    /** Why Fast mode cannot be had for the controller model; absent when it can. */
-    fastModeUnavailable?: string;
-    onFastModeChange(enabled: boolean): void;
+    /** The speed a call started now uses; absent when the machine does not say. */
+    speed?: GptLiveVoiceSpeed;
+    /** Every speed the controller's account offers; the others cannot be chosen. */
+    speeds: readonly GptLiveVoiceSpeed[];
+    /** No speed is chosen, so calls take the fastest the plan offers. */
+    speedDefault: boolean;
+    onSpeedChange(speed: GptLiveVoiceSpeed): void;
     /** What the editor holds: the unsaved draft while there is one, else the prompt in effect. */
     prompt: string;
     /** The machine keeps a prompt of the reader's own rather than the shipped one. */
@@ -50,7 +61,6 @@ export interface GptLiveVoiceSettingsProps {
  * starts, so a change here applies from the next call.
  */
 export function GptLiveVoiceSettings(props: GptLiveVoiceSettingsProps) {
-    const fastModeId = useId();
     if (props.loading)
         return (
             <HappyAgentSettingsSection rows="cards" title="Voice controller">
@@ -84,24 +94,34 @@ export function GptLiveVoiceSettings(props: GptLiveVoiceSettingsProps) {
                     description={props.controllerNotice ?? "The model voice hands your requests to"}
                     label="Model"
                 />
-                <FormRow
-                    control={
-                        <Switch
-                            aria-label="Fast mode"
-                            checked={props.fastMode && props.fastModeUnavailable === undefined}
-                            disabled={props.fastModeUnavailable !== undefined}
-                            id={fastModeId}
-                            onChange={props.onFastModeChange}
-                            size="small"
-                        />
-                    }
-                    description={
-                        props.fastModeUnavailable ??
-                        "Asks for the priority tier: quicker answers, at a higher cost."
-                    }
-                    htmlFor={fastModeId}
-                    label="Fast mode"
-                />
+                {props.speed ? (
+                    <FormRow
+                        control={
+                            <SegmentedControl
+                                aria-label="Speed"
+                                disabled={props.saving}
+                                onChange={(value) =>
+                                    props.onSpeedChange(value as GptLiveVoiceSpeed)
+                                }
+                                segments={SPEEDS.map((speed) => ({
+                                    ...speed,
+                                    disabled: !props.speeds.includes(speed.value),
+                                    ...(props.speeds.includes(speed.value)
+                                        ? {}
+                                        : { title: "Not offered on this account" }),
+                                }))}
+                                size="small"
+                                value={props.speed}
+                            />
+                        }
+                        description={
+                            props.speedDefault
+                                ? "The fastest your plan offers. Faster answers cost more."
+                                : "Faster answers cost more."
+                        }
+                        label="Speed"
+                    />
+                ) : null}
             </HappyAgentSettingsSection>
             <HappyAgentSettingsSection
                 description="What voice is told when a call starts. Changes apply from the next call."

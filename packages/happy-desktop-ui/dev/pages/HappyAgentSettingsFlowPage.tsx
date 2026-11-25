@@ -326,8 +326,10 @@ export function HappyAgentSettingsFlowPage() {
                 />
                 <GptLiveVoiceSettings
                     controller={voiceController}
-                    fastMode={false}
-                    onFastModeChange={noop}
+                    onSpeedChange={noop}
+                    speed="ultrafast"
+                    speedDefault
+                    speeds={["regular", "fast", "ultrafast"]}
                     onPromptCancel={noop}
                     onPromptChange={noop}
                     onPromptDefaultCopy={noop}

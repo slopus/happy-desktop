@@ -7,6 +7,7 @@ import {
     liveSessionResponseSchema,
     type HappyAgentClient,
     type LiveControlClientMessage,
+    type LiveFailureReason,
     type LiveControlServerMessage,
     type LiveSessionResponse,
 } from "@slopus/happy-agent-client";
@@ -21,6 +22,58 @@ import type {
     GptLiveRuntime,
     GptLiveRuntimeEvent,
 } from "./gptLiveRuntime.js";
+
+/**
+ * Why Happy Agent ended a call, in the person's words, and whether it is the
+ * account (nothing a new call fixes) or the connection (a new call may).
+ */
+const FAILURES: Record<LiveFailureReason, { message: string; problem: GptLiveProblem }> = {
+    signIn: {
+        message:
+            "This voice account needs signing in again. Sign in on Happy Agent, then start a new call.",
+        problem: "notSetUp",
+    },
+    apiKey: {
+        message:
+            "OpenAI didn't accept this account's API key. Update the key on Happy Agent, then start a new call.",
+        problem: "notSetUp",
+    },
+    forbidden: {
+        message:
+            "This account isn't allowed to use voice. Choose another account in Settings › Voice.",
+        problem: "notSetUp",
+    },
+    unsupported: {
+        message:
+            "This account's plan doesn't include voice. Choose another account in Settings › Voice.",
+        problem: "notSetUp",
+    },
+    usageExhausted: {
+        message:
+            "This account has used up its voice allowance. Try again later, or choose another account in Settings › Voice.",
+        problem: "notSetUp",
+    },
+    setupTimeout: {
+        message: "Voice took too long to set up. Start a new call to try again.",
+        problem: "connection",
+    },
+    readinessTimeout: {
+        message: "Voice didn't get ready in time. Start a new call to try again.",
+        problem: "connection",
+    },
+    connectionLost: {
+        message: "The connection to voice dropped. Start a new call to reconnect.",
+        problem: "connection",
+    },
+    controlLost: {
+        message: "Happy Agent lost touch with this window. Start a new call to reconnect.",
+        problem: "connection",
+    },
+    restart: {
+        message: "Happy Agent restarted, which ended the call. Start a new call once it's back.",
+        problem: "connection",
+    },
+};
 
 /** Browser integration owns these resources; the product lifetime decides when to release them. */
 export interface GptLiveMedia {
@@ -96,24 +149,33 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 ? GPT_LIVE_DESKTOP_CAPABILITIES.filter((item) => offered.includes(item))
                 : undefined;
             const { config } = await client.getConfig({ signal });
-            const accounts: GptLiveAvailability["accounts"][number][] = [];
-            for (const [providerId, provider] of Object.entries(config.providers)) {
-                if (!provider.enabled) continue;
-                if (provider.type === "codex")
-                    accounts.push({
-                        id: providerId,
+            // The daemon lists exactly the accounts a call can use, with the
+            // credential each holds. One that predates the list offered its
+            // enabled Codex accounts as subscriptions.
+            const listed =
+                config.voice?.accounts ??
+                Object.entries(config.providers)
+                    .filter(([, provider]) => provider.enabled && provider.type === "codex")
+                    .map(([providerId]) => ({
                         providerId,
-                        kind: "subscription",
-                        label: `${providerId} · Codex subscription`,
-                    });
-                else if (provider.type === "openai")
-                    accounts.push({
-                        id: providerId,
-                        providerId,
-                        kind: "api",
-                        label: `${providerId} · OpenAI API`,
-                    });
-            }
+                        credential: "codex_subscription" as const,
+                    }));
+            const accounts: GptLiveAvailability["accounts"][number][] = listed.map((account) => {
+                const name = ("name" in account && account.name) || account.providerId;
+                return account.credential === "openai_api_key"
+                    ? {
+                          id: account.providerId,
+                          providerId: account.providerId,
+                          kind: "api",
+                          label: `${name} · OpenAI API key`,
+                      }
+                    : {
+                          id: account.providerId,
+                          providerId: account.providerId,
+                          kind: "subscription",
+                          label: `${name} · Codex subscription`,
+                      };
+            });
             return {
                 availability: {
                     supported: true,
@@ -263,12 +325,12 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 );
                 if (event) receive(event);
             };
-            const fail = (message: string) => {
+            const fail = (message: string, problem: GptLiveProblem = "connection") => {
                 if (phase === "ended") return;
-                finish(new UserError(message, "connection"), {
+                finish(new UserError(message, problem), {
                     type: "callFailed",
                     message,
-                    problem: "connection",
+                    problem,
                 });
                 void remoteCleanup();
             };
@@ -291,10 +353,14 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 connectTimer = undefined;
                 receive({ type: "callActive" });
             };
-            const terminalReceive = (status: "closed" | "failed", error: string | null) => {
-                if (status === "failed")
-                    fail(error ?? "The voice call failed. Start a new call to reconnect.");
-                else finish(cancelled(), { type: "callClosed" });
+            const terminalReceive = (
+                status: "closed" | "failed",
+                error: string | null,
+                reason?: LiveFailureReason | null,
+            ) => {
+                if (status !== "failed") finish(cancelled(), { type: "callClosed" });
+                else if (reason) fail(FAILURES[reason].message, FAILURES[reason].problem);
+                else fail(error ?? "The voice call failed. Start a new call to reconnect.");
             };
             /**
              * `person` is End; `agent` is Happy Agent announcing that it is
@@ -346,7 +412,11 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                                     result.session.status === "closed" ||
                                     result.session.status === "failed"
                                 )
-                                    terminalReceive(result.session.status, result.session.error);
+                                    terminalReceive(
+                                        result.session.status,
+                                        result.session.error,
+                                        result.session.failureReason,
+                                    );
                             },
                             () => fail(unreachable),
                         );
@@ -391,7 +461,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         frame.type === "status" &&
                         (frame.status === "closed" || frame.status === "failed")
                     )
-                        terminalReceive(frame.status, frame.error);
+                        terminalReceive(frame.status, frame.error, frame.reason);
                     return;
                 }
                 if (!socketOpened) {
@@ -436,7 +506,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                                     "Voice lost provider readiness. Start a new call to reconnect.",
                                 );
                         } else if (frame.status === "closing") close("agent");
-                        else terminalReceive(frame.status, frame.error);
+                        else terminalReceive(frame.status, frame.error, frame.reason);
                         break;
                     case "transcript":
                         if ("startMs" in frame && frame.endMs < frame.startMs) {

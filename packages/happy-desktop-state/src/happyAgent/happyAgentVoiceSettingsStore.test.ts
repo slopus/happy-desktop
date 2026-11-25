@@ -27,7 +27,7 @@ function machine(inheritedPrompt: string | null = null) {
         providerId: null,
         modelId: null,
         effort: null,
-        fastMode: false,
+        speed: null,
     };
     let override: string | null = null;
     const config = () => ({
@@ -38,7 +38,10 @@ function machine(inheritedPrompt: string | null = null) {
                 providerId: controller.providerId ?? providerId,
                 modelId: controller.modelId ?? base.defaults.modelId,
                 effort: controller.effort ?? "low",
-                serviceTier: controller.fastMode ? ("priority" as const) : null,
+                serviceTier: "priority" as const,
+                // Unset takes the fastest the plan offers.
+                speed: controller.speed ?? ("ultrafast" as const),
+                speeds: ["regular", "fast", "ultrafast"] as const,
                 notice: null,
             },
             defaultSystemPrompt: DEFAULT_PROMPT,
@@ -64,7 +67,7 @@ function machine(inheritedPrompt: string | null = null) {
                         next.providerId === undefined ? controller.providerId : next.providerId,
                     modelId: next.modelId === undefined ? controller.modelId : next.modelId,
                     effort: next.effort === undefined ? controller.effort : next.effort,
-                    fastMode: next.fastMode ?? controller.fastMode,
+                    speed: next.speed === undefined ? controller.speed : next.speed,
                 };
             }
             if (patch.voice.systemPrompt !== undefined)
@@ -119,7 +122,7 @@ describe("Voice settings", () => {
         const stop = store.subscribe(() => {});
         await vi.waitFor(() => expect(store.get().loading).toBe(false));
         expect(store.get().settings).toMatchObject({
-            controller: { providerId: null, modelId: null, fastMode: false },
+            controller: { providerId: null, modelId: null, speed: null },
             effectiveSystemPrompt: DEFAULT_PROMPT,
             systemPromptOverride: null,
         });
@@ -128,7 +131,7 @@ describe("Voice settings", () => {
         store[Symbol.dispose]();
     });
 
-    it("writes the controller choice and fast mode, and shows only what the machine answers", async () => {
+    it("writes the controller choice and speed, and shows only what the machine answers", async () => {
         const m = machine();
         const store = happyAgentVoiceSettingsStoreCreate({ client: m.client });
         const stop = store.subscribe(() => {});
@@ -144,10 +147,14 @@ describe("Voice settings", () => {
             providerId: "codex",
             effort: "high",
         });
-        store.fastModeUpdate(true);
-        await vi.waitFor(() => expect(store.get().settings?.controller.fastMode).toBe(true));
-        expect(m.patches[1]).toEqual({ voice: { controller: { fastMode: true } } });
-        expect(store.get().settings?.effectiveController.serviceTier).toBe("priority");
+        expect(store.get().settings?.effectiveController.speed).toBe("ultrafast");
+        store.controllerSpeedUpdate("fast");
+        await vi.waitFor(() => expect(store.get().settings?.controller.speed).toBe("fast"));
+        expect(m.patches[1]).toEqual({ voice: { controller: { speed: "fast" } } });
+        expect(store.get().settings?.effectiveController.speed).toBe("fast");
+        store.controllerSpeedUpdate(null);
+        await vi.waitFor(() => expect(store.get().settings?.controller.speed).toBeNull());
+        expect(m.patches[2]).toEqual({ voice: { controller: { speed: null } } });
         stop();
         store[Symbol.dispose]();
     });

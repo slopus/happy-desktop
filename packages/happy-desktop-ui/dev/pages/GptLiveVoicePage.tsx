@@ -4,7 +4,7 @@ import { AppShell } from "../../src/AppShell";
 import { Box } from "../../src/Box";
 import { ConnectionShell, type ConnectionShellItem } from "../../src/ConnectionShell";
 import { ConnectionSurface } from "../../src/ConnectionSurface";
-import { GptLiveVoiceSettings } from "../../src/GptLiveVoiceSettings";
+import { GptLiveVoiceSettings, type GptLiveVoiceSpeed } from "../../src/GptLiveVoiceSettings";
 import { happyAgentComposerModelControlProps } from "../../src/happyAgentComposerModelControl";
 import { Sidebar, type SidebarSection } from "../../src/Sidebar";
 import { Tabs } from "../../src/Tabs";
@@ -146,11 +146,13 @@ function VoiceSettings(props: {
     restartError?: string;
 }) {
     const [modelId, setModelId] = useState(props.custom ? "opus-5-5" : "gpt-6.1-sol");
-    const [fastMode, setFastMode] = useState(false);
+    const [speed, setSpeed] = useState<GptLiveVoiceSpeed | null>(null);
     const [draft, setDraft] = useState<string | undefined>(
         props.custom ? `${DEFAULT_PROMPT}\nKeep every answer under ten words.` : undefined,
     );
-    const fastModeAvailable = modelId !== "opus-5-5";
+    // Opus runs only at Regular; the GPT models offer every speed.
+    const speeds: GptLiveVoiceSpeed[] =
+        modelId === "opus-5-5" ? ["regular"] : ["regular", "fast", "ultrafast"];
     return (
         <GptLiveVoiceSettings
             controller={happyAgentComposerModelControlProps(menus(modelId), {
@@ -158,11 +160,12 @@ function VoiceSettings(props: {
                 onEffortChange: () => undefined,
             })}
             {...(props.custom
-                ? { controllerNotice: "Fast mode is ignored: Opus 5.5 has no priority tier." }
+                ? { controllerNotice: "Ultrafast is ignored: Opus 5.5 runs only at Regular." }
                 : {})}
-            fastMode={fastMode}
-            {...(fastModeAvailable ? {} : { fastModeUnavailable: "Opus 5.5 has no fast mode." })}
-            onFastModeChange={setFastMode}
+            speed={speed !== null && speeds.includes(speed) ? speed : speeds.at(-1)}
+            speeds={speeds}
+            speedDefault={speed === null}
+            onSpeedChange={setSpeed}
             prompt={draft ?? DEFAULT_PROMPT}
             promptCustom={props.custom}
             promptEditing={draft !== undefined}
@@ -215,7 +218,7 @@ export function GptLiveVoicePage() {
             <Specimen
                 label="Custom prompt being edited"
                 number="04"
-                detail="Edits stay local until Save; Fast mode explains why it is off for this model."
+                detail="Edits stay local until Save; Speed offers only Regular, the one speed this model runs at."
             >
                 <div data-screen="04-settings-custom-editing" style={{ display: "flex" }}>
                     <Box width={680}>

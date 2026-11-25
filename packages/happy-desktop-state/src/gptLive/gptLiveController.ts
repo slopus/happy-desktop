@@ -64,6 +64,7 @@ export const GPT_LIVE_DESKTOP_CAPABILITIES = [
     "voiceFocus",
     "taskCreate",
     "sessionModelChange",
+    "failureReasons",
 ] as const;
 
 /**

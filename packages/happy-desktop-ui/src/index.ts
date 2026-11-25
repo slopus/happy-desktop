@@ -33,7 +33,11 @@ export {
     type ReviewStreamSingleFile,
 } from "./ReviewStream";
 export { GptLiveSettings, type GptLiveSettingsProps } from "./GptLiveSettings";
-export { GptLiveVoiceSettings, type GptLiveVoiceSettingsProps } from "./GptLiveVoiceSettings";
+export {
+    GptLiveVoiceSettings,
+    type GptLiveVoiceSettingsProps,
+    type GptLiveVoiceSpeed,
+} from "./GptLiveVoiceSettings";
 export { GptLivePhone, type GptLivePhoneProps, type GptLivePhoneStatus } from "./GptLivePhone";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";

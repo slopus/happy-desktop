@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import type { HappyAgentClient, VoiceSpeed } from "@slopus/happy-agent-client";
 import type { UserError } from "../types.js";
 import { happyAgentMenusDerive } from "./happyAgentMenusStore.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
@@ -10,6 +10,9 @@ import type {
     HappyAgentThinkingLevel,
 } from "./happyAgentTypes.js";
 
+/** How quickly the voice controller answers, as the model picker names it. */
+export type HappyAgentVoiceSpeed = VoiceSpeed;
+
 /** The machine's voice settings exactly as the Happy Agent states them. */
 export interface HappyAgentVoiceSettings {
     /** What the reader chose. `null` leaves that part to the machine's default. */
@@ -17,7 +20,8 @@ export interface HappyAgentVoiceSettings {
         readonly providerId: string | null;
         readonly modelId: string | null;
         readonly effort: string | null;
-        readonly fastMode: boolean;
+        /** The chosen speed; `null` takes the fastest the account's plan offers. */
+        readonly speed?: HappyAgentVoiceSpeed | null;
     };
     /** What a call started now would use, and why, when it is not what was chosen. */
     readonly effectiveController: {
@@ -26,6 +30,9 @@ export interface HappyAgentVoiceSettings {
         readonly effort: string;
         /** The tier a call asks for, such as `"priority"` with Fast mode on; `null` for the default. */
         readonly serviceTier: string | null;
+        /** The speed a call started now uses, and every speed its account's route offers. */
+        readonly speed?: HappyAgentVoiceSpeed;
+        readonly speeds?: readonly HappyAgentVoiceSpeed[];
         readonly notice: string | null;
     };
     /** The prompt that ships with Happy Agent. Never stored; copied from, never saved. */
@@ -44,8 +51,6 @@ export interface HappyAgentVoiceSettingsSnapshot {
      * models and opened on the controller a call would use.
      */
     readonly menus?: HappyAgentMenusSnapshot;
-    /** Whether the controller model has a priority tier for Fast mode to ask for. */
-    readonly fastModeAvailable: boolean;
     /**
      * The prompt being written, kept only here until it is saved. Absent while
      * nothing is being edited, when the editor shows the prompt in effect.
@@ -62,8 +67,8 @@ export interface HappyAgentVoiceSettingsSnapshot {
 }
 
 /**
- * Voice settings: which model the voice controller hands requests to, whether
- * it asks for the priority tier, and the prompt voice runs with.
+ * Voice settings: which model the voice controller hands requests to, how
+ * fast it answers, and the prompt voice runs with.
  *
  * They are the Happy Agent's own configuration, read and written whole through
  * `getConfig`/`patchConfig`, and a call reads them when it starts, so a change
@@ -78,7 +83,8 @@ export interface HappyAgentVoiceSettingsStore {
     /** Hands requests to this model from the next call, with its effort when one is named. */
     controllerModelUpdate(selection: HappyAgentModelSelection): void;
     controllerEffortUpdate(effort?: HappyAgentThinkingLevel): void;
-    fastModeUpdate(enabled: boolean): void;
+    /** Answers at this speed from the next call; `null` takes the fastest the plan offers. */
+    controllerSpeedUpdate(speed: HappyAgentVoiceSpeed | null): void;
     /** Edits the prompt locally. Nothing reaches the machine until `promptSave`. */
     promptDraftUpdate(text: string): void;
     /** Drops the unsaved prompt, leaving the one in effect. */
@@ -98,14 +104,13 @@ type VoicePatch = {
         readonly providerId?: string | null;
         readonly modelId?: string | null;
         readonly effort?: string | null;
-        readonly fastMode?: boolean;
+        readonly speed?: HappyAgentVoiceSpeed | null;
     };
     readonly systemPrompt?: string | null;
 };
 
 const EMPTY: HappyAgentVoiceSettingsSnapshot = {
     loading: true,
-    fastModeAvailable: false,
     saving: false,
     promptRevision: 0,
 };
@@ -175,8 +180,6 @@ export function happyAgentVoiceSettingsStoreCreate(
                               : settings,
                           menus: deepEqual(current.menus, menus) ? current.menus : menus,
                       }),
-                fastModeAvailable:
-                    menus?.serviceTierOptions.some((option) => option.tier === "priority") ?? false,
             },
             true,
         );
@@ -281,8 +284,8 @@ export function happyAgentVoiceSettingsStoreCreate(
         controllerEffortUpdate(effort) {
             write({ controller: { effort: effort ?? null } });
         },
-        fastModeUpdate(enabled) {
-            write({ controller: { fastMode: enabled } });
+        controllerSpeedUpdate(speed) {
+            write({ controller: { speed } });
         },
         promptDraftUpdate(text) {
             if (disposed) return;
@@ -325,7 +328,6 @@ export function happyAgentVoiceSettingsStoreCreate(
 
 const INERT_SNAPSHOT: HappyAgentVoiceSettingsSnapshot = {
     loading: false,
-    fastModeAvailable: false,
     saving: false,
     promptRevision: 0,
 };
@@ -336,7 +338,7 @@ export const happyAgentVoiceSettingsStoreNoop: HappyAgentVoiceSettingsStore = {
     subscribe: () => () => undefined,
     controllerModelUpdate: () => undefined,
     controllerEffortUpdate: () => undefined,
-    fastModeUpdate: () => undefined,
+    controllerSpeedUpdate: () => undefined,
     promptDraftUpdate: () => undefined,
     promptDraftCancel: () => undefined,
     promptSave: () => undefined,

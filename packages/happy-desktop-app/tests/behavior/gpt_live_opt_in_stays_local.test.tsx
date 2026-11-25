@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import {
     appearanceStoreCreate,
@@ -40,6 +40,8 @@ it("shows Voice settings while calls are off and moves the experiment with the o
                 modelId: "test-model",
                 effort: "low",
                 serviceTier: null,
+                speed: "ultrafast",
+                speeds: ["regular", "ultrafast"],
                 notice: null,
             },
             defaultSystemPrompt: "Built-in prompt.",
@@ -106,9 +108,12 @@ it("shows Voice settings while calls are off and moves the experiment with the o
         view.getByRole("textbox", { name: "Voice prompt" }).getAttribute("value") ??
             (view.getByRole("textbox", { name: "Voice prompt" }) as HTMLTextAreaElement).value,
     ).toBe("Built-in prompt.");
-    expect(view.getByRole("switch", { name: "Fast mode" }).getAttribute("aria-checked")).toBe(
-        "false",
-    );
+    // Calls take the fastest speed the account offers; one it lacks cannot be chosen.
+    const speed = view.getByRole("group", { name: "Speed" });
+    expect(
+        within(speed).getByRole("button", { name: "Ultrafast" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(within(speed).getByRole("button", { name: "Fast" }).hasAttribute("disabled")).toBe(true);
     expect(view.getByText("Test Model")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Experimental" }));
     expect(view.queryByRole("switch", { name: "Voice calls" })).toBeNull();

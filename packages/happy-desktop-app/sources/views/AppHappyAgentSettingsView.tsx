@@ -1119,15 +1119,16 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                               voiceSettings.settings.effectiveController.notice,
                                       }
                                     : {})}
-                                fastMode={voiceSettings.settings?.controller.fastMode ?? false}
-                                {...(voiceSettings.fastModeAvailable
-                                    ? {}
-                                    : {
-                                          fastModeUnavailable: `${voiceSettings.menus?.currentOption?.name ?? "This model"} has no fast mode.`,
-                                      })}
-                                onFastModeChange={(enabled) => {
+                                {...(voiceSettings.settings?.effectiveController.speed
+                                    ? { speed: voiceSettings.settings.effectiveController.speed }
+                                    : {})}
+                                speeds={voiceSettings.settings?.effectiveController.speeds ?? []}
+                                speedDefault={
+                                    (voiceSettings.settings?.controller.speed ?? null) === null
+                                }
+                                onSpeedChange={(speed) => {
                                     if (happyAgentOnline())
-                                        voiceSettingsStore.fastModeUpdate(enabled);
+                                        voiceSettingsStore.controllerSpeedUpdate(speed);
                                 }}
                                 prompt={
                                     voiceSettings.promptDraft ??

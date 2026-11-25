@@ -27,16 +27,22 @@ async function ended(f: Fixture, call: Awaited<ReturnType<Fixture["open"]>>) {
 afterEach(() => vi.useRealTimers());
 
 describe("GPT-Live runtime transport and lifetime", () => {
-    it("constructs inertly and lists only explicitly typed enabled candidate providers", async () => {
+    it("constructs inertly and lists the accounts the daemon names, with their credential", async () => {
         const f = gptLiveRuntimeFixtureCreate();
         expect(f.daemon.calls).toEqual([]);
         expect(f.stats.permissionStarts + f.stats.mediaOpens + f.stats.socketOpens).toBe(0);
         expect(f.stats.subscriptions).toBe(0);
         const availability = await f.runtime.availabilityRead(new AbortController().signal);
         expect(availability.supported).toBe(true);
-        expect(availability.accounts.map((account) => [account.providerId, account.kind])).toEqual([
-            ["codex", "subscription"],
-            ["openai", "api"],
+        expect(
+            availability.accounts.map((account) => [
+                account.providerId,
+                account.kind,
+                account.label,
+            ]),
+        ).toEqual([
+            ["codex", "subscription", "codex · Codex subscription"],
+            ["work-key", "api", "Work · OpenAI API key"],
         ]);
         expect(f.daemon.calls.map((call) => call.method)).toEqual(["getHealth", "getConfig"]);
         expect(f.stats.permissionStarts + f.stats.mediaOpens + f.stats.socketOpens).toBe(0);

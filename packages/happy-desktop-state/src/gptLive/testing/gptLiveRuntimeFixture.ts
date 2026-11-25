@@ -25,9 +25,32 @@ export function gptLiveRuntimeFixtureCreate(
         ...daemon.configGet(),
         providers: {
             codex: { enabled: true, type: "codex", models: [] },
-            openai: { enabled: true, type: "openai", models: [] },
+            "work-key": { enabled: true, type: "codex", models: [] },
             disabled: { enabled: false, type: "codex", models: [] },
             unsupported: { enabled: true, type: "claude", models: [] },
+        },
+        // The daemon names the accounts a call can use and the credential each holds.
+        voice: {
+            controller: {
+                providerId: null,
+                modelId: null,
+                effort: null,
+                fastMode: false,
+            },
+            effectiveController: {
+                providerId: null,
+                modelId: "gpt-6.2-sol",
+                effort: "low",
+                serviceTier: null,
+                notice: null,
+            },
+            accounts: [
+                { providerId: "codex", credential: "codex_subscription" },
+                { providerId: "work-key", credential: "openai_api_key", name: "Work" },
+            ],
+            defaultSystemPrompt: "",
+            systemPromptOverride: null,
+            effectiveSystemPrompt: "",
         },
     });
     const stats = {
