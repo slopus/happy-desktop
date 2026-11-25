@@ -170,6 +170,8 @@ const revisions: readonly HandbookRevision[] = [7, 6, 5, 4, 3, 2, 1].map((n) => 
     actorUserId: n === 5 ? "u_ada" : "u_kirill",
     actorAgentId: n === 6 ? "ag_release" : null,
     changeRequestId: n === 5 ? "cr_old" : null,
+    fromSeq: (n - 1) * 60,
+    toSeq: n * 60 - 1,
     createdAt: NOW - (8 - n) * 24 * 60 * MINUTE,
     updatedAt: NOW - (8 - n) * 24 * 60 * MINUTE + 4 * MINUTE,
 }));
@@ -188,6 +190,7 @@ const requestSummary: HandbookChangeRequestSummary = {
     resolvedAt: null,
     resolvedByUserId: null,
     mergedRevision: null,
+    mergedSeq: null,
     conflicts: null,
     rejectReason: null,
     abilities: { edit: false, withdraw: false, merge: true, reject: true },

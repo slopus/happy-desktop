@@ -161,6 +161,8 @@ function revisionRead(value: unknown): HandbookRevision | undefined {
         actorUserId: textOrNull(revision.actorUserId),
         actorAgentId: textOrNull(revision.actorAgentId),
         changeRequestId: textOrNull(revision.changeRequestId),
+        fromSeq: numberOrNull(revision.fromSeq) ?? 0,
+        toSeq: numberOrNull(revision.toSeq) ?? 0,
         createdAt: numberOrNull(revision.createdAt) ?? 0,
         updatedAt: numberOrNull(revision.updatedAt) ?? 0,
     };
@@ -210,6 +212,7 @@ function changeRequestSummaryRead(value: unknown): HandbookChangeRequestSummary 
         resolvedAt: numberOrNull(request.resolvedAt),
         resolvedByUserId: textOrNull(request.resolvedByUserId),
         mergedRevision: numberOrNull(request.mergedRevision),
+        mergedSeq: numberOrNull(request.mergedSeq),
         // A list of the blocks resolved, or their count.
         conflicts: Array.isArray(request.conflicts)
             ? request.conflicts.length

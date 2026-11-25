@@ -21,12 +21,17 @@ export interface HandbookCategory {
     readonly protected: boolean;
 }
 
-/** What the reader may do with one document, as the server decides. */
+/** What the reader may do with one document, as the server decides. All but `manage` are off once it is deleted. */
 export interface HandbookDocumentAbilities {
+    /** May change its content now. */
     readonly edit: boolean;
+    /** May change its title. */
     readonly editMetadata: boolean;
+    /** May change its slug, maintainer, and category, and delete and restore it. */
     readonly manage: boolean;
+    /** May open a change request. */
     readonly propose: boolean;
+    /** May merge and reject its change requests. */
     readonly merge: boolean;
 }
 
@@ -74,6 +79,9 @@ export interface HandbookRevision {
     readonly actorUserId: string | null;
     readonly actorAgentId: string | null;
     readonly changeRequestId: string | null;
+    /** The collaborative log span it covers; its Markdown is the text at `toSeq`. */
+    readonly fromSeq: number;
+    readonly toSeq: number;
     readonly createdAt: number;
     readonly updatedAt: number;
 }
@@ -103,6 +111,7 @@ export interface HandbookChangeRequestSummary {
     readonly resolvedAt: number | null;
     readonly resolvedByUserId: string | null;
     readonly mergedRevision: number | null;
+    readonly mergedSeq: number | null;
     /** Blocks both sides changed, resolved automatically at merge; null until merged. */
     readonly conflicts: number | null;
     readonly rejectReason: string | null;

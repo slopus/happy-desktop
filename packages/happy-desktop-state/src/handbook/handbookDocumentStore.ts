@@ -169,7 +169,9 @@ export function handbookDocumentStoreCreate(deps: {
         ],
         concerns: (event) =>
             event.type === "handbook.updated"
-                ? event.documentId === null || event.documentId === documentId
+                ? // A category change alone is the list's; the page names categories from it.
+                  event.documentId === documentId ||
+                  (event.documentId === null && event.categoryId === null)
                 : event.documentId === documentId,
         read: async () => {
             let answers: readonly unknown[];

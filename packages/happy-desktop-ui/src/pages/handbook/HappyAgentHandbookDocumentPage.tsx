@@ -359,13 +359,9 @@ function HandbookDocumentFacts(props: {
     readonly onMaintainerSave: (userId: string) => void;
 }) {
     const document = props.document;
-    const editable = document.abilities.editMetadata && document.deletedAt === null;
+    // Its category and maintainer are for those who manage it, as the server says.
+    const editable = document.abilities.manage && document.deletedAt === null;
     const category = props.categories.find((entry) => entry.id === document.categoryId);
-    // Filing into a protected category, or out of one, is for those who manage it.
-    const categories = props.categories.filter(
-        (entry) =>
-            entry.id === document.categoryId || document.abilities.manage || !entry.protected,
-    );
     const maintainer = props.labels.person(document.maintainerUserId);
     const people = props.people.some((person) => person.id === maintainer.id)
         ? props.people
@@ -375,11 +371,11 @@ function HandbookDocumentFacts(props: {
             <div className="happy-handbook-facts__item">
                 <dt>Category</dt>
                 <dd>
-                    {editable && (document.abilities.manage || !category?.protected) ? (
+                    {editable ? (
                         <Select
                             disabled={props.saving}
                             onValueChange={props.onCategorySave}
-                            options={categories.map((entry) => ({
+                            options={props.categories.map((entry) => ({
                                 value: entry.id,
                                 label: entry.name,
                             }))}
