@@ -60,6 +60,8 @@ export type HandbookDocumentContentSnapshot =
  * gap or a reconnect, is read as whatever the document here lacks, by its
  * state vector. Where the server does not serve live editing, the document is
  * read the same way on every `handbook.document.updated` about it instead.
+ * Deleting a document silently ends its subscriptions, so any change to its
+ * facts, a restore among them, subscribes again.
  *
  * The reader's changes are written to the document by the editor and sent
  * from here: merged while one request is in flight, at most one request at a
@@ -468,7 +470,7 @@ export function handbookDocumentContentStoreCreate(deps: {
             void (async () => {
                 for await (const input of sync.follow({
                     signal: active.signal,
-                    events: ["handbook.document.updated"],
+                    events: ["handbook.updated", "handbook.document.updated"],
                     documents: true,
                 })) {
                     if (input.kind === "error") continue;
@@ -538,8 +540,17 @@ export function handbookDocumentContentStoreCreate(deps: {
                     const event = handbookEventRead(
                         update.event as { readonly type: string; readonly payload?: unknown },
                     );
-                    if (event?.type !== "handbook.document.updated") continue;
+                    if (event === undefined || event.type === "handbook.change_request.updated")
+                        continue;
                     if (event.documentId !== documentId) continue;
+                    if (event.type === "handbook.updated") {
+                        // Deleting a document silently ends its subscriptions, and a
+                        // restore needs a new one; any change to its facts asks again.
+                        subscribed = undefined;
+                        refusedOn = undefined;
+                        void attach(active.signal);
+                        continue;
+                    }
                     // Live frames already brought it, unless this is past what they did.
                     if (subscribed !== undefined && event.seq <= seq) continue;
                     pullRun();
