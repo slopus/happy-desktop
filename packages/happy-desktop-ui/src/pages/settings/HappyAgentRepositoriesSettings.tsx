@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { HappyAgentPluginImage } from "happy-desktop-state";
+import { Avatar } from "../../Avatar";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
@@ -22,6 +23,8 @@ export interface HappyAgentRepositoryRow {
     /** Host and path, for example `github.com/slopus/rig`. */
     readonly location: string;
     readonly defaultBranch?: string;
+    /** Its picture, such as its GitHub owner's; the generic repository tile without one. */
+    readonly imageUrl?: string;
     /** What the last access check found. */
     readonly access: "reachable" | "failed" | "unchecked";
     /** The plugin that manages it, marked on the row. */
@@ -148,7 +151,9 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
                         onClick={() => props.onOpen(repository.id)}
                         type="button"
                     >
-                        <IconTile icon="repository" tone="gray" />
+                        <HappyAgentRepositoryMark
+                            {...(repository.imageUrl ? { imageUrl: repository.imageUrl } : {})}
+                        />
                         <span className="happy-agent-repositories__text">
                             <span className="happy-agent-repositories__name">
                                 {repository.name}
@@ -195,6 +200,19 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
                 </Box>
             ) : null}
         </HappyAgentSettingsSection>
+    );
+}
+
+/**
+ * A repository's mark at the head of its row and its dialog: its picture in
+ * the 28px tile the generic repository glyph otherwise fills, so a row with a
+ * picture and one without line up.
+ */
+function HappyAgentRepositoryMark(props: { readonly imageUrl?: string }) {
+    return props.imageUrl ? (
+        <Avatar imageUrl={props.imageUrl} initials="" size="sm" type="agent" />
+    ) : (
+        <IconTile icon="repository" tone="gray" />
     );
 }
 
@@ -390,6 +408,8 @@ export function HappyAgentRepositoryAddDialog(props: HappyAgentRepositoryAddDial
 
 export interface HappyAgentRepositoryDialogProps {
     readonly name: string;
+    /** Its picture, leading the title in place of the generic repository glyph. */
+    readonly imageUrl?: string;
     readonly url: string;
     readonly defaultBranch?: string;
     /** The branches the last read found, for choosing the default. */
@@ -446,6 +466,9 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                     </Button>
                 }
                 icon="repository"
+                {...(props.imageUrl
+                    ? { leading: <HappyAgentRepositoryMark imageUrl={props.imageUrl} /> }
+                    : {})}
                 onClose={props.onClose}
                 size="large"
                 title={props.name}

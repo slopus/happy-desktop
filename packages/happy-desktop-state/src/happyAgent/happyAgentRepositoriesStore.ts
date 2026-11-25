@@ -3,6 +3,7 @@ import { clusterSecretSchema } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
+import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 import {
     HappyCloudRequestRefusal,
     type HappyCloudRequest,
@@ -61,6 +62,8 @@ export interface HappyAgentRepository {
     readonly defaultBranch: string | null;
     readonly authentication: HappyAgentRepositoryAuthentication;
     readonly lastCheck: HappyAgentRepositoryCheck | null;
+    /** Its picture, painted from the ThumbHash until it loads; null without one. */
+    readonly avatar: { readonly url: string; readonly thumbhash: string } | null;
     /** What a change sends back as `If-Match`. */
     readonly version: string;
 }
@@ -247,11 +250,14 @@ function authenticationRead(value: unknown): HappyAgentRepositoryAuthentication 
     }
 }
 
-function repositoryRead(value: unknown): HappyAgentRepository | undefined {
+/** Reads one repository; `endpoint` is where the server serves its picture from. */
+function repositoryRead(value: unknown, endpoint: string): HappyAgentRepository | undefined {
     const entry = recordOf(value);
     if (!entry || typeof entry.id !== "string" || typeof entry.url !== "string") return undefined;
     const authentication = authenticationRead(entry.authentication);
     if (!authentication) return undefined;
+    const avatar = recordOf(entry.avatar);
+    const digest = stringOrNull(avatar?.digest);
     return {
         id: entry.id,
         name: typeof entry.name === "string" ? entry.name : entry.id,
@@ -262,6 +268,17 @@ function repositoryRead(value: unknown): HappyAgentRepository | undefined {
         defaultBranch: stringOrNull(entry.defaultBranch),
         authentication,
         lastCheck: checkRead(entry.lastCheck),
+        avatar:
+            digest === null
+                ? null
+                : {
+                      url: happyAgentImageUrl(
+                          endpoint,
+                          `/v0/repositories/${encodeURIComponent(entry.id)}/avatar`,
+                          digest,
+                      ),
+                      thumbhash: stringOrNull(avatar?.thumbhash) ?? "",
+                  },
         version: typeof entry.version === "string" ? entry.version : "",
     };
 }
@@ -298,6 +315,8 @@ export function happyAgentRepositoryUrlTransport(url: string): "https" | "ssh" |
 
 export function happyAgentRepositoriesStoreCreate(deps: {
     readonly request: HappyCloudRequest;
+    /** Where the server serves repository pictures from. */
+    readonly endpoint: string;
     /** Where `repository.updated` arrives, as a hint to read the list again sooner. */
     readonly sync?: HappyAgentSync;
 }): HappyAgentRepositoriesStore {
@@ -385,7 +404,7 @@ export function happyAgentRepositoriesStoreCreate(deps: {
                 listAccept(
                     Array.isArray(entries)
                         ? entries.flatMap((entry: unknown) => {
-                              const read = repositoryRead(entry);
+                              const read = repositoryRead(entry, deps.endpoint);
                               return read ? [read] : [];
                           })
                         : [],
@@ -468,7 +487,7 @@ export function happyAgentRepositoriesStoreCreate(deps: {
             .then(
                 (answer) => {
                     if (disposed) return;
-                    const read = repositoryRead(recordOf(answer)?.repository);
+                    const read = repositoryRead(recordOf(answer)?.repository, deps.endpoint);
                     if (read)
                         listAccept(
                             store

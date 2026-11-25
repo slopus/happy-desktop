@@ -52,7 +52,10 @@ function request(_method: string, path: string): Promise<unknown> {
 
 it("names the managing plugin with its catalog picture on the row and in the dialog", async () => {
     const plugins = happyAgentPluginsStoreCreate({ request, endpoint: "https://cluster.example" });
-    const repositories = happyAgentRepositoriesStoreCreate({ request });
+    const repositories = happyAgentRepositoriesStoreCreate({
+        request,
+        endpoint: "https://cluster.example",
+    });
     plugins.subscribe(() => undefined);
     repositories.subscribe(() => undefined);
     await waitFor(() => {

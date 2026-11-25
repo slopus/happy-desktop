@@ -48,6 +48,7 @@ export function AppRepositoriesSettings(props: {
                         id: repository.id,
                         name: repository.name,
                         location: `${repository.host}/${repository.path}`,
+                        ...(repository.avatar ? { imageUrl: repository.avatar.url } : {}),
                         ...(repository.defaultBranch
                             ? { defaultBranch: repository.defaultBranch }
                             : {}),
@@ -106,6 +107,7 @@ export function AppRepositoriesSettings(props: {
             {open && opened ? (
                 <HappyAgentRepositoryDialog
                     branches={branchesOf(snapshot, opened)}
+                    {...(opened.avatar ? { imageUrl: opened.avatar.url } : {})}
                     check={
                         open.checking
                             ? { state: "checking" }

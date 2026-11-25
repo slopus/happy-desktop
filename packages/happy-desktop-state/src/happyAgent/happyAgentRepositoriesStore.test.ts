@@ -123,6 +123,7 @@ async function loaded(
     );
     const store = happyAgentRepositoriesStoreCreate({
         request: fake.request,
+        endpoint: "https://cluster.example",
         ...(sync ? { sync } : {}),
     });
     stores.push(store);

@@ -1308,6 +1308,7 @@ export function happyAgentWorkspaceClientCreate(
             if (!request) return undefined;
             repositoriesStore ??= happyAgentRepositoriesStoreCreate({
                 request,
+                endpoint: deps.client.endpoint,
                 sync: deps.connection.sync,
             });
             return repositoriesStore;

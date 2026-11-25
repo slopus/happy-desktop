@@ -53,6 +53,9 @@ const GITHUB_PLUGIN_IMAGE = {
     thumbhash: "1QcSBwAKhod2h3hyioeYR5eI96SkM5QA",
 };
 
+/** The `acme` organization's picture, as a plugin-added repository carries its owner's. */
+const ACME_OWNER_IMAGE = new URL("../assets/repository-owner-acme.webp", import.meta.url).href;
+
 const repositories: readonly HappyAgentRepositoryRow[] = [
     {
         id: "rig",
@@ -71,6 +74,7 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
     {
         id: "web",
         name: "web",
+        imageUrl: ACME_OWNER_IMAGE,
         location: "github.com/acme/web",
         defaultBranch: "main",
         access: "reachable",
@@ -79,6 +83,7 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
     {
         id: "api",
         name: "api",
+        imageUrl: ACME_OWNER_IMAGE,
         location: "github.com/acme/api",
         defaultBranch: "main",
         access: "failed",
@@ -87,6 +92,7 @@ const repositories: readonly HappyAgentRepositoryRow[] = [
     {
         id: "docs",
         name: "docs",
+        imageUrl: ACME_OWNER_IMAGE,
         location: "github.com/acme/docs",
         defaultBranch: "main",
         access: "reachable",
@@ -213,6 +219,7 @@ const managed: HappyAgentRepositoryDialogProps = {
     ...detail,
     name: "web",
     url: "https://github.com/acme/web.git",
+    imageUrl: ACME_OWNER_IMAGE,
     credentialId: HAPPY_AGENT_REPOSITORY_CREDENTIAL_NONE,
     credentials: [],
     plugin: githubApp,
