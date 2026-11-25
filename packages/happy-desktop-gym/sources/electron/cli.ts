@@ -140,6 +140,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         for (const lane of lanes ?? [])
             if (lane !== "local" && lane !== "remote")
                 throw new Error(`Unknown live-voice-latency lane: ${lane}`);
+        if (flags.scenarios !== undefined && flags.scenarios !== "deep")
+            throw new Error(`Unknown live-voice-latency scenario: ${flags.scenarios}`);
         await gymLiveVoiceLatencyRun({
             authFile: flags.authFile,
             remoteRoot: flags.remoteRoot,
@@ -148,6 +150,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             ...(flags.rtt ? { roundTripMs: Number(flags.rtt) } : {}),
             ...(flags.jitter ? { jitterMs: Number(flags.jitter) } : {}),
             ...(lanes ? { lanes: lanes as LiveVoiceLatencyLane[] } : {}),
+            ...(flags.scenarios === "deep" ? { scenario: "deep" as const } : {}),
         });
         return;
     }
@@ -377,7 +380,8 @@ Commands:
   live-voice-evals --auth-file ABSOLUTE_CODEX_AUTH_PATH [--scenarios S1,S2,S3,S4,S5,S6]
       [--label NAME] [--artifact-dir PATH]   (HAPPY_DESKTOP_AGENT_EXECUTABLE picks the agent build)
   live-voice-latency --auth-file ABSOLUTE_CODEX_AUTH_PATH --remote-root PREPARED_REALISTIC_ROOT
-      [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
+      [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--scenarios deep]
+      [--artifact-dir PATH]
   clean --root PATH
 
 Workloads:

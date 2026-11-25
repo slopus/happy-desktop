@@ -566,6 +566,15 @@ node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-
   [--calls 5] [--rtt 60] [--jitter 20] [--lanes local,remote] [--artifact-dir PATH]
 ```
 
+`--scenarios deep` instead asks about a conversation past the hundred rows a
+call's context carries: "Lighthouse Ledger", added once to the realistic
+daemon's last project with a fact only it holds. Each call asks for its latest
+news by name, then says "Open it.", and `latency.md` adds k/n for four checks:
+the conversation was absent from the call's first AppState and context, voice
+answered with its fact, the window was asked to open it by agent ID
+(`agentTargets`) and succeeded, and the window landed on it. It defaults to the
+`remote` lane; `--calls 3` gives k/3.
+
 ### Voice evals
 
 `live-voice-evals` runs scenarios S1–S6 from the desktop voice eval report as

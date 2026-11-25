@@ -26,7 +26,17 @@ const CONVERSATION_TITLE = "Harbor Beacon Notes";
 const BEACON =
     "The harbor beacon code is Indigo Marmot 269, and the north pier stays closed until Friday.";
 
+/** Past the hundred rows a call's context carries: the realistic daemon's last project. */
+const DEEP_TITLE = "Lighthouse Ledger";
+const DEEP_FACT =
+    "The lighthouse ledger code is Cobalt Heron 418, and the east jetty reopens Monday.";
+
 export type LiveVoiceLatencyLane = "local" | "remote";
+/**
+ * `latency` opens a project and reads a conversation in the first hundred;
+ * `deep` asks by name about one past them, then opens it.
+ */
+export type LiveVoiceLatencyScenario = "latency" | "deep";
 
 /**
  * Real GPT-Live calls hosted by one realistic daemon (the `realistic` gym
@@ -44,6 +54,7 @@ export async function gymLiveVoiceLatencyRun(options: {
     roundTripMs?: number;
     jitterMs?: number;
     lanes?: readonly LiveVoiceLatencyLane[];
+    scenario?: LiveVoiceLatencyScenario;
 }): Promise<void> {
     if (!isAbsolute(options.authFile))
         throw new Error("--auth-file must reference an existing absolute Codex sign-in path.");
@@ -52,7 +63,8 @@ export async function gymLiveVoiceLatencyRun(options: {
     const calls = options.calls ?? 5;
     const roundTripMs = options.roundTripMs ?? 60;
     const jitterMs = options.jitterMs ?? 20;
-    const lanes = options.lanes ?? ["local", "remote"];
+    const scenario = options.scenario ?? "latency";
+    const lanes = options.lanes ?? (scenario === "deep" ? ["remote"] : ["local", "remote"]);
     const realisticPaths = await gymRunPathsRead(options.remoteRoot);
     const { paths } = await gymRunPathsCreate("smoke", undefined, options.artifactDirectory);
     const prepared = JSON.parse(
@@ -69,6 +81,7 @@ export async function gymLiveVoiceLatencyRun(options: {
             where: "stream proxy in front of the remote daemon's socket, behind its Tailcat serve",
         },
         calls,
+        scenario,
         voiceArchived: {},
         lanes: {},
         startedAt: new Date().toISOString(),
@@ -109,6 +122,11 @@ export async function gymLiveVoiceLatencyRun(options: {
     try {
         result.stage = "fixture";
         await harborSeed(realisticPaths, prepared.projects[0]!.id);
+        const deepSessionId =
+            scenario === "deep"
+                ? await deepSeed(realisticPaths, prepared.projects.at(-1)!.id)
+                : undefined;
+        result.deepSessionId = deepSessionId;
         realistic = await happyAgentRuntimeCreate(
             realisticPaths,
             undefined,
@@ -120,10 +138,15 @@ export async function gymLiveVoiceLatencyRun(options: {
         await realisticClient.completeOnboarding();
         // A node keeps the name its first start gave it; the rail names it by this.
         await realisticClient.patchConfig({ node: { name: REALISTIC_NODE } });
-        const turnsFor = (index: number) => [
-            { say: `Open gym project ${String(((index + 2) % 16) + 1).padStart(2, "0")}.` },
-            { say: `Read me the latest message in ${CONVERSATION_TITLE}.` },
-        ];
+        const turnsFor = (index: number) =>
+            scenario === "deep"
+                ? [{ say: `What's the latest in ${DEEP_TITLE}?` }, { say: "Open it." }]
+                : [
+                      {
+                          say: `Open gym project ${String(((index + 2) % 16) + 1).padStart(2, "0")}.`,
+                      },
+                      { say: `Read me the latest message in ${CONVERSATION_TITLE}.` },
+                  ];
         const lane = async (
             name: LiveVoiceLatencyLane,
             laneWindow: LiveVoiceWindow,
@@ -149,14 +172,19 @@ export async function gymLiveVoiceLatencyRun(options: {
             for (let index = 0; index < calls; index++) {
                 await page.getByText("gym-project-01", { exact: true }).first().click();
                 await page.waitForTimeout(1_500);
-                outcomes.push(
-                    await voiceCall({
-                        window: laneWindow,
-                        paths: lanePaths,
-                        name: `${name}/call-${index + 1}`,
-                        turns: turnsFor(index),
-                    }),
-                );
+                const call = await voiceCall({
+                    window: laneWindow,
+                    paths: lanePaths,
+                    name: `${name}/call-${index + 1}`,
+                    turns: turnsFor(index),
+                });
+                if (deepSessionId)
+                    call.deep = await deepChecks(
+                        join(lanePaths.artifacts, `${name}/call-${index + 1}`),
+                        deepSessionId,
+                        call,
+                    );
+                outcomes.push(call);
             }
             const silence = await liveVoiceSpeakersVerify(laneWindow.app, page);
             return {
@@ -251,6 +279,7 @@ export async function gymLiveVoiceLatencyRun(options: {
             };
         }
         result.summary = latencySummary(laneResults);
+        if (deepSessionId) result.deep = deepSummary(laneResults);
         result.status = "passed";
         result.stage = "complete";
     } catch (error) {
@@ -268,7 +297,8 @@ export async function gymLiveVoiceLatencyRun(options: {
         if (result.summary)
             await writeFile(
                 join(paths.artifacts, "latency.md"),
-                latencyTable(result.summary as Summary),
+                latencyTable(result.summary as Summary) +
+                    (result.deep ? `\n${result.deep as string}` : ""),
             );
         console.log(
             JSON.stringify(
@@ -313,6 +343,103 @@ async function harborSeed(paths: GymRunPaths, projectId: string) {
     } finally {
         await runtime.stop();
     }
+}
+
+/**
+ * Adds one conversation past the context's first hundred rows, once: in the
+ * realistic daemon's last project, with a scripted reply holding a fact only
+ * it knows. Returns its agent ID.
+ */
+async function deepSeed(paths: GymRunPaths, projectId: string): Promise<string> {
+    const marker = join(paths.root, "deep.json");
+    const seeded = await readFile(marker, "utf8").then(
+        (text) => (JSON.parse(text) as { sessionId: string }).sessionId,
+        () => undefined,
+    );
+    if (seeded) return seeded;
+    const inference = scriptedInferenceCreate(DEEP_TITLE, `Logged. ${DEEP_FACT}`);
+    await inference.start();
+    const runtime = await happyAgentRuntimeCreate(paths, inference);
+    try {
+        const { agent } = await runtime.client.createAgent(projectId);
+        const { runId } = await runtime.client.sendMessage(agent.id, `Log this: ${DEEP_FACT}`);
+        await runtime.client.waitForAgentIdle(agent.id, runId, 60_000);
+        await writeFile(marker, JSON.stringify({ sessionId: agent.id, title: DEEP_TITLE }));
+        return agent.id;
+    } finally {
+        await runtime.stop();
+        await inference.stop();
+    }
+}
+
+type DeepEvent = {
+    direction?: string;
+    at: number;
+    frame: Record<string, unknown> & { type: string };
+};
+
+/**
+ * One deep call, from its own control frames: the conversation was absent from
+ * what the call started with, voice answered from it, opened it by agent ID,
+ * and the window landed on it.
+ */
+async function deepChecks(directory: string, sessionId: string, call: Record<string, unknown>) {
+    const events = JSON.parse(
+        await readFile(join(directory, "control-events.json"), "utf8").catch(() => "[]"),
+    ) as DeepEvent[];
+    const first = (type: string) => events.find((event) => event.frame.type === type);
+    const contexts = events.filter((event) => event.frame.type === "desktopContext");
+    const opens = events.filter(
+        (event) =>
+            event.frame.type === "actionRequested" &&
+            (event.frame.action as { type?: string }).type === "desktopOpen",
+    );
+    const resultOf = (actionId: unknown) =>
+        events.find(
+            (event) => event.frame.type === "actionResult" && event.frame.actionId === actionId,
+        )?.frame.result as { status?: string } | undefined;
+    const byAgent = opens.find((event) => {
+        const target = (event.frame.action as { target?: { kind?: string; agentId?: string } })
+            .target;
+        return target?.kind === "agent" && target.agentId === sessionId;
+    });
+    const turns = (call.turns ?? []) as { assistant?: string; firstAudioMs?: number | null }[];
+    const landed = (
+        contexts.at(-1)?.frame.context as { activeTarget?: { sessionId?: string } } | undefined
+    )?.activeTarget?.sessionId;
+    return {
+        outsideFirstContext:
+            !JSON.stringify(first("appState")?.frame ?? {}).includes(sessionId) &&
+            !JSON.stringify(first("desktopContext")?.frame ?? {}).includes(sessionId),
+        answered: /cobalt heron|\b418\b/iu.test(turns[0]?.assistant ?? ""),
+        openedByAgentId: byAgent ? resultOf(byAgent.frame.actionId)?.status === "succeeded" : false,
+        opens: opens.map((event) => ({
+            target: (event.frame.action as { target?: unknown }).target,
+            result: resultOf(event.frame.actionId),
+        })),
+        landed: landed === sessionId,
+        firstAudioMs: turns.map((turn) => turn.firstAudioMs ?? null),
+        assistant: turns.map((turn) => turn.assistant ?? ""),
+    };
+}
+
+/** k/n per deep check, and first audio per turn, per lane. */
+function deepSummary(lanes: Record<string, unknown>): string {
+    const rows: string[] = [
+        "| Lane | Outside first context | Answered | Opened by agent ID | Landed | First audio t1 / t2 (ms) |",
+        "|---|---|---|---|---|---|",
+    ];
+    for (const [name, value] of Object.entries(lanes)) {
+        const deep = (
+            value as { outcomes: { deep?: Awaited<ReturnType<typeof deepChecks>> }[] }
+        ).outcomes.flatMap((outcome) => (outcome.deep ? [outcome.deep] : []));
+        const count = (key: "outsideFirstContext" | "answered" | "openedByAgentId" | "landed") =>
+            `${deep.filter((item) => item[key]).length}/${deep.length}`;
+        rows.push(
+            `| ${name} | ${count("outsideFirstContext")} | ${count("answered")} | ${count("openedByAgentId")} | ${count("landed")} | ${deep.map((item) => item.firstAudioMs.join(" / ")).join("; ")} |`,
+        );
+    }
+    return rows.join("\n") + "\n";
 }
 
 /**
