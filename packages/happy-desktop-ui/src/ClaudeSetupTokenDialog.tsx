@@ -49,13 +49,10 @@ export interface ClaudeSetupTokenDialogProps {
 export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
     const [token, tokenSet] = useState("");
     const saving = props.phase === "saving";
-    const normalized = token.replace(/[\s\p{White_Space}]/gu, "");
-    const terminal = props.shell === "powershell" ? "PowerShell" : "Terminal";
+    const normalized = claudeSetupTokenNormalize(token);
     const submit = () => {
         if (normalized && !saving) props.onTokenSubmit(normalized);
     };
-    // The steps after installing are numbered on from it when it is there.
-    const first = props.installCommand === undefined ? 1 : 2;
     return (
         <ModalOverlay onDismiss={props.onClose}>
             <Modal
@@ -80,72 +77,108 @@ export function ClaudeSetupTokenDialog(props: ClaudeSetupTokenDialogProps) {
                 size="medium"
                 title={props.title ?? "Connect Claude"}
             >
-                <div className="happy-claude-setup-token__body">
-                    <p className="happy-claude-setup-token__lead">
-                        {props.lead ??
-                            "Happy connects to Claude with a setup token: a key Claude Code makes for your own Claude account. It takes about a minute."}
-                    </p>
-                    <ol className="happy-claude-setup-token__steps">
-                        {props.installCommand === undefined ? null : (
-                            <li className="happy-claude-setup-token__step">
-                                <span className="happy-claude-setup-token__number">1</span>
-                                <span className="happy-claude-setup-token__words">
-                                    <span>Install Claude Code. In {terminal}, run:</span>
-                                    <SetupCommand
-                                        command={props.installCommand}
-                                        label="Claude Code install command"
-                                        {...(props.onCommandCopy
-                                            ? { onCopy: () => props.onCommandCopy?.("install") }
-                                            : {})}
-                                    />
-                                </span>
-                            </li>
-                        )}
-                        <li className="happy-claude-setup-token__step">
-                            <span className="happy-claude-setup-token__number">{first}</span>
-                            <span className="happy-claude-setup-token__words">
-                                <span>In {terminal}, run:</span>
-                                <SetupCommand
-                                    command={SETUP_TOKEN_COMMAND}
-                                    label="Claude setup token command"
-                                    {...(props.onCommandCopy
-                                        ? { onCopy: () => props.onCommandCopy?.("setup-token") }
-                                        : {})}
-                                />
-                            </span>
-                        </li>
-                        <li className="happy-claude-setup-token__step">
-                            <span className="happy-claude-setup-token__number">{first + 1}</span>
-                            <span className="happy-claude-setup-token__words">
-                                Your browser opens Claude. Sign in with the account Happy should
-                                use, and allow access.
-                            </span>
-                        </li>
-                        <li className="happy-claude-setup-token__step">
-                            <span className="happy-claude-setup-token__number">{first + 2}</span>
-                            <span className="happy-claude-setup-token__words">
-                                <span>
-                                    Back in {terminal}, copy the token it prints. It starts with{" "}
-                                    <code>sk-ant-oat01-</code>. Paste it here:
-                                </span>
-                                <TextField
-                                    aria-label="Claude setup token"
-                                    autoComplete="off"
-                                    disabled={saving}
-                                    onSubmit={submit}
-                                    onValueChange={tokenSet}
-                                    placeholder="sk-ant-oat01-…"
-                                    type="password"
-                                    value={token}
-                                />
-                            </span>
-                        </li>
-                    </ol>
-                    {props.phase === "failed" && props.error ? (
-                        <Banner tone="danger">{props.error}</Banner>
-                    ) : null}
-                </div>
+                <ClaudeSetupTokenSteps
+                    {...props}
+                    onSubmit={submit}
+                    token={token}
+                    tokenSet={tokenSet}
+                />
             </Modal>
         </ModalOverlay>
+    );
+}
+
+/** The token as Happy Agent takes it: every space and line break a terminal copy adds, gone. */
+export function claudeSetupTokenNormalize(token: string): string {
+    return token.replace(/[\s\p{White_Space}]/gu, "");
+}
+
+export type ClaudeSetupTokenStepsProps = Pick<
+    ClaudeSetupTokenDialogProps,
+    "shell" | "installCommand" | "phase" | "error" | "lead" | "onCommandCopy"
+> & {
+    readonly token: string;
+    tokenSet(token: string): void;
+    onSubmit(): void;
+};
+
+/**
+ * The steps that make and paste a setup token, without a dialog around them,
+ * for a sheet that shows them as one of its steps.
+ */
+export function ClaudeSetupTokenSteps(props: ClaudeSetupTokenStepsProps) {
+    const saving = props.phase === "saving";
+    const terminal = props.shell === "powershell" ? "PowerShell" : "Terminal";
+    const submit = props.onSubmit;
+    const token = props.token;
+    const tokenSet = props.tokenSet;
+    // The steps after installing are numbered on from it when it is there.
+    const first = props.installCommand === undefined ? 1 : 2;
+    return (
+        <div className="happy-claude-setup-token__body">
+            <p className="happy-claude-setup-token__lead">
+                {props.lead ??
+                    "Happy connects to Claude with a setup token: a key Claude Code makes for your own Claude account. It takes about a minute."}
+            </p>
+            <ol className="happy-claude-setup-token__steps">
+                {props.installCommand === undefined ? null : (
+                    <li className="happy-claude-setup-token__step">
+                        <span className="happy-claude-setup-token__number">1</span>
+                        <span className="happy-claude-setup-token__words">
+                            <span>Install Claude Code. In {terminal}, run:</span>
+                            <SetupCommand
+                                command={props.installCommand}
+                                label="Claude Code install command"
+                                {...(props.onCommandCopy
+                                    ? { onCopy: () => props.onCommandCopy?.("install") }
+                                    : {})}
+                            />
+                        </span>
+                    </li>
+                )}
+                <li className="happy-claude-setup-token__step">
+                    <span className="happy-claude-setup-token__number">{first}</span>
+                    <span className="happy-claude-setup-token__words">
+                        <span>In {terminal}, run:</span>
+                        <SetupCommand
+                            command={SETUP_TOKEN_COMMAND}
+                            label="Claude setup token command"
+                            {...(props.onCommandCopy
+                                ? { onCopy: () => props.onCommandCopy?.("setup-token") }
+                                : {})}
+                        />
+                    </span>
+                </li>
+                <li className="happy-claude-setup-token__step">
+                    <span className="happy-claude-setup-token__number">{first + 1}</span>
+                    <span className="happy-claude-setup-token__words">
+                        Your browser opens Claude. Sign in with the account Happy should use, and
+                        allow access.
+                    </span>
+                </li>
+                <li className="happy-claude-setup-token__step">
+                    <span className="happy-claude-setup-token__number">{first + 2}</span>
+                    <span className="happy-claude-setup-token__words">
+                        <span>
+                            Back in {terminal}, copy the token it prints. It starts with{" "}
+                            <code>sk-ant-oat01-</code>. Paste it here:
+                        </span>
+                        <TextField
+                            aria-label="Claude setup token"
+                            autoComplete="off"
+                            disabled={saving}
+                            onSubmit={submit}
+                            onValueChange={tokenSet}
+                            placeholder="sk-ant-oat01-…"
+                            type="password"
+                            value={token}
+                        />
+                    </span>
+                </li>
+            </ol>
+            {props.phase === "failed" && props.error ? (
+                <Banner tone="danger">{props.error}</Banner>
+            ) : null}
+        </div>
     );
 }

@@ -17,6 +17,7 @@
 .happy-modal,
 .happy-modal__dialog,
 .happy-modal__header,
+.happy-modal__subheader,
 .happy-modal__icon,
 .happy-modal__title,
 .happy-modal__body,
@@ -55,6 +56,49 @@
 
 .happy-modal__dialog[data-size="large"] {
     width: 640px;
+}
+
+/* A sheet is one frame, as an iPad form sheet is: it keeps its size whatever
+   it shows and however that changes, clamped to the window with a margin, and
+   only its body scrolls. Its insets are roomier than a dialog's. */
+.happy-modal__dialog[data-size="sheet"] {
+    width: min(640px, calc(100vw - 48px));
+    height: min(720px, calc(100vh - 48px));
+}
+
+.happy-modal-overlay > .happy-modal > .happy-modal__dialog[data-size="sheet"] {
+    max-height: none;
+}
+
+.happy-modal__dialog[data-size="sheet"] .happy-modal__header {
+    padding: 20px 20px 12px 28px;
+}
+
+.happy-modal__dialog[data-size="sheet"] .happy-modal__body {
+    min-height: 0;
+}
+
+.happy-modal__dialog[data-size="sheet"] .happy-modal__body-content {
+    padding: 20px 28px 28px;
+}
+
+.happy-modal__dialog[data-size="sheet"] .happy-modal__footer {
+    padding: 16px 28px;
+}
+
+.happy-modal__leading {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+}
+
+.happy-modal__subheader {
+    flex: none;
+    padding: 0 28px 16px;
+    border-bottom: 1px solid var(--divider);
 }
 
 /* ---- Header ---------------------------------------------------------- */

@@ -1623,34 +1623,21 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             else providerSignInStore.signInStart(providerId);
                         }}
                         {...(providerSignIn.signInDialog
-                            ? (() => {
-                                  const providerId = providerSignIn.signInDialog.providerId;
-                                  const account = providerSignIn.accounts.get(providerId);
-                                  const provider = providers.providers.find(
-                                      (entry) => entry.id === providerId,
-                                  );
-                                  return account
+                            ? ((account) =>
+                                  account
                                       ? {
                                             signInDialog: providerSignInDialogProps(
                                                 account,
-                                                provider
-                                                    ? [
-                                                          providerTypeName(provider).typeName,
-                                                          providerAccountName(
-                                                              provider.id,
-                                                              provider.name,
-                                                          ),
-                                                      ]
-                                                          .filter(Boolean)
-                                                          .join(" · ")
-                                                    : providerId,
                                                 providerSignInStore,
                                                 happyAgentOnline,
                                                 props.externalLinkOpen,
                                             ),
                                         }
-                                      : {};
-                              })()
+                                      : {})(
+                                  providerSignIn.accounts.get(
+                                      providerSignIn.signInDialog.providerId,
+                                  ),
+                              )
                             : {})}
                         onTokenEditorOpen={(providerId) => {
                             if (happyAgentOnline()) providerSignInStore.tokenEditorOpen(providerId);
@@ -1658,14 +1645,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(providerSignIn.tokenEditor
                             ? {
                                   tokenEditor: {
-                                      providerName: providerAccountName(
-                                          providerSignIn.tokenEditor.providerId,
-                                          providers.providers.find(
-                                              (provider) =>
-                                                  provider.id ===
-                                                  providerSignIn.tokenEditor?.providerId,
-                                          )?.name ?? providerSignIn.tokenEditor.providerId,
-                                      ),
+                                      providerId: providerSignIn.tokenEditor.providerId,
                                       shell: navigator.platform.toLowerCase().startsWith("win")
                                           ? "powershell"
                                           : "posix",
@@ -2413,7 +2393,6 @@ function providerSignedInAs(account: HappyAgentProviderSignInAccount): { account
 /** The sign-in dialog of one account, from where its sign-in stands. */
 function providerSignInDialogProps(
     account: HappyAgentProviderSignInAccount,
-    providerName: string,
     store: HappyAgentProviderSignInStore,
     online: () => boolean,
     externalLinkOpen: ((url: string) => void) | undefined,
@@ -2448,7 +2427,7 @@ function providerSignInDialogProps(
                     }
                   : undefined;
     return {
-        providerName,
+        providerId: account.providerId,
         cli: account.cli,
         methods: account.methods,
         ...(flow ? { flow } : {}),

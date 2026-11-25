@@ -55,8 +55,8 @@ export function happyAgentProviderAccountLine(
             text: [
                 "Couldn’t refresh",
                 reason,
-                `last tried ${happyAgentProviderAgo(refreshError.at, now)}`,
-                expiry,
+                // A login about to run out matters more than when it was tried.
+                expiry ?? `last tried ${happyAgentProviderAgo(refreshError.at, now)}`,
             ]
                 .filter(Boolean)
                 .join(" · "),

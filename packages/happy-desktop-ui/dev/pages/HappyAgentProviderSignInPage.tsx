@@ -237,7 +237,7 @@ const missing = account(
 );
 
 const codexDialog = {
-    providerName: "Codex · work",
+    providerId: "work",
     cli: "codex",
     methods: ["device", "browser"],
     onClose: noop,
@@ -274,7 +274,7 @@ const dialogs: readonly {
         screen: "10-claude-code",
         label: "Claude, waiting for the code its page shows",
         dialog: {
-            providerName: "Claude · personal_steve",
+            providerId: "personal_steve",
             cli: "claude",
             methods: ["browser"],
             onClose: noop,
@@ -458,7 +458,7 @@ export function HappyAgentProviderSignInPage() {
                             onClose: noop,
                             onTokenSubmit: noop,
                             phase: "failed",
-                            providerName: "personal_steve",
+                            providerId: "personal_steve",
                             shell: "posix",
                         }}
                     />

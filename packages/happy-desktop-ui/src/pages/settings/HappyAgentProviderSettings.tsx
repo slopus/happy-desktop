@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { BadgeVariant } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import {
-    ClaudeSetupTokenDialog,
+    claudeSetupTokenNormalize,
+    ClaudeSetupTokenSteps,
     type ClaudeSetupTokenDialogProps,
 } from "../../ClaudeSetupTokenDialog";
 import { TextField } from "../../TextField";
@@ -26,8 +27,9 @@ import {
     type HappyAgentProviderAccountLine,
 } from "./happyAgentProviderAccountStatus";
 import {
+    HAPPY_AGENT_PROVIDER_PROGRAM_NAMES,
     HappyAgentProviderLogin,
-    HappyAgentProviderSignInDialog,
+    happyAgentProviderSignInStep,
     type HappyAgentProviderSignInDialogProps,
     type HappyAgentProviderSignInRow,
 } from "./HappyAgentProviderSignIn";
@@ -115,7 +117,8 @@ export type HappyAgentProviderTokenEditorProps = Pick<
     ClaudeSetupTokenDialogProps,
     "shell" | "phase" | "error" | "onClose" | "onTokenSubmit"
 > & {
-    readonly providerName: string;
+    /** The account whose token is being replaced, by id. */
+    readonly providerId: string;
 };
 
 export type HappyAgentProviderSettingsProps = {
@@ -196,16 +199,18 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
     if (props.providers.length === 0)
         return (
             <EmptyState
-                description="This Happy Agent daemon reports no model providers yet."
+                description="This Happy Agent reports no accounts to run on yet."
                 icon="globe"
-                title="No providers"
+                title="No accounts"
             />
         );
     const now = props.currentTime;
-    const detail =
-        props.detail === undefined
+    // The sheet is about one account, whichever step it is on.
+    const sheetId = props.detail ?? props.signInDialog?.providerId ?? props.tokenEditor?.providerId;
+    const sheet =
+        sheetId === undefined
             ? undefined
-            : props.providers.find((provider) => provider.id === props.detail);
+            : props.providers.find((provider) => provider.id === sheetId);
     return (
         <>
             {props.unavailable ? (
@@ -213,8 +218,8 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     {props.unavailable}
                 </Banner>
             ) : null}
-            {props.saveError && !detail ? (
-                <Banner tone="danger" title="Provider unchanged">
+            {props.saveError && !sheet ? (
+                <Banner tone="danger" title="Account unchanged">
                     {props.saveError}
                 </Banner>
             ) : null}
@@ -278,7 +283,7 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                         size="small"
                         variant="secondary"
                     >
-                        Add a provider
+                        Add an account
                     </Button>
                     <span className="happy-agent-provider__add-note">
                         Any endpoint that speaks the OpenAI Responses API, such as vLLM or a
@@ -286,27 +291,12 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     </span>
                 </Box>
             ) : null}
-            {props.signInDialog ? (
-                <HappyAgentProviderSignInDialog {...props.signInDialog} />
-            ) : props.tokenEditor ? (
-                <ClaudeSetupTokenDialog
-                    {...(props.tokenEditor.error === undefined
-                        ? {}
-                        : { error: props.tokenEditor.error })}
-                    lead={`Paste a new setup token for ${props.tokenEditor.providerName}. Happy uses it instead of the system login.`}
-                    onClose={props.tokenEditor.onClose}
-                    onTokenSubmit={props.tokenEditor.onTokenSubmit}
-                    phase={props.tokenEditor.phase}
-                    shell={props.tokenEditor.shell}
-                    submitLabel="Update token"
-                    title={`Update token · ${props.tokenEditor.providerName}`}
-                />
-            ) : detail ? (
-                <HappyAgentProviderDetail
+            {sheet ? (
+                <HappyAgentProviderSheet
+                    line={providerLine(sheet, now)}
                     now={now}
-                    provider={detail}
+                    provider={sheet}
                     settings={props}
-                    line={providerLine(detail, now)}
                 />
             ) : null}
         </>
@@ -350,32 +340,68 @@ function ProviderTile(props: { readonly provider: HappyAgentProviderRow }) {
 }
 
 /**
- * One account behind its row: whether agents may use it, how its login
- * stands and the ways to sign it in again, and which of its models the
- * pickers offer.
+ * One account behind its row, as an iPad form sheet: one fixed frame whose
+ * header says who the account is and switches it on or off, and whose body
+ * shows its details, or signing it in again, or updating its token, as steps
+ * pushed in the same frame. Nothing in the frame changes size between
+ * accounts, states, or steps; only the body scrolls.
  */
-function HappyAgentProviderDetail(props: {
+function HappyAgentProviderSheet(props: {
     readonly provider: HappyAgentProviderRow;
     readonly line: HappyAgentProviderAccountLine;
     readonly now: number;
     readonly settings: HappyAgentProviderSettingsProps;
 }) {
     const { provider, settings } = props;
+    // Drafts are held only while typed, and go straight to the handler.
+    const [code, codeSet] = useState("");
+    const [token, tokenSet] = useState("");
     const unavailable = settings.unavailable !== undefined;
-    const close = (): void => settings.onDetailClose?.();
-    const hint = providerHint(provider);
+    const signInDialog = settings.signInDialog;
+    const tokenEditor = settings.tokenEditor;
+    const step = signInDialog ? "sign-in" : tokenEditor ? "token" : "details";
+    const back = (): void => {
+        codeSet("");
+        tokenSet("");
+        if (signInDialog) signInDialog.onClose();
+        else tokenEditor?.onClose();
+    };
+    // Closing from any step closes the sheet; a running sign-in is cancelled with it.
+    const close = (): void => {
+        if (step !== "details") back();
+        settings.onDetailClose?.();
+    };
+    const parts =
+        signInDialog !== undefined
+            ? happyAgentProviderSignInStep(signInDialog, code, codeSet)
+            : tokenEditor !== undefined
+              ? tokenStep(tokenEditor, token, tokenSet, back)
+              : detailsStep(provider, settings, props.now);
     return (
         <ModalOverlay onDismiss={close}>
             <Modal
-                className="happy-agent-provider-detail"
+                className="happy-agent-provider-sheet"
+                data-step={step}
                 data-testid="provider-detail-dialog"
-                onClose={close}
-                size="large"
-                title={provider.name}
-            >
-                <Box className="happy-agent-provider-detail__body">
-                    <header className="happy-agent-provider-detail__header">
+                footer={parts.footer}
+                leading={
+                    step === "details" ? (
                         <ProviderTile provider={provider} />
+                    ) : (
+                        <Button
+                            aria-label={`Back to ${provider.name}`}
+                            icon="chevron-left"
+                            iconOnly
+                            onClick={back}
+                            size="small"
+                            variant="ghost"
+                        />
+                    )
+                }
+                onClose={close}
+                size="sheet"
+                subheader={
+                    <Box className="happy-agent-provider-sheet__identity">
                         <Box className="happy-agent-provider__naming">
                             <span className="happy-agent-provider__name">
                                 {[provider.typeName ?? provider.name, provider.plan]
@@ -385,6 +411,7 @@ function HappyAgentProviderDetail(props: {
                             <span
                                 className="happy-agent-provider-list__line"
                                 data-tone={props.line.tone}
+                                title={props.line.text}
                             >
                                 <span
                                     aria-hidden="true"
@@ -397,16 +424,6 @@ function HappyAgentProviderDetail(props: {
                             </span>
                         </Box>
                         {provider.saving ? <Spinner size={16} /> : null}
-                        {provider.custom && settings.onCustomProviderEdit ? (
-                            <Button
-                                aria-label={`Edit ${provider.name}`}
-                                disabled={unavailable}
-                                icon="edit"
-                                onClick={() => settings.onCustomProviderEdit?.(provider.id)}
-                                size="small"
-                                variant="ghost"
-                            />
-                        ) : null}
                         <Switch
                             aria-label={`${provider.typeName ? `${provider.typeName} · ` : ""}${provider.name} enabled`}
                             checked={provider.enabled}
@@ -415,119 +432,232 @@ function HappyAgentProviderDetail(props: {
                                 settings.onProviderEnabledChange(provider.id, enabled)
                             }
                         />
-                    </header>
-                    {settings.saveError ? (
-                        <Banner tone="danger" title="Provider unchanged">
-                            {settings.saveError}
-                        </Banner>
-                    ) : null}
-                    {provider.signIn || provider.activity ? (
-                        <section className="happy-agent-provider-detail__section">
-                            <h3 className="happy-agent-provider-detail__heading">Login</h3>
-                            <HappyAgentProviderLogin
-                                providerName={provider.name}
-                                now={props.now}
-                                {...(provider.signIn ? { signIn: provider.signIn } : {})}
-                                {...(provider.activity ? { activity: provider.activity } : {})}
-                                unavailable={unavailable}
-                                {...(settings.signInLocked
-                                    ? { locked: settings.signInLocked }
-                                    : {})}
-                                onSignIn={() => settings.onSignIn?.(provider.id)}
-                                onTokenEditorOpen={() => settings.onTokenEditorOpen?.(provider.id)}
-                            />
-                        </section>
-                    ) : null}
-                    <section
-                        className="happy-agent-provider-detail__section"
-                        data-status={provider.status}
-                    >
-                        <h3 className="happy-agent-provider-detail__heading">Models</h3>
-                        <Box className="happy-agent-provider__models">
-                            {provider.models.map((model) => (
-                                <Box
-                                    className="happy-agent-provider__model"
-                                    data-happy-desktop-ui="happy-agent-provider-model"
-                                    key={model.id}
-                                >
-                                    <Box className="happy-agent-provider__model-text">
-                                        <Box className="happy-agent-provider__model-title">
-                                            <span
-                                                className="happy-agent-provider__model-name"
-                                                data-happy-desktop-ui="happy-agent-provider-model-name"
-                                            >
-                                                {model.name}
-                                            </span>
-                                            {model.isDefault ? (
-                                                <span className="happy-agent-provider__model-default">
-                                                    Default
-                                                </span>
-                                            ) : null}
-                                        </Box>
-                                        <span
-                                            className="happy-agent-provider__model-meta"
-                                            data-happy-desktop-ui="happy-agent-provider-model-meta"
-                                        >
-                                            {modelMeta(model)}
-                                        </span>
-                                    </Box>
-                                    <Switch
-                                        aria-label={`${model.name} enabled`}
-                                        checked={model.enabled}
-                                        disabled={
-                                            unavailable ||
-                                            model.isDefault ||
-                                            provider.status !== "ready"
-                                        }
-                                        onChange={(enabled) =>
-                                            settings.onModelEnabledChange(model.id, enabled)
-                                        }
-                                    />
-                                </Box>
-                            ))}
-                            {provider.models.length === 0 ? (
-                                <span
-                                    className="happy-agent-provider__models-empty"
-                                    data-happy-desktop-ui="happy-agent-provider-models-empty"
-                                >
-                                    This provider offers no models right now.
-                                </span>
-                            ) : null}
-                        </Box>
-                        {hint ? (
-                            <p
-                                className="happy-agent-provider__hint"
-                                data-happy-desktop-ui="happy-agent-provider-hint"
-                            >
-                                {hint}
-                            </p>
-                        ) : null}
-                        <p className="happy-agent-provider__hint">
-                            Off for a model only hides it from this window’s pickers.
-                        </p>
-                    </section>
-                    {provider.keys ? (
-                        <section className="happy-agent-provider-detail__section">
-                            <h3 className="happy-agent-provider-detail__heading">API keys</h3>
-                            <HappyAgentProviderKeyList
-                                keys={provider.keys}
-                                providerId={provider.id}
-                                providerName={provider.name}
-                                unavailable={unavailable}
-                                {...(settings.onKeyAdd ? { onKeyAdd: settings.onKeyAdd } : {})}
-                                {...(settings.onKeyEnabledChange
-                                    ? { onKeyEnabledChange: settings.onKeyEnabledChange }
-                                    : {})}
-                                {...(settings.onKeyRemove
-                                    ? { onKeyRemove: settings.onKeyRemove }
-                                    : {})}
-                            />
-                        </section>
-                    ) : null}
+                    </Box>
+                }
+                title={
+                    step === "sign-in"
+                        ? `Sign in · ${provider.name}`
+                        : step === "token"
+                          ? `Update token · ${provider.name}`
+                          : provider.name
+                }
+            >
+                {/* A new step cross-fades in; the frame around it stays put. */}
+                <Box className="happy-agent-provider-sheet__step" key={step}>
+                    {parts.body}
                 </Box>
             </Modal>
         </ModalOverlay>
     );
+}
+
+/** The account's details: a notice line, Login, Models, and its keys. */
+function detailsStep(
+    provider: HappyAgentProviderRow,
+    settings: HappyAgentProviderSettingsProps,
+    now: number,
+): { readonly body: ReactNode; readonly footer: ReactNode } {
+    const unavailable = settings.unavailable !== undefined;
+    const hint = providerHint(provider);
+    const signIn = provider.signIn;
+    const changeable = signIn !== undefined && (signIn.acceptsToken || signIn.methods.length > 0);
+    const blocked = unavailable || settings.signInLocked !== undefined;
+    const notice =
+        (settings.saveError ? `Account unchanged: ${settings.saveError}` : undefined) ??
+        (settings.signInLocked && changeable ? settings.signInLocked : undefined) ??
+        (signIn && !signIn.installed && signIn.methods.length > 0
+            ? `${HAPPY_AGENT_PROVIDER_PROGRAM_NAMES[signIn.cli]} isn’t installed on the Happy Agent’s computer.`
+            : undefined) ??
+        "";
+    const needsSignIn =
+        provider.activity?.signIn === "signed_out" ||
+        provider.activity?.login?.refreshError?.permanent === true;
+    return {
+        footer: (
+            <>
+                {provider.custom && settings.onCustomProviderEdit ? (
+                    <Button
+                        disabled={unavailable}
+                        icon="edit"
+                        onClick={() => settings.onCustomProviderEdit?.(provider.id)}
+                        variant="ghost"
+                    >
+                        Edit account
+                    </Button>
+                ) : null}
+                {signIn?.acceptsToken ? (
+                    <Button
+                        aria-label={`Update the token for ${provider.name}`}
+                        disabled={blocked || signIn.running === true}
+                        onClick={() => settings.onTokenEditorOpen?.(provider.id)}
+                        variant="ghost"
+                    >
+                        Update token
+                    </Button>
+                ) : null}
+                {signIn && signIn.methods.length > 0 ? (
+                    <Button
+                        aria-label={`Sign ${provider.name} in again`}
+                        disabled={blocked || !signIn.installed}
+                        onClick={() => settings.onSignIn?.(provider.id)}
+                        variant={needsSignIn ? "primary" : "secondary"}
+                    >
+                        {signIn.running ? "Continue sign-in" : "Sign in again"}
+                    </Button>
+                ) : null}
+                <Button
+                    onClick={() => settings.onDetailClose?.()}
+                    variant={changeable ? "ghost" : "primary"}
+                >
+                    Done
+                </Button>
+            </>
+        ),
+        body: (
+            <Box className="happy-agent-provider-sheet__body">
+                {/* One line, always there, so a refusal or a note never moves what is under it. */}
+                <span
+                    className="happy-agent-provider-sheet__notice"
+                    data-tone={settings.saveError ? "danger" : "neutral"}
+                    title={notice}
+                >
+                    {notice}
+                </span>
+                {signIn || provider.activity ? (
+                    <section className="happy-agent-provider-sheet__section">
+                        <h3 className="happy-agent-provider-sheet__heading">Login</h3>
+                        <HappyAgentProviderLogin
+                            now={now}
+                            {...(signIn ? { signIn } : {})}
+                            {...(provider.activity ? { activity: provider.activity } : {})}
+                        />
+                    </section>
+                ) : null}
+                <section
+                    className="happy-agent-provider-sheet__section"
+                    data-status={provider.status}
+                >
+                    <h3 className="happy-agent-provider-sheet__heading">Models</h3>
+                    <Box className="happy-agent-provider__models">
+                        {provider.models.map((model) => (
+                            <Box
+                                className="happy-agent-provider__model"
+                                data-happy-desktop-ui="happy-agent-provider-model"
+                                key={model.id}
+                            >
+                                <Box className="happy-agent-provider__model-text">
+                                    <Box className="happy-agent-provider__model-title">
+                                        <span
+                                            className="happy-agent-provider__model-name"
+                                            data-happy-desktop-ui="happy-agent-provider-model-name"
+                                        >
+                                            {model.name}
+                                        </span>
+                                        {model.isDefault ? (
+                                            <span className="happy-agent-provider__model-default">
+                                                Default
+                                            </span>
+                                        ) : null}
+                                    </Box>
+                                    <span
+                                        className="happy-agent-provider__model-meta"
+                                        data-happy-desktop-ui="happy-agent-provider-model-meta"
+                                    >
+                                        {modelMeta(model)}
+                                    </span>
+                                </Box>
+                                <Switch
+                                    aria-label={`${model.name} enabled`}
+                                    checked={model.enabled}
+                                    disabled={
+                                        unavailable ||
+                                        model.isDefault ||
+                                        provider.status !== "ready"
+                                    }
+                                    onChange={(enabled) =>
+                                        settings.onModelEnabledChange(model.id, enabled)
+                                    }
+                                />
+                            </Box>
+                        ))}
+                        {provider.models.length === 0 ? (
+                            <span
+                                className="happy-agent-provider__models-empty"
+                                data-happy-desktop-ui="happy-agent-provider-models-empty"
+                            >
+                                This account offers no models right now.
+                            </span>
+                        ) : null}
+                    </Box>
+                    <p
+                        className="happy-agent-provider__hint"
+                        data-happy-desktop-ui="happy-agent-provider-hint"
+                    >
+                        {hint ?? "Off for a model only hides it from this window’s pickers."}
+                    </p>
+                </section>
+                {provider.keys ? (
+                    <section className="happy-agent-provider-sheet__section">
+                        <h3 className="happy-agent-provider-sheet__heading">API keys</h3>
+                        <HappyAgentProviderKeyList
+                            keys={provider.keys}
+                            providerId={provider.id}
+                            providerName={provider.name}
+                            unavailable={unavailable}
+                            {...(settings.onKeyAdd ? { onKeyAdd: settings.onKeyAdd } : {})}
+                            {...(settings.onKeyEnabledChange
+                                ? { onKeyEnabledChange: settings.onKeyEnabledChange }
+                                : {})}
+                            {...(settings.onKeyRemove ? { onKeyRemove: settings.onKeyRemove } : {})}
+                        />
+                    </section>
+                ) : null}
+            </Box>
+        ),
+    };
+}
+
+/** Pasting a new Claude setup token, as a step of the account's sheet. */
+function tokenStep(
+    editor: HappyAgentProviderTokenEditorProps,
+    token: string,
+    tokenSet: (token: string) => void,
+    back: () => void,
+): { readonly body: ReactNode; readonly footer: ReactNode } {
+    const saving = editor.phase === "saving";
+    const normalized = claudeSetupTokenNormalize(token);
+    const submit = (): void => {
+        if (!normalized || saving) return;
+        editor.onTokenSubmit(normalized);
+    };
+    return {
+        footer: (
+            <>
+                <Button disabled={saving} onClick={back} variant="ghost">
+                    Back
+                </Button>
+                <Button
+                    disabled={!normalized || saving}
+                    loading={saving}
+                    onClick={submit}
+                    variant="primary"
+                >
+                    Update token
+                </Button>
+            </>
+        ),
+        body: (
+            <ClaudeSetupTokenSteps
+                {...(editor.error === undefined ? {} : { error: editor.error })}
+                lead="Paste a new setup token for this account. Happy uses it instead of the system login."
+                onSubmit={submit}
+                phase={editor.phase}
+                shell={editor.shell}
+                token={token}
+                tokenSet={tokenSet}
+            />
+        ),
+    };
 }
 
 /**
@@ -537,7 +667,7 @@ function HappyAgentProviderDetail(props: {
  */
 function providerHint(provider: HappyAgentProviderRow): string | undefined {
     if (provider.custom && !happyAgentCustomProviderProtocolOffered(provider.custom.protocol))
-        return `Happy Cloud doesn’t serve ${HAPPY_AGENT_CUSTOM_PROVIDER_PROTOCOL_LABELS[provider.custom.protocol]} yet, so this provider offers no models.`;
+        return `Happy Cloud doesn’t serve ${HAPPY_AGENT_CUSTOM_PROVIDER_PROTOCOL_LABELS[provider.custom.protocol]} yet, so this account offers no models.`;
     if (provider.keys?.addable && provider.keys.source === null)
         return "Add a team API key to use its models.";
     if (provider.keys) return undefined;
@@ -566,7 +696,7 @@ function keyMeta(key: HappyAgentProviderKeyRow): string {
         return key.coolingUntil
             ? `Hit a limit; tried again at ${key.coolingUntil}.`
             : "Hit a limit; tried again soon.";
-    if (key.state === "invalid") return "The provider refused this key. Add a new one.";
+    if (key.state === "invalid") return "The service refused this key. Add a new one.";
     if (key.state === "disabled") return "Not used until it is switched on.";
     return "Used for this team's turns.";
 }

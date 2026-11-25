@@ -22,7 +22,7 @@ export function ModalPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Dialog card — header (leading icon chip · title · close) / body / right-aligned footer actions, three fixed widths on a 14px shell radius. Rendered as a specimen card; a host portals it over its own backdrop."
+            summary="Dialog card — header (leading icon chip · title · close) / body / right-aligned footer actions, three fixed widths, or a fixed-size sheet, on a 14px shell radius. Rendered as a specimen card; a host portals it over its own backdrop."
             title="Modal"
         >
             <div className="specimen-grid specimen-grid--sizes">
@@ -147,6 +147,37 @@ export function ModalPage() {
                         <Modal size="small" title="Saving changes">
                             Your changes are being applied. This dialog closes automatically when
                             the update completes.
+                        </Modal>
+                    </div>
+                </Specimen>
+            </div>
+            <div className="specimen-grid">
+                <Specimen
+                    detail="size sheet — a fixed 640×720 frame clamped to the window; leading slot, a fixed subheader, a scrolling body, the footer pinned"
+                    label="Sheet"
+                    number="M-07"
+                    stage="app"
+                >
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        <DimensionRule label="640 × 720 · body scrolls" />
+                        <Modal
+                            footer={<ConfirmFooter confirmLabel="Done" />}
+                            leading={
+                                <Button
+                                    aria-label="Back"
+                                    icon="chevron-left"
+                                    iconOnly
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            }
+                            onClose={() => {}}
+                            size="sheet"
+                            subheader="A fixed line under the title, above the scrolling body."
+                            title="Sheet"
+                        >
+                            Whatever the body shows, the frame keeps its size; content taller than
+                            the body scrolls inside it.
                         </Modal>
                     </div>
                 </Specimen>

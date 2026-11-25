@@ -78,7 +78,7 @@ describe("happyAgentProviderAccountLine", () => {
         ).toBe("Couldn’t refresh · HTTP 429 · last tried 2m ago");
     });
 
-    it("warns of a login running out within the day only while refreshing fails", () => {
+    it("warns of a login running out within the day in place of when it was tried, only while refreshing fails", () => {
         expect(
             line({
                 lastUsedAt: null,
@@ -88,7 +88,7 @@ describe("happyAgentProviderAccountLine", () => {
                     refreshError: failing(false),
                 },
             }).text,
-        ).toBe("Couldn’t refresh · server_error · last tried 2m ago · Login expires in 3h");
+        ).toBe("Couldn’t refresh · server_error · Login expires in 3h");
         expect(
             line({
                 lastUsedAt: null,

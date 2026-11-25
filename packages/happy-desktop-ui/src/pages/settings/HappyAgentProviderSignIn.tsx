@@ -1,11 +1,9 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { CopyButton } from "../../CopyButton";
-import { Icon, type IconName } from "../../Icon";
-import { Modal } from "../../Modal";
-import { ModalOverlay } from "../../ModalOverlay";
+import { Icon } from "../../Icon";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
 import {
@@ -68,32 +66,18 @@ export interface HappyAgentProviderSignInRow {
 }
 
 export interface HappyAgentProviderLoginProps {
-    readonly providerName: string;
     /** The account's credential, where the daemon can sign it in. */
     readonly signIn?: HappyAgentProviderSignInRow;
     /** How the account has been doing, from its usage entry. */
     readonly activity?: HappyAgentProviderAccountActivity;
     /** The time the facts are told against, in milliseconds. */
     readonly now: number;
-    /** Why nothing may be changed here, such as the Happy Agent being offline. */
-    readonly unavailable?: boolean;
-    /** Why only the team owner may change how the account signs in. */
-    readonly locked?: string;
-    /** Starts a sign-in, or opens the one already running. */
-    onSignIn: () => void;
-    onTokenEditorOpen: () => void;
 }
 
 const SOURCE_LABELS: Record<HappyAgentProviderCredentialSourceId, string> = {
     system: "Using system login",
     internal: "Signed in to Happy",
     configured: "Configured in config file",
-};
-
-const SOURCE_ICONS: Record<HappyAgentProviderCredentialSourceId, IconName> = {
-    system: "link",
-    internal: "lock",
-    configured: "settings",
 };
 
 /** Whose page a sign-in opens. */
@@ -104,7 +88,7 @@ const VENDOR_NAMES: Record<HappyAgentProviderSignInCliId, string> = {
 };
 
 /** The program the daemon runs to sign in. */
-const PROGRAM_NAMES: Record<HappyAgentProviderSignInCliId, string> = {
+export const HAPPY_AGENT_PROVIDER_PROGRAM_NAMES: Record<HappyAgentProviderSignInCliId, string> = {
     codex: "Codex",
     claude: "Claude Code",
     grok: "Grok",
@@ -119,138 +103,101 @@ const FAILURE_TITLES: Record<HappyAgentProviderSignInFailure, string> = {
 const EXPLAINER =
     "Signing in here gives this account a login only Happy uses, so it stops using the system login.";
 
+/** What a fact reads while nothing is known of it, or there is nothing to say. */
+const UNKNOWN = "—";
+
 /**
- * One account's login in its details: where the credential comes from, when
- * the daemon last refreshed it, when the access token runs out, why
- * refreshing has been failing, and the ways to replace it. Signing in again
- * runs in `HappyAgentProviderSignInDialog`.
+ * One account's login in its sheet: where the credential comes from, when it
+ * was last used and refreshed, when the access token runs out, and why
+ * refreshing has been failing. Every account shows the same five rows, each
+ * one line, with a dash for what is unknown, so moving between accounts or
+ * states moves nothing.
  */
 export function HappyAgentProviderLogin(props: HappyAgentProviderLoginProps) {
     const { signIn, activity, now } = props;
-    const blocked = props.unavailable === true || props.locked !== undefined;
-    const login = activity?.login;
+    const login = activity?.login ?? null;
     const refreshError = login?.refreshError ?? null;
     const expiry = happyAgentProviderExpiryWarning(login, now);
-    const facts: { readonly label: string; readonly value: string; readonly tone?: string }[] = [];
-    if (activity?.lastUsedAt !== undefined)
-        facts.push({
+    const facts: readonly {
+        readonly label: string;
+        readonly value: string;
+        readonly tone?: "warning" | "danger";
+    }[] = [
+        {
+            label: "Source",
+            value: signIn
+                ? [SOURCE_LABELS[signIn.source], signIn.account].filter(Boolean).join(" · ")
+                : UNKNOWN,
+        },
+        {
             label: "Last used",
             value:
-                activity.lastUsedAt === null
-                    ? "Not used yet"
-                    : happyAgentProviderAgo(activity.lastUsedAt, now),
-        });
-    if (login) {
-        facts.push({
+                activity?.lastUsedAt === undefined
+                    ? UNKNOWN
+                    : activity.lastUsedAt === null
+                      ? "Not used yet"
+                      : happyAgentProviderAgo(activity.lastUsedAt, now),
+        },
+        {
             label: "Last refresh",
             value:
-                login.refreshedAt === null
-                    ? "Not yet"
-                    : happyAgentProviderAgo(login.refreshedAt, now),
-        });
-        if (login.expiresAt !== null)
-            facts.push({
-                label: "Access token expires",
-                value: happyAgentProviderUntil(login.expiresAt, now),
-                ...(expiry || login.expiresAt <= now ? { tone: "warning" } : {}),
-            });
-        if (refreshError)
-            facts.push({
-                label: "Last refresh error",
-                value: [
-                    refreshError.code,
-                    refreshError.status === null
-                        ? undefined
-                        : `HTTP ${String(refreshError.status)}`,
-                    `since ${happyAgentProviderSince(refreshError.since, now)}`,
-                    `last tried ${happyAgentProviderAgo(refreshError.at, now)}`,
-                ]
-                    .filter(Boolean)
-                    .join(" · "),
-                tone: refreshError.permanent ? "danger" : "warning",
-            });
-    } else if (login === undefined && activity?.checkedAt !== undefined)
-        facts.push({
-            label: "Last checked",
-            value: happyAgentProviderAgo(activity.checkedAt, now),
-        });
-    const note =
-        signIn && !signIn.installed && signIn.methods.length > 0
-            ? `${PROGRAM_NAMES[signIn.cli]} isn’t installed on the Happy Agent’s computer.`
-            : undefined;
-    const actions = signIn && (signIn.acceptsToken || signIn.methods.length > 0);
+                login?.refreshedAt != null
+                    ? happyAgentProviderAgo(login.refreshedAt, now)
+                    : // An older daemon only says when it last read the account.
+                      activity?.login === undefined && activity?.checkedAt !== undefined
+                      ? `Checked ${happyAgentProviderAgo(activity.checkedAt, now)}`
+                      : UNKNOWN,
+        },
+        {
+            label: "Access token expires",
+            value:
+                login?.expiresAt == null ? UNKNOWN : happyAgentProviderUntil(login.expiresAt, now),
+            ...(login?.expiresAt != null && (expiry || login.expiresAt <= now)
+                ? { tone: "warning" as const }
+                : {}),
+        },
+        {
+            label: "Last refresh error",
+            value: refreshError
+                ? [
+                      refreshError.code,
+                      refreshError.status === null
+                          ? undefined
+                          : `HTTP ${String(refreshError.status)}`,
+                      `since ${happyAgentProviderSince(refreshError.since, now)}`,
+                      `last tried ${happyAgentProviderAgo(refreshError.at, now)}`,
+                  ]
+                      .filter(Boolean)
+                      .join(" · ")
+                : UNKNOWN,
+            ...(refreshError
+                ? { tone: refreshError.permanent ? ("danger" as const) : ("warning" as const) }
+                : {}),
+        },
+    ];
     return (
-        <Box
+        <dl
             className="happy-agent-provider-login"
             data-happy-desktop-ui="happy-agent-provider-sign-in"
             {...(signIn ? { "data-source": signIn.source } : {})}
         >
-            {signIn ? (
-                <Box className="happy-agent-provider-login__source">
-                    <Icon name={SOURCE_ICONS[signIn.source]} size={14} />
-                    <span
-                        className="happy-agent-provider-login__source-text"
-                        data-happy-desktop-ui="happy-agent-provider-sign-in-source"
-                    >
-                        {[SOURCE_LABELS[signIn.source], signIn.account].filter(Boolean).join(" · ")}
-                    </span>
+            {facts.map((fact) => (
+                <Box
+                    className="happy-agent-provider-login__fact"
+                    data-tone={fact.tone}
+                    key={fact.label}
+                >
+                    <dt>{fact.label}</dt>
+                    <dd title={fact.value}>{fact.value}</dd>
                 </Box>
-            ) : null}
-            {facts.length > 0 ? (
-                <dl className="happy-agent-provider-login__facts">
-                    {facts.map((fact) => (
-                        <Box
-                            className="happy-agent-provider-login__fact"
-                            data-tone={fact.tone}
-                            key={fact.label}
-                        >
-                            <dt>{fact.label}</dt>
-                            <dd>{fact.value}</dd>
-                        </Box>
-                    ))}
-                </dl>
-            ) : null}
-            {note ? <span className="happy-agent-provider-login__note">{note}</span> : null}
-            {props.locked && actions ? (
-                <span className="happy-agent-provider-login__note">{props.locked}</span>
-            ) : null}
-            {actions ? (
-                <Box className="happy-agent-provider-login__actions">
-                    {signIn.acceptsToken ? (
-                        <Button
-                            aria-label={`Update the token for ${props.providerName}`}
-                            disabled={blocked || signIn.running === true}
-                            onClick={props.onTokenEditorOpen}
-                            size="small"
-                            variant="ghost"
-                        >
-                            Update token
-                        </Button>
-                    ) : null}
-                    {signIn.methods.length > 0 ? (
-                        <Button
-                            aria-label={`Sign ${props.providerName} in again`}
-                            disabled={blocked || !signIn.installed}
-                            onClick={props.onSignIn}
-                            size="small"
-                            variant={
-                                activity?.signIn === "signed_out" || refreshError?.permanent
-                                    ? "primary"
-                                    : "secondary"
-                            }
-                        >
-                            {signIn.running ? "Continue sign-in" : "Sign in again"}
-                        </Button>
-                    ) : null}
-                </Box>
-            ) : null}
-        </Box>
+            ))}
+        </dl>
     );
 }
 
 export interface HappyAgentProviderSignInDialogProps {
-    /** The account as its card names it, such as "Codex · Work". */
-    readonly providerName: string;
+    /** The account signing in, by id. */
+    readonly providerId: string;
     readonly cli: HappyAgentProviderSignInCliId;
     readonly methods: readonly HappyAgentProviderSignInMethodId[];
     /** Absent before a sign-in starts, or after one was cancelled. */
@@ -261,7 +208,7 @@ export interface HappyAgentProviderSignInDialogProps {
     readonly busy?: "start" | "code" | "cancel";
     /** Why the last request was refused. */
     readonly error?: string;
-    /** Closes the dialog; a running sign-in is cancelled with it. */
+    /** Leaves the sign-in for the account's details; a running sign-in is cancelled with it. */
     onClose: () => void;
     onStart: (method?: HappyAgentProviderSignInMethodId) => void;
     onCodeSubmit: (code: string) => void;
@@ -270,12 +217,16 @@ export interface HappyAgentProviderSignInDialogProps {
 }
 
 /**
+ * The sign-in step of an account's sheet, as its body and its footer.
  * Signing one account in to a login only Happy uses: the device code to
  * enter, the vendor's page, the code to paste back, and how it ended. The
  * code typed here goes straight to the handler and is not kept.
  */
-export function HappyAgentProviderSignInDialog(props: HappyAgentProviderSignInDialogProps) {
-    const [code, codeSet] = useState("");
+export function happyAgentProviderSignInStep(
+    props: HappyAgentProviderSignInDialogProps,
+    code: string,
+    codeSet: (code: string) => void,
+): { readonly body: ReactNode; readonly footer: ReactNode } {
     const vendor = VENDOR_NAMES[props.cli];
     const flow = props.flow;
     const live = flow?.kind === "starting" || flow?.kind === "waiting";
@@ -322,138 +273,126 @@ export function HappyAgentProviderSignInDialog(props: HappyAgentProviderSignInDi
                 {flow?.kind === "failed" ? "Try again" : "Sign in"}
             </Button>
         );
-    return (
-        <ModalOverlay onDismiss={props.onClose}>
-            <Modal
-                className="happy-agent-provider-sign-in"
-                data-testid="provider-sign-in-dialog"
-                footer={
-                    <>
-                        {flow?.kind === "succeeded" ? null : (
-                            <Button
-                                loading={props.busy === "cancel"}
-                                onClick={props.onClose}
-                                variant="ghost"
-                            >
-                                {live ? "Cancel" : "Close"}
-                            </Button>
-                        )}
-                        {primary}
-                    </>
-                }
-                onClose={props.onClose}
-                size="medium"
-                title={`Sign in · ${props.providerName}`}
-            >
-                <Box
-                    className="happy-agent-provider-sign-in__body"
-                    data-flow={flow?.kind ?? "idle"}
-                >
-                    {flow?.kind === "succeeded" ? (
-                        <Box className="happy-agent-provider-sign-in__done">
-                            <Icon name="check-circle" size={20} />
-                            <Box className="happy-agent-provider-sign-in__done-text">
-                                <span>Signed in</span>
-                                {props.account ? (
-                                    <span className="happy-agent-provider-sign-in__hint">
-                                        {props.account}
-                                    </span>
-                                ) : null}
+    return {
+        footer: (
+            <>
+                {flow?.kind === "succeeded" ? null : (
+                    <Button
+                        loading={props.busy === "cancel"}
+                        onClick={props.onClose}
+                        variant="ghost"
+                    >
+                        {live ? "Cancel" : "Back"}
+                    </Button>
+                )}
+                {primary}
+            </>
+        ),
+        body: (
+            <Box className="happy-agent-provider-sign-in__body" data-flow={flow?.kind ?? "idle"}>
+                {flow?.kind === "succeeded" ? (
+                    <Box className="happy-agent-provider-sign-in__done">
+                        <Icon name="check-circle" size={20} />
+                        <Box className="happy-agent-provider-sign-in__done-text">
+                            <span>Signed in</span>
+                            {props.account ? (
+                                <span className="happy-agent-provider-sign-in__hint">
+                                    {props.account}
+                                </span>
+                            ) : null}
+                        </Box>
+                    </Box>
+                ) : (
+                    <span className="happy-agent-provider-sign-in__hint">{EXPLAINER}</span>
+                )}
+                {flow?.kind === "starting" ? (
+                    <Box className="happy-agent-provider-sign-in__line">
+                        <Spinner size={16} />
+                        <span>Starting the sign-in…</span>
+                    </Box>
+                ) : flow?.kind === "waiting" ? (
+                    flow.userCode ? (
+                        <>
+                            <span className="happy-agent-provider-sign-in__text">
+                                Enter this code at {vendor}, on any device.
+                            </span>
+                            <Box className="happy-agent-provider-sign-in__line">
+                                <span
+                                    className="happy-agent-provider-sign-in__code"
+                                    data-happy-desktop-ui="happy-agent-provider-sign-in-code"
+                                >
+                                    {flow.userCode}
+                                </span>
+                                <CopyButton
+                                    caption="Copy"
+                                    copiedCaption="Copied"
+                                    label="Copy code"
+                                    text={flow.userCode}
+                                />
                             </Box>
-                        </Box>
-                    ) : (
-                        <span className="happy-agent-provider-sign-in__hint">{EXPLAINER}</span>
-                    )}
-                    {flow?.kind === "starting" ? (
-                        <Box className="happy-agent-provider-sign-in__line">
-                            <Spinner size={16} />
-                            <span>Starting the sign-in…</span>
-                        </Box>
-                    ) : flow?.kind === "waiting" ? (
-                        flow.userCode ? (
-                            <>
-                                <span className="happy-agent-provider-sign-in__text">
-                                    Enter this code at {vendor}, on any device.
-                                </span>
-                                <Box className="happy-agent-provider-sign-in__line">
-                                    <span
-                                        className="happy-agent-provider-sign-in__code"
-                                        data-happy-desktop-ui="happy-agent-provider-sign-in-code"
-                                    >
-                                        {flow.userCode}
-                                    </span>
-                                    <CopyButton
-                                        caption="Copy"
-                                        copiedCaption="Copied"
-                                        label="Copy code"
-                                        text={flow.userCode}
-                                    />
-                                </Box>
-                                <Box className="happy-agent-provider-sign-in__line happy-agent-provider-sign-in__hint">
-                                    <Spinner size={14} />
-                                    <span>Waiting for you to finish…</span>
-                                </Box>
-                                {browserInstead ? (
-                                    <Box className="happy-agent-provider-sign-in__line">
-                                        <Button
-                                            disabled={props.busy !== undefined}
-                                            onClick={() => props.onStart("browser")}
-                                            size="small"
-                                            variant="secondary"
-                                        >
-                                            Use this computer’s browser instead
-                                        </Button>
-                                    </Box>
-                                ) : null}
-                            </>
-                        ) : flow.acceptsCode ? (
-                            <>
-                                <span className="happy-agent-provider-sign-in__text">
-                                    Sign in to {vendor} in the browser, then paste the code it
-                                    shows.
-                                </span>
+                            <Box className="happy-agent-provider-sign-in__line happy-agent-provider-sign-in__hint">
+                                <Spinner size={14} />
+                                <span>Waiting for you to finish…</span>
+                            </Box>
+                            {browserInstead ? (
                                 <Box className="happy-agent-provider-sign-in__line">
                                     <Button
-                                        icon="open-external"
-                                        onClick={() => open(flow.url)}
+                                        disabled={props.busy !== undefined}
+                                        onClick={() => props.onStart("browser")}
                                         size="small"
                                         variant="secondary"
                                     >
-                                        Open {vendor}
+                                        Use this computer’s browser instead
                                     </Button>
                                 </Box>
-                                <TextField
-                                    aria-label={`Code from ${vendor}`}
-                                    autoComplete="off"
-                                    disabled={props.busy === "code"}
-                                    onSubmit={codeSubmit}
-                                    onValueChange={codeSet}
-                                    placeholder="Paste the code"
-                                    type="password"
-                                    value={code}
-                                />
-                            </>
-                        ) : (
-                            <>
-                                <span className="happy-agent-provider-sign-in__text">
-                                    {flow.openedByProgram
-                                        ? `Finish signing in to ${vendor} in the browser that opened on this computer.`
-                                        : `Sign in to ${vendor} in the browser on this computer.`}
-                                </span>
-                                <Box className="happy-agent-provider-sign-in__line happy-agent-provider-sign-in__hint">
-                                    <Spinner size={14} />
-                                    <span>Waiting for you to finish…</span>
-                                </Box>
-                            </>
-                        )
-                    ) : flow?.kind === "failed" ? (
-                        <Banner tone="danger" title={FAILURE_TITLES[flow.failure]}>
-                            {flow.message}
-                        </Banner>
-                    ) : null}
-                    {props.error ? <Banner tone="danger">{props.error}</Banner> : null}
-                </Box>
-            </Modal>
-        </ModalOverlay>
-    );
+                            ) : null}
+                        </>
+                    ) : flow.acceptsCode ? (
+                        <>
+                            <span className="happy-agent-provider-sign-in__text">
+                                Sign in to {vendor} in the browser, then paste the code it shows.
+                            </span>
+                            <Box className="happy-agent-provider-sign-in__line">
+                                <Button
+                                    icon="open-external"
+                                    onClick={() => open(flow.url)}
+                                    size="small"
+                                    variant="secondary"
+                                >
+                                    Open {vendor}
+                                </Button>
+                            </Box>
+                            <TextField
+                                aria-label={`Code from ${vendor}`}
+                                autoComplete="off"
+                                disabled={props.busy === "code"}
+                                onSubmit={codeSubmit}
+                                onValueChange={codeSet}
+                                placeholder="Paste the code"
+                                type="password"
+                                value={code}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <span className="happy-agent-provider-sign-in__text">
+                                {flow.openedByProgram
+                                    ? `Finish signing in to ${vendor} in the browser that opened on this computer.`
+                                    : `Sign in to ${vendor} in the browser on this computer.`}
+                            </span>
+                            <Box className="happy-agent-provider-sign-in__line happy-agent-provider-sign-in__hint">
+                                <Spinner size={14} />
+                                <span>Waiting for you to finish…</span>
+                            </Box>
+                        </>
+                    )
+                ) : flow?.kind === "failed" ? (
+                    <Banner tone="danger" title={FAILURE_TITLES[flow.failure]}>
+                        {flow.message}
+                    </Banner>
+                ) : null}
+                {props.error ? <Banner tone="danger">{props.error}</Banner> : null}
+            </Box>
+        ),
+    };
 }

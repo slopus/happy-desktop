@@ -489,7 +489,8 @@
     align-items: center;
     gap: 12px;
     min-width: 0;
-    min-height: 52px;
+    /* Fixed: a row is one line of status whatever it says. */
+    height: 52px;
     margin-inline: -8px;
     padding: 8px;
     border: 0;
@@ -573,46 +574,70 @@
     opacity: 0.5;
 }
 
-/* One account's details: who it is with its switch, then Login, Models and
-   API keys, each under a small heading. */
-.happy-agent-provider-detail__body {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.happy-agent-provider-detail__header {
+/* One account's sheet: who it is with its switch, fixed in the frame's
+   header, then a notice line and Login, Models and API keys, each under a
+   small heading, in the scrolling body. */
+.happy-agent-provider-sheet__identity {
     display: flex;
     align-items: center;
     gap: 12px;
+    height: 40px;
+    padding-left: 40px;
 }
 
-.happy-agent-provider-detail__header > .happy-agent-provider__naming {
+.happy-agent-provider-sheet__identity > .happy-agent-provider__naming {
     flex: 1 1 0%;
 }
 
-/* Inside the details there is room for the whole line, so it wraps. */
-.happy-agent-provider-detail__header .happy-agent-provider-list__line {
-    align-items: flex-start;
+/* A new step cross-fades in while the frame around it holds still. */
+.happy-agent-provider-sheet__step {
+    display: flex;
+    flex-direction: column;
+    animation: happy-agent-provider-sheet-step 160ms var(--happy-motion-ease-out);
 }
 
-.happy-agent-provider-detail__header .happy-agent-provider-list__dot {
-    margin-top: 4px;
+@keyframes happy-agent-provider-sheet-step {
+    from {
+        opacity: 0;
+    }
 }
 
-.happy-agent-provider-detail__header .happy-agent-provider-list__line-text {
-    white-space: normal;
+@media (prefers-reduced-motion: reduce) {
+    .happy-agent-provider-sheet__step {
+        animation: none;
+    }
 }
 
-.happy-agent-provider-detail__section {
+.happy-agent-provider-sheet__body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.happy-agent-provider-sheet__notice {
+    height: 16px;
+    margin-block: -12px -8px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-provider-sheet__notice[data-tone="danger"] {
+    color: var(--status-error);
+}
+
+.happy-agent-provider-sheet__section {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.happy-agent-provider-detail__heading {
+.happy-agent-provider-sheet__heading {
     margin: 0;
-    padding-bottom: 4px;
+    padding-bottom: 6px;
     border-bottom: 1px solid var(--divider);
     color: var(--text-secondary);
     font-size: 12px;
@@ -620,63 +645,51 @@
     line-height: 16px;
 }
 
-/* Inside the details nothing sits under a tile, so models and keys start at
+/* Inside the sheet nothing sits under a tile, so models and keys start at
    the edge. */
-.happy-agent-provider-detail .happy-agent-provider__models,
-.happy-agent-provider-detail .happy-agent-provider__keys {
+.happy-agent-provider-sheet .happy-agent-provider__models,
+.happy-agent-provider-sheet .happy-agent-provider__keys {
     padding-left: 0;
 }
 
-.happy-agent-provider-detail .happy-agent-provider__hint {
+.happy-agent-provider-sheet .happy-agent-provider__hint {
     padding: 4px 0 0;
 }
 
-.happy-agent-provider-detail__section:not([data-status="ready"])[data-status]
+.happy-agent-provider-sheet__section:not([data-status="ready"])[data-status]
     .happy-agent-provider__models {
     opacity: 0.55;
 }
 
+/* A refusal in a step is capped at three lines, so a long one never pushes
+   the step's own controls around. */
+.happy-agent-provider-sheet .happy-banner__message {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+/* Login: the same five one-line rows for every account. */
 .happy-agent-provider-login {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding-top: 8px;
-}
-
-.happy-agent-provider-login__source {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-secondary);
-}
-
-.happy-agent-provider-login__source-text {
-    overflow: hidden;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-agent-provider-login__facts {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     margin: 0;
+    padding-top: 8px;
 }
 
 .happy-agent-provider-login__fact {
     display: flex;
-    gap: 12px;
-    font-size: 12px;
-    line-height: 16px;
+    gap: 16px;
+    height: 18px;
+    font-size: 13px;
+    line-height: 18px;
 }
 
 .happy-agent-provider-login__fact dt {
     flex: none;
-    width: 140px;
+    width: 160px;
     color: var(--text-secondary);
 }
 
@@ -684,8 +697,10 @@
     flex: 1 1 0%;
     min-width: 0;
     margin: 0;
+    overflow: hidden;
     color: var(--text);
-    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .happy-agent-provider-login__fact[data-tone="warning"] dd {
@@ -694,18 +709,6 @@
 
 .happy-agent-provider-login__fact[data-tone="danger"] dd {
     color: var(--status-error);
-}
-
-.happy-agent-provider-login__note {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-.happy-agent-provider-login__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
 }
 
 /* The sign-in dialog: the explainer, then the step the sign-in is on. */

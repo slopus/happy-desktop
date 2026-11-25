@@ -729,7 +729,13 @@ export {
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
 export { OnboardingNode, type OnboardingNodeIdentity } from "./OnboardingNode";
-export { ClaudeSetupTokenDialog, type ClaudeSetupTokenDialogProps } from "./ClaudeSetupTokenDialog";
+export {
+    ClaudeSetupTokenDialog,
+    ClaudeSetupTokenSteps,
+    claudeSetupTokenNormalize,
+    type ClaudeSetupTokenDialogProps,
+    type ClaudeSetupTokenStepsProps,
+} from "./ClaudeSetupTokenDialog";
 export {
     ProfileSetupForm,
     ProfileSetupScreen,
@@ -1116,7 +1122,7 @@ export {
 } from "./pages/settings/HappyAgentProviderSettings";
 export {
     HappyAgentProviderLogin,
-    HappyAgentProviderSignInDialog,
+    happyAgentProviderSignInStep,
     type HappyAgentProviderSignInDialogProps,
     type HappyAgentProviderCredentialSourceId,
     type HappyAgentProviderSignInCliId,
