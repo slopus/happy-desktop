@@ -294,7 +294,10 @@ export function callStatusRead(): string | null {
 }
 
 export async function phoneStatus(page: Page): Promise<string | null> {
-    return page.evaluate(callStatusRead);
+    // tsx names nested functions through a helper the page doesn't have.
+    return page.evaluate<string | null>(
+        `(() => { const __name = (value) => value; return (${callStatusRead.toString()})(); })()`,
+    );
 }
 
 /** Waits until the call shows one of `statuses`; resolves to the status seen last. */
