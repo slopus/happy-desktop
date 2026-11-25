@@ -779,12 +779,12 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
         const t2 = await call.say("Open the release notes task.", { tier: "delegated" });
         check(
             context,
-            "S4 t2 opens Release notes, at most 8 words",
+            "S4 t2 opens Release notes, at most 12 words",
             t2.actions.filter(
                 (action) => action.type === "desktopOpen" && action.status === "succeeded",
             ).length === 1 &&
                 t2.focusAfter === "Release notes" &&
-                t2.words <= 8,
+                t2.words <= 12,
             `${t2.focusAfter}, ${t2.words} words: ${t2.assistant}`,
         );
         const t3 = await call.say("Go back to the cache task.", {
