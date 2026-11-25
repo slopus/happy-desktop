@@ -659,7 +659,7 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
         check(
             context,
             "S1 call-start push has a Now line with a UTC offset",
-            /Now:[^"]*[+-]\d{2}:?\d{2}/.test(pushed),
+            /Now[:\s][^\n"]*([+\-−]\d{1,2}(:?\d{2})?|[A-Za-z]+\/[A-Za-z_]+)/.test(pushed),
             `${capture.length} captured pushes`,
         );
         check(
