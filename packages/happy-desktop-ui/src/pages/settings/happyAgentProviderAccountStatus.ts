@@ -41,7 +41,9 @@ export function happyAgentProviderAccountLine(
     if (activity.signIn === "signed_out" || refreshError?.permanent)
         return {
             tone: "danger",
-            text: `Needs sign-in since ${refreshError ? happyAgentProviderSince(refreshError.since, now) : "recently"}`,
+            text: refreshError
+                ? `Needs sign-in since ${happyAgentProviderSince(refreshError.since, now)}`
+                : "Needs sign-in",
         };
     if (refreshError) {
         const reason =

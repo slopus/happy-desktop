@@ -43,7 +43,7 @@ describe("happyAgentProviderAccountLine", () => {
     it("needs sign-in when signed out or refused for good, dated by when refreshing began failing", () => {
         expect(line({ signIn: "signed_out", lastUsedAt: null, login: null })).toEqual({
             tone: "danger",
-            text: "Needs sign-in since recently",
+            text: "Needs sign-in",
         });
         const refused = line({
             signIn: "signed_in",
@@ -52,7 +52,6 @@ describe("happyAgentProviderAccountLine", () => {
         });
         expect(refused.tone).toBe("danger");
         expect(refused.text).toMatch(/^Needs sign-in since \S/);
-        expect(refused.text).not.toContain("recently");
     });
 
     it("names a passing refresh failure by its code, or its HTTP status without one", () => {
