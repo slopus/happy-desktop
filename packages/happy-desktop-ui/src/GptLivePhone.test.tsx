@@ -14,6 +14,7 @@ it("starts only on trusted click and keeps the existing composer without a draft
         return {
             close: async () => {},
             microphoneMutedUpdate: () => {},
+            outputLevelsRead: () => [0, 0, 0] as const,
         };
     });
     const store = gptLiveStoreCreate(undefined, () => ({

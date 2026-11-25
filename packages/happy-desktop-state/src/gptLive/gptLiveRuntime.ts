@@ -77,10 +77,15 @@ export type GptLiveRuntimeEvent =
     /** `null` clears whatever the call was pointing at. */
     | { readonly type: "voiceFocusUpdated"; readonly focus: GptLiveVoiceFocus | null };
 
+/** The agent's received audio as three bands (low, mid, high), each 0..1, raw; the UI smooths. */
+export type GptLiveOutputLevels = readonly [low: number, mid: number, high: number];
+
 export interface GptLiveCall {
     /** Stops recording/actions synchronously; resolves after confirmed closure and transport cleanup. Never aborts tasks. */
     close(): Promise<void>;
     microphoneMutedUpdate(muted: boolean): void;
+    /** Read on demand, never pushed: zero before the agent's audio arrives. */
+    outputLevelsRead(): GptLiveOutputLevels;
 }
 
 /**

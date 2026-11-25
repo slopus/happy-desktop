@@ -3,6 +3,7 @@ import {
     type GptLiveAvailability,
     type GptLiveCall,
     type GptLiveCallStep,
+    type GptLiveOutputLevels,
     type GptLiveProblem,
     type GptLiveRuntimeEvent,
     type GptLiveRuntimes,
@@ -98,10 +99,13 @@ export interface GptLiveStore {
     /** Explicitly replaces an established call, after its normal close confirms completion. */
     callRestart(): void;
     microphoneMutedUpdate(muted: boolean): void;
+    /** The call's received audio in three bands; zero without an active call. Never notifies. */
+    outputLevelsRead(): GptLiveOutputLevels;
     [Symbol.dispose](): void;
 }
 
 const IDLE: GptLiveCallState = { kind: "idle" };
+const SILENT: GptLiveOutputLevels = [0, 0, 0];
 const DISABLED: GptLiveSnapshot = {
     gptLiveEnabled: false,
     call: IDLE,
@@ -553,6 +557,8 @@ export function gptLiveStoreCreate(
             call?.microphoneMutedUpdate(nextMuted);
             publish({ ...snapshot, call: { ...current, muted: nextMuted } });
         },
+        outputLevelsRead: () =>
+            snapshot.call.kind === "active" && call ? call.outputLevelsRead() : SILENT,
         [Symbol.dispose]() {
             if (disposed) return;
             stop();
@@ -587,5 +593,6 @@ export const gptLiveStoreNoop: GptLiveStore = {
     callEnd: () => {},
     callRestart: () => {},
     microphoneMutedUpdate: () => {},
+    outputLevelsRead: () => SILENT,
     [Symbol.dispose]: () => {},
 };

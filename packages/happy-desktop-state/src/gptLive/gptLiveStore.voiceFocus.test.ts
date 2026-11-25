@@ -19,7 +19,11 @@ async function activeCall() {
         availabilityRead: async () => ({ supported: true, accounts: [account] }),
         callOpen: async (_input, listener) => {
             receive = listener;
-            return { close: async () => {}, microphoneMutedUpdate: () => {} };
+            return {
+                close: async () => {},
+                microphoneMutedUpdate: () => {},
+                outputLevelsRead: () => [0, 0, 0] as const,
+            };
         },
     };
     const store = gptLiveStoreCreate(

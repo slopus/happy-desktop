@@ -16,6 +16,7 @@ import type { GptLiveDesktopSource } from "./gptLiveDesktopSource.js";
 import type {
     GptLiveAvailability,
     GptLiveCall,
+    GptLiveOutputLevels,
     GptLiveProblem,
     GptLiveRuntime,
     GptLiveRuntimeEvent,
@@ -27,6 +28,7 @@ export interface GptLiveMedia {
     readonly ready: Promise<void>;
     answerApply(sdp: string): Promise<void>;
     microphoneMutedUpdate(muted: boolean): void;
+    outputLevelsRead(): GptLiveOutputLevels;
     silence(): void;
     close(): void;
 }
@@ -626,6 +628,8 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         if (phase === "ready" || phase === "opening")
                             media?.microphoneMutedUpdate(muted);
                     },
+                    outputLevelsRead: () =>
+                        phase === "ready" && media ? media.outputLevelsRead() : [0, 0, 0],
                 };
             } catch (error) {
                 const caught = userError(error, "The voice call could not start.");

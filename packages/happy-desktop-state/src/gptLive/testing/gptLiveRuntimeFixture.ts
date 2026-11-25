@@ -77,6 +77,7 @@ export function gptLiveRuntimeFixtureCreate(
         microphoneMutedUpdate(muted) {
             stats.microphoneMuted = muted;
         },
+        outputLevelsRead: () => [0.25, 0.5, 0.75],
         silence() {
             if (!silenced) {
                 silenced = true;

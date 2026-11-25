@@ -34,6 +34,7 @@ function fixture() {
     const call: GptLiveCall = {
         close: vi.fn(async () => {}),
         microphoneMutedUpdate: vi.fn(),
+        outputLevelsRead: () => [0, 0, 0],
     };
     const runtime: GptLiveRuntime = {
         availabilityRead: vi.fn(async () => available),
@@ -382,5 +383,23 @@ describe("GPT-Live call lifetime", () => {
             }),
         );
         expect(f.runtime.callOpen).not.toHaveBeenCalled();
+    });
+
+    it("reads the call's received levels only while active, and never notifies for them", async () => {
+        const f = fixture();
+        vi.mocked(f.call).outputLevelsRead = () => [0.1, 0.2, 0.3];
+        expect(f.store.outputLevelsRead()).toEqual([0, 0, 0]);
+        await f.start();
+        f.opening.resolve(f.call);
+        await Promise.resolve();
+        expect(f.store.outputLevelsRead()).toEqual([0, 0, 0]);
+        const listener = vi.fn();
+        f.store.subscribe(listener);
+        f.receive({ type: "callActive" });
+        listener.mockClear();
+        expect(f.store.outputLevelsRead()).toEqual([0.1, 0.2, 0.3]);
+        expect(listener).not.toHaveBeenCalled();
+        f.store.callEnd();
+        expect(f.store.outputLevelsRead()).toEqual([0, 0, 0]);
     });
 });

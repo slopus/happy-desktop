@@ -1,4 +1,4 @@
-import { UserError } from "happy-desktop-state";
+import { UserError, type GptLiveOutputLevels } from "happy-desktop-state";
 
 /** Browser-only media. Provider credentials and provider control events never enter here. */
 export interface GptLiveMedia {
@@ -7,10 +7,14 @@ export interface GptLiveMedia {
     readonly ready: Promise<void>;
     answerApply(sdp: string): Promise<void>;
     microphoneMutedUpdate(muted: boolean): void;
+    /** The received voice's level in three bands, read on demand; zero before audio arrives. */
+    outputLevelsRead(): GptLiveOutputLevels;
     /** Release microphone/audio immediately without interrupting provider close finalization. */
     silence(): void;
     close(): void;
 }
+
+const SILENT: GptLiveOutputLevels = [0, 0, 0];
 
 function aborted(): DOMException {
     return new DOMException("The voice call ended.", "AbortError");
@@ -32,6 +36,17 @@ export async function gptLiveMediaOpen(
     let peer: RTCPeerConnection | undefined;
     let channel: RTCDataChannel | undefined;
     let output: HTMLAudioElement | undefined;
+    /**
+     * Reads the received track's spectrum for the call's level bars. The
+     * analyser is never connected to an output, so it adds no audio path.
+     */
+    let meter:
+        | { context: AudioContext; analyser: AnalyserNode; bins: Uint8Array<ArrayBuffer> }
+        | undefined;
+    const meterClose = () => {
+        void meter?.context.close().catch(() => undefined);
+        meter = undefined;
+    };
     let iceCancel: (() => void) | undefined;
     let readyResolve!: () => void;
     let readyReject!: (reason: Error) => void;
@@ -53,6 +68,7 @@ export async function gptLiveMediaOpen(
             output.pause();
             output.srcObject = null;
         }
+        meterClose();
     };
 
     const close = () => {
@@ -110,7 +126,16 @@ export async function gptLiveMediaOpen(
         output.autoplay = true;
         peer.ontrack = (event) => {
             if (closed || silenced || !output) return;
-            output.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+            const received = event.streams[0] ?? new MediaStream([event.track]);
+            output.srcObject = received;
+            if (!meter && event.track.kind === "audio") {
+                const context = new AudioContext();
+                const analyser = context.createAnalyser();
+                analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.5;
+                context.createMediaStreamSource(received).connect(analyser);
+                meter = { context, analyser, bins: new Uint8Array(analyser.frequencyBinCount) };
+            }
             void output
                 .play()
                 .catch(() =>
@@ -185,6 +210,19 @@ export async function gptLiveMediaOpen(
             microphoneMutedUpdate(muted) {
                 if (closed || silenced) return;
                 for (const track of stream?.getAudioTracks() ?? []) track.enabled = !muted;
+            },
+            outputLevelsRead() {
+                if (!meter) return SILENT;
+                const { analyser, bins } = meter;
+                analyser.getByteFrequencyData(bins);
+                // At 48 kHz and 256 points each bin is 187.5 Hz: about
+                // 100–500 Hz, 500–1,500 Hz and 1,500–4,000 Hz.
+                const band = (from: number, to: number) => {
+                    let sum = 0;
+                    for (let index = from; index <= to; index++) sum += bins[index] ?? 0;
+                    return sum / ((to - from + 1) * 255);
+                };
+                return [band(1, 2), band(3, 8), band(9, 21)];
             },
             silence,
             close,

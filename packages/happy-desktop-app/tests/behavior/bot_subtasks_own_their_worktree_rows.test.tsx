@@ -263,7 +263,11 @@ it("points at the Bots heading for hidden bots and children without changing the
             }),
             callOpen: async (_input, listener) => {
                 receive = listener;
-                return { close: async () => {}, microphoneMutedUpdate: () => {} };
+                return {
+                    close: async () => {},
+                    microphoneMutedUpdate: () => {},
+                    outputLevelsRead: () => [0, 0, 0] as const,
+                };
             },
         }),
     );
