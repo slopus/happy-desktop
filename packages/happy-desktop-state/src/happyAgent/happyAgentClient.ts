@@ -166,6 +166,19 @@ import {
     pipelineNodeLogStoreCreate,
     type PipelineNodeLogStore,
 } from "../pipelines/pipelineNodeLogStore.js";
+import { handbookStoreCreate, type HandbookStore } from "../handbook/handbookStore.js";
+import {
+    handbookDocumentStoreCreate,
+    type HandbookDocumentStore,
+} from "../handbook/handbookDocumentStore.js";
+import {
+    handbookDocumentContentStoreCreate,
+    type HandbookDocumentContentStore,
+} from "../handbook/handbookDocumentContentStore.js";
+import {
+    handbookChangeRequestStoreCreate,
+    type HandbookChangeRequestStore,
+} from "../handbook/handbookChangeRequestStore.js";
 import {
     happyAgentPreviewsStoreCreate,
     type HappyAgentPreviewsStore,
@@ -339,6 +352,17 @@ export interface HappyAgentWorkspaceClient {
     pipelineRunPreload(runId: string): void;
     /** One node's log in one run, live; materialized per node run and kept. Undefined where `pipelines()` is. */
     pipelineNodeLog(runId: string, nodeId: string): PipelineNodeLogStore | undefined;
+    /**
+     * The team's handbook on Happy Cloud. Undefined anywhere else, and while
+     * the server's health does not say it keeps one.
+     */
+    handbook(): HandbookStore | undefined;
+    /** One handbook document's page; materialized per document and kept. Undefined where `handbook()` is. */
+    handbookDocument(documentId: string): HandbookDocumentStore | undefined;
+    /** One handbook document's collaborative text; materialized per document and kept. Undefined where `handbook()` is. */
+    handbookDocumentContent(documentId: string): HandbookDocumentContentStore | undefined;
+    /** One change request's page; materialized per request and kept. Undefined where `handbook()` is. */
+    handbookChangeRequest(changeRequestId: string): HandbookChangeRequestStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
     previews(): HappyAgentPreviewsStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
@@ -829,6 +853,18 @@ export function happyAgentWorkspaceClientCreate(
                 pipelineRunStoreCreate({ runId, request, sync: deps.connection.sync }),
         }));
     const pipelineNodeLogStores = new Map<string, PipelineNodeLogStore>();
+    let handbookStore: HandbookStore | undefined;
+    const handbookDocumentStores = new Map<string, HandbookDocumentStore>();
+    const handbookDocumentContentStores = new Map<string, HandbookDocumentContentStore>();
+    const handbookChangeRequestStores = new Map<string, HandbookChangeRequestStore>();
+    /** Happy Cloud's request, where the server's health says it keeps a handbook. */
+    const handbookRequest = (): HappyCloudRequest | undefined => {
+        const request = deps.cloudRequest;
+        if (!request) return undefined;
+        return happyAgentHealthCapability(deps.connection.sync.health(), "handbook")
+            ? request
+            : undefined;
+    };
     let previewsStore: HappyAgentPreviewsStore | undefined;
     let dailyUsageStore: HappyAgentDailyUsageStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
@@ -1372,6 +1408,62 @@ export function happyAgentWorkspaceClientCreate(
             }
             return store;
         },
+        handbook() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = handbookRequest();
+            if (!request) return undefined;
+            handbookStore ??= handbookStoreCreate({ request, sync: deps.connection.sync });
+            return handbookStore;
+        },
+        handbookDocument(documentId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = handbookRequest();
+            if (!request) return undefined;
+            let store = handbookDocumentStores.get(documentId);
+            if (!store) {
+                store = handbookDocumentStoreCreate({
+                    documentId,
+                    request,
+                    sync: deps.connection.sync,
+                });
+                handbookDocumentStores.set(documentId, store);
+            }
+            return store;
+        },
+        handbookDocumentContent(documentId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = handbookRequest();
+            if (!request) return undefined;
+            let store = handbookDocumentContentStores.get(documentId);
+            if (!store) {
+                store = handbookDocumentContentStoreCreate({
+                    documentId,
+                    request,
+                    sync: deps.connection.sync,
+                    // What the document's page last read; the text is shown wherever it is.
+                    editable: () =>
+                        handbookDocumentStores.get(documentId)?.get().document?.abilities.edit ===
+                        true,
+                });
+                handbookDocumentContentStores.set(documentId, store);
+            }
+            return store;
+        },
+        handbookChangeRequest(changeRequestId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = handbookRequest();
+            if (!request) return undefined;
+            let store = handbookChangeRequestStores.get(changeRequestId);
+            if (!store) {
+                store = handbookChangeRequestStoreCreate({
+                    changeRequestId,
+                    request,
+                    sync: deps.connection.sync,
+                });
+                handbookChangeRequestStores.set(changeRequestId, store);
+            }
+            return store;
+        },
         previews() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1656,6 +1748,14 @@ export function happyAgentWorkspaceClientCreate(
             pipelineRunCache = undefined;
             for (const store of pipelineNodeLogStores.values()) store[Symbol.dispose]();
             pipelineNodeLogStores.clear();
+            handbookStore?.[Symbol.dispose]();
+            handbookStore = undefined;
+            for (const store of handbookDocumentStores.values()) store[Symbol.dispose]();
+            handbookDocumentStores.clear();
+            for (const store of handbookDocumentContentStores.values()) store[Symbol.dispose]();
+            handbookDocumentContentStores.clear();
+            for (const store of handbookChangeRequestStores.values()) store[Symbol.dispose]();
+            handbookChangeRequestStores.clear();
             previewsStore?.[Symbol.dispose]();
             previewsStore = undefined;
             dailyUsageStore?.[Symbol.dispose]();

@@ -45,7 +45,10 @@ export type HappyCloudEventType =
     | "pipeline.updated"
     | "pipeline.run.updated"
     | "pipeline.node.updated"
-    | "pipeline.node.log";
+    | "pipeline.node.log"
+    | "handbook.updated"
+    | "handbook.document.updated"
+    | "handbook.change_request.updated";
 
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {
