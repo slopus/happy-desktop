@@ -298,9 +298,32 @@ describe("GPT-Live call lifetime", () => {
             connectionId: "connection:remote",
             problem: "connection",
             message: "Voice control disconnected. Start a new call to reconnect.",
+            restarting: false,
         });
         f.store.callEnd();
         expect(f.store.get().call).toEqual({ kind: "idle" });
+    });
+
+    it("marks a call that ended while restarting, and only that one", async () => {
+        const f = fixture();
+        await f.start();
+        f.opening.resolve(f.call);
+        await Promise.resolve();
+        f.receive({ type: "callActive" });
+        vi.mocked(f.runtime.callOpen).mockRejectedValueOnce(
+            new UserError("Voice could not restart.", "connection"),
+        );
+        f.store.callRestart();
+        // Settings shows this message beside the prompt; a dropped call's it does not.
+        await vi.waitFor(() =>
+            expect(f.store.get().call).toEqual({
+                kind: "ended",
+                connectionId: "local",
+                problem: "connection",
+                message: "Voice could not restart.",
+                restarting: true,
+            }),
+        );
     });
 
     it("ends with the problem a refused open names, and idles when it was cancelled", async () => {
@@ -361,6 +384,7 @@ describe("GPT-Live call lifetime", () => {
                 connectionId: "connection:remote",
                 problem: "agentOffline",
                 message: "Remote Lab isn't connected. Calls on it work again once it reconnects.",
+                restarting: false,
             }),
         );
         expect(runtime.callOpen).not.toHaveBeenCalled();

@@ -1167,7 +1167,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                         gptLiveStore.callRestart();
                                 }}
                                 promptRestartError={
-                                    voiceCall?.kind === "ended" ? voiceCall.message : undefined
+                                    voiceCall?.kind === "ended" && voiceCall.restarting
+                                        ? voiceCall.message
+                                        : undefined
                                 }
                                 onPromptDefaultCopy={() => {
                                     const text = voiceSettings.settings?.defaultSystemPrompt;

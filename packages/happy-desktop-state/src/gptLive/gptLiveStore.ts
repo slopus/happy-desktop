@@ -49,6 +49,8 @@ export type GptLiveCallState =
           readonly connectionId: string;
           readonly problem: GptLiveProblem;
           readonly message: string;
+          /** It ended while replacing an established call after its voice prompt changed. */
+          readonly restarting: boolean;
       };
 
 /** What one agent's voice can use, as this window last read it. */
@@ -238,7 +240,15 @@ export function gptLiveStoreCreate(
         const { actionStatus: _actionStatus, voiceFocus: _voiceFocus, ...rest } = snapshot;
         publish({
             ...rest,
-            call: ended && snapshot.gptLiveEnabled ? { kind: "ended", ...ended } : IDLE,
+            call:
+                ended && snapshot.gptLiveEnabled
+                    ? {
+                          kind: "ended",
+                          ...ended,
+                          restarting:
+                              snapshot.call.kind === "connecting" && snapshot.call.restarting,
+                      }
+                    : IDLE,
         });
     };
     const receive = (
