@@ -1983,6 +1983,36 @@ const TAB_MENU_CLOSE_ALL = "close-all";
 const fileDocumentIdentities = new WeakMap<object, number>();
 let fileDocumentIdentityNext = 0;
 
+/** What the window reads from the voice call; the call bar reads the rest itself. */
+interface GptLiveWindowView {
+    /** What the call is pointing at. */
+    readonly voiceFocus: GptLiveVoiceFocus | undefined;
+    /** Whether the status bar holds a call, which then leads it. */
+    readonly callHeld: boolean;
+}
+const gptLiveWindowViews = new WeakMap<GptLiveStore, GptLiveWindowView>();
+
+/**
+ * The window's one selection from the voice call's store. It keeps its
+ * identity until what the call points at or whether a call is held changes,
+ * so the call's transcript, which moves many times a second, never
+ * re-renders the window.
+ */
+function gptLiveWindowView(store: GptLiveStore): GptLiveWindowView {
+    const snapshot = store.get();
+    const callHeld = snapshot.call.kind !== "idle";
+    const previous = gptLiveWindowViews.get(store);
+    if (
+        previous !== undefined &&
+        previous.voiceFocus === snapshot.voiceFocus &&
+        previous.callHeld === callHeld
+    )
+        return previous;
+    const view = { voiceFocus: snapshot.voiceFocus, callHeld };
+    gptLiveWindowViews.set(store, view);
+    return view;
+}
+
 /**
  * The context menu a file or tool tab offers: the usual sweeps — this tab, the
  * others, everything to one side, the whole strip. A sweep still applies each
@@ -3698,20 +3728,11 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         () => commandPaletteStore.get().open,
         () => commandPaletteStore.get().open,
     );
-    // What a voice call is pointing at. Only that is read here: the call's
-    // transcript moves many times a second and must not re-render the window.
     const gptLiveStore = props.gptLive ?? gptLiveStoreNoop;
-    const voiceFocus = useSyncExternalStore(
+    const { voiceFocus, callHeld: gptLiveCallHeld } = useSyncExternalStore(
         gptLiveStore.subscribe,
-        () => gptLiveStore.get().voiceFocus,
-        () => gptLiveStore.get().voiceFocus,
-    );
-    // Whether the status bar holds a call, which then leads it; the call bar
-    // reads the rest itself.
-    const gptLiveCallHeld = useSyncExternalStore(
-        gptLiveStore.subscribe,
-        () => gptLiveStore.get().call.kind !== "idle",
-        () => gptLiveStore.get().call.kind !== "idle",
+        () => gptLiveWindowView(gptLiveStore),
+        () => gptLiveWindowView(gptLiveStore),
     );
     const windowStateStore = props.windowState ?? happyAgentWindowStoreNoop;
     const windowState = useSyncExternalStore(
