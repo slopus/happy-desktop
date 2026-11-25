@@ -1,19 +1,23 @@
 import { useState } from "react";
-import type { GptLiveSnapshot } from "happy-desktop-state";
 import { Box } from "../../src/Box";
 import { GptLiveSettings } from "../../src/GptLiveSettings";
-import { GptLivePhone } from "../../src/GptLivePhone";
+import { GptLivePhone, type GptLivePhoneStatus } from "../../src/GptLivePhone";
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "P-012b";
-const base: GptLiveSnapshot = {
-    gptLiveEnabled: true,
-    status: "idle",
-    panelVisible: false,
-    microphoneMuted: false,
-    transcripts: [],
-};
+/** Each phone state, with the message its tooltip carries and its specimen number. */
+const phones: readonly { status: GptLivePhoneStatus; number: string; message?: string }[] = [
+    { status: "idle", number: "02" },
+    { status: "connecting", number: "03" },
+    { status: "active", number: "04" },
+    { status: "ended", number: "05", message: "Microphone access was denied." },
+    {
+        status: "busy",
+        number: "08",
+        message: "In a voice call on another agent. End it to call here.",
+    },
+];
 const accounts = [
     {
         id: "subscription",
@@ -61,25 +65,20 @@ export function GptLiveSettingsPage() {
                     />
                 </Box>
             </Specimen>
-            {(["idle", "connecting", "active", "error"] as const).map((status, index) => (
+            {phones.map((phone) => (
                 <Specimen
-                    key={status}
-                    label={status}
-                    number={String(index + 2).padStart(2, "0")}
+                    key={phone.status}
+                    label={phone.status}
+                    number={phone.number}
                     detail="Phone immediately before Settings, 28 × 28 px."
                 >
-                    <Box width={300} data-voice-state={status}>
+                    <Box width={300} data-voice-state={phone.status}>
                         <SidebarFooter
                             onSettingsOpen={() => {}}
                             voice={
                                 <GptLivePhone
-                                    state={{
-                                        ...base,
-                                        status,
-                                        ...(status === "error"
-                                            ? { error: "Microphone access was denied." }
-                                            : {}),
-                                    }}
+                                    status={phone.status}
+                                    {...(phone.message ? { message: phone.message } : {})}
                                     onStart={() => {}}
                                     onEnd={() => {}}
                                 />

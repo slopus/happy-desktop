@@ -7,7 +7,7 @@ describe("GPT-Live desktop opt-in", () => {
         const store = gptLiveStoreCreate({ read: () => undefined, write });
         const listener = vi.fn();
         const unsubscribe = store.subscribe(listener);
-        expect(store.get()).toMatchObject({ gptLiveEnabled: false, status: "disabled" });
+        expect(store.get()).toMatchObject({ gptLiveEnabled: false, call: { kind: "idle" } });
         expect(store.get()).toBe(store.get());
         expect(write).not.toHaveBeenCalled();
         expect(listener).not.toHaveBeenCalled();

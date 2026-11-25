@@ -5,7 +5,7 @@ import type { HappyAgentWorkspaceStore } from "../happyAgent/happyAgentWorkspace
 export interface GptLiveDesktopConnection {
     readonly id: string;
     readonly name: string;
-    /** This Mac's own Happy Agent, or one reached through it. */
+    /** The agent hosting the call, or another one the window reaches. */
     readonly kind: "local" | "remote";
     readonly online: boolean;
     readonly workspace?: HappyAgentWorkspaceStore;

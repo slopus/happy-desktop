@@ -253,8 +253,8 @@ it("points at the Bots heading for hidden bots and children without changing the
     const hidden = attention.get();
     let receive: ((event: GptLiveRuntimeEvent) => void) | undefined;
     const gptLive = gptLiveStoreCreate(
-        { read: () => ({ gptLiveEnabled: true, accountId: "codex" }), write: () => {} },
-        {
+        { read: () => ({ gptLiveEnabled: true, accountIds: { local: "codex" } }), write: () => {} },
+        () => ({
             availabilityRead: async () => ({
                 supported: true,
                 accounts: [
@@ -265,11 +265,11 @@ it("points at the Bots heading for hidden bots and children without changing the
                 receive = listener;
                 return { close: async () => {}, microphoneMutedUpdate: () => {} };
             },
-        },
+        }),
     );
     const { container, getByText } = view({ attention, gptLive });
     await act(async () => {
-        gptLive.callStart();
+        gptLive.callStart("local");
         await vi.waitFor(() => expect(receive).toBeDefined());
         receive!({ type: "callActive" });
     });

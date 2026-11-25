@@ -8,11 +8,39 @@ export interface GptLiveAccount {
     readonly kind: "subscription" | "api";
 }
 
+/**
+ * Why a call on one agent cannot start or stopped, in the person's terms.
+ * `connection` covers every failure the agent reports without a typed reason.
+ */
+export type GptLiveProblem =
+    /** The agent's connection is not connected. */
+    | "agentOffline"
+    /** The agent offers no desktop voice, or no enabled voice account. */
+    | "notSetUp"
+    /** This window cannot place calls: not the native voice-enabled window. */
+    | "unsupportedWindow"
+    | "microphonePermission"
+    /** It started and then dropped, timed out, or never connected. */
+    | "connection";
+
+export const GPT_LIVE_PROBLEMS: readonly GptLiveProblem[] = [
+    "agentOffline",
+    "notSetUp",
+    "unsupportedWindow",
+    "microphonePermission",
+    "connection",
+];
+
 export interface GptLiveAvailability {
     readonly supported: boolean;
     readonly reason?: string;
+    /** Present whenever `supported` is false. */
+    readonly problem?: GptLiveProblem;
     readonly accounts: readonly GptLiveAccount[];
 }
+
+/** Where an opening call is, for its own progress and for nothing else. */
+export type GptLiveCallStep = "checking" | "microphone" | "allocating" | "attaching";
 
 export interface GptLiveTranscriptFragment {
     readonly id: string;
@@ -38,7 +66,12 @@ export interface GptLiveVoiceFocus {
 export type GptLiveRuntimeEvent =
     | { readonly type: "callActive" }
     | { readonly type: "callClosed" }
-    | { readonly type: "callFailed"; readonly message: string }
+    | {
+          readonly type: "callFailed";
+          readonly message: string;
+          readonly problem: GptLiveProblem;
+      }
+    | { readonly type: "callStepUpdated"; readonly step: GptLiveCallStep }
     | { readonly type: "transcriptReceived"; readonly fragment: GptLiveTranscriptFragment }
     | { readonly type: "actionStatusUpdated"; readonly message: string }
     /** `null` clears whatever the call was pointing at. */
@@ -51,8 +84,10 @@ export interface GptLiveCall {
 }
 
 /**
- * An already-authenticated desktop integration. It must allocate nothing until
- * called. Opening owns microphone, WebRTC, control socket and context/watch
+ * One agent's already-authenticated desktop integration: that agent hosts the
+ * call, with its own voice settings and accounts. It must allocate nothing until
+ * called. A rejected open's `UserError.code` is a `GptLiveProblem`, or
+ * `cancelled` when the person or its signal ended it. Opening owns microphone, WebRTC, control socket and context/watch
  * subscriptions under the supplied signal; rejection releases all of them.
  * An aborted open must never leave a late microphone grant or remote call alive.
  */
@@ -64,3 +99,6 @@ export interface GptLiveRuntime {
         signal: AbortSignal,
     ): Promise<GptLiveCall>;
 }
+
+/** The window's agents: each connection's own runtime, by connection ID. */
+export type GptLiveRuntimes = (connectionId: string) => GptLiveRuntime;

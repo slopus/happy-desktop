@@ -3940,6 +3940,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         updateStore.get,
     );
     const updateHost = hostHappyAgent(directory);
+    /** A call started from this surface's phone is hosted by its agent. */
+    const callHost = updateHost;
     const outageStore = props.agentOutage ?? agentOutageStoreNoop;
     const outage = useSyncExternalStore(outageStore.subscribe, outageStore.get, outageStore.get);
     const restart = outage?.restart;
@@ -4120,8 +4122,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 />
             }
             voice={
-                props.gptLive ? (
-                    <AppGptLivePhone store={props.gptLive} experiments={props.experiments} />
+                props.gptLive && callHost ? (
+                    <AppGptLivePhone
+                        store={props.gptLive}
+                        connectionId={callHost.id}
+                        {...(props.experiments ? { experiments: props.experiments } : {})}
+                    />
                 ) : undefined
             }
             actions={

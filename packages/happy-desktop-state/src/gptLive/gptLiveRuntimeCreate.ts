@@ -16,6 +16,7 @@ import type { GptLiveDesktopSource } from "./gptLiveDesktopSource.js";
 import type {
     GptLiveAvailability,
     GptLiveCall,
+    GptLiveProblem,
     GptLiveRuntime,
     GptLiveRuntimeEvent,
 } from "./gptLiveRuntime.js";
@@ -64,8 +65,8 @@ const CLEANUP_MS = 30_000;
 
 /** Construction starts no transport, permission request, subscription, or timer. */
 export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptLiveRuntime {
-    const unsupported = (reason: string) => ({
-        availability: { supported: false, reason, accounts: [] },
+    const unsupported = (reason: string, problem: GptLiveProblem) => ({
+        availability: { supported: false, reason, problem, accounts: [] },
         capabilities: undefined,
     });
     /**
@@ -78,12 +79,16 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
     }> {
         try {
             const client = options.client();
-            if (!client) return unsupported("Connect to Happy Agent to use GPT-Live.");
+            if (!client)
+                return unsupported("Connect to Happy Agent to use GPT-Live.", "agentOffline");
             const health = await client.getHealth({ signal });
             if (!health.ready || health.draining || health.shuttingDown)
-                return unsupported("Happy Agent is not ready for a voice call.");
+                return unsupported("Happy Agent is not ready for a voice call.", "agentOffline");
             if (health.capabilities?.desktopLiveControl !== true)
-                return unsupported("This Happy Agent does not support GPT-Live desktop control.");
+                return unsupported(
+                    "This Happy Agent does not support GPT-Live desktop control.",
+                    "notSetUp",
+                );
             const offered = health.capabilities.desktopLiveCapabilities;
             const capabilities = offered
                 ? GPT_LIVE_DESKTOP_CAPABILITIES.filter((item) => offered.includes(item))
@@ -258,7 +263,11 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
             };
             const fail = (message: string) => {
                 if (phase === "ended") return;
-                finish(new UserError(message), { type: "callFailed", message });
+                finish(new UserError(message, "connection"), {
+                    type: "callFailed",
+                    message,
+                    problem: "connection",
+                });
                 void remoteCleanup();
             };
             const aborted = () => {
@@ -457,6 +466,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 CONNECT_MS,
             );
             try {
+                receive({ type: "callStepUpdated", step: "checking" });
                 const { availability, capabilities } = await wait(
                     availabilityCheck(lifetime.signal),
                 );
@@ -470,10 +480,15 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                     throw new UserError(
                         availability.reason ??
                             "The selected voice account is unavailable. Choose an enabled account.",
+                        availability.problem ?? "notSetUp",
                     );
                 client = options.client();
                 if (!client)
-                    throw new UserError("Happy Agent disconnected before the voice call started.");
+                    throw new UserError(
+                        "Happy Agent disconnected before the voice call started.",
+                        "agentOffline",
+                    );
+                receive({ type: "callStepUpdated", step: "microphone" });
                 permissionRequested = true;
                 await wait(
                     Promise.resolve()
@@ -481,7 +496,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                             options.permissionStart({ enabled: true }).catch((error: unknown) => {
                                 throw new UserError(
                                     "Microphone access was denied.",
-                                    "microphone-denied",
+                                    "microphonePermission",
                                     error,
                                 );
                             }),
@@ -560,6 +575,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         "Voice desktop context could not fit the connection request.",
                     );
                 creationAttempted = true;
+                receive({ type: "callStepUpdated", step: "allocating" });
                 const creating = client
                     .createLiveSession(request, { signal: lifetime.signal })
                     .then((result) => {
@@ -582,6 +598,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         return result;
                     });
                 const created = await wait(creating);
+                receive({ type: "callStepUpdated", step: "attaching" });
                 await wait(media.answerApply(created.transport.sdp));
                 if (lifetime.signal.aborted) throw cancelled();
                 const url = new URL(client.liveSessionControlUrl(resourceId, options.windowId));
@@ -611,7 +628,11 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                     },
                 };
             } catch (error) {
-                const failure = userError(error, "The voice call could not start.");
+                const caught = userError(error, "The voice call could not start.");
+                // Every failure without a typed problem is the connection's.
+                const failure = caught.code
+                    ? caught
+                    : new UserError(caught.message, "connection", caught.cause);
                 finish(failure);
                 void remoteCleanup();
                 throw failure;

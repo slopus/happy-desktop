@@ -23,11 +23,11 @@ async function activeCall() {
         },
     };
     const store = gptLiveStoreCreate(
-        { read: () => ({ gptLiveEnabled: true, accountId: "codex" }), write: () => {} },
-        runtime,
+        { read: () => ({ gptLiveEnabled: true, accountIds: { local: "codex" } }), write: () => {} },
+        () => runtime,
     );
     // The first Start reads availability, then opens the call.
-    store.callStart();
+    store.callStart("local");
     await vi.waitFor(() => expect(receive).toBeDefined());
     return { store, receive: (event: GptLiveRuntimeEvent) => receive!(event) };
 }
@@ -51,7 +51,7 @@ describe("GPT-Live voice focus", () => {
         receive({ type: "voiceFocusUpdated", focus: focus("third") });
         store.callEnd();
         expect(store.get().voiceFocus).toBeUndefined();
-        expect(store.get().status).toBe("idle");
+        expect(store.get().call).toEqual({ kind: "idle" });
         store[Symbol.dispose]();
     });
 

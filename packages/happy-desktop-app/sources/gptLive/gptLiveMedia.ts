@@ -90,13 +90,13 @@ export async function gptLiveMediaOpen(
                 if (error instanceof DOMException && error.name === "NotAllowedError")
                     throw new UserError(
                         "Microphone access was denied.",
-                        "microphone-denied",
+                        "microphonePermission",
                         error,
                     );
                 if (error instanceof DOMException && error.name === "NotFoundError")
                     throw new UserError(
                         "No microphone is available.",
-                        "microphone-unavailable",
+                        "microphonePermission",
                         error,
                     );
                 throw error;

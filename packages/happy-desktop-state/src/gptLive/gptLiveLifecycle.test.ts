@@ -8,6 +8,7 @@ import type {
     GptLiveRuntime,
     GptLiveRuntimeEvent,
 } from "./gptLiveRuntime";
+import { UserError } from "../types";
 
 const available: GptLiveAvailability = {
     supported: true,
@@ -42,17 +43,19 @@ function fixture() {
             return opening.promise;
         }),
     };
-    const store = gptLiveStoreCreate(undefined, runtime);
-    const start = async () => {
+    const runtimeFor = vi.fn((_connectionId: string) => runtime);
+    const store = gptLiveStoreCreate(undefined, runtimeFor);
+    const start = async (connectionId = "local") => {
         store.gptLiveEnabledUpdate(true);
-        store.availabilityRead();
+        store.availabilityRead(connectionId);
         await Promise.resolve();
-        store.accountSelect("codex");
-        store.callStart();
+        store.accountSelect(connectionId, "codex");
+        store.callStart(connectionId);
     };
     return {
         store,
         runtime,
+        runtimeFor,
         call,
         opening,
         start,
@@ -67,31 +70,32 @@ describe("GPT-Live call lifetime", () => {
         const live = gptLiveRuntimeFixtureCreate();
         const store = gptLiveStoreCreate(
             { read: () => ({ gptLiveEnabled: true }), write: () => {} },
-            live.runtime,
+            () => live.runtime,
             experiments,
         );
         const stop = gptLiveExperimentsConnect(store, experiments);
         try {
             expect(store.get().gptLiveEnabled).toBe(false);
             store.gptLiveEnabledUpdate(true);
-            store.panelOpen();
-            store.callStart();
+            store.callStart("local");
             expect(live.daemon.calls).toHaveLength(0);
             expect(live.stats.permissionStarts).toBe(0);
             experiments.featureUpdate("voice", true, "experiments");
             store.gptLiveEnabledUpdate(true);
-            store.panelOpen();
-            await vi.waitFor(() => expect(store.get().availability?.supported).toBe(true));
-            store.accountSelect("codex");
-            store.callStart();
+            store.availabilityRead("local");
+            await vi.waitFor(() =>
+                expect(store.get().availability.get("local")).toMatchObject({ status: "ready" }),
+            );
+            store.accountSelect("local", "codex");
+            store.callStart("local");
             await vi.waitFor(() => expect(live.stats.socketOpens).toBe(1));
             live.hello();
             live.mediaReady();
             live.active();
-            await vi.waitFor(() => expect(store.get().status).toBe("active"));
+            await vi.waitFor(() => expect(store.get().call.kind).toBe("active"));
             experiments.featureUpdate("voice", false, "experiments");
             expect(store.get().gptLiveEnabled).toBe(false);
-            expect(store.get().panelVisible).toBe(false);
+            expect(store.get().call).toEqual({ kind: "idle" });
             expect(live.stats.mediaSilences).toBe(1);
             expect(live.stats.subscriptions).toBe(0);
             await vi.waitFor(() => expect(live.closeRequests()).toHaveLength(1));
@@ -119,14 +123,14 @@ describe("GPT-Live call lifetime", () => {
     it("can read and choose the account while calls are off without enabling or opening a call", async () => {
         const { store, runtime } = fixture();
         const unsubscribe = store.subscribe(() => {});
-        store.availabilityRead();
+        store.availabilityRead("local");
         await Promise.resolve();
-        store.callStart();
-        store.accountSelect("codex");
+        store.callStart("local");
+        store.accountSelect("local", "codex");
         expect(runtime.availabilityRead).toHaveBeenCalledTimes(1);
         expect(runtime.callOpen).not.toHaveBeenCalled();
-        expect(store.get().status).toBe("disabled");
-        expect(store.get().accountId).toBe("codex");
+        expect(store.get().call).toEqual({ kind: "idle" });
+        expect(store.get().accountIds.get("local")).toBe("codex");
         expect(store.get().gptLiveEnabled).toBe(false);
         unsubscribe();
     });
@@ -134,20 +138,24 @@ describe("GPT-Live call lifetime", () => {
     it("persists an account choice while off as an off preference", async () => {
         const write = vi.fn();
         const { runtime } = fixture();
-        const store = gptLiveStoreCreate({ read: () => undefined, write }, runtime);
-        store.availabilityRead();
+        const store = gptLiveStoreCreate({ read: () => undefined, write }, () => runtime);
+        store.availabilityRead("connection:remote");
         await Promise.resolve();
-        store.accountSelect("codex");
-        expect(write).toHaveBeenCalledWith({ gptLiveEnabled: false, accountId: "codex" });
-        const saved = write.mock.calls.at(-1)![0];
-        expect(gptLiveStoreCreate({ read: () => saved, write: () => {} }).get()).toMatchObject({
+        store.accountSelect("connection:remote", "codex");
+        expect(write).toHaveBeenCalledWith({
             gptLiveEnabled: false,
-            accountId: "codex",
+            accountIds: { "connection:remote": "codex" },
         });
-        store.callStart();
+        const saved = write.mock.calls.at(-1)![0];
+        expect(
+            gptLiveStoreCreate({ read: () => saved, write: () => {} })
+                .get()
+                .accountIds.get("connection:remote"),
+        ).toBe("codex");
+        store.callStart("connection:remote");
         expect(runtime.callOpen).not.toHaveBeenCalled();
         store.gptLiveEnabledUpdate(true);
-        expect(store.get().accountId).toBe("codex");
+        expect(store.get().accountIds.get("connection:remote")).toBe("codex");
         expect(runtime.callOpen).not.toHaveBeenCalled();
     });
 
@@ -155,10 +163,10 @@ describe("GPT-Live call lifetime", () => {
         const { runtime } = fixture();
         const store = gptLiveStoreCreate(
             { read: () => ({ gptLiveEnabled: true }), write: vi.fn() },
-            runtime,
+            () => runtime,
         );
         store.subscribe(() => {});
-        expect(store.get().status).toBe("idle");
+        expect(store.get().call).toEqual({ kind: "idle" });
         expect(runtime.callOpen).not.toHaveBeenCalled();
         expect(runtime.availabilityRead).not.toHaveBeenCalled();
     });
@@ -166,14 +174,14 @@ describe("GPT-Live call lifetime", () => {
     it("closes a late microphone/call grant after disable and ignores late events", async () => {
         const f = fixture();
         await f.start();
-        expect(f.store.get().status).toBe("connecting");
+        expect(f.store.get().call.kind).toBe("connecting");
         f.store.gptLiveEnabledUpdate(false);
         expect(f.signal()?.aborted).toBe(true);
         f.receive({ type: "callActive" });
         f.opening.resolve(f.call);
         await Promise.resolve();
         expect(f.call.close).toHaveBeenCalledTimes(1);
-        expect(f.store.get().status).toBe("disabled");
+        expect(f.store.get().call).toEqual({ kind: "idle" });
     });
 
     it("does not equate an opened media/control handle with provider readiness", async () => {
@@ -181,21 +189,21 @@ describe("GPT-Live call lifetime", () => {
         await f.start();
         f.opening.resolve(f.call);
         await Promise.resolve();
-        expect(f.store.get().status).toBe("connecting");
+        expect(f.store.get().call.kind).toBe("connecting");
         f.receive({ type: "callActive" });
-        expect(f.store.get().status).toBe("active");
+        expect(f.store.get().call).toMatchObject({ kind: "active", connectionId: "local" });
         f.store.microphoneMutedUpdate(true);
         expect(f.call.microphoneMutedUpdate).toHaveBeenLastCalledWith(true);
         f.store.callEnd();
         expect(f.call.close).toHaveBeenCalledTimes(1);
         expect(f.signal()?.aborted).toBe(true);
-        expect(f.store.get().status).toBe("idle");
+        expect(f.store.get().call).toEqual({ kind: "idle" });
     });
 
     it("deduplicates Start and reports draft staging without opening another surface", async () => {
         const f = fixture();
         await f.start();
-        f.store.callStart();
+        f.store.callStart("local");
         expect(f.runtime.callOpen).toHaveBeenCalledTimes(1);
         f.opening.resolve(f.call);
         await Promise.resolve();
@@ -205,23 +213,30 @@ describe("GPT-Live call lifetime", () => {
             message: "Review the draft in the conversation composer.",
         });
         expect(f.store.get().actionStatus).toBe("Review the draft in the conversation composer.");
-        expect(f.store.get().panelVisible).toBe(false);
     });
 
-    it("aborts availability on disable without republishing a late success", async () => {
+    it("disabling while a Start waits for availability opens nothing", async () => {
         const availability = pending<GptLiveAvailability>();
         const runtime: GptLiveRuntime = {
             availabilityRead: () => availability.promise,
             callOpen: vi.fn(),
         };
-        const store = gptLiveStoreCreate(undefined, runtime);
+        const store = gptLiveStoreCreate(
+            {
+                read: () => ({ gptLiveEnabled: false, accountIds: { local: "codex" } }),
+                write: () => {},
+            },
+            () => runtime,
+        );
         store.gptLiveEnabledUpdate(true);
-        store.availabilityRead();
+        store.callStart("local");
+        expect(store.get().call).toMatchObject({ kind: "connecting", step: "checking" });
         store.gptLiveEnabledUpdate(false);
         availability.resolve(available);
         await Promise.resolve();
-        expect(store.get().status).toBe("disabled");
-        expect(store.get().availability).toBeUndefined();
+        await Promise.resolve();
+        expect(store.get().call).toEqual({ kind: "idle" });
+        expect(runtime.callOpen).not.toHaveBeenCalled();
     });
 
     it("disposal tears down once and rejects every stale update", async () => {
@@ -233,11 +248,139 @@ describe("GPT-Live call lifetime", () => {
         f.store.subscribe(listener);
         f.store[Symbol.dispose]();
         f.store[Symbol.dispose]();
-        f.receive({ type: "callFailed", message: "late" });
-        f.store.callStart();
+        f.receive({ type: "callFailed", message: "late", problem: "connection" });
+        f.store.callStart("local");
         expect(f.call.close).toHaveBeenCalledTimes(1);
         expect(f.signal()?.aborted).toBe(true);
         expect(listener).not.toHaveBeenCalled();
         expect(f.runtime.callOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it("binds the call to the agent it was started on and refuses a second agent while live", async () => {
+        const f = fixture();
+        await f.start("connection:remote");
+        expect(f.runtimeFor).toHaveBeenLastCalledWith("connection:remote");
+        f.receive({ type: "callStepUpdated", step: "allocating" });
+        expect(f.store.get().call).toMatchObject({
+            kind: "connecting",
+            connectionId: "connection:remote",
+            step: "allocating",
+        });
+        f.opening.resolve(f.call);
+        await Promise.resolve();
+        f.receive({ type: "callActive" });
+        expect(f.store.get().call).toMatchObject({
+            kind: "active",
+            connectionId: "connection:remote",
+            muted: false,
+        });
+        f.store.availabilityRead("local");
+        await Promise.resolve();
+        f.store.accountSelect("local", "codex");
+        f.store.callStart("local");
+        expect(f.runtime.callOpen).toHaveBeenCalledTimes(1);
+        expect(f.store.get().call).toMatchObject({ connectionId: "connection:remote" });
+    });
+
+    it("keeps why an agent's call stopped until the person ends it or calls again", async () => {
+        const f = fixture();
+        await f.start("connection:remote");
+        f.opening.resolve(f.call);
+        await Promise.resolve();
+        f.receive({ type: "callActive" });
+        f.receive({
+            type: "callFailed",
+            message: "Voice control disconnected. Start a new call to reconnect.",
+            problem: "connection",
+        });
+        expect(f.store.get().call).toEqual({
+            kind: "ended",
+            connectionId: "connection:remote",
+            problem: "connection",
+            message: "Voice control disconnected. Start a new call to reconnect.",
+        });
+        f.store.callEnd();
+        expect(f.store.get().call).toEqual({ kind: "idle" });
+    });
+
+    it("ends with the problem a refused open names, and idles when it was cancelled", async () => {
+        const runtime: GptLiveRuntime = {
+            availabilityRead: async () => available,
+            callOpen: vi
+                .fn()
+                .mockRejectedValueOnce(
+                    new UserError("Microphone access was denied.", "microphonePermission"),
+                )
+                .mockRejectedValueOnce(new UserError("The voice call ended.", "cancelled"))
+                .mockRejectedValueOnce(new Error("socket hang up")),
+        };
+        const store = gptLiveStoreCreate(
+            {
+                read: () => ({ gptLiveEnabled: true, accountIds: { local: "codex" } }),
+                write: () => {},
+            },
+            () => runtime,
+        );
+        store.callStart("local");
+        await vi.waitFor(() =>
+            expect(store.get().call).toMatchObject({
+                kind: "ended",
+                problem: "microphonePermission",
+            }),
+        );
+        store.callStart("local");
+        await vi.waitFor(() => expect(store.get().call).toEqual({ kind: "idle" }));
+        store.callStart("local");
+        await vi.waitFor(() =>
+            expect(store.get().call).toMatchObject({
+                kind: "ended",
+                problem: "connection",
+                message: "The voice call could not connect.",
+            }),
+        );
+    });
+
+    it("ends with the agent's own reason when it cannot host voice, opening nothing", async () => {
+        const runtime: GptLiveRuntime = {
+            availabilityRead: async () => ({
+                supported: false,
+                problem: "agentOffline",
+                reason: "Remote Lab isn't connected. Calls on it work again once it reconnects.",
+                accounts: [],
+            }),
+            callOpen: vi.fn(),
+        };
+        const store = gptLiveStoreCreate(
+            { read: () => ({ gptLiveEnabled: true }), write: () => {} },
+            () => runtime,
+        );
+        store.callStart("connection:remote");
+        await vi.waitFor(() =>
+            expect(store.get().call).toEqual({
+                kind: "ended",
+                connectionId: "connection:remote",
+                problem: "agentOffline",
+                message: "Remote Lab isn't connected. Calls on it work again once it reconnects.",
+            }),
+        );
+        expect(runtime.callOpen).not.toHaveBeenCalled();
+    });
+
+    it("asks for an account on the agent being called, not one chosen on another agent", async () => {
+        const f = fixture();
+        f.store.gptLiveEnabledUpdate(true);
+        f.store.availabilityRead("local");
+        await Promise.resolve();
+        f.store.accountSelect("local", "codex");
+        f.store.callStart("connection:remote");
+        await vi.waitFor(() =>
+            expect(f.store.get().call).toMatchObject({
+                kind: "ended",
+                connectionId: "connection:remote",
+                problem: "notSetUp",
+                message: "Choose a voice account for this agent in Voice settings.",
+            }),
+        );
+        expect(f.runtime.callOpen).not.toHaveBeenCalled();
     });
 });

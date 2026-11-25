@@ -16,13 +16,13 @@ it("starts only on trusted click and keeps the existing composer without a draft
             microphoneMutedUpdate: () => {},
         };
     });
-    const store = gptLiveStoreCreate(undefined, {
+    const store = gptLiveStoreCreate(undefined, () => ({
         availabilityRead: async () => ({
             supported: true,
             accounts: [{ id: "codex", providerId: "codex", kind: "subscription", label: "Codex" }],
         }),
         callOpen: open,
-    });
+    }));
     let mounts = 0;
     let subscriptions = 0;
     const subscribe = (listener: () => void) => {
@@ -54,8 +54,8 @@ it("starts only on trusted click and keeps the existing composer without a draft
                     voice={
                         state.gptLiveEnabled ? (
                             <GptLivePhone
-                                state={state}
-                                onStart={store.callStart}
+                                status={state.call.kind === "idle" ? "idle" : state.call.kind}
+                                onStart={() => store.callStart("local")}
                                 onEnd={store.callEnd}
                             />
                         ) : undefined
@@ -72,9 +72,9 @@ it("starts only on trusted click and keeps the existing composer without a draft
         input.focus();
         input.setSelectionRange(2, 7);
         store.gptLiveEnabledUpdate(true);
-        store.availabilityRead();
-        await expect.poll(() => store.get().availability?.supported).toBe(true);
-        store.accountSelect("codex");
+        store.availabilityRead("local");
+        await expect.poll(() => store.get().availability.get("local")?.status).toBe("ready");
+        store.accountSelect("local", "codex");
         await expect
             .poll(() => document.querySelector('[aria-label="Start voice call"]') !== null)
             .toBe(true);

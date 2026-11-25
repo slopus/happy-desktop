@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
     HappyAgentAttentionStore,
@@ -871,6 +871,27 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     // The voice controller and prompt are read, and re-read every few seconds,
     // only while the Voice category is on screen, including while calls are off.
+    // They are this agent's, which hosts every call started on it.
+    const voiceAvailability = host ? gptLive.availability.get(host.id) : undefined;
+    const voiceAccountId = host ? gptLive.accountIds.get(host.id) : undefined;
+    // Identity contract: GptLiveSettings reads accounts from a ref callback,
+    // which runs again whenever this callback changes. Only a different agent
+    // may read again, or every published read would trigger the next one.
+    const voiceHostId = host?.id;
+    const voiceAccountsRead = useCallback(() => {
+        if (voiceHostId) gptLiveStore.availabilityRead(voiceHostId);
+    }, [gptLiveStore, voiceHostId]);
+    const voiceAccountSelect = useCallback(
+        (accountId: string) => {
+            if (voiceHostId) gptLiveStore.accountSelect(voiceHostId, accountId);
+        },
+        [gptLiveStore, voiceHostId],
+    );
+    /** The window's call, when this agent hosts it. */
+    const voiceCall =
+        host && gptLive.call.kind !== "idle" && gptLive.call.connectionId === host.id
+            ? gptLive.call
+            : undefined;
     const voiceSettingsStore =
         (section === "voice" || stateOpen ? host?.session?.voiceSettings : undefined) ??
         happyAgentVoiceSettingsStoreNoop;
@@ -1042,12 +1063,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     <>
                         <GptLiveSettings
                             enabled={experiments.voice && gptLive.gptLiveEnabled}
-                            accounts={gptLive.availability?.accounts}
-                            accountId={gptLive.accountId}
-                            checking={gptLive.status === "checking"}
+                            {...(voiceAvailability?.status === "ready"
+                                ? { accounts: voiceAvailability.availability.accounts }
+                                : {})}
+                            {...(voiceAccountId ? { accountId: voiceAccountId } : {})}
+                            checking={voiceAvailability?.status === "checking"}
                             accountsVisible
-                            onAccountSelect={gptLiveStore.accountSelect}
-                            onAccountsRead={gptLiveStore.availabilityRead}
+                            onAccountSelect={voiceAccountSelect}
+                            onAccountsRead={voiceAccountsRead}
                             // The one Voice calls switch: the experiment that
                             // allows calls and the window's own choice move together.
                             onEnabledChange={(enabled) => {
@@ -1124,20 +1147,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                     if (happyAgentOnline()) voiceSettingsStore.promptReset();
                                 }}
                                 promptRestart={
-                                    voiceSettings.promptRevision !==
-                                        (gptLive.promptRevision ?? 0) &&
-                                    (gptLive.status === "active" ||
-                                        gptLive.restartStatus === "closing" ||
-                                        gptLive.restartStatus === "connecting")
-                                        ? gptLive.restartStatus === "closing" ||
-                                          gptLive.restartStatus === "connecting"
-                                            ? "restarting"
-                                            : "available"
-                                        : undefined
+                                    voiceCall?.kind === "connecting" && voiceCall.restarting
+                                        ? "restarting"
+                                        : voiceCall?.kind === "active" &&
+                                            voiceSettings.promptRevision !==
+                                                (gptLive.promptRevision ?? 0)
+                                          ? "available"
+                                          : undefined
                                 }
                                 onPromptRestart={() => {
-                                    // Both this settings surface and the window's voice runtime
-                                    // use the host. A changed host/store invalidates this click.
+                                    // This page and the call both use this agent's settings.
+                                    // A changed host/store invalidates this click.
                                     if (
                                         happyAgentOnline() &&
                                         hostHappyAgent(props.happyAgents.get())?.session
@@ -1146,7 +1166,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                         gptLiveStore.callRestart();
                                 }}
                                 promptRestartError={
-                                    gptLive.restartStatus === "failed" ? gptLive.error : undefined
+                                    voiceCall?.kind === "ended" ? voiceCall.message : undefined
                                 }
                                 onPromptDefaultCopy={() => {
                                     const text = voiceSettings.settings?.defaultSystemPrompt;

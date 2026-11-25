@@ -34,7 +34,7 @@ export {
 } from "./ReviewStream";
 export { GptLiveSettings, type GptLiveSettingsProps } from "./GptLiveSettings";
 export { GptLiveVoiceSettings, type GptLiveVoiceSettingsProps } from "./GptLiveVoiceSettings";
-export { GptLivePhone, type GptLivePhoneProps } from "./GptLivePhone";
+export { GptLivePhone, type GptLivePhoneProps, type GptLivePhoneStatus } from "./GptLivePhone";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";

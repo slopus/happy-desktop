@@ -45,7 +45,10 @@ describe("GPT-Live runtime transport and lifetime", () => {
     it("rejects unsupported daemon capability before microphone or provider transport", async () => {
         const f = gptLiveRuntimeFixtureCreate();
         f.daemon.healthSet({ desktopLiveControl: false });
-        await expect(f.open()).rejects.toThrow("does not support");
+        await expect(f.open()).rejects.toMatchObject({
+            message: "This Happy Agent does not support GPT-Live desktop control.",
+            code: "notSetUp",
+        });
         expect(f.daemon.calls.map((call) => call.method)).toEqual(["getHealth"]);
         expect(f.stats.permissionStarts + f.stats.mediaOpens + f.stats.socketOpens).toBe(0);
     });
@@ -54,9 +57,15 @@ describe("GPT-Live runtime transport and lifetime", () => {
         const f = gptLiveRuntimeFixtureCreate();
         const call = await connected(f);
         expect(f.createRequests()).toHaveLength(1);
-        expect(f.events).toEqual([]);
+        // Opening reports its steps in order, and nothing else before readiness.
+        expect(f.events).toEqual([
+            { type: "callStepUpdated", step: "checking" },
+            { type: "callStepUpdated", step: "microphone" },
+            { type: "callStepUpdated", step: "allocating" },
+            { type: "callStepUpdated", step: "attaching" },
+        ]);
         f.active();
-        expect(f.events).toEqual([]);
+        expect(f.events.filter((event) => event.type !== "callStepUpdated")).toEqual([]);
         f.mediaReady();
         await flushUntil(() => f.events.some((event) => event.type === "callActive"));
         f.active();
@@ -68,7 +77,7 @@ describe("GPT-Live runtime transport and lifetime", () => {
         const f = gptLiveRuntimeFixtureCreate();
         f.mediaReady();
         const call = await connected(f);
-        expect(f.events).toEqual([]);
+        expect(f.events.filter((event) => event.type !== "callStepUpdated")).toEqual([]);
         f.active();
         expect(f.events.filter((event) => event.type === "callActive")).toHaveLength(1);
         await ended(f, call);
@@ -138,6 +147,7 @@ describe("GPT-Live runtime transport and lifetime", () => {
         expect(f.events).toContainEqual({
             type: "callFailed",
             message: "This account cannot use the selected voice provider.",
+            problem: "connection",
         });
         expect(f.events.some((event) => event.type === "callActive")).toBe(false);
         expect(f.stats.mediaSilences).toBe(1);
@@ -226,6 +236,7 @@ describe("GPT-Live runtime transport and lifetime", () => {
         expect(f.events).toContainEqual({
             type: "callFailed",
             message: "The voice connection ended before its close could be confirmed.",
+            problem: "connection",
         });
         expect(f.daemon.liveSessionGet(f.createRequests()[0]!.id!)?.usage.final).toBe(false);
 
@@ -236,6 +247,7 @@ describe("GPT-Live runtime transport and lifetime", () => {
         expect(failed.events).toContainEqual({
             type: "callFailed",
             message: "The RTC connection failed.",
+            problem: "connection",
         });
         await flushUntil(() => failed.closeRequests().length === 1);
     });

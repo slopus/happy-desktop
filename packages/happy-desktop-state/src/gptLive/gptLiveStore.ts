@@ -1,11 +1,13 @@
-import type {
-    GptLiveAccount,
-    GptLiveAvailability,
-    GptLiveCall,
-    GptLiveRuntime,
-    GptLiveRuntimeEvent,
-    GptLiveTranscriptFragment,
-    GptLiveVoiceFocus,
+import {
+    GPT_LIVE_PROBLEMS,
+    type GptLiveAvailability,
+    type GptLiveCall,
+    type GptLiveCallStep,
+    type GptLiveProblem,
+    type GptLiveRuntimeEvent,
+    type GptLiveRuntimes,
+    type GptLiveTranscriptFragment,
+    type GptLiveVoiceFocus,
 } from "./gptLiveRuntime.js";
 import type { ExperimentsStore } from "../experiments/experimentsStore.js";
 import { UserError } from "../types.js";
@@ -13,7 +15,8 @@ import { UserError } from "../types.js";
 /** A desktop preference, independent of any coding session or provider default. */
 export interface GptLiveDocument {
     readonly gptLiveEnabled: boolean;
-    readonly accountId?: string;
+    /** The voice account chosen on each agent, by connection ID. */
+    readonly accountIds?: Readonly<Record<string, string>>;
 }
 
 export interface GptLivePersistence {
@@ -21,27 +24,51 @@ export interface GptLivePersistence {
     write(document: GptLiveDocument): void;
 }
 
+/**
+ * The window's one call, bound to the agent that hosts it. `ended` keeps why a
+ * call could not start or stopped until the person ends it or calls again.
+ */
+export type GptLiveCallState =
+    | { readonly kind: "idle" }
+    | {
+          readonly kind: "connecting";
+          readonly connectionId: string;
+          readonly step: GptLiveCallStep;
+          /** Replacing an established call after its voice prompt changed. */
+          readonly restarting: boolean;
+          readonly muted: boolean;
+      }
+    | {
+          readonly kind: "active";
+          readonly connectionId: string;
+          readonly muted: boolean;
+          /** When the call became active, in epoch milliseconds. */
+          readonly since: number;
+      }
+    | {
+          readonly kind: "ended";
+          readonly connectionId: string;
+          readonly problem: GptLiveProblem;
+          readonly message: string;
+      };
+
+/** What one agent's voice can use, as this window last read it. */
+export type GptLiveAvailabilityRead =
+    | { readonly status: "checking" }
+    | { readonly status: "ready"; readonly availability: GptLiveAvailability }
+    | { readonly status: "failed"; readonly message: string };
+
 export interface GptLiveSnapshot {
     readonly gptLiveEnabled: boolean;
-    readonly status:
-        | "disabled"
-        | "idle"
-        | "checking"
-        | "unavailable"
-        | "connecting"
-        | "active"
-        | "error";
-    readonly availability?: GptLiveAvailability;
-    readonly accountId?: string;
-    readonly microphoneMuted: boolean;
-    readonly panelVisible: boolean;
+    readonly call: GptLiveCallState;
+    /** By connection ID; an agent is read only when a surface asks for it. */
+    readonly availability: ReadonlyMap<string, GptLiveAvailabilityRead>;
+    /** The voice account chosen on each agent, by connection ID. */
+    readonly accountIds: ReadonlyMap<string, string>;
     readonly transcripts: readonly GptLiveTranscriptFragment[];
     readonly actionStatus?: string;
-    readonly error?: string;
-    /** Successful prompt revision captured when this call started, published once it is active. */
+    /** The calling agent's prompt revision captured at start, published once active. */
     readonly promptRevision?: number;
-    /** A failed restart stays visible until the next explicit Start or End. */
-    readonly restartStatus?: "closing" | "connecting" | "failed";
     /**
      * What the call is pointing at, separate from the window's own selection.
      * It lasts until the call points elsewhere, the call ends, or
@@ -58,39 +85,48 @@ export interface GptLiveStore {
     subscribe(listener: () => void): () => void;
     /** Opts into the desktop voice surface; never starts a call or a coding task. */
     gptLiveEnabledUpdate(enabled: boolean): void;
-    /** Reads capability/account choices only when enabled and explicitly requested by the surface. */
-    availabilityRead(): void;
-    accountSelect(id: string): void;
-    /** A deliberate human Start action; restoring a preference never starts recording. */
-    callStart(): void;
+    /** Reads one agent's voice capability and accounts, when a surface asks for them. */
+    availabilityRead(connectionId: string): void;
+    accountSelect(connectionId: string, accountId: string): void;
+    /**
+     * A deliberate human Start on one agent, which hosts the call; restoring a
+     * preference never starts recording. Ignored while another call is live.
+     */
+    callStart(connectionId: string): void;
+    /** Hangs up a live call, or puts away an ended one. */
     callEnd(): void;
     /** Explicitly replaces an established call, after its normal close confirms completion. */
     callRestart(): void;
-    panelOpen(): void;
-    panelClose(): void;
     microphoneMutedUpdate(muted: boolean): void;
     [Symbol.dispose](): void;
 }
 
+const IDLE: GptLiveCallState = { kind: "idle" };
 const DISABLED: GptLiveSnapshot = {
     gptLiveEnabled: false,
-    status: "disabled",
-    microphoneMuted: false,
-    panelVisible: false,
+    call: IDLE,
+    availability: new Map(),
+    accountIds: new Map(),
     transcripts: [],
 };
+
+function problemOf(error: unknown): GptLiveProblem | "cancelled" {
+    const code = error instanceof UserError ? error.code : undefined;
+    if (code === "cancelled") return "cancelled";
+    return GPT_LIVE_PROBLEMS.find((problem) => problem === code) ?? "connection";
+}
 
 /**
  * Window-owned opt-in. Construction and subscription open no microphone,
  * transport, controller, timer, or session subscription. Even a persisted true
  * value is a preference, never consent to start recording on the next launch.
- * The runtime is supplied by the desktop and owns all external resources.
+ * Each agent's runtime is supplied by the desktop and owns all external resources.
  */
 export function gptLiveStoreCreate(
     persistence?: GptLivePersistence,
-    runtime?: GptLiveRuntime,
+    runtimes?: GptLiveRuntimes,
     experiments?: Pick<ExperimentsStore, "get">,
-    promptRevisionRead: () => number = () => 0,
+    promptRevisionRead: (connectionId: string) => number = () => 0,
 ): GptLiveStore {
     const allowed = () => experiments?.get().voice ?? true;
     let snapshot = DISABLED;
@@ -104,13 +140,12 @@ export function gptLiveStoreCreate(
             typeof (document as { gptLiveEnabled?: unknown }).gptLiveEnabled === "boolean"
         ) {
             const enabled = (document as { gptLiveEnabled: boolean }).gptLiveEnabled && allowed();
-            const accountId = (document as { accountId?: unknown }).accountId;
-            snapshot = {
-                ...DISABLED,
-                gptLiveEnabled: enabled,
-                status: enabled ? "idle" : "disabled",
-                ...(typeof accountId === "string" ? { accountId } : {}),
-            };
+            const stored = (document as { accountIds?: unknown }).accountIds;
+            const accountIds = new Map<string, string>();
+            if (typeof stored === "object" && stored !== null)
+                for (const [connectionId, accountId] of Object.entries(stored))
+                    if (typeof accountId === "string") accountIds.set(connectionId, accountId);
+            snapshot = { ...DISABLED, gptLiveEnabled: enabled, accountIds };
         }
     } catch {
         // Keep the default when storage cannot be read.
@@ -118,18 +153,31 @@ export function gptLiveStoreCreate(
     const listeners = new Set<() => void>();
     let disposed = false;
     let generation = 0;
-    let availabilityController: AbortController | undefined;
+    const availabilityControllers = new Map<string, AbortController>();
     let callController: AbortController | undefined;
     let call: GptLiveCall | undefined;
     let opening: Promise<void> | undefined;
     let activeEpoch: number | undefined;
     let cleanup: Promise<void> = Promise.resolve();
     let cleanupPending = false;
-    let startAfterAvailability = false;
+    /** The agent whose Start waits for its availability. */
+    let startAfterAvailability: { connectionId: string; restarting: boolean } | undefined;
     let focusTimer: ReturnType<typeof setTimeout> | undefined;
     const publish = (next: GptLiveSnapshot) => {
         snapshot = next;
         for (const listener of listeners) listener();
+    };
+    const persist = (next: GptLiveSnapshot) => {
+        try {
+            persistence?.write({
+                gptLiveEnabled: next.gptLiveEnabled,
+                ...(next.accountIds.size > 0
+                    ? { accountIds: Object.fromEntries(next.accountIds) }
+                    : {}),
+            });
+        } catch {
+            // An unavailable persistence adapter must not prevent disabling.
+        }
     };
     const focusTimerClear = () => {
         if (focusTimer !== undefined) clearTimeout(focusTimer);
@@ -150,12 +198,15 @@ export function gptLiveStoreCreate(
             publish(remaining);
         }, GPT_LIVE_VOICE_FOCUS_MS);
     };
+    const live = () => snapshot.call.kind === "connecting" || snapshot.call.kind === "active";
+    const muted = () =>
+        snapshot.call.kind === "connecting" || snapshot.call.kind === "active"
+            ? snapshot.call.muted
+            : false;
     const stop = (): Promise<void> => {
-        startAfterAvailability = false;
+        startAfterAvailability = undefined;
         focusTimerClear();
         generation++;
-        availabilityController?.abort();
-        availabilityController = undefined;
         const previous = call;
         const previousOpening = opening;
         call = undefined;
@@ -180,27 +231,26 @@ export function gptLiveStoreCreate(
         callController = undefined;
         return cleanup;
     };
-    const idle = (error?: string) => {
-        const {
-            actionStatus: _actionStatus,
-            error: _error,
-            voiceFocus: _voiceFocus,
-            ...rest
-        } = snapshot;
+    /** The call's resting state: nothing, or why it could not go on. */
+    const settle = (ended?: { connectionId: string; problem: GptLiveProblem; message: string }) => {
+        const { actionStatus: _actionStatus, voiceFocus: _voiceFocus, ...rest } = snapshot;
         publish({
             ...rest,
-            status: snapshot.gptLiveEnabled ? (error ? "error" : "idle") : "disabled",
-            microphoneMuted: false,
-            restartStatus: error && snapshot.restartStatus ? "failed" : undefined,
-            ...(error && snapshot.restartStatus
-                ? { microphoneMuted: snapshot.microphoneMuted }
-                : {}),
-            ...(error ? { error } : {}),
+            call: ended && snapshot.gptLiveEnabled ? { kind: "ended", ...ended } : IDLE,
         });
     };
-    const receive = (epoch: number, promptRevision: number, event: GptLiveRuntimeEvent) => {
+    const receive = (
+        epoch: number,
+        connectionId: string,
+        promptRevision: number,
+        event: GptLiveRuntimeEvent,
+    ) => {
         if (disposed || epoch !== generation || !snapshot.gptLiveEnabled) return;
         switch (event.type) {
+            case "callStepUpdated":
+                if (snapshot.call.kind === "connecting")
+                    publish({ ...snapshot, call: { ...snapshot.call, step: event.step } });
+                break;
             case "callActive":
                 // Provider readiness can precede the callOpen continuation.
                 // Expose an active call only once its close handle is owned.
@@ -210,18 +260,17 @@ export function gptLiveStoreCreate(
                 }
                 publish({
                     ...snapshot,
-                    status: "active",
+                    call: { kind: "active", connectionId, muted: muted(), since: Date.now() },
                     promptRevision,
-                    restartStatus: undefined,
                 });
                 break;
             case "callClosed":
                 stop();
-                idle();
+                settle();
                 break;
             case "callFailed":
                 stop();
-                idle(event.message);
+                settle({ connectionId, problem: event.problem, message: event.message });
                 break;
             case "transcriptReceived": {
                 // Stable fragment IDs replace revisions without inventing user-turn boundaries.
@@ -238,9 +287,120 @@ export function gptLiveStoreCreate(
             case "voiceFocusUpdated":
                 // Only a live call points anywhere; a late event from a call
                 // that is still connecting or already ending changes nothing.
-                if (snapshot.status === "active") focusUpdate(event.focus);
+                if (snapshot.call.kind === "active") focusUpdate(event.focus);
                 break;
         }
+    };
+    /** Opens the call on an agent whose availability has just been read. */
+    const open = (connectionId: string, availability: GptLiveAvailability, restarting: boolean) => {
+        if (!runtimes) return;
+        if (!availability.supported) {
+            settle({
+                connectionId,
+                problem: availability.problem ?? "notSetUp",
+                message: availability.reason ?? "Voice is not available on this agent.",
+            });
+            return;
+        }
+        const accountId = snapshot.accountIds.get(connectionId);
+        const account = availability.accounts.find((item) => item.id === accountId);
+        if (!account) {
+            settle({
+                connectionId,
+                problem: "notSetUp",
+                message:
+                    availability.accounts.length > 0
+                        ? "Choose a voice account for this agent in Voice settings."
+                        : (availability.reason ??
+                          "Configure an enabled Codex subscription or OpenAI API provider on this agent to use voice."),
+            });
+            return;
+        }
+        const abort = new AbortController();
+        // A normal explicit Start also retains the existing recovery behavior
+        // after an earlier close failed. Restart itself must confirm cleanup.
+        cleanup = Promise.resolve();
+        callController = abort;
+        const epoch = ++generation;
+        const promptRevision = promptRevisionRead(connectionId);
+        const microphoneMuted = muted();
+        publish({
+            ...snapshot,
+            call: {
+                kind: "connecting",
+                connectionId,
+                step: "checking",
+                restarting,
+                muted: microphoneMuted,
+            },
+            transcripts: [],
+        });
+        const pendingOpen = runtimes(connectionId)
+            .callOpen(
+                { account, microphoneMuted },
+                (event) => receive(epoch, connectionId, promptRevision, event),
+                abort.signal,
+            )
+            .then(
+                (opened) => {
+                    if (disposed || abort.signal.aborted || epoch !== generation) {
+                        return opened.close();
+                    }
+                    call = opened;
+                    opened.microphoneMutedUpdate(muted());
+                    if (activeEpoch === epoch)
+                        receive(epoch, connectionId, promptRevision, { type: "callActive" });
+                },
+                (error: unknown) => {
+                    if (disposed || abort.signal.aborted || epoch !== generation) return;
+                    stop();
+                    const problem = problemOf(error);
+                    if (problem === "cancelled") settle();
+                    else
+                        settle({
+                            connectionId,
+                            problem,
+                            message:
+                                error instanceof UserError
+                                    ? error.message
+                                    : "The voice call could not connect.",
+                        });
+                },
+            );
+        opening = pendingOpen;
+        void pendingOpen.then(
+            () => {
+                if (opening === pendingOpen) opening = undefined;
+            },
+            () => {
+                if (opening === pendingOpen) opening = undefined;
+            },
+        );
+    };
+    /** Starts on an agent, reading its availability first unless it is known to support voice. */
+    const start = (connectionId: string, restarting: boolean) => {
+        const read = snapshot.availability.get(connectionId);
+        if (read?.status === "ready" && read.availability.supported) {
+            open(connectionId, read.availability, restarting);
+            return;
+        }
+        startAfterAvailability = { connectionId, restarting };
+        publish({
+            ...snapshot,
+            call: {
+                kind: "connecting",
+                connectionId,
+                step: "checking",
+                restarting,
+                muted: muted(),
+            },
+        });
+        store.availabilityRead(connectionId);
+    };
+    const availabilitySet = (connectionId: string, read: GptLiveAvailabilityRead) => {
+        const availability = new Map(snapshot.availability);
+        availability.set(connectionId, read);
+        publish({ ...snapshot, availability });
     };
     const store: GptLiveStore = {
         get: () => snapshot,
@@ -257,232 +417,147 @@ export function gptLiveStoreCreate(
             const next: GptLiveSnapshot = {
                 ...DISABLED,
                 gptLiveEnabled: enabled,
-                status: enabled ? "idle" : "disabled",
-                ...(snapshot.accountId ? { accountId: snapshot.accountId } : {}),
-                ...(snapshot.availability ? { availability: snapshot.availability } : {}),
+                availability: snapshot.availability,
+                accountIds: snapshot.accountIds,
             };
-            try {
-                persistence?.write({
-                    gptLiveEnabled: enabled,
-                    ...(next.accountId ? { accountId: next.accountId } : {}),
-                });
-            } catch {
-                // An unavailable persistence adapter must not prevent disabling.
-            }
+            persist(next);
             publish(next);
         },
-        availabilityRead() {
-            if (
-                disposed ||
-                !allowed() ||
-                availabilityController ||
-                callController ||
-                cleanupPending
-            )
-                return;
-            if (!runtime) {
-                publish({
-                    ...snapshot,
-                    status: "unavailable",
-                    error: "This desktop build does not support GPT-Live calls.",
+        availabilityRead(connectionId) {
+            if (disposed || !allowed() || availabilityControllers.has(connectionId)) return;
+            if (!runtimes) {
+                availabilitySet(connectionId, {
+                    status: "ready",
+                    availability: {
+                        supported: false,
+                        problem: "unsupportedWindow",
+                        reason: "This desktop build does not support GPT-Live calls.",
+                        accounts: [],
+                    },
                 });
                 return;
             }
             const controller = new AbortController();
-            availabilityController = controller;
-            const epoch = generation;
-            publish({ ...snapshot, status: "checking", error: undefined });
-            void runtime.availabilityRead(controller.signal).then(
-                (availability) => {
-                    if (disposed || controller.signal.aborted || generation !== epoch) return;
-                    availabilityController = undefined;
-                    publish({
-                        ...snapshot,
-                        availability,
-                        status: !snapshot.gptLiveEnabled
-                            ? "disabled"
-                            : availability.supported
-                              ? "idle"
-                              : "unavailable",
-                        error: availability.reason,
-                        accountId: availability.accounts.some(
-                            (item) => item.id === snapshot.accountId,
-                        )
-                            ? snapshot.accountId
-                            : undefined,
-                    });
-                    if (startAfterAvailability) {
-                        startAfterAvailability = false;
-                        if (availability.supported) store.callStart();
-                    }
-                },
-                () => {
-                    if (disposed || controller.signal.aborted || generation !== epoch) return;
-                    availabilityController = undefined;
-                    startAfterAvailability = false;
-                    publish({
-                        ...snapshot,
-                        status: "unavailable",
-                        error: "GPT-Live availability could not be checked. Check your Happy Agent connection.",
-                    });
-                },
-            );
+            availabilityControllers.set(connectionId, controller);
+            availabilitySet(connectionId, { status: "checking" });
+            const settled = () => {
+                if (availabilityControllers.get(connectionId) === controller)
+                    availabilityControllers.delete(connectionId);
+            };
+            void runtimes(connectionId)
+                .availabilityRead(controller.signal)
+                .then(
+                    (availability) => {
+                        settled();
+                        if (disposed || controller.signal.aborted) return;
+                        availabilitySet(connectionId, { status: "ready", availability });
+                        const pending = startAfterAvailability;
+                        if (pending?.connectionId !== connectionId) return;
+                        startAfterAvailability = undefined;
+                        if (snapshot.gptLiveEnabled)
+                            open(connectionId, availability, pending.restarting);
+                    },
+                    () => {
+                        settled();
+                        if (disposed || controller.signal.aborted) return;
+                        const message =
+                            "Voice availability could not be checked. Check this agent's connection.";
+                        availabilitySet(connectionId, { status: "failed", message });
+                        if (startAfterAvailability?.connectionId !== connectionId) return;
+                        startAfterAvailability = undefined;
+                        settle({ connectionId, problem: "connection", message });
+                    },
+                );
         },
-        accountSelect(id) {
+        accountSelect(connectionId, accountId) {
+            const read = snapshot.availability.get(connectionId);
             if (
                 disposed ||
-                callController ||
-                cleanupPending ||
-                snapshot.restartStatus === "closing" ||
-                snapshot.restartStatus === "connecting" ||
-                !snapshot.availability?.accounts.some((item) => item.id === id)
+                (live() &&
+                    snapshot.call.kind !== "idle" &&
+                    snapshot.call.connectionId === connectionId) ||
+                read?.status !== "ready" ||
+                !read.availability.accounts.some((item) => item.id === accountId)
             )
                 return;
-            publish({ ...snapshot, accountId: id });
-            try {
-                persistence?.write({ gptLiveEnabled: snapshot.gptLiveEnabled, accountId: id });
-            } catch {}
+            const accountIds = new Map(snapshot.accountIds);
+            accountIds.set(connectionId, accountId);
+            const next = { ...snapshot, accountIds };
+            persist(next);
+            publish(next);
         },
-        callStart() {
+        callStart(connectionId) {
             if (
                 disposed ||
                 !allowed() ||
                 !snapshot.gptLiveEnabled ||
-                !runtime ||
+                live() ||
                 callController ||
-                availabilityController ||
-                cleanupPending ||
-                snapshot.restartStatus === "closing"
+                cleanupPending
             )
                 return;
-            if (!snapshot.accountId) {
-                idle("Choose a voice account in Voice settings.");
+            if (!runtimes) {
+                settle({
+                    connectionId,
+                    problem: "unsupportedWindow",
+                    message: "This desktop build does not support GPT-Live calls.",
+                });
                 return;
             }
-            if (!snapshot.availability || snapshot.status === "unavailable") {
-                startAfterAvailability = true;
-                store.availabilityRead();
-                return;
-            }
-            if (!snapshot.availability.supported) return;
-            const account: GptLiveAccount | undefined = snapshot.availability.accounts.find(
-                (item) => item.id === snapshot.accountId,
-            );
-            if (!account) {
-                idle("Choose a voice account in Voice settings.");
-                return;
-            }
-            const abort = new AbortController();
-            // A normal explicit Start also retains the existing recovery behavior
-            // after an earlier close failed. Restart itself must confirm cleanup.
-            cleanup = Promise.resolve();
-            callController = abort;
-            const epoch = ++generation;
-            const promptRevision = promptRevisionRead();
-            const restarting = snapshot.restartStatus !== undefined;
-            publish({
-                ...snapshot,
-                status: "connecting",
-                transcripts: [],
-                error: undefined,
-                microphoneMuted: restarting ? snapshot.microphoneMuted : false,
-                restartStatus: restarting ? "connecting" : undefined,
-            });
-            const pendingOpen = runtime
-                .callOpen(
-                    { account, microphoneMuted: snapshot.microphoneMuted },
-                    (event) => receive(epoch, promptRevision, event),
-                    abort.signal,
-                )
-                .then(
-                    (opened) => {
-                        if (disposed || abort.signal.aborted || epoch !== generation) {
-                            return opened.close();
-                        }
-                        call = opened;
-                        opened.microphoneMutedUpdate(snapshot.microphoneMuted);
-                        if (activeEpoch === epoch)
-                            receive(epoch, promptRevision, { type: "callActive" });
-                    },
-                    (error: unknown) => {
-                        if (disposed || abort.signal.aborted || epoch !== generation) return;
-                        stop();
-                        idle(
-                            error instanceof UserError
-                                ? error.message
-                                : "The voice call could not connect.",
-                        );
-                    },
-                );
-            opening = pendingOpen;
-            void pendingOpen.then(
-                () => {
-                    if (opening === pendingOpen) opening = undefined;
-                },
-                () => {
-                    if (opening === pendingOpen) opening = undefined;
-                },
-            );
+            start(connectionId, false);
         },
         callEnd() {
             if (disposed) return;
             stop();
-            idle();
+            settle();
         },
         callRestart() {
             // Pending microphone grants/uncertain creates keep their existing
             // cancellation path; only an established active call offers Restart.
-            if (
-                disposed ||
-                !snapshot.gptLiveEnabled ||
-                snapshot.restartStatus === "closing" ||
-                snapshot.restartStatus === "connecting" ||
-                snapshot.status !== "active" ||
-                !call
-            )
-                return;
-            const muted = snapshot.microphoneMuted;
+            const current = snapshot.call;
+            if (disposed || !snapshot.gptLiveEnabled || current.kind !== "active" || !call) return;
             const closing = stop();
             const epoch = generation;
             publish({
                 ...snapshot,
-                status: "connecting",
-                restartStatus: "closing",
-                error: undefined,
+                call: {
+                    kind: "connecting",
+                    connectionId: current.connectionId,
+                    step: "checking",
+                    restarting: true,
+                    muted: current.muted,
+                },
             });
             void closing.then(
                 () => {
                     if (disposed || epoch !== generation || !snapshot.gptLiveEnabled) return;
-                    publish({ ...snapshot, restartStatus: "connecting", microphoneMuted: muted });
-                    store.callStart();
+                    start(current.connectionId, true);
                 },
                 (error: unknown) => {
                     if (disposed || epoch !== generation || !snapshot.gptLiveEnabled) return;
-                    idle(
-                        error instanceof UserError
-                            ? error.message
-                            : "The previous voice call could not be confirmed closed.",
-                    );
+                    settle({
+                        connectionId: current.connectionId,
+                        problem: "connection",
+                        message:
+                            error instanceof UserError
+                                ? error.message
+                                : "The previous voice call could not be confirmed closed.",
+                    });
                 },
             );
         },
-        panelOpen() {
-            if (disposed || !allowed() || !snapshot.gptLiveEnabled) return;
-            publish({ ...snapshot, panelVisible: true });
-            if (!snapshot.availability) store.availabilityRead();
-        },
-        panelClose() {
-            if (disposed || !snapshot.panelVisible) return;
-            publish({ ...snapshot, panelVisible: false });
-        },
-        microphoneMutedUpdate(muted) {
-            if (disposed || !callController || !snapshot.gptLiveEnabled) return;
-            call?.microphoneMutedUpdate(muted);
-            publish({ ...snapshot, microphoneMuted: muted });
+        microphoneMutedUpdate(nextMuted) {
+            const current = snapshot.call;
+            if (disposed || !snapshot.gptLiveEnabled) return;
+            if (current.kind !== "connecting" && current.kind !== "active") return;
+            call?.microphoneMutedUpdate(nextMuted);
+            publish({ ...snapshot, call: { ...current, muted: nextMuted } });
         },
         [Symbol.dispose]() {
             if (disposed) return;
             stop();
+            for (const controller of availabilityControllers.values()) controller.abort();
+            availabilityControllers.clear();
             disposed = true;
             listeners.clear();
         },
@@ -511,8 +586,6 @@ export const gptLiveStoreNoop: GptLiveStore = {
     callStart: () => {},
     callEnd: () => {},
     callRestart: () => {},
-    panelOpen: () => {},
-    panelClose: () => {},
     microphoneMutedUpdate: () => {},
     [Symbol.dispose]: () => {},
 };

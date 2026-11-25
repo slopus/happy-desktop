@@ -1926,12 +1926,11 @@ if (mediaPreviewBridge) {
                 connectionUis,
             }),
             experiments,
-            // Voice settings and calls both belong to the local host, even while
-            // the window is looking at a remote machine's work.
-            () =>
+            // A call belongs to the agent it was started on, with that agent's voice settings.
+            (connectionId) =>
                 happyAgents
                     .get()
-                    .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
+                    .happyAgents.find((entry) => entry.id === connectionId)
                     ?.session?.voiceSettings.get().promptRevision ?? 0,
         );
         appDisposers.push(gptLiveExperimentsConnect(gptLive, experiments));
