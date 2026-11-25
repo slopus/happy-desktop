@@ -84,12 +84,12 @@ index 03908bc55..4ca469d6f 100644
  };
  /** `GET /v0/events/stream` options. */
  export interface EventStreamOptions {
-diff --git a/dist/protocol/viewers.d.ts b/dist/protocol/viewers.d.ts
+diff --git a/client-patch/dist/protocol/viewers.d.ts b/dist/protocol/viewers.d.ts
 new file mode 100644
-index 000000000..4cec2134c
+index 000000000..f319cb53b
 --- /dev/null
 +++ b/dist/protocol/viewers.d.ts
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,44 @@
 +/** What a person can be viewing: an agent session or a Surface. */
 +export type ViewerTarget = {
 +    type: "agent";
@@ -98,6 +98,16 @@ index 000000000..4cec2134c
 +    type: "surface";
 +    id: string;
 +};
++/**
++ * A target of a type this client does not know, such as one a newer client
++ * views. The server answers it with no viewers.
++ */
++export interface OtherViewerTarget {
++    type: string;
++    id: string;
++}
++/** What a request may name, and so what an answer may echo. */
++export type ViewerRequestTarget = ViewerTarget | OtherViewerTarget;
 +/**
 + * One other person who views a target now, or did. `lastSeenAt` is the last moment
 + * they were here, epoch milliseconds; for a person here now it is the server's time.
@@ -109,11 +119,11 @@ index 000000000..4cec2134c
 +}
 +/** `PUT /v0/viewers/streams/:streamId` body: everything this stream views, 0 to 8 targets. */
 +export interface PutViewersRequest {
-+    targets: ViewerTarget[];
++    targets: ViewerRequestTarget[];
 +}
 +/** The viewers of one requested target, the caller excluded: here first, then newest. */
 +export interface TargetViewers {
-+    target: ViewerTarget;
++    target: ViewerRequestTarget;
 +    viewers: Viewer[];
 +}
 +export interface PutViewersResponse {
@@ -124,7 +134,7 @@ index 000000000..4cec2134c
 +    target: ViewerTarget;
 +    viewer: Viewer;
 +}
-diff --git a/dist/protocol/viewers.js b/dist/protocol/viewers.js
+diff --git a/client-patch/dist/protocol/viewers.js b/dist/protocol/viewers.js
 new file mode 100644
 index 000000000..cb0ff5c3b
 --- /dev/null

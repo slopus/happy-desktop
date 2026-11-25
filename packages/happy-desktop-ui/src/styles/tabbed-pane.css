@@ -99,9 +99,10 @@
 
 /* An overlaid bar keeps its trailing controls when it hides: the strip and its
    band go, and they stay where they were, standing on the content the way the
-   window's other header controls do. Nothing under them moves either way. */
+   window's other header controls do. Nothing under them moves either way. A
+   trailing lane whose control draws nothing leaves the bar hidden. */
 .happy-tabbed-pane[data-bar-overlay][data-bar-hidden]
-    > .happy-tabbed-pane__bar:has(> .happy-tabbed-pane__trailing) {
+    > .happy-tabbed-pane__bar:has(> .happy-tabbed-pane__trailing:not(:empty)) {
     /* Over the body's veil, which would otherwise wash the controls out. */
     z-index: 4;
     display: flex;
@@ -283,6 +284,11 @@
     gap: 4px;
     margin-left: auto;
     padding: 0 16px 0 8px;
+}
+
+/* A trailing control with nothing to show keeps no gutter in the strip. */
+.happy-tabbed-pane__trailing:empty {
+    display: none;
 }
 
 .happy-tabbed-pane__body {

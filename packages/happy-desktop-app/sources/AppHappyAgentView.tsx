@@ -6675,6 +6675,7 @@ function HappyAgentSurfaceContent(props: {
             ) : (
                 <HappyAgentSurfaceUnsupportedPage
                     surface={{ ...view, type: { kind: "unsupported", type: "system_monitor" } }}
+                    viewers={viewers}
                 />
             );
         if (surface.type.kind === "chat")
@@ -6726,7 +6727,7 @@ function HappyAgentSurfaceContent(props: {
                     surface={view}
                 />
             );
-        return <HappyAgentSurfaceUnsupportedPage surface={view} />;
+        return <HappyAgentSurfaceUnsupportedPage surface={view} viewers={viewers} />;
     };
     // The shell is there whether or not the chat is, so opening it does not
     // remount the Surface's page and lose its scroll, caret, or edit.

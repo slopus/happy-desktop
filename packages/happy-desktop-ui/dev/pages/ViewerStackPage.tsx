@@ -232,13 +232,13 @@ export function ViewerStackPage() {
             </Specimen>
 
             <Specimen
-                detail="A Surface's header with nobody, three tiers, and ten people: the title and controls hold their places"
+                detail="A Surface's header with nobody, three tiers, ten people, and fifty: the title and controls hold their places"
                 label="In a Surface header"
                 number="04"
                 stage="app"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    {[[], VIEWERS_MIXED, VIEWERS_TEN].map((viewers) => (
+                    {[[], VIEWERS_MIXED, VIEWERS_TEN, VIEWERS_FIFTY].map((viewers) => (
                         <div
                             data-testid={`surface-header-${String(viewers.length)}`}
                             key={viewers.length}

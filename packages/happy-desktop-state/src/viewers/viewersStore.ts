@@ -1,6 +1,7 @@
 import {
     HappyAgentApiError,
     type HappyAgentClient,
+    type ViewerRequestTarget,
     type ViewerTarget,
 } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
@@ -89,6 +90,11 @@ interface Shown {
 
 const UNAVAILABLE: HappyAgentTargetViewersSnapshot = { status: "unavailable" };
 
+/** An answer may echo a target of a type a newer client sent; this one names none. */
+function targetKnown(target: ViewerRequestTarget): target is ViewerTarget {
+    return target.type === "agent" || target.type === "surface";
+}
+
 function notFound(error: unknown): boolean {
     return error instanceof HappyAgentApiError && error.status === 404;
 }
@@ -99,9 +105,10 @@ function notFound(error: unknown): boolean {
  * It then follows the connection's event stream for its `streamId` and for
  * `viewers.updated` frames, and says which targets are on screen with one
  * `PUT /v0/viewers/streams/:streamId` whenever that changes and every 15
- * seconds while anything is, with at most one request in flight. Each answer
- * replaces the lists for the targets it names, and frames change them in
- * between. A server that answers 404 has no viewers for this stream, and is
+ * seconds after the last answer while anything is, with at most one request
+ * in flight on a stream. A new stream abandons the old stream's request. Each
+ * answer replaces the lists for the targets it names, and frames change them
+ * in between. A server that answers 404 has no viewers for this stream, and is
  * asked again only on the next stream.
  */
 export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgentViewers {
@@ -125,9 +132,13 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
     let streamId: string | undefined;
     /** The stream a 404 came back on; nothing more is sent on it. */
     let refusedOn: string | undefined;
-    /** What the server last accepted on the current stream, as keys. */
-    let accepted = "";
-    let sending = false;
+    /**
+     * What the server last accepted on the current stream, as keys, or
+     * `undefined` when a request failed and it may or may not have applied it.
+     */
+    let accepted: string | undefined = "";
+    /** The request in flight, which belongs to the stream it was sent on. */
+    let inflight: { readonly stream: string; readonly abort: AbortController } | undefined;
     let sendAgain = false;
     let changeQueued = false;
     let heartbeat: ReturnType<typeof setTimeout> | undefined;
@@ -201,60 +212,84 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
         changeQueued = true;
         queueMicrotask(() => {
             changeQueued = false;
-            for (const key of lists.keys()) if (!shown.has(key)) lists.delete(key);
+            let pruned = false;
+            for (const key of lists.keys())
+                if (!shown.has(key)) pruned = lists.delete(key) || pruned;
+            if (pruned) {
+                // A view shown again starts empty, and its tier timer goes too.
+                version += 1;
+                tickSchedule();
+            }
             void send(false);
         });
     };
 
-    async function send(renew: boolean): Promise<void> {
-        if (disposed || streamId === undefined || !available()) return;
-        if (sending) {
-            sendAgain = true;
-            return;
-        }
-        const targets = wanted();
-        const keys = targets.map(viewerTargetKey).join(" ");
-        if (keys === accepted && (!renew || keys === "")) return;
-        const stream = streamId;
-        sending = true;
-        try {
-            const answer = await deps.client.putViewers(
-                stream,
-                { targets },
-                { signal: life.signal },
-            );
-            if (disposed || stream !== streamId) return;
-            accepted = keys;
-            let changed = false;
-            for (const { target, viewers } of answer.targets) {
-                const key = viewerTargetKey(target);
-                if (!shown.has(key)) continue;
-                const previous = lists.get(key);
-                const next = viewersListAnswered(previous, viewers);
-                if (next === previous) continue;
-                listSet(key, next);
-                changed = true;
-            }
-            if (changed) publish();
-        } catch (error) {
-            if (disposed || stream !== streamId) return;
-            if (notFound(error)) {
-                refusedOn = stream;
-                lists.clear();
-                publish();
-            }
-        } finally {
-            sending = false;
-        }
-        if (disposed) return;
-        // A failed request is tried again on the next beat, as is a stream
-        // that is still viewing something.
+    /** Drops the old stream's request and everything it may have left behind. */
+    const streamEnd = (): void => {
+        inflight?.abort.abort();
+        inflight = undefined;
+        sendAgain = false;
+        accepted = "";
+        if (heartbeat !== undefined) clearTimeout(heartbeat);
+        heartbeat = undefined;
+    };
+
+    const sent = (): void => {
         if (wanted().length > 0 || accepted !== "") heartbeatSchedule();
         else if (heartbeat !== undefined) clearTimeout(heartbeat);
         if (sendAgain) {
             sendAgain = false;
             void send(false);
         }
+    };
+
+    async function send(renew: boolean): Promise<void> {
+        if (disposed || streamId === undefined || !available()) return;
+        if (inflight !== undefined) {
+            sendAgain = true;
+            return;
+        }
+        const targets = wanted();
+        const keys = targets.map(viewerTargetKey).join(" ");
+        if (keys === accepted && (!renew || keys === "")) return;
+        const request = { stream: streamId, abort: new AbortController() };
+        inflight = request;
+        let answer;
+        try {
+            answer = await deps.client.putViewers(
+                request.stream,
+                { targets },
+                { signal: AbortSignal.any([life.signal, request.abort.signal]) },
+            );
+        } catch (error) {
+            if (inflight !== request) return;
+            inflight = undefined;
+            accepted = undefined;
+            if (notFound(error)) {
+                refusedOn = request.stream;
+                lists.clear();
+                publish();
+                return;
+            }
+            sent();
+            return;
+        }
+        if (inflight !== request) return;
+        inflight = undefined;
+        accepted = keys;
+        let changed = false;
+        for (const { target, viewers } of answer.targets) {
+            if (!targetKnown(target)) continue;
+            const key = viewerTargetKey(target);
+            if (!shown.has(key)) continue;
+            const previous = lists.get(key);
+            const next = viewersListAnswered(previous, viewers);
+            if (next === previous) continue;
+            listSet(key, next);
+            changed = true;
+        }
+        if (changed) publish();
+        sent();
     }
 
     const follow = (): void => {
@@ -279,16 +314,19 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
                     if (update.streamId === streamId) continue;
                     // A new stream views nothing yet, and may reach a server
                     // that has viewers where the last one did not.
+                    streamEnd();
                     streamId = update.streamId;
-                    accepted = "";
                     publish();
                     void send(false);
                     continue;
                 }
                 if (update.kind === "disconnected") {
-                    // The server ends a closed stream's viewing at once.
+                    // The server ends a closed stream's viewing at once, and
+                    // nobody can be shown here while no frames arrive.
+                    streamEnd();
                     streamId = undefined;
-                    accepted = "";
+                    lists.clear();
+                    publish();
                     continue;
                 }
                 if (update.kind !== "viewers") continue;
@@ -386,7 +424,7 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
             disposed = true;
             life.abort();
             activityRelease?.();
-            if (heartbeat !== undefined) clearTimeout(heartbeat);
+            streamEnd();
             if (tick !== undefined) clearTimeout(tick);
             shown.clear();
             lists.clear();

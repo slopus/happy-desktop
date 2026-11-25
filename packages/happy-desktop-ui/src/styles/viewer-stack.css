@@ -3,9 +3,8 @@
  *
  * Contract: a 132 × 36 box whoever is here. Five 24px steps of 28px faces (four
  * faces and the `+N` count) inside a 4px margin that holds the rings, gathered
- * against the trailing edge. Every motion is a transform or opacity (and the
- * greying filter of a face seen before), so nothing here lays anything out
- * while it moves.
+ * against the trailing edge. Every motion is a transform or opacity, so nothing
+ * here lays anything out or repaints while it moves.
  *
  * The dot, the badge, and the gap inside a ring are cut in `--surface`, what
  * a header stands on, so they part cleanly from the faces behind.
@@ -81,19 +80,32 @@
     flex: 1;
     transition:
         transform var(--happy-viewer-glide),
-        opacity var(--happy-viewer-fade),
-        filter var(--happy-viewer-fade);
+        opacity var(--happy-viewer-fade);
 }
 
 .happy-viewer-stack__avatar {
     box-shadow: 0 0 0 1.5px var(--surface);
 }
 
-/* Seen at some point before: smaller, greyed, and behind the others. */
+/* Seen at some point before: smaller, greyed, and behind the others. The grey
+   is a second copy of the face that fades in over it, so only opacity moves. */
 .happy-viewer-stack__slot[data-tier="seen"] > .happy-viewer-stack__face {
-    filter: grayscale(1);
     opacity: 0.7;
     transform: scale(0.78);
+}
+
+.happy-viewer-stack__grey {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    filter: grayscale(1);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--happy-viewer-fade);
+}
+
+.happy-viewer-stack__slot[data-tier="seen"] .happy-viewer-stack__grey {
+    opacity: 1;
 }
 
 /* The ring stands 1.5px off the face in the person's own hue. Its holder fades

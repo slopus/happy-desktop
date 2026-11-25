@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@slopus/happy-agent-client@0.0.181':
-    hash: 78e7783c54661cc04614a165d9a71afc4cb6dbedc07a84c3049ca693831d680c
+    hash: ba6bb93c5723628ee75ef2a98c337502f632378d0e0d2227a10e15193f0b7bf0
     path: patches/@slopus__happy-agent-client@0.0.181.patch
   electron-updater@6.8.9:
     hash: 5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457
@@ -163,7 +163,7 @@ importers:
         version: 0.34.52
       '@slopus/happy-agent-client':
         specifier: 0.0.181
-        version: 0.0.181(patch_hash=78e7783c54661cc04614a165d9a71afc4cb6dbedc07a84c3049ca693831d680c)
+        version: 0.0.181(patch_hash=ba6bb93c5723628ee75ef2a98c337502f632378d0e0d2227a10e15193f0b7bf0)
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9(patch_hash=5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457)
@@ -303,7 +303,7 @@ importers:
         version: 0.34.52
       '@slopus/happy-agent-client':
         specifier: 0.0.181
-        version: 0.0.181(patch_hash=78e7783c54661cc04614a165d9a71afc4cb6dbedc07a84c3049ca693831d680c)
+        version: 0.0.181(patch_hash=ba6bb93c5723628ee75ef2a98c337502f632378d0e0d2227a10e15193f0b7bf0)
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -7409,7 +7409,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@0.0.181(patch_hash=78e7783c54661cc04614a165d9a71afc4cb6dbedc07a84c3049ca693831d680c)':
+  '@slopus/happy-agent-client@0.0.181(patch_hash=ba6bb93c5723628ee75ef2a98c337502f632378d0e0d2227a10e15193f0b7bf0)':
     dependencies:
       '@noble/hashes': 1.8.0
       '@sinclair/typebox': 0.34.52

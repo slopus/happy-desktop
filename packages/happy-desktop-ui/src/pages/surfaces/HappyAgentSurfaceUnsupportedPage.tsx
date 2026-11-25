@@ -1,10 +1,12 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { EmptyState } from "../../EmptyState";
 import { HappyAgentSurfaceHeader } from "./HappyAgentSurfaceHeader";
 import type { HappyAgentSurfaceView } from "./surfacePresentation";
 
 export interface HappyAgentSurfaceUnsupportedPageProps {
     surface: HappyAgentSurfaceView;
+    /** Who else is looking at it, for its header. */
+    viewers?: ReactNode;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -28,7 +30,7 @@ export function HappyAgentSurfaceUnsupportedPage(props: HappyAgentSurfaceUnsuppo
             data-testid={props["data-testid"]}
             style={props.style}
         >
-            <HappyAgentSurfaceHeader surface={props.surface} />
+            <HappyAgentSurfaceHeader surface={props.surface} viewers={props.viewers} />
             <div className="happy-agent-surface-unsupported__body">
                 <EmptyState
                     description={`It is a “${type}”, which this version of Happy can’t show yet. Its members and its place in the sidebar work as usual.`}
