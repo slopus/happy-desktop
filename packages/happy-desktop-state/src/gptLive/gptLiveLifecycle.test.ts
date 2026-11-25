@@ -232,7 +232,7 @@ describe("GPT-Live call lifetime", () => {
         );
         store.gptLiveEnabledUpdate(true);
         store.callStart("local");
-        expect(store.get().call).toMatchObject({ kind: "connecting", step: "checking" });
+        expect(store.get().call).toMatchObject({ kind: "connecting" });
         store.gptLiveEnabledUpdate(false);
         availability.resolve(available);
         await Promise.resolve();
@@ -262,11 +262,9 @@ describe("GPT-Live call lifetime", () => {
         const f = fixture();
         await f.start("connection:remote");
         expect(f.runtimeFor).toHaveBeenLastCalledWith("connection:remote");
-        f.receive({ type: "callStepUpdated", step: "allocating" });
         expect(f.store.get().call).toMatchObject({
             kind: "connecting",
             connectionId: "connection:remote",
-            step: "allocating",
         });
         f.opening.resolve(f.call);
         await Promise.resolve();
@@ -417,7 +415,6 @@ describe("GPT-Live call lifetime", () => {
         expect(f.store.get().call).toMatchObject({
             kind: "connecting",
             connectionId: "local",
-            step: "checking",
         });
         expect(f.runtime.callOpen).toHaveBeenCalledTimes(1);
         closing.resolve();

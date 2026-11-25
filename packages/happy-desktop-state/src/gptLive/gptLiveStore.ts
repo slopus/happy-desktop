@@ -2,7 +2,6 @@ import {
     GPT_LIVE_PROBLEMS,
     type GptLiveAvailability,
     type GptLiveCall,
-    type GptLiveCallStep,
     type GptLiveOutputLevels,
     type GptLiveProblem,
     type GptLiveRuntimeEvent,
@@ -34,7 +33,6 @@ export type GptLiveCallState =
     | {
           readonly kind: "connecting";
           readonly connectionId: string;
-          readonly step: GptLiveCallStep;
           /** Replacing an established call after its voice prompt changed. */
           readonly restarting: boolean;
           readonly muted: boolean;
@@ -251,10 +249,6 @@ export function gptLiveStoreCreate(
     ) => {
         if (disposed || epoch !== generation || !snapshot.gptLiveEnabled) return;
         switch (event.type) {
-            case "callStepUpdated":
-                if (snapshot.call.kind === "connecting")
-                    publish({ ...snapshot, call: { ...snapshot.call, step: event.step } });
-                break;
             case "callActive":
                 // Provider readiness can precede the callOpen continuation.
                 // Expose an active call only once its close handle is owned.
@@ -333,7 +327,6 @@ export function gptLiveStoreCreate(
             call: {
                 kind: "connecting",
                 connectionId,
-                step: "checking",
                 restarting,
                 muted: microphoneMuted,
             },
@@ -394,7 +387,6 @@ export function gptLiveStoreCreate(
             call: {
                 kind: "connecting",
                 connectionId,
-                step: "checking",
                 restarting,
                 muted: muted(),
             },
@@ -510,7 +502,6 @@ export function gptLiveStoreCreate(
                     call: {
                         kind: "connecting",
                         connectionId,
-                        step: "checking",
                         restarting: false,
                         muted: false,
                     },
@@ -542,7 +533,6 @@ export function gptLiveStoreCreate(
                 call: {
                     kind: "connecting",
                     connectionId: current.connectionId,
-                    step: "checking",
                     restarting: true,
                     muted: current.muted,
                 },

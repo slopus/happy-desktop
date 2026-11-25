@@ -63,15 +63,9 @@ describe("GPT-Live runtime transport and lifetime", () => {
         const f = gptLiveRuntimeFixtureCreate();
         const call = await connected(f);
         expect(f.createRequests()).toHaveLength(1);
-        // Opening reports its steps in order, and nothing else before readiness.
-        expect(f.events).toEqual([
-            { type: "callStepUpdated", step: "checking" },
-            { type: "callStepUpdated", step: "microphone" },
-            { type: "callStepUpdated", step: "allocating" },
-            { type: "callStepUpdated", step: "attaching" },
-        ]);
+        expect(f.events).toEqual([]);
         f.active();
-        expect(f.events.filter((event) => event.type !== "callStepUpdated")).toEqual([]);
+        expect(f.events).toEqual([]);
         f.mediaReady();
         await flushUntil(() => f.events.some((event) => event.type === "callActive"));
         f.active();
@@ -83,7 +77,7 @@ describe("GPT-Live runtime transport and lifetime", () => {
         const f = gptLiveRuntimeFixtureCreate();
         f.mediaReady();
         const call = await connected(f);
-        expect(f.events.filter((event) => event.type !== "callStepUpdated")).toEqual([]);
+        expect(f.events).toEqual([]);
         f.active();
         expect(f.events.filter((event) => event.type === "callActive")).toHaveLength(1);
         await ended(f, call);

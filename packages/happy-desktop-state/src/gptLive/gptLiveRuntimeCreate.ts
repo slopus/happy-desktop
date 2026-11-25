@@ -557,7 +557,6 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 CONNECT_MS,
             );
             try {
-                receive({ type: "callStepUpdated", step: "checking" });
                 const { availability, capabilities } = await wait(
                     availabilityCheck(lifetime.signal),
                 );
@@ -579,7 +578,6 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         "Happy Agent disconnected before the voice call started.",
                         "agentOffline",
                     );
-                receive({ type: "callStepUpdated", step: "microphone" });
                 permissionRequested = true;
                 await wait(
                     Promise.resolve()
@@ -672,7 +670,6 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         "Voice desktop context could not fit the connection request.",
                     );
                 creationAttempted = true;
-                receive({ type: "callStepUpdated", step: "allocating" });
                 const creating = client
                     .createLiveSession(request, { signal: lifetime.signal })
                     .then((result) => {
@@ -695,7 +692,6 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         return result;
                     });
                 const created = await wait(creating);
-                receive({ type: "callStepUpdated", step: "attaching" });
                 await wait(media.answerApply(created.transport.sdp));
                 if (lifetime.signal.aborted) throw cancelled();
                 const url = new URL(client.liveSessionControlUrl(resourceId, options.windowId));

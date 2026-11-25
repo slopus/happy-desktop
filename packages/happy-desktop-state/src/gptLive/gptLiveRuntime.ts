@@ -39,8 +39,6 @@ export interface GptLiveAvailability {
     readonly accounts: readonly GptLiveAccount[];
 }
 
-/** Where an opening call is, for its own progress and for nothing else. */
-export type GptLiveCallStep = "checking" | "microphone" | "allocating" | "attaching";
 
 export interface GptLiveTranscriptFragment {
     readonly id: string;
@@ -71,7 +69,6 @@ export type GptLiveRuntimeEvent =
           readonly message: string;
           readonly problem: GptLiveProblem;
       }
-    | { readonly type: "callStepUpdated"; readonly step: GptLiveCallStep }
     | { readonly type: "transcriptReceived"; readonly fragment: GptLiveTranscriptFragment }
     | { readonly type: "actionStatusUpdated"; readonly message: string }
     /** `null` clears whatever the call was pointing at. */
