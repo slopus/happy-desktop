@@ -71,6 +71,8 @@ type Turn = {
     expectedTier?: Tier;
     /** When the controller's first outcome reached voice, for a delegated turn. */
     deliveredAt: number | null;
+    /** When this turn's speech started playing into the microphone, in epoch ms. */
+    speechStart?: number;
     speechEnd: number;
     firstAudioMs: number | null;
     firstTranscriptMs: number | null;
@@ -211,6 +213,10 @@ async function scenarioRun(name: LiveVoiceEval, authFile: string, artifactDirect
         outcome.checks = checks;
         outcome.turns = turns;
         outcome.capture = await captureRead(capturePath);
+        // Voice's own conversation: each delegation it received, its tool calls, its outcomes.
+        await voiceConversationWrite(runtime, join(paths.artifacts, "voice-agent.json")).catch(
+            () => undefined,
+        );
         if (window) {
             await writeFile(
                 join(paths.artifacts, "control-events.json"),
@@ -308,7 +314,7 @@ async function callStart(context: Context) {
         const speechEnd = playback.startedAt + Math.round(playback.durationSeconds * 1_000);
         if (options.during) await options.during();
         await settled(context, fromEvent, speechEnd);
-        return turnRecord(context, text, fromEvent, speechEnd, options.tier);
+        return turnRecord(context, text, fromEvent, speechEnd, options.tier, playback.startedAt);
     };
     return {
         activeAt,
@@ -340,6 +346,17 @@ async function callStart(context: Context) {
             turnRecord(context, text, fromEvent, speechEnd, tier),
         settled: (fromEvent: number, speechEnd: number) => settled(context, fromEvent, speechEnd),
         async end() {
+            // The received level over the whole call: when voice was actually speaking.
+            const levels = await page
+                .evaluate(
+                    (since) =>
+                        (window as Window & { voiceGym?: LiveVoiceMedia }).voiceGym!.levelsSince(
+                            since,
+                        ),
+                    activeAt - 2_000,
+                )
+                .catch(() => []);
+            await writeFile(join(directory, "call.json"), JSON.stringify({ activeAt, levels }));
             if ((await phoneStatus(page)) === "active")
                 await page.getByRole("button", { name: "End voice call", exact: true }).click();
             await page
@@ -402,6 +419,7 @@ async function turnRecord(
     fromEvent: number,
     speechEnd: number,
     expectedTier?: Tier,
+    speechStart?: number,
 ): Promise<Turn> {
     const { page } = context.window;
     const events = context.window.events.slice(fromEvent);
@@ -440,6 +458,7 @@ async function turnRecord(
         tier,
         ...(expectedTier === undefined ? {} : { expectedTier }),
         deliveredAt,
+        ...(speechStart === undefined ? {} : { speechStart }),
         speechEnd,
         firstAudioMs: firstAudioAt === null ? null : firstAudioAt - speechEnd,
         firstTranscriptMs: firstTranscriptAt === null ? null : firstTranscriptAt - speechEnd,
@@ -469,6 +488,29 @@ function focusOf(context: Context, events: readonly ControlEvent[]): string | nu
     for (const task of context.harbor.tasks.values())
         if (task.agentId === target.sessionId) return task.name;
     return target.sessionId;
+}
+
+/** The Voice subtask's conversation, read through the API while the daemon still runs. */
+async function voiceConversationWrite(runtime: StartedHappyAgentRuntime, path: string) {
+    const client = happyAgentClientCreate(runtime.socketPath, runtime.token);
+    const ids: string[] = [];
+    const walk = (value: unknown) => {
+        if (Array.isArray(value)) for (const item of value) walk(item);
+        else if (typeof value === "object" && value !== null) {
+            const record = value as Record<string, unknown>;
+            if (
+                record.title === "Voice" &&
+                record.subtask === true &&
+                typeof record.id === "string"
+            )
+                ids.push(record.id);
+            for (const item of Object.values(record)) walk(item);
+        }
+    };
+    walk(await client.listBots());
+    const conversations: Record<string, unknown> = {};
+    for (const id of new Set(ids)) conversations[id] = await client.getMessages(id as Cuid2);
+    await writeFile(path, JSON.stringify(conversations, null, 2));
 }
 
 /** The hosting daemon's live diagnostics in a time window. */
