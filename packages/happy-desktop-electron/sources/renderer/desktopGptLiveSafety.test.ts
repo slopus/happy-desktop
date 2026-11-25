@@ -199,7 +199,7 @@ it("reads immutable context during a mutation, stages in the existing composer a
         actionId: "stage-exact",
         contextRevision: controller.contextRead().revision,
         inputTranscriptIds: [],
-        action: { type: "sessionSend" as const, target, text: "Review this exact change" },
+        action: { type: "composerDraftAppend" as const, target, text: "Review this exact change" },
     };
     try {
         controller.actionReceive(request);
@@ -228,7 +228,7 @@ it("reads immutable context during a mutation, stages in the existing composer a
             expect(frames).toContainEqual({
                 type: "actionResult",
                 actionId: "stage-exact",
-                result: { status: "succeeded", output: { type: "staged" } },
+                result: { status: "succeeded", output: { type: "ack" } },
             }),
         );
         // It then runs against the draft the first one staged, and refuses.
@@ -282,15 +282,17 @@ it("reads immutable context during a mutation, stages in the existing composer a
             actionId: "second",
             contextRevision: controller.contextRead().revision,
         });
+        // A second append adds to voice's own draft; only a human draft refuses it.
         await vi.waitFor(() =>
             expect(frames).toContainEqual(
                 expect.objectContaining({
                     type: "actionResult",
                     actionId: "second",
-                    result: expect.objectContaining({ code: "draftConflict" }),
+                    result: { status: "succeeded", output: { type: "ack" } },
                 }),
             ),
         );
+        expect(f.voice.draftRead()?.text.startsWith("Review this exact change")).toBe(true);
         f.workspace.composerTextUpdate(f.id, "My edited message");
         expect(f.voice.draftRead()?.voiceDraft).toBe(true);
         expect(f.daemon.callCount("sendMessage")).toBe(0);
@@ -310,7 +312,7 @@ it("reads immutable context during a mutation, stages in the existing composer a
     }
 });
 
-it("refuses sessionSend and composerDraftAppend over an existing human draft without modifying it", async () => {
+it("sends past an existing human draft and refuses composerDraftAppend over it, never modifying it", async () => {
     const f = await fixture();
     f.workspace.composerTextUpdate(f.id, "Private existing human draft");
     const frames: Parameters<Parameters<typeof gptLiveControllerCreate>[0]["send"]>[0][] = [];
@@ -349,12 +351,13 @@ it("refuses sessionSend and composerDraftAppend over an existing human draft wit
                 text: "Only this requested text",
             },
         });
+        // A send goes straight to the conversation; the human draft stays as it was.
         await vi.waitFor(() =>
             expect(frames).toContainEqual(
                 expect.objectContaining({
                     type: "actionResult",
                     actionId: "conflicting-send",
-                    result: expect.objectContaining({ status: "refused", code: "draftConflict" }),
+                    result: { status: "succeeded", output: { type: "ack" } },
                 }),
             ),
         );
@@ -381,9 +384,10 @@ it("refuses sessionSend and composerDraftAppend over an existing human draft wit
         );
         expect(f.voice.draftRead()?.text).toBe("Private existing human draft");
         expect(f.voice.draftRead()?.voiceDraft).toBeUndefined();
-        expect(receive).not.toHaveBeenCalled();
         expect(JSON.stringify(frames)).not.toContain("Private existing human draft");
-        expect(f.daemon.callCount("sendMessage")).toBe(0);
+        const sent = f.daemon.calls.find((call) => call.method === "sendMessage");
+        expect(JSON.stringify(sent?.args[1])).toContain('"text":"Only this requested text"');
+        expect(f.daemon.callCount("sendMessage")).toBe(1);
     } finally {
         controller.close();
         f.voice[Symbol.dispose]();
@@ -516,7 +520,7 @@ it.each(["edit", "empty", "submit"] as const)(
                 contextRevision: controller.contextRead().revision,
                 inputTranscriptIds: [],
                 action: {
-                    type: "sessionSend",
+                    type: "composerDraftAppend",
                     target: { connectionId: "local", groupId: f.group, sessionId: f.id },
                     text: "Exact generated text",
                 },
@@ -746,13 +750,13 @@ it.each(["empty", "restored"] as const)(
                 actionId: "draft-after-open",
                 contextRevision: acknowledgedRevision!,
                 inputTranscriptIds: [],
-                action: { type: "sessionSend", target, text: "Bring the seed catalog" },
+                action: { type: "composerDraftAppend", target, text: "Bring the seed catalog" },
             });
             await vi.waitFor(() =>
                 expect(result("draft-after-open")).toMatchObject({
                     result: savedText
                         ? { status: "refused", code: "draftConflict" }
-                        : { status: "succeeded", output: { type: "staged" } },
+                        : { status: "succeeded", output: { type: "ack" } },
                 }),
             );
             const opened = f.workspace.get().conversation;
@@ -866,7 +870,7 @@ it.each(["open"] as const)(
                 contextRevision: revision(),
                 inputTranscriptIds: [],
                 action: {
-                    type: first === "open" ? "sessionSend" : "composerDraftAppend",
+                    type: "composerDraftAppend",
                     target,
                     text: "Exact next-step draft",
                 },
@@ -875,7 +879,7 @@ it.each(["open"] as const)(
                 expect(result("sequence-draft")).toMatchObject({
                     result: {
                         status: "succeeded",
-                        output: { type: first === "open" ? "staged" : "ack" },
+                        output: { type: "ack" },
                     },
                 }),
             );
@@ -1374,7 +1378,7 @@ const resultOf = (
     actionId: string,
 ) => frames.find((frame) => frame.type === "actionResult" && frame.actionId === actionId);
 
-it("creates one acknowledged task with its opening text as a local-only draft and blocks a later permission question", async () => {
+it("creates one acknowledged task, sends its opening text as its first message, and refuses voice text while it waits on the person", async () => {
     const f = await fixture();
     const frames: Parameters<Parameters<typeof gptLiveControllerCreate>[0]["send"]>[0][] = [];
     const controller = controllerFor(f, frames);
@@ -1437,20 +1441,41 @@ it("creates one acknowledged task with its opening text as a local-only draft an
         });
         expect(f.workspace.get().list.tasks.map((task) => task.name)).toContain("Approval check");
         created = await f.workspace.voiceSessionAcquire(newId);
-        expect(created.draftRead()).toMatchObject({ text: "Approve", voiceDraft: true });
-        // A repeated request is answered from the ledger, never made again.
+        expect(created.draftRead()?.text ?? "").toBe("");
+        const sent = f.daemon.calls.find((call) => call.method === "sendMessage");
+        expect(sent?.args[0]).toBe(newId);
+        expect(JSON.stringify(sent?.args[1])).toContain('"text":"Approve"');
+        // A repeated request is answered from the ledger, never made or sent again.
         controller.actionReceive(request);
         expect(f.daemon.callCount("createTask")).toBe(1);
-        expect(f.daemon.callCount("sendMessage")).toBe(0);
+        expect(f.daemon.callCount("sendMessage")).toBe(1);
         expect(
             JSON.stringify(f.daemon.calls.filter((call) => call.method === "saveAgentDraft")),
         ).not.toContain("Approve");
         f.question(newId);
         await vi.waitFor(() => expect(created?.get().pendingUserInputs).toHaveLength(1));
-        f.workspace.composerTextSubmit();
-        await vi.waitFor(() => expect(created?.draftRead()?.submission.status).toBe("failed"));
+        controller.actionReceive({
+            type: "actionRequested",
+            actionId: "send-while-asked",
+            contextRevision: controller.contextRead().revision,
+            inputTranscriptIds: [],
+            action: {
+                type: "sessionSend",
+                target: {
+                    connectionId: "local",
+                    groupId: f.workspace.get().address.groupId!,
+                    sessionId: newId,
+                },
+                text: "Approve",
+            },
+        });
+        await vi.waitFor(() =>
+            expect(resultOf(frames, "send-while-asked")).toMatchObject({
+                result: { status: "refused", code: "forbidden" },
+            }),
+        );
         expect(f.daemon.callCount("answerQuestion")).toBe(0);
-        expect(f.daemon.callCount("sendMessage")).toBe(0);
+        expect(f.daemon.callCount("sendMessage")).toBe(1);
     } finally {
         controller.close();
         created?.[Symbol.dispose]();

@@ -724,18 +724,17 @@ export function gptLiveControllerCreate(options: {
                         if (closed || signal.aborted)
                             throw new Refusal(
                                 "ended",
-                                "The call ended after creation; no prompt was staged.",
+                                "The call ended after creation; its first message was not sent.",
                             );
                         sessionFind(target, true);
-                        activeCheck(target, connection.workspace);
                         refusePending(handle);
-                        const draft = handle.draftRead();
-                        if (!draft || draft.text || draft.attachments.length)
+                        // The task's first message is sent, as the person's New task would.
+                        await handle.messageSend(prompt).catch((error: unknown) => {
                             throw new Refusal(
-                                "draftConflict",
-                                "The conversation was created, but its draft changed. No generated prompt was added.",
+                                "failed",
+                                `The task was created, but its first message was not sent: ${error instanceof Error ? error.message.slice(0, 512) : "the send was refused"}. Do not repeat creation.`,
                             );
-                        await handle.draftAppend(prompt, "");
+                        });
                     } finally {
                         handle[Symbol.dispose]();
                     }
@@ -743,7 +742,7 @@ export function gptLiveControllerCreate(options: {
             }
             options.receive({
                 type: "actionStatusUpdated",
-                message: `Created and opened ${target.kind}${prompt ? "; prompt kept as a local draft" : ""}.`,
+                message: `Created and opened ${target.kind}${prompt ? "; its first message was sent" : ""}.`,
             });
             return { status: "succeeded", output: { type: "created", target } } as const;
         } catch (error) {
@@ -965,6 +964,26 @@ export function gptLiveControllerCreate(options: {
                 schedule();
                 return { status: "succeeded", output: { type: "ack" } };
             }
+            if (action.type === "sessionSend") {
+                // A voice send really sends, to the named conversation wherever
+                // the window is; nothing is staged and nothing moves.
+                refusePending(handle);
+                if (handle.get().session.type !== "ready")
+                    throw new Refusal("unavailable", "The conversation is not ready.");
+                await handle.messageSend(action.text).catch((error: unknown) => {
+                    throw new Refusal(
+                        "failed",
+                        error instanceof Error
+                            ? error.message.slice(0, 1024)
+                            : "The message was not sent.",
+                    );
+                });
+                options.receive({
+                    type: "actionStatusUpdated",
+                    message: `Sent to ${connection.title}.`,
+                });
+                return { status: "succeeded", output: { type: "ack" } };
+            }
             activeCheck(target, connection.workspace);
             refusePending(handle);
             const draft = handle.draftRead();
@@ -973,12 +992,7 @@ export function gptLiveControllerCreate(options: {
                     "draftConflict",
                     "The composer is unavailable, has attachments, or is already sending.",
                 );
-            if (action.type === "sessionSend" && draft.text.length > 0)
-                throw new Refusal(
-                    "draftConflict",
-                    "The composer already contains a draft. It was left unchanged; sessionSend requires an empty composer.",
-                );
-            if (action.type === "composerDraftAppend" && draft.text.length > 0 && !draft.voiceDraft)
+            if (draft.text.length > 0 && !draft.voiceDraft)
                 throw new Refusal(
                     "draftConflict",
                     "The composer contains a human draft. It was left unchanged; voice can append only to an empty composer or an existing voice draft.",
@@ -987,13 +1001,6 @@ export function gptLiveControllerCreate(options: {
             if (snapshot.session.type !== "ready")
                 throw new Refusal("unavailable", "The conversation is not ready.");
             await handle.draftAppend(action.text, draft.text);
-            if (action.type === "sessionSend") {
-                options.receive({
-                    type: "actionStatusUpdated",
-                    message: `Added a local draft in ${connection.title}. Review, edit, and send it from the conversation composer; nothing was sent.`,
-                });
-                return { status: "succeeded", output: { type: "staged" } };
-            }
             options.receive({
                 type: "actionStatusUpdated",
                 message: `Added a local draft in ${connection.title}; nothing was sent.`,

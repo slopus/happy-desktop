@@ -180,9 +180,10 @@ function fixture(
 afterEach(() => vi.useRealTimers());
 
 describe("GPT-Live controller navigation", () => {
-    it("acknowledges a cold open after its session and composer hydrate, then stages at that revision", async () => {
+    it("acknowledges a cold open after its session and composer hydrate, then stages and sends at that revision", async () => {
         vi.useFakeTimers();
         const draftAppend = vi.fn(async () => {});
+        const messageSend = vi.fn(async () => {});
         const handle = {
             get: () => ({
                 ready: true,
@@ -192,6 +193,7 @@ describe("GPT-Live controller navigation", () => {
             draftRead: () => ({ text: "", attachments: [], submission: { status: "idle" } }),
             subscribe: () => () => {},
             draftAppend,
+            messageSend,
             [Symbol.dispose]: () => {},
         } as unknown as HappyAgentVoiceSession;
         const f = fixture({ sessionAcquire: async () => handle });
@@ -231,7 +233,7 @@ describe("GPT-Live controller navigation", () => {
         expect(f.frames.indexOf(published)).toBeLessThan(f.frames.indexOf(f.result("cold-open")!));
         f.controller.actionReceive({
             ...f.request("next-draft", {
-                type: "sessionSend",
+                type: "composerDraftAppend",
                 target: botTarget,
                 text: "Bring the seed catalog",
             }),
@@ -239,9 +241,24 @@ describe("GPT-Live controller navigation", () => {
         });
         await vi.advanceTimersByTimeAsync(0);
         expect(f.result("next-draft")).toMatchObject({
-            result: { status: "succeeded", output: { type: "staged" } },
+            result: { status: "succeeded", output: { type: "ack" } },
         });
         expect(draftAppend).toHaveBeenCalledExactlyOnceWith("Bring the seed catalog", "");
+        // A send really sends, through the conversation's own send, and stages nothing.
+        f.controller.actionReceive({
+            ...f.request("next-send", {
+                type: "sessionSend",
+                target: botTarget,
+                text: "Run the benchmark again, please.",
+            }),
+            contextRevision: f.resultRevisions.get("cold-open")!,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(f.result("next-send")).toMatchObject({
+            result: { status: "succeeded", output: { type: "ack" } },
+        });
+        expect(messageSend).toHaveBeenCalledExactlyOnceWith("Run the benchmark again, please.");
+        expect(draftAppend).toHaveBeenCalledTimes(1);
         f.controller.close();
     });
 
