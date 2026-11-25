@@ -134,11 +134,7 @@ function StatusBar(props: {
                             }}
                             voice={
                                 props.call === undefined ? (
-                                    <GptLivePhone
-                                        onEnd={() => {}}
-                                        onStart={() => {}}
-                                        status="idle"
-                                    />
+                                    <GptLivePhone onStart={() => {}} status="idle" />
                                 ) : undefined
                             }
                         />

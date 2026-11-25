@@ -6,17 +6,13 @@ import { SidebarFooter } from "../../src/SidebarFooter";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "P-012b";
-/** Each phone state, with the message its tooltip carries and its specimen number. */
+/**
+ * Each phone state, with the message its tooltip carries and its specimen
+ * number. A call that connects or runs is the status bar's (`GptLiveCallBar`).
+ */
 const phones: readonly { status: GptLivePhoneStatus; number: string; message?: string }[] = [
-    { status: "idle", number: "02" },
-    { status: "connecting", number: "03" },
-    { status: "active", number: "04" },
-    { status: "ended", number: "05", message: "Microphone access was denied." },
-    {
-        status: "busy",
-        number: "08",
-        message: "In a voice call on another agent. End it to call here.",
-    },
+    { status: "idle", number: "03" },
+    { status: "ended", number: "04", message: "Microphone access was denied." },
 ];
 const accounts = [
     {
@@ -51,7 +47,7 @@ export function GptLiveSettingsPage() {
             </Specimen>
             <Specimen
                 label="Calls unavailable"
-                number="07"
+                number="02"
                 detail="Settings stay visible before experimental opt-in."
             >
                 <Box width={680}>
@@ -80,7 +76,6 @@ export function GptLiveSettingsPage() {
                                     status={phone.status}
                                     {...(phone.message ? { message: phone.message } : {})}
                                     onStart={() => {}}
-                                    onEnd={() => {}}
                                 />
                             }
                         />
@@ -89,7 +84,7 @@ export function GptLiveSettingsPage() {
             ))}
             <Specimen
                 label="Selected account"
-                number="06"
+                number="05"
                 detail="API billing appears as one short line."
             >
                 <Box width={680}>

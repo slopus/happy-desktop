@@ -23,15 +23,10 @@ function phoneOf(
     return { status: "ended", message: call.message };
 }
 
-function useGptLiveShown(store: GptLiveStore, experiments: ExperimentsStore | undefined) {
-    const enabled = useSyncExternalStore(
-        store.subscribe,
-        () => store.get().gptLiveEnabled,
-        () => store.get().gptLiveEnabled,
-    );
+/** Whether the voice experiment is on; the window's own opt-in is in the call's snapshot. */
+function useGptLiveExperimental(experiments: ExperimentsStore | undefined): boolean {
     const source = experiments ?? experimentsStoreNoop;
-    const experimental = useSyncExternalStore(source.subscribe, source.get, source.get).voice;
-    return experimental && enabled;
+    return useSyncExternalStore(source.subscribe, source.get, source.get).voice;
 }
 
 /** One agent's phone: a call started here is hosted by that agent. */
@@ -40,21 +35,12 @@ export function AppGptLivePhone(props: {
     connectionId: string;
     experiments?: ExperimentsStore;
 }) {
-    const call = useSyncExternalStore(
-        props.store.subscribe,
-        () => props.store.get().call,
-        () => props.store.get().call,
-    );
-    const shown = useGptLiveShown(props.store, props.experiments);
-    const phone = phoneOf(call, props.connectionId);
-    if (!shown || !phone) return null;
-    return (
-        <GptLivePhone
-            {...phone}
-            onStart={() => props.store.callStart(props.connectionId)}
-            onEnd={props.store.callEnd}
-        />
-    );
+    // One subscription; this small control re-renders with the snapshot.
+    const state = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const experimental = useGptLiveExperimental(props.experiments);
+    const phone = phoneOf(state.call, props.connectionId);
+    if (!experimental || !state.gptLiveEnabled || !phone) return null;
+    return <GptLivePhone {...phone} onStart={() => props.store.callStart(props.connectionId)} />;
 }
 
 /** The few words the status bar keeps for why a call stopped. */
@@ -71,13 +57,11 @@ const ENDED_REASONS: Record<GptLiveProblem, string> = {
  * hang-up act on that one call, and the bars read its received voice.
  */
 export function AppGptLiveCallBar(props: { store: GptLiveStore; experiments?: ExperimentsStore }) {
-    const call = useSyncExternalStore(
-        props.store.subscribe,
-        () => props.store.get().call,
-        () => props.store.get().call,
-    );
-    const shown = useGptLiveShown(props.store, props.experiments);
-    if (!shown || call.kind === "idle") return null;
+    // One subscription; the bar's levels are read on demand, never through it.
+    const state = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const experimental = useGptLiveExperimental(props.experiments);
+    const call = state.call;
+    if (!experimental || !state.gptLiveEnabled || call.kind === "idle") return null;
     if (call.kind === "ended")
         return (
             <GptLiveCallBar

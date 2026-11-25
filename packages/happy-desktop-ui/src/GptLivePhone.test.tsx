@@ -2,12 +2,13 @@ import { useSyncExternalStore } from "react";
 import { expect, it, vi } from "vitest";
 import { userEvent } from "vitest/browser";
 import { gptLiveStoreCreate, type GptLiveRuntimeEvent } from "happy-desktop-state";
+import { GptLiveCallBar } from "./GptLiveCallBar";
 import { GptLivePhone } from "./GptLivePhone";
 import { SidebarFooter } from "./SidebarFooter";
 import { createRenderer } from "./testing";
 import "./styles.css";
 
-it("starts only on trusted click and keeps the existing composer without a draft dialog", async () => {
+it("starts only on trusted click, hands the call to the status bar, and keeps the existing composer", async () => {
     let receive: (event: GptLiveRuntimeEvent) => void = () => {};
     const open = vi.fn(async (_input, listener) => {
         receive = listener;
@@ -39,6 +40,8 @@ it("starts only on trusted click and keeps the existing composer without a draft
     };
     function Fixture() {
         const state = useSyncExternalStore(subscribe, store.get, store.get);
+        const call = state.call;
+        // As the app composes them: the phone while no call runs, the call bar while one does.
         return (
             <div
                 style={{
@@ -51,13 +54,30 @@ it("starts only on trusted click and keeps the existing composer without a draft
             >
                 <input aria-label="Existing composer" defaultValue="Keep my text" ref={mounted} />
                 <SidebarFooter
+                    call={
+                        state.gptLiveEnabled && call.kind === "active" ? (
+                            <GptLiveCallBar
+                                muted={call.muted}
+                                onEnd={store.callEnd}
+                                onMutedChange={store.microphoneMutedUpdate}
+                                since={call.since}
+                                state="active"
+                            />
+                        ) : state.gptLiveEnabled && call.kind === "connecting" ? (
+                            <GptLiveCallBar
+                                muted={call.muted}
+                                onEnd={store.callEnd}
+                                onMutedChange={store.microphoneMutedUpdate}
+                                state="connecting"
+                            />
+                        ) : undefined
+                    }
                     onSettingsOpen={() => {}}
                     voice={
-                        state.gptLiveEnabled ? (
+                        state.gptLiveEnabled && (call.kind === "idle" || call.kind === "ended") ? (
                             <GptLivePhone
-                                status={state.call.kind === "idle" ? "idle" : state.call.kind}
+                                status={call.kind}
                                 onStart={() => store.callStart("local")}
-                                onEnd={store.callEnd}
                             />
                         ) : undefined
                     }
@@ -83,6 +103,18 @@ it("starts only on trusted click and keeps the existing composer without a draft
         expect(input.selectionStart).toBe(2);
         expect(input.selectionEnd).toBe(7);
         const phone = view.$('[aria-label="Start voice call"]').element as HTMLButtonElement;
+        expect(view.$('[aria-label="Start voice call"]').bounds().width).toBe(28);
+        expect(view.$('[aria-label="Start voice call"]').bounds().height).toBe(28);
+        const icon = view.$('[data-name="call"]');
+        expect(icon.bounds().width).toBe(14);
+        expect(icon.bounds().height).toBe(14);
+        expect((await icon.visibleMetrics()).pixelCount).toBeGreaterThan(0);
+        // No theme or keep-awake menu in this footer, so the phone sits 4px from Settings.
+        expect(
+            view.$('[aria-label="Settings"]').bounds().x -
+                view.$('[aria-label="Start voice call"]').bounds().x -
+                28,
+        ).toBe(4);
         phone.click();
         expect(open).not.toHaveBeenCalled();
         await userEvent.click(phone);
@@ -100,19 +132,11 @@ it("starts only on trusted click and keeps the existing composer without a draft
         expect(input.value).toBe("Keep my text");
         expect(mounts).toBe(1);
         expect(subscriptions).toBe(1);
-        expect(view.$('[aria-label="End voice call"]').element).toBe(phone);
-        expect(view.$('[aria-label="End voice call"]').bounds().width).toBe(28);
-        expect(view.$('[aria-label="End voice call"]').bounds().height).toBe(28);
-        const icon = view.$('[data-name="call"]');
-        expect(icon.bounds().width).toBe(14);
-        expect(icon.bounds().height).toBe(14);
-        expect((await icon.visibleMetrics()).pixelCount).toBeGreaterThan(0);
-        // No theme or keep-awake menu in this footer, so the call sits 4px from Settings.
+        // The live call is the status bar's: the phone is gone, its hang-up is the bar's.
+        expect(document.querySelector(".happy-gpt-live-phone")).toBeNull();
         expect(
-            view.$('[aria-label="Settings"]').bounds().x -
-                view.$('[aria-label="End voice call"]').bounds().x -
-                28,
-        ).toBe(4);
+            view.$('[aria-label="End voice call"]').element.closest(".happy-gpt-live-call"),
+        ).not.toBeNull();
         input.focus();
         input.setSelectionRange(2, 7);
         receive({

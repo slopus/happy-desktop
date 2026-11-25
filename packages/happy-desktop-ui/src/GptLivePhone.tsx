@@ -1,48 +1,36 @@
 import { Button } from "./Button";
 import { Icon } from "./Icon";
-import { Spinner } from "./Spinner";
 import { Tooltip } from "./Tooltip";
 
-/**
- * The window's call as one agent's phone shows it: `busy` while the call is on
- * another agent, `ended` while the reason this agent's call stopped is kept.
- */
-export type GptLivePhoneStatus = "idle" | "connecting" | "active" | "ended" | "busy";
+/** One agent's phone: `ended` while the reason this agent's call stopped is kept. */
+export type GptLivePhoneStatus = "idle" | "ended";
 
 export interface GptLivePhoneProps {
     status: GptLivePhoneStatus;
-    /** Why an ended call stopped, or where the busy call is. */
+    /** Why an ended call stopped. */
     message?: string;
     onStart(): void;
-    onEnd(): void;
 }
 
-/** The footer call control; voice drafts are reviewed in the existing composer. */
+/**
+ * The footer's call control, which starts a call. While a call connects or
+ * runs, on any agent, the status bar's `GptLiveCallBar` stands in for it.
+ */
 export function GptLivePhone(props: GptLivePhoneProps) {
-    const { status } = props;
-    const label =
-        status === "active" || status === "busy"
-            ? "End voice call"
-            : status === "connecting"
-              ? "Cancel voice call"
-              : "Start voice call";
     return (
-        <Tooltip label={props.message ?? label}>
+        <Tooltip label={props.message ?? "Start voice call"}>
             <Button
-                aria-label={label}
-                aria-pressed={status === "active"}
+                aria-label="Start voice call"
                 className="happy-gpt-live-phone"
-                data-status={status}
+                data-status={props.status}
                 iconOnly
                 onClick={(event) => {
-                    if (!event.isTrusted) return;
-                    if (status === "idle" || status === "ended") props.onStart();
-                    else props.onEnd();
+                    if (event.isTrusted) props.onStart();
                 }}
                 size="small"
                 variant="ghost"
             >
-                {status === "connecting" ? <Spinner size={14} /> : <Icon name="call" size={14} />}
+                <Icon name="call" size={14} />
             </Button>
         </Tooltip>
     );
