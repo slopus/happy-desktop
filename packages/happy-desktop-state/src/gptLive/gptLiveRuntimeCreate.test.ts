@@ -251,4 +251,35 @@ describe("GPT-Live runtime transport and lifetime", () => {
         });
         await flushUntil(() => failed.closeRequests().length === 1);
     });
+
+    it("says the agent stopped when its own closing cannot be confirmed, and keeps End's wording for End", async () => {
+        const unreachable = async () => {
+            throw new Error("socket closed");
+        };
+        const stopping = gptLiveRuntimeFixtureCreate();
+        await connected(stopping);
+        stopping.mediaReady();
+        stopping.active();
+        stopping.daemon.client.closeLiveSession = unreachable;
+        stopping.status("closing");
+        await flushUntil(() => stopping.events.some((event) => event.type === "callFailed"));
+        expect(stopping.events).toContainEqual({
+            type: "callFailed",
+            message: "Happy Agent ended the call while stopping. Start a new call once it's back.",
+            problem: "connection",
+        });
+
+        const ending = gptLiveRuntimeFixtureCreate();
+        const call = await connected(ending);
+        ending.mediaReady();
+        ending.active();
+        ending.daemon.client.closeLiveSession = unreachable;
+        void call.close().catch(() => undefined);
+        await flushUntil(() => ending.events.some((event) => event.type === "callFailed"));
+        expect(ending.events).toContainEqual({
+            type: "callFailed",
+            message: "The voice close command could not reach Happy Agent.",
+            problem: "connection",
+        });
+    });
 });

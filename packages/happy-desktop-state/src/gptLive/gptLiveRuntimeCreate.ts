@@ -296,8 +296,17 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                     fail(error ?? "The voice call failed. Start a new call to reconnect.");
                 else finish(cancelled(), { type: "callClosed" });
             };
-            const close = (): Promise<void> => {
+            /**
+             * `person` is End; `agent` is Happy Agent announcing that it is
+             * closing the call, as it does when it stops. An unconfirmed close
+             * is then the agent going away, not a command that failed.
+             */
+            const close = (by: "person" | "agent" = "person"): Promise<void> => {
                 if (phase === "ended" || phase === "closing") return closed;
+                const unreachable =
+                    by === "agent"
+                        ? "Happy Agent ended the call while stopping. Start a new call once it's back."
+                        : "The voice close command could not reach Happy Agent.";
                 phase = "closing";
                 active = false;
                 // The store aborts its opening signal immediately after close(). Keep the RTC/DC
@@ -339,10 +348,10 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                                 )
                                     terminalReceive(result.session.status, result.session.error);
                             },
-                            () => fail("The voice close command could not reach Happy Agent."),
+                            () => fail(unreachable),
                         );
                 } catch {
-                    fail("The voice close command could not reach Happy Agent.");
+                    fail(unreachable);
                 }
                 return closed;
             };
@@ -426,7 +435,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                                 fail(
                                     "Voice lost provider readiness. Start a new call to reconnect.",
                                 );
-                        } else if (frame.status === "closing") close();
+                        } else if (frame.status === "closing") close("agent");
                         else terminalReceive(frame.status, frame.error);
                         break;
                     case "transcript":
@@ -623,7 +632,7 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                 if (lifetime.signal.aborted) throw cancelled();
                 if (phase === "opening") phase = "ready";
                 return {
-                    close,
+                    close: () => close("person"),
                     microphoneMutedUpdate(muted) {
                         if (phase === "ready" || phase === "opening")
                             media?.microphoneMutedUpdate(muted);
