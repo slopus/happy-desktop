@@ -568,7 +568,9 @@ node --import tsx packages/happy-desktop-gym/sources/electron/cli.ts live-voice-
 
 `--scenarios deep` instead asks about a conversation past the hundred rows a
 call's context carries: "Lighthouse Ledger", added once to the realistic
-daemon's last project with a fact only it holds. Each call asks for its latest
+daemon's last project with a fact only it holds, after which ten others there
+get a newer turn. Later calls start with a fresh Voice, but the daemon's
+recap of earlier calls can still let voice answer without reading. Each call asks for its latest
 news by name, then says "Open it.", and `latency.md` adds k/n for five checks:
 the conversation was missing from the directory in voice's first context (the
 window's AppState lists every conversation), Voice called a tool on its agent

@@ -69,7 +69,12 @@ export async function gymLiveVoiceLatencyRun(options: {
     const { paths } = await gymRunPathsCreate("smoke", undefined, options.artifactDirectory);
     const prepared = JSON.parse(
         await readFile(join(realisticPaths.root, "prepared.json"), "utf8"),
-    ) as { projects: { id: string; name: string }[]; catalog: unknown; durableCounts: unknown };
+    ) as {
+        projects: { id: string; name: string }[];
+        sessionIds: string[];
+        catalog: unknown;
+        durableCounts: unknown;
+    };
     const result: Record<string, unknown> = {
         status: "failed",
         root: paths.root,
@@ -125,7 +130,7 @@ export async function gymLiveVoiceLatencyRun(options: {
         await harborSeed(realisticPaths, prepared.projects[0]!.id);
         const deepSessionId =
             scenario === "deep"
-                ? await deepSeed(realisticPaths, prepared.projects.at(-1)!.id)
+                ? await deepSeed(realisticPaths, prepared.projects.at(-1)!.id, prepared.sessionIds)
                 : undefined;
         result.deepSessionId = deepSessionId;
         realistic = await happyAgentRuntimeCreate(
@@ -173,6 +178,10 @@ export async function gymLiveVoiceLatencyRun(options: {
             const outcomes: Record<string, unknown>[] = [];
             const startedAt = Date.now();
             for (let index = 0; index < calls; index++) {
+                // Deep calls stand alone: a Voice from the last one would remember the answer.
+                if (deepSessionId && index > 0)
+                    (result.voiceArchived as Record<string, number>)[`${name}-${index + 1}`] =
+                        await voiceArchive(realisticClient);
                 await page.getByText("gym-project-01", { exact: true }).first().click();
                 await page.waitForTimeout(1_500);
                 const call = await voiceCall({
@@ -356,26 +365,64 @@ async function harborSeed(paths: GymRunPaths, projectId: string) {
 }
 
 /**
- * Adds one conversation past the context's first hundred rows, once: in the
+ * Adds one conversation past the directory voice starts with, once: in the
  * realistic daemon's last project, with a scripted reply holding a fact only
- * it knows. Returns its agent ID.
+ * it knows. Voice lists each project's most recent conversations, so ten
+ * others in that project are then given a newer turn, leaving this one out.
+ * Returns its agent ID.
  */
-async function deepSeed(paths: GymRunPaths, projectId: string): Promise<string> {
+async function deepSeed(
+    paths: GymRunPaths,
+    projectId: string,
+    sessionIds: readonly string[],
+): Promise<string> {
     const marker = join(paths.root, "deep.json");
     const seeded = await readFile(marker, "utf8").then(
-        (text) => (JSON.parse(text) as { sessionId: string }).sessionId,
+        (text) => JSON.parse(text) as { sessionId: string; buried?: boolean },
         () => undefined,
     );
-    if (seeded) return seeded;
-    const inference = scriptedInferenceCreate(DEEP_TITLE, `Logged. ${DEEP_FACT}`);
+    if (seeded?.buried) return seeded.sessionId;
+    let sessionId = seeded?.sessionId;
+    if (!sessionId) {
+        const inference = scriptedInferenceCreate(DEEP_TITLE, `Logged. ${DEEP_FACT}`);
+        await inference.start();
+        const runtime = await happyAgentRuntimeCreate(paths, inference);
+        try {
+            const { agent } = await runtime.client.createAgent(projectId);
+            const { runId } = await runtime.client.sendMessage(agent.id, `Log this: ${DEEP_FACT}`);
+            await runtime.client.waitForAgentIdle(agent.id, runId, 60_000);
+            sessionId = agent.id;
+            await writeFile(marker, JSON.stringify({ sessionId, title: DEEP_TITLE }));
+        } finally {
+            await runtime.stop();
+            await inference.stop();
+        }
+    }
+    // Their titles stay as they were: a title request answers with the one they have.
+    const inference = scriptedInferenceCreate("Gym performance session", "Noted.");
     await inference.start();
     const runtime = await happyAgentRuntimeCreate(paths, inference);
     try {
-        const { agent } = await runtime.client.createAgent(projectId);
-        const { runId } = await runtime.client.sendMessage(agent.id, `Log this: ${DEEP_FACT}`);
-        await runtime.client.waitForAgentIdle(agent.id, runId, 60_000);
-        await writeFile(marker, JSON.stringify({ sessionId: agent.id, title: DEEP_TITLE }));
-        return agent.id;
+        const client = happyAgentClientCreate(runtime.socketPath, runtime.token);
+        type AgentId = Parameters<typeof client.getAgent>[0];
+        const group = (await client.getAgent(sessionId as AgentId)).agent.workspaceId;
+        const others: string[] = [];
+        for (const id of [...sessionIds].reverse()) {
+            if (others.length === 10) break;
+            if (id === sessionId) continue;
+            const { agent } = await client.getAgent(id as AgentId).catch(() => ({ agent: null }));
+            if (agent?.workspaceId === group && agent.title === "Gym performance session")
+                others.push(id);
+        }
+        for (const id of others) {
+            const { runId } = await runtime.client.sendMessage(id, "Gym note: nothing to do.");
+            await runtime.client.waitForAgentIdle(id, runId, 60_000);
+        }
+        await writeFile(
+            marker,
+            JSON.stringify({ sessionId, title: DEEP_TITLE, buried: true, newer: others }),
+        );
+        return sessionId;
     } finally {
         await runtime.stop();
         await inference.stop();
@@ -491,11 +538,13 @@ async function deepChecks(
         outsideFirstContext: firstContext
             ? !(firstContext.text.split("Conversations in the app")[1] ?? "").includes(DEEP_TITLE)
             : null,
+        // A read tool on its ID; opening it is counted separately.
         read: tools.some(
             (tool) =>
-                tool.name !== "list_sidebar" && JSON.stringify(tool.arguments).includes(sessionId),
+                tool.name.startsWith("read") && JSON.stringify(tool.arguments).includes(sessionId),
         ),
-        answered: /cobalt heron|\b418\b/iu.test(turns[0]?.assistant ?? ""),
+        // Its fact; voice may decline to read the code itself aloud.
+        answered: /cobalt heron|\b418\b|east jetty/iu.test(turns[0]?.assistant ?? ""),
         tools,
         openedByAgentId: byAgent ? resultOf(byAgent.frame.actionId)?.status === "succeeded" : false,
         opens: opens.map((event) => ({
