@@ -682,4 +682,30 @@ describe("secret scopes and expiry", () => {
             expiresAt: SERVER_NOW + 604_800_000,
         });
     });
+
+    it("keeps a secret's reach through a conflict, whose secret carries none, until the next read", async () => {
+        const theirs = { ...globalKey, name: "OpenAI (rotated)", version: "v-openai-2" };
+        const { reach: _, ...conflicted } = theirs;
+        const { store } = open({
+            "GET /v0/cluster/secrets?limit=100": [
+                ...listAt(SERVER_NOW, globalKey),
+                ...listAt(SERVER_NOW, theirs),
+            ],
+            [`PATCH /v0/cluster/secrets/${globalKey.id}`]: [
+                {
+                    status: 409,
+                    body: { error: "Stale.", code: "conflict", secret: conflicted },
+                },
+            ],
+        });
+        await vi.waitFor(() => expect(store.get().loading).toBe(false));
+
+        await expect(
+            store.secretUpdate(globalKey.id, globalKey.version, { description: "Mine" }),
+        ).rejects.toMatchObject({ code: "conflict" });
+        expect(store.get().secrets[0]).toMatchObject({
+            name: "OpenAI (rotated)",
+            reach: globalKey.reach,
+        });
+    });
 });
