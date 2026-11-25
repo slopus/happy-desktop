@@ -181,3 +181,37 @@ export type HandbookEvent =
           readonly documentId: string;
           readonly status: HandbookChangeRequestStatus;
       };
+
+/** Someone else's window in a handbook document, as its editor last described itself. */
+export interface HandbookDocumentPresence {
+    /** Names one window in this document; assigned by the server, opaque. */
+    readonly clientKey: string;
+    /** Rises with each update from that window. */
+    readonly revision: number;
+    readonly active: boolean;
+    /** That editor's awareness update, base64; absent once the window has left. */
+    readonly update?: string;
+    /** That editor's awareness client, so its caret can be taken away when it leaves. */
+    readonly awarenessClientId?: number;
+}
+
+/** The reader's own editor's awareness, to be relayed to everyone else in the document. */
+export interface HandbookDocumentPresencePayload {
+    readonly update: string;
+    readonly awarenessClientId: number;
+}
+
+/**
+ * A live frame for a handbook document this connection subscribed: a change
+ * as it is made, or someone's caret. Never journaled; one the stream skipped
+ * is read back by state vector.
+ */
+export type HandbookDocumentLiveFrame =
+    | {
+          readonly type: "update";
+          readonly documentId: string;
+          readonly seq: number;
+          /** One Yjs update, base64. */
+          readonly update: string;
+      }
+    | ({ readonly type: "presence"; readonly documentId: string } & HandbookDocumentPresence);

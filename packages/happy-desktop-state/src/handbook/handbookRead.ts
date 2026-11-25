@@ -6,6 +6,7 @@ import type {
     HandbookChangeRequestStatus,
     HandbookChangeRequestSummary,
     HandbookDocument,
+    HandbookDocumentLiveFrame,
     HandbookEvent,
     HandbookRevision,
     HandbookRevisionKind,
@@ -316,4 +317,36 @@ export function handbookEventRead(event: {
         default:
             return undefined;
     }
+}
+
+/**
+ * A live frame on the stream, as `document.update` or `document.presence`,
+ * when it is a handbook document's: it names a `documentId` and no Surface.
+ */
+export function handbookLiveFrameRead(frame: {
+    readonly type: string;
+    readonly data: unknown;
+}): HandbookDocumentLiveFrame | undefined {
+    const data = recordOf(frame.data);
+    if (!data || typeof data.documentId !== "string" || data.surfaceId !== undefined)
+        return undefined;
+    if (frame.type === "document.update") {
+        const seq = numberOrNull(data.seq);
+        return seq !== null && typeof data.update === "string"
+            ? { type: "update", documentId: data.documentId, seq, update: data.update }
+            : undefined;
+    }
+    if (frame.type !== "document.presence") return undefined;
+    const revision = numberOrNull(data.revision);
+    if (typeof data.clientKey !== "string" || revision === null) return undefined;
+    const awarenessClientId = numberOrNull(data.awarenessClientId);
+    return {
+        type: "presence",
+        documentId: data.documentId,
+        clientKey: data.clientKey,
+        revision,
+        active: data.active === true,
+        ...(typeof data.update === "string" ? { update: data.update } : {}),
+        ...(awarenessClientId === null ? {} : { awarenessClientId }),
+    };
 }

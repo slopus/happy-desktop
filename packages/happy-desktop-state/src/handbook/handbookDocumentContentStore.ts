@@ -7,12 +7,18 @@ import {
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import type { UserError } from "../types.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
-import { handbookFollowCreate } from "./handbookFollow.js";
 import { HANDBOOK_UNREADABLE } from "./handbookMutate.js";
-import { handbookDocumentStateRead } from "./handbookRead.js";
+import {
+    handbookDocumentStateRead,
+    handbookEventRead,
+    handbookLiveFrameRead,
+} from "./handbookRead.js";
+import type { HandbookDocumentPresence, HandbookDocumentPresencePayload } from "./handbookTypes.js";
 
 /** The least time between two changes sent for one document. */
 const SEND_SPACING = 200;
+/** The least time between two presence updates sent for one document. */
+const PRESENCE_SPACING = 250;
 /** The most change bytes merged into one request; a single larger change is still sent alone. */
 const SEND_BATCH_BYTES = 768 * 1024;
 
@@ -33,11 +39,13 @@ export type HandbookDocumentContentSnapshot =
           /**
            * The shared document itself, the CRDT everyone's changes merge in:
            * the editor writes to it, and the store sends what is written and
-           * pulls what others wrote. It stays the same object until the server
+           * applies what arrives. It stays the same object until the server
            * refuses a change, when it is replaced by what the server holds.
            */
           readonly ydoc: Y.Doc;
           readonly sync: HandbookDocumentContentSync;
+          /** Everyone else with the document open, by window; empty where live editing is off. */
+          readonly presence: readonly HandbookDocumentPresence[];
           /** The server refused a change, which was undone; cleared by the next one. */
           readonly failure?: UserError;
       };
@@ -46,10 +54,12 @@ export type HandbookDocumentContentSnapshot =
  * One handbook document's collaborative text, kept for the life of the
  * connection.
  *
- * The constructor opens nothing. The first subscriber reads the whole
- * document; after that, every `handbook.document.updated` about it and every
- * reconnect reads what the document here lacks, by its state vector. Events
- * are only hints: what arrives is always what the server answers.
+ * The constructor opens nothing. While something shows it, the connection's
+ * stream is subscribed to the document, and every change anyone makes
+ * arrives on it in order and is merged in; one the stream skipped, across a
+ * gap or a reconnect, is read as whatever the document here lacks, by its
+ * state vector. Where the server does not serve live editing, the document is
+ * read the same way on every `handbook.document.updated` about it instead.
  *
  * The reader's changes are written to the document by the editor and sent
  * from here: merged while one request is in flight, at most one request at a
@@ -59,10 +69,16 @@ export type HandbookDocumentContentSnapshot =
  * document is replaced by what the server holds, and says so. Changes made
  * while the reader may not edit, such as the editor's own setup, are never
  * sent.
+ *
+ * The reader's editor describes its caret through `presenceUpdate`; that is
+ * sent at most every 250 ms, and the editor itself renews it every 15 seconds
+ * while it is open. Everyone else's arrives on the same stream.
  */
 export interface HandbookDocumentContentStore {
     get(): HandbookDocumentContentSnapshot;
     subscribe(listener: () => void): () => void;
+    /** The reader's editor says where its caret is; everyone else is told, at a steady pace. */
+    presenceUpdate(payload: HandbookDocumentPresencePayload): void;
     /**
      * The reader's pointer went down in the document, or came back up. While
      * it is down, everyone else's changes wait, so a click still placing the
@@ -129,7 +145,10 @@ export function handbookDocumentContentStoreCreate(deps: {
     let missing = false;
     let error: UserError | undefined;
     let ydoc: Y.Doc | undefined;
+    /** Whether the document holds what the server had when it was first read. */
     let loaded = false;
+    /** The latest change seen from the stream or a read; a frame past the next is a gap. */
+    let seq = 0;
     let pending: Uint8Array[] = [];
     let sending: Sending | undefined;
     let sendRunning = false;
@@ -138,6 +157,19 @@ export function handbookDocumentContentStoreCreate(deps: {
     let failure: UserError | undefined;
     let pressed = false;
     let held: Uint8Array[] = [];
+
+    /** The current connection's stream, while it is connected. */
+    let streamId: string | undefined;
+    /** The stream this document is subscribed on, once the server has said so. */
+    let subscribed: string | undefined;
+    /** A stream the server would not subscribe, such as one where live editing is off. */
+    let refusedOn: string | undefined;
+    const presence = new Map<string, HandbookDocumentPresence>();
+    let presenceLatest: HandbookDocumentPresencePayload | undefined;
+    let presenceAt = 0;
+    let presenceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    let following: AbortController | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
 
     const snapshotOf = (): HandbookDocumentContentSnapshot => {
@@ -152,6 +184,7 @@ export function handbookDocumentContentStoreCreate(deps: {
                     : sending !== undefined || pending.length > 0
                       ? "saving"
                       : "saved",
+                presence: [...presence.values()],
                 ...(failure === undefined ? {} : { failure }),
             };
         return { documentId, status: "loading", ...(error === undefined ? {} : { error }) };
@@ -162,13 +195,18 @@ export function handbookDocumentContentStoreCreate(deps: {
         if (disposed) return;
         const next = snapshotOf();
         const previous = snapshot;
-        if (
+        // The status line and the carets change far less often than the document does.
+        if (next.status === "live" && previous.status === "live") {
+            if (
+                next.ydoc === previous.ydoc &&
+                next.sync === previous.sync &&
+                next.failure === previous.failure &&
+                next.presence.length === previous.presence.length &&
+                next.presence.every((entry, index) => entry === previous.presence[index])
+            )
+                return;
+        } else if (
             next.status === previous.status &&
-            (next.status !== "live" ||
-                (previous.status === "live" &&
-                    next.ydoc === previous.ydoc &&
-                    next.sync === previous.sync &&
-                    next.failure === previous.failure)) &&
             (next.status !== "loading" ||
                 (previous.status === "loading" && next.error === previous.error))
         )
@@ -193,6 +231,7 @@ export function handbookDocumentContentStoreCreate(deps: {
         return doc;
     };
 
+    /** Applies what the server sent, as everyone else's change, once the reader's pointer is up. */
     const remoteApply = (doc: Y.Doc, update: string): void => {
         if (pressed && doc === ydoc) held.push(base64Decode(update));
         else Y.applyUpdate(doc, base64Decode(update), REMOTE);
@@ -204,6 +243,8 @@ export function handbookDocumentContentStoreCreate(deps: {
         if (updates.length > 0 && ydoc !== undefined && !disposed)
             Y.applyUpdate(ydoc, Y.mergeUpdates(updates), REMOTE);
     };
+
+    // ---- Reading what is missing ------------------------------------------
 
     /** Reads what the document here lacks and merges it in: the whole document the first time. */
     const pull = async (): Promise<void> => {
@@ -226,29 +267,111 @@ export function handbookDocumentContentStoreCreate(deps: {
         const state = handbookDocumentStateRead(answer);
         if (!state) throw HANDBOOK_UNREADABLE;
         remoteApply(doc, state.update);
+        seq = Math.max(seq, state.seq);
         loaded = true;
         error = undefined;
         publish();
     };
 
-    const follow = handbookFollowCreate({
-        sync: deps.sync,
-        events: ["handbook.document.updated"],
-        concerns: (event) =>
-            event.type === "handbook.document.updated" && event.documentId === documentId,
-        read: pull,
-        failed: (readError) => {
-            if (loaded) return;
-            // The first read is tried again until it lands; later ones wait for the next hint.
-            error = happyAgentUserError(readError);
-            publish();
-            if (retry) clearTimeout(retry);
-            retry = setTimeout(() => {
-                retry = undefined;
-                follow.load();
-            }, 2_000);
-        },
-    });
+    let pulling = false;
+    let pullAgain = false;
+    /** Reads now, or once more after the read in flight; the first read is tried until it lands. */
+    const pullRun = (): void => {
+        if (disposed || missing) return;
+        if (pulling) {
+            pullAgain = true;
+            return;
+        }
+        pulling = true;
+        pullAgain = false;
+        void pull()
+            .catch((readError: unknown) => {
+                if (loaded || disposed) return;
+                error = happyAgentUserError(readError);
+                publish();
+                if (retry) clearTimeout(retry);
+                retry = setTimeout(() => {
+                    retry = undefined;
+                    if (following) pullRun();
+                }, 2_000);
+            })
+            .finally(() => {
+                pulling = false;
+                if (pullAgain) pullRun();
+            });
+    };
+
+    // ---- Live editing ---------------------------------------------------
+
+    const presenceSend = (): void => {
+        presenceTimer = undefined;
+        const payload = presenceLatest;
+        const stream = subscribed;
+        if (payload === undefined || stream === undefined || disposed) return;
+        presenceAt = now();
+        void deps
+            .request("POST", `${path}/presence`, {
+                streamId: stream,
+                awarenessClientId: payload.awarenessClientId,
+                update: payload.update,
+            })
+            .catch(() => undefined);
+    };
+
+    const presenceSchedule = (): void => {
+        if (presenceTimer !== undefined || subscribed === undefined) return;
+        const wait = presenceAt + PRESENCE_SPACING - now();
+        if (wait <= 0) presenceSend();
+        else presenceTimer = setTimeout(presenceSend, wait);
+    };
+
+    /** Subscribes the current stream to the document, then reads what it may have missed. */
+    const attach = async (signal: AbortSignal): Promise<void> => {
+        const stream = streamId;
+        if (stream === undefined || subscribed === stream || refusedOn === stream) {
+            pullRun();
+            return;
+        }
+        let delay = 1_000;
+        while (!signal.aborted && streamId === stream) {
+            try {
+                await deps.request("POST", `${path}/subscribe`, { streamId: stream });
+                if (signal.aborted || streamId !== stream) return;
+                subscribed = stream;
+                // Said again on the new subscription, still no sooner than the pace allows.
+                presenceSchedule();
+                break;
+            } catch (subscribeError) {
+                if (signal.aborted) return;
+                // Answered and refused: live editing is off here, or the stream
+                // is gone. Not asked again on this stream; events still bring
+                // the document current, and the next connection asks again.
+                if (refusalOf(subscribeError) !== undefined) {
+                    refusedOn = stream;
+                    break;
+                }
+                await waitFor(delay, signal);
+                delay = Math.min(delay * 2, 10_000);
+            }
+        }
+        if (!signal.aborted) pullRun();
+    };
+
+    const detach = (): void => {
+        const stream = subscribed;
+        subscribed = undefined;
+        presenceLatest = undefined;
+        if (presenceTimer) clearTimeout(presenceTimer);
+        presenceTimer = undefined;
+        presence.clear();
+        // Ending the subscription also ends this window's presence there.
+        if (stream !== undefined && !disposed)
+            void deps
+                .request("POST", `${path}/unsubscribe`, { streamId: stream })
+                .catch(() => undefined);
+    };
+
+    // ---- Sending --------------------------------------------------------
 
     /** Drops the document held here for what the server holds. */
     const ydocReplace = (): void => {
@@ -257,13 +380,11 @@ export function handbookDocumentContentStoreCreate(deps: {
         ydoc = ydocCreate();
         held = [];
         loaded = false;
+        seq = 0;
         sendFailing = false;
         publish();
         previous?.destroy();
-        void pull().catch((readError: unknown) => {
-            error = happyAgentUserError(readError);
-            publish();
-        });
+        pullRun();
     };
 
     const sendRun = async (): Promise<void> => {
@@ -336,25 +457,133 @@ export function handbookDocumentContentStoreCreate(deps: {
         }
     };
 
+    // ---- Following ------------------------------------------------------
+
+    const start = (): void => {
+        if (disposed || following || listeners.size === 0) return;
+        const active = new AbortController();
+        following = active;
+        const sync = deps.sync;
+        if (sync)
+            void (async () => {
+                for await (const input of sync.follow({
+                    signal: active.signal,
+                    events: ["handbook.document.updated"],
+                    documents: true,
+                })) {
+                    if (input.kind === "error") continue;
+                    // A bootstrap or reconcile may have missed some.
+                    if (input.kind !== "update") {
+                        pullRun();
+                        continue;
+                    }
+                    const update = input.update;
+                    if (update.kind === "connected") {
+                        if (subscribed !== undefined && subscribed !== update.streamId) {
+                            // The old stream's subscription and presence ended with it.
+                            subscribed = undefined;
+                            presence.clear();
+                            publish();
+                        }
+                        streamId = update.streamId;
+                        void attach(active.signal);
+                        continue;
+                    }
+                    if (update.kind === "disconnected") {
+                        streamId = undefined;
+                        subscribed = undefined;
+                        presence.clear();
+                        publish();
+                        continue;
+                    }
+                    if (update.kind === "state_lost") {
+                        pullRun();
+                        continue;
+                    }
+                    if (update.kind === "document") {
+                        // Frames reach this connection only for documents it
+                        // subscribed, and may arrive before the subscription or
+                        // the first read has answered; neither is waited for.
+                        const frame = handbookLiveFrameRead(update.frame);
+                        if (frame === undefined || frame.documentId !== documentId) continue;
+                        if (frame.type === "update") {
+                            // Applied even before the first read lands: Yjs holds a
+                            // change until what it builds on arrives.
+                            const doc = (ydoc ??= ydocCreate());
+                            const gap = loaded && frame.seq > seq + 1;
+                            remoteApply(doc, frame.update);
+                            seq = Math.max(seq, frame.seq);
+                            // A change the stream skipped is read as whatever is missing.
+                            if (gap) pullRun();
+                            continue;
+                        }
+                        const known = presence.get(frame.clientKey);
+                        if (known !== undefined && known.revision >= frame.revision) continue;
+                        if (frame.active)
+                            presence.set(frame.clientKey, {
+                                clientKey: frame.clientKey,
+                                revision: frame.revision,
+                                active: true,
+                                ...(frame.update === undefined ? {} : { update: frame.update }),
+                                ...(frame.awarenessClientId === undefined
+                                    ? {}
+                                    : { awarenessClientId: frame.awarenessClientId }),
+                            });
+                        else presence.delete(frame.clientKey);
+                        publish();
+                        continue;
+                    }
+                    if (update.kind !== "event") continue;
+                    // Cloud events travel as the daemon's event envelope, typed by name.
+                    const event = handbookEventRead(
+                        update.event as { readonly type: string; readonly payload?: unknown },
+                    );
+                    if (event?.type !== "handbook.document.updated") continue;
+                    if (event.documentId !== documentId) continue;
+                    // Live frames already brought it, unless this is past what they did.
+                    if (subscribed !== undefined && event.seq <= seq) continue;
+                    pullRun();
+                }
+            })()
+                .catch(() => undefined)
+                .finally(() => {
+                    if (following === active) following = undefined;
+                    if (!active.signal.aborted && !disposed && listeners.size > 0)
+                        retry = setTimeout(start, 1_000);
+                });
+        pullRun();
+    };
+
+    const stop = (): void => {
+        following?.abort();
+        following = undefined;
+        if (retry) clearTimeout(retry);
+        retry = undefined;
+        detach();
+        // Nobody is reading it, so no pointer is down in it.
+        pressed = false;
+        heldRelease();
+        publish();
+    };
+
     return {
         get: () => snapshot,
         subscribe(listener) {
             if (disposed) return () => undefined;
             listeners.add(listener);
-            if (listeners.size === 1) follow.start();
+            start();
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 listeners.delete(listener);
-                if (listeners.size > 0) return;
-                follow.stop();
-                if (retry) clearTimeout(retry);
-                retry = undefined;
-                // Nobody is reading it, so no pointer is down in it.
-                pressed = false;
-                heldRelease();
+                if (listeners.size === 0) stop();
             };
+        },
+        presenceUpdate(payload) {
+            if (disposed) return;
+            presenceLatest = payload;
+            presenceSchedule();
         },
         pointerPressUpdate(next) {
             if (disposed || pressed === next) return;
@@ -363,8 +592,7 @@ export function handbookDocumentContentStoreCreate(deps: {
         },
         [Symbol.dispose]() {
             if (disposed) return;
-            follow.stop();
-            if (retry) clearTimeout(retry);
+            stop();
             disposed = true;
             life.abort();
             ydoc?.off("update", localChange);

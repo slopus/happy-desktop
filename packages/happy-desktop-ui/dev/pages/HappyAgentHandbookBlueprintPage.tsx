@@ -241,7 +241,7 @@ const USER: DocumentEditorUser = { name: "Kirill Petrov", tone: "ocean" };
 
 function useContent(markdown: string): HandbookDocumentContentView {
     const [ydoc] = useState(() => documentDocFromMarkdown(markdown));
-    return { kind: "live", ydoc, user: USER, sync: "saved" };
+    return { kind: "live", ydoc, user: USER, presence: [], sync: "saved" };
 }
 
 const PROPOSED_TEXT = GPU_TEXT.replace("under four hours", "under six hours").concat(

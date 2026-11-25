@@ -10,7 +10,12 @@ import type {
 import { Badge } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
-import { DocumentEditor, type DocumentEditorUser } from "../../DocumentEditor";
+import {
+    DocumentEditor,
+    type DocumentEditorPresence,
+    type DocumentEditorPresencePayload,
+    type DocumentEditorUser,
+} from "../../DocumentEditor";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
 import { MarkdownDocument } from "../../MarkdownDocument";
@@ -44,7 +49,12 @@ export type HandbookDocumentContentView =
           /** One shared document everyone writes in at once. */
           readonly kind: "live";
           readonly ydoc: Y.Doc;
+          /** The reader, as everyone else sees their caret. */
           readonly user: DocumentEditorUser;
+          /** Everyone else with the document open, each with their own caret. */
+          readonly presence: readonly DocumentEditorPresence[];
+          /** The reader's caret, to be relayed to everyone else. */
+          readonly onPresence?: (payload: DocumentEditorPresencePayload) => void;
           readonly sync: HandbookDocumentSync;
           /** Why the server refused the last change, which was undone. */
           readonly failure?: string;
@@ -488,6 +498,8 @@ function HandbookDocumentBody(props: {
                     editable={props.editable}
                     focusOnType={props.editable}
                     {...(content.onPointerPress ? { onPointerPress: content.onPointerPress } : {})}
+                    {...(content.onPresence ? { onPresence: content.onPresence } : {})}
+                    presence={content.presence}
                     user={content.user}
                     ydoc={content.ydoc}
                 />

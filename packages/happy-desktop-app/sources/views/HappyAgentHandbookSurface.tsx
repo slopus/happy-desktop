@@ -140,9 +140,15 @@ function HappyAgentHandbookDocumentSurface(props: {
             kind: "live",
             ydoc: text.ydoc,
             user: props.user,
+            presence: text.presence,
             sync: text.sync,
             ...(text.failure === undefined ? {} : { failure: text.failure.message }),
-            ...(props.content ? { onPointerPress: props.content.pointerPressUpdate } : {}),
+            ...(props.content
+                ? {
+                      onPointerPress: props.content.pointerPressUpdate,
+                      onPresence: props.content.presenceUpdate,
+                  }
+                : {}),
         };
     })();
     return (
