@@ -670,7 +670,7 @@ const SCENARIOS: Record<LiveVoiceEval, (context: Context) => Promise<void>> = {
         check(
             context,
             "S1 push has times on the on-screen turns and rows",
-            /ago/.test(pushed),
+            /(ago|just now) \(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(pushed),
             `${capture.length} captured pushes`,
         );
     },
