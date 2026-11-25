@@ -413,6 +413,7 @@ import {
 import { BlueprintView } from "./views/BlueprintView";
 import { HappyAgentPluginsSurface } from "./views/HappyAgentPluginsSurface";
 import { HappyAgentPipelinesSurface } from "./views/HappyAgentPipelinesSurface";
+import { HappyAgentHandbookSurface } from "./views/HappyAgentHandbookSurface";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
@@ -760,6 +761,20 @@ export interface AppHappyAgentSession {
         runId: string,
         nodeId: string,
     ) => import("happy-desktop-state").PipelineNodeLogStore | undefined;
+    /** The team's handbook on a Happy Cloud server; absent or undefined anywhere it keeps none. */
+    readonly handbook?: () => import("happy-desktop-state").HandbookStore | undefined;
+    /** One handbook document's page; undefined wherever `handbook` is. */
+    readonly handbookDocument?: (
+        documentId: string,
+    ) => import("happy-desktop-state").HandbookDocumentStore | undefined;
+    /** One handbook document's shared text; undefined wherever `handbook` is. */
+    readonly handbookDocumentContent?: (
+        documentId: string,
+    ) => import("happy-desktop-state").HandbookDocumentContentStore | undefined;
+    /** One handbook change request's page; undefined wherever `handbook` is. */
+    readonly handbookChangeRequest?: (
+        changeRequestId: string,
+    ) => import("happy-desktop-state").HandbookChangeRequestStore | undefined;
     /** Everyone on the team, which names the people and agents pipelines credit. */
     readonly team?: () => import("happy-desktop-state").HappyAgentTeamRoster;
     /** The repositories one cloud agent checked out; absent or undefined anywhere but Happy Cloud. */
@@ -1102,6 +1117,18 @@ export interface AppHappyAgentViewProps {
     pipelineRunId?: string;
     /** Addresses one pipeline run on one server. */
     onPipelineRunOpen?(happyAgentId: string, runId: string): void;
+    /** Whether the URL addresses the addressed Happy Cloud server's handbook. */
+    handbookOpen?: boolean;
+    /** The handbook document the URL opens. */
+    handbookDocumentId?: string;
+    /** The handbook change request the URL opens. */
+    handbookChangeRequestId?: string;
+    /** Addresses one server's handbook. */
+    onHandbookOpen?(happyAgentId: string): void;
+    /** Addresses one handbook document on one server. */
+    onHandbookDocumentOpen?(happyAgentId: string, documentId: string): void;
+    /** Addresses one handbook change request on one server. */
+    onHandbookChangeRequestOpen?(happyAgentId: string, changeRequestId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
     /** The person whose profile the URL opens, on the addressed Happy Agent. */
@@ -3096,6 +3123,7 @@ function happyAgentTopSection(
             ARTIFACTS_SIDEBAR_ITEM,
             ...(happyAgent?.session?.plugins?.() ? [PLUGINS_SIDEBAR_ITEM] : []),
             ...(happyAgent?.session?.pipelines?.() ? [PIPELINES_SIDEBAR_ITEM] : []),
+            ...(happyAgent?.session?.handbook?.() ? [HANDBOOK_SIDEBAR_ITEM] : []),
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3461,6 +3489,14 @@ const PLUGINS_ITEM = "plugins";
 const PIPELINES_ITEM = "pipelines";
 
 /**
+ * The row that opens a Happy Cloud server's handbook, directly under
+ * Pipelines. The handbook is the team's, read by every member and agent, so
+ * the row belongs to the machine and never moves. It is there only where the
+ * server keeps a handbook.
+ */
+const HANDBOOK_ITEM = "handbook";
+
+/**
  * The row that opens the reader's feed on the addressed Happy Agent: what
  * happened there, newest change first. It heads the sidebar's first group and,
  * like Artifacts under it, never moves; it counts what the reader has not
@@ -3570,6 +3606,15 @@ const PIPELINES_SIDEBAR_ITEM: SidebarItem = {
     id: PIPELINES_ITEM,
     kind: "project",
     label: "Pipelines",
+    reorderable: false,
+};
+
+const HANDBOOK_SIDEBAR_ITEM: SidebarItem = {
+    icon: "book",
+    tint: "indigo",
+    id: HANDBOOK_ITEM,
+    kind: "project",
+    label: "Handbook",
     reorderable: false,
 };
 
@@ -4296,21 +4341,26 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ? PLUGINS_ITEM
                         : props.pipelinesOpen
                           ? PIPELINES_ITEM
-                          : props.feedOpen
-                            ? FEED_ITEM
-                            : props.surfaceId !== undefined
-                              ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                              : props.groupId
+                          : props.handbookOpen
+                            ? HANDBOOK_ITEM
+                            : props.feedOpen
+                              ? FEED_ITEM
+                              : props.surfaceId !== undefined
                                 ? happyAgentItemId(
                                       props.happyAgentId,
-                                      activeRowId(
-                                          active?.bots ?? [],
-                                          active?.tasks ?? [],
-                                          props.groupId,
-                                          props.chatId,
-                                      ),
+                                      surfaceRowId(props.surfaceId),
                                   )
-                                : ""
+                                : props.groupId
+                                  ? happyAgentItemId(
+                                        props.happyAgentId,
+                                        activeRowId(
+                                            active?.bots ?? [],
+                                            active?.tasks ?? [],
+                                            props.groupId,
+                                            props.chatId,
+                                        ),
+                                    )
+                                  : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -4594,6 +4644,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 if (id === PIPELINES_ITEM) {
                     props.onPipelinesOpen?.(active?.id ?? props.happyAgentId);
+                    return;
+                }
+                if (id === HANDBOOK_ITEM) {
+                    props.onHandbookOpen?.(active?.id ?? props.happyAgentId);
                     return;
                 }
                 const row = happyAgentItemParse(id);
@@ -5085,6 +5139,51 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {...(pipeline ? { pipeline } : {})}
                     {...(run ? { run } : {})}
                     pipelines={pipelines}
+                    {...(session.team ? { team: session.team() } : {})}
+                    workspace={session.workspace}
+                />
+            );
+        }
+
+        // The handbook belongs to the addressed Happy Cloud server. A server
+        // without one says so, in case its address was reached some other way
+        // than its sidebar row.
+        if (props.handbookOpen && active?.session) {
+            const session = active.session;
+            const handbook = session.handbook?.();
+            if (!handbook)
+                return (
+                    <EmptyState
+                        description="This server does not keep a handbook."
+                        icon="book"
+                        size="panel"
+                        title="No handbook here"
+                    />
+                );
+            const documentId = props.handbookDocumentId;
+            const document =
+                documentId === undefined ? undefined : session.handbookDocument?.(documentId);
+            const content =
+                documentId === undefined
+                    ? undefined
+                    : session.handbookDocumentContent?.(documentId);
+            const changeRequest =
+                props.handbookChangeRequestId === undefined
+                    ? undefined
+                    : session.handbookChangeRequest?.(props.handbookChangeRequestId);
+            return (
+                <HappyAgentHandbookSurface
+                    key={props.handbookChangeRequestId ?? documentId}
+                    {...(changeRequest ? { changeRequest } : {})}
+                    clock={session.clock}
+                    {...(content ? { content } : {})}
+                    {...(document ? { document } : {})}
+                    handbook={handbook}
+                    onChangeRequestOpen={(changeRequestId) =>
+                        props.onHandbookChangeRequestOpen?.(active.id, changeRequestId)
+                    }
+                    onDocumentOpen={(id) => props.onHandbookDocumentOpen?.(active.id, id)}
+                    onHandbookOpen={() => props.onHandbookOpen?.(active.id)}
                     {...(session.team ? { team: session.team() } : {})}
                     workspace={session.workspace}
                 />

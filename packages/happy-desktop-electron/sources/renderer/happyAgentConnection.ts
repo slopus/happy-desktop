@@ -172,6 +172,16 @@ export interface HappyAgentSession {
         runId: string,
         nodeId: string,
     ) => import("happy-desktop-state").PipelineNodeLogStore | undefined;
+    readonly handbook: () => import("happy-desktop-state").HandbookStore | undefined;
+    readonly handbookDocument: (
+        documentId: string,
+    ) => import("happy-desktop-state").HandbookDocumentStore | undefined;
+    readonly handbookDocumentContent: (
+        documentId: string,
+    ) => import("happy-desktop-state").HandbookDocumentContentStore | undefined;
+    readonly handbookChangeRequest: (
+        changeRequestId: string,
+    ) => import("happy-desktop-state").HandbookChangeRequestStore | undefined;
     /** Everyone on the team, which names the people and agents pipelines credit. */
     readonly team: () => import("happy-desktop-state").HappyAgentTeamRoster;
     readonly payments: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
@@ -752,6 +762,12 @@ export function happyAgentConnectionOpen(input: {
                     pipeline: (pipelineId) => client.pipeline(pipelineId),
                     pipelineRun: (runId) => client.pipelineRun(runId),
                     pipelineNodeLog: (runId, nodeId) => client.pipelineNodeLog(runId, nodeId),
+                    handbook: () => client.handbook(),
+                    handbookDocument: (documentId) => client.handbookDocument(documentId),
+                    handbookDocumentContent: (documentId) =>
+                        client.handbookDocumentContent(documentId),
+                    handbookChangeRequest: (changeRequestId) =>
+                        client.handbookChangeRequest(changeRequestId),
                     team: () => client.team(),
                     onboardingSettings: () => client.onboardingSettings(),
                     payments: () => client.payments(),

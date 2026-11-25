@@ -61,6 +61,20 @@ export type HappyAgentRoute =
     | { readonly kind: "pipeline"; readonly happyAgentId: string; readonly pipelineId: string }
     /** One run of a pipeline on one server, live. A run is addressed alone, as a child run's parent links to it. */
     | { readonly kind: "pipelineRun"; readonly happyAgentId: string; readonly runId: string }
+    /** The team's handbook on a Happy Cloud server, by category. */
+    | { readonly kind: "handbook"; readonly happyAgentId: string }
+    /** One handbook document on one server. */
+    | {
+          readonly kind: "handbookDocument";
+          readonly happyAgentId: string;
+          readonly documentId: string;
+      }
+    /** One change request to a handbook document, addressed alone as links to it are. */
+    | {
+          readonly kind: "handbookChangeRequest";
+          readonly happyAgentId: string;
+          readonly changeRequestId: string;
+      }
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
     | { readonly kind: "settingsSection"; readonly section: string }
@@ -126,6 +140,12 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/pipelines/${part(route.happyAgentId)}/${part(route.pipelineId)}`;
         case "pipelineRun":
             return `/pipeline-runs/${part(route.happyAgentId)}/${part(route.runId)}`;
+        case "handbook":
+            return `/handbook/${part(route.happyAgentId)}`;
+        case "handbookDocument":
+            return `/handbook/${part(route.happyAgentId)}/${part(route.documentId)}`;
+        case "handbookChangeRequest":
+            return `/handbook-changes/${part(route.happyAgentId)}/${part(route.changeRequestId)}`;
         case "happyAgent":
             return `/chats/${part(route.happyAgentId)}`;
         case "settings":
@@ -246,6 +266,15 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             return first !== undefined && second !== undefined && segments.length === 3
                 ? { kind: "pipelineRun", happyAgentId: first, runId: second }
                 : undefined;
+        case "handbook":
+            if (first === undefined || segments.length > 3) return undefined;
+            return second === undefined
+                ? { kind: "handbook", happyAgentId: first }
+                : { kind: "handbookDocument", happyAgentId: first, documentId: second };
+        case "handbook-changes":
+            return first !== undefined && second !== undefined && segments.length === 3
+                ? { kind: "handbookChangeRequest", happyAgentId: first, changeRequestId: second }
+                : undefined;
         case "people":
             return first !== undefined && second !== undefined && segments.length === 3
                 ? { kind: "userProfile", happyAgentId: first, userId: second }
@@ -343,6 +372,24 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
             const happyAgentId = fieldOf(record, "happyAgentId");
             const runId = fieldOf(record, "runId");
             return happyAgentId && runId ? { kind: "pipelineRun", happyAgentId, runId } : undefined;
+        }
+        case "handbook": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "handbook", happyAgentId } : undefined;
+        }
+        case "handbookDocument": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const documentId = fieldOf(record, "documentId");
+            return happyAgentId && documentId
+                ? { kind: "handbookDocument", happyAgentId, documentId }
+                : undefined;
+        }
+        case "handbookChangeRequest": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const changeRequestId = fieldOf(record, "changeRequestId");
+            return happyAgentId && changeRequestId
+                ? { kind: "handbookChangeRequest", happyAgentId, changeRequestId }
+                : undefined;
         }
         case "pipeline": {
             const happyAgentId = fieldOf(record, "happyAgentId");

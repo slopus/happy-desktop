@@ -546,6 +546,24 @@ const pipelineRunRoute = createRoute({
     path: "/pipeline-runs/$happyAgentId/$runId",
 });
 
+/** The team's handbook on a Happy Cloud server. */
+const handbookRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/handbook/$happyAgentId",
+});
+
+/** One handbook document on the server that keeps it. */
+const handbookDocumentRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/handbook/$happyAgentId/$documentId",
+});
+
+/** One change request to a handbook document. */
+const handbookChangeRequestRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/handbook-changes/$happyAgentId/$changeRequestId",
+});
+
 /** One artifact open in the viewer, on the machine that keeps it. */
 const artifactRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -671,6 +689,9 @@ const routeTree = rootRoute.addChildren([
         pipelinesRoute,
         pipelineRoute,
         pipelineRunRoute,
+        handbookRoute,
+        handbookDocumentRoute,
+        handbookChangeRequestRoute,
         feedRoute,
         userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
@@ -707,6 +728,10 @@ function HappyAgentWorkspaceLayout() {
             matched.has(pipelinesRoute.id) ||
             matched.has(pipelineRoute.id) ||
             matched.has(pipelineRunRoute.id),
+        handbook:
+            matched.has(handbookRoute.id) ||
+            matched.has(handbookDocumentRoute.id) ||
+            matched.has(handbookChangeRequestRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
         bugReportCreate: matched.has(bugReportCreateRoute.id),
@@ -786,6 +811,28 @@ function HappyAgentWorkspaceLayout() {
                 void navigate({
                     params: { happyAgentId, pipelineId },
                     to: "/pipelines/$happyAgentId/$pipelineId",
+                })
+            }
+            handbookOpen={shows.handbook}
+            {...(shows.handbook && params.documentId !== undefined
+                ? { handbookDocumentId: params.documentId }
+                : {})}
+            {...(shows.handbook && params.changeRequestId !== undefined
+                ? { handbookChangeRequestId: params.changeRequestId }
+                : {})}
+            onHandbookOpen={(happyAgentId) =>
+                void navigate({ params: { happyAgentId }, to: "/handbook/$happyAgentId" })
+            }
+            onHandbookDocumentOpen={(happyAgentId, documentId) =>
+                void navigate({
+                    params: { happyAgentId, documentId },
+                    to: "/handbook/$happyAgentId/$documentId",
+                })
+            }
+            onHandbookChangeRequestOpen={(happyAgentId, changeRequestId) =>
+                void navigate({
+                    params: { happyAgentId, changeRequestId },
+                    to: "/handbook-changes/$happyAgentId/$changeRequestId",
                 })
             }
             {...(shows.artifacts && params.artifactId !== undefined
