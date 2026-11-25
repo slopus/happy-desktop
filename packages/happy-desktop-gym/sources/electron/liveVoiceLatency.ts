@@ -372,7 +372,8 @@ async function liveLogRead(paths: GymRunPaths, from: number, to: number) {
                     record.event === "provider.ready" ||
                     record.event === "session.created" ||
                     record.event === "control.attached" ||
-                    record.event === "context.accepted")
+                    record.event === "context.accepted" ||
+                    record.event === "context.pushed")
             )
                 records.push({
                     at,
@@ -381,6 +382,8 @@ async function liveLogRead(paths: GymRunPaths, from: number, to: number) {
                     durationMs: record.durationMs,
                     elapsedMs: record.elapsedMs,
                     resultStatus: record.resultStatus,
+                    kind: record.kind,
+                    bytes: record.bytes,
                 });
         } catch {
             /* Not a JSON diagnostic line. */
@@ -418,7 +421,14 @@ function latencySummary(lanes: Record<string, unknown>): Summary {
                 }[];
                 desktopContexts?: { bytes: number }[];
             }[];
-            daemon: { event: string; actionType?: string; durationMs?: number }[];
+            daemon: {
+                at: number;
+                event: string;
+                actionType?: string;
+                durationMs?: number;
+                kind?: string;
+                bytes?: number;
+            }[];
         };
         const metrics: Record<string, number[]> = {};
         const add = (key: string, sample: number | null | undefined) => {
@@ -427,6 +437,26 @@ function latencySummary(lanes: Record<string, unknown>): Summary {
         };
         for (const outcome of lane.outcomes) {
             const opening = outcome.opening ?? {};
+            // The first context the hosting daemon gave voice for this call, by its own diagnostics.
+            const pressedAt = opening.pressedAt;
+            const first =
+                typeof pressedAt === "number"
+                    ? lane.daemon.find(
+                          (record) =>
+                              record.event === "context.pushed" &&
+                              // "outline" was the opening push before the mobile-model context.
+                              (record.kind === "context" || record.kind === "outline") &&
+                              record.at >= pressedAt &&
+                              record.at <= pressedAt + 60_000,
+                      )
+                    : undefined;
+            add("first push to voice, bytes", first?.bytes);
+            add(
+                "create sent → first push to voice",
+                first && typeof pressedAt === "number" && typeof opening.createStartMs === "number"
+                    ? first.at - (pressedAt + opening.createStartMs)
+                    : undefined,
+            );
             add("press → active (total)", opening.totalMs);
             add("press → availability read", opening.availabilityDoneMs);
             add(

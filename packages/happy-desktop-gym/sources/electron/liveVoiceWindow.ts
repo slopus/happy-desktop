@@ -526,6 +526,7 @@ function openingOf(input: {
         at === null || at === undefined ? null : at - input.pressedAt;
     const availabilityEnd = config.at(-1)?.finishedAt;
     return {
+        pressedAt: input.pressedAt,
         totalMs: input.settledAt - input.pressedAt,
         availabilityDoneMs: since(availabilityEnd),
         createStartMs: since(create?.startedAt),
