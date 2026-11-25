@@ -7,7 +7,7 @@ import { Sidebar } from "../../src/Sidebar";
 import { SidebarBugReport } from "../../src/SidebarBugReport";
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { ThemeScope } from "../../src/ThemeScope";
-import { gptLiveSyntheticVoiceStart, type GptLiveSyntheticVoice } from "../gptLiveSyntheticVoice";
+import { gptLiveSyntheticLevels } from "../gptLiveSyntheticLevels";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-352";
@@ -120,7 +120,7 @@ function StatusBar(props: {
                                 ? {
                                       devMenu: (
                                           <DevBuildMenu
-                                              branch="worktree/voice-call-statusbar"
+                                              branch="feature/example"
                                               onBlueprintOpen={() => {}}
                                           />
                                       ),
@@ -152,8 +152,11 @@ function StatusBar(props: {
     );
 }
 
+const syntheticLevels = gptLiveSyntheticLevels();
+
+/** A live call whose bars follow synthetic voice levels while "Speak" is on. */
 function SyntheticCall(props: { mode: "light" | "dark" }) {
-    const [voice, setVoice] = useState<GptLiveSyntheticVoice | undefined>(undefined);
+    const [speaking, setSpeaking] = useState(false);
     const [muted, setMuted] = useState(false);
     const [since] = useState(() => Date.now());
     return (
@@ -162,31 +165,19 @@ function SyntheticCall(props: { mode: "light" | "dark" }) {
                 call={
                     <GptLiveCallBar
                         muted={muted}
-                        onEnd={() => {
-                            voice?.stop();
-                            setVoice(undefined);
-                        }}
+                        onEnd={() => setSpeaking(false)}
                         onMutedChange={setMuted}
                         since={since}
                         state="active"
-                        {...(voice ? { levelsRead: voice.levelsRead } : {})}
+                        {...(speaking ? { levelsRead: syntheticLevels } : {})}
                     />
                 }
                 mode={props.mode}
-                screen={`08-synthetic-${props.mode}`}
+                screen={`09-live-${props.mode}`}
                 width={330}
             />
-            <Button
-                onClick={() => {
-                    if (voice) {
-                        voice.stop();
-                        setVoice(undefined);
-                    } else setVoice(gptLiveSyntheticVoiceStart());
-                }}
-                size="small"
-                variant="secondary"
-            >
-                {voice ? "Stop the voice" : "Play a synthetic voice (silent)"}
+            <Button onClick={() => setSpeaking(!speaking)} size="small" variant="secondary">
+                {speaking ? "Stop speaking" : "Speak"}
             </Button>
         </div>
     );
@@ -220,77 +211,62 @@ export function GptLiveCallBarPage() {
                 </Specimen>
             ))}
             <Specimen
-                detail="A 290px sidebar, as Happy opens at 1100 × 760: “Connecting…” and the call's length both fit"
-                label="Default window"
-                number="10"
-            >
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    {[STATES[0]!, STATES[1]!].map((state) => (
-                        <StatusBar
-                            call={<GptLiveCallBar {...state.bar} />}
-                            key={state.id}
-                            mode="light"
-                            screen={`10-default-${state.id.slice(3)}`}
-                            width={290}
-                        />
-                    ))}
-                </div>
-            </Specimen>
-            <Specimen
-                detail="A 250px sidebar, the narrowest: the label gives way, the bars and both controls stay"
-                label="Narrowest sidebar"
+                detail="No call: the phone sits before the theme menu and Settings"
+                label="Idle"
                 number="06"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                     {(["light", "dark"] as const).map((mode) => (
-                        <StatusBar
-                            call={<GptLiveCallBar {...STATES[1]!.bar} />}
-                            key={mode}
-                            mode={mode}
-                            screen={`06-narrow-${mode}`}
-                            width={250}
-                        />
+                        <StatusBar key={mode} mode={mode} screen={`06-idle-${mode}`} width={330} />
                     ))}
                 </div>
             </Specimen>
             <Specimen
-                detail="No call: the phone sits before the theme menu and Settings"
-                label="Idle"
+                detail="290px, the sidebar at Happy's 1100 × 760 window: “Connecting…” and the call's length fit · 250px, the narrowest: the label gives way"
+                label="Sidebar widths"
                 number="07"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    {(["light", "dark"] as const).map((mode) => (
-                        <StatusBar key={mode} mode={mode} screen={`07-idle-${mode}`} width={330} />
-                    ))}
+                    <StatusBar
+                        call={<GptLiveCallBar {...STATES[0]!.bar} />}
+                        mode="light"
+                        screen="07-default-connecting"
+                        width={290}
+                    />
+                    <StatusBar
+                        call={<GptLiveCallBar {...STATES[1]!.bar} />}
+                        mode="light"
+                        screen="07-default-active"
+                        width={290}
+                    />
+                    <StatusBar
+                        call={<GptLiveCallBar {...STATES[1]!.bar} />}
+                        mode="light"
+                        screen="07-narrowest-active"
+                        width={250}
+                    />
                 </div>
             </Specimen>
             <Specimen
                 detail="A development build: the branch menu fills the row with no call and steps aside for one"
                 label="Development build"
-                number="09"
+                number="08"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    <StatusBar devBuild mode="light" screen="09-dev-idle-light" width={330} />
+                    <StatusBar devBuild mode="light" screen="08-dev-idle" width={330} />
                     <StatusBar
                         call={<GptLiveCallBar {...STATES[1]!.bar} />}
                         devBuild
                         mode="light"
-                        screen="09-dev-active-light"
-                        width={330}
-                    />
-                    <StatusBar
-                        call={<GptLiveCallBar {...STATES[0]!.bar} />}
-                        devBuild
-                        mode="dark"
-                        screen="09-dev-connecting-dark"
+                        screen="08-dev-active"
                         width={330}
                     />
                 </div>
             </Specimen>
             <Specimen
-                detail="A synthetic received track through the same analyser the call uses; nothing reaches the speakers"
+                detail="Synthetic voice levels drive the bars; press Speak"
                 label="Live bars"
-                number="08"
+                number="09"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                     <SyntheticCall mode="light" />
