@@ -280,7 +280,7 @@ async function callStart(context: Context) {
             const playback = await call.play(text);
             const speechEnd = playback.startedAt + Math.round(playback.durationSeconds * 1_000);
             if (options.during) await options.during();
-            await settled(context, fromEvent, speechEnd);
+            await settled(context, fromEvent, speechEnd, options.quietOk);
             return record(text, fromEvent, speechEnd, options, playback.startedAt);
         },
         /** Speaks without waiting for an answer: for overlapping requests and barge-in. */
@@ -314,8 +314,11 @@ async function callStart(context: Context) {
     };
 }
 
-/** An answer is over once frames and the daemon's delegations have been quiet for a while. */
-async function settled(context: Context, fromEvent: number, speechEnd: number) {
+/**
+ * An answer is over once frames and delegations have been quiet for a while.
+ * A `quietOk` turn may end in silence, so it needs no assistant transcript.
+ */
+async function settled(context: Context, fromEvent: number, speechEnd: number, quietOk = false) {
     const { page } = context.window;
     await page.waitForTimeout(Math.max(0, speechEnd - Date.now()) + 1_000);
     const deadline = Date.now() + 150_000;
@@ -337,7 +340,13 @@ async function settled(context: Context, fromEvent: number, speechEnd: number) {
         const open =
             records.filter((record) => record.event === "delegation.queued").length >
             records.filter((record) => record.event === "delegation.delivered").length;
-        if (answered && requested === finished && !open && Date.now() - movedAt > 12_000) return;
+        if (
+            (answered || quietOk) &&
+            requested === finished &&
+            !open &&
+            Date.now() - movedAt > 12_000
+        )
+            return;
         if ((await phoneStatus(page)) !== "active") return;
         await page.waitForTimeout(500);
     }
