@@ -7714,6 +7714,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     );
     const activeMainTool = mainTools.find((tab) => tab.id === workspace.activeMainViewId);
     const displayedMainTool = mainTools.find((tab) => tab.id === workspace.displayedMainViewId);
+    // Whether the main pane draws the conversation, which is also when the
+    // reader counts as looking at the session.
+    const mainConversationDisplayed =
+        !displayedMainTool && activeReview === undefined && displayedFile === undefined;
     const openInRecent = workspace.openInRecent;
     const conversation = workspace.conversation;
     // A chat that belongs to another session rather than to this group's strip.
@@ -8935,9 +8939,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 // Who else is looking at the session, while the
                                 // session is what the main pane shows.
                                 trailing={
-                                    props.chatId !== undefined &&
-                                    (workspace.activeMainViewId ?? props.chatId) ===
-                                        props.chatId ? (
+                                    props.chatId !== undefined && mainConversationDisplayed ? (
                                         <HappyAgentViewersSlot
                                             target={{ type: "agent", id: props.chatId }}
                                             viewers={props.viewers}
@@ -9201,11 +9203,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                               }
                                                             : undefined
                                                     }
-                                                    shown={
-                                                        !displayedMainTool &&
-                                                        activeReview === undefined &&
-                                                        displayedFile === undefined
-                                                    }
+                                                    shown={mainConversationDisplayed}
                                                     workspace={props.workspace}
                                                 />
                                                 <HappyAgentToolBodies

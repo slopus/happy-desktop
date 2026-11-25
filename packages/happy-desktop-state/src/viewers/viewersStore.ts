@@ -224,7 +224,10 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
         });
     };
 
-    /** Drops the old stream's request and everything it may have left behind. */
+    /**
+     * Drops the old stream's request, heartbeat, and lists: who was here came
+     * from its frames, which a new stream does not replay.
+     */
     const streamEnd = (): void => {
         inflight?.abort.abort();
         inflight = undefined;
@@ -232,6 +235,7 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
         accepted = "";
         if (heartbeat !== undefined) clearTimeout(heartbeat);
         heartbeat = undefined;
+        lists.clear();
     };
 
     const sent = (): void => {
@@ -321,11 +325,9 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
                     continue;
                 }
                 if (update.kind === "disconnected") {
-                    // The server ends a closed stream's viewing at once, and
-                    // nobody can be shown here while no frames arrive.
+                    // The server ends a closed stream's viewing at once.
                     streamEnd();
                     streamId = undefined;
-                    lists.clear();
                     publish();
                     continue;
                 }

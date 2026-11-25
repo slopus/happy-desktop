@@ -445,3 +445,34 @@ it("clears who is here and stops its timers when the stream drops", async () => 
     expect(vi.getTimerCount()).toBe(0);
     viewers[Symbol.dispose]();
 });
+
+it("forgets who was here when a new stream replaces the old one without a drop", async () => {
+    const stream = streamCreate();
+    const server = serverCreate();
+    server.there.set("doc", [
+        { userId: "anna", here: true, lastSeenAt: START },
+        { userId: "kirill", here: false, lastSeenAt: START - 4 * MINUTE },
+    ]);
+    const viewers = happyAgentViewersCreate({ client: server.client, sync: stream.sync, team });
+    const doc = viewers.target({ type: "surface", id: "doc" });
+    doc.subscribe(() => undefined);
+    stream.connected("stream-1");
+    await settle();
+    const names = () => {
+        const snapshot = doc.get();
+        return snapshot.status === "available" ? snapshot.viewers.map((v) => v.name) : [];
+    };
+    expect(names()).toEqual(["Anna", "Kirill"]);
+
+    server.hold(true);
+    stream.connected("stream-2");
+    await settle();
+    expect(names()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+
+    server.there.set("doc", [{ userId: "kirill", here: false, lastSeenAt: START - 4 * MINUTE }]);
+    server.puts[1]!.answer();
+    await settle();
+    expect(names()).toEqual(["Kirill"]);
+    viewers[Symbol.dispose]();
+});

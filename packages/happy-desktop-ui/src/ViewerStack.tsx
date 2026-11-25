@@ -140,14 +140,6 @@ export function ViewerStack(props: ViewerStackProps) {
                                     {...(person.imageUrl ? {} : { placeholderSeed: person.id })}
                                     size="sm"
                                 />
-                                <span aria-hidden className="happy-viewer-stack__grey">
-                                    <Avatar
-                                        imageUrl={person.imageUrl}
-                                        initials={initialsOf(person.name)}
-                                        {...(person.imageUrl ? {} : { placeholderSeed: person.id })}
-                                        size="sm"
-                                    />
-                                </span>
                                 <span className="happy-viewer-stack__dot" />
                             </span>
                             {person.tier === "recent" ? (
