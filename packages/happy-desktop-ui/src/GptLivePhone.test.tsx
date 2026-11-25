@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { expect, it, vi } from "vitest";
 import { userEvent } from "vitest/browser";
 import { gptLiveStoreCreate, type GptLiveRuntimeEvent } from "happy-desktop-state";
+import { DevBuildMenu } from "./DevBuildMenu";
 import { GptLiveCallBar } from "./GptLiveCallBar";
 import { GptLivePhone } from "./GptLivePhone";
 import { SidebarFooter } from "./SidebarFooter";
@@ -62,6 +63,11 @@ it("starts only on trusted click, hangs up in the phone's own slot without movin
                         ) : call.kind === "connecting" ? (
                             <GptLiveCallBar state="connecting" />
                         ) : undefined
+                    }
+                    // A long branch name fills the row with no call; it must
+                    // truncate rather than squeeze the phone out of its box.
+                    devMenu={
+                        <DevBuildMenu branch="feature/a-long-branch-name-that-has-to-truncate" />
                     }
                     onSettingsOpen={() => {}}
                     voice={

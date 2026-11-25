@@ -33,7 +33,7 @@ export type GptLivePhoneStatus = GptLivePhoneProps["status"];
 export function GptLivePhone(props: GptLivePhoneProps) {
     if (!("onEnd" in props))
         return (
-            <Tooltip label={props.message ?? "Start voice call"}>
+            <Tooltip className="happy-gpt-live-slot" label={props.message ?? "Start voice call"}>
                 <Button
                     aria-label="Start voice call"
                     className="happy-gpt-live-phone"
@@ -53,7 +53,7 @@ export function GptLivePhone(props: GptLivePhoneProps) {
     const endLabel = props.status === "active" ? "End voice call" : "Cancel voice call";
     return (
         <>
-            <Tooltip label={muteLabel}>
+            <Tooltip className="happy-gpt-live-slot" label={muteLabel}>
                 <Button
                     aria-label={muteLabel}
                     aria-pressed={props.muted}
@@ -67,7 +67,7 @@ export function GptLivePhone(props: GptLivePhoneProps) {
                     <Icon name={props.muted ? "mic-off" : "mic"} size={14} />
                 </Button>
             </Tooltip>
-            <Tooltip label={endLabel}>
+            <Tooltip className="happy-gpt-live-slot" label={endLabel}>
                 <Button
                     aria-label={endLabel}
                     className="happy-gpt-live-phone"

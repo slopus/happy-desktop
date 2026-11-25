@@ -1,3 +1,8 @@
+/* The voice slot's buttons keep their 28px boxes however full the row is: a
+   long branch name beside them truncates instead of squeezing them. */
+.happy-tooltip.happy-gpt-live-slot {
+    flex: none;
+}
 /* The phone's slot while a call connects or runs: the same 28px box, red, its
    handset laid down to hang up (GptLivePhone). */
 .happy-button.happy-gpt-live-phone:is([data-status="connecting"], [data-status="active"]) {

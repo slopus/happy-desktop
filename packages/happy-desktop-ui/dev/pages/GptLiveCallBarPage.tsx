@@ -129,7 +129,7 @@ function StatusBar(props: {
                                 ? {
                                       devMenu: (
                                           <DevBuildMenu
-                                              branch="feature/example"
+                                              branch="feature/a-long-branch-name-that-has-to-truncate"
                                               onBlueprintOpen={() => {}}
                                           />
                                       ),
