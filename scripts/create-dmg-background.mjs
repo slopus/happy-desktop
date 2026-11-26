@@ -5,7 +5,7 @@ import sharp from "sharp";
 /*
  * The macOS installer window's background: the happy.engineering homepage's Lavender surface
  * (slopus.github.io src/happy-home.css, light palette), with its colour in the top right and
- * bottom left corners, and an arrow from the app to Applications. The layout matches
+ * bottom left corners, and an arrow from the app to Applications, with no words. The layout matches
  * electron-builder's default DMG contents: a 540 × 380 window, 80 px icons centred at
  * (130, 220) and (410, 220). electron-builder joins background.png and background@2x.png into
  * one HiDPI TIFF.
@@ -36,8 +36,6 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${
     <rect width="${width}" height="${height}" fill="${back}"/>
     <rect width="${width}" height="${height}" fill="url(#topRight)"/>
     <rect width="${width}" height="${height}" fill="url(#bottomLeft)"/>
-    <text x="${width / 2}" y="92" text-anchor="middle" fill="${ink}" fill-opacity="0.87"
-        font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="500">Drag Happy to Applications</text>
     <g fill="none" stroke="${ink}" stroke-opacity="0.45" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M212 220 H326 M312 206 L327 220 L312 234"/>
     </g>
