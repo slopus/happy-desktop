@@ -50,6 +50,7 @@ import type {
 import {
     EmptyState,
     SplashScreen,
+    ViewErrorFallback,
     WindowDragRegion,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
@@ -1029,9 +1030,11 @@ export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaul
 }
 
 /**
- * What a route shows when it fails outside the content region's own boundary:
- * each Happy Agent has its own router, so this stands in for one server's
- * window and leaves the rail and every other server as they were.
+ * What a route shows when it fails outside the content pane's own boundary —
+ * the sidebar included. Each Happy Agent has its own router, so this stands
+ * in for one server's whole window and leaves the rail and every other server
+ * as they were. Reset & reconnect unmounts that window while it shows, so the
+ * window comes back mounted against the fresh connection.
  */
 function HappyAgentRouteError(props: ErrorComponentProps) {
     const context = useRouteContext({ strict: false }) as HappyAgentRouterContext | undefined;
@@ -1044,28 +1047,20 @@ function HappyAgentRouteError(props: ErrorComponentProps) {
     };
     const reset = context?.happyAgents?.happyAgentReset;
     return (
-        <>
-            <WindowDragRegion />
-            <EmptyState
-                action={{ icon: "repeat", label: "Retry", onClick: retry }}
-                data-testid="happy-agent-route-failed"
-                description={props.error.message}
-                icon="alert"
-                {...(reset
-                    ? {
-                          secondaryAction: {
-                              label: "Reset & reconnect",
-                              onClick: () => {
-                                  reset(params.happyAgentId ?? happyAgentDefaultId(context));
-                                  retry();
-                              },
-                          },
-                      }
-                    : {})}
-                size="panel"
-                title="This view stopped working"
-            />
-        </>
+        <ViewErrorFallback
+            data-testid="happy-agent-route-failed"
+            error={props.error}
+            onRetry={retry}
+            {...(reset
+                ? {
+                      onReset: () => {
+                          reset(params.happyAgentId ?? happyAgentDefaultId(context));
+                          retry();
+                      },
+                  }
+                : {})}
+            windowDragRegion={context?.platform === "desktop"}
+        />
     );
 }
 

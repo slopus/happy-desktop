@@ -71,6 +71,7 @@ export {
     type HappyAgentRouterContext,
 } from "./navigation/happyAgentRouter";
 export { DesktopStartupScreen, type DesktopStartupValues } from "happy-desktop-ui";
+export { HappyAgentConnectionBoundary } from "./components/HappyAgentConnectionBoundary";
 export {
     BrowserTerminalConnection,
     TERMINAL_PROTOCOL,

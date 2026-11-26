@@ -25,6 +25,7 @@ import {
     happyAgentRouterHappyLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
+    HappyAgentConnectionBoundary,
     happyAgentRouterConnectionChanged,
     gptLiveDropSoundConnect,
     type AppHappyAgentDaemonStore,
@@ -110,6 +111,8 @@ import {
     HappyLinkNoticeDialog,
     ConnectionSurface,
     happyAgentSurfaceBackdropsPreload,
+    RenderErrorBoundary,
+    ViewErrorFallback,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
     type LivePerformanceStore,
@@ -1013,11 +1016,21 @@ function DesktopScreens(props: DesktopRendererProps) {
                     key={LOCAL_HAPPY_AGENT_ID}
                     active={activeId === LOCAL_HAPPY_AGENT_ID}
                 >
-                    <DesktopLocalScreens
-                        {...props}
-                        happyAgents={main?.directory ?? props.happyAgents}
-                        windowState={surfaceWindowState}
-                    />
+                    <HappyAgentConnectionBoundary
+                        {...(props.happyAgents.happyAgentReset
+                            ? {
+                                  onReset: () =>
+                                      props.happyAgents.happyAgentReset?.(LOCAL_HAPPY_AGENT_ID),
+                              }
+                            : {})}
+                        windowDragRegion={props.platform === "desktop"}
+                    >
+                        <DesktopLocalScreens
+                            {...props}
+                            happyAgents={main?.directory ?? props.happyAgents}
+                            windowState={surfaceWindowState}
+                        />
+                    </HappyAgentConnectionBoundary>
                 </ConnectionSurface>
                 {directory.happyAgents
                     .filter((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID)
@@ -1026,33 +1039,43 @@ function DesktopScreens(props: DesktopRendererProps) {
                         if (!ui) return null;
                         return (
                             <ConnectionSurface key={entry.id} active={activeId === entry.id}>
-                                <HappyAgentBoundary
-                                    appearance={props.appearance}
-                                    bridge={props.bridge}
-                                    browserContent={props.browserContent}
-                                    commandPalette={ui.commandPalette}
-                                    connectionOnboarding
-                                    experiments={props.experiments}
-                                    mobilePairingMethod={props.mobilePairingMethod}
-                                    projectsVisibility={props.projectsVisibility}
-                                    statusBar={props.statusBar}
-                                    gptLive={props.gptLive}
-                                    usageAnalytics={props.usageAnalytics}
-                                    keepAwake={props.keepAwake}
-                                    htmlPreview={props.htmlPreview}
-                                    artifactPage={props.artifactPage}
-                                    mediaWindow={props.mediaWindow}
-                                    navigationOrder={ui.navigationOrder}
-                                    sidebarCollapse={ui.sidebarCollapse}
-                                    sidebarVisibility={ui.sidebarVisibility}
-                                    attention={props.attention}
-                                    platform={props.platform}
-                                    router={ui.router}
-                                    happyAgents={ui.directory}
-                                    settings={ui.settings}
-                                    titleShimmer={props.titleShimmer}
-                                    windowState={surfaceWindowState}
-                                />
+                                <HappyAgentConnectionBoundary
+                                    {...(props.happyAgents.happyAgentReset
+                                        ? {
+                                              onReset: () =>
+                                                  props.happyAgents.happyAgentReset?.(entry.id),
+                                          }
+                                        : {})}
+                                    windowDragRegion={props.platform === "desktop"}
+                                >
+                                    <HappyAgentBoundary
+                                        appearance={props.appearance}
+                                        bridge={props.bridge}
+                                        browserContent={props.browserContent}
+                                        commandPalette={ui.commandPalette}
+                                        connectionOnboarding
+                                        experiments={props.experiments}
+                                        mobilePairingMethod={props.mobilePairingMethod}
+                                        projectsVisibility={props.projectsVisibility}
+                                        statusBar={props.statusBar}
+                                        gptLive={props.gptLive}
+                                        usageAnalytics={props.usageAnalytics}
+                                        keepAwake={props.keepAwake}
+                                        htmlPreview={props.htmlPreview}
+                                        artifactPage={props.artifactPage}
+                                        mediaWindow={props.mediaWindow}
+                                        navigationOrder={ui.navigationOrder}
+                                        sidebarCollapse={ui.sidebarCollapse}
+                                        sidebarVisibility={ui.sidebarVisibility}
+                                        attention={props.attention}
+                                        platform={props.platform}
+                                        router={ui.router}
+                                        happyAgents={ui.directory}
+                                        settings={ui.settings}
+                                        titleShimmer={props.titleShimmer}
+                                        windowState={surfaceWindowState}
+                                    />
+                                </HappyAgentConnectionBoundary>
                             </ConnectionSurface>
                         );
                     })}
@@ -2181,56 +2204,72 @@ if (mediaPreviewBridge) {
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
                 <DesktopHappyLinkNotice store={happyLinkInbox} />
-                <CodeHighlightWorkers>
-                    <DesktopWindowZoom reported={!browserLocal}>
-                        <DesktopRenderer
-                            connectionUis={connectionUis}
-                            appearance={appearance}
-                            commandPalette={commandPalette}
-                            {...(daemon ? { daemon } : {})}
-                            debug={debug}
-                            {...(livePerformance ? { performance: livePerformance } : {})}
-                            profiler={profiler}
-                            onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
-                            browserContent={browserLocal ? undefined : desktopBrowserContentRender}
-                            htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
-                            artifactPage={browserLocal ? undefined : desktopArtifactPageRender}
-                            bridge={desktopBridge}
-                            mediaWindow={
-                                browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
-                            }
-                            experiments={experiments}
-                            mobilePairingMethod={mobilePairingMethod}
-                            projectsVisibility={projectsVisibility}
-                            statusBar={statusBar}
-                            gptLive={gptLive}
-                            usageAnalytics={analytics.preference}
-                            {...(cloudConnect ? { cloudConnect } : {})}
-                            keepAwake={keepAwake}
-                            navigationOrder={navigationOrder}
-                            sidebarCollapse={sidebarCollapse}
-                            sidebarVisibility={sidebarVisibility}
-                            attention={attention}
-                            // Only the Electron window hides its title bar; the browser
-                            // development server renders the same tree with web chrome.
-                            platform={browserLocal ? "web" : "desktop"}
-                            happyAgentRouter={happyAgentRouter}
-                            happyAgents={happyAgents}
-                            localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                            settings={settings}
-                            titleShimmer={titleShimmer}
-                            startupValues={startupValuesStoreCreate()}
-                            store={runtimeStore}
-                            welcome={welcome}
-                            windowState={windowState}
-                            surfaceWindowState={surfaceWindowState}
-                            agentUpdate={agentUpdate}
-                            agentReleaseNotes={agentReleaseNotes}
-                            agentBroken={agentBroken}
-                            agentOutage={agentOutage}
+                {/* The last resort: nothing that fails below, the rail included,
+                    leaves the window blank. */}
+                <RenderErrorBoundary
+                    fallback={(error) => (
+                        <ViewErrorFallback
+                            data-testid="happy-window-failed"
+                            error={error}
+                            onReload={() => window.location.reload()}
+                            title="Happy stopped working"
+                            windowDragRegion={!browserLocal}
                         />
-                    </DesktopWindowZoom>
-                </CodeHighlightWorkers>
+                    )}
+                >
+                    <CodeHighlightWorkers>
+                        <DesktopWindowZoom reported={!browserLocal}>
+                            <DesktopRenderer
+                                connectionUis={connectionUis}
+                                appearance={appearance}
+                                commandPalette={commandPalette}
+                                {...(daemon ? { daemon } : {})}
+                                debug={debug}
+                                {...(livePerformance ? { performance: livePerformance } : {})}
+                                profiler={profiler}
+                                onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
+                                browserContent={
+                                    browserLocal ? undefined : desktopBrowserContentRender
+                                }
+                                htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
+                                artifactPage={browserLocal ? undefined : desktopArtifactPageRender}
+                                bridge={desktopBridge}
+                                mediaWindow={
+                                    browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
+                                }
+                                experiments={experiments}
+                                mobilePairingMethod={mobilePairingMethod}
+                                projectsVisibility={projectsVisibility}
+                                statusBar={statusBar}
+                                gptLive={gptLive}
+                                usageAnalytics={analytics.preference}
+                                {...(cloudConnect ? { cloudConnect } : {})}
+                                keepAwake={keepAwake}
+                                navigationOrder={navigationOrder}
+                                sidebarCollapse={sidebarCollapse}
+                                sidebarVisibility={sidebarVisibility}
+                                attention={attention}
+                                // Only the Electron window hides its title bar; the browser
+                                // development server renders the same tree with web chrome.
+                                platform={browserLocal ? "web" : "desktop"}
+                                happyAgentRouter={happyAgentRouter}
+                                happyAgents={happyAgents}
+                                localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                                settings={settings}
+                                titleShimmer={titleShimmer}
+                                startupValues={startupValuesStoreCreate()}
+                                store={runtimeStore}
+                                welcome={welcome}
+                                windowState={windowState}
+                                surfaceWindowState={surfaceWindowState}
+                                agentUpdate={agentUpdate}
+                                agentReleaseNotes={agentReleaseNotes}
+                                agentBroken={agentBroken}
+                                agentOutage={agentOutage}
+                            />
+                        </DesktopWindowZoom>
+                    </CodeHighlightWorkers>
+                </RenderErrorBoundary>
                 {/* After the app, not before it: the window folds drag regions in
                     tree order and later ones win, so the app's title-bar band would
                     otherwise re-cover the sheet's close button and leave it dead. */}

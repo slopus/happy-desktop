@@ -576,6 +576,7 @@ export {
     type EmptyStateSize,
 } from "./EmptyState";
 export { RenderErrorBoundary, type RenderErrorBoundaryProps } from "./RenderErrorBoundary";
+export { ViewErrorFallback, type ViewErrorFallbackProps } from "./ViewErrorFallback";
 export { SetupDrift, type SetupDriftProps } from "./SetupDrift";
 export {
     LottieScene,

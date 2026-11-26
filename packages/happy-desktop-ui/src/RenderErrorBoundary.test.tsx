@@ -1,10 +1,11 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 import type { ConversationEntry } from "happy-desktop-state";
 import "./styles.css";
 import { ConversationEntryView } from "./ConversationEntryView";
 import { EmptyState } from "./EmptyState";
 import { RenderErrorBoundary } from "./RenderErrorBoundary";
+import { ViewErrorFallback } from "./ViewErrorFallback";
 import { createRenderer } from "./testing";
 
 /*
@@ -79,4 +80,32 @@ it("keeps a render error inside its region and renders it again on retry", async
     broken = false;
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect.element(page.getByText("Conversation", { exact: true })).toBeVisible();
+});
+
+it("offers only Reload as the window's last resort", async () => {
+    const reload = vi.fn();
+    function Broken(): never {
+        throw new Error("The rail failed.");
+    }
+    const view = createRenderer().render(
+        () => (
+            <RenderErrorBoundary
+                fallback={(error) => (
+                    <ViewErrorFallback
+                        error={error}
+                        onReload={reload}
+                        title="Happy stopped working"
+                    />
+                )}
+            >
+                <Broken />
+            </RenderErrorBoundary>
+        ),
+        { width: 640, height: 480 },
+    );
+    await view.ready();
+    await expect.element(page.getByText("Happy stopped working", { exact: true })).toBeVisible();
+    expect(page.getByRole("button").elements()).toHaveLength(1);
+    await page.getByRole("button", { name: "Reload", exact: true }).click();
+    expect(reload).toHaveBeenCalledOnce();
 });

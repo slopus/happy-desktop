@@ -355,6 +355,7 @@ import {
     TransferZone,
     RenderErrorBoundary,
     RetainedViews,
+    ViewErrorFallback,
     type TabTransferTarget,
     WindowDragRegion,
     happyAgentComposerModelControlProps,
@@ -5476,39 +5477,29 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             // screen; the header offers it only while the sidebar hides.
                             sidebarOwnsCreate={sidebarTaskCreateHappyAgent !== undefined}
                         >
-                            {/* A view that fails to render takes down only itself:
-                the sidebar and every other server stay usable, and the
-                reader can render it again or start this server over. */}
+                            {/* A view that fails to render takes down only the content
+                pane: the sidebar stays usable, and the reader can render it
+                again or start this server over. A failure anywhere else in
+                the server's window is the router's error page, which fills
+                the window beside the rail. */}
                             <RenderErrorBoundary
                                 fallback={(error, retry) => (
-                                    <>
-                                        {desktop ? <WindowDragRegion /> : null}
-                                        <EmptyState
-                                            action={{
-                                                icon: "repeat",
-                                                label: "Retry",
-                                                onClick: retry,
-                                            }}
-                                            data-testid="happy-agent-view-failed"
-                                            description={error.message}
-                                            icon="alert"
-                                            {...(props.happyAgents.happyAgentReset
-                                                ? {
-                                                      secondaryAction: {
-                                                          label: "Reset & reconnect",
-                                                          onClick: () => {
-                                                              props.happyAgents.happyAgentReset?.(
-                                                                  props.happyAgentId,
-                                                              );
-                                                              retry();
-                                                          },
-                                                      },
-                                                  }
-                                                : {})}
-                                            size="panel"
-                                            title="This view stopped working"
-                                        />
-                                    </>
+                                    <ViewErrorFallback
+                                        data-testid="happy-agent-view-failed"
+                                        error={error}
+                                        onRetry={retry}
+                                        {...(props.happyAgents.happyAgentReset
+                                            ? {
+                                                  onReset: () => {
+                                                      props.happyAgents.happyAgentReset?.(
+                                                          props.happyAgentId,
+                                                      );
+                                                      retry();
+                                                  },
+                                              }
+                                            : {})}
+                                        windowDragRegion={desktop}
+                                    />
                                 )}
                                 resetKey={[
                                     props.happyAgentId,
