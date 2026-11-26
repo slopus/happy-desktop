@@ -15,6 +15,8 @@ import {
     timestampSchema,
     toolCallRequestBlockSchema,
     toolPresentationSchema,
+    userInputPresentationQuestionSchema,
+    userInputPresentationSchema,
     type Message,
 } from "@slopus/happy-agent-client";
 
@@ -25,6 +27,11 @@ import {
  * reasoning and tool-call blocks only as TypeScript types, so those few are
  * spelled out here to the letter of those types, and `MessageSchemaMatches`
  * below proves the two agree.
+ *
+ * Two departures, both so an older client keeps reading a newer server: a
+ * presentation of a type this build does not know reads as no presentation
+ * (`messageAdmission` drops it), and a question's `header` may be empty, as
+ * it is on iOS and Android.
  *
  * Checked with `Value`, not a `TypeCompiler` function: the renderer's content
  * security policy refuses the `new Function` a compiled check is built with.
@@ -64,34 +71,6 @@ const toolPermissionReviewSchema = Type.Union([
     }),
 ]);
 
-const toolCallBlockBase = {
-    type: Type.Literal("tool_call"),
-    id: Type.String(),
-    name: Type.String(),
-    status: Type.Union([
-        Type.Literal("running"),
-        Type.Literal("completed"),
-        Type.Literal("failed"),
-    ]),
-    arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    result: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    presentation: Type.Optional(toolPresentationSchema),
-};
-
-/** Review metadata is either absent or present as one complete pair. */
-const toolCallBlockSchema = Type.Union([
-    Type.Object({
-        ...toolCallBlockBase,
-        elevated: Type.Optional(Type.Never()),
-        review: Type.Optional(Type.Never()),
-    }),
-    Type.Object({
-        ...toolCallBlockBase,
-        elevated: Type.Boolean(),
-        review: toolPermissionReviewSchema,
-    }),
-]);
-
 /** Retired blocks, kept as opaque historical data. */
 const legacyMessageBlockSchema = Type.Intersect([
     Type.Object({
@@ -104,51 +83,116 @@ const legacyMessageBlockSchema = Type.Intersect([
     Type.Record(Type.String(), Type.Unknown()),
 ]);
 
-const messageBlockSchema = Type.Union([
-    Type.Object({ type: Type.Literal("text"), text: Type.String() }),
-    Type.Object({ type: Type.Literal("image"), mimeType: Type.String(), data: Type.String() }),
-    fileBlockSchema,
-    toolCallRequestBlockSchema,
-    Type.Object({ type: Type.Literal("reasoning"), text: Type.String() }),
-    toolCallBlockSchema,
-    configurationBlockSchema,
-    compactionBlockSchema,
-    legacyMessageBlockSchema,
-]);
+/** A question as a `user_input` card records it, with its header allowed to be empty. */
+const userInputPresentationLenientSchema = Type.Object({
+    ...userInputPresentationSchema.properties,
+    questions: Type.Array(
+        Type.Object({
+            ...userInputPresentationQuestionSchema.properties,
+            header: Type.String({ maxLength: 64 }),
+        }),
+        { minItems: 1, maxItems: 4 },
+    ),
+});
 
-const messageBase = {
-    id: cuid2Schema,
-    createdAt: timestampSchema,
-    content: Type.Array(messageBlockSchema),
-    metadata: messageMetadataSchema,
-};
+/** Every presentation type this build knows, retired ones included. */
+const presentationTypesKnown = [...(literalsAt(toolPresentationSchema, "type") ?? [])].map(
+    (type) => type as string,
+);
 
-const messageSchema = Type.Union([
+/** The presentations this build reads, and any other type, which it drops. */
+const presentationAdmittedSchema = Type.Union([
+    ...(toolPresentationSchema.anyOf as readonly TSchema[]).map((variant) =>
+        literalsAt(variant, "type")?.has("user_input") === true
+            ? userInputPresentationLenientSchema
+            : variant,
+    ),
     Type.Object({
-        ...messageBase,
-        role: Type.Literal("user"),
-        clientMetadata: Type.Optional(clientMetadataSchema),
-        quote: Type.Optional(storyQuoteSchema),
-        quickReply: Type.Optional(Type.Unknown()),
-        profile: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-        status: Type.Union([Type.Literal("pending"), Type.Literal("accepted")]),
-        delivery: Type.Union([Type.Literal("queue"), Type.Literal("steer")]),
-        mode: messageModeSchema,
-        runId: Type.Union([cuid2Schema, Type.Null()]),
-    }),
-    Type.Object({ ...messageBase, role: Type.Literal("agent") }),
-    Type.Object({ ...messageBase, role: Type.Literal("system") }),
-    Type.Object({
-        ...messageBase,
-        role: Type.Literal("service"),
-        error: Type.Optional(messageErrorSchema),
-        failure: Type.Optional(messageFailureSchema),
-        notice: Type.Optional(serviceNoticeSchema),
+        type: Type.Intersect([
+            Type.String(),
+            Type.Not(Type.Union(presentationTypesKnown.map((type) => Type.Literal(type)))),
+        ]),
     }),
 ]);
 
-/* A message this schema accepts is a `Message` to every reader after it. */
-type MessageSchemaMatches = Static<typeof messageSchema> extends Message ? true : never;
+/** The whole message, with tool-call presentations read as `presentation`. */
+function messageSchemaOf<P extends TSchema>(presentation: P) {
+    const toolCallBlockBase = {
+        type: Type.Literal("tool_call"),
+        id: Type.String(),
+        name: Type.String(),
+        status: Type.Union([
+            Type.Literal("running"),
+            Type.Literal("completed"),
+            Type.Literal("failed"),
+        ]),
+        arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+        result: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+        presentation: Type.Optional(presentation),
+    };
+    /* Review metadata is either absent or present as one complete pair. */
+    const toolCallBlockSchema = Type.Union([
+        Type.Object({
+            ...toolCallBlockBase,
+            elevated: Type.Optional(Type.Never()),
+            review: Type.Optional(Type.Never()),
+        }),
+        Type.Object({
+            ...toolCallBlockBase,
+            elevated: Type.Boolean(),
+            review: toolPermissionReviewSchema,
+        }),
+    ]);
+    const messageBlockSchema = Type.Union([
+        Type.Object({ type: Type.Literal("text"), text: Type.String() }),
+        Type.Object({ type: Type.Literal("image"), mimeType: Type.String(), data: Type.String() }),
+        fileBlockSchema,
+        toolCallRequestBlockSchema,
+        Type.Object({ type: Type.Literal("reasoning"), text: Type.String() }),
+        toolCallBlockSchema,
+        configurationBlockSchema,
+        compactionBlockSchema,
+        legacyMessageBlockSchema,
+    ]);
+    const messageBase = {
+        id: cuid2Schema,
+        createdAt: timestampSchema,
+        content: Type.Array(messageBlockSchema),
+        metadata: messageMetadataSchema,
+    };
+    return Type.Union([
+        Type.Object({
+            ...messageBase,
+            role: Type.Literal("user"),
+            clientMetadata: Type.Optional(clientMetadataSchema),
+            quote: Type.Optional(storyQuoteSchema),
+            quickReply: Type.Optional(Type.Unknown()),
+            profile: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+            status: Type.Union([Type.Literal("pending"), Type.Literal("accepted")]),
+            delivery: Type.Union([Type.Literal("queue"), Type.Literal("steer")]),
+            mode: messageModeSchema,
+            runId: Type.Union([cuid2Schema, Type.Null()]),
+        }),
+        Type.Object({ ...messageBase, role: Type.Literal("agent") }),
+        Type.Object({ ...messageBase, role: Type.Literal("system") }),
+        Type.Object({
+            ...messageBase,
+            role: Type.Literal("service"),
+            error: Type.Optional(messageErrorSchema),
+            failure: Type.Optional(messageFailureSchema),
+            notice: Type.Optional(serviceNoticeSchema),
+        }),
+    ]);
+}
+
+/** What arrives is checked against this; what it admits is the protocol's message once dropped presentations are gone. */
+const messageSchema = messageSchemaOf(presentationAdmittedSchema);
+
+/* The protocol's own message, with only the presentations it publishes, is a `Message`. */
+type MessageSchemaMatches =
+    Static<ReturnType<typeof messageSchemaOf<typeof toolPresentationSchema>>> extends Message
+        ? true
+        : never;
 const messageSchemaMatches: MessageSchemaMatches = true;
 void messageSchemaMatches;
 
@@ -165,33 +209,77 @@ export interface MessageProblem {
     readonly errors: readonly string[];
 }
 
+/** A tool-call presentation of a type this build does not know, left out of its message. */
+export interface PresentationDropped {
+    readonly toolCallId: string;
+    readonly type: string;
+}
+
+/** What a message from the wire is to this build. */
+export type MessageAdmission =
+    | {
+          readonly kind: "valid";
+          /** The message, without any presentation this build cannot read. */
+          readonly message: Message;
+          readonly presentationsDropped: readonly PresentationDropped[];
+      }
+    | { readonly kind: "invalid"; readonly problem: MessageProblem };
+
 /* Each payload object is checked once, however many readers ask about it. */
-const problems = new WeakMap<object, MessageProblem | null>();
+const admissions = new WeakMap<object, MessageAdmission>();
 
 /**
  * Checks one message as it arrives from a Happy Agent server against the
- * protocol: undefined when it is a valid `Message`, and otherwise what is
- * wrong with it. The answer is remembered for the payload object.
+ * protocol: the message this build reads, or what is wrong with it. A tool
+ * call whose presentation is of a type this build does not know reads as the
+ * plain call it is. The answer is remembered for the payload object.
  */
-export function messageProblem(value: unknown): MessageProblem | undefined {
-    if (typeof value !== "object" || value === null) return problemOf(value);
-    const known = problems.get(value);
-    if (known !== undefined) return known ?? undefined;
-    const problem = problemOf(value);
-    problems.set(value, problem ?? null);
-    return problem;
+export function messageAdmission(value: unknown): MessageAdmission {
+    if (typeof value !== "object" || value === null) return admissionOf(value);
+    const known = admissions.get(value);
+    if (known !== undefined) return known;
+    const admission = admissionOf(value);
+    admissions.set(value, admission);
+    return admission;
 }
 
-function problemOf(value: unknown): MessageProblem | undefined {
-    if (Value.Check(messageSchema, value)) return undefined;
-    const errors: string[] = [];
-    errorsExplain(messageSchema, value, "", errors);
-    const record =
-        typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+/** What is wrong with a message from the wire, or undefined when this build reads it. */
+export function messageProblem(value: unknown): MessageProblem | undefined {
+    const admission = messageAdmission(value);
+    return admission.kind === "invalid" ? admission.problem : undefined;
+}
+
+function admissionOf(value: unknown): MessageAdmission {
+    if (!Value.Check(messageSchema, value)) {
+        const errors: string[] = [];
+        errorsExplain(messageSchema, value, "", errors);
+        const record =
+            typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+        return {
+            kind: "invalid",
+            problem: {
+                ...(typeof record.id === "string" ? { messageId: record.id } : {}),
+                ...(Number.isInteger(record.createdAt)
+                    ? { createdAt: record.createdAt as number }
+                    : {}),
+                errors,
+            },
+        };
+    }
+    const message = value as Message;
+    const presentationsDropped: PresentationDropped[] = [];
+    const content = message.content.map((block) => {
+        if (block.type !== "tool_call" || block.presentation === undefined) return block;
+        const type = (block.presentation as { type: string }).type;
+        if (presentationTypesKnown.includes(type)) return block;
+        presentationsDropped.push({ toolCallId: block.id, type });
+        const { presentation: _, ...call } = block;
+        return call;
+    });
     return {
-        ...(typeof record.id === "string" ? { messageId: record.id } : {}),
-        ...(Number.isInteger(record.createdAt) ? { createdAt: record.createdAt as number } : {}),
-        errors,
+        kind: "valid",
+        message: presentationsDropped.length === 0 ? message : { ...message, content },
+        presentationsDropped,
     };
 }
 

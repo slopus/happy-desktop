@@ -10,13 +10,18 @@ its `Message` TypeScript types for the envelope and the text, image, reasoning
 and tool-call blocks. Desktop's composition of them is
 `packages/happy-desktop-state/src/happyAgentConnection/messageValidate.ts`.
 
+Two departures from that schema keep an older client reading a newer server:
+a tool-call presentation of a type the client does not know is dropped rather
+than failing its message, and a question's `header` may be empty.
+
 ## Layout
 
 - `valid/` — messages that must pass. Together they cover every role (user,
   agent, system, service), every block type (text, image, file,
   tool_call_request, reasoning, tool_call, configuration, compaction, and the
-  retired ui/action/quick_replies), every tool presentation type, and both
-  halves of tool-call review metadata.
+  retired ui/action/quick_replies), every tool presentation type, a
+  presentation type no client knows, and both halves of tool-call review
+  metadata.
 - `invalid/` — messages that must fail. A client shows each one as a
   placeholder in its place and keeps drawing the messages around it.
 
@@ -44,8 +49,13 @@ Each file is one JSON object:
   question the person answered by replying in chat (hc-agent
   `history.rs`, `resume_question_after_human_message`): question ID
   `"reviewer"`, an empty `header`, `status: "canceled"` and `answers: null`.
+  It fails on `answers`; the empty header alone is allowed.
   Read as an answered question, it crashed desktop with "Cannot read
   properties of null (reading 'reviewer')".
-- `invalid/unknown-presentation-type.json` is what a newer server's tool
-  presentation looks like to an older client: the presentation union is
-  closed, so the whole message becomes a placeholder.
+- `valid/agent-presentation-unknown-type.json` is what a newer server's tool
+  presentation looks like to an older client. A presentation whose `type`
+  the client does not know is read as no presentation: the client shows the
+  plain tool call and logs it once. A presentation of a known type with a bad
+  shape, such as the card above, still fails the whole message.
+- A question's `header` may be empty: clients do not enforce the published
+  schema's `minLength: 1` on it.

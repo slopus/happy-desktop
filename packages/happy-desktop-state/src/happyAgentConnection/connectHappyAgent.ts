@@ -80,7 +80,7 @@ import {
     type TranscriptInvalidMessage,
     type TranscriptMessage,
 } from "./projection.js";
-import { messageProblem } from "./messageValidate.js";
+import { messageAdmission, messageProblem } from "./messageValidate.js";
 import type {
     BotGroup,
     ConnectHappyAgentOptions,
@@ -403,22 +403,38 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
     /** The protocol errors last logged for each message, so a placeholder is reported once. */
     const invalidMessagesLogged = new Map<string, string>();
+    /** The unknown presentations already logged, by agent, message and tool call. */
+    const presentationsDroppedLogged = new Set<string>();
     /**
-     * Whether a message from the server is one this client can read: every
-     * message that reaches a session is checked here first, once, against the
-     * protocol. One that is not readable leaves the session's messages and
-     * takes a placeholder in its place, named by its ID, run, time and what is
-     * wrong with it; its payload is logged, and goes no further. `runId`
-     * undefined keeps the run the message already sits in. The caller
-     * publishes the session.
+     * The message from the server as this client reads it: every message that
+     * reaches a session is checked here first, once, against the protocol. A
+     * tool call whose presentation is of a type this build does not know comes
+     * back without it, a plain call. A message that is not readable is
+     * undefined: it leaves the session's messages and takes a placeholder in
+     * its place, named by its ID, run, time and what is wrong with it; its
+     * payload is logged, and goes no further. `runId` undefined keeps the run
+     * the message already sits in. The caller publishes the session.
      */
-    const messageAdmit = (
+    const messageAdmit = <M extends Message>(
         agentId: string,
-        message: Message,
+        message: M,
         runId: string | null | undefined,
-    ): boolean => {
-        const problem = messageProblem(message);
-        if (problem === undefined) return true;
+    ): M | undefined => {
+        const admission = messageAdmission(message);
+        if (admission.kind === "valid") {
+            for (const dropped of admission.presentationsDropped) {
+                const key = `${agentId}/${admission.message.id}/${dropped.toolCallId}`;
+                if (presentationsDroppedLogged.has(key)) continue;
+                presentationsDroppedLogged.add(key);
+                console.warn(
+                    "A Happy Agent tool call has a presentation this build does not know; it shows as a plain call.",
+                    { agentId, messageId: admission.message.id, ...dropped },
+                );
+            }
+            // Dropping a presentation keeps the message's role and every other field.
+            return admission.message as M;
+        }
+        const problem = admission.problem;
         const id = problem.messageId;
         const logKey = `${agentId}/${id ?? ""}`;
         const logged = problem.errors.join("\n");
@@ -433,7 +449,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             );
         }
         const entry = sessions.get(agentId);
-        if (id === undefined || entry === undefined) return false;
+        if (id === undefined || entry === undefined) return undefined;
         const replaced = entry.messages.get(id);
         const held = entry.invalidMessages.get(id);
         entry.invalidMessages.set(id, {
@@ -449,7 +465,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         entry.messageBlockOffsets.delete(id);
         entry.corruptedMessageIds.delete(id);
         entry.deltaGapMessageIds.delete(id);
-        return false;
+        return undefined;
     };
     const ingestSessionHistory = (
         entry: SessionEntry,
@@ -3169,8 +3185,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return;
             case "message.created":
             case "message.updated": {
-                const { agentId, message, runId } = event.payload;
-                if (!messageAdmit(agentId, message, runId)) {
+                const { agentId, runId } = event.payload;
+                const message = messageAdmit(agentId, event.payload.message, runId);
+                if (message === undefined) {
                     const entry = sessions.get(agentId);
                     if (entry !== undefined) publishSession(entry);
                 } else if (event.type === "message.created") createMessage(agentId, message, runId);
@@ -3611,13 +3628,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     // The failed message comes back carrying its resolution; it keeps the run
     // it already belongs to, and the continued run arrives through events.
-    const failureResolutionAdopt = (
-        agentId: string,
-        { agent, message }: FailureResolutionResponse,
-    ): void => {
-        adoptAgent(agent);
+    const failureResolutionAdopt = (agentId: string, response: FailureResolutionResponse): void => {
+        adoptAgent(response.agent);
         const entry = sessions.get(agentId);
-        if (!messageAdmit(agentId, message, undefined)) {
+        const message = messageAdmit(agentId, response.message, undefined);
+        if (message === undefined) {
             if (entry !== undefined) publishSession(entry);
             return;
         }
@@ -5736,8 +5751,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // message it stays pending at the tail; filed under a
                         // run this session does not hold it would leave the
                         // transcript for that moment.
-                        const message = response.message;
-                        if (!messageAdmit(sessionId, message, null)) {
+                        const message = messageAdmit(sessionId, response.message, null);
+                        if (message === undefined) {
                             const entry = sessions.get(sessionId);
                             if (entry !== undefined) publishSession(entry);
                         } else if (
@@ -5973,12 +5988,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     await ensureMessageUsers([response.message]);
                     return response;
                 },
-                ({ agent, message, run }) => {
+                ({ agent, message: sent, run }) => {
                     adoptAgent(agent);
                     const entry = sessions.get(sessionId);
                     if (entry === undefined) return;
                     if (!entry.runs.has(run.id)) updateRun(sessionId, run);
-                    if (!messageAdmit(sessionId, message, run.id)) publishSession(entry);
+                    const message = messageAdmit(sessionId, sent, run.id);
+                    if (message === undefined) publishSession(entry);
                     else if (!entry.messages.has(message.id))
                         updateMessage(sessionId, message, run.id);
                 },
@@ -7021,13 +7037,19 @@ function ingestHistory(
     entry: SessionEntry,
     runs: readonly (Run & { messages: Message[] })[],
     pending: readonly Message[],
-    admit: (message: Message, runId: string | null) => boolean,
+    admit: (message: Message, runId: string | null) => Message | undefined,
 ): void {
     for (const run of runs) {
-        const messages = run.messages.filter((message) => admit(message, run.id));
+        const messages = run.messages.flatMap((message) => admit(message, run.id) ?? []);
         // A run keeps only what was admitted, so no unreadable payload is held.
         const admitted: Run & { messages: Message[] } = { ...run, messages };
-        entry.runs.set(run.id, messages.length === run.messages.length ? run : admitted);
+        entry.runs.set(
+            run.id,
+            messages.every((message, index) => message === run.messages[index]) &&
+                messages.length === run.messages.length
+                ? run
+                : admitted,
+        );
         for (const message of messages) {
             entry.invalidMessages.delete(message.id);
             entry.messages.set(message.id, { message, runId: run.id });
@@ -7040,7 +7062,9 @@ function ingestHistory(
         const problem = messageProblem(message);
         const id = problem === undefined ? message.id : problem.messageId;
         if (id !== undefined && (entry.messages.has(id) || entry.invalidMessages.has(id))) continue;
-        if (admit(message, null)) entry.messages.set(message.id, { message, runId: null });
+        const admitted = admit(message, null);
+        if (admitted !== undefined)
+            entry.messages.set(admitted.id, { message: admitted, runId: null });
     }
 }
 

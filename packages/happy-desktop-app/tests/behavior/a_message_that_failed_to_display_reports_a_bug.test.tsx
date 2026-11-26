@@ -34,10 +34,7 @@ const CONNECTED = { connection: "connected", daemon: "ready", attempt: 0 } as co
 const PANEL_CLOSED = { open: false, tabs: [] } as const;
 const MODELS_LOADING = { type: "loading" } as const;
 const SESSION = "ses_review";
-const ERRORS = [
-    "/content/1/presentation/questions/0/header: Expected string length greater or equal to 1",
-    "/content/1/presentation/answers: Expected object",
-];
+const ERRORS = ["/content/1/presentation/answers: Expected object"];
 
 const ENTRIES: readonly ConversationEntry[] = [
     {

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { messageProblem } from "./messageValidate.js";
+import { messageAdmission, messageProblem } from "./messageValidate.js";
 
 /** One shared protocol message fixture; see `fixtures/protocol-messages/README.md`. */
 interface Fixture {
@@ -75,6 +75,7 @@ it("covers every role, block type and tool presentation type with a valid fixtur
             "exploration",
             "file_diff",
             "gen_ui",
+            "hologram",
             "media",
             "page",
             "quick_replies",
@@ -108,11 +109,46 @@ it("names Happy Cloud's answerless question card by its ID, time and faults", ()
     expect(messageProblem(card.message)).toEqual({
         messageId: "msgclustercancelled000001",
         createdAt: 1_764_100_000_000,
-        errors: [
-            "/content/1/presentation/questions/0/header: Expected string length greater or equal to 1",
-            "/content/1/presentation/answers: Expected object",
-        ],
+        errors: ["/content/1/presentation/answers: Expected object"],
     });
+});
+
+it("reads a presentation of a type this build does not know as none", () => {
+    const fixture = protocolMessageFixtures("valid").find(
+        (candidate) => candidate.name === "agent-presentation-unknown-type",
+    )!;
+    const admission = messageAdmission(fixture.message);
+    expect(admission).toMatchObject({
+        kind: "valid",
+        presentationsDropped: [{ toolCallId: "toolunknownpresent000001", type: "hologram" }],
+    });
+    const block = (admission as Extract<typeof admission, { kind: "valid" }>).message.content[0]!;
+    expect(block).toMatchObject({ type: "tool_call", id: "toolunknownpresent000001" });
+    expect("presentation" in block).toBe(false);
+    // The payload itself is left as it came.
+    expect(JSON.stringify(fixture.message)).toContain("hologram");
+});
+
+it("still fails a presentation of a known type with a bad shape", () => {
+    const message = structuredClone(
+        protocolMessageFixtures("valid").find(
+            (candidate) => candidate.name === "agent-presentation-search",
+        )!.message,
+    ) as { content: { presentation: { target: unknown } }[] };
+    message.content[0]!.presentation.target = "radio";
+    expect(messageProblem(message)?.errors).toEqual([
+        '/content/0/presentation/target: Expected one of "web", "x"',
+    ]);
+});
+
+it("allows a question with an empty header", () => {
+    const card = structuredClone(
+        protocolMessageFixtures("invalid").find(
+            (fixture) => fixture.name === "cluster-cancelled-question",
+        )!.message,
+    ) as { content: { presentation?: Record<string, unknown> }[] };
+    card.content[1]!.presentation!.answers = {};
+    expect(messageProblem(card)).toBeUndefined();
 });
 
 it("checks a payload once, however often it is asked about", () => {

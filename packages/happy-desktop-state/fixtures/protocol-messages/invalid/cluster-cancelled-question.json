@@ -1,6 +1,6 @@
 {
-    "description": "Happy Cloud's card for a question the person answered in chat instead of on the card (hc-agent history.rs resume_question_after_human_message): an empty header and answers null. This is the message behind \"Cannot read properties of null (reading 'reviewer')\".",
-    "invalidAt": ["/content/1/presentation/questions/0/header", "/content/1/presentation/answers"],
+    "description": "Happy Cloud's card for a question the person answered in chat instead of on the card (hc-agent history.rs resume_question_after_human_message): answers null. This is the message behind \"Cannot read properties of null (reading 'reviewer')\". Its empty header alone would not fail it.",
+    "invalidAt": ["/content/1/presentation/answers"],
     "message": {
         "id": "msgclustercancelled000001",
         "role": "agent",

@@ -10,6 +10,7 @@ import {
 import agentTextReasoning from "../../fixtures/protocol-messages/valid/agent-text-reasoning.json" with { type: "json" };
 import userText from "../../fixtures/protocol-messages/valid/user-text.json" with { type: "json" };
 import clusterCancelledQuestion from "../../fixtures/protocol-messages/invalid/cluster-cancelled-question.json" with { type: "json" };
+import unknownPresentation from "../../fixtures/protocol-messages/valid/agent-presentation-unknown-type.json" with { type: "json" };
 import contentNull from "../../fixtures/protocol-messages/invalid/content-null.json" with { type: "json" };
 
 /*
@@ -26,10 +27,7 @@ afterEach(() => {
 });
 
 const CARD_ID = "msgclustercancelled000001";
-const CARD_ERRORS = [
-    "/content/1/presentation/questions/0/header: Expected string length greater or equal to 1",
-    "/content/1/presentation/answers: Expected object",
-];
+const CARD_ERRORS = ["/content/1/presentation/answers: Expected object"];
 
 /** A fresh copy of one shared fixture's message, as the server would send it. */
 function fixture(file: { readonly message: unknown }): Message {
@@ -183,4 +181,36 @@ it("puts a live message the protocol does not describe in its place, and the nex
         ]),
     );
     expect(warn).toHaveBeenCalledTimes(2);
+});
+
+it("shows a tool call whose presentation this build does not know as a plain call, logged once", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const call = fixture(unknownPresentation);
+    const { daemon, agentId, watched } = await sessionOpen([
+        fakeRun({ id: "run-1", status: "running", messages: [call] }),
+    ]);
+    const tool = () =>
+        watched.elements.find(
+            (element) =>
+                element.kind === "tool_call" && element.toolCallId === "toolunknownpresent000001",
+        );
+    expect(tool()).toBeDefined();
+    expect(tool()).not.toHaveProperty("presentation");
+    expect(rows(watched.elements)).not.toContain(`invalid_message:${call.id}`);
+
+    // The same call arriving again is not logged again.
+    daemon.eventEmit("message.updated", {
+        agentId,
+        runId: "run-1",
+        message: fixture(unknownPresentation),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(tool()).toBeDefined();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]![1]).toEqual({
+        agentId: "agent-a",
+        messageId: call.id,
+        toolCallId: "toolunknownpresent000001",
+        type: "hologram",
+    });
 });

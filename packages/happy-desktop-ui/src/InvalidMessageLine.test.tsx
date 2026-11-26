@@ -40,10 +40,7 @@ const message = (id: string, text: string, human: boolean): ConversationMessageE
     },
 });
 
-const ERRORS = [
-    "/content/1/presentation/questions/0/header: Expected string length greater or equal to 1",
-    "/content/1/presentation/answers: Expected object",
-];
+const ERRORS = ["/content/1/presentation/answers: Expected object"];
 
 const entries: readonly ConversationEntry[] = [
     message("1", "Who should review this?", true),
