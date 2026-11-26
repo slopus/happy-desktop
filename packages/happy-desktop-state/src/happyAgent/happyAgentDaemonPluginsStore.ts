@@ -184,6 +184,8 @@ export function happyAgentDaemonPluginsStoreCreate(
                     current.installations,
                     installationsProject(installed.plugins),
                 ),
+                // Custom plugins belong to a Happy Cloud team; a machine has none.
+                customPlugins: current.customPlugins,
             },
             true,
         );

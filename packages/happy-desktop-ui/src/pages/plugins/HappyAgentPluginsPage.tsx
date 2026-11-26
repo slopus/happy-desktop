@@ -68,7 +68,8 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                             {snapshot.error.message}
                         </Banner>
                     ) : null}
-                    {snapshot.loading || snapshot.plugins.length + installedCount + customCount === 0 ? (
+                    {snapshot.loading ||
+                    snapshot.plugins.length + installedCount + customCount === 0 ? (
                         <EmptyState
                             description={
                                 snapshot.loading
@@ -105,8 +106,8 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                                 <section className="happy-agent-plugins__section">
                                     <h2 className="happy-agent-plugins__heading">Custom</h2>
                                     <p className="happy-agent-plugins__note">
-                                        Made by agents. Ask one to add, change or remove a
-                                        custom plugin.
+                                        Made by agents. Ask one to add, change or remove a custom
+                                        plugin.
                                     </p>
                                     <div className="happy-agent-plugins__list" role="list">
                                         {snapshot.customPlugins.map((plugin) => (
