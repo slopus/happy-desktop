@@ -1,4 +1,5 @@
 import { onboardingGrainFieldShader, onboardingGrainFragmentShader } from "./onboardingGrainShader";
+import { webglContextGet } from "./webglAcceleration";
 
 const vertexSource = `
 attribute vec2 a_position;
@@ -40,23 +41,6 @@ const contextAttributes: WebGLContextAttributes = {
 };
 
 /**
- * Whether WebGL is being rasterized on the CPU. Chromium answers most of this
- * by refusing a context with a major performance caveat; the renderer string
- * covers the software drivers it does not flag. Both are the GPU stack's own
- * report, which Happy does not own and cannot ask any other way.
- */
-function softwareRendered(gl: WebGLRenderingContext): boolean {
-    const info = gl.getExtension("WEBGL_debug_renderer_info");
-    const renderer: unknown = gl.getParameter(
-        info === null ? gl.RENDERER : info.UNMASKED_RENDERER_WEBGL,
-    );
-    return (
-        typeof renderer === "string" &&
-        /swiftshader|llvmpipe|softpipe|software|basic render/iu.test(renderer)
-    );
-}
-
-/**
  * One canvas owns all GPU resources and observers; disposing it releases all of
  * them. Without GPU acceleration the gradient is drawn once and holds still: a
  * software rasterizer spends the whole main thread on it and still stutters.
@@ -69,13 +53,13 @@ export function onboardingGrainRenderer(
     const document = canvas.ownerDocument;
     const view = document.defaultView;
     if (view === null) return;
-    const accelerated = canvas.getContext("webgl", {
-        ...contextAttributes,
-        failIfMajorPerformanceCaveat: true,
-    });
-    const gl = accelerated ?? canvas.getContext("webgl", contextAttributes);
-    if (gl === null) return;
-    const animated = moving && accelerated !== null && !softwareRendered(gl);
+    const context = webglContextGet(
+        (attributes) => canvas.getContext("webgl", attributes),
+        contextAttributes,
+    );
+    if (context === null) return;
+    const { gl } = context;
+    const animated = moving && context.accelerated;
 
     let releaseProgram: (() => void) | undefined;
     let render: (() => void) | undefined;

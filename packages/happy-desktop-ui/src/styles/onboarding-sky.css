@@ -5,29 +5,19 @@
     inset: 0;
     overflow: hidden;
     pointer-events: none;
-    /* Match the shader's 70% inward reach, anchored at the same corners. */
-    background:
-        radial-gradient(
-            circle at 100% 24.5%,
-            color-mix(in srgb, var(--onboarding-grain-3) 70%, transparent),
-            transparent 52.5%
-        ),
-        radial-gradient(
-            circle at 0% 72%,
-            color-mix(in srgb, var(--onboarding-grain-2) 70%, transparent),
-            transparent 52.5%
-        ),
-        radial-gradient(
-            circle at 100% 0%,
-            color-mix(in srgb, var(--onboarding-grain-1) 70%, transparent),
-            transparent 52.5%
-        ),
-        radial-gradient(
-            circle at 0% 100%,
-            color-mix(in srgb, var(--onboarding-grain-0) 70%, transparent),
-            transparent 52.5%
-        ),
-        var(--onboarding-grain-back);
+    /*
+     * Wherever the canvas has not drawn — no WebGL at all, or a lost context —
+     * the shader's own frame 0 shows instead, baked for a 1920×1200 window at
+     * 1× and 2×. It is exact at that size and only ever drawn smaller below
+     * it, so its grain stays sharp. Stretched like the shader, its corner
+     * fields stay on the corners. Its average colour stands in while it
+     * decodes.
+     */
+    background-color: var(--onboarding-grain-still-average);
+    background-image: var(--onboarding-grain-still);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
 }
 
 .happy-onboarding-sky__canvas {
@@ -56,8 +46,8 @@
         );
 }
 
-/* Mirrored as one picture, the fallback glows with the canvas, so the dense
-   corners move off the caption buttons' corner. */
+/* Mirrored as one picture, the still with the canvas, so the dense corners
+   move off the caption buttons' corner. */
 .happy-onboarding-sky[data-mirrored] {
     transform: scaleX(-1);
 }

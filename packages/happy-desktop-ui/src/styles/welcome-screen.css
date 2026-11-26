@@ -128,8 +128,31 @@
     flex: none;
 }
 
+/* The second way forward, as wide as the first. */
+.happy-welcome-screen__alternate {
+    flex: none;
+    min-width: 240px;
+}
+
+/* Two ways forward, then the way back, 36px clear of them. The pointer that
+   clicked the start page's Connect link rests in that gap, not on Back. */
+.happy-welcome-screen__alternate + .happy-welcome-screen__secondary {
+    margin-top: 28px;
+}
+
 .happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__secondary {
     color: var(--onboarding-foreground);
+}
+
+/* The second way forward is a pane of the foreground over the sky. */
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__alternate {
+    border-color: color-mix(in srgb, var(--onboarding-foreground) 16%, transparent);
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    color: var(--onboarding-foreground);
+}
+
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__alternate:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
 }
 
 /* The native palette supplies contrasting ink and an inverse action label. */

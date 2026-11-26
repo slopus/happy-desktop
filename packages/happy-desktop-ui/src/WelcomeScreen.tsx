@@ -42,6 +42,15 @@ export interface WelcomeScreenProps {
     /** Ambient pictures between the backdrop and the deck, never information. */
     readonly decoration?: ReactNode;
     onAction(): void;
+    /**
+     * Another way forward, under the primary action and as large, in the
+     * secondary style. The secondary action then stands apart below the two.
+     */
+    readonly alternateAction?: {
+        readonly label: string;
+        readonly disabled?: boolean;
+        onAction(): void;
+    };
     /** A quieter second way in, under the primary action. */
     readonly secondaryAction?: {
         readonly label: string;
@@ -124,6 +133,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "backdrop",
         "decoration",
         "onAction",
+        "alternateAction",
         "secondaryAction",
         "children",
         "onArtPress",
@@ -184,6 +194,17 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                         >
                             {local.actionLabel ?? "Go Happy"}
                         </Button>
+                        {local.alternateAction ? (
+                            <Button
+                                className="happy-welcome-screen__alternate"
+                                disabled={local.alternateAction.disabled}
+                                onClick={local.alternateAction.onAction}
+                                size="large"
+                                variant="secondary"
+                            >
+                                {local.alternateAction.label}
+                            </Button>
+                        ) : null}
                         {local.secondaryAction ? (
                             <Button
                                 className="happy-welcome-screen__secondary"
@@ -194,7 +215,10 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                 {local.secondaryAction.label}
                                 {local.secondaryAction.tag ? (
                                     <span aria-hidden="true" className="happy-welcome-tag">
-                                        <Badge label={local.secondaryAction.tag} variant="outline" />
+                                        <Badge
+                                            label={local.secondaryAction.tag}
+                                            variant="outline"
+                                        />
                                     </span>
                                 ) : null}
                             </Button>

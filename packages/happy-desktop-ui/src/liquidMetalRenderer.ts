@@ -1,4 +1,5 @@
 import { liquidMetalFragmentShader, liquidMetalVertexShader } from "./liquidMetalShader";
+import { webglContextGet } from "./webglAcceleration";
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string) {
     const shader = gl.createShader(type);
@@ -23,9 +24,9 @@ const contextAttributes: WebGLContextAttributes = {
  * Draws a Liquid Metal mark into `canvas`, filling its square. `field` is the
  * mark's baked field (red the edge, green the alpha); until it has loaded,
  * and where WebGL 2 is missing or lost, nothing is drawn and the caller's
- * still mark underneath shows. It moves at the display's rate while
- * `moving`, on screen and the document visible; otherwise it holds the frame
- * it was on (frame 0 when it never moved). Returns the release of everything
+ * still underneath shows. It moves at the display's rate while `moving`, on a
+ * GPU, on screen and the document visible; otherwise it holds the frame it
+ * was on (frame 0 when it never moved). Returns the release of everything
  * it made, and `onReady` hears when the first frame is up.
  */
 export function liquidMetalRenderer(
@@ -38,8 +39,15 @@ export function liquidMetalRenderer(
     const document = canvas.ownerDocument;
     const view = document.defaultView;
     if (view === null) return;
-    const gl = canvas.getContext("webgl2", contextAttributes);
-    if (gl === null) return;
+    const context = webglContextGet(
+        (attributes) => canvas.getContext("webgl2", attributes),
+        contextAttributes,
+    );
+    if (context === null) return;
+    const { gl } = context;
+    // Only a GPU moves it; elsewhere it holds frame 0 (see webglContextGet).
+    const animated = moving && context.accelerated;
+    if (!animated) clock.seconds = 0;
 
     let release: (() => void) | undefined;
     let render: (() => void) | undefined;
@@ -126,7 +134,7 @@ export function liquidMetalRenderer(
         frame = view.requestAnimationFrame(loop);
     };
     const settle = () => {
-        if (!moving || !visible || document.hidden || render === undefined) stop();
+        if (!animated || !visible || document.hidden || render === undefined) stop();
         else if (frame === undefined) frame = view.requestAnimationFrame(loop);
     };
     const resize = () => {
