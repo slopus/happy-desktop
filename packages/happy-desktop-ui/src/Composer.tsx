@@ -586,6 +586,7 @@ export function Composer(props: ComposerProps) {
     /* Whether a file drag this composer will take is currently in flight. */
     const [dropActive, setDropActive] = useState(false);
     const restoreFocusAfterSend = useRef(false);
+    const composingRef = useRef(false);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const busy = Boolean(props.disabled || props.pending);
     const mentionsSupported = () => props.mentions !== undefined;
@@ -1061,6 +1062,8 @@ export function Composer(props: ComposerProps) {
         });
     };
     const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        const isComposing = (e: ReactKeyboardEvent) =>
+            composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229;
         const historyDirection = historyChordOf(event.nativeEvent);
         if (historyDirection) {
             // Prevented here, the browser runs neither its own Undo nor the
@@ -1071,10 +1074,25 @@ export function Composer(props: ComposerProps) {
         }
         if (
             event.key === "Tab" &&
+            !event.shiftKey &&
+            audienceEnabled() &&
+            !busy &&
+            !isComposing(event)
+        ) {
+            // Keep Tab as audience switch only while the draft is still empty;
+            // once it has text, Tab belongs to the draft and to mention selection.
+            if (draft.text.length === 0) {
+                event.preventDefault();
+                audienceToggle();
+                return;
+            }
+        }
+        if (
+            event.key === "Tab" &&
             event.shiftKey &&
             audienceEnabled() &&
             !busy &&
-            !event.nativeEvent.isComposing
+            !isComposing(event)
         ) {
             event.preventDefault();
             audienceToggle();
@@ -1084,7 +1102,7 @@ export function Composer(props: ComposerProps) {
             (event.key === "Backspace" || event.key === "Delete") &&
             // Cmd+Backspace takes the whole line, mentions and all.
             !event.metaKey &&
-            !event.nativeEvent.isComposing &&
+            !isComposing(event) &&
             draft.tags.length > 0 &&
             tagDelete(event.currentTarget, event.key === "Backspace")
         ) {
@@ -1105,13 +1123,16 @@ export function Composer(props: ComposerProps) {
                 );
                 return;
             }
-            if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) {
+            if (
+                (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) &&
+                !isComposing(event)
+            ) {
                 event.preventDefault();
                 const command = activeCommand();
                 if (command) selectCommand(command.id);
                 return;
             }
-            if (event.key === "Escape") {
+            if (event.key === "Escape" && !isComposing(event)) {
                 // The whole draft is the command being typed, so dismissing the
                 // popover and clearing what opened it are the same act.
                 event.preventDefault();
@@ -1134,20 +1155,21 @@ export function Composer(props: ComposerProps) {
             }
             if (
                 (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) &&
-                list.length > 0
+                list.length > 0 &&
+                !isComposing(event)
             ) {
                 event.preventDefault();
                 const mention = activeMention();
                 if (mention) selectMention(mention);
                 return;
             }
-            if (event.key === "Escape") {
+            if (event.key === "Escape" && !isComposing(event)) {
                 event.preventDefault();
                 closeMention();
                 return;
             }
         }
-        if (emojiOpen && event.key === "Escape") {
+        if (emojiOpen && event.key === "Escape" && !isComposing(event)) {
             event.preventDefault();
             closeEmoji();
             textareaEl.current?.focus();
@@ -1161,17 +1183,12 @@ export function Composer(props: ComposerProps) {
          * draft with something in it stops the run just the same, even though
          * the send control has taken the circle back from stop.
          */
-        if (
-            event.key === "Escape" &&
-            props.running &&
-            props.onStop &&
-            !event.nativeEvent.isComposing
-        ) {
+        if (event.key === "Escape" && props.running && props.onStop && !isComposing(event)) {
             event.preventDefault();
             props.onStop();
             return;
         }
-        if (event.key === "Enter" && !event.shiftKey) {
+        if (event.key === "Enter" && !event.shiftKey && !isComposing(event)) {
             event.preventDefault();
             send();
         }
@@ -1358,10 +1375,17 @@ export function Composer(props: ComposerProps) {
             disabled={props.disabled}
             readOnly={props.pending}
             onBlur={() => {
+                composingRef.current = false;
                 rememberSelection();
                 props.onFocusChange?.(false);
             }}
             onClick={rememberSelection}
+            onCompositionStart={() => {
+                composingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+                composingRef.current = false;
+            }}
             onFocus={() => props.onFocusChange?.(true)}
             onInput={onInput}
             onKeyDown={onKeyDown}
