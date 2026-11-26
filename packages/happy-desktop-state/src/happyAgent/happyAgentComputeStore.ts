@@ -904,7 +904,9 @@ export function happyAgentComputeStoreCreate(deps: {
                         name: machine.name,
                         description: machine.description ?? "",
                         ...concurrencyDraftOf(machine.concurrency, machine.maxConcurrency),
-                        commandMemory: commandMemoryText(machine.commandLimits?.memoryBytes ?? null),
+                        commandMemory: commandMemoryText(
+                            machine.commandLimits?.memoryBytes ?? null,
+                        ),
                         commandProcesses:
                             machine.commandLimits?.processes == null
                                 ? ""

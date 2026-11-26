@@ -537,8 +537,8 @@ function HappyAgentComputeCommandLimits(props: {
         <Box className="happy-agent-compute__concurrency">
             <span className="happy-agent-compute__field-label">Each command</span>
             <span className="happy-agent-compute__meta" data-wrap="">
-                The most one command and everything it starts may use. Leave a field empty for
-                the server's default. Linux and Windows enforce them; macOS can't.
+                The most one command and everything it starts may use. Leave a field empty for the
+                server's default. Linux and Windows enforce them; macOS can't.
             </span>
             <Box className="happy-agent-compute__limit">
                 <TextField
