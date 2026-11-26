@@ -11,6 +11,7 @@ import agentTextReasoning from "../../fixtures/protocol-messages/valid/agent-tex
 import userText from "../../fixtures/protocol-messages/valid/user-text.json" with { type: "json" };
 import clusterCancelledQuestion from "../../fixtures/protocol-messages/invalid/cluster-cancelled-question.json" with { type: "json" };
 import unknownPresentation from "../../fixtures/protocol-messages/valid/agent-presentation-unknown-type.json" with { type: "json" };
+import userMissingMode from "../../fixtures/protocol-messages/invalid/user-missing-mode.json" with { type: "json" };
 import contentNull from "../../fixtures/protocol-messages/invalid/content-null.json" with { type: "json" };
 
 /*
@@ -62,7 +63,7 @@ async function sessionOpen(
     reader.followingSet?.(true);
     await vi.waitFor(() => expect(watched.session?.historyLoading).not.toBe(true));
     await vi.waitFor(() => expect(watched.elements.length).toBeGreaterThan(0));
-    return { daemon, agentId: agent.id, watched };
+    return { daemon, connection, agentId: agent.id, watched };
 }
 
 /** What each row is, by kind and the message it stands for. */
@@ -215,4 +216,57 @@ it("shows a tool call whose presentation this build does not know as a plain cal
         toolCallId: "toolunknownpresent000001",
         type: "hologram",
     });
+});
+
+it("moves a pending placeholder into the run that accepts it, and keeps it there past a late reply", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { daemon, connection, agentId, watched } = await sessionOpen([
+        fakeRun({
+            id: "run-0",
+            status: "completed",
+            endedAt: 2,
+            messages: [
+                fakeAgentMessage({ id: "reply-0", content: [{ type: "text", text: "Hi." }] }),
+            ],
+        }),
+    ]);
+    // The server's answer to this send, and its events, carry a user message with no mode.
+    let reply: (() => void) | undefined;
+    let sentId: string | undefined;
+    const unreadable = (id: string) => ({ ...fixture(userMissingMode), id }) as Message;
+    (daemon.client as unknown as { sendMessage: unknown }).sendMessage = (
+        _agentId: string,
+        request: { id: string },
+    ) =>
+        new Promise((resolve) => {
+            sentId = request.id;
+            reply = () =>
+                resolve({ cursor: "cursor-999999999999", message: unreadable(request.id) });
+        });
+    connection.sendMessage(agentId, "hello");
+    await vi.waitFor(() => expect(sentId).toBeDefined());
+    const id = sentId!;
+    const placeholder = () =>
+        watched.elements.find(
+            (element) => element.kind === "invalid_message" && element.messageId === id,
+        );
+
+    daemon.eventEmit("message.created", { agentId, runId: null, message: unreadable(id) });
+    await vi.waitFor(() => expect(placeholder()?.groupId).toBe(`pending:${id}`));
+
+    daemon.eventEmit("run.started", {
+        agentId,
+        run: fakeRun({ id: "run-1", status: "running", startedAt: 3 }),
+        acceptedMessageIds: [id],
+    });
+    await vi.waitFor(() => expect(placeholder()?.groupId).toBe("run-1"));
+
+    // The send's reply, and a replayed creation, both name no run.
+    reply!();
+    daemon.eventEmit("message.created", { agentId, runId: null, message: unreadable(id) });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(placeholder()?.groupId).toBe("run-1");
+    expect(watched.elements.filter((element) => element.kind === "invalid_message")).toHaveLength(
+        1,
+    );
 });

@@ -459,7 +459,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const held = entry.invalidMessages.get(id);
         entry.invalidMessages.set(id, {
             id,
-            runId: runId !== undefined ? runId : (held?.runId ?? replaced?.runId ?? null),
+            // Acceptance is final for a message ID, as `updateMessage` holds:
+            // a late send reply naming no run leaves it in the run that took it.
+            runId: runId ?? held?.runId ?? replaced?.runId ?? null,
             createdAt: problem.createdAt ?? held?.createdAt ?? replaced?.message.createdAt ?? null,
             errors: problem.errors,
         });
@@ -3720,6 +3722,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const entry = sessions.get(agentId);
         let nonUserAccepted = false;
         for (const messageId of messageIds) {
+            // A placeholder the run accepted moves into it, as its message would.
+            const invalid = entry?.invalidMessages.get(messageId);
+            if (invalid !== undefined) {
+                if (invalid.runId === null)
+                    entry!.invalidMessages.set(messageId, { ...invalid, runId });
+                continue;
+            }
             const current = entry?.messages.get(messageId);
             if (current?.message.role === "user") {
                 entry!.messages.set(messageId, {
