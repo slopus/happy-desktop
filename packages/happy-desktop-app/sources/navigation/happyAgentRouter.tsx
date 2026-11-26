@@ -3,6 +3,7 @@ import {
     createRoute,
     createRouter,
     type ErrorComponentProps,
+    Navigate,
     Outlet,
     redirect,
     useMatches,
@@ -58,6 +59,7 @@ import {
     type MediaWindowOpener,
 } from "happy-desktop-ui";
 import { artifactBesideOpen } from "../artifactOpen";
+import { useAccountFeatureEnabled } from "../accountFeatureEnabled";
 import { messageReferenceEntities, messageReferenceSurfaceNames } from "../messageReferences";
 import {
     AppHappyAgentView,
@@ -685,6 +687,29 @@ const routeTree = rootRoute.addChildren([
     settingsSectionRoute,
 ]);
 
+/**
+ * Leaves an open Pipelines page for the server's chats once the person turns
+ * Pipelines off for their account, wherever they turned them off. It replaces
+ * the page rather than adding a step that Back would return to.
+ */
+function PipelinesOffLeave(props: {
+    readonly happyAgents: AppHappyAgentDirectoryStore;
+    readonly happyAgentId: string;
+}) {
+    const directory = useSyncExternalStore(
+        props.happyAgents.subscribe,
+        props.happyAgents.get,
+        props.happyAgents.get,
+    );
+    const happyAgent =
+        directory.happyAgents.find((entry) => entry.id === props.happyAgentId) ??
+        directory.happyAgents[0];
+    const enabled = useAccountFeatureEnabled(happyAgent, "pipelines");
+    return enabled ? null : (
+        <Navigate params={{ happyAgentId: props.happyAgentId }} replace to="/chats/$happyAgentId" />
+    );
+}
+
 function HappyAgentWorkspaceLayout() {
     // Read loosely because this component renders under several routes, which
     // makes every context member optional; the provider supplies all of them
@@ -718,7 +743,7 @@ function HappyAgentWorkspaceLayout() {
     // so the very first render of a deep-linked URL can arrive with an empty
     // context; the provider's context lands on the next synchronous pass.
     if (!context.happyAgents) return null;
-    return (
+    const view = (
         <AppHappyAgentView
             appearance={context.appearance}
             browserContent={context.browserContent}
@@ -940,6 +965,17 @@ function HappyAgentWorkspaceLayout() {
                 })
             }
         />
+    );
+    return (
+        <>
+            {shows.pipelines ? (
+                <PipelinesOffLeave
+                    happyAgentId={params.happyAgentId ?? happyAgentDefaultId(context)}
+                    happyAgents={context.happyAgents}
+                />
+            ) : null}
+            {view}
+        </>
     );
 }
 
