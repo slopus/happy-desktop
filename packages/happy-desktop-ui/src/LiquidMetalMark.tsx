@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
-import { cloudLiquidMetalFieldUrl, cloudMarkUrl } from "./assets";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import cloudLiquidMetalStillUrl from "./assets/brand/cloud-liquid-metal-still.webp?inline";
+import { cloudLiquidMetalFieldUrl } from "./assets";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
 import { liquidMetalRenderer } from "./liquidMetalRenderer";
 
@@ -25,8 +26,10 @@ export interface LiquidMetalMarkProps {
  * It draws only its own square and nothing around the cloud, so it sits on
  * any surface. The mask's edge field comes baked, so a frame is one texture
  * read and the stripes' arithmetic per pixel. It moves at the display's own
- * rate; until its field has loaded, and where WebGL 2 is unavailable, the
- * cloud's outline stands still in the text colour.
+ * rate. Until its field has loaded, and where WebGL 2 is unavailable, the
+ * shader's own first frame stands in, baked losslessly at twice the largest
+ * size drawn (208px), so the canvas takes over on the same picture. Inline,
+ * so it is on screen with the page rather than after a fetch.
  */
 export function LiquidMetalMark(props: LiquidMetalMarkProps) {
     const reducedMotion = useSyncExternalStore(
@@ -51,11 +54,6 @@ export function LiquidMetalMark(props: LiquidMetalMarkProps) {
             setReady,
         );
     }, [moving]);
-    const style = {
-        width: `${props.size}px`,
-        height: `${props.size}px`,
-        "--happy-liquid-metal-mark-shape": `url("${cloudMarkUrl}")`,
-    } as CSSProperties;
     return (
         <span
             aria-hidden="true"
@@ -64,9 +62,15 @@ export function LiquidMetalMark(props: LiquidMetalMarkProps) {
             data-motion={moving ? "full" : "still"}
             data-ready={ready ? "" : undefined}
             data-testid={props["data-testid"]}
-            style={style}
+            style={{ width: `${props.size}px`, height: `${props.size}px` }}
         >
-            <span className="happy-liquid-metal-mark__still" />
+            <img
+                alt=""
+                className="happy-liquid-metal-mark__still"
+                decoding="sync"
+                draggable={false}
+                src={cloudLiquidMetalStillUrl}
+            />
             <canvas ref={canvas} className="happy-liquid-metal-mark__canvas" />
         </span>
     );

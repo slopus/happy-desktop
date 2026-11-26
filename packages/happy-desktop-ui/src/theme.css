@@ -968,7 +968,9 @@
 }
 
 /* Native StartSpec / StartViewController artwork palette, not application
-   surface aliases. Kept verbatim so the WebGL and native backgrounds match. */
+   surface aliases. Kept verbatim so the WebGL and native backgrounds match.
+   The still is that shader's frame 0 in this palette, for when WebGL cannot
+   draw, and the average is its mean colour. */
 :root,
 .happy-theme-light,
 [data-backdrop="sky"][data-appearance="light"],
@@ -979,6 +981,11 @@
     --onboarding-grain-1: #c4b5fd;
     --onboarding-grain-2: #93c5fd;
     --onboarding-grain-3: #a78bfa;
+    --onboarding-grain-still: image-set(
+        url("./assets/backdrops/onboarding-sky-light.webp") 1x,
+        url("./assets/backdrops/onboarding-sky-light-2x.webp") 2x
+    );
+    --onboarding-grain-still-average: #dedefe;
     --onboarding-foreground: #14112e;
     --onboarding-action-label: #ffffff;
     --onboarding-accent: #4f46e5;
@@ -993,6 +1000,11 @@
         --onboarding-grain-1: #7c3aed;
         --onboarding-grain-2: #1d4ed8;
         --onboarding-grain-3: #2a00ff;
+        --onboarding-grain-still: image-set(
+            url("./assets/backdrops/onboarding-sky-dark.webp") 1x,
+            url("./assets/backdrops/onboarding-sky-dark-2x.webp") 2x
+        );
+        --onboarding-grain-still-average: #17124a;
         --onboarding-foreground: #ffffff;
         --onboarding-action-label: #14112e;
         --onboarding-accent: #a5b4fc;
@@ -1010,6 +1022,11 @@
     --onboarding-grain-1: #7c3aed;
     --onboarding-grain-2: #1d4ed8;
     --onboarding-grain-3: #2a00ff;
+    --onboarding-grain-still: image-set(
+        url("./assets/backdrops/onboarding-sky-dark.webp") 1x,
+        url("./assets/backdrops/onboarding-sky-dark-2x.webp") 2x
+    );
+    --onboarding-grain-still-average: #17124a;
     --onboarding-foreground: #ffffff;
     --onboarding-action-label: #14112e;
     --onboarding-accent: #a5b4fc;

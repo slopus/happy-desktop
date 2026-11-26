@@ -487,6 +487,14 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 data-testid="cloud-connect"
                                 onAction={props.onContinue}
                                 onArtPress={props.onLogoPress}
+                                {...(view.emailSignIn && !test
+                                    ? {
+                                          alternateAction: {
+                                              label: "Continue with email",
+                                              onAction: props.onEmailOpen,
+                                          },
+                                      }
+                                    : {})}
                                 secondaryAction={{
                                     label: "Back",
                                     // The welcome is the first step: Back sinks the

@@ -49,7 +49,9 @@ interface OnboardingSkyProps {
  * without GPU acceleration.
  * Where the caption buttons sit top-right, the gradient is mirrored so its
  * dense corners are top-left and bottom-right, clear of them.
- * The CSS corner glows remain underneath if WebGL is unavailable or lost.
+ * It draws its first frame before the window first paints, so it never fades
+ * in. The same frame, baked with its grain, lies underneath for when WebGL is
+ * unavailable or lost.
  */
 export function OnboardingSky(props: OnboardingSkyProps) {
     const scopeAppearance = useContext(ThemeAppearanceContext);
