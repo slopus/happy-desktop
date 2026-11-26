@@ -24,6 +24,22 @@ export function orderKeyDecimalBetween(before: string | null, after: string | nu
     }
 }
 
+/**
+ * A key that sorts before `first` in plain code-unit order, whichever host
+ * minted it, for a row placed at the top of a list ahead of the host's answer.
+ *
+ * Ahead of a Happy Agent's decimal key it is the key that daemon mints there,
+ * so its answer changes nothing. A Happy Cloud server mints base-62 keys (`a0`,
+ * `Zz`), where the decimal port reads letters as digits past nine and returns
+ * `"undefined"`, which sorts the row last; ahead of one of those it is the
+ * first character lowered by one, a placeholder the server's own key replaces.
+ */
+export function orderKeyBefore(first: string | null): string {
+    if (first === null || /^[0-9]+$/u.test(first)) return orderKeyDecimalBetween(null, first);
+    const head = first.charCodeAt(0);
+    return Number.isNaN(head) || head === 0 ? "" : String.fromCharCode(head - 1);
+}
+
 function orderKeyAbove(rest: string): string {
     let prefix = "";
     for (let index = 0; ; index += 1) {
