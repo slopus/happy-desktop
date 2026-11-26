@@ -3,7 +3,9 @@ import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent }
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { compactCount, changeCountLabel } from "./countText";
 import { ContextMenu } from "./ContextMenu";
-import { Icon } from "./Icon";
+import { Avatar } from "./Avatar";
+import { ChangeStats } from "./ChangeStats";
+import { Icon, type IconName } from "./Icon";
 import { fileTreeRowModel, type FileTreeRow } from "./fileTreeRows";
 import { ScrollArea } from "./Scrollbar";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
@@ -48,11 +50,32 @@ export type FileTreeNode = {
     readonly expanded?: boolean;
     /** Section only: how many files it holds, stated on its heading. */
     readonly count?: number;
+    /**
+     * Section only: the checkout the section lists, when the listing holds
+     * several. Its heading then wears the repository's picture beside its name,
+     * the branch after it, and what the checkout changed in all.
+     */
+    readonly checkout?: FileTreeCheckout;
     /** Directory only: a page request is in flight. */
     readonly loading?: boolean;
     /** Directory only: more children exist beyond those loaded. */
     readonly hasMore?: boolean;
     readonly children?: readonly FileTreeNode[];
+};
+/** A section heading's checkout: one repository, where it is checked out, and its change. */
+export type FileTreeCheckout = {
+    /** The repository's picture, or the initials and placeholder that stand in for one. */
+    readonly mark: {
+        readonly initials: string;
+        readonly imageUrl?: string;
+        readonly placeholderSeed?: string;
+        /** A glyph in place of a picture, such as a folder for work outside any repository. */
+        readonly icon?: IconName;
+    };
+    /** Where it is checked out — its branch, and the computer when that is worth saying. */
+    readonly detail?: string;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 };
 /**
  * What was held down when a row was chosen. A listing where several files can
@@ -545,13 +568,14 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
     };
     if (row.kind === "entry" && node.kind === "section") {
         const count = node.count ?? 0;
+        const checkout = node.checkout;
         // A heading the reader folds, not a folder: it wears no icon and no
         // status, only its name and how much is under it, so it reads as where
         // one run of files ends and the next begins.
         return (
             <div
                 aria-expanded={node.expanded === true}
-                aria-label={`${node.name}, ${String(count)} ${count === 1 ? "file" : "files"}`}
+                aria-label={`${node.name}${checkout?.detail ? `, ${checkout.detail}` : ""}, ${String(count)} ${count === 1 ? "file" : "files"}`}
                 aria-level={row.depth + 1}
                 aria-posinset={row.posInSet}
                 // A heading is never picked, which is what an absent
@@ -563,7 +587,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                 data-happy-desktop-ui="file-tree-section"
                 data-row={row.id}
                 onClick={() => onToggle?.(node.id, !node.expanded)}
-                title={node.name}
+                title={checkout?.detail ? `${node.name} · ${checkout.detail}` : node.name}
                 onFocus={() => onFocusRow(row.id)}
                 onKeyDown={onKeyDown}
                 ref={onElement}
@@ -580,12 +604,47 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                         <Icon name={node.expanded ? "chevron-down" : "chevron-right"} size={12} />
                     </span>
                 </span>
+                {checkout ? (
+                    <span
+                        aria-hidden="true"
+                        className="happy-file-tree__section-mark"
+                        data-happy-desktop-ui="file-tree-section-mark"
+                    >
+                        <Avatar
+                            icon={checkout.mark.icon}
+                            imageUrl={checkout.mark.imageUrl}
+                            initials={checkout.mark.initials}
+                            placeholderSeed={checkout.mark.placeholderSeed}
+                            size="xs"
+                            style={{ width: 16, height: 16, borderRadius: 4 }}
+                            type="agent"
+                        />
+                    </span>
+                ) : null}
                 <span
                     className="happy-file-tree__section-name"
+                    data-checkout={checkout ? (checkout.detail ? "detail" : "") : undefined}
                     data-happy-desktop-ui="file-tree-section-name"
                 >
                     {node.name}
                 </span>
+                {checkout?.detail ? (
+                    <span
+                        className="happy-file-tree__section-detail"
+                        data-happy-desktop-ui="file-tree-section-detail"
+                    >
+                        {checkout.detail}
+                    </span>
+                ) : null}
+                {checkout &&
+                ((checkout.addedLines ?? 0) > 0 || (checkout.deletedLines ?? 0) > 0) ? (
+                    <ChangeStats
+                        added={checkout.addedLines ?? 0}
+                        className="happy-file-tree__section-stats"
+                        data-happy-desktop-ui="file-tree-section-stats"
+                        deleted={checkout.deletedLines ?? 0}
+                    />
+                ) : null}
                 <span
                     aria-hidden="true"
                     className="happy-file-tree__section-count"

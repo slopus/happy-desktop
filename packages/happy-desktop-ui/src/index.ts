@@ -215,6 +215,7 @@ export {
     FileTree,
     FileTreeFamilyIcon,
     fileTreeFamily,
+    type FileTreeCheckout,
     type FileTreeFamily,
     type FileTreeGitStatus,
     type FileTreeNode,

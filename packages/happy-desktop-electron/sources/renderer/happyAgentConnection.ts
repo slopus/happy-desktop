@@ -187,6 +187,9 @@ export interface HappyAgentSession {
     readonly checkouts: (
         agentId: string,
     ) => import("happy-desktop-state").HappyAgentCheckoutsStore | undefined;
+    readonly taskCheckouts: (
+        agentIds: readonly string[],
+    ) => import("happy-desktop-state").HappyAgentCheckoutsStore | undefined;
     readonly plugins: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
     readonly genUiActions: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
     readonly dailyUsage: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
@@ -785,6 +788,7 @@ export function happyAgentConnectionOpen(input: {
                     members: () => client.members(),
                     userProfile: (userId) => client.userProfile(userId),
                     checkouts: (agentId) => client.checkouts(agentId),
+                    taskCheckouts: (agentIds) => client.taskCheckouts(agentIds),
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),

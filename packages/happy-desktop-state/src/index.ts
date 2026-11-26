@@ -261,6 +261,7 @@ export * from "./happyAgent/happyAgentRepositoriesStore.js";
 export * from "./happyAgent/happyAgentOnboardingSettingsStore.js";
 export * from "./happyAgent/happyAgentPaymentsStore.js";
 export * from "./happyAgent/happyAgentCheckoutsStore.js";
+export * from "./happyAgent/happyAgentTaskCheckoutsStore.js";
 export * from "./happyAgent/happyAgentPluginsStore.js";
 export * from "./happyAgent/happyAgentDaemonPluginsStore.js";
 export * from "./happyAgent/happyAgentGenUiActions.js";
@@ -300,8 +301,15 @@ export * from "./happyAgent/happyAgentActivity.js";
 export * from "./happyAgent/happyAgentTerminalStore.js";
 export * from "./happyAgent/happyAgentHostServices.js";
 export * from "./happyAgent/happyAgentTypes.js";
-export { happyAgentBotSubtasks, happyAgentTaskDepths } from "./happyAgent/happyAgentBotSubtasks.js";
-export type { HappyAgentSubtaskRoot } from "./happyAgent/happyAgentBotSubtasks.js";
+export {
+    happyAgentBotSubtasks,
+    happyAgentSubtaskTree,
+    happyAgentTaskDepths,
+} from "./happyAgent/happyAgentBotSubtasks.js";
+export type {
+    HappyAgentSubtaskRoot,
+    HappyAgentSubtaskTree,
+} from "./happyAgent/happyAgentBotSubtasks.js";
 export {
     HAPPY_AGENT_TASKS_VERSION,
     HAPPY_AGENT_TASK_CREATE_VERSION,

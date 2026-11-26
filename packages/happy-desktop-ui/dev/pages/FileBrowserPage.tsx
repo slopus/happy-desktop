@@ -285,6 +285,85 @@ function LiveBrowser(props: { entries: FileTreeBuildEntry[]; height?: number; wi
         props.width ?? 320,
     );
 }
+/** One checkout's section, the way the app lists a task's checkouts. */
+function checkoutSection(
+    id: string,
+    name: string,
+    detail: string | undefined,
+    files: readonly FileTreeBuildEntry[],
+    layout: FileBrowserLayout,
+    expanded = true,
+): FileTreeNode {
+    // The files are addressed under the section, so two checkouts of one
+    // repository never share a row identity.
+    const entries = files.map((file) => ({
+        ...file,
+        path: `${id}/${file.path}`,
+        displayPath: file.path,
+    }));
+    return {
+        id,
+        kind: "section",
+        name,
+        count: files.length,
+        expanded,
+        checkout: {
+            mark: { initials: name.slice(0, 1).toUpperCase(), placeholderSeed: id },
+            ...(detail === undefined ? {} : { detail }),
+            addedLines: files.reduce((sum, file) => sum + (file.addedLines ?? 0), 0),
+            deletedLines: files.reduce((sum, file) => sum + (file.deletedLines ?? 0), 0),
+        },
+        ...(expanded
+            ? {
+                  children:
+                      layout === "tree"
+                          ? fileTreeBuild(entries, {
+                                opened: new Set(),
+                                closed: new Set(),
+                                defaultDepth: Number.POSITIVE_INFINITY,
+                            })
+                          : fileTreeFlatten(entries),
+              }
+            : {}),
+    };
+}
+const checkoutFiles: readonly FileTreeBuildEntry[] = [
+    {
+        path: "crates/hc-api/src/routes/files.rs",
+        gitStatus: "modified",
+        addedLines: 84,
+        deletedLines: 3,
+    },
+    { path: "API.md", gitStatus: "modified", addedLines: 12 },
+];
+function checkoutNodes(layout: FileBrowserLayout): FileTreeNode[] {
+    return [
+        checkoutSection(
+            "checkout:desktop",
+            "happy-desktop",
+            "happy/per-checkout-changes",
+            changed.slice(0, 3),
+            layout,
+        ),
+        checkoutSection(
+            "checkout:cluster",
+            "happy-cluster",
+            "happy/file-revision",
+            checkoutFiles,
+            layout,
+        ),
+        checkoutSection(
+            "checkout:agent",
+            "happy-agent-with-a-very-long-repository-name",
+            "happy/a-branch-name-long-enough-to-give-way-first",
+            changed.slice(3, 4),
+            layout,
+            false,
+        ),
+        checkoutSection("checkout:docs", "happy-docs", undefined, changed.slice(4, 5), layout),
+    ];
+}
+const checkoutFileCount = checkoutNodes("flat").reduce((sum, node) => sum + (node.count ?? 0), 0);
 /** A tiered listing whose headings fold, the way the product's do. */
 function LiveTieredBrowser() {
     const [layout, layoutSet] = useState<FileBrowserLayout>("flat");
@@ -491,6 +570,36 @@ export function FileBrowserPage() {
                             onSearchQueryChange={() => undefined}
                             scope="changed"
                             searchQuery=""
+                        />,
+                        520,
+                    )}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="A task working in several repositories lists each checkout under its own heading · 16px repository picture · name, then the branch, which gives way first · the checkout's line totals and file count"
+                label="Checkouts"
+                number="13"
+                stage="surface"
+            >
+                <div style={{ display: "flex", gap: "12px" }}>
+                    {panelFrame(
+                        <FileBrowser
+                            count={checkoutFileCount}
+                            layout="flat"
+                            nodes={checkoutNodes("flat")}
+                            onReviewOpen={() => undefined}
+                            scope="changed"
+                            selectedId="checkout:cluster/API.md"
+                        />,
+                        520,
+                    )}
+                    {panelFrame(
+                        <FileBrowser
+                            count={checkoutFileCount}
+                            layout="tree"
+                            nodes={checkoutNodes("tree")}
+                            scope="changed"
                         />,
                         520,
                     )}

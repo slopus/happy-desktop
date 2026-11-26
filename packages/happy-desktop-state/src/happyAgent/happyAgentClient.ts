@@ -192,6 +192,7 @@ import {
     happyAgentCheckoutsStoreCreate,
     type HappyAgentCheckoutsStore,
 } from "./happyAgentCheckoutsStore.js";
+import { happyAgentTaskCheckoutsStoreCreate } from "./happyAgentTaskCheckoutsStore.js";
 import {
     happyAgentVoiceSettingsStoreCreate,
     type HappyAgentVoiceSettingsStore,
@@ -377,6 +378,12 @@ export interface HappyAgentWorkspaceClient {
      * Happy Cloud.
      */
     checkouts(agentId: string): HappyAgentCheckoutsStore | undefined;
+    /**
+     * Every checkout one task works in, its subtasks' included: the task's
+     * agent first, then each subtask's. The same store for as long as the same
+     * agents are asked for; undefined anywhere but Happy Cloud.
+     */
+    taskCheckouts(agentIds: readonly string[]): HappyAgentCheckoutsStore | undefined;
     /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
@@ -868,6 +875,11 @@ export function happyAgentWorkspaceClientCreate(
     let membersStore: HappyAgentMembersStore | undefined;
     const userProfileStores = new Map<string, HappyAgentUserProfileStore>();
     const checkoutStores = new Map<string, HappyAgentCheckoutsStore>();
+    /** The last tree asked for, by its task's agent. */
+    const taskCheckoutStores = new Map<
+        string,
+        { readonly key: string; readonly store: HappyAgentCheckoutsStore }
+    >();
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
@@ -1487,6 +1499,20 @@ export function happyAgentWorkspaceClientCreate(
                 });
                 checkoutStores.set(agentId, store);
             }
+            return store;
+        },
+        taskCheckouts(agentIds) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const root = agentIds[0];
+            if (root === undefined || !deps.cloudRequest) return undefined;
+            const key = agentIds.join("\u0000");
+            const known = taskCheckoutStores.get(root);
+            if (known?.key === key) return known.store;
+            const store = happyAgentTaskCheckoutsStoreCreate({
+                agentIds,
+                checkouts: (agentId) => workspace.checkouts(agentId),
+            });
+            taskCheckoutStores.set(root, { key, store });
             return store;
         },
         taskSettings() {

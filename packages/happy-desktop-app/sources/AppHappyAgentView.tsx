@@ -22,6 +22,7 @@ import {
     conversationFileDiff,
     gptLiveStoreNoop,
     happyAgentBotSubtasks,
+    happyAgentSubtaskTree,
     happyExternalLinkFormat,
     happyShareLinkFormat,
     isHappyUrl,
@@ -365,6 +366,7 @@ import {
     type GenUiSecretHost,
     type IconName,
     type MenuItem,
+    type FileTreeCheckout,
     type FileTreeNode,
     type KeyboardShortcut,
     type SidebarItem,
@@ -777,6 +779,10 @@ export interface AppHappyAgentSession {
     /** The repositories one cloud agent checked out; absent or undefined anywhere but Happy Cloud. */
     readonly checkouts?: (
         agentId: string,
+    ) => import("happy-desktop-state").HappyAgentCheckoutsStore | undefined;
+    /** Every checkout of a task's agents, its subtasks' included; undefined anywhere but Happy Cloud. */
+    readonly taskCheckouts?: (
+        agentIds: readonly string[],
     ) => import("happy-desktop-state").HappyAgentCheckoutsStore | undefined;
     /** The Gen UI actions a Happy Cloud server runs, such as secret forms; absent or undefined elsewhere. */
     readonly genUiActions?: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
@@ -5370,6 +5376,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : {})}
                     {...(active.session.viewers ? { viewers: active.session.viewers } : {})}
                     {...(active.session.checkouts ? { checkoutsOf: active.session.checkouts } : {})}
+                    {...(active.session.taskCheckouts
+                        ? { taskCheckoutsOf: active.session.taskCheckouts }
+                        : {})}
                     restarting={
                         active.session.connection.get().drain?.intent === "restart" ||
                         (active.id === updateHost?.id &&
@@ -7578,6 +7587,8 @@ interface HappyAgentWorkspaceSurfaceProps {
     artifacts?: HappyAgentArtifacts;
     /** The repositories a cloud agent checked out; absent anywhere but Happy Cloud. */
     checkoutsOf?: (agentId: string) => HappyAgentCheckoutsStore | undefined;
+    /** Every checkout of a cloud task's agents; absent anywhere but Happy Cloud. */
+    taskCheckoutsOf?: (agentIds: readonly string[]) => HappyAgentCheckoutsStore | undefined;
     /** Shows an HTML artifact opened beside the conversation as a site of its own. */
     artifactPage?: HtmlPreviewRenderer;
     /** Opens one artifact in the viewer. */
@@ -7752,6 +7763,24 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         workspace.list.tasksArchived,
         props.groupId,
         props.chatId,
+    );
+    // The open chat and every subtask under it: the checkouts any of them
+    // works in are this task's, and Changes lists each of them.
+    const taskTree =
+        props.chatId === undefined
+            ? undefined
+            : happyAgentSubtaskTree(
+                  [...workspace.list.bots, ...tasksOpenable(workspace.list)],
+                  props.chatId,
+              );
+    const taskAgentIds = taskTree?.agentIds ?? (props.chatId === undefined ? [] : [props.chatId]);
+    // The client hands back the same store for as long as the tree is the same.
+    const taskCheckoutsStore =
+        taskAgentIds.length === 0 ? undefined : props.taskCheckoutsOf?.(taskAgentIds);
+    const taskCheckouts = useSyncExternalStore(
+        taskCheckoutsStore?.subscribe ?? checkoutsSubscribeNoop,
+        taskCheckoutsStore?.get ?? checkoutsNoop,
+        taskCheckoutsStore?.get ?? checkoutsNoop,
     );
     // Finder is offered where the host can hand a path to it: a remote Happy
     // Agent's host lists no applications, because its files are not on this Mac.
@@ -8003,6 +8032,62 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
               addedLines: change.added,
               deletedLines: change.deleted,
           }));
+    // Every checkout the task works in, each under its own heading, where it
+    // works in more than its own.
+    const changesCheckouts =
+        openGroup === undefined
+            ? undefined
+            : changesCheckoutsOf({
+                  openGroup,
+                  projects: rows,
+                  agentIds: new Set(taskAgentIds),
+                  workspaceIds: new Set(taskTree?.workspaceIds ?? []),
+                  cloudCheckouts: taskCheckouts.checkouts,
+                  ownChanges: panelChanges,
+                  ownFromGit: floatyFromGit,
+                  cwd: conversationCwd,
+              });
+    /**
+     * Opens one row of Changes. A file of another workspace takes the reader
+     * there, as its place in the floaty does, with that file open and the
+     * workspace's changes beside it; `pin` is a double click.
+     */
+    const changeRowOpen = (path: string, pin: boolean): void => {
+        const target =
+            workspace.fileScope === "changed" ? changesCheckouts?.targets.get(path) : undefined;
+        if (target?.kind === "workspace") {
+            if (!happyAgentOnline()) return;
+            const group = rows
+                .flatMap((project) => [project, ...project.worktrees])
+                .find((candidate) => candidate.id === target.groupId);
+            workspaceChangesShowOnOpen(props.workspace, group);
+            const kind = fileTabKind(target.path);
+            if (pin) props.workspace.fileOpen(target.groupId, target.path, kind);
+            props.onFileSelect(
+                target.groupId,
+                props.workspace.get().groupResume?.get(target.groupId) ??
+                    group?.conversations[0]?.id,
+                target.path,
+                kind,
+            );
+            return;
+        }
+        // A file the conversation edited outside a checkout opens as
+        // everything those edits did to it.
+        if (
+            target?.kind === "edits" ||
+            (target === undefined && !floatyFromGit && workspace.fileScope === "changed")
+        ) {
+            props.workspace.panel.changeViewOpen(path);
+            return;
+        }
+        if (!openGroup || !happyAgentOnline()) return;
+        const kind = fileTabKind(path);
+        // A double click pins the preview; the address is unchanged when the
+        // first click already selected this file.
+        if (pin) props.workspace.fileOpen(openGroup.id, path, kind);
+        props.onFileSelect(openGroup.id, props.chatId, path, kind);
+    };
     // The places this chat changed files, its own first.
     const floatyOwnPlace =
         openGroup === undefined
@@ -8844,31 +8929,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             expanded={workspace.fileTreeExpanded}
                             collapsed={workspace.fileTreeCollapsed}
                             layout={workspace.fileLayout}
-                            onFileSelect={(path) => {
-                                // A file the conversation edited outside a checkout
-                                // opens as everything those edits did to it.
-                                if (!floatyFromGit && workspace.fileScope === "changed")
-                                    props.workspace.panel.changeViewOpen(path);
-                                else if (openGroup && happyAgentOnline())
-                                    props.onFileSelect(
-                                        openGroup.id,
-                                        props.chatId,
-                                        path,
-                                        fileTabKind(path),
-                                    );
-                            }}
-                            onFileOpen={(path) => {
-                                if (!floatyFromGit && workspace.fileScope === "changed")
-                                    props.workspace.panel.changeViewOpen(path);
-                                else if (openGroup && happyAgentOnline()) {
-                                    const kind = fileTabKind(path);
-                                    // A double click pins the preview; the address
-                                    // is unchanged when the first click already
-                                    // selected this file.
-                                    props.workspace.fileOpen(openGroup.id, path, kind);
-                                    props.onFileSelect(openGroup.id, props.chatId, path, kind);
-                                }
-                            }}
+                            {...(changesCheckouts === undefined
+                                ? {}
+                                : { changeSections: changesCheckouts.sections })}
+                            onFileSelect={(path) => changeRowOpen(path, false)}
+                            onFileOpen={(path) => changeRowOpen(path, true)}
                             {...(fileReveal === undefined ? {} : { onFileReveal: fileReveal.path })}
                             {...(workspace.panelFile && fileReveal !== undefined
                                 ? {
@@ -8879,6 +8944,14 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                   }
                                 : {})}
                             onFilePreprocess={(path) => {
+                                // Only a file of the open group is read ahead
+                                // here; another workspace's is read once the
+                                // reader is there.
+                                const target =
+                                    workspace.fileScope === "changed"
+                                        ? changesCheckouts?.targets.get(path)
+                                        : undefined;
+                                if (target !== undefined && target.kind !== "open") return;
                                 if (openGroup && happyAgentOnline())
                                     props.workspace.filePreprocess(
                                         openGroup.id,
@@ -10585,6 +10658,188 @@ function workFloatyCreatedPlaces(
     );
 }
 
+/**
+ * Where a changed file listed under a checkout opens: in the open group, as
+ * its own file or as what the conversation's edits did to it, or in another
+ * workspace of this Happy Agent, which the reader is taken to.
+ */
+type ChangesFileTarget =
+    | { readonly kind: "open"; readonly path: string }
+    | { readonly kind: "edits"; readonly path: string }
+    | { readonly kind: "workspace"; readonly groupId: HappyAgentGroupId; readonly path: string };
+
+/**
+ * One checkout a task works in, as Changes lists it under its own heading.
+ * Each change's `path` is the row's identity in the listing and `displayPath`
+ * the path inside the checkout, so two checkouts of one repository never
+ * share a row.
+ */
+interface ChangesCheckoutSection {
+    readonly id: string;
+    readonly name: string;
+    readonly checkout: FileTreeCheckout;
+    readonly changes: readonly HappyAgentPanelChange[];
+}
+
+/** What Changes lists for a task working in several checkouts, and where each row opens. */
+interface ChangesCheckouts {
+    readonly sections: readonly ChangesCheckoutSection[];
+    readonly targets: ReadonlyMap<string, ChangesFileTarget>;
+}
+
+/** A checkout section's line totals, read off its files. */
+function changesCheckoutTotals(changes: readonly HappyAgentPanelChange[]): {
+    readonly addedLines: number;
+    readonly deletedLines: number;
+} {
+    return {
+        addedLines: changes.reduce((sum, change) => sum + (change.addedLines ?? 0), 0),
+        deletedLines: changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0),
+    };
+}
+
+/** A project's picture, as a checkout heading wears it. */
+function changesProjectMark(project: HappyAgentProjectGroup): FileTreeCheckout["mark"] {
+    return {
+        initials: project.name.slice(0, 1).toUpperCase(),
+        placeholderSeed: project.id,
+        ...(project.kind === "home" ? { icon: "home" as const } : {}),
+        ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
+    };
+}
+
+/** Whether a path the conversation edited lies inside a folder. */
+function pathWithin(path: string, folder: string): boolean {
+    const base = folder.replace(/\/+$/u, "");
+    return base !== "" && path.startsWith(`${base}/`);
+}
+
+/**
+ * Every checkout the open chat's task works in, each under its own heading,
+ * or undefined while it works in no checkout but its own — then Changes lists
+ * the open group as it always has.
+ *
+ * The open group comes first: its Git change, or, in a folder Git does not
+ * keep, what the conversation's edits did there. Then, on this machine, each
+ * other workspace a chat of the task runs in or created; and on Happy Cloud,
+ * each repository its agents checked out. An edit inside one of those is
+ * listed under that checkout, not twice.
+ */
+function changesCheckoutsOf(input: {
+    readonly openGroup: OpenGroup;
+    readonly projects: readonly HappyAgentProjectGroup[];
+    /** The open chat and each subtask under it, with the workspaces they run in. */
+    readonly agentIds: ReadonlySet<string>;
+    readonly workspaceIds: ReadonlySet<string>;
+    readonly cloudCheckouts: readonly HappyAgentCheckout[];
+    /** The open group's own listing, Git's or the conversation's edits. */
+    readonly ownChanges: readonly HappyAgentPanelChange[];
+    readonly ownFromGit: boolean;
+    readonly cwd: string | undefined;
+}): ChangesCheckouts | undefined {
+    const sections: ChangesCheckoutSection[] = [];
+    const targets = new Map<string, ChangesFileTarget>();
+    const others: { readonly path: string; readonly section: ChangesCheckoutSection }[] = [];
+    for (const project of input.projects) {
+        const places = [
+            { group: project, worktree: undefined },
+            ...project.worktrees.map((worktree) => ({ group: worktree, worktree })),
+        ];
+        for (const { group, worktree } of places) {
+            if (group.id === input.openGroup.id) continue;
+            const ours =
+                input.workspaceIds.has(group.id) ||
+                (worktree?.creatorAgentId != null && input.agentIds.has(worktree.creatorAgentId));
+            if (!ours) continue;
+            const prefix = `\u0000checkout\u0000${group.id}/`;
+            const changes = (group.changes ?? []).map((change) => {
+                const id = `${prefix}${change.path}`;
+                targets.set(id, { kind: "workspace", groupId: group.id, path: change.path });
+                return { ...change, path: id, displayPath: change.path };
+            });
+            const section: ChangesCheckoutSection = {
+                id: `\u0000checkout\u0000${group.id}`,
+                name: project.name,
+                checkout: {
+                    mark: changesProjectMark(project),
+                    ...(worktree ? { detail: worktree.name } : {}),
+                    ...changesCheckoutTotals(changes),
+                },
+                changes,
+            };
+            others.push({ path: group.path, section });
+        }
+    }
+    for (const checkout of input.cloudCheckouts) {
+        if (checkout.status === "failed") continue;
+        // A checkout is a folder of the task's workspace, so its files open
+        // there by the path that folder gives them.
+        const folder = checkout.folder.replace(/\/+$/u, "");
+        const changes = (checkout.changes?.files ?? []).map((change) => {
+            const path = folder === "" ? change.path : `${folder}/${change.path}`;
+            targets.set(path, { kind: "open", path });
+            return { ...change, path, displayPath: change.path };
+        });
+        others.push({
+            path: input.cwd === undefined ? folder : `${input.cwd.replace(/\/+$/u, "")}/${folder}`,
+            section: {
+                id: `\u0000checkout\u0000${checkout.id}`,
+                name: checkout.repository.name,
+                checkout: {
+                    mark: {
+                        initials: checkout.repository.name.slice(0, 1).toUpperCase(),
+                        placeholderSeed: checkout.repository.id,
+                        ...(checkout.repository.avatar
+                            ? { imageUrl: checkout.repository.avatar.url }
+                            : {}),
+                    },
+                    ...(checkout.branch === "" ? {} : { detail: checkout.branch }),
+                    ...changesCheckoutTotals(changes),
+                },
+                changes,
+            },
+        });
+    }
+    if (others.length === 0) return undefined;
+    const own = input.ownFromGit
+        ? input.ownChanges
+        : input.ownChanges.filter(
+              (change) => !others.some((other) => pathWithin(change.path, other.path)),
+          );
+    if (own.length > 0) {
+        const project = input.ownFromGit
+            ? input.projects.find(
+                  (candidate) =>
+                      candidate.id === input.openGroup.id ||
+                      candidate.worktrees.some((worktree) => worktree.id === input.openGroup.id),
+              )
+            : undefined;
+        const worktree = project?.worktrees.find(
+            (candidate) => candidate.id === input.openGroup.id,
+        );
+        const folder = input.openGroup.path.replace(/\/+$/u, "");
+        for (const change of own)
+            targets.set(change.path, {
+                kind: input.ownFromGit ? "open" : "edits",
+                path: change.path,
+            });
+        sections.push({
+            id: `\u0000checkout\u0000${input.openGroup.id}`,
+            name: project
+                ? project.name
+                : folder.slice(folder.lastIndexOf("/") + 1) || input.openGroup.name,
+            checkout: {
+                mark: project ? changesProjectMark(project) : { initials: "", icon: "folder-open" },
+                ...(worktree ? { detail: worktree.name } : {}),
+                ...changesCheckoutTotals(own),
+            },
+            changes: own,
+        });
+    }
+    sections.push(...others.map((other) => other.section));
+    return { sections, targets };
+}
+
 /** A floaty row that opens an artifact rather than an agent's chat. */
 const FLOATY_ARTIFACT_PREFIX = "artifact:";
 
@@ -12017,7 +12272,12 @@ function changeTierNodes(
     tiers: readonly HappyAgentChangeTier[],
     layout: HappyAgentFileLayout,
     expansion: FileTreeExpansion,
-): { nodes: FileTreeNode[]; sections: ReadonlyMap<string, HappyAgentChangeTierId> } {
+): {
+    nodes: FileTreeNode[];
+    sections: ReadonlyMap<string, HappyAgentChangeTierId>;
+    /** How many files are listed, every section's included. */
+    files: number;
+} {
     const arrange = (files: readonly FileTreeBuildEntry[]): FileTreeNode[] =>
         layout === "tree" ? fileTreeBuild(files, expansion) : fileTreeFlatten(files);
     const assignment = happyAgentChangeTiersAssign(entries, tiers);
@@ -12036,7 +12296,79 @@ function changeTierNodes(
             ...(tier.collapsed ? {} : { children: arrange(files) }),
         };
     });
-    return { nodes: [...arrange(assignment.primary), ...tierNodes], sections };
+    return {
+        nodes: [...arrange(assignment.primary), ...tierNodes],
+        sections,
+        files: entries.length,
+    };
+}
+
+/**
+ * Changes for a task working in several checkouts: one heading per checkout,
+ * folding like a tier, with that checkout's files under it split into the
+ * reader's tiers as one checkout's are. Tiers match a file by its path inside
+ * its checkout, and a query narrows each checkout's files the same way.
+ */
+function changeCheckoutNodes(
+    checkouts: readonly ChangesCheckoutSection[],
+    query: string,
+    tiers: readonly HappyAgentChangeTier[],
+    layout: HappyAgentFileLayout,
+    expansion: FileTreeExpansion,
+): ReturnType<typeof changeTierNodes> {
+    const sections = new Map<string, HappyAgentChangeTierId>();
+    let files = 0;
+    const nodes = checkouts.flatMap((checkout): FileTreeNode[] => {
+        const built = checkout.changes.map(changeEntry);
+        const entries =
+            query === ""
+                ? built
+                : built.filter((entry) => filePathMatches(entry.displayPath ?? entry.path, query));
+        // A query that empties a checkout leaves its heading out with its files.
+        if (query !== "" && entries.length === 0) return [];
+        files += entries.length;
+        const expanded = !expansion.closed.has(checkout.id);
+        let children: FileTreeNode[] = [];
+        if (expanded) {
+            const assignment = happyAgentChangeTiersAssign(
+                entries.map((entry) => ({ path: entry.displayPath ?? entry.path, entry })),
+                tiers,
+            );
+            const arrange = (
+                claimed: readonly { readonly entry: FileTreeBuildEntry }[],
+            ): FileTreeNode[] => {
+                const list = claimed.map(({ entry }) => entry);
+                return layout === "tree" ? fileTreeBuild(list, expansion) : fileTreeFlatten(list);
+            };
+            children = [
+                ...arrange(assignment.primary),
+                ...assignment.tiers.map(({ tier, files: claimed }): FileTreeNode => {
+                    const id = `${checkout.id}\u0000tier\u0000${tier.id}`;
+                    sections.set(id, tier.id);
+                    return {
+                        id,
+                        kind: "section",
+                        name: tier.name.trim() === "" ? "Untitled tier" : tier.name.trim(),
+                        count: claimed.length,
+                        expanded: !tier.collapsed,
+                        ...(tier.collapsed ? {} : { children: arrange(claimed) }),
+                    };
+                }),
+            ];
+        }
+        return [
+            {
+                id: checkout.id,
+                kind: "section",
+                name: checkout.name,
+                count: entries.length,
+                expanded,
+                checkout: checkout.checkout,
+                ...(expanded ? { children } : {}),
+            },
+        ];
+    });
+    return { nodes, sections, files };
 }
 
 /** The Devices tab: one subscription to the open workspace's bridges. */
@@ -12098,6 +12430,11 @@ function HappyAgentPanelBody(props: {
     };
     changes: readonly HappyAgentPanelChange[];
     changesStatus?: OpenGroup["changesStatus"];
+    /**
+     * Every checkout the task works in, each listed under its own heading in
+     * place of `changes`; absent while it works in its own alone.
+     */
+    changeSections?: readonly ChangesCheckoutSection[];
     /**
      * The tiers Changes lists secondary files under. Read here rather than by
      * the workspace surface, so editing a tier's patterns redraws the listing
@@ -12205,9 +12542,13 @@ function HappyAgentPanelBody(props: {
     // first, then one section per tier that claimed anything. A query narrows
     // the entries before they are split, so a section whose files all fail to
     // match leaves with them.
+    const changeSections = props.changeSections;
     const changeListing = useMemo(
-        () => changeTierNodes(entries, tiers, props.layout, expansion),
-        [entries, tiers, props.layout, expansion],
+        () =>
+            changeSections === undefined
+                ? changeTierNodes(entries, tiers, props.layout, expansion)
+                : changeCheckoutNodes(changeSections, query, tiers, props.layout, expansion),
+        [changeSections, entries, query, tiers, props.layout, expansion],
     );
     const searchResults = props.search.results;
     const nodes: FileTreeNode[] = useMemo(
@@ -12235,9 +12576,15 @@ function HappyAgentPanelBody(props: {
     const loading = all ? props.workspaceFilesLoading : props.changesStatus === "loading";
     const changesUnavailable = props.changesStatus === "unavailable";
     const changesStale = !all && props.changesStatus === "stale";
-    const addedLines = props.changes.reduce((sum, change) => sum + (change.addedLines ?? 0), 0);
-    const deletedLines = props.changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
-    const count = !all && (changesUnavailable || loading) ? undefined : entries.length;
+    const listed = changeSections?.flatMap((section) => section.changes) ?? props.changes;
+    const addedLines = listed.reduce((sum, change) => sum + (change.addedLines ?? 0), 0);
+    const deletedLines = listed.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
+    const count =
+        !all && (changesUnavailable || loading)
+            ? undefined
+            : !all && changeSections !== undefined
+              ? changeListing.files
+              : entries.length;
     // Only the tabs this side is holding: one the reader moved into the main
     // content is drawn there, and the panel neither lists it nor renders it.
     const panelTools = toolTabsPlaced(props.panel, "panel");
@@ -12522,7 +12869,12 @@ function HappyAgentPanelBody(props: {
                             onLayoutChange={(layout: HappyAgentFileLayout) =>
                                 props.onLayoutChange(layout)
                             }
-                            onReviewOpen={props.onReviewOpen}
+                            // A review reads the open group's own Git change.
+                            // Beside other checkouts that is only part of what
+                            // is listed, and where Git keeps none it is nothing.
+                            {...(changeSections === undefined || props.changesStatus !== undefined
+                                ? { onReviewOpen: props.onReviewOpen }
+                                : {})}
                             onDirectoryPrefetch={props.onDirectoryPrefetch}
                             onFilePrefetch={props.onFilePreprocess}
                             onReveal={props.onFileReveal}

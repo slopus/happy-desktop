@@ -2,6 +2,7 @@ import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type { UserError } from "../types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
+import type { HappyAgentGitChangedFile } from "./happyAgentTypes.js";
 import {
     HappyCloudRequestRefusal,
     type HappyCloudRequest,
@@ -28,11 +29,18 @@ export interface HappyAgentCheckoutChanges {
     readonly deletions: number;
     /** False when Git could not compare it, so zero counts do not claim a clean checkout. */
     readonly comparable: boolean;
+    /**
+     * Each changed file, by its path inside the checkout's folder, compared
+     * against the commit the checkout started from.
+     */
+    readonly files: readonly HappyAgentGitChangedFile[];
 }
 
 /** One repository checked out into a cloud agent's workspace, and how that went. */
 export interface HappyAgentCheckout {
     readonly id: string;
+    /** The agent whose workspace holds it. */
+    readonly agentId: string;
     /** Where it is, relative to the workspace root. */
     readonly folder: string;
     readonly repository: HappyAgentCheckoutRepository;
@@ -82,6 +90,37 @@ function textOrNull(value: unknown): string | null {
 
 function count(value: unknown): number {
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+const FILE_STATUSES = new Set(["added", "deleted", "modified", "renamed", "untracked"]);
+
+/**
+ * One changed file of a checkout's scan, as happy-agent's Git state names it.
+ * Git's rarer statuses (copied, conflicted, a type or submodule change) read as
+ * modified, the way a local checkout's do.
+ */
+function checkoutFileRead(
+    value: unknown,
+    base: string | null,
+): HappyAgentGitChangedFile | undefined {
+    const file = recordOf(value);
+    const path = textOrNull(file?.path);
+    if (!file || path === null) return undefined;
+    const status = (
+        typeof file.status === "string" && FILE_STATUSES.has(file.status) ? file.status : "modified"
+    ) as HappyAgentGitChangedFile["status"];
+    const previousPath = textOrNull(file.previousPath);
+    const lines = file.binary !== true && typeof file.insertions === "number";
+    const added = count(file.insertions);
+    const deleted = count(file.deletions);
+    return {
+        path,
+        ...(previousPath === null ? {} : { previousPath }),
+        ...(base === null ? {} : { baseRevision: base }),
+        status,
+        revision: `${status}:${String(added)}:${String(deleted)}`,
+        ...(lines ? { addedLines: added, deletedLines: deleted } : {}),
+    };
 }
 
 function accessRead(value: unknown): HappyAgentCheckoutAccess {
@@ -232,8 +271,15 @@ export function happyAgentCheckoutsStoreCreate(deps: {
         const repository = repositoryRead(checkout?.repository);
         if (!checkout || id === null || !repository) return undefined;
         const changes = recordOf(checkout.changes);
+        const base = textOrNull(changes?.base);
+        const files: HappyAgentGitChangedFile[] = [];
+        for (const entry of Array.isArray(changes?.files) ? changes.files : []) {
+            const file = checkoutFileRead(entry, base);
+            if (file) files.push(file);
+        }
         return {
             id,
+            agentId: deps.agentId,
             folder: textOrNull(checkout.folder) ?? "",
             repository,
             branch: textOrNull(checkout.branch) ?? "",
@@ -253,6 +299,7 @@ export function happyAgentCheckoutsStoreCreate(deps: {
                       insertions: count(changes.insertions),
                       deletions: count(changes.deletions),
                       comparable: changes.comparison === "ready",
+                      files,
                   }
                 : null,
         };

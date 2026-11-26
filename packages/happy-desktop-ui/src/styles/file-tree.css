@@ -422,7 +422,49 @@
 }
 
 .happy-file-tree__section:hover .happy-file-tree__chevron,
-.happy-file-tree__section:hover .happy-file-tree__section-count {
+.happy-file-tree__section:hover /* A checkout's heading: the repository's picture in the lane a file icon
+   takes, its name in full weight, then the branch it is on, which is the part
+   that gives way when the column is narrow. */
+.happy-file-tree__section-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 4px;
+}
+
+.happy-file-tree__section-name[data-checkout="detail"] {
+    flex: 0 1 auto;
+}
+
+.happy-file-tree__section-detail {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    margin-left: 6px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-file-tree__section-stats {
+    margin-right: 6px;
+}
+
+.happy-file-tree__section-stats [data-tone="added"] {
+    color: var(--git-added-text);
+}
+
+.happy-file-tree__section-stats [data-tone="deleted"] {
+    color: var(--git-removed-text);
+}
+
+.happy-file-tree__section-count {
     color: var(--text);
 }
 
