@@ -33,6 +33,8 @@ const LOCAL_ROUTES = new Set([
     "/open-in-targets",
     "/open-in",
     "/file-reveal",
+    "/file-open",
+    "/file-open-applications",
     "/attachment",
     "/attachment-source-reachable",
     "/workspace-file-bytes",

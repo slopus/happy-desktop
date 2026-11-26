@@ -434,6 +434,7 @@ export {
     type FileReveal,
     type LinkContextMenuProps,
 } from "./LinkContextMenu";
+export { FileOpenContext, type FileOpen, type FileOpenApplication } from "./PresentedFileMenu";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export {
     fileTreeBuild,

@@ -157,6 +157,7 @@ import type {
     HappyAgentCompute,
     HappyAgentRepositoryBinding,
     HappyAgentContextGauge,
+    HappyAgentFileApplication,
     HappyAgentOpenInTarget,
     HappyAgentWorkspaceFiles,
     HappyAgentWorkspaceFilesUnavailable,
@@ -1868,6 +1869,23 @@ export interface HappyAgentWorkspaceStore {
     fileReveal(groupId: HappyAgentGroupId, path: string): void;
     /** Selects the file a `happy://` or `happy-file://` file link names in the machine's file manager. */
     fileLinkReveal(link: HappyAgentFileLink): void;
+    /**
+     * The applications a file may be opened in, the one a double-click uses
+     * first; none when the host does not open this file or the group is not on
+     * this machine. A list is kept per group and kind of file for the session,
+     * so the next file of that kind is answered at once; asking again while the
+     * host is still answering waits for the same answer.
+     */
+    fileApplicationsRead(
+        groupId: HappyAgentGroupId,
+        path: string,
+    ): Promise<readonly HappyAgentFileApplication[]>;
+    /**
+     * Opens a file in one of those applications, by its id. `path` is relative
+     * to the group's root, or absolute. When the host cannot open it,
+     * `fileOpenFailure` says why.
+     */
+    fileApplicationOpen(groupId: HappyAgentGroupId, path: string, applicationId: string): void;
     /** Puts away the notice about a reference that could not be followed. */
     fileOpenFailureDismiss(): void;
     /**
@@ -2697,6 +2715,8 @@ export function happyAgentWorkspaceStoreCreate(
     let fileTreeCollapsed: ReadonlySet<string> = new Set();
     /** Counts the asks to show a region, so each one is its own event. */
     let fileRevealRequests = 0;
+    /** What `fileApplicationsRead` was answered, or is waiting for, by group and kind of file. */
+    const fileApplications = new Map<string, Promise<readonly HappyAgentFileApplication[]>>();
     /** The parts of a new bot the store holds itself; the composer is a store of its own. */
     interface BotCreateDraft {
         readonly name: string;
@@ -8476,6 +8496,41 @@ export function happyAgentWorkspaceStoreCreate(
                         path: link.path,
                         message: happyAgentUserError(error).message,
                     };
+                    recompute();
+                });
+        },
+        fileApplicationsRead(groupId, path) {
+            if (disposed) return Promise.resolve([]);
+            const name = path.slice(path.lastIndexOf("/") + 1);
+            const kind = name.includes(".")
+                ? name.slice(name.lastIndexOf(".") + 1).toLowerCase()
+                : "";
+            if (kind.length === 0) return Promise.resolve([]);
+            const key = `${groupId}\n${kind}`;
+            const known = fileApplications.get(key);
+            if (known !== undefined) return known;
+            const asked = client.fileApplicationsRead(groupId, path).then(
+                (applications) => {
+                    // No applications, and a refusal, may be this one file's
+                    // (an executable, say), not its kind's: neither is kept.
+                    if (applications.length === 0) fileApplications.delete(key);
+                    return applications;
+                },
+                () => {
+                    fileApplications.delete(key);
+                    return [];
+                },
+            );
+            fileApplications.set(key, asked);
+            return asked;
+        },
+        fileApplicationOpen(groupId, path, applicationId) {
+            if (disposed) return;
+            void client
+                .fileApplicationOpen(groupId, path, applicationId)
+                .catch((error: unknown) => {
+                    if (disposed) return;
+                    fileOpenFailure = { path, message: happyAgentUserError(error).message };
                     recompute();
                 });
         },

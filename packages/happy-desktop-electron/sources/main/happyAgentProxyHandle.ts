@@ -9,7 +9,13 @@ import {
     type HappyAgentDaemonClient,
 } from "./happyAgentDaemonClient";
 import { isAbsolute, relative, resolve } from "node:path";
-import { fileReveal, openInRun, openInTargetsRead } from "./openIn";
+import {
+    fileOpen,
+    fileOpenApplicationsRead,
+    fileReveal,
+    openInRun,
+    openInTargetsRead,
+} from "./openIn";
 import { happyAgentDaemonHealthProject } from "./happyAgentHttpProxy";
 import type { HappyAgentRequestMilestone } from "./happyAgentRequestTiming";
 import type { HappyAgentDaemonClientOptions } from "./happyAgentDaemonClient";
@@ -168,6 +174,23 @@ export async function happyAgentProxyHandle(
                 throw new Error("That path is outside this workspace.");
             await fileReveal(target);
             writeJson(response, 200, {});
+            return true;
+        }
+        if (method === "POST" && (path === "/file-open" || path === "/file-open-applications")) {
+            if (connectionId)
+                throw new Error("A file on another machine cannot be opened on this Mac.");
+            const body = await bodyReadJson(request);
+            const target = await localFileResolve(
+                client,
+                requiredString(body.workspaceId, "workspaceId"),
+                requiredString(body.path, "path"),
+            );
+            if (path === "/file-open") {
+                await fileOpen(target, requiredString(body.appId, "appId"));
+                writeJson(response, 200, {});
+            } else {
+                writeJson(response, 200, { applications: await fileOpenApplicationsRead(target) });
+            }
             return true;
         }
         if (method === "POST" && path === "/attachment") {
@@ -484,6 +507,27 @@ async function attachmentSourceReachable(
     } catch {
         return false;
     }
+}
+
+/**
+ * Where a file named in a workspace is on this Mac, as `/file-reveal` reads it:
+ * an absolute path anywhere, or a relative one inside the workspace. A
+ * workspace in a container has no files here.
+ */
+async function localFileResolve(
+    client: HappyAgentProxyClient,
+    workspaceId: string,
+    filePath: string,
+): Promise<string> {
+    const { workspace } = await client.getWorkspace(workspaceId);
+    if (workspace.compute.type !== "host")
+        throw new Error("A file in a container cannot be opened on this Mac.");
+    const root = workspace.compute.path;
+    const target = isAbsolute(filePath) ? resolve(filePath) : resolve(root, filePath);
+    const inside = relative(root, target);
+    if (!isAbsolute(filePath) && (inside.startsWith("..") || isAbsolute(inside)))
+        throw new Error("That path is outside this workspace.");
+    return target;
 }
 
 async function workspaceFileExists(

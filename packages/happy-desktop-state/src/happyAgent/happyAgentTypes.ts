@@ -1088,6 +1088,18 @@ export interface HappyAgentOpenInTarget {
 }
 
 /**
+ * One application a file may be opened in, as Finder's Open With lists it. The
+ * id is the host's own and is only ever handed back to it.
+ */
+export interface HappyAgentFileApplication {
+    readonly id: string;
+    /** Its name as the machine shows it, in the reader's language. */
+    readonly name: string;
+    /** Whether it is the application a double-click opens the file in. */
+    readonly isDefault: boolean;
+}
+
+/**
  * The applications a host offers, with the one opened most recently. The recent
  * application belongs to the same answer because a control that wears the
  * last-used one has to know it before it can draw itself.

@@ -11,6 +11,7 @@ import type { ConversationSummary, HappyAgentSystemMonitorStore } from "happy-de
 import { conversationGenUiHostCreate } from "./conversationGenUiHost";
 import {
     HappyAgentSystemMonitorSurfacePage,
+    FileOpenContext,
     FileRevealContext,
     LinkCopyContext,
     MessageSettingsLinksContext,
@@ -298,6 +299,7 @@ import {
     filePathMatches,
     fileNameCompare,
     type FileLinkOpenHandler,
+    type FileOpen,
     type FileReveal,
     type FileOpenHandler,
     type LinkOpenHandler,
@@ -7713,6 +7715,17 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                   link: (link) => props.workspace.fileLinkReveal(link),
               }
             : undefined;
+    // A file a chat was shown opens in an application this Mac offers for it
+    // on the same terms: the host has to be this Mac, and it checks the file.
+    const fileOpen: FileOpen | undefined =
+        openGroup && fileReveal
+            ? {
+                  applicationsRead: (path) =>
+                      props.workspace.fileApplicationsRead(openGroup.id, path),
+                  open: (path, applicationId) =>
+                      props.workspace.fileApplicationOpen(openGroup.id, path, applicationId),
+              }
+            : undefined;
     /** Reveals into the workspace a file tab reads, which a linked file names itself. */
     const fileTabReveal = (file: HappyAgentFileTabSnapshot): FileReveal | undefined =>
         fileReveal && {
@@ -8680,7 +8693,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         deviceBridgeSupport && openGroup ? props.workspace.deviceBridges(openGroup.id) : undefined;
 
     return (
-        <FileRevealContext.Provider value={fileReveal}>
+        <FileHostProvider open={fileOpen} reveal={fileReveal}>
             <AppShell
                 embedded
                 panelResizable
@@ -9432,6 +9445,19 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     </>
                 )}
             </AppShell>
+        </FileHostProvider>
+    );
+}
+
+/** What the host does with a file a transcript names, for every pane below it. */
+function FileHostProvider(props: {
+    readonly reveal: FileReveal | undefined;
+    readonly open: FileOpen | undefined;
+    readonly children: ReactNode;
+}) {
+    return (
+        <FileRevealContext.Provider value={props.reveal}>
+            <FileOpenContext.Provider value={props.open}>{props.children}</FileOpenContext.Provider>
         </FileRevealContext.Provider>
     );
 }

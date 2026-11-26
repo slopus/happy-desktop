@@ -1,6 +1,5 @@
 import {
     Fragment,
-    useContext,
     useRef,
     useState,
     useSyncExternalStore,
@@ -9,13 +8,11 @@ import {
 } from "react";
 import type { ConversationMediaItem, ConversationMediaLayout } from "happy-desktop-state";
 import { artifactSizeText } from "./pages/artifacts/artifactPresentation";
-import { ContextMenu } from "./ContextMenu";
-import { fileRevealMenuItems, fileRevealMenuSelect } from "./FileRevealMenu";
-import { FileRevealContext } from "./LinkContextMenu";
 import { conversationMediaPlan, mediaFlowPointSize } from "./mediaLayout";
 import { MediaFlow } from "./MediaFlow";
 import { MediaVideoTile } from "./MediaVideoTile";
 import { MediaTree } from "./MediaTree";
+import { usePresentedFileMenu } from "./PresentedFileMenu";
 import {
     mediaItemsFramed,
     mediaItemsUnframed,
@@ -225,7 +222,7 @@ export type ConversationMediaProps = {
     onItemOpen?: (index: number) => void;
 };
 
-/** The media menu's own row; the rest are any file's (`fileRevealMenuItems`). */
+/** The media menu's own row; the rest are any presented file's (`usePresentedFileMenu`). */
 const MEDIA_MENU_OPEN = "open";
 
 /** What kind of file a presented item is, in a word, from its declared media type. */
@@ -269,49 +266,28 @@ export function ConversationMedia(props: ConversationMediaProps) {
     const open = props.onItemOpen;
     const className = ["happy-conversation-media", props.className].filter(Boolean).join(" ");
     /* Every item is a file on the agent's machine, and its right-click offers
-       what a file's name does elsewhere: open it, as a click does, show it in
-       Finder where a host can, and copy its path, when the item kept the file
-       it was shown from. The menu floats over the transcript, so asking for it
-       moves nothing. */
-    const reveal = useContext(FileRevealContext);
-    // Which item asked for its menu, and where the pointer was, while it is up.
-    const [menuAt, setMenuAt] = useState<{ index: number; x: number; y: number }>();
-    const menuItems = (item: ConversationMediaItem): MenuItem[] => {
-        const opening: MenuItem[] = open
-            ? [{ kind: "item", id: MEDIA_MENU_OPEN, label: "Open", icon: "panel-expand" }]
-            : [];
-        if (item.source === undefined) return opening;
-        return [
-            ...opening,
-            ...(opening.length > 0 ? [{ kind: "separator" } as const] : []),
-            ...fileRevealMenuItems(reveal),
-        ];
-    };
-    const menuOpen = (index: number) =>
-        menuItems(items[index]!).length === 0
+       what a file's name does elsewhere: open it, as a click does, open it in
+       the application this machine opens it with, show it in Finder where a
+       host can, and copy its path, when the item kept the file it was shown
+       from. The menu floats over the transcript, so asking for it moves
+       nothing. */
+    const presented = usePresentedFileMenu();
+    const opening: readonly MenuItem[] = open
+        ? [{ kind: "item", id: MEDIA_MENU_OPEN, label: "Open", icon: "panel-expand" }]
+        : [];
+    const menuOpen = (index: number) => {
+        const path = items[index]!.source?.absolutePath;
+        return opening.length === 0 && path === undefined
             ? undefined
-            : (event: MouseEvent<HTMLElement>) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setMenuAt({ index, x: event.clientX, y: event.clientY });
-              };
-    const menuItem = menuAt === undefined ? undefined : items[menuAt.index];
-    const menu =
-        menuAt === undefined || menuItem === undefined ? null : (
-            <ContextMenu
-                data-testid="conversation-media-menu"
-                items={menuItems(menuItem)}
-                onClose={() => setMenuAt(undefined)}
-                onSelect={(id) => {
-                    setMenuAt(undefined);
-                    if (id === MEDIA_MENU_OPEN) open?.(menuAt.index);
-                    else if (menuItem.source)
-                        fileRevealMenuSelect(reveal, menuItem.source.absolutePath, id);
-                }}
-                x={menuAt.x}
-                y={menuAt.y}
-            />
-        );
+            : (event: MouseEvent<HTMLElement>) =>
+                  presented.ask(event, path, opening, () => open?.(index));
+    };
+    const menu = presented.menu;
+    // The applications a file opens in are asked for as the pointer arrives,
+    // so its menu has them when it is asked for.
+    const warm = () => {
+        for (const item of items) presented.warm(item.source?.absolutePath);
+    };
     const image = (tile: {
         index: number;
         style: CSSProperties;
@@ -385,6 +361,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
                 data-happy-desktop-ui="conversation-media"
                 data-layout="tree"
                 data-testid={props["data-testid"]}
+                onPointerEnter={warm}
                 style={props.style}
             >
                 <MediaTree
@@ -430,6 +407,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
             data-happy-desktop-ui="conversation-media"
             data-layout={layout?.type === "columns" ? `columns-${String(layout.columns)}` : "auto"}
             data-testid={props["data-testid"]}
+            onPointerEnter={warm}
             style={props.style}
         >
             {visuals.length > 0 ? (

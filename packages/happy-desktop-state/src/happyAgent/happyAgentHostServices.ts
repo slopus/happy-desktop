@@ -1,6 +1,7 @@
 import type { TerminalConnection } from "../transport.js";
 import type { HappyAgentDeviceBridgeHost } from "./happyAgentDeviceBridgeHost.js";
 import type {
+    HappyAgentFileApplication,
     HappyAgentGroupId,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
@@ -42,6 +43,29 @@ export interface HappyAgentHostServices {
      * group runs on. Rejects when the group is not on this machine.
      */
     fileReveal(groupId: HappyAgentGroupId, path: string): Promise<void>;
+    /**
+     * The applications this machine offers to open one file in, as Finder's
+     * Open With does, the one a double-click uses first. None for a file the
+     * host does not open: a kind that runs something or is not known to be a
+     * document, a folder, or an executable; applications that run what they
+     * open are never offered. Rejects when the group is not on this machine.
+     * Reading them launches nothing.
+     */
+    fileApplicationsRead(
+        groupId: HappyAgentGroupId,
+        path: string,
+    ): Promise<readonly HappyAgentFileApplication[]>;
+    /**
+     * Opens one file in one of those applications, by its id. The host checks
+     * the file again and launches only an application it offers for it now.
+     * `path` is relative to the group's root, or absolute. Rejects when the
+     * file or the application is refused, or the launch fails.
+     */
+    fileApplicationOpen(
+        groupId: HappyAgentGroupId,
+        path: string,
+        applicationId: string,
+    ): Promise<void>;
     workspaceFileBytesRead(
         groupId: HappyAgentGroupId,
         path: string,

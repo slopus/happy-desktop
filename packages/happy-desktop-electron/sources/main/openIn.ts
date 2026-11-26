@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readdir, readFile, rm, stat } from "node:fs/promises";
+import { readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { basename, extname, isAbsolute, join } from "node:path";
 import { execFileHiddenAsync } from "./childProcess";
 
 /**
@@ -448,5 +448,287 @@ export async function fileReveal(path: string): Promise<void> {
         await execFileHiddenAsync("/usr/bin/open", ["-R", path], { timeout: 10_000 });
     } catch {
         throw new Error("Finder could not show this file.");
+    }
+}
+
+/*
+ * Opening a file in an application this Mac offers for it is a launch, not a
+ * selection, so unlike revealing it is held to what a document can be. The
+ * file must be a plain document by its real name and bytes: one of the kinds
+ * below, not a folder or bundle, not executable, and handed to an application
+ * that is not a shell, a script runner, or an installer. Everything else is
+ * refused by name, so a kind added to macOS later is refused until it is
+ * added here.
+ */
+
+/** Document, picture, sound, and recording kinds a file may be opened as. */
+const FILE_OPEN_EXTENSIONS = new Set([
+    "xlsx",
+    "xls",
+    "csv",
+    "tsv",
+    "docx",
+    "doc",
+    "pptx",
+    "ppt",
+    "numbers",
+    "pages",
+    "key",
+    "pdf",
+    "odt",
+    "ods",
+    "odp",
+    "rtf",
+    "txt",
+    "md",
+    "json",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "heic",
+    "tiff",
+    "bmp",
+    "mp3",
+    "m4a",
+    "wav",
+    "aac",
+    "flac",
+    "mp4",
+    "mov",
+    "m4v",
+    "webm",
+]);
+
+/**
+ * Kinds that run something or open in a browser: macro documents, pages and
+ * vector images that carry script, applications, scripts, installers, and
+ * links. Outside the list above already; named so the refusal says why.
+ */
+const FILE_OPEN_REFUSED_EXTENSIONS = new Set([
+    "xlsm",
+    "docm",
+    "pptm",
+    "html",
+    "htm",
+    "svg",
+    "app",
+    "command",
+    "sh",
+    "terminal",
+    "pkg",
+    "dmg",
+    "jar",
+    "scpt",
+    "webloc",
+]);
+
+/**
+ * Applications that run what they open, or build, script, or unpack it, by
+ * bundle id. They are never offered, even when this Mac says they open a kind.
+ */
+const FILE_OPEN_REFUSED_APPLICATIONS = new Set([
+    "com.apple.Terminal",
+    "com.googlecode.iterm2",
+    "com.apple.ScriptEditor2",
+    "com.apple.Automator",
+    "com.apple.installer",
+    "com.apple.archiveutility",
+    "com.apple.dt.Xcode",
+    "com.apple.shortcuts",
+]);
+
+/** How many applications one file is offered to, the default among them. */
+const FILE_OPEN_APPLICATIONS_MAX = 8;
+
+/**
+ * One application a file may be opened in, as Finder's Open With lists it. The
+ * renderer only ever sends `id` back: it never names a bundle path, so what is
+ * launched is always one of the applications this Mac itself offered.
+ */
+export interface FileOpenApplication {
+    /** The bundle id, or the bundle's path when it has none. */
+    readonly id: string;
+    /** Its name as Finder shows it, in the reader's language. */
+    readonly name: string;
+    /** Whether it is the application a double-click opens the file in. */
+    readonly isDefault: boolean;
+}
+
+/** An application LaunchServices named for a file, before it is offered. */
+export interface FileOpenApplicationFound {
+    readonly path: string;
+    readonly bundleId: string;
+    readonly name: string;
+}
+
+interface FileOpenApplicationOffered extends FileOpenApplication {
+    readonly path: string;
+}
+
+/**
+ * The real file behind `path`, when it is a document that may be opened: an
+ * absolute path whose resolved target is a regular, non-executable file of an
+ * allowed kind. The kind is read from the resolved name, so a link named like
+ * a spreadsheet to a script is the script.
+ */
+export async function fileOpenCheck(path: string): Promise<string> {
+    if (!isAbsolute(path)) throw new Error("Only a file on this Mac can be opened.");
+    let target: string;
+    let info: Awaited<ReturnType<typeof stat>>;
+    try {
+        target = await realpath(path);
+        info = await stat(target);
+    } catch {
+        throw new Error("That file is not on this Mac.");
+    }
+    // A bundle (an application, a package) is a folder to the file system.
+    if (!info.isFile()) throw new Error("Only a file can be opened, not a folder or a bundle.");
+    if ((info.mode & 0o111) !== 0) throw new Error("An executable file is not opened from Happy.");
+    const extension = extname(target).slice(1).toLowerCase();
+    if (FILE_OPEN_REFUSED_EXTENSIONS.has(extension) || !FILE_OPEN_EXTENSIONS.has(extension))
+        throw new Error(
+            extension.length === 0
+                ? "A file without a type is not opened from Happy."
+                : `A .${extension} file is not opened from Happy.`,
+        );
+    return target;
+}
+
+/**
+ * The applications offered for a file, from what LaunchServices found: only
+ * application bundles, none that runs what it opens, one entry per bundle id
+ * (the copy a double-click uses when it is among them), the default first and
+ * the rest by name, at most `FILE_OPEN_APPLICATIONS_MAX`.
+ */
+export function fileOpenApplicationsChoose(
+    found: readonly FileOpenApplicationFound[],
+    defaultPath: string,
+): FileOpenApplicationOffered[] {
+    const offered = new Map<string, FileOpenApplicationOffered>();
+    for (const application of found) {
+        if (!application.path.endsWith(".app")) continue;
+        if (FILE_OPEN_REFUSED_APPLICATIONS.has(application.bundleId)) continue;
+        const id = application.bundleId || application.path;
+        const isDefault = application.path === defaultPath;
+        const known = offered.get(id);
+        if (known !== undefined && (known.isDefault || !isDefault)) continue;
+        const name =
+            application.name.replace(/\.app$/u, "") ||
+            basename(application.path).replace(/\.app$/u, "");
+        offered.set(id, { id, name, isDefault, path: application.path });
+    }
+    return [...offered.values()]
+        .sort((a, b) =>
+            a.isDefault !== b.isDefault ? (a.isDefault ? -1 : 1) : a.name.localeCompare(b.name),
+        )
+        .slice(0, FILE_OPEN_APPLICATIONS_MAX);
+}
+
+/*
+ * LaunchServices' own answer for one file, through the system's script host:
+ * the application a double-click uses and every one that says it opens the
+ * kind (`URLsForApplicationsToOpenURL`, macOS 12). The path arrives as
+ * `argv[0]` and is never part of the script's text.
+ */
+const FILE_OPEN_APPLICATIONS_SCRIPT = `function run(argv) {
+    ObjC.import("AppKit");
+    const workspace = $.NSWorkspace.sharedWorkspace;
+    const file = $.NSURL.fileURLWithPath(argv[0]);
+    const fallback = workspace.URLForApplicationToOpenURL(file);
+    const urls = workspace.URLsForApplicationsToOpenURL(file);
+    const found = [];
+    for (let index = 0; index < urls.count; index += 1) {
+        const app = urls.objectAtIndex(index);
+        const bundle = $.NSBundle.bundleWithURL(app);
+        found.push({
+            path: ObjC.unwrap(app.path),
+            bundleId: bundle.isNil() ? "" : ObjC.unwrap(bundle.bundleIdentifier) || "",
+            name: ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(app.path)) || "",
+        });
+    }
+    return JSON.stringify({ defaultPath: fallback.isNil() ? "" : ObjC.unwrap(fallback.path), found });
+}`;
+
+/** The applications offered for the checked file `target`. */
+async function fileOpenApplicationsOf(target: string): Promise<FileOpenApplicationOffered[]> {
+    let answer: { defaultPath?: unknown; found?: unknown };
+    try {
+        const { stdout } = await execFileHiddenAsync(
+            "/usr/bin/osascript",
+            ["-l", "JavaScript", "-e", FILE_OPEN_APPLICATIONS_SCRIPT, target],
+            { timeout: 10_000 },
+        );
+        answer = JSON.parse(stdout.trim() || "{}") as typeof answer;
+    } catch {
+        throw new Error("This Mac did not say which applications open this file.");
+    }
+    const found = (Array.isArray(answer.found) ? answer.found : []).flatMap(
+        (entry: Partial<FileOpenApplicationFound>): FileOpenApplicationFound[] =>
+            typeof entry.path === "string" && entry.path.length > 0
+                ? [
+                      {
+                          path: entry.path,
+                          bundleId: typeof entry.bundleId === "string" ? entry.bundleId : "",
+                          name: typeof entry.name === "string" ? entry.name : "",
+                      },
+                  ]
+                : [],
+    );
+    return fileOpenApplicationsChoose(
+        found,
+        typeof answer.defaultPath === "string" ? answer.defaultPath : "",
+    );
+}
+
+/**
+ * The applications `path` may be opened in, for the menu that offers them;
+ * none for a file the host does not open, or on a host that is not a Mac.
+ * Reading them launches nothing, so a hidden-window run may ask.
+ */
+export async function fileOpenApplicationsRead(path: string): Promise<FileOpenApplication[]> {
+    if (process.platform !== "darwin") return [];
+    let target: string;
+    try {
+        target = await fileOpenCheck(path);
+    } catch {
+        return [];
+    }
+    return (await fileOpenApplicationsOf(target)).map(({ id, name, isDefault }) => ({
+        id,
+        name,
+        isDefault,
+    }));
+}
+
+/**
+ * Opens `path` in the application `applicationId` names. The file is checked
+ * and the applications this Mac offers for it are read again, so only one of
+ * them is launched, whatever the request says; the file is checked once more
+ * immediately before the launch, which names the application by the bundle
+ * that was offered and passes the file after `--`, with no shell.
+ */
+export async function fileOpen(path: string, applicationId: string): Promise<void> {
+    if (process.platform !== "darwin")
+        throw new Error("Opening a file in another application is only supported on macOS.");
+    const target = await fileOpenCheck(path);
+    const application = (await fileOpenApplicationsOf(target)).find(
+        (offered) => offered.id === applicationId,
+    );
+    if (application === undefined)
+        throw new Error("Happy does not open this file in that application.");
+    if ((await fileOpenCheck(path)) !== target)
+        throw new Error("The file changed while it was being opened; try again.");
+    // A hidden-window run (main/hiddenWindows.ts) never puts another
+    // application in front of the person.
+    if (process.env.HAPPY_DESKTOP_WINDOWS_HIDDEN !== undefined)
+        throw new Error("A hidden-window run cannot open a file in another application.");
+    try {
+        await execFileHiddenAsync("/usr/bin/open", ["-a", application.path, "--", target], {
+            timeout: 10_000,
+        });
+    } catch {
+        throw new Error(`${application.name} could not open this file.`);
     }
 }
