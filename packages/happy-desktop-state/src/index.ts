@@ -267,6 +267,7 @@ export * from "./happyAgent/happyAgentPluginsStore.js";
 export * from "./happyAgent/happyAgentDaemonPluginsStore.js";
 export * from "./happyAgent/happyAgentGenUiActions.js";
 export * from "./happyAgent/happyAgentComputeStore.js";
+export * from "./accountFeatures/accountFeaturesStore.js";
 export * from "./pipelines/pipelineTypes.js";
 export * from "./pipelines/pipelinesStore.js";
 export * from "./pipelines/pipelineStore.js";
