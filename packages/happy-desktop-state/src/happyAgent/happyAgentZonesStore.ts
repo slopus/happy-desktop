@@ -259,6 +259,8 @@ export function happyAgentZonesStoreCreate(deps: {
     readonly endpoint: string;
     /** Where `zone.*` and `agent.zone` arrive, each a hint to read the list again. */
     readonly sync?: HappyAgentSync;
+    /** The reader's own user ID, who owns a zone they make unless they pick otherwise. */
+    readonly selfUserId?: () => Promise<string | null>;
 }): HappyAgentZonesStore {
     const store = createStore<HappyAgentZonesSnapshot>()(() => ({
         loading: true,
@@ -271,6 +273,7 @@ export function happyAgentZonesStoreCreate(deps: {
     let reading = false;
     let readAgain = false;
     let follow: AbortController | undefined;
+    let selfUserId: string | null = null;
     const zonePath = (id: string): string => `v0/zones/${encodeURIComponent(id)}`;
 
     /**
@@ -384,13 +387,15 @@ export function happyAgentZonesStoreCreate(deps: {
         );
 
     const read = async (): Promise<void> => {
-        const [list, permissions, members, roles] = await Promise.all([
+        const [list, permissions, members, roles, self] = await Promise.all([
             deps.request("GET", "v0/zones"),
             deps.request("GET", "v0/permissions"),
             deps.request("GET", "v0/members"),
             // Roles only name members in the add list; a member is listed without one.
             deps.request("GET", "v0/roles").catch(() => undefined),
+            (deps.selfUserId?.() ?? Promise.resolve(null)).catch(() => null),
         ]);
+        selfUserId = self;
         const zones = listOf(recordOf(list)?.zones)
             .flatMap((entry) => {
                 const zone = zoneRead(entry);
@@ -514,17 +519,8 @@ export function happyAgentZonesStoreCreate(deps: {
         return disposed || !manage || !open ? undefined : zoneOf(open.zoneId);
     };
 
-    /** A refused change, in words about zones where the cluster's say only that it was stale. */
-    const changeRefusal = (error: unknown): UserError => {
-        const refused = happyAgentUserError(error);
-        return refused.code === "stale" || refused.code === "version_mismatch"
-            ? new UserError(
-                  "Someone changed this zone just now. Look again, then retry.",
-                  refused.code,
-                  error,
-              )
-            : refused;
-    };
+    /** A refused change, in the cluster's own words, such as a 409 for a zone changed meanwhile. */
+    const changeRefusal = (error: unknown): UserError => happyAgentUserError(error);
 
     /**
      * Takes the zone the cluster answered a change with, so the page shows the
@@ -558,8 +554,9 @@ export function happyAgentZonesStoreCreate(deps: {
         const { error: _cleared, ...rest } = details;
         store.setState({ details: { ...rest, imageSaving: true } }, false);
         void send(zone).then(
-            () => {
+            (answer) => {
                 if (disposed) return;
+                zoneAnswered(answer);
                 detailsUpdate({ imageSaving: false });
                 load();
             },
@@ -668,7 +665,8 @@ export function happyAgentZonesStoreCreate(deps: {
                 {
                     details: {
                         isDefault: false,
-                        draft: DRAFT_EMPTY,
+                        // Whoever makes a zone owns it, unless they pick someone else or nobody.
+                        draft: { ...DRAFT_EMPTY, owner: selfUserId },
                         edited: false,
                         saving: false,
                         imageSaving: false,
@@ -725,23 +723,39 @@ export function happyAgentZonesStoreCreate(deps: {
             if (details.zoneId !== undefined && !zone)
                 return refuse("This zone was deleted in the meantime.");
             store.setState({ details: { ...rest, saving: true } }, false);
-            // Listing members keeps whoever the zone listed already; the page adds the rest.
             const members = draft.everyone ? null : (zone?.members ?? []);
-            // The default zone's critical flag, members and owner are fixed; only the rest is sent.
-            const body = {
-                name,
-                description: draft.description.trim(),
-                color: draft.color,
-                ...(details.isDefault
-                    ? {}
-                    : {
-                          critical: draft.critical,
-                          members,
-                          // The cluster refuses bots on a zone that isn't critical.
-                          bots: draft.critical ? (zone?.bots ?? []) : [],
-                          owner: draft.owner,
-                      }),
-            };
+            const fixed = details.isDefault;
+            // A new zone is sent whole. A change sends only what differs from the zone as
+            // read, never its bots: those are listed on the page, and turning Critical off
+            // empties them on the cluster.
+            const body: Record<string, unknown> = zone
+                ? {
+                      ...(name === zone.name ? {} : { name }),
+                      ...(draft.description.trim() === zone.description
+                          ? {}
+                          : { description: draft.description.trim() }),
+                      ...(draft.color === zone.color ? {} : { color: draft.color }),
+                      ...(fixed || draft.critical === zone.critical
+                          ? {}
+                          : { critical: draft.critical }),
+                      ...(fixed || (members === null) === (zone.members === null)
+                          ? {}
+                          : { members }),
+                      ...(fixed || draft.owner === zone.owner ? {} : { owner: draft.owner }),
+                  }
+                : {
+                      name,
+                      description: draft.description.trim(),
+                      color: draft.color,
+                      critical: draft.critical,
+                      members,
+                      owner: draft.owner,
+                  };
+            if (zone && Object.keys(body).length === 0) {
+                const { details: _unchanged, ...after } = store.getState();
+                store.setState(after, true);
+                return;
+            }
             void (zone ? zonePatch(zone, body) : deps.request("POST", "v0/zones", body)).then(
                 (answer) => {
                     if (disposed) return;

@@ -319,16 +319,13 @@ export function HappyCloudPermissionsFlowPage() {
                 <Page zoneId="z-payments" />
             </Screen>
             <Screen
-                detail="a critical zone's details, being edited"
+                detail="a critical zone's details"
                 heading={ZONE_HEADING}
                 number="05"
                 screen="05-critical-details"
             >
                 <Page zoneId="z-payments" />
-                <Details
-                    draft={{ ...draftOf(zoneOf("z-payments")), name: "Payments and refunds" }}
-                    edited
-                />
+                <Details />
             </Screen>
             <Screen
                 detail="adding members, two of them picked"

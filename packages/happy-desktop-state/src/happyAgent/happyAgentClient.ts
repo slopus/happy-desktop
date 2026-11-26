@@ -1458,6 +1458,7 @@ export function happyAgentWorkspaceClientCreate(
                 request,
                 endpoint: deps.client.endpoint,
                 sync: deps.connection.sync,
+                selfUserId: async () => (await deps.client.getProfile()).profile.userId ?? null,
             });
             return zonesStore;
         },
