@@ -3,10 +3,13 @@ import {
     HappyAgentPermissionsSettings,
     HappyAgentSettingsShell,
     HappyAgentZoneDeleteDialog,
+    HappyAgentZoneDetailsDialog,
     HappyAgentZonePage,
+    HappyAgentZonePickDialog,
     type HappyAgentSettingsCategory,
     type HappyAgentZoneBotRow,
     type HappyAgentZoneDeleteDialogProps,
+    type HappyAgentZoneDetailsDialogProps,
     type HappyAgentZoneDraftView,
     type HappyAgentZonePageProps,
     type HappyAgentZonePersonRow,
@@ -37,10 +40,12 @@ const PAYMENTS_IMAGE = new URL("../assets/zone-payments.webp", import.meta.url).
 const STEVE_PHOTO = new URL("../assets/user-profile-photo.webp", import.meta.url).href;
 
 const people: readonly HappyAgentZonePersonRow[] = [
-    { id: "u-ana", name: "Ana Lima" },
-    { id: "u-kirill", name: "Kirill" },
-    { id: "u-steve", name: "Steve Korshakov", imageUrl: STEVE_PHOTO },
-    { id: "u-mia", name: "Mia Chen" },
+    { id: "u-ana", name: "Ana Lima", role: "Member" },
+    { id: "u-kirill", name: "Kirill", role: "Admin" },
+    { id: "u-mia", name: "Mia Chen", role: "Member" },
+    { id: "u-priya", name: "Priya Shah", role: "Finance" },
+    { id: "u-steve", name: "Steve Korshakov", imageUrl: STEVE_PHOTO, role: "Owner" },
+    { id: "u-tom", name: "Tom Becker", role: "Member" },
 ];
 
 /** The team's bots, which a critical zone may list. */
@@ -177,41 +182,43 @@ function List(props: { manage: boolean }) {
     );
 }
 
-/** A listed zone's fields, as its page opens them. */
+const zoneOf = (id: string): HappyAgentZoneRow => zones.find((zone) => zone.id === id)!;
+
+/** The settings header over a zone's page, with the way back to the list. */
+const ZONE_HEADING: Heading = { title: "Permissions", description: "A zone, and who may join it" };
+
+/** A zone's page, as someone who may manage it sees it. */
+function Page(props: Partial<HappyAgentZonePageProps> & { readonly zoneId: string }) {
+    const { zoneId, ...rest } = props;
+    return (
+        <HappyAgentZonePage
+            manage
+            onBotRemove={noop}
+            onBotsAdd={noop}
+            onDetailsOpen={noop}
+            onMemberRemove={noop}
+            onMembersAdd={noop}
+            zone={zoneOf(zoneId)}
+            {...rest}
+        />
+    );
+}
+
+/** A listed zone's settings, as its details modal opens them. */
 function draftOf(zone: HappyAgentZoneRow): HappyAgentZoneDraftView {
     return {
         name: zone.name,
         description: zone.description,
         critical: zone.critical,
         color: zone.color,
-        members:
-            zone.isDefault || zone.members === "everyone"
-                ? null
-                : zone.members.map((entry) => entry.id),
-        bots: zone.bots?.map((bot) => bot.id) ?? [],
+        everyone: zone.members === "everyone",
         owner: zone.owner?.id ?? null,
     };
 }
 
-const zoneOf = (id: string): HappyAgentZoneRow => zones.find((zone) => zone.id === id)!;
-
-/** The heading a zone's page shows. */
-function headingOf(zone: HappyAgentZoneRow | undefined): Heading {
-    return {
-        title: zone?.name ?? "New zone",
-        description: zone
-            ? zone.isDefault
-                ? "The default zone, open to every member"
-                : zone.critical
-                  ? "A critical zone"
-                  : "A zone"
-            : "A zone agents can join",
-    };
-}
-
-/** A zone's page as someone who may manage it sees it, or with `create` a new zone's. */
-function Page(
-    props: Partial<HappyAgentZonePageProps> & {
+/** A zone's details modal, or with `create` a new zone's. */
+function Details(
+    props: Partial<HappyAgentZoneDetailsDialogProps> & {
         readonly zoneId?: string;
         readonly create?: boolean;
     },
@@ -219,7 +226,7 @@ function Page(
     const { zoneId, create, ...rest } = props;
     const zone = create ? undefined : zoneOf(zoneId ?? "z-payments");
     return (
-        <HappyAgentZonePage
+        <HappyAgentZoneDetailsDialog
             draft={
                 zone
                     ? draftOf(zone)
@@ -228,36 +235,29 @@ function Page(
                           description: "",
                           critical: false,
                           color: "blue",
-                          members: null,
-                          bots: [],
+                          everyone: true,
                           owner: null,
                       }
             }
             edited={false}
             imageSaving={false}
             manage
-            onBotAdd={noop}
-            onBotRemove={noop}
+            onClose={noop}
             onColorChange={noop}
             onCriticalChange={noop}
             onDelete={noop}
             onDescriptionChange={noop}
-            onDiscard={noop}
             onEveryoneChange={noop}
             onImagePick={noop}
             onImageRemove={noop}
-            onMemberAdd={noop}
-            onMemberRemove={noop}
             onNameChange={noop}
             onOwnerChange={noop}
             onSave={noop}
             people={people}
             saving={false}
-            teamBots={teamBots}
             {...(zone
                 ? {
                       zone: {
-                          agentCount: zone.agentCount,
                           isDefault: zone.isDefault,
                           ...(zone.imageUrl ? { imageUrl: zone.imageUrl } : {}),
                           ...(zone.agentCount > 0
@@ -285,11 +285,19 @@ function Delete(props: Partial<HappyAgentZoneDeleteDialogProps>) {
     );
 }
 
+/** Everyone a zone doesn't list yet, as its add modal offers them. */
+function unlisted(zoneId: string): readonly HappyAgentZonePersonRow[] {
+    const members = zoneOf(zoneId).members;
+    return people.filter(
+        (entry) => members === "everyone" || !members.some((member) => member.id === entry.id),
+    );
+}
+
 export function HappyCloudPermissionsFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Settings › Permissions on a Happy Cloud server: the team's zones, the default one first and the critical ones last, with each zone's picture or colour, owner, who may join and how many agents are in it. A row opens the zone's own page, which holds every setting of the zone and deleting it, with the rules the cluster keeps; a member without zones.manage reads the same pages."
+            summary="Settings › Permissions on a Happy Cloud server: the team's zones, the default one first and the critical ones last, with each zone's picture or colour, owner, who may join and how many agents are in it. A row opens the zone's page, built for reviewing who may reach it: a header with the zone's details, then its members and, on a critical zone, its bots, each added in its own modal and removed in place. The details modal holds the rest of the zone's settings and Delete. A member without zones.manage reads the same pages."
             title="Happy Cloud permissions flow"
         >
             <Screen detail="zones, for someone who may manage them" number="01" screen="01-list">
@@ -298,57 +306,126 @@ export function HappyCloudPermissionsFlowPage() {
             <Screen detail="zones, read-only for a member" number="02" screen="02-read-only">
                 <List manage={false} />
             </Screen>
-            <Screen
-                detail="a new zone"
-                heading={headingOf(undefined)}
-                number="03"
-                screen="03-create"
-            >
-                <Page create />
+            <Screen detail="a new zone" number="03" screen="03-create">
+                <List manage />
+                <Details create />
             </Screen>
             <Screen
-                detail="the default zone: open to everyone, no owner, not deletable"
-                heading={headingOf(zoneOf("z-default"))}
+                detail="a critical zone with a picture, an owner, its members and a bot"
+                heading={ZONE_HEADING}
                 number="04"
-                screen="04-default"
+                screen="04-critical"
             >
-                <Page zoneId="z-default" />
+                <Page zoneId="z-payments" />
             </Screen>
             <Screen
-                detail="a critical zone with a picture, an owner, its members and a bot, being edited"
-                heading={headingOf(zoneOf("z-payments"))}
+                detail="a critical zone's details, being edited"
+                heading={ZONE_HEADING}
                 number="05"
-                screen="05-critical"
+                screen="05-critical-details"
             >
-                <Page
+                <Page zoneId="z-payments" />
+                <Details
                     draft={{ ...draftOf(zoneOf("z-payments")), name: "Payments and refunds" }}
                     edited
-                    zoneId="z-payments"
+                />
+            </Screen>
+            <Screen
+                detail="adding members, two of them picked"
+                heading={ZONE_HEADING}
+                number="06"
+                screen="06-add-members"
+            >
+                <Page zoneId="z-payments" />
+                <HappyAgentZonePickDialog
+                    candidates={unlisted("z-payments")}
+                    kind="members"
+                    onAdd={noop}
+                    onClose={noop}
+                    onQueryChange={noop}
+                    onToggle={noop}
+                    query=""
+                    saving={false}
+                    selected={["u-priya", "u-tom"]}
+                />
+            </Screen>
+            <Screen
+                detail="adding bots to a critical zone"
+                heading={ZONE_HEADING}
+                number="07"
+                screen="07-add-bots"
+            >
+                <Page zoneId="z-payments" />
+                <HappyAgentZonePickDialog
+                    candidates={teamBots.slice(1)}
+                    kind="bots"
+                    onAdd={noop}
+                    onClose={noop}
+                    onQueryChange={noop}
+                    onToggle={noop}
+                    query=""
+                    saving={false}
+                    selected={["b-release"]}
                 />
             </Screen>
             <Screen
                 detail="a critical zone, read-only for a member"
-                heading={headingOf(zoneOf("z-payments"))}
-                number="06"
-                screen="06-critical-read-only"
+                heading={ZONE_HEADING}
+                number="08"
+                screen="08-critical-read-only"
             >
                 <Page manage={false} zoneId="z-payments" />
             </Screen>
             <Screen
+                detail="a critical zone's details, read-only for a member"
+                heading={ZONE_HEADING}
+                number="09"
+                screen="09-details-read-only"
+            >
+                <Page manage={false} zoneId="z-payments" />
+                <Details manage={false} />
+            </Screen>
+            <Screen
+                detail="the default zone: open to every member"
+                heading={ZONE_HEADING}
+                number="10"
+                screen="10-default"
+            >
+                <Page zoneId="z-default" />
+            </Screen>
+            <Screen
+                detail="the default zone's details: no owner, Critical or Delete"
+                heading={ZONE_HEADING}
+                number="11"
+                screen="11-default-details"
+            >
+                <Page zoneId="z-default" />
+                <Details zoneId="z-default" />
+            </Screen>
+            <Screen
                 detail="a zone limited to its members, with agents in it"
-                heading={headingOf(zoneOf("z-research"))}
-                number="07"
-                screen="07-members"
+                heading={ZONE_HEADING}
+                number="12"
+                screen="12-members"
             >
                 <Page zoneId="z-research" />
             </Screen>
             <Screen
-                detail="turning off the last critical zone, which the cluster refused"
-                heading={headingOf(zoneOf("z-critical"))}
-                number="08"
-                screen="08-save-refused"
+                detail="the seeded Critical zone, nobody and no bot listed"
+                heading={ZONE_HEADING}
+                number="13"
+                screen="13-critical-empty"
             >
-                <Page
+                <Page zoneId="z-critical" />
+            </Screen>
+            <Screen
+                detail="turning off the last critical zone, which the cluster refused"
+                heading={ZONE_HEADING}
+                number="14"
+                screen="14-save-refused"
+            >
+                <Page zoneId="z-critical" />
+                <Details
                     draft={{ ...draftOf(zoneOf("z-critical")), critical: false }}
                     edited
                     error="A team keeps at least one critical zone."
@@ -357,18 +434,18 @@ export function HappyCloudPermissionsFlowPage() {
             </Screen>
             <Screen
                 detail="deleting an empty zone"
-                heading={headingOf(zoneOf("z-sandbox"))}
-                number="09"
-                screen="09-delete"
+                heading={ZONE_HEADING}
+                number="15"
+                screen="15-delete"
             >
                 <Page zoneId="z-sandbox" />
                 <Delete />
             </Screen>
             <Screen
                 detail="a deletion the cluster refused"
-                heading={headingOf(zoneOf("z-payments"))}
-                number="10"
-                screen="10-delete-refused"
+                heading={ZONE_HEADING}
+                number="16"
+                screen="16-delete-refused"
             >
                 <Page zoneId="z-payments" />
                 <Delete error="A team keeps at least one critical zone." name="Payments" />

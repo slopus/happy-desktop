@@ -334,36 +334,91 @@
     line-height: 16px;
 }
 
-.happy-agent-zones__members {
+/* A zone page's header: its picture, name, badges and summary, and the
+   button to its details. */
+.happy-agent-zones__header {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 16px;
 }
 
-.happy-agent-zones__member {
+.happy-agent-zones__name[data-size="large"] {
+    font-size: 17px;
+    line-height: 22px;
+}
+
+/* A member or bot a zone lists, on its page. */
+.happy-agent-zones__entry {
+    box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 32px;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 0;
     border-bottom: 1px solid var(--divider);
 }
 
-.happy-agent-zones__member:last-child {
+.happy-agent-zones__field-label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+/* The Critical switch in the details modal, its words beside it. */
+.happy-agent-zones__toggle {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Deleting, at the foot of the details modal. */
+.happy-agent-zones__danger {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-agent-zones__search {
+    display: flex;
+}
+
+/* Who may be added, in the add modals. */
+.happy-agent-zones__picks {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-zones__pick {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-zones__pick:last-child {
     border-bottom: 0;
 }
 
-.happy-agent-zones__member-name {
+.happy-agent-zones__pick-label {
+    display: flex;
     flex: 1 1 0%;
+    align-items: center;
+    gap: 12px;
     min-width: 0;
-    overflow: hidden;
-    color: var(--text);
-    font-size: 13px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
-/* Deleting sits apart from Cancel and Save, at the footer's leading edge. */
 /* A field's value where the reader may not change it. */
 .happy-agent-zones__value {
     color: var(--text);
