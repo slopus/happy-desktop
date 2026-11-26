@@ -547,6 +547,7 @@ export function happyAgentConnectionOpen(input: {
         ...(cloudRequest
             ? {
                   cloudRequest,
+                  photoCodec: { open: imageCropOpen },
                   plugins: () => client.plugins(),
                   // The first owner to finish starts the Chief of Staff's first
                   // conversation, which is where the reader goes next.

@@ -1,0 +1,124 @@
+/* A picture the reader picks for a person, a bot or a server, with what
+   picks it: the picture, its button, and the line saying a picture can be
+   dropped on them. All of it is the one zone a dragged picture is taken by. */
+.happy-picture-picker {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-picture-picker__picture {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
+    cursor: pointer;
+}
+
+.happy-picture-picker__picture[data-shape="rounded"] {
+    border-radius: 25%;
+}
+
+.happy-picture-picker__picture:disabled {
+    cursor: default;
+}
+
+.happy-picture-picker__picture:focus-visible {
+    outline: 2px solid var(--onboarding-foreground);
+    outline-offset: 3px;
+}
+
+.happy-picture-picker__image {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 18%, transparent);
+}
+
+/* Inside the picture's lower-right, ringed in the surface so it reads as a
+   control sitting on the picture rather than part of it. */
+.happy-picture-picker__badge {
+    position: absolute;
+    z-index: 1;
+    right: 2px;
+    bottom: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--onboarding-foreground) 22%, transparent),
+        0 2px 6px var(--shadow-subtle);
+    color: var(--text);
+}
+
+.happy-picture-picker__badge[data-size="small"] {
+    right: -2px;
+    bottom: -2px;
+    width: 22px;
+    height: 22px;
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--onboarding-foreground) 22%, transparent),
+        0 1px 4px var(--shadow-subtle);
+}
+
+.happy-picture-picker__picture:not(:disabled):hover .happy-picture-picker__badge {
+    background: var(--surface-high);
+}
+
+/* A picture held over the zone: a dashed ring around the picture and a faint
+   wash over it, both in the page's own ink, so the drop target reads clearly
+   without a colour the page does not already use. */
+.happy-picture-picker__picture::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.happy-picture-picker[data-dropping] .happy-picture-picker__picture {
+    outline: 2px dashed color-mix(in srgb, var(--onboarding-foreground) 56%, transparent);
+    outline-offset: 4px;
+    transform: scale(1.03);
+}
+
+.happy-picture-picker[data-dropping] .happy-picture-picker__picture::after {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .happy-picture-picker__picture {
+        transition: transform 160ms ease-out;
+    }
+
+    .happy-picture-picker__picture::after {
+        transition: opacity 160ms ease-out;
+    }
+}
+
+.happy-setup-page[data-backdrop="sky"]
+    .happy-picture-picker__action.happy-button[data-variant="ghost"] {
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+}
+
+/* Read with the button above it as one instruction, so it sits closer to it
+   than the zone's gap. */
+.happy-picture-picker__hint {
+    margin: -6px 0 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 60%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+}

@@ -85,6 +85,12 @@ const screens: readonly Screen[] = [
                 name: "Chief of Staff",
                 avatarUrl: null,
                 placeholderSeed: "chief-of-staff",
+                picture: {
+                    opening: false,
+                    onChoose: noop,
+                    onCropCancel: noop,
+                    onCropConfirm: noop,
+                },
                 busy: false,
                 onNameChange: noop,
                 onSubmit: noop,

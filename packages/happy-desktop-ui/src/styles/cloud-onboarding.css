@@ -105,6 +105,15 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 18%, transparent);
 }
 
+/* Under the row, saying the picture beside the name takes a dropped one. */
+.happy-cloud-onboarding__picture-hint {
+    margin: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 60%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+}
+
 .happy-cloud-onboarding__name {
     flex: 1 1 auto;
     min-width: 0;

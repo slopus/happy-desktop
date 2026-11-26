@@ -1,15 +1,11 @@
-import { useRef } from "react";
 import { AvatarPlaceholder } from "./AvatarPlaceholder";
-import { Button } from "./Button";
 import type { ImageCropRegion } from "./imageCrop";
 import { OnboardingHelp } from "./OnboardingHelp";
-import { ProfilePhotoCropDialog, type ProfilePhotoCropSource } from "./ProfilePhotoCropDialog";
+import { PicturePicker } from "./PicturePicker";
+import type { ProfilePhotoCropSource } from "./ProfilePhotoCropDialog";
 import { SetupPage } from "./SetupPage";
-import { Spinner } from "./Spinner";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
-import { useImageDrop } from "./useImageDrop";
-import { Ionicon } from "./vectorIcons/VectorIcon";
 
 export interface ProfileSetupScreenProps {
     readonly appearance: ThemeMode;
@@ -43,8 +39,6 @@ export interface ProfileSetupScreenProps {
     onPhotoCropConfirm(region: ImageCropRegion): void;
 }
 
-/** The encodings a server accepts, offered as the file picker's filter. */
-const PHOTO_ACCEPT = "image/png,image/jpeg,image/webp";
 /** The avatar's side in CSS pixels, as profile-setup.css draws it. */
 const AVATAR_SIDE = 120;
 
@@ -119,122 +113,52 @@ export interface ProfileSetupFormProps {
  * any setup page that asks for a profile draws them.
  */
 export function ProfileSetupForm(props: ProfileSetupFormProps) {
-    const photoInput = useRef<HTMLInputElement>(null);
     const blocked = props.busy || props.loading === true;
-    const photoBusy = blocked || props.photoOpening === true;
-    const photoPick = () => {
-        if (!photoBusy) photoInput.current?.click();
-    };
-    const photoDrop = useImageDrop<HTMLDivElement>({
-        accept: PHOTO_ACCEPT,
-        disabled: photoBusy,
-        onFile: props.onPhotoChoose,
-    });
     const hint = props.message ?? props.photoError;
     return (
-        <>
-            <div className="happy-profile-setup__form" data-happy-desktop-ui="profile-setup">
-                <div
-                    className="happy-profile-setup__drop"
-                    data-dropping={photoDrop.dropping || undefined}
-                    data-testid="profile-setup-photo-drop"
-                    {...photoDrop.zoneProps}
-                >
-                    <button
-                        aria-label={props.photoUrl ? "Change photo" : "Add photo"}
-                        className="happy-profile-setup__avatar"
-                        data-testid="profile-setup-avatar"
-                        disabled={photoBusy}
-                        onClick={(event) => {
-                            // The crop dialog hands focus back to whatever had
-                            // it, and not every engine focuses a clicked button.
-                            event.currentTarget.focus();
-                            photoPick();
-                        }}
-                        type="button"
-                    >
-                        {props.photoUrl ? (
-                            <img
-                                alt=""
-                                className="happy-profile-setup__photo"
-                                draggable={false}
-                                src={props.photoUrl}
-                            />
-                        ) : (
-                            <AvatarPlaceholder
-                                className="happy-profile-setup__photo"
-                                seed={props.placeholderSeed}
-                                side={AVATAR_SIDE}
-                            />
-                        )}
-                        <span className="happy-profile-setup__badge" aria-hidden="true">
-                            {props.photoOpening ? (
-                                <Spinner size={14} />
-                            ) : (
-                                <Ionicon name="camera" size={16} />
-                            )}
-                        </span>
-                    </button>
-                    <Button
-                        className="happy-profile-setup__photo-action"
-                        disabled={photoBusy}
-                        onClick={(event) => {
-                            event.currentTarget.focus();
-                            photoPick();
-                        }}
-                        size="small"
-                        variant="ghost"
-                    >
-                        {props.photoUrl ? "Change photo" : "Add photo"}
-                    </Button>
-                    <p className="happy-profile-setup__drop-hint" aria-hidden="true">
-                        {photoDrop.dropping ? "Drop to use this picture" : "or drag a picture here"}
-                    </p>
-                </div>
-                <input
-                    accept={PHOTO_ACCEPT}
-                    data-testid="profile-setup-photo-input"
-                    hidden
-                    onChange={(event) => {
-                        const file = event.currentTarget.files?.[0];
-                        // Picking the same file again is a new choice.
-                        event.currentTarget.value = "";
-                        if (file) props.onPhotoChoose(file);
-                    }}
-                    ref={photoInput}
-                    type="file"
-                />
-                {props.nameHidden ? null : (
-                    <TextField
-                        aria-label="Name"
-                        autoFocus
-                        className="happy-profile-setup__name"
-                        disabled={props.busy}
-                        fullWidth
-                        onSubmit={props.onSubmit}
-                        onValueChange={props.onNameChange}
-                        placeholder="Your name"
-                        size="large"
-                        value={props.name}
+        <div className="happy-profile-setup__form" data-happy-desktop-ui="profile-setup">
+            <PicturePicker
+                {...(props.photoCrop ? { crop: props.photoCrop } : {})}
+                data-testid="profile-setup-photo"
+                disabled={blocked}
+                layout="column"
+                noun="photo"
+                onChoose={props.onPhotoChoose}
+                onCropCancel={props.onPhotoCropCancel}
+                onCropConfirm={props.onPhotoCropConfirm}
+                {...(props.photoOpening === undefined ? {} : { opening: props.photoOpening })}
+                {...(props.photoUrl === undefined ? {} : { pictureUrl: props.photoUrl })}
+                placeholder={
+                    <AvatarPlaceholder
+                        className="happy-picture-picker__image"
+                        seed={props.placeholderSeed}
+                        side={AVATAR_SIDE}
                     />
-                )}
-                <p
-                    className="happy-profile-setup__hint"
-                    data-tone={hint ? "attention" : undefined}
-                    role="status"
-                >
-                    {hint}
-                </p>
-            </div>
-            {props.photoCrop ? (
-                <ProfilePhotoCropDialog
-                    // A new picture is a new crop, centred afresh.
-                    key={props.photoCrop.imageUrl}
-                    onCancel={props.onPhotoCropCancel}
-                    onConfirm={props.onPhotoCropConfirm}
-                    source={props.photoCrop}
+                }
+                shape="circle"
+                side={AVATAR_SIDE}
+            />
+            {props.nameHidden ? null : (
+                <TextField
+                    aria-label="Name"
+                    autoFocus
+                    className="happy-profile-setup__name"
+                    disabled={props.busy}
+                    fullWidth
+                    onSubmit={props.onSubmit}
+                    onValueChange={props.onNameChange}
+                    placeholder="Your name"
+                    size="large"
+                    value={props.name}
                 />
-            ) : null}
-        </>
+            )}
+            <p
+                className="happy-profile-setup__hint"
+                data-tone={hint ? "attention" : undefined}
+                role="status"
+            >
+                {hint}
+            </p>
+        </div>
     );
 }

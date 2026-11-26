@@ -5,8 +5,10 @@ import {
     happyShareLinkParse,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
+    happyCloudRequestCreate,
     serverAuthenticationOutcome,
     serverAuthFailure,
+    type HappyAgentAvatarImage,
     type HappyAgentConnectionItem,
     type HappyAgentConnectionsPersistence,
     type HappyAgentConnectionsStore,
@@ -169,10 +171,13 @@ export interface HappyAgentDirectoryStore {
     /**
      * Lists a Happy Cloud server the shell has added and signed in to, by its
      * connection ID, and selects it once the shell reports it signed in.
-     * Present only when the shell reaches Happy Cloud itself.
+     * Present only when the shell reaches Happy Cloud itself. A server just
+     * created is given `picture` once signed in to; a picture that does not
+     * arrive never undoes the server.
      */
     happyAgentCloudConnect?(
         connectionId: string,
+        picture?: HappyAgentAvatarImage,
     ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
     /** Stops listing a Happy Cloud server the shell removed. */
     happyAgentCloudForget?(connectionId: string): void;
@@ -720,6 +725,28 @@ export function happyAgentDirectoryStoreCreate(
         };
     };
 
+    /**
+     * Gives a server just created the picture chosen for it, over the
+     * connection signed in to it. The server's own `config.updated` brings the
+     * picture to its tile once it is kept; one that is not kept is only logged,
+     * since the server is there either way.
+     */
+    const nodePictureSend = (id: string, picture: HappyAgentAvatarImage): void => {
+        const url = remotes.get(id)?.url;
+        if (url === undefined) {
+            console.warn("The new server's picture was not sent: it has no connection yet.");
+            return;
+        }
+        void happyCloudRequestCreate({ endpoint: url, token: "happy-local-capability" })(
+            "PUT",
+            "v0/node/avatar",
+            new Blob([picture.data], { type: picture.contentType }),
+            { "content-type": picture.contentType },
+        ).catch((error: unknown) => {
+            console.warn("The new server's picture was not sent.", error);
+        });
+    };
+
     function cloudForget(connectionId: string): void {
         const wanted = new Set(cloudWanted);
         wanted.delete(connectionId);
@@ -1224,7 +1251,10 @@ export function happyAgentDirectoryStoreCreate(
                   },
                   ...(deps.cloud
                       ? {
-                            async happyAgentCloudConnect(connectionId: string) {
+                            async happyAgentCloudConnect(
+                                connectionId: string,
+                                picture?: HappyAgentAvatarImage,
+                            ) {
                                 const item = cloudItems([connectionId])[0];
                                 const sessions = deps.serverSessions;
                                 if (!item || !sessions)
@@ -1261,6 +1291,7 @@ export function happyAgentDirectoryStoreCreate(
                                         message: "Happy couldn't finish signing in to this server.",
                                     };
                                 roster?.connectionSelect(item.id);
+                                if (picture) nodePictureSend(item.id, picture);
                                 return { ok: true };
                             },
                             happyAgentCloudForget: cloudForget,

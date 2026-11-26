@@ -1,4 +1,10 @@
-import type { HappyAgentChiefOfStaffRequest } from "happy-desktop-state";
+import {
+    happyAgentPicturePickStoreCreate,
+    type HappyAgentAvatarImage,
+    type HappyAgentChiefOfStaffRequest,
+    type HappyAgentPicturePickStore,
+    type HappyAgentProfilePhotoCodec,
+} from "happy-desktop-state";
 import type {
     CloudConnectAgentAudience,
     CloudConnectAvailability,
@@ -17,6 +23,12 @@ export interface DesktopCloudConnectStore {
     /** The screen on show, or nothing. */
     get(): CloudConnectView | undefined;
     subscribe(listener: () => void): () => void;
+    /**
+     * The picture chosen on the create step, held here until the server
+     * exists and this app is signed in to it. Absent without a way to crop
+     * pictures.
+     */
+    readonly picture?: HappyAgentPicturePickStore;
     /** The sidebar's "+": Happy Cloud's welcome, with a close button. */
     connectOpen(): void;
     /**
@@ -99,8 +111,12 @@ export function desktopCloudConnectStoreCreate(input: {
         HappyDesktopBridge,
         "serverSignInBegin" | "serverSignInFinish" | "serverSignInCancel"
     >;
+    /** Decodes and crops the picture the create step is given. */
+    readonly photoCodec?: HappyAgentProfilePhotoCodec;
+    /** `picture`, from the create step, is given to the server once signed in to. */
     readonly connect: (
         connectionId: string,
+        picture?: HappyAgentAvatarImage,
     ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
     /**
      * Writes the request into This Mac's Chief of Staff draft and opens that
@@ -118,6 +134,9 @@ export function desktopCloudConnectStoreCreate(input: {
             ? { start: emailCodeStart, verify: emailCodeVerify }
             : undefined;
     const listeners = new Set<() => void>();
+    const picture = input.photoCodec
+        ? happyAgentPicturePickStoreCreate({ codec: input.photoCodec })
+        : undefined;
     let view: CloudConnectView | undefined;
     // Opened from the start page rather than the sidebar's "+".
     let fromStart = false;
@@ -273,13 +292,14 @@ export function desktopCloudConnectStoreCreate(input: {
     /** Signs this app in to one of the account's servers, which selects it behind the screen. */
     const enter = async (
         server: HappyCloudServer,
+        image?: HappyAgentAvatarImage,
     ): Promise<
         | { readonly ok: true }
         | { readonly ok: false; readonly code?: string; readonly message: string }
     > => {
         const added = await cloud.serverConnect(server.id);
         if (!added.ok) return added;
-        return input.connect(added.value);
+        return input.connect(added.value, image);
     };
 
     /**
@@ -288,7 +308,8 @@ export function desktopCloudConnectStoreCreate(input: {
      */
     const connect = async (server: HappyCloudServer): Promise<void> => {
         const asked = generation;
-        const answer = await enter(server).catch(() => ({
+        const image = await picture?.pictureTake().catch(() => undefined);
+        const answer = await enter(server, image).catch(() => ({
             ok: false as const,
             message: "Happy Cloud isn't reachable right now.",
         }));
@@ -299,6 +320,7 @@ export function desktopCloudConnectStoreCreate(input: {
             return;
         }
         generation += 1;
+        picture?.pictureClear();
         set(undefined);
     };
 
@@ -425,6 +447,7 @@ export function desktopCloudConnectStoreCreate(input: {
     };
 
     return {
+        ...(picture ? { picture } : {}),
         get: () => view,
         subscribe(listener) {
             listeners.add(listener);
@@ -550,6 +573,7 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         createOpen() {
             if (view?.kind !== "servers") return;
+            picture?.pictureClear();
             set({ kind: "create", name: "", availability: "idle", back: servers.length > 0 });
         },
         back() {
