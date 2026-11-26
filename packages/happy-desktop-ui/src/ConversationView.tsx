@@ -203,6 +203,11 @@ export type ConversationViewProps = {
     errorAssistance?: readonly ConversationErrorAssistanceEntry[];
     errorAssistanceUnavailable?: string;
     onErrorAssistanceRequest?: (entryId: string) => void;
+    /**
+     * Sends a reply an agent's message offered as the reader's next message.
+     * Absent, as in a read-only transcript, the replies cannot be chosen.
+     */
+    onMessageOptionSelect?: (option: string) => void;
     /** Custom introduction for a loaded conversation with no transcript entries. */
     emptyContent?: ReactNode;
     /**
@@ -1282,6 +1287,9 @@ export function ConversationView(props: ConversationViewProps) {
                                     errorAssistance={errorAssistanceFor(entry)}
                                     failure={failureFor(entry)}
                                     onErrorAssistanceRequest={props.onErrorAssistanceRequest}
+                                    {...(props.onMessageOptionSelect
+                                        ? { onMessageOptionSelect: props.onMessageOptionSelect }
+                                        : {})}
                                     activityMotion={props.motion}
                                     activityTreatment={props.activityTreatment}
                                     {...(props.streamingCaret === undefined

@@ -1,0 +1,28 @@
+/* C-351 MessageOptions — replies an agent offered, one small button each. */
+
+.happy-message-options {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+
+/* One line each, so the stack's height is its count; a long reply ends in an
+   ellipsis inside the column instead of wrapping. */
+.happy-message-options__option {
+    max-width: 100%;
+}
+
+.happy-message-options__option .happy-button__content {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.happy-message-options__option .happy-button__label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
