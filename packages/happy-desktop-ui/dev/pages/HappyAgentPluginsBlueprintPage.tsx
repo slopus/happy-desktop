@@ -219,7 +219,8 @@ const happySkills: HappyAgentCustomPlugin = {
         },
         {
             name: "bro",
-            description: "Restate the previous assistant message in simple, concise human language.",
+            description:
+                "Restate the previous assistant message in simple, concise human language.",
         },
         {
             name: "how",
@@ -228,7 +229,8 @@ const happySkills: HappyAgentCustomPlugin = {
         },
         {
             name: "sync-to-main",
-            description: "Commit all workspace work, rebase on main, and push to main without force.",
+            description:
+                "Commit all workspace work, rebase on main, and push to main without force.",
         },
         {
             name: "unslop",
