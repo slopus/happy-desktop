@@ -14,7 +14,7 @@ const MENTION_PLACES_LIMIT = 5;
  * own Surfaces, then the bots, tasks, and project chats in their list, each
  * written as the `happy://` link that names it, labelled with its name so the
  * words read on any surface that cannot look it up. The chat the draft is
- * written in is not offered to itself.
+ * written in is not offered to itself; a draft that starts a chat has none.
  *
  * Surfaces are offered once the reference grammar knows them; until then a
  * reference to one would read as unavailable everywhere it was shown, so
@@ -24,7 +24,7 @@ export function happyAgentMentionPlaces(input: {
     readonly query: string;
     readonly list: HappyAgentSessionListSnapshot;
     readonly catalog: HappyAgentSurfaceCatalogSnapshot | undefined;
-    readonly conversationId: HappyAgentSessionId;
+    readonly conversationId?: HappyAgentSessionId;
     /** The other people on the team, held by the connection from its bootstrap. */
     readonly teammates: readonly HappyAgentTeammate[];
     /** The people already in this chat: its owner and whoever has written in it. */

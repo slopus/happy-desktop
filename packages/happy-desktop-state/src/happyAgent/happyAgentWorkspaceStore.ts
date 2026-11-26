@@ -5346,6 +5346,75 @@ export function happyAgentWorkspaceStoreCreate(
         return undefined;
     };
 
+    /**
+     * Answers one composer's `@` token. The people, Surfaces, and chats it
+     * names are held here, so they answer at once; the files the token still
+     * names stand beside them until the search of the group the draft is
+     * written in answers. A draft with no group yet names no files. `current`
+     * is whether the composer still wants this token answered.
+     */
+    const mentionAnswer = (input: {
+        readonly target: ComposerStore;
+        readonly query: string;
+        readonly groupId: HappyAgentGroupId | undefined;
+        readonly conversationId?: HappyAgentSessionId;
+        readonly present?: ReadonlySet<string>;
+        readonly current: () => boolean;
+    }): void => {
+        const { target, query } = input;
+        const places = happyAgentMentionPlaces({
+            query,
+            list: list.get(),
+            catalog: client.surfaces().catalog().get(),
+            ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+            teammates: client.teammates(),
+            ...(input.present === undefined ? {} : { present: input.present }),
+        });
+        const needle = query.toLowerCase();
+        const filesStanding = target
+            .getState()
+            .mentionCandidates.filter(
+                (candidate) =>
+                    candidate.subject.kind === "file" &&
+                    candidate.label.toLowerCase().includes(needle),
+            );
+        if (places.length > 0)
+            target.getState().composerInput({
+                type: "mentionCandidatesReconciled",
+                query,
+                candidates: [...places, ...filesStanding],
+            });
+        const group = input.groupId;
+        if (!group) {
+            if (places.length === 0)
+                target.getState().composerInput({
+                    type: "mentionCandidatesReconciled",
+                    query,
+                    candidates: [],
+                });
+            return;
+        }
+        void client.filesSearch(group, query, MENTION_LIMIT).then(
+            (files: readonly HappyAgentFileSearchResult[]) => {
+                if (!input.current()) return;
+                target.getState().composerInput({
+                    type: "mentionCandidatesReconciled",
+                    query,
+                    candidates: [
+                        ...places,
+                        ...files.map((file) => ({
+                            id: `file:${file.path}`,
+                            label: file.path,
+                            subject: { kind: "file" as const },
+                            insertion: `@${file.path}`,
+                        })),
+                    ],
+                });
+            },
+            () => undefined,
+        );
+    };
+
     const composerCreate = (conversationId: HappyAgentSessionId): ComposerStore => {
         const submittingComposer = composerSubmissions.get(conversationId)?.composer;
         if (submittingComposer) return submittingComposer;
@@ -5539,15 +5608,11 @@ export function happyAgentWorkspaceStoreCreate(
                         if (query === undefined) return;
                         const target = composer;
                         if (target === undefined) return;
-                        // Surfaces and chats are held here, so they answer at
-                        // once; the files the token still names stand beside
-                        // them until the search answers.
-                        const places = happyAgentMentionPlaces({
+                        mentionAnswer({
+                            target,
                             query,
-                            list: list.get(),
-                            catalog: client.surfaces().catalog().get(),
+                            groupId: conversationGroupId(conversationId),
                             conversationId,
-                            teammates: client.teammates(),
                             present: conversationPeople(
                                 list.get(),
                                 conversationId,
@@ -5555,51 +5620,9 @@ export function happyAgentWorkspaceStoreCreate(
                                     ? chatStore.get().entries
                                     : [],
                             ),
+                            current: () =>
+                                requestGeneration === mentionGeneration && composer === target,
                         });
-                        const needle = query.toLowerCase();
-                        const filesStanding = target
-                            .getState()
-                            .mentionCandidates.filter(
-                                (candidate) =>
-                                    candidate.subject.kind === "file" &&
-                                    candidate.label.toLowerCase().includes(needle),
-                            );
-                        if (places.length > 0)
-                            target.getState().composerInput({
-                                type: "mentionCandidatesReconciled",
-                                query,
-                                candidates: [...places, ...filesStanding],
-                            });
-                        const group = conversationGroupId(conversationId);
-                        if (!group) {
-                            if (places.length === 0)
-                                target.getState().composerInput({
-                                    type: "mentionCandidatesReconciled",
-                                    query,
-                                    candidates: [],
-                                });
-                            return;
-                        }
-                        void client.filesSearch(group, query, MENTION_LIMIT).then(
-                            (files: readonly HappyAgentFileSearchResult[]) => {
-                                if (requestGeneration !== mentionGeneration || composer !== target)
-                                    return;
-                                target.getState().composerInput({
-                                    type: "mentionCandidatesReconciled",
-                                    query,
-                                    candidates: [
-                                        ...places,
-                                        ...files.map((file) => ({
-                                            id: `file:${file.path}`,
-                                            label: file.path,
-                                            subject: { kind: "file" as const },
-                                            insertion: `@${file.path}`,
-                                        })),
-                                    ],
-                                });
-                            },
-                            () => undefined,
-                        );
                         return;
                     }
                     default:
@@ -6512,8 +6535,20 @@ export function happyAgentWorkspaceStoreCreate(
         const scope =
             kind === "bugReport" ? BUG_REPORT_CREATE_COMPOSER_SCOPE : BOT_CREATE_COMPOSER_SCOPE;
         const created: ComposerStore = composerStoreCreate(scope, {
-            capabilities: { shellMode: false, commands: [], mentions: false },
+            capabilities: { shellMode: false, commands: [], mentions: true },
             output: (event) => {
+                // Nothing exists to search for files yet, so the token is
+                // answered at once with the people, Surfaces, and chats.
+                if (event.type === "mentionQueryUpdated") {
+                    if (event.query === undefined) return;
+                    mentionAnswer({
+                        target: created,
+                        query: event.query,
+                        groupId: undefined,
+                        current: () => botCreateComposer === created,
+                    });
+                    return;
+                }
                 // The composer's own submission lifecycle carries the
                 // whole act: pending while the bot is made and the message
                 // sent, and failed — with the host's reason and a retry —
@@ -7805,8 +7840,11 @@ export function happyAgentWorkspaceStoreCreate(
                     },
                 );
             };
+            // Rejects a file search answered after a newer token or after the
+            // group was left.
+            let mentionRequest = 0;
             const created: ComposerStore = composerStoreCreate(groupId, {
-                capabilities: { shellMode: false, commands: [], mentions: false },
+                capabilities: { shellMode: false, commands: [], mentions: true },
                 text: client.memory.groupRead(groupId)?.draft ?? "",
                 attachments: [
                     ...(groupAttachments.get(groupId) ?? []),
@@ -7858,6 +7896,18 @@ export function happyAgentWorkspaceStoreCreate(
                                     () => undefined,
                                 ),
                             );
+                            return;
+                        }
+                        case "mentionQueryUpdated": {
+                            const request = ++mentionRequest;
+                            if (event.query === undefined) return;
+                            mentionAnswer({
+                                target: created,
+                                query: event.query,
+                                groupId,
+                                current: () =>
+                                    request === mentionRequest && groupComposer === created,
+                            });
                             return;
                         }
                         default:
