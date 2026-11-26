@@ -163,10 +163,26 @@ export interface HappyAgentTask {
     readonly membership?: { readonly orderKey: string };
 }
 
+/**
+ * The one repository checkout a Happy Cloud agent was started scoped to, with
+ * that repository's name and photo as the server last said. It is set when the
+ * agent is made and never changes; the name and photo are the repository's own.
+ */
+export interface HappyAgentAgentScope {
+    readonly repositoryId: string;
+    /** Where the checkout is, relative to the agent's workspace root. */
+    readonly folder: string;
+    readonly name: string;
+    /** Its photo, painted from the ThumbHash until it loads; null without one. */
+    readonly avatar: { readonly url: string; readonly thumbhash: string } | null;
+}
+
 /** An active interactive task; its workspace may be shared with its parent. */
 export interface HappyAgentBotSubtask {
     readonly workspaceId: HappyAgentWorktreeId;
     readonly path: string;
+    /** The repository checkout it is scoped to on Happy Cloud; absent for one free to work in any. */
+    readonly scope?: HappyAgentAgentScope;
     readonly conversation: ConversationSummary;
     readonly subtasks: readonly HappyAgentBotSubtask[];
 }

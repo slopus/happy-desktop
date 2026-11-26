@@ -195,6 +195,10 @@ import {
 } from "./happyAgentCheckoutsStore.js";
 import { happyAgentTaskCheckoutsStoreCreate } from "./happyAgentTaskCheckoutsStore.js";
 import {
+    happyAgentTaskRepositoriesStoreCreate,
+    type HappyAgentTaskRepositoriesStore,
+} from "./happyAgentTaskRepositoriesStore.js";
+import {
     happyAgentVoiceSettingsStoreCreate,
     type HappyAgentVoiceSettingsStore,
 } from "./happyAgentVoiceSettingsStore.js";
@@ -385,6 +389,12 @@ export interface HappyAgentWorkspaceClient {
      * agents are asked for; undefined anywhere but Happy Cloud.
      */
     taskCheckouts(agentIds: readonly string[]): HappyAgentCheckoutsStore | undefined;
+    /**
+     * The repositories of every task the reader has joined, which their
+     * sidebar rows wear as photos. Materialized on first access and shared;
+     * undefined anywhere but Happy Cloud.
+     */
+    taskRepositories(): HappyAgentTaskRepositoriesStore | undefined;
     /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
@@ -896,6 +906,7 @@ export function happyAgentWorkspaceClientCreate(
         string,
         { readonly key: string; readonly store: HappyAgentCheckoutsStore }
     >();
+    let taskRepositoriesStore: HappyAgentTaskRepositoriesStore | undefined;
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
@@ -1533,6 +1544,17 @@ export function happyAgentWorkspaceClientCreate(
             taskCheckoutStores.set(root, { key, store });
             return store;
         },
+        taskRepositories() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            taskRepositoriesStore ??= happyAgentTaskRepositoriesStoreCreate({
+                request,
+                endpoint: deps.client.endpoint,
+                sync: deps.connection.sync,
+            });
+            return taskRepositoriesStore;
+        },
         taskSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             taskSettingsStore ??= happyAgentTaskSettingsStoreCreate({
@@ -1775,6 +1797,8 @@ export function happyAgentWorkspaceClientCreate(
             checkoutStores.clear();
             for (const { store } of taskCheckoutStores.values()) store[Symbol.dispose]();
             taskCheckoutStores.clear();
+            taskRepositoriesStore?.[Symbol.dispose]();
+            taskRepositoriesStore = undefined;
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();

@@ -1,0 +1,196 @@
+/*
+ * C-354 RepositoryStack — the repositories a task works in, in its sidebar row.
+ *
+ * Contract: exactly the row's 20 × 20 identity lane, whatever it holds. A pile
+ * is two 14px tiles on the lane's diagonal — the first repository's photo in
+ * front at the bottom-left and the second's behind it at the top-right; past
+ * two, the first photo at 16px with a `+N` pill on its top-right corner
+ * counting the rest — so the lane's top-right and
+ * bottom-right corners, where the row's unread dot and folded count go, stay
+ * the corners of a 20px mark. Fanning out is a transform, so it lays nothing
+ * out.
+ *
+ * The gap between piled tiles is cut in `--surface`; the sidebar cuts it in
+ * the row's own background (sidebar.css).
+ */
+
+.happy-repository-stack,
+.happy-repository-stack * {
+    box-sizing: border-box;
+}
+
+.happy-repository-stack {
+    --happy-repository-glide: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    display: flex;
+    flex: none;
+    width: 20px;
+    height: 20px;
+}
+
+.happy-repository-stack__single {
+    display: flex;
+}
+
+/* Each piled tile is the 20px avatar drawn at 14px, so a picture, a
+   placeholder, the count and their corners all shrink together and stay one
+   shape. Slot 0 is the bottom-left, slot 1 the top-right. */
+.happy-repository-stack__tile {
+    --happy-repository-step: 6px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: var(--happy-repository-depth);
+    display: flex;
+    transform: translate(
+            calc(var(--happy-repository-slot) * var(--happy-repository-step)),
+            calc((1 - var(--happy-repository-slot)) * var(--happy-repository-step))
+        )
+        scale(0.7);
+    transform-origin: 0 0;
+    transition: transform var(--happy-repository-glide);
+}
+
+.happy-repository-stack__tile > .happy-repository-stack__photo {
+    box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* Rested on, the pile fans apart along its diagonal, about its own centre. */
+.happy-repository-stack:hover > .happy-repository-stack__tile,
+.happy-repository-stack[data-open] > .happy-repository-stack__tile {
+    transform: translate(
+            calc(var(--happy-repository-slot) * 10px - 2px),
+            calc((1 - var(--happy-repository-slot)) * 10px - 2px)
+        )
+        scale(0.7);
+}
+
+/* Past two: the first photo at 16px in the lane's bottom-left, and a pill
+   counting the rest over its top-right corner. The photo keeps most of its
+   face; the pill's 8px figures fit `+99` inside the lane. */
+.happy-repository-stack__lead {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    transform: scale(0.8);
+    transform-origin: 0 100%;
+    transition: transform var(--happy-repository-glide);
+}
+
+.happy-repository-stack__more {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 12px;
+    height: 11px;
+    padding: 0 2px;
+    border-radius: var(--happy-radius-pill);
+    /* The avatar's neutral chip, made opaque so the photo under it does not
+       show through. */
+    background: linear-gradient(var(--surface-ripple), var(--surface-ripple)), var(--surface);
+    box-shadow: 0 0 0 1.5px var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    line-height: 11px;
+    font-synthesis: none;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transition: transform var(--happy-repository-glide);
+}
+
+.happy-repository-stack:hover > .happy-repository-stack__lead,
+.happy-repository-stack[data-open] > .happy-repository-stack__lead {
+    transform: translate(-2px, 2px) scale(0.8);
+}
+
+.happy-repository-stack:hover > .happy-repository-stack__more,
+.happy-repository-stack[data-open] > .happy-repository-stack__more {
+    transform: translate(3px, -3px);
+}
+
+/* ---- The list ---- */
+
+.happy-repository-stack__list {
+    position: fixed;
+    z-index: var(--happy-z-overlay);
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+    min-width: 200px;
+    max-width: 320px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    box-shadow: 0 4px 16px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    pointer-events: none;
+}
+
+.happy-repository-stack__list[data-above] {
+    transform: translateY(-100%);
+}
+
+/* A fixture's list hangs from the pile itself rather than off the window. */
+.happy-repository-stack__list[data-pinned] {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+}
+
+.happy-repository-stack__rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-repository-stack__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px;
+}
+
+.happy-repository-stack__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-repository-stack__name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-repository-stack__where {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-repository-stack__tile,
+    .happy-repository-stack__lead,
+    .happy-repository-stack__more {
+        transition: none;
+    }
+}

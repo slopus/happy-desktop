@@ -1446,6 +1446,17 @@
     mask-image: none;
 }
 
+/* Piled repository tiles, and the count on a pile, part on what the row stands on. */
+.happy-sidebar__item-leading .happy-repository-stack__tile > *,
+.happy-sidebar__item-leading .happy-repository-stack__more {
+    box-shadow: 0 0 0 2px var(--groupped-background);
+}
+
+.happy-sidebar__item[data-active] .happy-sidebar__item-leading .happy-repository-stack__tile > *,
+.happy-sidebar__item[data-active] .happy-sidebar__item-leading .happy-repository-stack__more {
+    box-shadow: 0 0 0 2px var(--surface-selected);
+}
+
 .happy-sidebar__item-context-avatar {
     display: flex;
     flex: 0 0 auto;

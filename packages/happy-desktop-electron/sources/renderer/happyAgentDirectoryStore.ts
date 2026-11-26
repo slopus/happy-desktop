@@ -28,6 +28,7 @@ import type {
     HappyAgentProjectAddSnapshot,
     HappyAgentProjectGroup,
     HappyAgentSessionListSnapshot,
+    HappyAgentTaskRepositoriesSnapshot,
     HappyAgentSessionLocation,
     HappyAgentViewersActivity,
     TerminalColorScheme,
@@ -141,6 +142,11 @@ export interface HappyAgentDirectoryEntry {
     readonly botFailures: HappyAgentSessionListSnapshot["botFailures"];
     /** This Happy Agent's tasks the reader has joined, in the reader's own order. */
     readonly tasks: HappyAgentSessionListSnapshot["tasks"];
+    /**
+     * The repositories each joined task works in, and repositories changed
+     * since, which scoped subtasks wear; absent anywhere but Happy Cloud.
+     */
+    readonly taskRepositories?: Pick<HappyAgentTaskRepositoriesSnapshot, "tasks" | "changed">;
     /** Task acts the host refused, with the reason to show. */
     readonly taskFailures: HappyAgentSessionListSnapshot["taskFailures"];
     readonly session?: HappyAgentSession;
@@ -288,6 +294,7 @@ interface LocalHappyAgent {
     attentionUnfollow?: () => void;
     connectionUnsubscribe?: () => void;
     workspaceUnsubscribe?: () => void;
+    taskRepositoriesUnsubscribe?: () => void;
     node?: HappyAgentNodeStore;
     nodeUnsubscribe?: () => void;
     protocolMismatch?: HappyAgentProtocolMismatch;
@@ -715,6 +722,8 @@ export function happyAgentDirectoryStoreCreate(
         happyAgent.connectionUnsubscribe = undefined;
         happyAgent.workspaceUnsubscribe?.();
         happyAgent.workspaceUnsubscribe = undefined;
+        happyAgent.taskRepositoriesUnsubscribe?.();
+        happyAgent.taskRepositoriesUnsubscribe = undefined;
         happyAgent.nodeUnsubscribe?.();
         happyAgent.nodeUnsubscribe = undefined;
         happyAgent.attentionUnfollow?.();
@@ -938,6 +947,26 @@ export function happyAgentDirectoryStoreCreate(
                             happyAgent.entry = { ...happyAgent.entry, ...projects };
                             publish();
                         });
+                        // A Happy Cloud server says which repositories each task
+                        // works in; its rows wear their photos while it is open.
+                        happyAgent.taskRepositoriesUnsubscribe?.();
+                        happyAgent.taskRepositoriesUnsubscribe = undefined;
+                        const taskRepositories = session.taskRepositories();
+                        if (taskRepositories)
+                            happyAgent.taskRepositoriesUnsubscribe = taskRepositories.subscribe(
+                                () => {
+                                    if (happyAgent.entry.session !== session) return;
+                                    const { tasks, changed } = taskRepositories.get();
+                                    const current = happyAgent.entry.taskRepositories;
+                                    if (current?.tasks === tasks && current.changed === changed)
+                                        return;
+                                    happyAgent.entry = {
+                                        ...happyAgent.entry,
+                                        taskRepositories: { tasks, changed },
+                                    };
+                                    publish();
+                                },
+                            );
                         happyAgent.connectionUnsubscribe = session.connection.subscribe(() => {
                             if (happyAgent.entry.session !== session) return;
                             happyAgent.entry = {

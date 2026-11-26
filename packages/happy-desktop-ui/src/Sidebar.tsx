@@ -37,6 +37,7 @@ import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
 import { Tooltip } from "./Tooltip";
 import { type ImageMark } from "./imageMark";
+import { RepositoryStack, type RepositoryStackEntry } from "./RepositoryStack";
 import { ScrollArea } from "./Scrollbar";
 import { useDevicePixelRatio } from "./devicePixelRatio";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
@@ -101,6 +102,12 @@ export type SidebarItem = {
         /** The ID whose live placeholder it wears without a picture or glyph (`Avatar`). */
         placeholderSeed?: string;
     }[];
+    /**
+     * The repositories a task row works in, worn as its identity in place of
+     * its own face: one repository's photo, or several piled, which fan out
+     * into a list of them when the pointer rests on the pile.
+     */
+    repositories?: readonly RepositoryStackEntry[];
     /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
     icon?: IconName;
     /**
@@ -654,7 +661,7 @@ function leadingIcon(item: SidebarItem): IconName {
  * carries it.
  */
 function showsLeadingSlot(item: SidebarItem): boolean {
-    if (item.contextAvatars?.length) return true;
+    if (item.contextAvatars?.length || item.repositories?.length) return true;
     if ((item.depth ?? 0) === 0) return true;
     if (item.kind === "person" || item.kind === "agent" || item.kind === "project") return true;
     return item.icon !== undefined || item.emoji !== undefined;
@@ -2389,6 +2396,8 @@ function SidebarRow({
                         />
                     ) : activityLeading() ? (
                         activityMark()
+                    ) : item().repositories?.length ? (
+                        <RepositoryStack repositories={item().repositories!} />
                     ) : item().contextAvatars?.length ? (
                         item().contextAvatars?.map((avatar) => (
                             <span

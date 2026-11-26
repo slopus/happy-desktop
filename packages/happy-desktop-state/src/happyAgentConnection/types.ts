@@ -29,6 +29,7 @@ import type {
 import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
 import type {
     HappyAgentCompute,
+    HappyAgentAgentScope,
     HappyAgentRepositoryBinding,
 } from "../happyAgent/happyAgentTypes.js";
 import type { HappyAgentSync } from "./happyAgentSync.js";
@@ -782,6 +783,8 @@ export interface BotGroup {
 export interface BotSubtaskGroup {
     workspaceId: string;
     path: string;
+    /** The repository checkout a Happy Cloud agent is scoped to; absent for one free to work in any. */
+    scope?: HappyAgentAgentScope;
     session: GroupSession;
     subtasks: readonly BotSubtaskGroup[];
 }

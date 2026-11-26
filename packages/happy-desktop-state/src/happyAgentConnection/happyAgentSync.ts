@@ -41,6 +41,7 @@ export type HappyCloudEventType =
     | "payments.updated"
     | "checkout.updated"
     | "repository.updated"
+    | "repository.deleted"
     | "checkout.deleted"
     | "pipeline.updated"
     | "pipeline.run.updated"
