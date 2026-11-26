@@ -28,10 +28,13 @@ import {
  * spelled out here to the letter of those types, and `MessageSchemaMatches`
  * below proves the two agree.
  *
- * Two departures, both so an older client keeps reading a newer server: a
- * presentation of a type this build does not know reads as no presentation
+ * Three departures from it. So an older client keeps reading a newer server,
+ * a presentation of a type this build does not know reads as no presentation
  * (`messageAdmission` drops it), and a question's `header` may be empty, as
- * it is on iOS and Android.
+ * it is on iOS and Android. And a user message's `mode` may be null: Happy
+ * Agent writes `mode: message.mode ?? null` for a message stored before modes
+ * were (`ApiMessageProjection.ts`), though the client's type has no null. It
+ * must still be present. Every reader of it here takes null as no mode.
  *
  * Checked with `Value`, not a `TypeCompiler` function: the renderer's content
  * security policy refuses the `new Function` a compiled check is built with.
@@ -115,8 +118,8 @@ const presentationAdmittedSchema = Type.Union([
     }),
 ]);
 
-/** The whole message, with tool-call presentations read as `presentation`. */
-function messageSchemaOf<P extends TSchema>(presentation: P) {
+/** The whole message, with tool-call presentations read as `presentation` and a user's mode as `mode`. */
+function messageSchemaOf<P extends TSchema, M extends TSchema>(presentation: P, mode: M) {
     const toolCallBlockBase = {
         type: Type.Literal("tool_call"),
         id: Type.String(),
@@ -170,7 +173,7 @@ function messageSchemaOf<P extends TSchema>(presentation: P) {
             profile: Type.Optional(Type.Union([Type.String(), Type.Null()])),
             status: Type.Union([Type.Literal("pending"), Type.Literal("accepted")]),
             delivery: Type.Union([Type.Literal("queue"), Type.Literal("steer")]),
-            mode: messageModeSchema,
+            mode,
             runId: Type.Union([cuid2Schema, Type.Null()]),
         }),
         Type.Object({ ...messageBase, role: Type.Literal("agent") }),
@@ -186,11 +189,16 @@ function messageSchemaOf<P extends TSchema>(presentation: P) {
 }
 
 /** What arrives is checked against this; what it admits is the protocol's message once dropped presentations are gone. */
-const messageSchema = messageSchemaOf(presentationAdmittedSchema);
+const messageSchema = messageSchemaOf(
+    presentationAdmittedSchema,
+    Type.Union([messageModeSchema, Type.Null()]),
+);
 
 /* The protocol's own message, with only the presentations it publishes, is a `Message`. */
 type MessageSchemaMatches =
-    Static<ReturnType<typeof messageSchemaOf<typeof toolPresentationSchema>>> extends Message
+    Static<
+        ReturnType<typeof messageSchemaOf<typeof toolPresentationSchema, typeof messageModeSchema>>
+    > extends Message
         ? true
         : never;
 const messageSchemaMatches: MessageSchemaMatches = true;

@@ -141,6 +141,18 @@ it("still fails a presentation of a known type with a bad shape", () => {
     ]);
 });
 
+it("allows a user message's mode to be null, but not missing", () => {
+    const legacy = protocolMessageFixtures("valid").find(
+        (fixture) => fixture.name === "user-legacy-null-mode",
+    )!.message as Record<string, unknown>;
+    expect(legacy.mode).toBeNull();
+    expect(messageProblem(legacy)).toBeUndefined();
+    const { mode: _, ...missing } = legacy;
+    expect(messageProblem(missing)?.errors.some((error) => error.startsWith("/mode: "))).toBe(
+        true,
+    );
+});
+
 it("allows a question with an empty header", () => {
     const card = structuredClone(
         protocolMessageFixtures("invalid").find(

@@ -10,9 +10,14 @@ its `Message` TypeScript types for the envelope and the text, image, reasoning
 and tool-call blocks. Desktop's composition of them is
 `packages/happy-desktop-state/src/happyAgentConnection/messageValidate.ts`.
 
-Two departures from that schema keep an older client reading a newer server:
-a tool-call presentation of a type the client does not know is dropped rather
-than failing its message, and a question's `header` may be empty.
+Three departures from that schema. Two keep an older client reading a newer
+server: a tool-call presentation of a type the client does not know is dropped
+rather than failing its message, and a question's `header` may be empty. The
+third keeps old history readable: a user message's `mode` may be `null`, as
+Happy Agent sends it for a message stored before modes were
+(`ApiMessageProjection.ts`, `mode: message.mode ?? null`), although the
+published `UserMessage` type declares `mode: MessageMode`. `mode` must still
+be present.
 
 ## Layout
 
@@ -57,5 +62,7 @@ Each file is one JSON object:
   the client does not know is read as no presentation: the client shows the
   plain tool call and logs it once. A presentation of a known type with a bad
   shape, such as the card above, still fails the whole message.
+- `valid/user-legacy-null-mode.json` is such a user message with `mode: null`;
+  `invalid/user-missing-mode.json`, with no `mode` at all, still fails.
 - A question's `header` may be empty: clients do not enforce the published
   schema's `minLength: 1` on it.
