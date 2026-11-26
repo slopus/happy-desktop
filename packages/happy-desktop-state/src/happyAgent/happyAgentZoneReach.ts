@@ -65,7 +65,11 @@ export type HappyAgentZoneReach =
     | {
           readonly kind: "ready";
           readonly plugins: readonly HappyAgentZonePlugin[];
-          readonly policies: readonly HappyAgentZonePolicy[];
+          /**
+           * The policies on the zone's plugins and tools; `null` where the
+           * server has no policies yet, and the page says nothing about them.
+           */
+          readonly policies: readonly HappyAgentZonePolicy[] | null;
           /** Every installation of the team, for adding one to the zone. */
           readonly installations: readonly HappyAgentZoneInstallation[];
       };

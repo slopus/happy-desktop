@@ -75,7 +75,7 @@ export function AppPermissionsSettings(props: {
     const plugins = reach?.plugins ?? [];
     return (
         <>
-            {opened && policy ? (
+            {opened && policy && reach?.policies ? (
                 <HappyAgentZonePolicyPage
                     {...(policy.error ? { error: policy.error.message } : {})}
                     {...(policy.testError ? { testError: policy.testError.message } : {})}
@@ -159,6 +159,7 @@ export function AppPermissionsSettings(props: {
                                     : { removing: open.removing })}
                                 expanded={open?.expanded ?? []}
                                 manage={snapshot.manage}
+                                policies={reach.policies !== null}
                                 onAdd={() => store.zonePluginsPickOpen()}
                                 onRemove={(installationId) =>
                                     store.zonePluginRemove(installationId)
@@ -175,18 +176,21 @@ export function AppPermissionsSettings(props: {
                                     tools: plugin.tools,
                                 }))}
                             />
-                            <HappyAgentZonePoliciesSection
-                                canAdd={reach.plugins.length > 0}
-                                manage={snapshot.manage}
-                                onAdd={() => store.zonePolicyCreateOpen()}
-                                onOpen={(policyId) => store.zonePolicyOpen(policyId)}
-                                policies={reach.policies.map((entry) => ({
-                                    id: entry.id,
-                                    description: entry.description,
-                                    targetLabel: targetLabel(reach.plugins, entry.target),
-                                    enabled: entry.enabled,
-                                }))}
-                            />
+                            {/* A server without policies yet gets nothing about them. */}
+                            {reach.policies === null ? null : (
+                                <HappyAgentZonePoliciesSection
+                                    canAdd={reach.plugins.length > 0}
+                                    manage={snapshot.manage}
+                                    onAdd={() => store.zonePolicyCreateOpen()}
+                                    onOpen={(policyId) => store.zonePolicyOpen(policyId)}
+                                    policies={reach.policies.map((entry) => ({
+                                        id: entry.id,
+                                        description: entry.description,
+                                        targetLabel: targetLabel(reach.plugins, entry.target),
+                                        enabled: entry.enabled,
+                                    }))}
+                                />
+                            )}
                         </>
                     ) : null}
                 </HappyAgentZonePage>

@@ -690,8 +690,28 @@ export function happyAgentZonesStoreCreate(deps: {
                 const plugin = happyAgentZonePluginRead(deps.endpoint, value);
                 return plugin ? [plugin] : [];
             });
+            // Policies arrive after plugins: the policies of the zone's first installation
+            // say whether the server has them at all. Any refusal, or no installation to
+            // ask about, leaves every part of the page about policies out.
+            const probe: HappyAgentZonePolicyTarget | undefined = plugins[0]
+                ? { kind: "plugin", installationId: plugins[0].id }
+                : undefined;
+            const [installed, probed] = await Promise.all([
+                deps.request("GET", "v0/plugins/installations").catch(() => undefined),
+                probe
+                    ? deps.request("GET", policiesPath(zoneId, probe)).then(
+                          (answer) => ({ answer }),
+                          () => undefined,
+                      )
+                    : undefined,
+            ]);
+            const installations = listOf(recordOf(installed)?.installations).flatMap((value) => {
+                const installation = happyAgentZoneInstallationRead(deps.endpoint, value);
+                return installation ? [installation] : [];
+            });
+            if (!probe || !probed) return { kind: "ready", plugins, installations, policies: null };
             const targets: HappyAgentZonePolicyTarget[] = plugins.flatMap((plugin) => [
-                ...(plugin.policyCount > 0
+                ...(plugin.policyCount > 0 && plugin.id !== probe.installationId
                     ? [{ kind: "plugin" as const, installationId: plugin.id }]
                     : []),
                 ...plugin.tools
@@ -702,20 +722,16 @@ export function happyAgentZonesStoreCreate(deps: {
                         tool: tool.name,
                     })),
             ]);
-            const [installed, ...lists] = await Promise.all([
-                deps.request("GET", "v0/plugins/installations").catch(() => undefined),
-                ...targets.map((target) =>
+            const lists = await Promise.all(
+                targets.map((target) =>
                     deps.request("GET", policiesPath(zoneId, target)).catch(() => undefined),
                 ),
-            ]);
+            );
             return {
                 kind: "ready",
                 plugins,
-                installations: listOf(recordOf(installed)?.installations).flatMap((value) => {
-                    const installation = happyAgentZoneInstallationRead(deps.endpoint, value);
-                    return installation ? [installation] : [];
-                }),
-                policies: lists.flatMap((list) =>
+                installations,
+                policies: [probed.answer, ...lists].flatMap((list) =>
                     listOf(recordOf(list)?.policies).flatMap((value) => {
                         const policy = happyAgentZonePolicyRead(value);
                         return policy ? [policy] : [];
@@ -726,7 +742,21 @@ export function happyAgentZonesStoreCreate(deps: {
             (reach) => {
                 const open = store.getState().open;
                 if (disposed || open?.zoneId !== zoneId) return;
-                store.setState({ open: { ...open, reach: reachKeep(open.reach, reach) } }, false);
+                // A server that no longer answers for policies takes their page with it.
+                const { policy, ...rest } = open;
+                const kept = reach.kind === "ready" && reach.policies !== null;
+                store.setState(
+                    {
+                        open: {
+                            ...rest,
+                            reach: reachKeep(open.reach, reach),
+                            ...(policy && (kept || policy.saving || policy.deleting)
+                                ? { policy }
+                                : {}),
+                        },
+                    },
+                    false,
+                );
             },
             () => {
                 // A refused read keeps what the page shows; the first one shows nothing.
@@ -746,7 +776,10 @@ export function happyAgentZonesStoreCreate(deps: {
             ? {
                   kind: "ready",
                   plugins: referencesPreserve(before.plugins, after.plugins),
-                  policies: referencesPreserve(before.policies, after.policies),
+                  policies:
+                      before.policies && after.policies
+                          ? referencesPreserve(before.policies, after.policies)
+                          : after.policies,
                   installations: referencesPreserve(before.installations, after.installations),
               }
             : after;
@@ -1122,6 +1155,8 @@ export function happyAgentZonesStoreCreate(deps: {
         zonePolicyCreateOpen(target) {
             const { open, manage } = store.getState();
             if (disposed || !manage || !open || open.reach.kind !== "ready" || open.policy) return;
+            // Only a server that has policies gets a page to write one on.
+            if (open.reach.policies === null) return;
             const plugins = open.reach.plugins;
             const chosen: HappyAgentZonePolicyTarget | undefined =
                 target ??
@@ -1132,7 +1167,7 @@ export function happyAgentZonesStoreCreate(deps: {
         zonePolicyOpen(policyId) {
             const open = store.getState().open;
             if (disposed || !open || open.reach.kind !== "ready" || open.policy) return;
-            const policy = open.reach.policies.find((entry) => entry.id === policyId);
+            const policy = open.reach.policies?.find((entry) => entry.id === policyId);
             if (!policy) return;
             store.setState(
                 {
@@ -1201,7 +1236,7 @@ export function happyAgentZonesStoreCreate(deps: {
             const saved =
                 policy.policyId === undefined || open.reach.kind !== "ready"
                     ? undefined
-                    : open.reach.policies.find((entry) => entry.id === policy.policyId);
+                    : open.reach.policies?.find((entry) => entry.id === policy.policyId);
             if (policy.policyId !== undefined && !saved)
                 return refuse("This policy was deleted in the meantime.");
             store.setState(

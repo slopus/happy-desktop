@@ -41,12 +41,12 @@ function policiesText(count: number): string {
     return count === 0 ? "No policies" : countText(count, "policy", "policies");
 }
 
-function pluginMeta(plugin: HappyAgentZonePluginRow): string {
+function pluginMeta(plugin: HappyAgentZonePluginRow, policies: boolean): string {
     const critical = plugin.tools.filter((tool) => tool.critical).length;
     return [
         countText(plugin.tools.length, "tool", "tools"),
         ...(critical > 0 ? [`${String(critical)} critical`] : []),
-        ...(plugin.policyCount > 0
+        ...(policies && plugin.policyCount > 0
             ? [`${countText(plugin.policyCount, "policy", "policies")} on every tool`]
             : []),
     ].join(" · ");
@@ -57,6 +57,8 @@ export interface HappyAgentZonePluginsSectionProps {
     /** The installations whose tools are shown. */
     readonly expanded: readonly string[];
     readonly manage: boolean;
+    /** Whether the server has policies, so each tool shows how many it has. */
+    readonly policies: boolean;
     /** The installation whose removal is on its way. */
     readonly removing?: string;
     onAdd: () => void;
@@ -67,7 +69,8 @@ export interface HappyAgentZonePluginsSectionProps {
 /**
  * The plugin installations a zone lists: only their tools reach agents in
  * it, and a critical tool only in a critical zone. Each expands to its tools,
- * with each one's critical badge and how many policies it has here.
+ * with each one's critical badge and, on a server with policies, how many
+ * policies it has here.
  */
 export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSectionProps) {
     return (
@@ -119,7 +122,7 @@ export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSection
                                                     : plugin.name}
                                             </span>
                                             <span className="happy-agent-zones__meta">
-                                                {pluginMeta(plugin)}
+                                                {pluginMeta(plugin, props.policies)}
                                             </span>
                                         </span>
                                     </button>
@@ -173,14 +176,18 @@ export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSection
                                                             </span>
                                                         ) : null}
                                                     </span>
-                                                    <span
-                                                        className="happy-agent-zones__count"
-                                                        data-none={
-                                                            tool.policyCount === 0 ? "" : undefined
-                                                        }
-                                                    >
-                                                        {policiesText(tool.policyCount)}
-                                                    </span>
+                                                    {props.policies ? (
+                                                        <span
+                                                            className="happy-agent-zones__count"
+                                                            data-none={
+                                                                tool.policyCount === 0
+                                                                    ? ""
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            {policiesText(tool.policyCount)}
+                                                        </span>
+                                                    ) : null}
                                                 </Box>
                                             ))
                                         )}

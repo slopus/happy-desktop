@@ -303,37 +303,46 @@ function Page(props: Partial<HappyAgentZonePageProps> & { readonly zoneId: strin
 }
 
 /** The Payments zone's page with what it may reach: its plugins, and the policies on them. */
-function ReachPage(props: { readonly manage: boolean; readonly expanded: readonly string[] }) {
+function ReachPage(props: {
+    readonly manage: boolean;
+    readonly expanded: readonly string[];
+    /** False for a server with plugins on zones but no policies yet. */
+    readonly policies?: boolean;
+}) {
+    const policies = props.policies !== false;
     return (
         <Page manage={props.manage} zoneId="z-payments">
             <HappyAgentZonePluginsSection
                 expanded={props.expanded}
                 manage={props.manage}
+                policies={policies}
                 onAdd={noop}
                 onRemove={noop}
                 onToggle={noop}
                 plugins={zonePlugins}
             />
-            <HappyAgentZonePoliciesSection
-                canAdd
-                manage={props.manage}
-                onAdd={noop}
-                onOpen={noop}
-                policies={[
-                    {
-                        id: "p-weekends",
-                        description: "No refunds on weekends",
-                        targetLabel: "Stripe · create_refund",
-                        enabled: true,
-                    },
-                    {
-                        id: "p-exports",
-                        description: "Ledger exports only for finance",
-                        targetLabel: "Ledger · Finance · every tool",
-                        enabled: false,
-                    },
-                ]}
-            />
+            {policies ? (
+                <HappyAgentZonePoliciesSection
+                    canAdd
+                    manage={props.manage}
+                    onAdd={noop}
+                    onOpen={noop}
+                    policies={[
+                        {
+                            id: "p-weekends",
+                            description: "No refunds on weekends",
+                            targetLabel: "Stripe · create_refund",
+                            enabled: true,
+                        },
+                        {
+                            id: "p-exports",
+                            description: "Ledger exports only for finance",
+                            targetLabel: "Ledger · Finance · every tool",
+                            enabled: false,
+                        },
+                    ]}
+                />
+            ) : null}
         </Page>
     );
 }
@@ -636,6 +645,14 @@ export function HappyCloudPermissionsFlowPage() {
                 screen="19-plugins-read-only"
             >
                 <ReachPage expanded={["i-stripe"]} manage={false} />
+            </Screen>
+            <Screen
+                detail="a server with zones' plugins but no policies yet: nothing about policies"
+                heading={ZONE_HEADING}
+                number="26"
+                screen="26-plugins-without-policies"
+            >
+                <ReachPage expanded={["i-stripe"]} manage policies={false} />
             </Screen>
             <Screen
                 detail="writing a new policy"
