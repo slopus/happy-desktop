@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
 export type ResultCardProps = {
@@ -13,6 +13,8 @@ export type ResultCardProps = {
     detail: string;
     /** Opens the thing. Absent leaves the card a plain record rather than an inert button. */
     onOpen?: () => void;
+    /** Asks for the card's own menu, as a right-click does. */
+    onContextMenu?: (event: MouseEvent<HTMLElement>) => void;
     "aria-label"?: string;
 };
 
@@ -68,6 +70,7 @@ export function ResultCard(props: ResultCardProps) {
             data-happy-desktop-ui="result-card"
             data-testid={props["data-testid"]}
             onClick={props.onOpen}
+            onContextMenu={props.onContextMenu}
             style={props.style}
             type="button"
         >
@@ -78,6 +81,7 @@ export function ResultCard(props: ResultCardProps) {
             className={className}
             data-happy-desktop-ui="result-card"
             data-testid={props["data-testid"]}
+            onContextMenu={props.onContextMenu}
             style={props.style}
         >
             {inner}
