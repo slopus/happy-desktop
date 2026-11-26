@@ -844,6 +844,7 @@ function DesktopRenderer(props: DesktopRendererProps) {
                     ? {
                           secondaryAction: {
                               label: "Connect to Happy Cloud",
+                              tag: "Beta",
                               onAction: () => props.cloudConnect?.welcomeConnectOpen(),
                           },
                       }

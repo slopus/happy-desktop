@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { NightSkyShader, type NightSkyShaderMotion } from "./NightSkyShader";
@@ -44,6 +45,11 @@ export interface WelcomeScreenProps {
     /** A quieter second way in, under the primary action. */
     readonly secondaryAction?: {
         readonly label: string;
+        /**
+         * A short tag after the label, such as "Beta". It is drawn only: the
+         * action is still called by its label.
+         */
+        readonly tag?: string;
         readonly disabled?: boolean;
         onAction(): void;
     };
@@ -186,6 +192,11 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                                 variant="ghost"
                             >
                                 {local.secondaryAction.label}
+                                {local.secondaryAction.tag ? (
+                                    <span aria-hidden="true" className="happy-welcome-tag">
+                                        <Badge label={local.secondaryAction.tag} variant="outline" />
+                                    </span>
+                                ) : null}
                             </Button>
                         ) : null}
                     </div>

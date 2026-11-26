@@ -496,13 +496,6 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 }}
                                 slides={CLOUD_SLIDES}
                             >
-                                {view.emailSignIn && !test ? (
-                                    <div className="happy-cloud-connect__links">
-                                        <Button onClick={props.onEmailOpen} variant="ghost">
-                                            Continue with email
-                                        </Button>
-                                    </div>
-                                ) : null}
                                 {test ? (
                                     <div className="happy-cloud-connect__column">
                                         <TextField

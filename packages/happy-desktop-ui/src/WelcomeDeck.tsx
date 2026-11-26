@@ -215,7 +215,7 @@ export function WelcomeDeck(props: WelcomeDeckProps) {
                                 {slide.tag ? (
                                     <span
                                         aria-hidden="true"
-                                        className="happy-welcome-deck__tag"
+                                        className="happy-welcome-tag"
                                         data-happy-desktop-ui="welcome-tag"
                                     >
                                         <Badge label={slide.tag} variant="outline" />

@@ -135,22 +135,31 @@
 }
 
 /*
- * The tag takes no width, so the title stays centred on its own words; the
- * badge hangs from the anchor off the end of the last word, raised like a
- * superscript.
+ * A welcome tag, on a slide's title or on an action's label: the outline Badge
+ * hung off the end of the last word, raised like a superscript. It takes no
+ * width, so the words stay centred on themselves. Everything is measured in
+ * the words' own em, so a tag on small text is drawn small in proportion;
+ * the badge only stops shrinking where its letters would stop reading.
  */
-.happy-welcome-deck__tag {
+.happy-welcome-tag {
     position: relative;
+    top: -0.6em;
+    left: 0.2em;
     display: inline-flex;
     width: 0;
     height: 0;
-    vertical-align: top;
 }
 
-.happy-welcome-deck__tag > .happy-badge {
+.happy-welcome-tag > .happy-badge {
     position: absolute;
-    top: 3px;
-    left: 6px;
+    top: 0;
+    left: 0;
+    height: 1.8em;
+    padding: 0 0.5em;
+    border-radius: 0.4em;
+    font-size: max(6.5px, 0.3125em);
+    line-height: 1.8em;
+    transform: translateY(-50%);
 }
 
 /*
@@ -174,7 +183,9 @@
     color: var(--onboarding-foreground);
 }
 
-.happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__tag > .happy-badge {
+/* A welcome tag over the native palette, on the title or on an action. */
+.happy-welcome-deck[data-tint="sky"] .happy-welcome-tag > .happy-badge,
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-tag > .happy-badge {
     border-color: color-mix(in srgb, var(--onboarding-foreground) 40%, transparent);
     color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
 }
