@@ -1323,6 +1323,7 @@ export {
 export { ChangeStats, type ChangeStatsProps } from "./ChangeStats";
 export { FileChangeDiff, type FileChangeDiffProps } from "./FileChangeDiff";
 export { ConversationSummaryRow, type ConversationSummaryRowProps } from "./ConversationSummaryRow";
+export { InvalidMessageLine, type InvalidMessageLineProps } from "./InvalidMessageLine";
 export {
     DataDisclosure,
     type DataDisclosureGroup,

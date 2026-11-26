@@ -22,6 +22,18 @@ export interface BugReportContext extends AppBugReportHost {
     readonly agent?: { readonly label: string; readonly version?: string };
     /** The `happy://` link to what was on screen when the report was started. */
     readonly startedFrom?: string;
+    /** The message the report is about, when it was started from one that failed to display. */
+    readonly invalidMessage?: BugReportInvalidMessage;
+}
+
+/** A conversation message that failed to display, as the placeholder in its place names it. */
+export interface BugReportInvalidMessage {
+    /** The Happy Agent server the message came from, as the rail names it. */
+    readonly server: string;
+    readonly sessionId: string;
+    readonly messageId: string;
+    /** The schema failures, each a JSON pointer and what was expected there. */
+    readonly errors: readonly string[];
 }
 
 /**
@@ -42,10 +54,24 @@ export function bugReportDraft(context: BugReportContext): string {
         ...(parts.length > 0 ? [`Context: ${parts.join(" · ")}`] : []),
         ...(context.startedFrom ? [`Started from: ${context.startedFrom}`] : []),
         ...(parts.length > 0 || context.startedFrom ? [""] : []),
+        ...(context.invalidMessage ? invalidMessageLines(context.invalidMessage) : []),
         "What happened:",
         "Expected:",
         "Screenshot (attach if you have one):",
     ].join("\n");
+}
+
+/** What a report started from a message that failed to display says about it. */
+function invalidMessageLines(message: BugReportInvalidMessage): string[] {
+    return [
+        "A message failed to display.",
+        `Server: ${message.server}`,
+        `Session: ${message.sessionId}`,
+        `Message: ${message.messageId}`,
+        "Validation errors:",
+        ...message.errors.map((error) => `- ${error}`),
+        "",
+    ];
 }
 
 /**

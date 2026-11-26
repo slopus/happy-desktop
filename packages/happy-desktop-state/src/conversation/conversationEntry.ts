@@ -1063,6 +1063,21 @@ export interface ConversationSummaryEntry {
 }
 
 /**
+ * A message the server sent that this build could not read, in the place it
+ * would have taken: one muted line, and a way to report it. It carries what
+ * names the message and what was wrong with it, never the message itself.
+ */
+export interface ConversationInvalidMessageEntry {
+    readonly kind: "invalidMessage";
+    readonly id: string;
+    readonly sequence: string;
+    readonly occurredAt: number;
+    readonly messageId: string;
+    /** The first few schema failures, each a JSON pointer and what was expected there. */
+    readonly errors: readonly string[];
+}
+
+/**
  * Everything a desktop conversation can contain, as one closed union. Every
  * session projects its transcript into these render-ready entries.
  */
@@ -1074,6 +1089,7 @@ export type ConversationEntry = (
     | ConversationDelegationEntry
     | ConversationTurnStatusEntry
     | ConversationSummaryEntry
+    | ConversationInvalidMessageEntry
 ) & {
     /** Stable turn identity used to find the summary if this row folds away. */
     readonly traceFoldTargetId?: string;
@@ -1111,7 +1127,7 @@ export function entryAgentOwned(entry: ConversationEntry): boolean {
 export function entryTrace(entry: ConversationEntry): AgentTurnTraceSummary | undefined {
     if (entry.kind === "message") return entry.message.agentTrace;
     if (entry.kind === "notice") return entry.variant === "compute" ? undefined : entry.agentTrace;
-    if (entry.kind === "summary") return undefined;
+    if (entry.kind === "summary" || entry.kind === "invalidMessage") return undefined;
     return entry.agentTrace;
 }
 
@@ -1126,7 +1142,7 @@ export function entryTraceWith(
     if (entry.kind === "message")
         return { ...entry, message: { ...entry.message, agentTrace: trace } };
     if (entry.kind === "notice" && entry.variant === "compute") return entry;
-    if (entry.kind === "summary") return entry;
+    if (entry.kind === "summary" || entry.kind === "invalidMessage") return entry;
     return { ...entry, agentTrace: trace };
 }
 

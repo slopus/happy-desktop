@@ -1,0 +1,26 @@
+{
+    "description": "A tool presentation type this protocol does not have (what a newer server would send an older client).",
+    "invalidAt": ["/content/0/presentation/type"],
+    "message": {
+        "id": "msgunknownpresent0000001",
+        "role": "agent",
+        "createdAt": 1764100000000,
+        "content": [
+            {
+                "type": "tool_call",
+                "id": "toolunknownpresent000001",
+                "name": "hologram",
+                "status": "completed",
+                "arguments": {},
+                "result": {},
+                "presentation": {
+                    "type": "hologram"
+                }
+            }
+        ],
+        "metadata": {
+            "providerId": "claude_work",
+            "modelId": "claude-sonnet-4-5"
+        }
+    }
+}

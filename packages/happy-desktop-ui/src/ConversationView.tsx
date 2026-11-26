@@ -208,6 +208,8 @@ export type ConversationViewProps = {
     errorAssistance?: readonly ConversationErrorAssistanceEntry[];
     errorAssistanceUnavailable?: string;
     onErrorAssistanceRequest?: (entryId: string) => void;
+    /** Reports a message this build could not show, by its ID and what was wrong with it. */
+    onInvalidMessageReport?: (messageId: string, errors: readonly string[]) => void;
     /** Custom introduction for a loaded conversation with no transcript entries. */
     emptyContent?: ReactNode;
     /**
@@ -1294,6 +1296,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     errorAssistance={errorAssistanceFor(entry)}
                                     failure={failureFor(entry)}
                                     onErrorAssistanceRequest={props.onErrorAssistanceRequest}
+                                    onInvalidMessageReport={props.onInvalidMessageReport}
                                     activityMotion={props.motion}
                                     activityTreatment={props.activityTreatment}
                                     {...(props.streamingCaret === undefined

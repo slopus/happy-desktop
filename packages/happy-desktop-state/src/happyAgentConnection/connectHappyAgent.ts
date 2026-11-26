@@ -77,8 +77,10 @@ import {
     workspaceSessionContextSame,
     workspaceShapeSame,
     type SessionProjectionInput,
+    type TranscriptInvalidMessage,
     type TranscriptMessage,
 } from "./projection.js";
+import { messageProblem } from "./messageValidate.js";
 import type {
     BotGroup,
     ConnectHappyAgentOptions,
@@ -200,6 +202,9 @@ function eventDebugOf(event: HappyAgentEvent): unknown {
         case "message.created":
         case "message.updated": {
             const { message } = event.payload;
+            const problem = messageProblem(message);
+            if (problem !== undefined)
+                return { ...event, payload: { ...event.payload, message: problem } };
             return {
                 ...event,
                 payload: {
@@ -256,6 +261,11 @@ interface SessionEntry {
     store: ChatStore;
     subscribers: Set<SessionSubscriber>;
     messages: Map<string, TranscriptMessage>;
+    /**
+     * Messages the server sent that the protocol does not describe, each held
+     * in its place as a placeholder; an ID is in this map or `messages`, never both.
+     */
+    invalidMessages: Map<string, TranscriptInvalidMessage>;
     userIds: Set<string>;
     /** Cumulative block offset of the provider segment currently streaming per agent message. */
     messageBlockOffsets: Map<string, number>;
@@ -368,7 +378,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const ensureMessageUsers = (messages: readonly Message[]): Promise<void> =>
         users.ensure(
             messages.flatMap((message) =>
-                message.role === "user" && message.metadata.userId !== undefined
+                messageProblem(message) === undefined &&
+                message.role === "user" &&
+                message.metadata.userId !== undefined
                     ? [message.metadata.userId]
                     : [],
             ),
@@ -389,18 +401,72 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
         entry.userIds.clear();
     };
+    /** The protocol errors last logged for each message, so a placeholder is reported once. */
+    const invalidMessagesLogged = new Map<string, string>();
+    /**
+     * Whether a message from the server is one this client can read: every
+     * message that reaches a session is checked here first, once, against the
+     * protocol. One that is not readable leaves the session's messages and
+     * takes a placeholder in its place, named by its ID, run, time and what is
+     * wrong with it; its payload is logged, and goes no further. `runId`
+     * undefined keeps the run the message already sits in. The caller
+     * publishes the session.
+     */
+    const messageAdmit = (
+        agentId: string,
+        message: Message,
+        runId: string | null | undefined,
+    ): boolean => {
+        const problem = messageProblem(message);
+        if (problem === undefined) return true;
+        const id = problem.messageId;
+        const logKey = `${agentId}/${id ?? ""}`;
+        const logged = problem.errors.join("\n");
+        if (id === undefined || invalidMessagesLogged.get(logKey) !== logged) {
+            invalidMessagesLogged.set(logKey, logged);
+            console.warn(
+                id === undefined
+                    ? "A Happy Agent message without an ID does not match the protocol; it is left out."
+                    : "A Happy Agent message does not match the protocol; a placeholder shows in its place.",
+                { agentId, messageId: id, errors: problem.errors },
+                message,
+            );
+        }
+        const entry = sessions.get(agentId);
+        if (id === undefined || entry === undefined) return false;
+        const replaced = entry.messages.get(id);
+        const held = entry.invalidMessages.get(id);
+        entry.invalidMessages.set(id, {
+            id,
+            runId: runId !== undefined ? runId : (held?.runId ?? replaced?.runId ?? null),
+            createdAt: problem.createdAt ?? held?.createdAt ?? replaced?.message.createdAt ?? null,
+            errors: problem.errors,
+        });
+        if (replaced !== undefined) {
+            entry.messages.delete(id);
+            if (replaced.pendingSend) sendConfirm(id);
+        }
+        entry.messageBlockOffsets.delete(id);
+        entry.corruptedMessageIds.delete(id);
+        entry.deltaGapMessageIds.delete(id);
+        return false;
+    };
     const ingestSessionHistory = (
         entry: SessionEntry,
         runs: readonly (Run & { messages: Message[] })[],
         pending: readonly Message[],
     ): void => {
-        ingestHistory(entry, runs, pending);
+        ingestHistory(entry, runs, pending, (message, runId) =>
+            messageAdmit(entry.id, message, runId),
+        );
         for (const run of runs)
             for (const message of run.messages) {
+                if (messageProblem(message) !== undefined) continue;
                 if (message.role === "user") rememberUserMessageId(message.id);
                 indexMessageUser(entry, message);
             }
         for (const message of pending) {
+            if (messageProblem(message) !== undefined) continue;
             if (message.role === "user") rememberUserMessageId(message.id);
             indexMessageUser(entry, message);
         }
@@ -1065,6 +1131,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             mediaUrl: toolCallMediaUrl,
             hasMore: entry.hasMore,
             messages: [...entry.messages.values()],
+            invalidMessages: [...entry.invalidMessages.values()],
             userProfiles: users.profiles,
             currentUserId,
             intendedMode: intendedModes.get(entry.id),
@@ -2011,6 +2078,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 );
                 const kept = history.hasMore ? olderRunsKept(entry, history.runs) : undefined;
                 entry.messages.clear();
+                // A placeholder in an older run kept stays; the read places every other again.
+                const keptRunIds = new Set(kept?.runs.map((run) => run.id));
+                for (const [id, invalid] of entry.invalidMessages)
+                    if (invalid.runId === null || !keptRunIds.has(invalid.runId))
+                        entry.invalidMessages.delete(id);
                 clearUserIndex(entry);
                 entry.messageBlockOffsets.clear();
                 entry.runs.clear();
@@ -2020,7 +2092,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 ingestSessionHistory(entry, history.runs, bootstrap.pending);
                 captureLatestIdleRunFinalContext(entry);
                 for (const message of pendingSends) {
-                    if (entry.messages.has(message.message.id)) {
+                    if (
+                        entry.messages.has(message.message.id) ||
+                        entry.invalidMessages.has(message.message.id)
+                    ) {
                         sendConfirm(message.message.id);
                     } else {
                         entry.messages.set(message.message.id, message);
@@ -2274,6 +2349,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             store: new ChatStore(sessionId),
             subscribers: new Set(),
             messages: new Map(),
+            invalidMessages: new Map(),
             userIds: new Set(),
             messageBlockOffsets: new Map(),
             runs: new Map(),
@@ -3092,15 +3168,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 trimHistory(event.payload.agentId);
                 return;
             case "message.created":
-                createMessage(event.payload.agentId, event.payload.message, event.payload.runId);
+            case "message.updated": {
+                const { agentId, message, runId } = event.payload;
+                if (!messageAdmit(agentId, message, runId)) {
+                    const entry = sessions.get(agentId);
+                    if (entry !== undefined) publishSession(entry);
+                } else if (event.type === "message.created") createMessage(agentId, message, runId);
+                else updateMessageSnapshot(agentId, message, event.payload.runId);
                 return;
-            case "message.updated":
-                updateMessageSnapshot(
-                    event.payload.agentId,
-                    event.payload.message,
-                    event.payload.runId,
-                );
-                return;
+            }
             case "message.delta":
                 appendMessageDelta(event.payload);
                 return;
@@ -3108,6 +3184,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 knownUserMessageIds.delete(event.payload.messageId);
                 const entry = sessions.get(event.payload.agentId);
                 entry?.messages.delete(event.payload.messageId);
+                entry?.invalidMessages.delete(event.payload.messageId);
                 if (entry !== undefined) {
                     clearUserIndex(entry);
                     for (const message of entry.messages.values())
@@ -3257,6 +3334,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             entry.runs.delete(id);
             entry.runFinalContextTokens.delete(id);
         }
+        for (const [id, invalid] of entry.invalidMessages)
+            if (invalid.runId !== null && dropped.has(invalid.runId))
+                entry.invalidMessages.delete(id);
         for (const [id, message] of entry.messages) {
             if (message.runId === null || !dropped.has(message.runId)) continue;
             entry.messages.delete(id);
@@ -3523,6 +3603,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             refetchAgentMode(agentId);
         }
         if (entry === undefined) return;
+        entry.invalidMessages.delete(message.id);
         entry.messages.set(message.id, { message, runId });
         indexMessageUser(entry, message);
         publishSession(entry);
@@ -3536,6 +3617,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     ): void => {
         adoptAgent(agent);
         const entry = sessions.get(agentId);
+        if (!messageAdmit(agentId, message, undefined)) {
+            if (entry !== undefined) publishSession(entry);
+            return;
+        }
         if (entry === undefined) {
             adoptFailureSwitch(agentId, message, null, false);
             return;
@@ -3644,6 +3729,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         // skips for it, is costly. Reopening it then shows the live transcript
         // at once instead of waiting on a full history read.
         if (entry.corruptedMessageIds.has(payload.messageId)) return;
+        // A placeholder takes no text; the message's next snapshot is checked whole.
+        if (entry.invalidMessages.has(payload.messageId)) return;
         const current = entry?.messages.get(payload.messageId);
         const blockIndex =
             (entry.messageBlockOffsets.get(payload.messageId) ?? 0) + payload.blockIndex;
@@ -5644,15 +5731,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // Happy Cloud answers before the run that takes the
                         // message is announced: its events take a Redis hint
                         // and a journal read to arrive, its reply does not.
-                        // The reply names that run, or on an older server
-                        // leaves it out. Only a run the stream has announced
-                        // is drawn, so until run.started places the message it
-                        // stays pending at the tail; filed under a run this
-                        // session does not hold it would leave the transcript
-                        // for that moment.
+                        // The reply names that run. Only a run the stream has
+                        // announced is drawn, so until run.started places the
+                        // message it stays pending at the tail; filed under a
+                        // run this session does not hold it would leave the
+                        // transcript for that moment.
                         const message = response.message;
-                        if (
-                            message.runId == null ||
+                        if (!messageAdmit(sessionId, message, null)) {
+                            const entry = sessions.get(sessionId);
+                            if (entry !== undefined) publishSession(entry);
+                        } else if (
+                            message.runId === null ||
                             sessions.get(sessionId)?.runs.has(message.runId) !== true
                         )
                             updateMessage(
@@ -5889,7 +5978,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     const entry = sessions.get(sessionId);
                     if (entry === undefined) return;
                     if (!entry.runs.has(run.id)) updateRun(sessionId, run);
-                    if (!entry.messages.has(message.id)) updateMessage(sessionId, message, run.id);
+                    if (!messageAdmit(sessionId, message, run.id)) publishSession(entry);
+                    else if (!entry.messages.has(message.id))
+                        updateMessage(sessionId, message, run.id);
                 },
                 undefined,
                 sessionId,
@@ -6930,18 +7021,26 @@ function ingestHistory(
     entry: SessionEntry,
     runs: readonly (Run & { messages: Message[] })[],
     pending: readonly Message[],
+    admit: (message: Message, runId: string | null) => boolean,
 ): void {
     for (const run of runs) {
-        entry.runs.set(run.id, run);
-        for (const message of run.messages)
+        const messages = run.messages.filter((message) => admit(message, run.id));
+        // A run keeps only what was admitted, so no unreadable payload is held.
+        const admitted: Run & { messages: Message[] } = { ...run, messages };
+        entry.runs.set(run.id, messages.length === run.messages.length ? run : admitted);
+        for (const message of messages) {
+            entry.invalidMessages.delete(message.id);
             entry.messages.set(message.id, { message, runId: run.id });
+        }
     }
     entry.runsOrdered = undefined;
     // History and pending bootstrap are independent snapshots. A message
     // already present in accepted history cannot become pending again.
     for (const message of pending) {
-        if (!entry.messages.has(message.id))
-            entry.messages.set(message.id, { message, runId: null });
+        const problem = messageProblem(message);
+        const id = problem === undefined ? message.id : problem.messageId;
+        if (id !== undefined && (entry.messages.has(id) || entry.invalidMessages.has(id))) continue;
+        if (admit(message, null)) entry.messages.set(message.id, { message, runId: null });
     }
 }
 

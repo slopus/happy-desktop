@@ -1,5 +1,3 @@
-import { Type } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { happyAgentPreviewResultRead } from "../happyAgent/happyAgentPreviewsStore.js";
 import { happyAgentToolCheckoutsRead } from "../happyAgent/happyAgentCheckoutsStore.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
@@ -39,6 +37,7 @@ import type {
     BotSubtaskGroup,
     ChatElement,
     GroupSession,
+    InvalidMessageElement,
     ProjectGroup,
     SessionState,
     SessionUsage,
@@ -60,6 +59,19 @@ export interface TranscriptMessage {
     pendingSend?: true;
 }
 
+/**
+ * A message the server sent that the protocol does not describe, held in its
+ * place in the transcript by what names it. Its payload is never kept.
+ */
+export interface TranscriptInvalidMessage {
+    id: string;
+    runId: string | null;
+    /** Null when the payload had no usable time; it then follows its run's messages. */
+    createdAt: number | null;
+    /** The first few schema failures, each a JSON pointer and what was expected there. */
+    errors: readonly string[];
+}
+
 export interface SessionProjectionInput {
     agent: Agent;
     config: DaemonConfig;
@@ -72,6 +84,7 @@ export interface SessionProjectionInput {
     mediaUrl: (agentId: string, toolCallId: string, index: number) => string;
     hasMore: boolean;
     messages: readonly TranscriptMessage[];
+    invalidMessages?: readonly TranscriptInvalidMessage[];
     userProfiles?: ReadonlyMap<string, UserProfile>;
     currentUserId?: string;
     intendedMode?: MessageMode;
@@ -440,6 +453,12 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             else entries.push(entry);
         }
     }
+    const invalidByRun = new Map<string | null, TranscriptInvalidMessage[]>();
+    for (const invalid of input.invalidMessages ?? []) {
+        const entries = invalidByRun.get(invalid.runId);
+        if (entries === undefined) invalidByRun.set(invalid.runId, [invalid]);
+        else entries.push(invalid);
+    }
 
     const elements: ChatElement[] = [];
     const question = input.question?.status === "pending" ? input.question : undefined;
@@ -464,10 +483,12 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         if (messages !== undefined) {
             // Messages usually arrive in order; avoid sorting each run again.
             if (!messagesOrdered(messages)) messages.sort(compareMessages);
-            for (const entry of messages) {
+        }
+        for (const entry of transcriptOrdered(messages, invalidByRun.get(run.id))) {
+            if ("message" in entry)
                 for (const element of projectMessage(entry, run.id, run.status, reader))
                     push(element);
-            }
+            else push(projectInvalidMessage(entry, run.id, elements, run.startedAt));
         }
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
@@ -475,16 +496,62 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
         const end = projectRunEnd(run, input.runFinalContextTokens?.get(run.id));
         if (end !== undefined) elements.push(end);
     }
-    for (const entry of pending)
-        for (const element of projectMessage(
-            entry,
-            `pending:${entry.message.id}`,
-            "running",
-            reader,
-        ))
-            push(element);
+    for (const entry of transcriptOrdered(pending, invalidByRun.get(null))) {
+        if ("message" in entry)
+            for (const element of projectMessage(
+                entry,
+                `pending:${entry.message.id}`,
+                "running",
+                reader,
+            ))
+                push(element);
+        else push(projectInvalidMessage(entry, `pending:${entry.id}`, elements, 0));
+    }
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
     return elements;
+}
+
+/**
+ * A run's messages with the placeholders of those it could not read, in time
+ * order. A placeholder with no time follows the messages it came with.
+ */
+function transcriptOrdered(
+    messages: readonly TranscriptMessage[] | undefined,
+    invalid: readonly TranscriptInvalidMessage[] | undefined,
+): readonly (TranscriptMessage | TranscriptInvalidMessage)[] {
+    if (invalid === undefined) return messages ?? [];
+    const time = (entry: TranscriptMessage | TranscriptInvalidMessage): number =>
+        "message" in entry
+            ? entry.message.createdAt
+            : (entry.createdAt ?? Number.POSITIVE_INFINITY);
+    // Stable, so messages in the same millisecond keep the order they arrived in.
+    return [...(messages ?? []), ...invalid].sort((left, right) =>
+        time(left) === time(right) ? 0 : time(left) - time(right),
+    );
+}
+
+const invalidMessageElements = new WeakMap<TranscriptInvalidMessage, InvalidMessageElement>();
+
+/** The placeholder row of a message this build could not read. */
+function projectInvalidMessage(
+    invalid: TranscriptInvalidMessage,
+    runId: string,
+    before: readonly ChatElement[],
+    fallbackCreatedAt: number,
+): InvalidMessageElement {
+    const cached = invalidMessageElements.get(invalid);
+    if (cached !== undefined && cached.runId === runId) return cached;
+    const element: InvalidMessageElement = {
+        id: `invalid:${invalid.id}`,
+        kind: "invalid_message",
+        groupId: runId,
+        runId,
+        createdAt: invalid.createdAt ?? before.at(-1)?.createdAt ?? fallbackCreatedAt,
+        messageId: invalid.id,
+        errors: invalid.errors,
+    };
+    invalidMessageElements.set(invalid, element);
+    return element;
 }
 
 /**
@@ -1992,27 +2059,6 @@ function usageTotal(usage: UsageBreakdown): number {
     return total;
 }
 
-/**
- * The shape an answered question's card is read in: every question it asked
- * and, for each, the values given. Narrower than the published schema's
- * bounds — Happy Cloud writes an empty header for a question without one —
- * but strict about what the transcript dereferences. Happy Cloud records a
- * question settled by a chat reply as a `user_input` card with
- * `answers: null`, which this keeps from reaching the transcript.
- */
-const userInputPresentationShape = Type.Object({
-    questions: Type.Array(
-        Type.Object({
-            id: Type.String(),
-            header: Type.String(),
-            question: Type.String(),
-            multiSelect: Type.Boolean(),
-            options: Type.Array(Type.Object({ label: Type.String(), description: Type.String() })),
-        }),
-    ),
-    answers: Type.Record(Type.String(), Type.Array(Type.String())),
-});
-
 type ToolPresentationWire = NonNullable<
     Extract<MessageBlock, { type: "tool_call" }>["presentation"]
 >;
@@ -2101,13 +2147,6 @@ function projectToolPresentation(
                 display: artifactDisplayProject(presentation.display),
             };
         case "user_input":
-            // A record that is not the questions and the answers they were
-            // given stays out of the transcript: the call shows as the plain
-            // tool call it was, as a cancelled ask does on happy-agent.
-            if (!Value.Check(userInputPresentationShape, presentation)) {
-                console.warn("Ignored a malformed user_input presentation.", presentation);
-                return undefined;
-            }
             return {
                 kind: "user_input",
                 questions: presentation.questions,

@@ -417,6 +417,8 @@ const ACTIVITY_LEAD_RUN_SEPARATION = 6;
 const DELEGATION_HEIGHT = 44;
 /** A summary row's toggle, and each detail line it opens onto. */
 const SUMMARY_HEIGHT = 36;
+/** `InvalidMessageLine`: its 28px line and 4px above and below. */
+const INVALID_MESSAGE_HEIGHT = 36;
 const SUMMARY_DETAIL_HEIGHT = 22;
 const SUMMARY_DETAILS_PADDING = 6;
 /** `.happy-day-divider` — 20px padding around a 20px label that never wraps. */
@@ -1410,6 +1412,7 @@ export function conversationRowHeight(
                     ? entry.details.length * SUMMARY_DETAIL_HEIGHT + SUMMARY_DETAILS_PADDING
                     : 0),
         );
+    if (entry.kind === "invalidMessage") return INVALID_MESSAGE_HEIGHT;
     const message = entry.message;
     const agent = message.sender?.kind === "agent";
     const own = message.sender !== undefined && message.sender.id === context.viewerId;

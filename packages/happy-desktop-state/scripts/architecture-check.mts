@@ -8,16 +8,19 @@ const failures: string[] = [];
 // Happy Agent Client declares the transport contract; Yjs is the
 // framework-independent value type used by Notes; picomatch's POSIX entry is
 // the dependency-free glob matcher behind the Changes tiers. TypeBox validates
-// the client's explicit wire schemas at the transport boundary.
+// the client's explicit wire schemas at the transport boundary, and composes
+// the whole message from them where the client publishes only its parts.
 const allowedExternalSpecifiers = new Set([
     "@slopus/happy-agent-client",
+    "@sinclair/typebox",
     "@sinclair/typebox/value",
     "picomatch/posix",
     "vitest",
     "zustand/vanilla",
     "yjs",
 ]);
-const testOnlyExternalSpecifiers = new Set(["node:sqlite"]);
+// A test may read the shared protocol message fixtures from disk.
+const testOnlyExternalSpecifiers = new Set(["node:fs", "node:sqlite"]);
 
 for (const directory of readdirSync(join(root, "modules"))) {
     const moduleDirectory = join(root, "modules", directory);

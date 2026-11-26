@@ -56,7 +56,10 @@ async function chatOpen(
     return { daemon, store };
 }
 
-const FILE: HappyCloudFileBlock = { type: "file", attachment: "digest-notes", name: "notes.txt" };
+/** Happy Cloud names an uploaded file by the SHA-256 digest of its bytes. */
+const NOTES_DIGEST = "1".repeat(64);
+const REPORT_DIGEST = "2".repeat(64);
+const FILE: HappyCloudFileBlock = { type: "file", attachment: NOTES_DIGEST, name: "notes.txt" };
 
 function sent(daemon: ReturnType<typeof fakeHappyAgentDaemonCreate>): SendMessageRequest {
     const call = daemon.calls.find((entry) => entry.method === "sendMessage");
@@ -70,7 +73,7 @@ it("names an uploaded file in the message it is sent with, keeping the words as 
 
     expect(sent(daemon)).toMatchObject({
         text: "Read this",
-        content: [{ type: "file", attachment: "digest-notes", name: "notes.txt" }],
+        content: [{ type: "file", attachment: NOTES_DIGEST, name: "notes.txt" }],
     });
     // One row for the message, before and after the server holds it.
     await vi.waitFor(() =>
@@ -111,7 +114,7 @@ it("shows a sent file as its card, from the moment it is sent", async () => {
                 kind: "linked",
                 attachmentKind: "file",
                 name: "notes.txt",
-                source: "digest-notes",
+                source: NOTES_DIGEST,
             }),
         ]),
     );
@@ -130,7 +133,7 @@ it("shows a file from history as its card with the size the server recorded, and
                             { type: "text", text: "[file:report.pdf]" },
                             {
                                 type: "file",
-                                attachment: "digest-report",
+                                attachment: REPORT_DIGEST,
                                 name: "report.pdf",
                                 mimeType: "application/pdf",
                                 size: 2048,
@@ -145,7 +148,7 @@ it("shows a file from history as its card with the size the server recorded, and
     expect(fileCards(store)[0]).toMatchObject({
         attachmentKind: "file",
         name: "report.pdf",
-        source: "digest-report",
+        source: REPORT_DIGEST,
         mediaType: "application/pdf",
         bytes: 2048,
     });

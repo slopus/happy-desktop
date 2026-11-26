@@ -401,6 +401,7 @@ import {
     BUG_REPORT_X_URL,
     bugReportDraft,
     bugReportPlaceLink,
+    type BugReportInvalidMessage,
     type AppBugReportHost,
 } from "./bugReport";
 import { changedFileRenderedDiffOffered } from "./changedFileRenderedDiff";
@@ -4110,46 +4111,50 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         happyAgentTaskCreateSupported(active)
             ? active
             : undefined;
+    /* The sidebar's Report bug, and a message that failed to display, open the
+       same report; the message adds what names it. */
+    const bugReportOpen = (invalidMessage?: BugReportInvalidMessage): void => {
+        if (!bugReportWorkspace || !bugReportTaskTarget) return;
+        const bugReportStartedFrom = bugReportPlaceLink({
+            ...(props.chatId === undefined ? {} : { chatId: props.chatId }),
+            ...(props.surfaceId === undefined ? {} : { surfaceId: props.surfaceId }),
+            ...(props.artifactId === undefined ? {} : { artifactId: props.artifactId }),
+        });
+        const draft = bugReportDraft({
+            ...props.bugReportHost,
+            agent: {
+                label: bugReportTaskTarget.label,
+                ...(bugReportTaskTarget.version ? { version: bugReportTaskTarget.version } : {}),
+            },
+            ...(bugReportStartedFrom === undefined ? {} : { startedFrom: bugReportStartedFrom }),
+            ...(invalidMessage === undefined ? {} : { invalidMessage }),
+        });
+        bugReportWorkspace.bugReportCreateOpen();
+        // A bug report already being written is come back to as it was;
+        // only a fresh one is given the template.
+        const written = bugReportWorkspace.get().taskCreate?.composer.get().text ?? "";
+        if (written.trim() === "") bugReportWorkspace.taskCreateMessageUpdate(draft);
+        props.onBugReportCreateOpen?.(bugReportTaskTarget.id);
+        const focused = bugReportWorkspace.get().taskCreate?.composer.get().text;
+        composerTypingFocusAtEnd(focused ?? draft);
+    };
+    const invalidMessageReport =
+        bugReportTaskTarget === undefined
+            ? undefined
+            : (sessionId: string, messageId: string, errors: readonly string[]) =>
+                  bugReportOpen({
+                      server: bugReportTaskTarget.label,
+                      sessionId,
+                      messageId,
+                      errors,
+                  });
     const sidebarFooter = (
         <SidebarFooter
             bugReport={
                 <SidebarBugReport
                     discordUrl={BUG_REPORT_DISCORD_URL}
                     onLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                    onReport={async () => {
-                        if (!bugReportWorkspace || !bugReportTaskTarget) return;
-                        const bugReportStartedFrom = bugReportPlaceLink({
-                            ...(props.chatId === undefined ? {} : { chatId: props.chatId }),
-                            ...(props.surfaceId === undefined
-                                ? {}
-                                : { surfaceId: props.surfaceId }),
-                            ...(props.artifactId === undefined
-                                ? {}
-                                : { artifactId: props.artifactId }),
-                        });
-                        const draft = bugReportDraft({
-                            ...props.bugReportHost,
-                            agent: {
-                                label: bugReportTaskTarget.label,
-                                ...(bugReportTaskTarget.version
-                                    ? { version: bugReportTaskTarget.version }
-                                    : {}),
-                            },
-                            ...(bugReportStartedFrom === undefined
-                                ? {}
-                                : { startedFrom: bugReportStartedFrom }),
-                        });
-                        bugReportWorkspace.bugReportCreateOpen();
-                        // A bug report already being written is come back to as it was;
-                        // only a fresh one is given the template.
-                        const written =
-                            bugReportWorkspace.get().taskCreate?.composer.get().text ?? "";
-                        if (written.trim() === "")
-                            bugReportWorkspace.taskCreateMessageUpdate(draft);
-                        props.onBugReportCreateOpen?.(bugReportTaskTarget.id);
-                        const focused = bugReportWorkspace.get().taskCreate?.composer.get().text;
-                        composerTypingFocusAtEnd(focused ?? draft);
-                    }}
+                    onReport={async () => bugReportOpen()}
                     {...(bugReportTaskTarget
                         ? {}
                         : { reportUnavailable: "Connect a Happy Agent to report from here." })}
@@ -5219,6 +5224,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     chatConversation={(chat, surfaceName) => (
                         <HappyAgentSurfaceChat
                             instanceId={active.instanceId}
+                            {...(invalidMessageReport
+                                ? { onInvalidMessageReport: invalidMessageReport }
+                                : {})}
                             platform={props.platform}
                             {...(referenceSurfaces ? { referenceSurfaces } : {})}
                             {...(artifactsAvailable && session.artifacts
@@ -5308,6 +5316,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentWorkspaceSurface
                     instanceId={active.instanceId}
+                    {...(invalidMessageReport
+                        ? { onInvalidMessageReport: invalidMessageReport }
+                        : {})}
                     {...(active.session.viewers ? { viewers: active.session.viewers } : {})}
                     {...(active.session.checkouts ? { checkoutsOf: active.session.checkouts } : {})}
                     restarting={
@@ -6897,6 +6908,12 @@ function HappyAgentSurfaceChat(props: {
     platform?: "desktop" | "web";
     /** The Surfaces the chat's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
+    /** Opens a bug report about a message that failed to display, prefilled with what names it. */
+    onInvalidMessageReport?: (
+        sessionId: string,
+        messageId: string,
+        errors: readonly string[],
+    ) => void;
 }) {
     const workspace = useSyncExternalStore(
         reactFrameSubscribe(props.workspace),
@@ -6954,6 +6971,9 @@ function HappyAgentSurfaceChat(props: {
             happyAgentOnline={props.happyAgentOnline}
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
             {...(writeRefusal === undefined ? {} : { writeRefusal })}
+            {...(props.onInvalidMessageReport === undefined
+                ? {}
+                : { onInvalidMessageReport: props.onInvalidMessageReport })}
             viewerId={props.viewerId}
             workspace={props.workspace}
         />
@@ -7525,6 +7545,12 @@ interface HappyAgentWorkspaceSurfaceProps {
     happyAgentOnline: () => boolean;
     /** Joined conversation-list + active-conversation product store. */
     workspace: HappyAgentWorkspaceStore;
+    /** Opens a bug report about a message that failed to display, prefilled with what names it. */
+    onInvalidMessageReport?: (
+        sessionId: string,
+        messageId: string,
+        errors: readonly string[],
+    ) => void;
     /**
      * The tiers every Changes listing is split by. The host's, whichever
      * machine this workspace is on: tiers are one list for the whole window,
@@ -8539,6 +8565,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         ) : (
             <HappyAgentConversationBody
                 instanceId={props.instanceId}
+                {...(props.onInvalidMessageReport === undefined
+                    ? {}
+                    : { onInvalidMessageReport: props.onInvalidMessageReport })}
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
@@ -10145,6 +10174,12 @@ function HappyAgentGroupComposer(props: {
 
 /** The open conversation's materialization states, inside the directory's tabs. */
 function HappyAgentConversationBody(props: {
+    /** Opens a bug report about a message that failed to display, prefilled with what names it. */
+    onInvalidMessageReport?: (
+        sessionId: string,
+        messageId: string,
+        errors: readonly string[],
+    ) => void;
     /**
      * The instance this machine's health named, which a link naming an
      * instance must match to resolve here; absent while it has not said.
@@ -10247,6 +10282,9 @@ function HappyAgentConversationBody(props: {
                 {...(props.notice === undefined ? {} : { notice: props.notice })}
                 now={props.now}
                 {...(props.onCreate === undefined ? {} : { onNewChat: props.onCreate })}
+                {...(props.onInvalidMessageReport === undefined
+                    ? {}
+                    : { onInvalidMessageReport: props.onInvalidMessageReport })}
                 onChatSelect={props.onChatSelect}
                 onFileOpen={props.onFileOpen}
                 onFileLinkOpen={props.onFileLinkOpen}
@@ -10566,6 +10604,12 @@ function happyAgentDelegatedElapsedMs(
 }
 
 function HappyAgentConversationSurface(props: {
+    /** Opens a bug report about a message that failed to display, prefilled with what names it. */
+    onInvalidMessageReport?: (
+        sessionId: string,
+        messageId: string,
+        errors: readonly string[],
+    ) => void;
     /**
      * The instance this machine's health named, which a link naming an
      * instance must match to resolve here; absent while it has not said.
@@ -10970,6 +11014,13 @@ function HappyAgentConversationSurface(props: {
             onErrorAssistanceRequest={(entryId) => {
                 if (props.happyAgentOnline()) workspace.errorAssistanceRequest(entryId);
             }}
+            {...((report) =>
+                report === undefined
+                    ? {}
+                    : {
+                          onInvalidMessageReport: (messageId: string, errors: readonly string[]) =>
+                              report(conversation.conversationId, messageId, errors),
+                      })(props.onInvalidMessageReport)}
             /* A chat that takes no message cannot be continued from its failure
                either, so a read-only one offers only a new chat. */
             failureActions={{

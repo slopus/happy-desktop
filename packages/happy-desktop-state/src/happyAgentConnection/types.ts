@@ -415,6 +415,17 @@ export interface GroupEndElement extends BaseChatElement {
     modelTurn: boolean;
 }
 
+/**
+ * A message the server sent that the protocol does not describe, in the place
+ * it would have taken. It names the message and what was wrong, never its content.
+ */
+export interface InvalidMessageElement extends BaseChatElement {
+    kind: "invalid_message";
+    messageId: string;
+    /** The first few schema failures, each a JSON pointer and what was expected there. */
+    errors: readonly string[];
+}
+
 export type ChatElement =
     | UserMessageElement
     | InboundAgentMessageElement
@@ -427,6 +438,7 @@ export type ChatElement =
     | CompactionElement
     | FailureElement
     | ConfigurationElement
+    | InvalidMessageElement
     | GroupEndElement;
 
 export interface UserInputRequest {

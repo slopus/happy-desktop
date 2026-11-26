@@ -1,0 +1,31 @@
+/* InvalidMessageLine: the transcript's 30px inset, and 4px around the 28px
+   line its small button sets — 36px, whatever the row holds. */
+.happy-invalid-message {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 4px 30px;
+    font-family: var(--happy-font-ui);
+}
+
+.happy-invalid-message__text {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-style: italic;
+    line-height: 20px;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-invalid-message .happy-button {
+    flex: none;
+}

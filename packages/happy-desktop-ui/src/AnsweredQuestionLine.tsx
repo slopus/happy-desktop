@@ -21,9 +21,6 @@ export type AnsweredQuestionLineProps = {
  */
 export function AnsweredQuestionLine(props: AnsweredQuestionLineProps) {
     const request = props.request;
-    /* The card this line stands in for reads a missing record as no answers
-       (`ConversationRequestView`); the line must not be the one that throws. */
-    const answers = request.answers ?? {};
     return (
         <div
             className={["happy-tool-section", "happy-answered-question", props.className]
@@ -43,7 +40,7 @@ export function AnsweredQuestionLine(props: AnsweredQuestionLineProps) {
                         data-happy-desktop-ui="answered-question-text"
                     >
                         {request.questions.map((question, index) => {
-                            const answer = (answers[question.id] ?? []).join(", ");
+                            const answer = (request.answers[question.id] ?? []).join(", ");
                             return (
                                 <span key={question.id}>
                                     {index > 0 ? " · " : null}

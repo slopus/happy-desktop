@@ -964,6 +964,16 @@ function happyAgentConnectGroupProject(
                         });
                 }
                 break;
+            case "invalid_message":
+                entries.push({
+                    kind: "invalidMessage",
+                    id: element.id,
+                    sequence,
+                    occurredAt: element.createdAt,
+                    messageId: element.messageId,
+                    errors: element.errors,
+                });
+                break;
             case "configuration":
                 for (const { field, text } of happyAgentConfigurationChanges(
                     element.configuration,
@@ -1176,6 +1186,8 @@ function happyAgentConnectGroupProject(
             // An answered question is the reader's own decision, so it stays with
             // their messages rather than folding away with the work it steered.
             entry.kind === "request" ||
+            // A message that could not be shown is not a step of the work.
+            entry.kind === "invalidMessage" ||
             // What set the turn going stays visible for the same reason the
             // reader's own message does: folding it away would leave the answer
             // standing over nothing.

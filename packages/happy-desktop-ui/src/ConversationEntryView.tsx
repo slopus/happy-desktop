@@ -24,6 +24,7 @@ import {
 } from "./AgentActivityRow";
 import { AgentToolSection } from "./AgentToolSection";
 import { AnsweredQuestionLine } from "./AnsweredQuestionLine";
+import { InvalidMessageLine } from "./InvalidMessageLine";
 import type { ConversationMediaRun } from "./conversationMediaRuns";
 import type { ConversationToolSection } from "./conversationToolSections";
 import type { MessageInlineLayouts } from "./conversationInlineLayouts";
@@ -74,6 +75,8 @@ export type ConversationEntryViewProps = {
     entry: ConversationEntry;
     errorAssistance?: ConversationErrorAssistance;
     onErrorAssistanceRequest?: (entryId: string) => void;
+    /** Reports a message this build could not show, by its ID and what was wrong with it. */
+    onInvalidMessageReport?: (messageId: string, errors: readonly string[]) => void;
     /**
      * What a failure card on this row offers and which switch target is
      * picked. Absent, the card shows its message and offers only Ask Chief of
@@ -608,6 +611,19 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 />
             </div>
         );
+    if (entry.kind === "invalidMessage") {
+        const report = props.onInvalidMessageReport;
+        return (
+            <InvalidMessageLine
+                className={props.className}
+                data-testid={props["data-testid"]}
+                onReport={
+                    report === undefined ? undefined : () => report(entry.messageId, entry.errors)
+                }
+                style={props.style}
+            />
+        );
+    }
     const message = entry.message;
     const author = message.sender;
     const own = author !== undefined && author.id === props.viewerId;
