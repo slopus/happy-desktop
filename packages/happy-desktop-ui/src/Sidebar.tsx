@@ -4316,15 +4316,20 @@ export function Sidebar(props: SidebarProps) {
                 ? restTops.current
                 : undefined;
         // Every read comes before every write, and the document's animations
-        // are asked for only when a glide may cancel some. Each
-        // `getAnimations()` call walks every animation in the document — ten
-        // for each spinner — and each write between reads makes the next read
-        // lay the page out again: with a few hundred rows wearing spinners,
-        // asking per row took two seconds of the main thread on every leave
-        // or insert, and asking once still cost every render tens of
-        // milliseconds.
-        const rowAnimations = new Map<Element, Animation[]>();
-        if (previous)
+        // are asked for at most once, and only when a glide may cancel some or
+        // a row stands displaced. Each `getAnimations()` call walks every
+        // animation in the document — ten for each spinner — and each write
+        // between reads makes the next read lay the page out again: with a few
+        // hundred rows wearing spinners, asking per row took two seconds of the
+        // main thread on every leave or insert, and asking once still cost
+        // every render tens of milliseconds. Every row below a leave is
+        // displaced while it glides, and a working list commits many times in
+        // that glide, so asking those rows one by one stalled each of those
+        // commits for hundreds of milliseconds again.
+        let rowAnimations: Map<Element, Animation[]> | undefined;
+        const rowAnimationsRead = (): Map<Element, Animation[]> => {
+            if (rowAnimations) return rowAnimations;
+            rowAnimations = new Map();
             for (const animation of root.getAnimations({ subtree: true })) {
                 const effect = animation.effect;
                 if (!(effect instanceof KeyframeEffect) || effect.pseudoElement !== null) continue;
@@ -4334,19 +4339,21 @@ export function Sidebar(props: SidebarProps) {
                 if (held) held.push(animation);
                 else rowAnimations.set(target, [animation]);
             }
+            return rowAnimations;
+        };
         // Read where each row is painted now before anything is cancelled, so a
         // row caught mid-glide carries on from where it actually is. A row
         // standing at its own place has nothing to carry on from; only one
-        // displaced from it is asked whether an animation is what moved it.
+        // displaced from it is looked up among the animations.
         const offsets = nodes.map(([, node]) => {
             const top = Number.parseFloat(getComputedStyle(node).top) || 0;
             if (top === 0) return 0;
-            return (previous ? rowAnimations.has(node) : node.getAnimations().length > 0) ? top : 0;
+            return rowAnimationsRead().has(node) ? top : 0;
         });
         if (previous)
             for (const [id, node] of nodes)
                 if (previous.has(id))
-                    for (const animation of rowAnimations.get(node) ?? []) animation.cancel();
+                    for (const animation of rowAnimationsRead().get(node) ?? []) animation.cancel();
         const rootTop = root.getBoundingClientRect().top;
         const tops = new Map<string, number>();
         const glides: [HTMLElement, number][] = [];
