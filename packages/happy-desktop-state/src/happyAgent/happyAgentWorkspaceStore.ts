@@ -3315,20 +3315,19 @@ export function happyAgentWorkspaceStoreCreate(
                use, and false for a delegated one. That chat's model, reasoning,
                access mode, and speed belong to the runner that started it, so it
                shows nothing rather than another session's model until its own
-               arrives. */
+               arrives. So does any chat not read yet: a message sent before the
+               read waits for it and goes out with the session's own selection,
+               which may well not be the default. */
             const pendingMenus =
-                conversationDelegated || models.type !== "ready" ? undefined : models.menus;
+                conversationDelegated || models.type !== "ready" || !chat?.ready
+                    ? undefined
+                    : models.menus;
             if (chat?.ready || reopened?.conversationId !== openId) reopened = undefined;
             const next: HappyAgentConversationSnapshot = reopened
                 ? { ...reopened, composer: draft, standIn: true }
                 : chat
                   ? conversationProject(chat, draft, pendingMenus)
-                  : conversationAcquiring(
-                        openId,
-                        draft,
-                        conversationSummaryFind(openId),
-                        pendingMenus,
-                    );
+                  : conversationAcquiring(openId, draft, conversationSummaryFind(openId));
             if (conversation.type !== "ready" || !conversationEqual(conversation.value, next)) {
                 conversation = { type: "ready", value: next };
             }
@@ -9626,7 +9625,6 @@ function conversationAcquiring(
     conversationId: HappyAgentSessionId,
     composer: ComposerSource,
     summary: ConversationSummary | undefined,
-    menus?: HappyAgentMenusSnapshot,
 ): HappyAgentConversationSnapshot {
     return {
         conversationId,
@@ -9654,7 +9652,6 @@ function conversationAcquiring(
         expandedMessageIds: NO_TURNS,
         usageLoading: false,
         activityPanelOpen: false,
-        ...(menus ? { menus } : {}),
         modelLocked: false,
         failureSwitchSupported: false,
     };

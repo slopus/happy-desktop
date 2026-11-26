@@ -395,7 +395,9 @@ it.each(
                     views={[...ids].map((id) => ({
                         id,
                         content: contents.get(id),
-                        ready: id !== current?.conversationId || current.standIn !== true,
+                        ready:
+                            id !== current?.conversationId ||
+                            (current.ready && current.standIn !== true),
                     }))}
                     onViewHide={(id, size) =>
                         workspace.conversationViewSizeUpdate(id as HappyAgentSessionId, size)

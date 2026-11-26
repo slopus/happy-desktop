@@ -44,13 +44,15 @@ function transcript(id: string): readonly ConversationEntry[] {
     }));
 }
 
-const TRANSCRIPTS = new Map(["a", "b", "c"].map((id) => [id, transcript(id)]));
+const TRANSCRIPTS = new Map(["a", "b", "c", "d"].map((id) => [id, transcript(id)]));
 
 type Shown = {
     readonly activeId: string | undefined;
     readonly ids: readonly string[];
     readonly entries?: readonly ConversationEntry[];
     readonly running?: boolean;
+    /** Views whose transcript has not been read yet. */
+    readonly loading?: ReadonlySet<string>;
 };
 
 function shownStoreCreate(initial: Shown) {
@@ -88,6 +90,7 @@ function harness(initial: Shown) {
                     onViewHide={onViewHide}
                     views={snapshot.ids.map((id) => ({
                         id,
+                        ready: snapshot.loading?.has(id) !== true,
                         content: (
                             <ConversationView
                                 dock={
@@ -101,6 +104,7 @@ function harness(initial: Shown) {
                                     />
                                 }
                                 conversationId={id}
+                                loading={snapshot.loading?.has(id) === true}
                                 running={id === "a" && snapshot.running}
                                 entries={
                                     id === "a" && snapshot.entries
@@ -432,4 +436,87 @@ it("takes what a view hung off the window with it when it hides, and the focus i
     await frame();
     expect(itemOf("a")!.checkVisibility()).toBe(true);
     expect(itemOf("b")!.checkVisibility()).toBe(false);
+});
+
+it("holds a cold switch on the view on screen, then shows the snail, never an empty pane", async () => {
+    const { view, shown, frameOf, textareaOf } = harness({ activeId: "a", ids: ["a"] });
+    await view.ready();
+    await frame();
+    /* A view first mounted out of sight is drawn at idle, so it may have no frame yet. */
+    const shownOf = (id: string) => {
+        const element = frameOf(id);
+        return element !== null && getComputedStyle(element).display !== "none";
+    };
+    const snailOf = (id: string) =>
+        frameOf(id)?.querySelector<HTMLElement>(
+            '[data-happy-desktop-ui="conversation-loading"] [data-happy-desktop-ui="empty-state"]',
+        ) ?? null;
+    const emptyShown = () =>
+        [
+            ...view.container.querySelectorAll<HTMLElement>(
+                '[data-happy-desktop-ui="conversation-empty"]',
+            ),
+        ].some((element) => element.checkVisibility());
+    type Sample = { at: number; on: string; snail: boolean };
+    /* What the pane shows on every frame for `ms`: which view, and whether a
+       view still loading shows the snail rather than nothing. */
+    const sample = async (ms: number) => {
+        const samples: Sample[] = [];
+        const start = performance.now();
+        while (performance.now() - start < ms) {
+            await frame();
+            expect(emptyShown()).toBe(false);
+            const on = ["a", "b", "c", "d"].find(shownOf)!;
+            const snail = snailOf(on);
+            samples.push({
+                at: performance.now() - start,
+                on,
+                snail: snail !== null && getComputedStyle(snail).visibility === "visible",
+            });
+        }
+        return samples;
+    };
+
+    // A cold switch keeps the transcript left on screen while the next one is read,
+    // inert, so stray typing goes nowhere rather than into the conversation left.
+    (document.activeElement as HTMLElement | null)?.blur();
+    shown.set({ activeId: "b", ids: ["a", "b"], loading: new Set(["b"]) });
+    expect(shownOf("a")).toBe(true);
+    expect(shownOf("b")).toBe(false);
+    type("x");
+    expect(document.activeElement).not.toBe(textareaOf("a"));
+    const slow = await sample(400);
+    const held = slow.filter((entry) => entry.on === "a");
+    expect(held.length).toBeGreaterThan(0);
+    expect(held.at(-1)!.at).toBeGreaterThanOrEqual(200);
+    // Once the hold runs out, the snail is there in the first frame the view is.
+    const reading = slow.filter((entry) => entry.on === "b");
+    expect(reading.length).toBeGreaterThan(0);
+    expect(reading.every((entry) => entry.snail)).toBe(true);
+    expect(slow.findIndex((entry) => entry.on === "b")).toBe(held.length);
+    // The view shown takes the caret, and its transcript replaces the snail.
+    expect(document.activeElement).toBe(textareaOf("b"));
+    shown.set({ activeId: "b", ids: ["a", "b"] });
+    await frame();
+    expect(snailOf("b")).toBeNull();
+    expect(frameOf("b")!.querySelector(".happy-message-list__viewport")).not.toBeNull();
+
+    // A transcript read within the hold never shows the snail at all.
+    shown.set({ activeId: "c", ids: ["a", "b", "c"], loading: new Set(["c"]) });
+    const quick = await sample(80);
+    shown.set({ activeId: "c", ids: ["a", "b", "c"] });
+    quick.push(...(await sample(80)));
+    expect(quick.some((entry) => entry.on === "c")).toBe(true);
+    expect(quick.every((entry) => entry.on === "b" || entry.on === "c")).toBe(true);
+    expect(quick.some((entry) => entry.snail)).toBe(false);
+
+    // With nothing on screen to hold, the view loading is shown at once, and
+    // its snail waits for the same quiet moment before it comes in.
+    shown.set({ activeId: undefined, ids: ["a", "b", "c"] });
+    await frame();
+    shown.set({ activeId: "d", ids: ["a", "b", "c", "d"], loading: new Set(["d"]) });
+    const uncovered = await sample(400);
+    expect(uncovered.every((entry) => entry.on === "d")).toBe(true);
+    expect(uncovered.filter((entry) => entry.at < 200).some((entry) => entry.snail)).toBe(false);
+    expect(uncovered.at(-1)!.snail).toBe(true);
 });

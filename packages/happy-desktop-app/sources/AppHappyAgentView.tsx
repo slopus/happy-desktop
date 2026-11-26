@@ -9247,8 +9247,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                                   ready:
                                                                       conversation.type !==
                                                                           "ready" ||
-                                                                      conversation.value.standIn !==
-                                                                          true,
+                                                                      (conversation.value.ready &&
+                                                                          conversation.value
+                                                                              .standIn !== true),
                                                               }
                                                             : undefined
                                                     }
@@ -10285,7 +10286,10 @@ function HappyAgentConversationBody(props: {
 function HappyAgentConversationViews(props: {
     /**
      * The conversation the address names, drawn by the surface with everything
-     * it knows. Not `ready` while it stands in for one being read back.
+     * it knows. Not `ready` until its transcript is read: while it is being
+     * acquired, or stands in for one being read back. A switch to it keeps the
+     * conversation left on screen meanwhile, rather than a pane with no
+     * transcript in it.
      */
     open: { readonly id: string; readonly content: ReactNode; readonly ready: boolean } | undefined;
     /** Whether the main pane shows the open conversation rather than a file or tool over it. */
