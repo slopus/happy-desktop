@@ -1909,6 +1909,43 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         entry.draft = agentDrafts.get(entry.id);
     };
 
+    /**
+     * What a session read again keeps of the history its reader already paged back through. A
+     * read brings only the newest page, and a page is counted in messages, so one long turn can
+     * be all of it: everything older on screen would otherwise go, and a reader at a working
+     * session would watch its transcript empty whenever a missed delta or a journal gap sent it
+     * back to the server. The finished runs older than the page are kept when the page joins
+     * them — its oldest run is one already held. One that does not reach back that far leaves a
+     * hole between it and them, so then nothing older is kept and the reader pages back again.
+     * A run whose stream skipped text is not trusted, nor anything older than it.
+     */
+    const olderRunsKept = (
+        entry: SessionEntry,
+        page: readonly Run[],
+    ): { runs: (Run & { messages: Message[] })[]; hasMore: boolean } | undefined => {
+        const oldest = [...page].sort(runCompare)[0];
+        if (oldest === undefined || !entry.runs.has(oldest.id)) return undefined;
+        const held = runsOrderedOf(entry);
+        const messagesByRun = new Map<string, Message[]>();
+        for (const { message, runId } of entry.messages.values()) {
+            if (runId === null) continue;
+            const messages = messagesByRun.get(runId);
+            if (messages === undefined) messagesByRun.set(runId, [message]);
+            else messages.push(message);
+        }
+        const runs: (Run & { messages: Message[] })[] = [];
+        for (let index = held.findIndex((run) => run.id === oldest.id) - 1; index >= 0; index--) {
+            const run = held[index]!;
+            if (run.status === "running") break;
+            const messages = messagesByRun.get(run.id) ?? [];
+            if (messages.some((message) => entry.corruptedMessageIds.has(message.id))) break;
+            runs.unshift({ ...run, messages });
+        }
+        if (runs.length === 0) return undefined;
+        // What lies beyond the oldest run kept is what lay beyond it before the read.
+        return { runs, hasMore: runs[0]!.id === held[0]!.id ? entry.hasMore : true };
+    };
+
     const loadSession = (entry: SessionEntry): Promise<void> => {
         if (entry.loading !== undefined) return entry.loading;
         // An agent this connection has named but not yet created has no history
@@ -1972,12 +2009,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 const pendingSends = [...entry.messages.values()].filter(
                     (message) => message.pendingSend,
                 );
+                const kept = history.hasMore ? olderRunsKept(entry, history.runs) : undefined;
                 entry.messages.clear();
                 clearUserIndex(entry);
                 entry.messageBlockOffsets.clear();
                 entry.runs.clear();
                 entry.runsOrdered = undefined;
                 entry.corruptedMessageIds.clear();
+                if (kept !== undefined) ingestSessionHistory(entry, kept.runs, []);
                 ingestSessionHistory(entry, history.runs, bootstrap.pending);
                 captureLatestIdleRunFinalContext(entry);
                 for (const message of pendingSends) {
@@ -1988,7 +2027,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         indexMessageUser(entry, message.message);
                     }
                 }
-                entry.hasMore = history.hasMore;
+                entry.hasMore = kept?.hasMore ?? history.hasMore;
                 if (activity !== undefined) setActivity(entry, activity);
                 if (question !== undefined) entry.question = question.question;
                 entry.historyLoaded = true;
@@ -6672,6 +6711,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             );
             await ensureMessageUsers(page.runs.flatMap((run) => run.messages));
             if (closed) return;
+            // A read of the session that landed meanwhile may have let go of the run this page
+            // continues from; laid down then, it would sit behind a hole in the transcript.
+            if (runsOrderedOf(entry)[0]?.id !== token) return;
             ingestSessionHistory(entry, page.runs, []);
             entry.hasMore = page.hasMore;
         } catch (error) {
