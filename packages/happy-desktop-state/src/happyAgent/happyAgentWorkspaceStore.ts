@@ -3768,6 +3768,43 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
+    /**
+     * A file a Happy Cloud checkout changed, by its path in the bot's or task's
+     * workspace that holds the checkout. The checkouts are read from the
+     * agents running there, while something shows them; a file in none of
+     * them is not a change.
+     */
+    const checkoutChangeFind = (
+        groupId: HappyAgentGroupId,
+        path: string,
+    ): HappyAgentGitChangedFile | undefined => {
+        const snapshot = list.get();
+        const roots = [...snapshot.bots, ...snapshot.tasks, ...snapshot.taskDirectory];
+        const agentIds = [
+            ...roots.filter((root) => root.workspaceId === groupId),
+            ...happyAgentBotSubtasks(roots).filter((task) => task.workspaceId === groupId),
+        ].map((entry) => entry.conversation.id);
+        for (const agentId of new Set(agentIds)) {
+            for (const checkout of client.checkouts(agentId)?.get().checkouts ?? []) {
+                const folder = checkout.folder.replace(/\/+$/u, "");
+                if (folder === "" || !path.startsWith(`${folder}/`)) continue;
+                const change = checkout.changes?.files.find(
+                    (file) => file.path === path.slice(folder.length + 1),
+                );
+                if (change === undefined) continue;
+                // Read from the workspace, every path names the checkout's folder too.
+                return {
+                    ...change,
+                    path,
+                    ...(change.previousPath === undefined
+                        ? {}
+                        : { previousPath: `${folder}/${change.previousPath}` }),
+                };
+            }
+        }
+        return undefined;
+    };
+
     const fileChangeFind = (
         groupId: HappyAgentGroupId,
         path: string,
@@ -3780,7 +3817,7 @@ export function happyAgentWorkspaceStoreCreate(
             const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
             if (worktree) return worktree.changes?.find((change) => change.path === path);
         }
-        return undefined;
+        return checkoutChangeFind(groupId, path);
     };
 
     /** Every changed file in one checkout, as the live Git snapshot has them. */

@@ -1,3 +1,4 @@
+import { UserError } from "../types.js";
 import type { HappyAgentProviderCredentialsApi } from "./happyAgentProviderCredentials.js";
 import type {
     TerminalColorScheme,
@@ -782,11 +783,23 @@ async function changedFileRead(
             ? ""
             : happyAgentTextDecodeBase64(
                   (
-                      await client.readFileRevision(
-                          groupId,
-                          { path: oldPath, revision: change.baseRevision },
-                          { signal },
-                      )
+                      await client
+                          .readFileRevision(
+                              groupId,
+                              { path: oldPath, revision: change.baseRevision },
+                              { signal },
+                          )
+                          .catch((error: unknown) => {
+                              // A Happy Cloud server from before file revisions
+                              // cannot give the old side, so there is no diff.
+                              if (error instanceof HappyAgentApiError && error.status === 501)
+                                  throw new UserError(
+                                      "This server cannot show what changed in this file yet.",
+                                      "unsupported",
+                                      error,
+                                  );
+                              throw error;
+                          })
                   ).content,
               );
     const current =
