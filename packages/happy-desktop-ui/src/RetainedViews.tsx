@@ -26,12 +26,13 @@ export type RetainedView = {
 };
 
 /**
- * True inside the view on screen while it is shown before it was ready,
- * because the wait for it ran out. The reader has already waited that long
- * for it, so whatever it shows while it gets ready can appear at once rather
- * than after a quiet moment of its own.
+ * True inside the view on screen while it is shown before it is ready: the
+ * switch to it held the view before until the wait ran out, or there was no
+ * view on screen to hold. Either way the reader has nothing else to look at,
+ * so whatever it shows while it gets ready appears at once rather than after
+ * a quiet moment of its own.
  */
-export const RetainedViewWaitedContext = createContext(false);
+export const RetainedViewUnreadyContext = createContext(false);
 
 export type RetainedViewsProps = {
     /** The view on screen. Absent keeps every view out of sight, such as while something else covers the pane. */
@@ -39,7 +40,9 @@ export type RetainedViewsProps = {
     /**
      * Every view kept mounted, the one on screen included, in any order. A view
      * that leaves this list is unmounted; one that stays keeps its DOM, scroll
-     * position, and component state while it is out of sight.
+     * position, and component state while it is out of sight. The view on
+     * screen when a switch begins stays mounted until the switch settles,
+     * whether or not it is still listed, so the switch can hold it.
      */
     views: readonly RetainedView[];
     /**
@@ -72,15 +75,14 @@ export type RetainedViewsProps = {
  * order its owner keeps them in.
  */
 export function RetainedViews(props: RetainedViewsProps) {
-    const views = [...props.views].sort((left, right) =>
-        left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
-    );
     /*
      * A view switched to before its content is current would be drawn, and its
      * reader placed, against what it held when it was left, then move to what
      * arrived since. The view on screen stays, frozen and inert, until the
      * next one is ready, so the next one appears in the commit that draws it
-     * current: placed where it belongs in its first frame.
+     * current: placed where it belongs in its first frame. A view its owner
+     * lets go as the switch begins is held all the same, and let go once the
+     * switch settles: what is on screen never gives way to an empty pane.
      */
     const [shown, setShown] = useState(props.activeId);
     const activeReady = props.views.find((view) => view.id === props.activeId)?.ready !== false;
@@ -90,14 +92,17 @@ export function RetainedViews(props: RetainedViewsProps) {
     if (wait.id !== waitFor)
         setWait({ id: waitFor, wait: waitFor === undefined ? NO_WAIT : retainedViewWait() });
     const waited = useSyncExternalStore(wait.wait.subscribe, wait.wait.get, wait.wait.get);
-    const holding =
-        !activeReady &&
-        !waited &&
-        shown !== undefined &&
-        shown !== props.activeId &&
-        props.views.some((view) => view.id === shown);
+    const holding = !activeReady && !waited && shown !== undefined && shown !== props.activeId;
     if (!holding && shown !== props.activeId) setShown(props.activeId);
     const displayedId = holding ? shown : props.activeId;
+    /* Held, a frame draws what it last drew, so one let go needs no content. */
+    const listed =
+        holding && !props.views.some((view) => view.id === shown)
+            ? [...props.views, { id: shown }]
+            : props.views;
+    const views = [...listed].sort((left, right) =>
+        left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+    );
     return (
         <>
             {views.map((view) => (
@@ -108,7 +113,7 @@ export function RetainedViews(props: RetainedViewsProps) {
                     id={view.id}
                     key={view.id}
                     onHide={props.onViewHide}
-                    waited={waited && !activeReady && view.id === displayedId}
+                    unready={!activeReady && !holding && view.id === displayedId}
                 />
             ))}
         </>
@@ -144,8 +149,8 @@ type RetainedViewEntryProps = {
     held: boolean;
     id: string;
     onHide: RetainedViewsProps["onViewHide"];
-    /** On screen only because the wait for it ran out; see `RetainedViewWaitedContext`. */
-    waited: boolean;
+    /** On screen before it is ready; see `RetainedViewUnreadyContext`. */
+    unready: boolean;
 };
 
 /*
@@ -164,7 +169,7 @@ const RetainedViewEntry = memo(
                     inert={props.held}
                     id={props.id}
                     onHide={props.onHide}
-                    waited={props.waited}
+                    unready={props.unready}
                 />
             </Activity>
         );
@@ -174,7 +179,7 @@ const RetainedViewEntry = memo(
         previous.held === next.held &&
         previous.id === next.id &&
         previous.onHide === next.onHide &&
-        previous.waited === next.waited &&
+        previous.unready === next.unready &&
         (!next.active || next.held || previous.content === next.content),
 );
 
@@ -186,7 +191,7 @@ type RetainedViewFrameProps = {
     inert: boolean;
     id: string;
     onHide: RetainedViewsProps["onViewHide"];
-    waited: boolean;
+    unready: boolean;
 };
 
 /*
@@ -229,9 +234,9 @@ const RetainedViewFrame = memo(
                 ref={frame}
             >
                 <WindowOverlayRetainedContext.Provider value>
-                    <RetainedViewWaitedContext.Provider value={props.waited}>
+                    <RetainedViewUnreadyContext.Provider value={props.unready}>
                         {props.hidden ? drawn : props.content}
-                    </RetainedViewWaitedContext.Provider>
+                    </RetainedViewUnreadyContext.Provider>
                 </WindowOverlayRetainedContext.Provider>
             </div>
         );
@@ -243,5 +248,5 @@ const RetainedViewFrame = memo(
             previous.content === next.content &&
             previous.id === next.id &&
             previous.onHide === next.onHide &&
-            previous.waited === next.waited),
+            previous.unready === next.unready),
 );
