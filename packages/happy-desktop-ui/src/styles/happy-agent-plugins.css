@@ -149,6 +149,69 @@
     white-space: nowrap;
 }
 
+/* ---- Custom plugin ----------------------------------------------------- */
+
+/* Read-only, so no hover; its mark and name sit where an ordinary row's do. */
+.happy-agent-custom-plugin {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 8px;
+}
+
+.happy-agent-custom-plugin__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-agent-custom-plugin__summary {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-custom-plugin__description {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-custom-plugin__skills {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-agent-custom-plugin__skill {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-custom-plugin__skill-name {
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy-agent-custom-plugin__skill-description {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
 /* ---- Mark -------------------------------------------------------------- */
 
 .happy-agent-plugin-mark {

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type {
+    HappyAgentCustomPlugin,
     HappyAgentPlugin,
     HappyAgentPluginInstallation,
     HappyAgentPluginsSnapshot,
@@ -28,12 +29,15 @@ export interface HappyAgentPluginsPageProps {
 }
 
 /**
- * HappyAgentPluginsPage — what the team has installed, then every plugin the
- * server offers. A row opens the plugin; a manager installs one from its row.
+ * HappyAgentPluginsPage — what the team has installed, the custom plugins
+ * agents made, then every plugin the server offers. A row opens the plugin; a
+ * manager installs one from its row. Custom plugins are only shown: agents
+ * make, change and delete them.
  */
 export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
     const snapshot = props.plugins;
     const installedCount = snapshot.installations.length;
+    const customCount = snapshot.customPlugins.length;
     return (
         <div
             className={["happy-agent-plugins", props.className].filter(Boolean).join(" ")}
@@ -46,7 +50,11 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                 subtitle={
                     snapshot.loading
                         ? "Loading…"
-                        : `${String(snapshot.plugins.length)} available · ${String(installedCount)} installed`
+                        : [
+                              `${String(snapshot.plugins.length)} available`,
+                              `${String(installedCount)} installed`,
+                              ...(customCount === 0 ? [] : [`${String(customCount)} custom`]),
+                          ].join(" · ")
                 }
                 title="Plugins"
             />
@@ -60,7 +68,7 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                             {snapshot.error.message}
                         </Banner>
                     ) : null}
-                    {snapshot.loading || snapshot.plugins.length + installedCount === 0 ? (
+                    {snapshot.loading || snapshot.plugins.length + installedCount + customCount === 0 ? (
                         <EmptyState
                             description={
                                 snapshot.loading
@@ -93,6 +101,20 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                                     </div>
                                 )}
                             </section>
+                            {customCount === 0 ? null : (
+                                <section className="happy-agent-plugins__section">
+                                    <h2 className="happy-agent-plugins__heading">Custom</h2>
+                                    <p className="happy-agent-plugins__note">
+                                        Made by agents. Ask one to add, change or remove a
+                                        custom plugin.
+                                    </p>
+                                    <div className="happy-agent-plugins__list" role="list">
+                                        {snapshot.customPlugins.map((plugin) => (
+                                            <CustomPluginRow key={plugin.id} plugin={plugin} />
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
                             <section className="happy-agent-plugins__section">
                                 <h2 className="happy-agent-plugins__heading">Available</h2>
                                 {snapshot.manage ? null : (
@@ -147,6 +169,55 @@ function InstallationRow(props: {
                     </span>
                 </span>
             </button>
+        </div>
+    );
+}
+
+/** A custom plugin with its skills; nothing to open or install, agents manage it. */
+function CustomPluginRow(props: { readonly plugin: HappyAgentCustomPlugin }) {
+    const plugin = props.plugin;
+    const skillCount = plugin.skills.length;
+    return (
+        <div
+            className="happy-agent-custom-plugin"
+            data-happy-desktop-ui="happy-agent-custom-plugin"
+            data-owner={plugin.owner}
+            role="listitem"
+        >
+            <PluginMark image={plugin.image} size="row" />
+            <div className="happy-agent-custom-plugin__text">
+                <div className="happy-agent-custom-plugin__summary">
+                    <span className="happy-agent-plugin-row__name">{plugin.name}</span>
+                    <span className="happy-agent-plugin-row__meta">
+                        {plugin.owner === "team" ? "Shared with the team" : "Only you"}
+                        {" · "}
+                        {skillCount === 0
+                            ? "No skills"
+                            : `${String(skillCount)} ${skillCount === 1 ? "skill" : "skills"}`}
+                    </span>
+                    {plugin.description ? (
+                        <p className="happy-agent-custom-plugin__description">
+                            {plugin.description}
+                        </p>
+                    ) : null}
+                </div>
+                {skillCount === 0 ? null : (
+                    <ul aria-label="Skills" className="happy-agent-custom-plugin__skills">
+                        {plugin.skills.map((skill) => (
+                            <li className="happy-agent-custom-plugin__skill" key={skill.name}>
+                                <span className="happy-agent-custom-plugin__skill-name">
+                                    {skill.name}
+                                </span>
+                                {skill.description ? (
+                                    <span className="happy-agent-custom-plugin__skill-description">
+                                        {skill.description}
+                                    </span>
+                                ) : null}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
         </div>
     );
 }

@@ -66,6 +66,26 @@ export interface HappyAgentPlugin {
     readonly catalog: "public" | "cluster" | null;
 }
 
+/** One skill a custom plugin gives agents. */
+export interface HappyAgentCustomPluginSkill {
+    readonly name: string;
+    readonly description: string;
+}
+
+/**
+ * A plugin agents made for this team: skills and docs with a name and an
+ * avatar, and no tools. It is never installed; it is there for everyone who
+ * sees it. `team` is shared with every member, `me` is the reader's own.
+ */
+export interface HappyAgentCustomPlugin {
+    readonly id: string;
+    readonly name: string;
+    readonly description: string;
+    readonly image: HappyAgentPluginImage | null;
+    readonly owner: "team" | "me";
+    readonly skills: readonly HappyAgentCustomPluginSkill[];
+}
+
 /**
  * `notConfigured` is installed but waiting for a sign-in; `methodUnavailable`
  * signed in with a method this server no longer offers. `installing` and
@@ -108,6 +128,8 @@ export interface HappyAgentPluginsSnapshot {
     readonly plugins: readonly HappyAgentPlugin[];
     /** Every installation on the team; a reader who may not manage them sees them too. */
     readonly installations: readonly HappyAgentPluginInstallation[];
+    /** The team's custom plugins and the reader's own, sorted by name. Agents manage them. */
+    readonly customPlugins: readonly HappyAgentCustomPlugin[];
     /** Whether the reader may install, set up and remove plugins. */
     readonly manage: boolean;
 }
@@ -164,9 +186,10 @@ const EMPTY: HappyAgentPluginsSnapshot = {
     loading: true,
     plugins: [],
     installations: [],
+    customPlugins: [],
     manage: false,
 };
-/** Installation writes stream an event; the catalog changes only with a server release. */
+/** Installation and custom plugin writes stream an event; the catalog changes only with a server release. */
 const POLL_INTERVAL_MS = 30_000;
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -241,9 +264,10 @@ function compareByName(left: { readonly name: string }, right: { readonly name: 
 }
 
 /**
- * The plugins of a Happy Cloud server, compiled into it, and the team's
- * installations of them. Installations are read again on `plugins.changed`,
- * which every installation write journals.
+ * The plugins of a Happy Cloud server, compiled into it, the team's
+ * installations of them, and the custom plugins agents made. Both lists are
+ * read again on `plugins.changed`, which every installation and custom plugin
+ * write journals.
  */
 export function happyAgentPluginsStoreCreate(deps: {
     readonly request: HappyCloudRequest;
@@ -300,6 +324,25 @@ export function happyAgentPluginsStoreCreate(deps: {
             multiInstance: true,
             installRefusal: null,
             catalog: null,
+        };
+    };
+
+    const customPluginRead = (value: unknown): HappyAgentCustomPlugin | undefined => {
+        const plugin = recordOf(value);
+        const id = textOrNull(plugin?.id);
+        const owner = plugin?.owner;
+        if (!plugin || id === null || (owner !== "team" && owner !== "me")) return undefined;
+        return {
+            id,
+            name: textOrNull(plugin.name) ?? id,
+            description: text(plugin.description),
+            image: imageRead(plugin.image),
+            owner,
+            skills: listOf(plugin.skills).flatMap((skill) => {
+                const entry = recordOf(skill);
+                const name = textOrNull(entry?.name);
+                return name === null ? [] : [{ name, description: text(entry?.description) }];
+            }),
         };
     };
 
@@ -361,6 +404,15 @@ export function happyAgentPluginsStoreCreate(deps: {
                         const read = installationRead(entry);
                         return read ? [read] : [];
                     }),
+                ),
+                customPlugins: referencesPreserve(
+                    current.customPlugins,
+                    listOf(recordOf(catalog)?.customPlugins)
+                        .flatMap((plugin) => {
+                            const entry = customPluginRead(plugin);
+                            return entry ? [entry] : [];
+                        })
+                        .sort(compareByName),
                 ),
             },
             true,
