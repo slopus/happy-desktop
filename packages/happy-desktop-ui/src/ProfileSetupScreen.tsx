@@ -8,6 +8,7 @@ import { SetupPage } from "./SetupPage";
 import { Spinner } from "./Spinner";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
+import { useImageDrop } from "./useImageDrop";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 export interface ProfileSetupScreenProps {
@@ -54,7 +55,7 @@ const AVATAR_SIDE = 120;
  * desktop's first-run sequence and draws no step bar.
  *
  * The avatar is the photo picker: pressing it, or the line under it, opens a
- * file, then the crop. Until a photo is chosen it wears the placeholder this
+ * file, then the crop. A picture dropped on either is taken the same way. Until a photo is chosen it wears the placeholder this
  * person is given. The photo is optional; Continue waits only on a name.
  * Under the field sits one line kept whether or not it says anything, so an
  * error never moves the page.
@@ -124,57 +125,72 @@ export function ProfileSetupForm(props: ProfileSetupFormProps) {
     const photoPick = () => {
         if (!photoBusy) photoInput.current?.click();
     };
+    const photoDrop = useImageDrop<HTMLDivElement>({
+        accept: PHOTO_ACCEPT,
+        disabled: photoBusy,
+        onFile: props.onPhotoChoose,
+    });
     const hint = props.message ?? props.photoError;
     return (
         <>
             <div className="happy-profile-setup__form" data-happy-desktop-ui="profile-setup">
-                <button
-                    aria-label={props.photoUrl ? "Change photo" : "Add photo"}
-                    className="happy-profile-setup__avatar"
-                    data-testid="profile-setup-avatar"
-                    disabled={photoBusy}
-                    onClick={(event) => {
-                        // The crop dialog hands focus back to whatever had
-                        // it, and not every engine focuses a clicked button.
-                        event.currentTarget.focus();
-                        photoPick();
-                    }}
-                    type="button"
+                <div
+                    className="happy-profile-setup__drop"
+                    data-dropping={photoDrop.dropping || undefined}
+                    data-testid="profile-setup-photo-drop"
+                    {...photoDrop.zoneProps}
                 >
-                    {props.photoUrl ? (
-                        <img
-                            alt=""
-                            className="happy-profile-setup__photo"
-                            draggable={false}
-                            src={props.photoUrl}
-                        />
-                    ) : (
-                        <AvatarPlaceholder
-                            className="happy-profile-setup__photo"
-                            seed={props.placeholderSeed}
-                            side={AVATAR_SIDE}
-                        />
-                    )}
-                    <span className="happy-profile-setup__badge" aria-hidden="true">
-                        {props.photoOpening ? (
-                            <Spinner size={14} />
+                    <button
+                        aria-label={props.photoUrl ? "Change photo" : "Add photo"}
+                        className="happy-profile-setup__avatar"
+                        data-testid="profile-setup-avatar"
+                        disabled={photoBusy}
+                        onClick={(event) => {
+                            // The crop dialog hands focus back to whatever had
+                            // it, and not every engine focuses a clicked button.
+                            event.currentTarget.focus();
+                            photoPick();
+                        }}
+                        type="button"
+                    >
+                        {props.photoUrl ? (
+                            <img
+                                alt=""
+                                className="happy-profile-setup__photo"
+                                draggable={false}
+                                src={props.photoUrl}
+                            />
                         ) : (
-                            <Ionicon name="camera" size={16} />
+                            <AvatarPlaceholder
+                                className="happy-profile-setup__photo"
+                                seed={props.placeholderSeed}
+                                side={AVATAR_SIDE}
+                            />
                         )}
-                    </span>
-                </button>
-                <Button
-                    className="happy-profile-setup__photo-action"
-                    disabled={photoBusy}
-                    onClick={(event) => {
-                        event.currentTarget.focus();
-                        photoPick();
-                    }}
-                    size="small"
-                    variant="ghost"
-                >
-                    {props.photoUrl ? "Change photo" : "Add photo"}
-                </Button>
+                        <span className="happy-profile-setup__badge" aria-hidden="true">
+                            {props.photoOpening ? (
+                                <Spinner size={14} />
+                            ) : (
+                                <Ionicon name="camera" size={16} />
+                            )}
+                        </span>
+                    </button>
+                    <Button
+                        className="happy-profile-setup__photo-action"
+                        disabled={photoBusy}
+                        onClick={(event) => {
+                            event.currentTarget.focus();
+                            photoPick();
+                        }}
+                        size="small"
+                        variant="ghost"
+                    >
+                        {props.photoUrl ? "Change photo" : "Add photo"}
+                    </Button>
+                    <p className="happy-profile-setup__drop-hint" aria-hidden="true">
+                        {photoDrop.dropping ? "Drop to use this picture" : "or drag a picture here"}
+                    </p>
+                </div>
                 <input
                     accept={PHOTO_ACCEPT}
                     data-testid="profile-setup-photo-input"
