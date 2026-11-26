@@ -162,6 +162,7 @@ export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
 export {
     Composer,
+    type ComposerAttachmentsOrigin,
     composerTypingFocusAtEnd,
     type ComposerProps,
     ContextChips,

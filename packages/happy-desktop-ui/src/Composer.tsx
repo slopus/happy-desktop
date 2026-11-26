@@ -262,6 +262,12 @@ export function MentionPicker(props: MentionPickerProps) {
     );
 }
 /* ---- Composer ----------------------------------------------------------- */
+/**
+ * How files reached the composer. A paste is told apart because the browser's
+ * clipboard can carry fewer files than the system's did, and only the owner's
+ * host can go back and ask the system for the rest.
+ */
+export type ComposerAttachmentsOrigin = "picked" | "pasted" | "dropped";
 export type ComposerProps = {
     /** Native file-picker accept filter, used with `onAttachmentsSelect`. */
     attachmentAccept?: string;
@@ -329,7 +335,7 @@ export type ComposerProps = {
     /** Called for toggle clicks and Shift+Tab with the next audience. */
     onAudienceChange?: (audience: AudienceValue) => void;
     /** Receives files picked, pasted into the draft, or dropped onto the composer. */
-    onAttachmentsSelect?: (files: File[]) => void;
+    onAttachmentsSelect?: (files: File[], origin: ComposerAttachmentsOrigin) => void;
     /** Opens one of the draft's media previews in the full-window viewer. */
     onAttachmentPreviewOpen?: ComposerAttachmentPreviewsProps["onOpen"];
     onContextRemove?: (id: string) => void;
@@ -1042,7 +1048,7 @@ export function Composer(props: ComposerProps) {
     };
     const selectAttachments = (event: ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(event.currentTarget.files ?? []);
-        if (files.length > 0) props.onAttachmentsSelect?.(files);
+        if (files.length > 0) props.onAttachmentsSelect?.(files, "picked");
         event.currentTarget.value = "";
         textareaEl.current?.focus();
     };
@@ -1213,8 +1219,12 @@ export function Composer(props: ComposerProps) {
         // pastes carry no files and fall through to the textarea untouched.
         const files = Array.from(event.clipboardData.files);
         if (files.length === 0 || !props.onAttachmentsSelect) return;
-        event.preventDefault();
-        props.onAttachmentsSelect(files);
+        // Text copied together with the files — a caption under a photo —
+        // still lands in the draft through the textarea's own paste. Files
+        // copied in Finder carry their names as text too, but Chromium hides
+        // that text from the paste, so it reads empty and the names stay out.
+        if (event.clipboardData.getData("text/plain") === "") event.preventDefault();
+        props.onAttachmentsSelect(files, "pasted");
     };
     /*
      * Dropping files is attaching them, exactly as pasting them is: the same
@@ -1226,7 +1236,7 @@ export function Composer(props: ComposerProps) {
     const dropAvailable = () => dropAccepted() && !composerEl.current?.closest("[inert]");
     const attachDropped = (transfer: DataTransfer | null) => {
         const files = Array.from(transfer?.files ?? []);
-        if (files.length > 0) props.onAttachmentsSelect?.(files);
+        if (files.length > 0) props.onAttachmentsSelect?.(files, "dropped");
     };
     /*
      * Answering `dragover` is what makes the drop possible at all: an

@@ -979,6 +979,9 @@ export interface HappyAgentTaskCreateSnapshot {
 }
 
 /** What a task being made is for; each purpose keeps its own draft. */
+/** How files reached a composer: picked from disk, pasted, or dropped on it. */
+export type HappyAgentAttachmentsOrigin = "picked" | "pasted" | "dropped";
+
 export type HappyAgentTaskCreatePurpose = "task" | "bugReport";
 
 /** Which files the panel lists. */
@@ -2004,8 +2007,10 @@ export interface HappyAgentWorkspaceStore {
      * Attaches picked, pasted, or dropped files to the addressed draft. Small
      * images are prepared inline; larger media and ordinary files retain their
      * browser `File` until send so selection itself never serializes a video.
+     * A paste is then followed by whatever else the system clipboard held that
+     * the browser left out, attached after it to the same draft.
      */
-    composerAttachmentsAdd(files: readonly File[]): void;
+    composerAttachmentsAdd(files: readonly File[], origin: HappyAgentAttachmentsOrigin): void;
     /** Removes one attachment from the addressed draft. */
     composerAttachmentRemove(attachmentId: string): void;
 
@@ -2095,7 +2100,7 @@ export interface HappyAgentWorkspaceStore {
      * as `composerAttachmentsAdd` does for a conversation's: the composer here
      * is the one the conversation will have, and takes the same things.
      */
-    botCreateAttachmentsAdd(files: readonly File[]): void;
+    botCreateAttachmentsAdd(files: readonly File[], origin: HappyAgentAttachmentsOrigin): void;
     /** Removes one attachment from the first message. */
     botCreateAttachmentRemove(attachmentId: string): void;
     /** Chooses the model the bot's conversation starts on; effort and speed follow it. */
@@ -2141,7 +2146,7 @@ export interface HappyAgentWorkspaceStore {
     /** Whether that composer's text control owns focus. */
     taskCreateMessageFocusUpdate(focused: boolean): void;
     /** Attaches files to the first message, as `botCreateAttachmentsAdd` does. */
-    taskCreateAttachmentsAdd(files: readonly File[]): void;
+    taskCreateAttachmentsAdd(files: readonly File[], origin: HappyAgentAttachmentsOrigin): void;
     /** Removes one attachment from the first message. */
     taskCreateAttachmentRemove(attachmentId: string): void;
     /** Chooses the model the task's conversation starts on; effort and speed follow it. */
@@ -5202,7 +5207,7 @@ export function happyAgentWorkspaceStoreCreate(
      * composer here takes files the same way, whichever conversation — or
      * conversation to be — it writes into.
      */
-    const attachmentsAddTo = (target: ComposerStore, files: readonly File[]): void => {
+    const filesAttach = (target: ComposerStore, files: readonly File[]): void => {
         for (const file of files) {
             const id = `attachment:${++attachmentSequence}`;
             // Asked for now, while the browser still has the object the host
@@ -5213,6 +5218,26 @@ export function happyAgentWorkspaceStoreCreate(
                 .getState()
                 .attachmentAdd(happyAgentComposerAttachmentCreate(id, file, sourcePath));
         }
+    };
+
+    /** Attaches files as they arrived, then whatever a paste of them left out. */
+    const attachmentsAddTo = (
+        target: ComposerStore,
+        files: readonly File[],
+        origin: HappyAgentAttachmentsOrigin,
+        accepting: () => boolean,
+    ): void => {
+        filesAttach(target, files);
+        if (origin !== "pasted") return;
+        // The browser's paste may have carried only part of what was copied.
+        // The rest follows once the host has read it, and only into a draft
+        // that is still the one being written and still takes files.
+        void client
+            .pastedFilesMissing(files)
+            .then((missing) => {
+                if (missing.length > 0 && accepting()) filesAttach(target, missing);
+            })
+            .catch(() => undefined);
     };
 
     /** Takes one attachment out of a composer's draft, letting go of its preview. */
@@ -8910,9 +8935,15 @@ export function happyAgentWorkspaceStoreCreate(
         composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
         composerCommandInvoke: (commandId) =>
             (groupComposer ?? composer)?.getState().commandInvoke(commandId),
-        composerAttachmentsAdd(files) {
+        composerAttachmentsAdd(files, origin) {
             const target = groupComposer ?? composer;
-            if (target) attachmentsAddTo(target, files);
+            if (target)
+                attachmentsAddTo(
+                    target,
+                    files,
+                    origin,
+                    () => (groupComposer ?? composer) === target,
+                );
         },
         composerAttachmentRemove(attachmentId) {
             const target = groupComposer ?? composer;
@@ -9018,9 +9049,18 @@ export function happyAgentWorkspaceStoreCreate(
         taskCreateMessageFocusUpdate(focused) {
             if (createKindTask(createKind)) botCreateComposer?.getState().focusUpdate(focused);
         },
-        taskCreateAttachmentsAdd(files) {
-            if (createKindTask(createKind) && botCreateComposer && !botCreateDraft?.submitting)
-                attachmentsAddTo(botCreateComposer, files);
+        taskCreateAttachmentsAdd(files, origin) {
+            const target = botCreateComposer;
+            if (createKindTask(createKind) && target && !botCreateDraft?.submitting)
+                attachmentsAddTo(
+                    target,
+                    files,
+                    origin,
+                    () =>
+                        createKindTask(createKind) &&
+                        botCreateComposer === target &&
+                        !botCreateDraft?.submitting,
+                );
         },
         taskCreateAttachmentRemove(attachmentId) {
             if (createKindTask(createKind) && botCreateComposer && !botCreateDraft?.submitting)
@@ -9074,9 +9114,15 @@ export function happyAgentWorkspaceStoreCreate(
         },
         botCreateTaskUpdate: (text) => botCreateComposer?.getState().textUpdate(text),
         botCreateTaskFocusUpdate: (focused) => botCreateComposer?.getState().focusUpdate(focused),
-        botCreateAttachmentsAdd(files) {
-            if (botCreateComposer && !botCreateDraft?.submitting)
-                attachmentsAddTo(botCreateComposer, files);
+        botCreateAttachmentsAdd(files, origin) {
+            const target = botCreateComposer;
+            if (target && !botCreateDraft?.submitting)
+                attachmentsAddTo(
+                    target,
+                    files,
+                    origin,
+                    () => botCreateComposer === target && !botCreateDraft?.submitting,
+                );
         },
         botCreateAttachmentRemove(attachmentId) {
             if (botCreateComposer && !botCreateDraft?.submitting)

@@ -10070,7 +10070,9 @@ function HappyAgentGroupComposer(props: {
                     onComposerAttachmentRemove={(attachmentId) =>
                         workspace.composerAttachmentRemove(attachmentId)
                     }
-                    onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
+                    onComposerAttachmentsSelect={(files, origin) =>
+                        workspace.composerAttachmentsAdd(files, origin)
+                    }
                     onComposerFocusChange={(focused) =>
                         workspace.composerFocusUpdate(props.composer.get().scopeId, focused)
                     }
@@ -10890,7 +10892,9 @@ function HappyAgentConversationSurface(props: {
                     onComposerAttachmentRemove={(attachmentId) =>
                         workspace.composerAttachmentRemove(attachmentId)
                     }
-                    onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
+                    onComposerAttachmentsSelect={(files, origin) =>
+                        workspace.composerAttachmentsAdd(files, origin)
+                    }
                     onComposerFocusChange={(focused) =>
                         workspace.composerFocusUpdate(conversation.composer.get().scopeId, focused)
                     }
@@ -11618,7 +11622,9 @@ function HappyAgentCreateBotSurface(props: {
                     onComposerAttachmentRemove={(attachmentId) =>
                         store.botCreateAttachmentRemove(attachmentId)
                     }
-                    onComposerAttachmentsSelect={(files) => store.botCreateAttachmentsAdd(files)}
+                    onComposerAttachmentsSelect={(files, origin) =>
+                        store.botCreateAttachmentsAdd(files, origin)
+                    }
                     onComposerFocusChange={(focused) => store.botCreateTaskFocusUpdate(focused)}
                     onComposerSend={() => {
                         if (props.happyAgentOnline()) store.botCreateTaskSend();
@@ -11743,7 +11749,9 @@ function HappyAgentCreateTaskSurface(props: {
                     onComposerAttachmentRemove={(attachmentId) =>
                         store.taskCreateAttachmentRemove(attachmentId)
                     }
-                    onComposerAttachmentsSelect={(files) => store.taskCreateAttachmentsAdd(files)}
+                    onComposerAttachmentsSelect={(files, origin) =>
+                        store.taskCreateAttachmentsAdd(files, origin)
+                    }
                     onComposerFocusChange={(focused) => store.taskCreateMessageFocusUpdate(focused)}
                     onComposerSend={() => {
                         if (props.happyAgentOnline()) store.taskCreateMessageSend();

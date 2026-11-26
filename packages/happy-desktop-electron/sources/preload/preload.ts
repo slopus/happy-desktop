@@ -130,6 +130,9 @@ const bridge: HappyDesktopBridge = {
             return undefined;
         }
     },
+    ...(process.platform === "darwin"
+        ? { clipboardImagesRead: () => ipcRenderer.invoke(desktopIpc.clipboardImagesRead) }
+        : {}),
     browserNetworkResolve: (target) => ipcRenderer.invoke(desktopIpc.browserNetworkResolve, target),
     browserNetworkProfileOpen: (network) =>
         ipcRenderer.invoke(desktopIpc.browserNetworkProfileOpen, network),

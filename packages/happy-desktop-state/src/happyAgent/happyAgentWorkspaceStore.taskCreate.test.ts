@@ -244,7 +244,10 @@ it("uploads a Happy Cloud task's first file once the task exists, then sends it"
 
     workspace.taskCreateOpen();
     workspace.taskCreateMessageUpdate("Read this");
-    workspace.taskCreateAttachmentsAdd([new File(["hello"], "notes.txt", { type: "text/plain" })]);
+    workspace.taskCreateAttachmentsAdd(
+        [new File(["hello"], "notes.txt", { type: "text/plain" })],
+        "picked",
+    );
     workspace.taskCreateMessageSend();
 
     const [text, images, , files] = await delivered;
@@ -586,4 +589,42 @@ it("opens the next task on the model, effort, and account the last one started o
     });
     unsubscribe();
     models[Symbol.dispose]();
+});
+
+it("follows a paste with the clipboard files the browser left out, after the pasted one", async () => {
+    let missing!: (files: readonly File[]) => void;
+    const pastedFilesMissing = vi.fn(
+        (_pasted: readonly File[]) =>
+            new Promise<readonly File[]>((resolve) => (missing = resolve)),
+    );
+    const { workspace, unsubscribe } = store(vi.fn(), undefined, undefined, {
+        attachmentSourcePath: () => undefined,
+        pastedFilesMissing,
+    });
+    const names = () =>
+        workspace
+            .get()
+            .taskCreate?.composer.get()
+            .attachments.map((attachment) =>
+                "name" in attachment ? attachment.name : attachment.id,
+            );
+
+    workspace.taskCreateOpen();
+    const pasted = new File(["1"], "image.png", { type: "image/png" });
+    workspace.taskCreateAttachmentsAdd([pasted], "pasted");
+    // The pasted file is attached at once; the rest waits for the host.
+    expect(names()).toEqual(["image.png"]);
+    expect(pastedFilesMissing).toHaveBeenCalledWith([pasted]);
+
+    missing([
+        new File(["2"], "image-2.png", { type: "image/png" }),
+        new File(["3"], "image-3.gif", { type: "image/gif" }),
+    ]);
+    await vi.waitFor(() => expect(names()).toEqual(["image.png", "image-2.png", "image-3.gif"]));
+
+    // Picking or dropping never asks the clipboard.
+    workspace.taskCreateAttachmentsAdd([new File(["4"], "notes.txt")], "picked");
+    workspace.taskCreateAttachmentsAdd([new File(["5"], "drop.txt")], "dropped");
+    expect(pastedFilesMissing).toHaveBeenCalledTimes(1);
+    unsubscribe();
 });

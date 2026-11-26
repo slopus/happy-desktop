@@ -8,6 +8,7 @@ import type {
     HappyAgentOpenInTargets,
     HappyAgentWorkspaceFileBytes,
 } from "happy-desktop-state";
+import { clipboardPasteMissingRead } from "./clipboardPaste";
 
 /**
  * Where the application a project was last opened in is remembered. It holds the
@@ -307,6 +308,7 @@ export function happyAgentHostServicesCreate(
             : {}),
         ...(options.deviceBridges ? { deviceBridges: deviceBridgeHostCreate(baseUrl) } : {}),
         attachmentSourcePath: (file) => window.happyDesktop?.attachmentSourcePath(file),
+        pastedFilesMissing: (pasted) => clipboardPasteMissingRead(pasted),
         attachmentSourceReachable: async (workspaceId, sourcePath) =>
             (
                 await postJson<{ readonly reachable: boolean }>(

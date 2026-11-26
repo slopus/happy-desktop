@@ -529,6 +529,8 @@ export interface HappyAgentWorkspaceClient {
     ): Promise<{ readonly hash: string }>;
     /** Where a file the reader chose lives on this machine, when it lives anywhere. */
     attachmentSourcePath(file: File): string | undefined;
+    /** The files a paste copied that the browser's paste left out; none when the host cannot tell. */
+    pastedFilesMissing(pasted: readonly File[]): Promise<readonly File[]>;
     /**
      * Whether an agent working in this group could open that path where it lies,
      * which is true exactly when its work happens on the reader's own machine.
@@ -1055,6 +1057,8 @@ export function happyAgentWorkspaceClientCreate(
             return { hash: written.hash };
         },
         attachmentSourcePath: (file) => deps.hostServices.attachmentSourcePath(file),
+        pastedFilesMissing: async (pasted) =>
+            (await deps.hostServices.pastedFilesMissing?.(pasted)) ?? [],
         attachmentSourceReachable: (groupId, sourcePath) =>
             attachmentPlacement.attachmentSourceReachable(groupId, sourcePath),
         attachmentWrite: (groupId, name, content) =>

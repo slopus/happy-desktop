@@ -12,6 +12,11 @@ export type DesktopMode = "local";
 
 /** Appearance source the Electron shell applies to every local renderer and guest. */
 export type DesktopAppearanceMode = "custom" | "dark" | "light" | "midnight" | "system";
+/** One image the system clipboard holds as data of its own rather than as a file. */
+export type DesktopClipboardImage = {
+    readonly mediaType: "image/gif" | "image/jpeg" | "image/png";
+    readonly bytes: Uint8Array;
+};
 export type DesktopScrollbarVisibility = "always" | "automatic";
 /** When the shell holds this computer out of system sleep. Follows the agents when absent. */
 /** Where a plain click on a web link opens: the side panel's browser tab, or the machine's browser. */
@@ -1079,6 +1084,16 @@ export interface HappyDesktopBridge {
      */
     attachmentSourcePath(file: File): string | undefined;
     /**
+     * Every image on the macOS clipboard, one per pasteboard item, in order.
+     * Chromium's paste reads only the first item's image, so several images
+     * copied at once — from Telegram, say — paste as one; this is the rest of
+     * them. Files copied in Finder are not repeated here: Chromium already
+     * hands every one of those to the paste, and the list is empty whenever
+     * the clipboard carries files. Absent on other platforms and on hosts
+     * that predate it.
+     */
+    clipboardImagesRead?(): Promise<readonly DesktopClipboardImage[]>;
+    /**
      * Asks the agent's Happy Agent which network the agent's traffic leaves
      * from, once, when a tab is created. The four network browser members are
      * absent on native hosts without network profiles, which must not open a
@@ -1321,6 +1336,7 @@ export const desktopIpc = {
     liveMicrophoneRevoke: "happy:live:microphone-revoke",
     /** Renderer → main only: the appearance source inherited by local web contents. */
     appearanceSet: "happy:appearance:set",
+    clipboardImagesRead: "happy:clipboard:images-read",
     browserNetworkResolve: "happy:browser:network-resolve",
     browserNetworkProfileOpen: "happy:browser:network-profile-open",
     guestFitMeasure: "happy:guest:fit-measure",

@@ -142,6 +142,7 @@ import { desktopSmokeReportStart } from "./desktopSmokeReport";
 import { doNotTrackEnabled, doNotTrackEnvironment } from "../shared/doNotTrack";
 import { powerSavingInstall } from "./powerSaving";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
+import { clipboardImagesRead } from "./clipboardImages";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
 import { credentialImportCreate, credentialImportSend } from "./credentialImport";
 import { happyExternalLinkUrl, happyShareLinkSystemUrl, happyUniversalLinkUrl } from "./happyLink";
@@ -2369,6 +2370,10 @@ void app
                 return browser.command(guest, desktopBrowserCommandValidate(rawCommand));
             },
         );
+        ipcMain.handle(desktopIpc.clipboardImagesRead, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return clipboardImagesRead();
+        });
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });

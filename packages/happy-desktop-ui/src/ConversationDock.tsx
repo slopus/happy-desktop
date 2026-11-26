@@ -3,7 +3,7 @@ import type { ComposerMentionSubject, ComposerSnapshot } from "happy-desktop-sta
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { commandPickerItems } from "./CommandPicker";
-import { Composer, type Mentionable } from "./Composer";
+import { Composer, type ComposerAttachmentsOrigin, type Mentionable } from "./Composer";
 import type { IconName } from "./Icon";
 import type { ComposerAttachmentPreview } from "./ComposerAttachmentPreviews";
 import { Lightbox } from "./Lightbox";
@@ -63,7 +63,7 @@ export type ConversationDockProps = {
     onSubagentsAbort?: () => void;
     onCommandInvoke?: (commandId: string) => void;
     onComposerAttachmentRemove?: (attachmentId: string) => void;
-    onComposerAttachmentsSelect?: (files: File[]) => void;
+    onComposerAttachmentsSelect?: (files: File[], origin: ComposerAttachmentsOrigin) => void;
     onComposerFocusChange?: (focused: boolean) => void;
     onComposerSend: () => void;
     onComposerValueChange: (value: string) => void;

@@ -73,6 +73,13 @@ export interface HappyAgentHostServices {
      */
     attachmentSourcePath(file: File): string | undefined;
     /**
+     * The files a paste carried on the system clipboard that the browser did
+     * not hand over with it, in clipboard order. The browser's paste can hold
+     * fewer than were copied — several images copied at once arrive as one — and
+     * only the host can read the rest. A host that cannot tell leaves it out.
+     */
+    pastedFilesMissing?(pasted: readonly File[]): Promise<readonly File[]>;
+    /**
      * Whether an agent working in this group could open that path as it stands,
      * because its work and the reader's disk are the same machine. When they
      * are, an attachment needs no transfer at all and is named where it lies.
