@@ -148,9 +148,30 @@ it("allows a user message's mode to be null, but not missing", () => {
     expect(legacy.mode).toBeNull();
     expect(messageProblem(legacy)).toBeUndefined();
     const { mode: _, ...missing } = legacy;
-    expect(messageProblem(missing)?.errors.some((error) => error.startsWith("/mode: "))).toBe(
-        true,
-    );
+    expect(messageProblem(missing)?.errors.some((error) => error.startsWith("/mode: "))).toBe(true);
+});
+
+it("allows a review without elevated, but not elevated without a review", () => {
+    const valid = protocolMessageFixtures("valid").find(
+        (fixture) => fixture.name === "agent-tool-review-without-elevated",
+    )!;
+    expect(messageProblem(valid.message)).toBeUndefined();
+    for (const name of ["elevated-without-review", "review-malformed"])
+        expect(
+            messageProblem(
+                protocolMessageFixtures("invalid").find((fixture) => fixture.name === name)!
+                    .message,
+            ),
+        ).toBeDefined();
+});
+
+it("reads non-object tool arguments and results as opaque values", () => {
+    for (const name of ["agent-tool-result-string", "agent-tool-data-not-object"])
+        expect(
+            messageProblem(
+                protocolMessageFixtures("valid").find((fixture) => fixture.name === name)!.message,
+            ),
+        ).toBeUndefined();
 });
 
 it("allows a question with an empty header", () => {

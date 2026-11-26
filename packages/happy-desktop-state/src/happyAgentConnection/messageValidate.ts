@@ -28,13 +28,24 @@ import {
  * spelled out here to the letter of those types, and `MessageSchemaMatches`
  * below proves the two agree.
  *
- * Three departures from it. So an older client keeps reading a newer server,
- * a presentation of a type this build does not know reads as no presentation
- * (`messageAdmission` drops it), and a question's `header` may be empty, as
- * it is on iOS and Android. And a user message's `mode` may be null: Happy
- * Agent writes `mode: message.mode ?? null` for a message stored before modes
- * were (`ApiMessageProjection.ts`), though the client's type has no null. It
- * must still be present. Every reader of it here takes null as no mode.
+ * Departures from it, each so this build keeps reading what servers send:
+ *
+ * - A presentation of a type this build does not know reads as no
+ *   presentation (`messageAdmission` drops it), so a newer server's stays
+ *   readable.
+ * - A question's `header` may be empty, as it is on iOS and Android.
+ * - A user message's `mode` may be null: Happy Agent writes
+ *   `mode: message.mode ?? null` for a message stored before modes were
+ *   (`ApiMessageProjection.ts`). It must still be present; every reader here
+ *   takes null as no mode.
+ * - A reviewed tool call may lack `elevated`: Happy Cloud history written
+ *   before its fix carries the review alone. Every reader here takes a
+ *   missing `elevated` as not known to be elevated. `elevated` without a
+ *   review, or a malformed review, still fails.
+ * - A tool call's `arguments` and `result` may be any JSON, not only an
+ *   object: old Happy Cloud history stores results such as
+ *   "Message delivered." as they were. Every reader here takes them as
+ *   opaque values.
  *
  * Checked with `Value`, not a `TypeCompiler` function: the renderer's content
  * security policy refuses the `new Function` a compiled check is built with.
@@ -118,8 +129,31 @@ const presentationAdmittedSchema = Type.Union([
     }),
 ]);
 
-/** The whole message, with tool-call presentations read as `presentation` and a user's mode as `mode`. */
-function messageSchemaOf<P extends TSchema, M extends TSchema>(presentation: P, mode: M) {
+/** What `messageSchemaOf` reads the fields that depart from the protocol as. */
+interface MessageSchemaParts<
+    P extends TSchema,
+    M extends TSchema,
+    E extends TSchema,
+    D extends TSchema,
+> {
+    /** A tool call's presentation. */
+    readonly presentation: P;
+    /** A user message's mode. */
+    readonly mode: M;
+    /** A reviewed tool call's `elevated`. */
+    readonly elevated: E;
+    /** A tool call's `arguments` and `result`, each optional. */
+    readonly toolData: D;
+}
+
+/** The whole message, its departing fields read as `parts` says. */
+function messageSchemaOf<
+    P extends TSchema,
+    M extends TSchema,
+    E extends TSchema,
+    D extends TSchema,
+>(parts: MessageSchemaParts<P, M, E, D>) {
+    const { presentation, mode, elevated, toolData } = parts;
     const toolCallBlockBase = {
         type: Type.Literal("tool_call"),
         id: Type.String(),
@@ -129,8 +163,8 @@ function messageSchemaOf<P extends TSchema, M extends TSchema>(presentation: P, 
             Type.Literal("completed"),
             Type.Literal("failed"),
         ]),
-        arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-        result: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+        arguments: Type.Optional(toolData),
+        result: Type.Optional(toolData),
         presentation: Type.Optional(presentation),
     };
     /* Review metadata is either absent or present as one complete pair. */
@@ -142,7 +176,7 @@ function messageSchemaOf<P extends TSchema, M extends TSchema>(presentation: P, 
         }),
         Type.Object({
             ...toolCallBlockBase,
-            elevated: Type.Boolean(),
+            elevated,
             review: toolPermissionReviewSchema,
         }),
     ]);
@@ -189,18 +223,23 @@ function messageSchemaOf<P extends TSchema, M extends TSchema>(presentation: P, 
 }
 
 /** What arrives is checked against this; what it admits is the protocol's message once dropped presentations are gone. */
-const messageSchema = messageSchemaOf(
-    presentationAdmittedSchema,
-    Type.Union([messageModeSchema, Type.Null()]),
-);
+const messageSchema = messageSchemaOf({
+    presentation: presentationAdmittedSchema,
+    mode: Type.Union([messageModeSchema, Type.Null()]),
+    elevated: Type.Optional(Type.Boolean()),
+    toolData: Type.Unknown(),
+});
+
+/** The protocol's own message, as the client package defines it. */
+const messageSchemaPublished = messageSchemaOf({
+    presentation: toolPresentationSchema,
+    mode: messageModeSchema,
+    elevated: Type.Boolean(),
+    toolData: Type.Record(Type.String(), Type.Unknown()),
+});
 
 /* The protocol's own message, with only the presentations it publishes, is a `Message`. */
-type MessageSchemaMatches =
-    Static<
-        ReturnType<typeof messageSchemaOf<typeof toolPresentationSchema, typeof messageModeSchema>>
-    > extends Message
-        ? true
-        : never;
+type MessageSchemaMatches = Static<typeof messageSchemaPublished> extends Message ? true : never;
 const messageSchemaMatches: MessageSchemaMatches = true;
 void messageSchemaMatches;
 
