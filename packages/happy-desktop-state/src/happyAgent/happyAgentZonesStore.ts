@@ -62,6 +62,11 @@ export interface HappyAgentZone {
      * is every member, which a critical zone never is.
      */
     readonly members: readonly string[] | null;
+    /**
+     * The bots whose agents may join, by bot ID; always empty on a zone that
+     * isn't critical. Owners and admins don't get a bot in that isn't listed.
+     */
+    readonly bots: readonly string[];
     /** The member shown as its author; `null` for the seeded zones. It grants nothing. */
     readonly owner: string | null;
     /** How many agents are in it. A zone with any can't be deleted. */
@@ -80,7 +85,7 @@ export interface HappyAgentZonePerson {
     readonly photo: { readonly url: string; readonly thumbhash: string } | null;
 }
 
-/** A zone's fields as the editor holds them. */
+/** A zone's fields as its page holds them. */
 export interface HappyAgentZoneDraft {
     readonly name: string;
     readonly description: string;
@@ -88,16 +93,27 @@ export interface HappyAgentZoneDraft {
     readonly color: HappyAgentZoneColor;
     /** `null` lets every member join, which a critical zone can't. */
     readonly members: readonly string[] | null;
+    /** The bots whose agents may join; only a critical zone lists any. */
+    readonly bots: readonly string[];
     readonly owner: string | null;
 }
 
-/** Creating a zone, or changing one, while its dialog is open. */
-export interface HappyAgentZoneEditor {
-    /** The zone being changed; absent while a new one is being made. */
+/**
+ * One zone's page in Settings › Permissions, or a new zone's while it is
+ * being made. Anyone may open a zone's page; only `zones.manage` may change it.
+ */
+export interface HappyAgentZoneOpen {
+    /** The zone on the page; absent while a new one is being made. */
     readonly zoneId?: string;
-    /** Changing the default zone, of which only the name, description, colour and picture can change. */
+    /** The default zone, of which only the name, description, colour and picture can change. */
     readonly isDefault: boolean;
+    /**
+     * The zone's fields as they stand on the page. Until the reader changes
+     * one they follow the zone as the cluster lists it.
+     */
     readonly draft: HappyAgentZoneDraft;
+    /** Whether the reader changed a field since the page opened or last saved. */
+    readonly edited: boolean;
     readonly saving: boolean;
     /** A picture being sent or taken off; only an existing zone has one. */
     readonly imageSaving: boolean;
@@ -123,7 +139,8 @@ export interface HappyAgentZonesSnapshot {
     readonly manage: boolean;
     /** The team's members by user ID, which zones' members and owners are named from. */
     readonly people: ReadonlyMap<string, HappyAgentZonePerson>;
-    readonly editor?: HappyAgentZoneEditor;
+    /** The zone page on screen in place of the list. */
+    readonly open?: HappyAgentZoneOpen;
     readonly deletion?: HappyAgentZoneDeletion;
     /** Why the list could not be read. */
     readonly error?: UserError;
@@ -137,9 +154,14 @@ export interface HappyAgentZonesSnapshot {
 export interface HappyAgentZonesStore {
     get(): HappyAgentZonesSnapshot;
     subscribe(listener: () => void): () => void;
+    /** Opens a new zone's page; only for `zones.manage`. */
     zoneCreateOpen(): void;
-    zoneEditOpen(zoneId: string): void;
-    zoneEditorClose(): void;
+    /** Opens a zone's page, read-only without `zones.manage`. */
+    zoneOpen(zoneId: string): void;
+    /** Goes back to the list, dropping any change not saved. */
+    zoneClose(): void;
+    /** Puts the page's fields back to the zone as the cluster lists it. */
+    zoneDraftReset(): void;
     zoneNameUpdate(value: string): void;
     zoneDescriptionUpdate(value: string): void;
     /** A critical zone always lists its members, so turning it on from "everyone" starts an empty list. */
@@ -150,6 +172,9 @@ export interface HappyAgentZonesStore {
     zoneMembersEveryoneUpdate(everyone: boolean): void;
     zoneMemberAdd(userId: string): void;
     zoneMemberRemove(userId: string): void;
+    /** Lists a bot, so its agents may join the critical zone being edited. */
+    zoneBotAdd(botId: string): void;
+    zoneBotRemove(botId: string): void;
     zoneSave(): void;
     /** Sends a picture for the open zone as it is; the cluster checks and refuses what it can't read. */
     zoneImageUpload(image: Blob): void;
@@ -180,8 +205,21 @@ const DRAFT_EMPTY: HappyAgentZoneDraft = {
     critical: false,
     color: "blue",
     members: null,
+    bots: [],
     owner: null,
 };
+
+function zoneDraft(zone: HappyAgentZone): HappyAgentZoneDraft {
+    return {
+        name: zone.name,
+        description: zone.description,
+        critical: zone.critical,
+        color: zone.color,
+        members: zone.members,
+        bots: zone.bots,
+        owner: zone.owner,
+    };
+}
 
 const PEOPLE_NONE: ReadonlyMap<string, HappyAgentZonePerson> = new Map();
 
@@ -234,6 +272,7 @@ export function happyAgentZonesStoreCreate(deps: {
                     ? { url: happyAgentImageUrl(deps.endpoint, image.url, image.digest) }
                     : null,
             members: entry.members === null ? null : stringList(entry.members),
+            bots: stringList(entry.bots),
             owner: typeof entry.owner === "string" ? entry.owner : null,
             agentCount: typeof entry.agentCount === "number" ? entry.agentCount : 0,
             version: typeof entry.version === "string" ? entry.version : "",
@@ -327,6 +366,28 @@ export function happyAgentZonesStoreCreate(deps: {
             },
             true,
         );
+        openFollow();
+    };
+
+    /**
+     * Keeps the open page on its zone as the cluster lists it: an untouched
+     * page takes the latest fields, and a zone deleted elsewhere takes its page
+     * with it back to the list.
+     */
+    const openFollow = (): void => {
+        const { open, zones } = store.getState();
+        if (open?.zoneId === undefined) return;
+        const zone = zones.find((entry) => entry.id === open.zoneId);
+        if (!zone) {
+            if (open.saving || open.imageSaving) return;
+            const { open: _gone, ...rest } = store.getState();
+            store.setState(rest, true);
+            return;
+        }
+        if (open.edited || open.saving) return;
+        const draft = zoneDraft(zone);
+        if (JSON.stringify(draft) === JSON.stringify(open.draft)) return;
+        store.setState({ open: { ...open, draft } }, false);
     };
 
     function load(): void {
@@ -379,15 +440,18 @@ export function happyAgentZonesStoreCreate(deps: {
         })().catch(() => undefined);
     };
 
-    const editorUpdate = (change: Partial<HappyAgentZoneEditor>): void => {
-        const editor = store.getState().editor;
-        if (editor) store.setState({ editor: { ...editor, ...change } }, false);
+    const openUpdate = (change: Partial<HappyAgentZoneOpen>): void => {
+        const open = store.getState().open;
+        if (open) store.setState({ open: { ...open, ...change } }, false);
     };
     const draftUpdate = (change: Partial<HappyAgentZoneDraft>): void => {
-        const editor = store.getState().editor;
-        if (!editor || editor.saving) return;
-        const { error: _cleared, ...rest } = editor;
-        store.setState({ editor: { ...rest, draft: { ...editor.draft, ...change } } }, false);
+        const { open, manage } = store.getState();
+        if (!open || !manage || open.saving) return;
+        const { error: _cleared, ...rest } = open;
+        store.setState(
+            { open: { ...rest, edited: true, draft: { ...open.draft, ...change } } },
+            false,
+        );
     };
     const zoneOf = (id: string): HappyAgentZone | undefined =>
         store.getState().zones.find((zone) => zone.id === id);
@@ -406,20 +470,20 @@ export function happyAgentZonesStoreCreate(deps: {
 
     /** Sends a picture change for the open zone, then reads the list again. */
     const imageChange = (send: (zone: HappyAgentZone) => Promise<unknown>): void => {
-        const editor = store.getState().editor;
-        const zone = editor?.zoneId === undefined ? undefined : zoneOf(editor.zoneId);
-        if (disposed || !editor || !zone || editor.saving || editor.imageSaving) return;
-        const { error: _cleared, ...rest } = editor;
-        store.setState({ editor: { ...rest, imageSaving: true } }, false);
+        const { open, manage } = store.getState();
+        const zone = open?.zoneId === undefined ? undefined : zoneOf(open.zoneId);
+        if (disposed || !manage || !open || !zone || open.saving || open.imageSaving) return;
+        const { error: _cleared, ...rest } = open;
+        store.setState({ open: { ...rest, imageSaving: true } }, false);
         void send(zone).then(
             () => {
                 if (disposed) return;
-                editorUpdate({ imageSaving: false });
+                openUpdate({ imageSaving: false });
                 load();
             },
             (error: unknown) => {
                 if (disposed) return;
-                editorUpdate({ imageSaving: false, error: happyAgentUserError(error) });
+                openUpdate({ imageSaving: false, error: happyAgentUserError(error) });
                 load();
             },
         );
@@ -446,12 +510,13 @@ export function happyAgentZonesStoreCreate(deps: {
         },
         zoneCreateOpen() {
             const current = store.getState();
-            if (disposed || !current.manage || current.editor?.saving) return;
+            if (disposed || !current.manage || current.open?.saving) return;
             store.setState(
                 {
-                    editor: {
+                    open: {
                         isDefault: false,
                         draft: DRAFT_EMPTY,
+                        edited: false,
                         saving: false,
                         imageSaving: false,
                     },
@@ -459,23 +524,17 @@ export function happyAgentZonesStoreCreate(deps: {
                 false,
             );
         },
-        zoneEditOpen(zoneId) {
+        zoneOpen(zoneId) {
             const current = store.getState();
             const zone = zoneOf(zoneId);
-            if (disposed || !current.manage || !zone || current.editor?.saving) return;
+            if (disposed || !zone || current.open?.saving) return;
             store.setState(
                 {
-                    editor: {
+                    open: {
                         zoneId,
                         isDefault: zone.isDefault,
-                        draft: {
-                            name: zone.name,
-                            description: zone.description,
-                            critical: zone.critical,
-                            color: zone.color,
-                            members: zone.members,
-                            owner: zone.owner,
-                        },
+                        draft: zoneDraft(zone),
+                        edited: false,
                         saving: false,
                         imageSaving: false,
                     },
@@ -483,10 +542,20 @@ export function happyAgentZonesStoreCreate(deps: {
                 false,
             );
         },
-        zoneEditorClose() {
-            const { editor, ...rest } = store.getState();
-            if (disposed || !editor || editor.saving || editor.imageSaving) return;
+        zoneClose() {
+            const { open, ...rest } = store.getState();
+            if (disposed || !open || open.saving || open.imageSaving) return;
             store.setState(rest, true);
+        },
+        zoneDraftReset() {
+            const open = store.getState().open;
+            if (disposed || !open || open.saving) return;
+            const zone = open.zoneId === undefined ? undefined : zoneOf(open.zoneId);
+            const { error: _cleared, ...rest } = open;
+            store.setState(
+                { open: { ...rest, edited: false, draft: zone ? zoneDraft(zone) : DRAFT_EMPTY } },
+                false,
+            );
         },
         zoneNameUpdate(value) {
             draftUpdate({ name: value });
@@ -495,45 +564,57 @@ export function happyAgentZonesStoreCreate(deps: {
             draftUpdate({ description: value });
         },
         zoneCriticalUpdate(critical) {
-            const editor = store.getState().editor;
-            if (!editor || editor.isDefault) return;
+            const open = store.getState().open;
+            if (!open || open.isDefault) return;
+            // The cluster refuses bots on a zone that isn't critical.
             draftUpdate({
                 critical,
-                ...(critical && editor.draft.members === null ? { members: [] } : {}),
+                ...(critical && open.draft.members === null ? { members: [] } : {}),
+                ...(critical ? {} : { bots: [] }),
             });
         },
         zoneColorUpdate(color) {
             draftUpdate({ color });
         },
         zoneOwnerUpdate(userId) {
-            if (store.getState().editor?.isDefault) return;
+            if (store.getState().open?.isDefault) return;
             draftUpdate({ owner: userId });
         },
         zoneMembersEveryoneUpdate(everyone) {
-            const editor = store.getState().editor;
-            const draft = editor?.draft;
-            if (!draft || editor.isDefault || (everyone && draft.critical)) return;
+            const open = store.getState().open;
+            const draft = open?.draft;
+            if (!draft || open.isDefault || (everyone && draft.critical)) return;
             if (everyone === (draft.members === null)) return;
             draftUpdate({ members: everyone ? null : [] });
         },
         zoneMemberAdd(userId) {
-            const members = store.getState().editor?.draft.members;
+            const members = store.getState().open?.draft.members;
             if (!members || members.includes(userId)) return;
             draftUpdate({ members: [...members, userId] });
         },
         zoneMemberRemove(userId) {
-            const members = store.getState().editor?.draft.members;
+            const members = store.getState().open?.draft.members;
             if (!members?.includes(userId)) return;
             draftUpdate({ members: members.filter((member) => member !== userId) });
         },
+        zoneBotAdd(botId) {
+            const draft = store.getState().open?.draft;
+            if (!draft?.critical || draft.bots.includes(botId)) return;
+            draftUpdate({ bots: [...draft.bots, botId] });
+        },
+        zoneBotRemove(botId) {
+            const bots = store.getState().open?.draft.bots;
+            if (!bots?.includes(botId)) return;
+            draftUpdate({ bots: bots.filter((bot) => bot !== botId) });
+        },
         zoneSave() {
-            const editor = store.getState().editor;
-            if (disposed || !editor || editor.saving || editor.imageSaving) return;
-            const { error: _cleared, ...rest } = editor;
-            const draft = editor.draft;
+            const { open, manage } = store.getState();
+            if (disposed || !manage || !open || open.saving || open.imageSaving) return;
+            const { error: _cleared, ...rest } = open;
+            const draft = open.draft;
             const name = draft.name.trim();
             const refuse = (message: string): void =>
-                store.setState({ editor: { ...rest, error: new UserError(message) } }, false);
+                store.setState({ open: { ...rest, error: new UserError(message) } }, false);
             if (name === "") return refuse("Give the zone a name.");
             if (name.length > HAPPY_AGENT_ZONE_NAME_MAX)
                 return refuse(
@@ -543,33 +624,61 @@ export function happyAgentZonesStoreCreate(deps: {
                 return refuse(
                     `A zone's description is at most ${String(HAPPY_AGENT_ZONE_DESCRIPTION_MAX)} characters.`,
                 );
-            const zone = editor.zoneId === undefined ? undefined : zoneOf(editor.zoneId);
-            if (editor.zoneId !== undefined && !zone)
+            const zone = open.zoneId === undefined ? undefined : zoneOf(open.zoneId);
+            if (open.zoneId !== undefined && !zone)
                 return refuse("This zone was deleted in the meantime.");
-            store.setState({ editor: { ...rest, saving: true } }, false);
+            store.setState({ open: { ...rest, saving: true } }, false);
             // The default zone's critical flag, members and owner are fixed; only the rest is sent.
             const body = {
                 name,
                 description: draft.description.trim(),
                 color: draft.color,
-                ...(editor.isDefault
+                ...(open.isDefault
                     ? {}
-                    : { critical: draft.critical, members: draft.members, owner: draft.owner }),
+                    : {
+                          critical: draft.critical,
+                          members: draft.members,
+                          bots: draft.critical ? draft.bots : [],
+                          owner: draft.owner,
+                      }),
             };
             void (
                 zone
                     ? deps.request("PATCH", zonePath(zone.id), body, { "if-match": zone.version })
                     : deps.request("POST", "v0/zones", body)
             ).then(
-                () => {
+                (answer) => {
                     if (disposed) return;
-                    const { editor: _closed, ...after } = store.getState();
-                    store.setState(after, true);
+                    if (zone) {
+                        // Saved: the page stays, and follows the zone again from the next read.
+                        openUpdate({ saving: false, edited: false });
+                    } else {
+                        // Created: the new zone's own page, once the cluster names it.
+                        const created = zoneRead(recordOf(answer)?.zone);
+                        const { open: _made, ...after } = store.getState();
+                        store.setState(
+                            created
+                                ? {
+                                      ...after,
+                                      zones: [...after.zones, created].sort(zoneOrder),
+                                      open: {
+                                          zoneId: created.id,
+                                          isDefault: created.isDefault,
+                                          draft: zoneDraft(created),
+                                          edited: false,
+                                          saving: false,
+                                          imageSaving: false,
+                                      },
+                                  }
+                                : after,
+                            true,
+                        );
+                    }
                     load();
                 },
                 (error: unknown) => {
                     if (disposed) return;
-                    editorUpdate({ saving: false, error: changeRefusal(error) });
+                    openUpdate({ saving: false, error: changeRefusal(error) });
                     load();
                 },
             );
@@ -608,8 +717,8 @@ export function happyAgentZonesStoreCreate(deps: {
                     if (disposed) return;
                     const { deletion: _done, ...after } = store.getState();
                     // The zone's own dialog goes with it.
-                    if (after.editor?.zoneId === deletion.zoneId) {
-                        const { editor: _gone, ...without } = after;
+                    if (after.open?.zoneId === deletion.zoneId) {
+                        const { open: _gone, ...without } = after;
                         store.setState(without, true);
                     } else store.setState(after, true);
                     load();
@@ -651,8 +760,9 @@ export const happyAgentZonesStoreNoop: HappyAgentZonesStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
     zoneCreateOpen: () => undefined,
-    zoneEditOpen: () => undefined,
-    zoneEditorClose: () => undefined,
+    zoneOpen: () => undefined,
+    zoneClose: () => undefined,
+    zoneDraftReset: () => undefined,
     zoneNameUpdate: () => undefined,
     zoneDescriptionUpdate: () => undefined,
     zoneCriticalUpdate: () => undefined,
@@ -661,6 +771,8 @@ export const happyAgentZonesStoreNoop: HappyAgentZonesStore = {
     zoneMembersEveryoneUpdate: () => undefined,
     zoneMemberAdd: () => undefined,
     zoneMemberRemove: () => undefined,
+    zoneBotAdd: () => undefined,
+    zoneBotRemove: () => undefined,
     zoneSave: () => undefined,
     zoneImageUpload: () => undefined,
     zoneImageRemove: () => undefined,

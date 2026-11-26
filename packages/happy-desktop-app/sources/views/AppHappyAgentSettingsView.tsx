@@ -142,7 +142,7 @@ import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppOnboardingSettings } from "./AppOnboardingSettings";
 import { AppPaymentsSettings } from "./AppPaymentsSettings";
 import { AppComputeSettings } from "./AppComputeSettings";
-import { AppPermissionsSettings } from "./AppPermissionsSettings";
+import { AppPermissionsSettings, appPermissionsHeading } from "./AppPermissionsSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
 import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
@@ -1028,13 +1028,16 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const mobileLinkHeading = mobileLink
         ? happyAgentMobileLinkHeading(mobileLink.step, mobileLink.pairingOptions)
         : undefined;
+    // A zone's page is a page inside Permissions, its header leading back to the list.
+    const zoneHeading = zonesShown ? appPermissionsHeading(zones, zonesShown) : undefined;
+    const subpageHeading = mobileLinkHeading ?? zoneHeading;
     const content = (
         <HappyAgentSettingsShell
             activeCategoryId={section}
             categories={categories}
             description={
-                mobileLinkHeading
-                    ? mobileLinkHeading.description
+                subpageHeading
+                    ? subpageHeading.description
                     : section === "secrets" && happyCloud
                       ? "Keys and credentials agents use without seeing them"
                       : section === "instructions" && happyCloud
@@ -1043,9 +1046,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             }
             onCategorySelect={props.onCategorySelect}
             onClose={props.onClose}
-            {...(mobileLink ? { onBack: mobileLink.setup.close } : {})}
+            {...(mobileLink
+                ? { onBack: mobileLink.setup.close }
+                : zoneHeading
+                  ? { onBack: zoneHeading.onBack }
+                  : {})}
             title={
-                mobileLinkHeading?.title ??
+                subpageHeading?.title ??
                 categories.find((category) => category.id === section)?.label ??
                 "Settings"
             }
@@ -1750,7 +1757,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 ) : null
             ) : section === "permissions" ? (
                 zonesShown ? (
-                    <AppPermissionsSettings snapshot={zones} store={zonesShown} />
+                    <AppPermissionsSettings
+                        bots={host?.bots ?? []}
+                        snapshot={zones}
+                        store={zonesShown}
+                    />
                 ) : null
             ) : section === "danger" ? (
                 owner && membersStore ? (
