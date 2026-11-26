@@ -1604,14 +1604,38 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Providers category: connected, unauthenticated, disabled, and model-less providers together"
+                detail="Providers category on a Happy Agent: connected, unauthenticated, and model-less providers; the one switched off is not listed"
                 label="Happy Agent settings — providers"
                 number="03"
+                screen="providers"
             >
                 <HappyAgentSettingsShell
                     activeCategoryId="providers"
                     categories={categories}
                     description="Every model provider this Happy Agent daemon knows about"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Inference"
+                >
+                    <HappyAgentProviderSettings
+                        currentTime={PROVIDERS_NOW}
+                        hideDisabled
+                        onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
+                        providers={providers}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Providers category on a Happy Cloud server: the one switched off is listed with the rest"
+                label="Happy Agent settings — Happy Cloud providers"
+                number="03c"
+                screen="providers-cloud"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="providers"
+                    categories={categories}
+                    description="Every model provider this server knows about"
                     onCategorySelect={noop}
                     onClose={noop}
                     title="Inference"

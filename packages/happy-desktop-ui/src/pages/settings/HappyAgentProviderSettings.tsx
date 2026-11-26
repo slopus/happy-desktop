@@ -133,6 +133,8 @@ export type HappyAgentProviderSettingsProps = {
     currentTime: number;
     /** The account whose details are open, by id. */
     detail?: string;
+    /** Leaves the accounts switched off out of the list, as a Happy Agent does. */
+    hideDisabled?: boolean;
     onDetailOpen?: (providerId: string) => void;
     onDetailClose?: () => void;
     onModelEnabledChange: (id: string, enabled: boolean) => void;
@@ -205,6 +207,11 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
             />
         );
     const now = props.currentTime;
+    // An account switched off leaves a Happy Agent's list, but its sheet still
+    // finds it, so switching it off does not close the sheet.
+    const listed = props.hideDisabled
+        ? props.providers.filter((provider) => provider.enabled)
+        : props.providers;
     // The sheet is about one account, whichever step it is on.
     const sheetId = props.detail ?? props.signInDialog?.providerId ?? props.tokenEditor?.providerId;
     const sheet =
@@ -223,57 +230,65 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                     {props.saveError}
                 </Banner>
             ) : null}
-            <HappyAgentSettingsSection
-                description="Each account agents here can run on. Open one to see its login and models."
-                title="Accounts"
-            >
-                {props.providers.map((provider) => {
-                    const line = providerLine(provider, now);
-                    return (
-                        <Box
-                            className="happy-agent-provider-list__item"
-                            data-happy-desktop-ui="happy-agent-provider"
-                            data-status={provider.status}
-                            key={provider.id}
-                        >
-                            <button
-                                aria-label={`${providerTitle(provider)}, ${line.text}`}
-                                className="happy-agent-provider-list__row"
-                                onClick={() => props.onDetailOpen?.(provider.id)}
-                                type="button"
+            {listed.length === 0 ? (
+                <EmptyState
+                    description="Every account on this Happy Agent is switched off."
+                    icon="globe"
+                    title="No accounts"
+                />
+            ) : (
+                <HappyAgentSettingsSection
+                    description="Each account agents here can run on. Open one to see its login and models."
+                    title="Accounts"
+                >
+                    {listed.map((provider) => {
+                        const line = providerLine(provider, now);
+                        return (
+                            <Box
+                                className="happy-agent-provider-list__item"
+                                data-happy-desktop-ui="happy-agent-provider"
+                                data-status={provider.status}
+                                key={provider.id}
                             >
-                                <ProviderTile provider={provider} />
-                                <span className="happy-agent-provider-list__text">
-                                    <span
-                                        className="happy-agent-provider-list__name"
-                                        data-happy-desktop-ui="happy-agent-provider-name"
-                                    >
-                                        {providerTitle(provider)}
-                                    </span>
-                                    <span
-                                        className="happy-agent-provider-list__line"
-                                        data-happy-desktop-ui="happy-agent-provider-meta"
-                                        data-tone={line.tone}
-                                    >
+                                <button
+                                    aria-label={`${providerTitle(provider)}, ${line.text}`}
+                                    className="happy-agent-provider-list__row"
+                                    onClick={() => props.onDetailOpen?.(provider.id)}
+                                    type="button"
+                                >
+                                    <ProviderTile provider={provider} />
+                                    <span className="happy-agent-provider-list__text">
                                         <span
-                                            aria-hidden="true"
-                                            className="happy-agent-provider-list__dot"
+                                            className="happy-agent-provider-list__name"
+                                            data-happy-desktop-ui="happy-agent-provider-name"
+                                        >
+                                            {providerTitle(provider)}
+                                        </span>
+                                        <span
+                                            className="happy-agent-provider-list__line"
+                                            data-happy-desktop-ui="happy-agent-provider-meta"
                                             data-tone={line.tone}
-                                        />
-                                        <span className="happy-agent-provider-list__line-text">
-                                            {line.text}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className="happy-agent-provider-list__dot"
+                                                data-tone={line.tone}
+                                            />
+                                            <span className="happy-agent-provider-list__line-text">
+                                                {line.text}
+                                            </span>
                                         </span>
                                     </span>
-                                </span>
-                                {provider.saving || provider.signIn?.running ? (
-                                    <Spinner size={14} />
-                                ) : null}
-                                <Icon name="chevron-right" size={14} />
-                            </button>
-                        </Box>
-                    );
-                })}
-            </HappyAgentSettingsSection>
+                                    {provider.saving || provider.signIn?.running ? (
+                                        <Spinner size={14} />
+                                    ) : null}
+                                    <Icon name="chevron-right" size={14} />
+                                </button>
+                            </Box>
+                        );
+                    })}
+                </HappyAgentSettingsSection>
+            )}
             {props.onCustomProviderCreate ? (
                 <Box className="happy-agent-provider__add">
                     <Button

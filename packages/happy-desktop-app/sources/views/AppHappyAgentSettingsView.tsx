@@ -1586,6 +1586,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             : {})}
                         onDetailOpen={(providerId) => providersStore.providerDetailOpen(providerId)}
                         onDetailClose={() => providersStore.providerDetailClose()}
+                        // A Happy Cloud server lists its accounts switched off too.
+                        hideDisabled={!happyCloud}
                         onModelEnabledChange={(id, enabled) =>
                             happyAgentOnline()
                                 ? props.settings.modelEnabledUpdate(
