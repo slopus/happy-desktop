@@ -603,7 +603,7 @@ type AgentUpdatedPayloadOf = Extract<HappyAgentEvent, { type: "agent.updated" }>
 /** The parts of a chat's agent its activity is read from, with the version they stand on. */
 type ChatAgentFacts = Pick<
     Agent,
-    "version" | "status" | "wait" | "pendingQuestionId" | "subagents"
+    "version" | "status" | "wait" | "pendingQuestionId" | "subagents" | "processes"
 >;
 
 function chatAgentFactsOf(agent: ChatAgentFacts): ChatAgentFacts {
@@ -613,6 +613,7 @@ function chatAgentFactsOf(agent: ChatAgentFacts): ChatAgentFacts {
         ...(agent.wait === undefined ? {} : { wait: agent.wait }),
         pendingQuestionId: agent.pendingQuestionId,
         subagents: agent.subagents,
+        processes: agent.processes,
     };
 }
 
@@ -621,6 +622,7 @@ function chatActivityOf(agent: ChatAgentFacts): HappyAgentSurfaceChatActivity {
     return happyAgentConversationActivityProject({
         pendingQuestion: agent.pendingQuestionId !== null,
         activeSubagentCount: agent.subagents.running,
+        activeProcessCount: agent.processes.running,
         status: agent.status === "idle" ? "idle" : "running",
         ...(agent.wait == null ? {} : { wait: agent.wait }),
     });

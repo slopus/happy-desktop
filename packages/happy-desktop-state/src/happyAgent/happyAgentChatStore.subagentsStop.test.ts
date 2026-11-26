@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Agent } from "@slopus/happy-agent-client";
 import { connectHappyAgent } from "../happyAgentConnection/connectHappyAgent.js";
-import type { HappyAgentConnection } from "../happyAgentConnection/types.js";
+import type { GroupSession, HappyAgentConnection } from "../happyAgentConnection/types.js";
 import {
     fakeHappyAgentDaemonCreate,
     type FakeHappyAgentDaemon,
@@ -61,7 +61,7 @@ function harness(seed: (daemon: FakeHappyAgentDaemon, projectId: string) => void
         store[Symbol.dispose]();
         unsubscribe();
     };
-    return { daemon, store, outputs, dispose };
+    return { daemon, connection, store, outputs, dispose };
 }
 
 /** Publishes an agent change the way the daemon's event stream does. */
@@ -236,6 +236,63 @@ describe("stopping a conversation's subagents", () => {
         await vi.waitFor(() => expect(daemon.callCount("abortAgent")).toBe(1));
         const abort = daemon.calls.find((call) => call.method === "abortAgent");
         expect(abort?.args[0]).toBe("agent-a");
+        dispose();
+    });
+});
+
+/** The conversation's row as the connection projects it into the catalog. */
+async function row(connection: HappyAgentConnection, sessionId = "agent-a"): Promise<GroupSession> {
+    let found: GroupSession | undefined;
+    const groups = connection.connectGroups({
+        onChange: (projects) => {
+            found =
+                projects
+                    .flatMap((project) => project.sessions)
+                    .find((session) => session.id === sessionId) ?? found;
+        },
+        onError: () => undefined,
+    });
+    await vi.waitFor(() => expect(found).toBeDefined());
+    groups.close();
+    if (found === undefined) throw new Error(`No row for ${sessionId}.`);
+    return found;
+}
+
+describe("a conversation whose only work is a background process", () => {
+    it("is marked as running on that work alone", async () => {
+        const { connection, dispose } = harness((daemon) => {
+            daemon.agentReplace({ ...daemon.agentGet("agent-a"), processes: { running: 1 } });
+        });
+        const session = await row(connection);
+        expect(session.activeProcesses).toBe(1);
+        expect(session.backgroundOnly).toBe(true);
+        dispose();
+    });
+
+    it("is ordinary work while a subtask beside the process is still running", async () => {
+        const { connection, dispose } = harness((daemon, projectId) => {
+            const writer = child(daemon, projectId, "child-writer", { status: "working" });
+            daemon.agentReplace({
+                ...daemon.agentGet("agent-a"),
+                processes: { running: 1 },
+                subtasks: [writer],
+            });
+        });
+        expect((await row(connection)).backgroundOnly).toBeUndefined();
+        dispose();
+    });
+
+    it("offers no Stop for a subtask whose only work is a background process", async () => {
+        const { connection, store, dispose } = harness((daemon, projectId) => {
+            const server = child(daemon, projectId, "child-server", { processes: { running: 1 } });
+            daemon.agentReplace({ ...daemon.agentGet("agent-a"), subtasks: [server] });
+            daemon.activitySet("agent-a", { subagents: [server], processes: [] });
+        });
+        await vi.waitFor(() => expect(store.get().ready).toBe(true));
+        // Stopping delegated work kills its processes, and a dev server alone is no reason to.
+        expect(store.get().subagentsRunning).toBe(false);
+        // The row still shows the subtask's process as work going on.
+        expect((await row(connection)).backgroundOnly).toBe(true);
         dispose();
     });
 });

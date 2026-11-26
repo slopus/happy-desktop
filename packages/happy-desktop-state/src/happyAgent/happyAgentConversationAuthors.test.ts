@@ -16,6 +16,7 @@ const session = (
     permissionMode: "auto",
     status: "running",
     activeSubagentCount: 0,
+    activeProcessCount: 0,
     pendingQuestion: false,
     createdAt: 1,
     updatedAt: 1,
@@ -32,4 +33,13 @@ it("calls a session with no title yet a new task, never by its id", () => {
         happyAgentConversationSummaryProject(session({ title: "Say the word OK", recap: "x" }))
             .title,
     ).toBe("Say the word OK");
+});
+
+it("shows a session whose turn has ended as running while its background processes live", () => {
+    const summary = happyAgentConversationSummaryProject(
+        session({ status: "idle", activeProcessCount: 1, backgroundOnly: true }),
+    );
+    expect(summary.activity).toBe("running");
+    expect(summary.backgroundOnly).toBe(true);
+    expect(happyAgentConversationSummaryProject(session({ status: "idle" })).activity).toBe("idle");
 });

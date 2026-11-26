@@ -649,6 +649,19 @@ export interface GroupSession {
      * what says so without reading another resource.
      */
     activeSubagents: number;
+    /**
+     * How many background processes this session started are running right
+     * now, as the host counts them on the session itself. A session whose own
+     * turn has ended while a command it left in the background keeps running is
+     * still doing work.
+     */
+    activeProcesses: number;
+    /**
+     * Set when the session reads as running only because background processes
+     * that it or its subtasks started are alive. Rows show it as running;
+     * keeping this computer awake does not count it.
+     */
+    backgroundOnly?: true;
     /** Direct interactive child work; hidden subagents remain covered by the total count. */
     subtaskActivity?: HappyAgentSubtaskActivity;
     archived: boolean;
