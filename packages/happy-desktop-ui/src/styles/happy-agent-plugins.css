@@ -301,6 +301,11 @@
     padding-top: 2px;
 }
 
+/* A note under the description starts where the description does. */
+.happy-agent-plugin__summary-text .happy-agent-plugins__note {
+    padding-inline: 0;
+}
+
 .happy-agent-plugin__description {
     margin: 0;
     color: var(--text);

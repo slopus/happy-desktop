@@ -59,7 +59,7 @@ import {
     type MediaWindowOpener,
 } from "happy-desktop-ui";
 import { artifactBesideOpen } from "../artifactOpen";
-import { useAccountFeatureEnabled } from "../accountFeatureEnabled";
+import { useFeatureAvailable } from "../featureAvailable";
 import { messageReferenceEntities, messageReferenceSurfaceNames } from "../messageReferences";
 import {
     AppHappyAgentView,
@@ -688,8 +688,8 @@ const routeTree = rootRoute.addChildren([
 ]);
 
 /**
- * Leaves an open Pipelines page for the server's chats once the person turns
- * Pipelines off for their account, wherever they turned them off. It replaces
+ * Leaves an open Pipelines page for the server's chats once the person
+ * uninstalls the Pipelines plugin, wherever they uninstalled it. It replaces
  * the page rather than adding a step that Back would return to.
  */
 function PipelinesOffLeave(props: {
@@ -704,7 +704,7 @@ function PipelinesOffLeave(props: {
     const happyAgent =
         directory.happyAgents.find((entry) => entry.id === props.happyAgentId) ??
         directory.happyAgents[0];
-    const enabled = useAccountFeatureEnabled(happyAgent, "pipelines");
+    const enabled = useFeatureAvailable(happyAgent, "pipelines");
     return enabled ? null : (
         <Navigate params={{ happyAgentId: props.happyAgentId }} replace to="/chats/$happyAgentId" />
     );

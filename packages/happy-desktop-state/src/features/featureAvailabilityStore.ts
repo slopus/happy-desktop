@@ -1,5 +1,6 @@
 import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
 import {
     HappyCloudRequestRefusal,
     type HappyCloudRequest,
@@ -7,70 +8,67 @@ import {
 import { referencesPreserve } from "../happyAgent/happyAgentSupport.js";
 import type { HappyAgentViewersActivity } from "../viewers/viewersStore.js";
 
-/** A feature a person may turn off for their account. Pipelines is the only one today. */
-export type AccountFeatureId = "pipelines";
+/**
+ * One of Happy's own features a person turns on or off for themselves by
+ * installing or uninstalling its feature plugin. Pipelines is the only one today.
+ */
+export type FeatureId = "pipelines";
 
-const ACCOUNT_FEATURE_IDS: readonly AccountFeatureId[] = ["pipelines"];
+const FEATURE_IDS: readonly FeatureId[] = ["pipelines"];
 
-/** What a feature is called before the server has named it. */
-const ACCOUNT_FEATURE_NAMES: Readonly<Record<AccountFeatureId, string>> = {
-    pipelines: "Pipelines",
-};
-
-/** One feature, as it is for the account in every team the person belongs to. */
-export interface AccountFeature {
-    readonly id: AccountFeatureId;
-    /** The server's name for it. */
-    readonly name: string;
-    readonly enabled: boolean;
+/** Whether one feature is available to the person, in every team they belong to. */
+export interface FeatureAvailability {
+    readonly id: FeatureId;
+    readonly available: boolean;
 }
 
-export interface AccountFeaturesSnapshot {
+export interface FeatureAvailabilitySnapshot {
     /** True until the server first answers. */
     readonly loading: boolean;
     /**
-     * False on a server older than the switch, which answers `404` or `501`:
-     * every feature is on there, and none can be turned off.
+     * False on a server without feature plugins: its health does not say
+     * `features`, or it answers `404` or `501`. Every feature is available there.
      */
     readonly served: boolean;
     /** As the server last answered or announced, in its order. */
-    readonly features: readonly AccountFeature[];
+    readonly features: readonly FeatureAvailability[];
 }
 
 /**
- * The features the person has on or off for their account. The switch is the
- * account's: it applies in every team, so a change made on any server reaches
- * this one as `account.features.updated`, whose payload replaces the list.
+ * Which features are available to the person. A feature is available while
+ * their account has its feature plugin installed, which they change on the
+ * Plugins screen of any server; the change reaches this one as
+ * `features.updated`, whose payload replaces the list.
  *
  * Subscribing reads the list, then reads it again on every reconnect and each
- * time the window comes back to the foreground. Every feature counts as on
- * until the server says it is off. Nothing here turns one on or off.
+ * time the window comes back to the foreground. Every feature counts as
+ * available until the server says it is not.
  */
-export interface AccountFeaturesStore {
-    get(): AccountFeaturesSnapshot;
+export interface FeatureAvailabilityStore {
+    get(): FeatureAvailabilitySnapshot;
     subscribe(listener: () => void): () => void;
     [Symbol.dispose](): void;
 }
 
 /** Private authoritative input from the connection that made the store. */
-export interface AccountFeaturesWriter {
+export interface FeatureAvailabilityWriter {
     /**
-     * The same requests, watched: a `feature_not_installed` refusal turns its
-     * feature off here, unless the list changed after the request was sent.
+     * The same requests, watched: a `feature_not_installed` refusal makes its
+     * feature unavailable here, unless the list changed after the request was sent.
      */
     requestWatch(request: HappyCloudRequest): HappyCloudRequest;
 }
 
-export const ACCOUNT_FEATURES_EVENT = "account.features.updated";
+export const FEATURES_UPDATED_EVENT = "features.updated";
 
-const FEATURES = "v0/account/features";
+const FEATURES = "v0/features";
 
-/** Whether a feature is on: every feature is, until the server says it is off. */
-export function accountFeatureEnabled(
-    snapshot: AccountFeaturesSnapshot,
-    featureId: AccountFeatureId,
+/** Whether a feature is available: every feature is, until the server says it is not. */
+export function featureAvailable(
+    snapshot: FeatureAvailabilitySnapshot,
+    featureId: FeatureId,
 ): boolean {
-    return snapshot.features.find((feature) => feature.id === featureId)?.enabled !== false;
+    return snapshot.features.find((feature) => feature.id === featureId)?.available !== false;
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -79,21 +77,20 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
         : undefined;
 }
 
-function featureIdRead(value: unknown): AccountFeatureId | undefined {
-    return ACCOUNT_FEATURE_IDS.find((id) => id === value);
+function featureIdRead(value: unknown): FeatureId | undefined {
+    return FEATURE_IDS.find((id) => id === value);
 }
 
 /** One feature, or undefined for one this build does not know or a malformed entry. */
-function featureRead(value: unknown): AccountFeature | undefined {
+function featureRead(value: unknown): FeatureAvailability | undefined {
     const entry = recordOf(value);
     const id = featureIdRead(entry?.id);
-    if (!entry || id === undefined || typeof entry.enabled !== "boolean") return undefined;
-    const name = typeof entry.name === "string" && entry.name !== "" ? entry.name : undefined;
-    return { id, name: name ?? ACCOUNT_FEATURE_NAMES[id], enabled: entry.enabled };
+    if (!entry || id === undefined || typeof entry.available !== "boolean") return undefined;
+    return { id, available: entry.available };
 }
 
 /** The list `GET` answers and the event carries, or undefined when it is not that shape. */
-function featuresRead(value: unknown): AccountFeature[] | undefined {
+function featuresRead(value: unknown): FeatureAvailability[] | undefined {
     const list = recordOf(value)?.features;
     if (!Array.isArray(list)) return undefined;
     return list.flatMap((entry: unknown) => {
@@ -102,8 +99,8 @@ function featuresRead(value: unknown): AccountFeature[] | undefined {
     });
 }
 
-/** The feature a refusal says is off for the account, if it is one this build knows. */
-export function accountFeatureRefusalRead(error: unknown): AccountFeatureId | undefined {
+/** The feature a refusal says is unavailable to the person, if it is one this build knows. */
+export function featureRefusalRead(error: unknown): FeatureId | undefined {
     if (
         !(error instanceof HappyCloudRequestRefusal) ||
         error.status !== 403 ||
@@ -113,19 +110,17 @@ export function accountFeatureRefusalRead(error: unknown): AccountFeatureId | un
     return featureIdRead(recordOf(error.body)?.feature);
 }
 
-const EMPTY: AccountFeaturesSnapshot = {
-    loading: true,
-    served: true,
-    features: [],
-};
+const EMPTY: FeatureAvailabilitySnapshot = { loading: true, served: true, features: [] };
+const UNSERVED: FeatureAvailabilitySnapshot = { loading: false, served: false, features: [] };
 
-export function accountFeaturesStoreCreate(deps: {
+export function featureAvailabilityStoreCreate(deps: {
     readonly request: HappyCloudRequest;
-    readonly sync?: HappyAgentSync;
+    /** The connection's events, and its health, which says whether it has feature plugins. */
+    readonly sync: HappyAgentSync;
     /** Whether the person is at this window; coming back to it reads the list again. */
     readonly activity?: HappyAgentViewersActivity;
-}): { readonly store: AccountFeaturesStore; readonly writer: AccountFeaturesWriter } {
-    const store = createStore<AccountFeaturesSnapshot>()(() => EMPTY);
+}): { readonly store: FeatureAvailabilityStore; readonly writer: FeatureAvailabilityWriter } {
+    const store = createStore<FeatureAvailabilitySnapshot>()(() => EMPTY);
     let disposed = false;
     let listeners = 0;
     let reading = false;
@@ -139,7 +134,7 @@ export function accountFeaturesStoreCreate(deps: {
     let generation = 0;
 
     /** Replaces the list with what the server said, keeping unchanged entries. */
-    const featuresApply = (features: readonly AccountFeature[]): void => {
+    const featuresApply = (features: readonly FeatureAvailability[]): void => {
         generation += 1;
         const current = store.getState();
         store.setState({
@@ -149,20 +144,29 @@ export function accountFeaturesStoreCreate(deps: {
         });
     };
 
+    const unserved = (): void => {
+        generation += 1;
+        store.setState(UNSERVED, true);
+    };
+
     const read = async (): Promise<void> => {
+        const health = deps.sync.health();
+        // Asked again once the connection has said what it serves.
+        if (health === undefined) return;
+        if (!happyAgentHealthCapability(health, "features")) {
+            if (store.getState() !== UNSERVED) unserved();
+            return;
+        }
         const sent = generation;
         let answer: unknown;
         try {
             answer = await deps.request("GET", FEATURES);
         } catch (error) {
-            // A server older than the switch has every feature on.
             if (
                 error instanceof HappyCloudRequestRefusal &&
                 (error.status === 404 || error.status === 501)
             ) {
-                if (disposed || generation !== sent) return;
-                generation += 1;
-                store.setState({ loading: false, served: false, features: [] });
+                if (!disposed && generation === sent) unserved();
                 return;
             }
             throw error;
@@ -193,15 +197,14 @@ export function accountFeaturesStoreCreate(deps: {
     };
 
     const followStart = (): void => {
-        const sync = deps.sync;
-        if (!sync || follow) return;
+        if (follow) return;
         const active = new AbortController();
         follow = active;
         void (async () => {
             let greeted = false;
-            for await (const input of sync.follow({
+            for await (const input of deps.sync.follow({
                 signal: active.signal,
-                events: [ACCOUNT_FEATURES_EVENT],
+                events: [FEATURES_UPDATED_EVENT],
             })) {
                 const greeting = !greeted;
                 greeted = true;
@@ -236,23 +239,20 @@ export function accountFeaturesStoreCreate(deps: {
         });
     };
 
-    const featureRefused = (featureId: AccountFeatureId): void => {
+    const featureRefused = (featureId: FeatureId): void => {
         const current = store.getState();
-        if (!accountFeatureEnabled(current, featureId)) return;
+        if (!featureAvailable(current, featureId)) return;
         const known = current.features.some((feature) => feature.id === featureId);
         featuresApply(
             known
                 ? current.features.map((feature) =>
-                      feature.id === featureId ? { ...feature, enabled: false } : feature,
+                      feature.id === featureId ? { ...feature, available: false } : feature,
                   )
-                : [
-                      ...current.features,
-                      { id: featureId, name: ACCOUNT_FEATURE_NAMES[featureId], enabled: false },
-                  ],
+                : [...current.features, { id: featureId, available: false }],
         );
     };
 
-    const accountFeatures: AccountFeaturesStore = {
+    const availability: FeatureAvailabilityStore = {
         get: () => store.getState(),
         subscribe(listener) {
             if (disposed) return () => undefined;
@@ -287,14 +287,14 @@ export function accountFeaturesStoreCreate(deps: {
     };
 
     return {
-        store: accountFeatures,
+        store: availability,
         writer: {
             requestWatch: (request) => async (method, path, body, headers) => {
                 const sent = generation;
                 try {
                     return await request(method, path, body, headers);
                 } catch (error) {
-                    const featureId = accountFeatureRefusalRead(error);
+                    const featureId = featureRefusalRead(error);
                     if (featureId !== undefined && !disposed && generation === sent)
                         featureRefused(featureId);
                     throw error;
@@ -304,11 +304,9 @@ export function accountFeaturesStoreCreate(deps: {
     };
 }
 
-const NONE: AccountFeaturesSnapshot = { ...EMPTY, loading: false, served: false };
-
-/** For a connection without account features: every feature is on. */
-export const accountFeaturesStoreNone: AccountFeaturesStore = {
-    get: () => NONE,
+/** For a connection without feature plugins: every feature is available. */
+export const featureAvailabilityStoreNone: FeatureAvailabilityStore = {
+    get: () => UNSERVED,
     subscribe: () => () => undefined,
     [Symbol.dispose]: () => undefined,
 };

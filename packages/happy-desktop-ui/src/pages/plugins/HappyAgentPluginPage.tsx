@@ -17,6 +17,7 @@ import { TextField } from "../../TextField";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
 import {
+    FEATURE_PLUGIN_NOTE,
     PluginInstallationStatus,
     PluginMark,
     pluginInstallationTitle,
@@ -55,7 +56,9 @@ export interface HappyAgentPluginPageProps {
 
 /**
  * HappyAgentPluginPage — one plugin: what it is and the tools it gives agents,
- * then each of the team's installations of it, with the way to set each up.
+ * then each of the team's installations of it, with the way to set each up. A
+ * feature plugin is the reader's own: they install and uninstall it whatever
+ * they may manage, and it has nothing to set up.
  */
 export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
     const snapshot = props.plugins;
@@ -64,6 +67,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
         (installation) => installation.pluginId === props.pluginId,
     );
     const install = usePluginAct();
+    const feature = plugin?.kind === "feature" || installations[0]?.kind === "feature";
     const back = props.onBack ? (
         <Button
             aria-label="Back"
@@ -126,6 +130,11 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                         {plugin?.description ||
                                             "This server no longer offers this plugin."}
                                     </p>
+                                    {feature ? (
+                                        <p className="happy-agent-plugins__note">
+                                            {FEATURE_PLUGIN_NOTE}
+                                        </p>
+                                    ) : null}
                                     {install.error ? (
                                         <p className="happy-agent-plugin__error">{install.error}</p>
                                     ) : plugin?.installRefusal ? (
@@ -135,7 +144,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                     ) : null}
                                 </div>
                                 {plugin &&
-                                snapshot.manage &&
+                                (snapshot.manage || feature) &&
                                 (plugin.multiInstance || installations.length === 0) ? (
                                     <Button
                                         disabled={plugin.installRefusal !== null}
@@ -169,7 +178,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                     </div>
                                 </section>
                             ) : null}
-                            {snapshot.manage ? null : (
+                            {snapshot.manage || feature ? null : (
                                 <p className="happy-agent-plugins__note">
                                     Only people who manage plugins can install and set them up.
                                 </p>
@@ -213,11 +222,15 @@ function InstallationCard(props: {
     readonly onDisconnect: HappyAgentPluginPageProps["onDisconnect"];
 }) {
     const installation = props.installation;
-    const methods = props.plugin?.authMethods ?? [];
+    // A feature installation is the reader's own and has no sign-in to set up.
+    const feature = installation.kind === "feature";
+    const methods = feature ? [] : (props.plugin?.authMethods ?? []);
+    const manage = props.manage || feature;
     const [confirming, setConfirming] = useState(false);
     const remove = usePluginAct();
     const disconnect = usePluginAct();
-    const signedIn = installation.status === "active" && installation.authMethod !== null;
+    const signedIn =
+        !feature && installation.status === "active" && installation.authMethod !== null;
     return (
         <article
             className="happy-agent-plugin-card"
@@ -228,7 +241,7 @@ function InstallationCard(props: {
                     {pluginInstallationTitle(installation)}
                 </span>
                 <PluginInstallationStatus installation={installation} />
-                {props.manage ? (
+                {manage ? (
                     <span className="happy-agent-plugin-card__actions">
                         {signedIn ? (
                             <Button
@@ -250,7 +263,7 @@ function InstallationCard(props: {
                             size="small"
                             variant="secondary"
                         >
-                            Remove
+                            {feature ? "Uninstall" : "Remove"}
                         </Button>
                     </span>
                 ) : null}
@@ -274,25 +287,26 @@ function InstallationCard(props: {
                                         setConfirming(false);
                                         void remove.run(() => props.onRemove(installation.id));
                                     }}
-                                    variant="danger"
+                                    variant={feature ? "primary" : "danger"}
                                 >
-                                    Remove plugin
+                                    {feature ? "Uninstall" : "Remove plugin"}
                                 </Button>
                             </>
                         }
                         onClose={() => setConfirming(false)}
                         size="small"
-                        title={`Remove ${pluginInstallationTitle(installation)}?`}
-                        tone="danger"
+                        title={`${feature ? "Uninstall" : "Remove"} ${pluginInstallationTitle(installation)}?`}
+                        {...(feature ? {} : { tone: "danger" as const })}
                     >
                         <p className="happy-agent-plugins__note">
-                            Its sign-in and everything it stored are deleted, and agents lose the
-                            tools and skills it gave them.
+                            {feature
+                                ? FEATURE_PLUGIN_NOTE
+                                : "Its sign-in and everything it stored are deleted, and agents lose the tools and skills it gave them."}
                         </p>
                     </Modal>
                 </ModalOverlay>
             ) : null}
-            {props.manage && installation.available && !signedIn && methods.length > 0 ? (
+            {manage && installation.available && !signedIn && methods.length > 0 ? (
                 <HappyAgentPluginSetup
                     installation={installation}
                     methods={methods}

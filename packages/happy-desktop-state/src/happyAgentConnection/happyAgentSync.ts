@@ -29,11 +29,11 @@ type QueuedSyncInput =
 /**
  * Events only Happy Cloud sends, which the daemon's protocol package does not
  * name. Most carry no payload a follower reads; each is a hint to read again.
- * `account.features.updated` carries the account's whole feature list, which
- * its follower reads at its own boundary.
+ * `features.updated` carries the person's whole feature availability list,
+ * which its follower reads at its own boundary.
  */
 export type HappyCloudEventType =
-    | "account.features.updated"
+    | "features.updated"
     | "compute.nodes.updated"
     | "compute.approvals.updated"
     | "plugins.changed"

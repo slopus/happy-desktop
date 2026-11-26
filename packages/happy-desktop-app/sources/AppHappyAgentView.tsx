@@ -421,7 +421,7 @@ import {
 import { BlueprintView } from "./views/BlueprintView";
 import { HappyAgentPluginsSurface } from "./views/HappyAgentPluginsSurface";
 import { HappyAgentPipelinesSurface } from "./views/HappyAgentPipelinesSurface";
-import { useAccountFeatureEnabled } from "./accountFeatureEnabled";
+import { useFeatureAvailable } from "./featureAvailable";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { HappyAgentViewersSlot } from "./views/HappyAgentViewersSlot";
@@ -772,10 +772,13 @@ export interface AppHappyAgentSession {
     /** The plugins this machine offers and its team installed; absent or undefined where it offers none. */
     readonly plugins?: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
     /**
-     * The features the person turned on or off for their account, on Happy
-     * Cloud; absent or undefined elsewhere, where every feature is on.
+     * Which features are available to the person, by the feature plugins their
+     * account has installed, on Happy Cloud; absent or undefined elsewhere,
+     * where every feature is available.
      */
-    readonly accountFeatures?: () => import("happy-desktop-state").AccountFeaturesStore | undefined;
+    readonly featureAvailability?: () =>
+        | import("happy-desktop-state").FeatureAvailabilityStore
+        | undefined;
     /** The pipelines a Happy Cloud server runs; absent or undefined anywhere it runs none. */
     readonly pipelines?: () => import("happy-desktop-state").PipelinesStore | undefined;
     /** One pipeline's page; undefined wherever `pipelines` is. */
@@ -3219,7 +3222,7 @@ function happyAgentTopSection(
     activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>,
     titleShimmerEnabled: boolean,
     feedUnread: number,
-    pipelinesEnabled: boolean,
+    pipelinesAvailable: boolean,
 ): SidebarSection {
     const offline = happyAgent?.status !== "connected";
     const failure = catalog.failure?.action === "join" ? catalog.failure : undefined;
@@ -3238,7 +3241,7 @@ function happyAgentTopSection(
             { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ARTIFACTS_SIDEBAR_ITEM,
             ...(happyAgent?.session?.plugins?.() ? [PLUGINS_SIDEBAR_ITEM] : []),
-            ...(pipelinesEnabled && happyAgent?.session?.pipelines?.()
+            ...(pipelinesAvailable && happyAgent?.session?.pipelines?.()
                 ? [PIPELINES_SIDEBAR_ITEM]
                 : []),
             ...(catalog.availability === "available"
@@ -3959,9 +3962,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         () => feedUnreadStore.get().unread,
         () => feedUnreadStore.get().unread,
     );
-    // Pipelines the person turned off for their account leave this window as
-    // they switch them, wherever they switch them; the router leaves an open one.
-    const pipelinesEnabled = useAccountFeatureEnabled(active, "pipelines");
+    // Pipelines the person uninstalled leave this window as they uninstall
+    // them, wherever they do; the router leaves an open one.
+    const pipelinesAvailable = useFeatureAvailable(active, "pipelines");
     // Whether the addressed Happy Agent keeps artifacts at all. The catalog is
     // read whether or not it is on screen, because the panel beside every chat
     // exists only once the machine has answered that it does; one too old to
@@ -4458,7 +4461,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       ? artifactsItemId
                       : props.pluginsOpen
                         ? PLUGINS_ITEM
-                        : props.pipelinesOpen && pipelinesEnabled
+                        : props.pipelinesOpen && pipelinesAvailable
                           ? PIPELINES_ITEM
                           : props.feedOpen
                             ? FEED_ITEM
@@ -4989,7 +4992,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     activeTodoCounts,
                     titleShimmerEnabled,
                     feedUnread,
-                    pipelinesEnabled,
+                    pipelinesAvailable,
                 ),
                 ...sectionsVoiceFocused(
                     happyAgentSections(
@@ -5234,7 +5237,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         // The pipelines belong to the addressed Happy Cloud server. A server that
         // runs none says so, in case its address was reached some other way than
         // its sidebar row.
-        if (props.pipelinesOpen && pipelinesEnabled && active?.session) {
+        if (props.pipelinesOpen && pipelinesAvailable && active?.session) {
             const session = active.session;
             const pipelines = session.pipelines?.();
             if (!pipelines)

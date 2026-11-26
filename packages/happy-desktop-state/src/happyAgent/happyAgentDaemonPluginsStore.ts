@@ -89,6 +89,7 @@ function offered(available: readonly AvailablePlugin[]): Map<string, AvailablePl
 function pluginProject(entry: AvailablePlugin): HappyAgentPlugin {
     return {
         id: keyOf(entry),
+        kind: "integration",
         name: entry.name || entry.pluginId,
         description: entry.description,
         version: entry.version,
@@ -117,6 +118,7 @@ function installationsProject(
             return {
                 id: entry.id,
                 pluginId: key,
+                kind: "integration",
                 name: entry.name || entry.pluginId,
                 ordinal,
                 label: null,

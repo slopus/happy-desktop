@@ -130,7 +130,8 @@ function pluginRows(
     connecting: string | undefined,
     connect: ((pluginId: string) => void) | undefined,
 ): readonly CloudOnboardingPlugin[] {
-    const catalog = plugins?.plugins ?? [];
+    // A feature plugin is the person's own and already installed; it connects nothing.
+    const catalog = (plugins?.plugins ?? []).filter((plugin) => plugin.kind === "integration");
     const required = gate.plugins.filter((plugin) => plugin.required);
     // The gate's own list stands in where the catalog could not be read.
     const offered = [

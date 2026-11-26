@@ -45,10 +45,20 @@ export type HappyAgentPluginAuthMethod =
           readonly fields: readonly HappyAgentPluginAuthField[];
       };
 
+/**
+ * What installing a plugin does. An `integration` gives the team's agents a
+ * service's tools and is installed for the team by those who manage plugins.
+ * A `feature` turns one of Happy's own features on for the person alone, in
+ * every team they belong to: any member installs or uninstalls their own, it
+ * has nothing to set up, and uninstalling it deletes nothing.
+ */
+export type HappyAgentPluginKind = "integration" | "feature";
+
 /** One plugin the server offers, installed or not. */
 export interface HappyAgentPlugin {
     /** The store's own key for it; pass it back unchanged, never read into. */
     readonly id: string;
+    readonly kind: HappyAgentPluginKind;
     readonly name: string;
     readonly description: string;
     readonly version: string;
@@ -102,6 +112,8 @@ export type HappyAgentPluginInstallationStatus =
 export interface HappyAgentPluginInstallation {
     readonly id: string;
     readonly pluginId: string;
+    /** A `feature` installation is the reader's own, never another member's. */
+    readonly kind: HappyAgentPluginKind;
     /** The plugin's name, or its ID once the server stops offering it. */
     readonly name: string;
     /** Counts installations of one plugin from 1; never reused. */
@@ -259,6 +271,11 @@ function statusRead(status: unknown, reason: unknown): HappyAgentPluginInstallat
     return reason === "method_unavailable" ? "methodUnavailable" : "notConfigured";
 }
 
+/** A server older than feature plugins names no kind; every plugin it offers is an integration. */
+function kindRead(value: unknown): HappyAgentPluginKind {
+    return value === "feature" ? "feature" : "integration";
+}
+
 function compareByName(left: { readonly name: string }, right: { readonly name: string }): number {
     return left.name.localeCompare(right.name);
 }
@@ -305,8 +322,10 @@ export function happyAgentPluginsStoreCreate(deps: {
         const id = textOrNull(plugin?.id);
         if (!plugin || id === null) return undefined;
         const auth = recordOf(plugin.auth);
+        const kind = kindRead(plugin.kind);
         return {
             id,
+            kind,
             name: textOrNull(plugin.name) ?? id,
             description: text(plugin.description),
             version: text(plugin.version),
@@ -321,7 +340,8 @@ export function happyAgentPluginsStoreCreate(deps: {
                 const read = methodRead(method);
                 return read ? [read] : [];
             }),
-            multiInstance: true,
+            // The person has a feature or does not.
+            multiInstance: kind === "integration",
             installRefusal: null,
             catalog: null,
         };
@@ -354,6 +374,7 @@ export function happyAgentPluginsStoreCreate(deps: {
         return {
             id,
             pluginId,
+            kind: kindRead(entry.kind),
             name: textOrNull(entry.pluginName) ?? pluginId,
             ordinal: typeof entry.ordinal === "number" ? entry.ordinal : 1,
             label: textOrNull(entry.label),

@@ -15,6 +15,7 @@ const WINDOW = { width: 1100, height: 760 } as const;
 
 const github: HappyAgentPlugin = {
     id: "github",
+    kind: "integration",
     name: "GitHub",
     description:
         "Lets agents read and change repositories, issues and pull requests on the team's GitHub.",
@@ -51,6 +52,7 @@ const github: HappyAgentPlugin = {
 
 const linear: HappyAgentPlugin = {
     id: "linear",
+    kind: "integration",
     name: "Linear",
     description: "Reads and files issues in Linear.",
     version: "0.4.1",
@@ -65,6 +67,7 @@ const linear: HappyAgentPlugin = {
 
 const weather: HappyAgentPlugin = {
     id: "weather",
+    kind: "integration",
     name: "Weather",
     description: "",
     version: "2.0.0",
@@ -80,6 +83,7 @@ const weather: HappyAgentPlugin = {
 const githubActive: HappyAgentPluginInstallation = {
     id: "inst-1",
     pluginId: "github",
+    kind: "integration",
     name: "GitHub",
     ordinal: 1,
     label: "Acme",
@@ -104,6 +108,7 @@ const githubSecond: HappyAgentPluginInstallation = {
 const retired: HappyAgentPluginInstallation = {
     id: "inst-3",
     pluginId: "jira",
+    kind: "integration",
     name: "jira",
     ordinal: 1,
     label: null,
@@ -113,6 +118,60 @@ const retired: HappyAgentPluginInstallation = {
     toolPrefix: "plugin_jira_",
     image: null,
     available: false,
+};
+
+/* A feature plugin: the reader's own Pipelines, installed by everyone until they uninstall it. */
+const pipelines: HappyAgentPlugin = {
+    id: "pipelines",
+    kind: "feature",
+    name: "Pipelines",
+    description: "Pipelines in the sidebar, and the tools agents use to build and run them.",
+    version: "1.0.0",
+    image: null,
+    tools: [
+        { name: "pipeline_list", summary: "Lists the team's pipelines." },
+        { name: "pipeline_get", summary: "Reads one pipeline and its definition." },
+        { name: "pipeline_save", summary: "Saves a new version of a pipeline." },
+        { name: "pipeline_run", summary: "Starts a run of a pipeline." },
+        { name: "pipeline_run_get", summary: "Reads one run and its nodes." },
+        { name: "pipeline_run_abort", summary: "Stops a run that is still going." },
+        { name: "pipeline_node_log", summary: "Reads one node's log in a run." },
+    ],
+    authRequired: false,
+    authMethods: [],
+    multiInstance: false,
+    installRefusal: null,
+    catalog: null,
+};
+
+const pipelinesInstalled: HappyAgentPluginInstallation = {
+    id: "pipelines",
+    pluginId: "pipelines",
+    kind: "feature",
+    name: "Pipelines",
+    ordinal: 1,
+    label: null,
+    status: "active",
+    error: null,
+    authMethod: null,
+    toolPrefix: "",
+    image: null,
+    available: true,
+};
+
+/** A member who manages nothing, with Pipelines installed, as everyone starts. */
+const featureInstalled: HappyAgentPluginsSnapshot = {
+    loading: false,
+    manage: false,
+    plugins: [github, linear, pipelines],
+    installations: [githubActive, pipelinesInstalled],
+    customPlugins: [],
+};
+
+/** The same member after uninstalling Pipelines. */
+const featureUninstalled: HappyAgentPluginsSnapshot = {
+    ...featureInstalled,
+    installations: [githubActive],
 };
 
 const manager: HappyAgentPluginsSnapshot = {
@@ -141,6 +200,7 @@ const daemonPlugin = (
     installRefusal: string | null = null,
 ): HappyAgentPlugin => ({
     id: `${id === "figma-export" ? "cluster" : "public"}:${id}`,
+    kind: "integration",
     name,
     description,
     version: "1.0.0",
@@ -177,6 +237,7 @@ const daemonInstallation = (
 ): HappyAgentPluginInstallation => ({
     id: `daemon-${plugin.id}`,
     pluginId: plugin.id,
+    kind: "integration",
     name: plugin.name,
     ordinal: 1,
     label: null,
@@ -418,6 +479,58 @@ export function HappyAgentPluginsBlueprintPage() {
                     onPluginInstall={settle}
                     onPluginOpen={() => undefined}
                     plugins={customOnly}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A feature plugin is the reader's own. Pipelines is installed, as it is for everyone until they uninstall it, and listed as a Feature beside the team's installations."
+                label="Catalog, feature installed"
+                number="11"
+                screen="11-catalog-feature-installed-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginsPage
+                    onPluginInstall={settle}
+                    onPluginOpen={() => undefined}
+                    plugins={featureInstalled}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="After uninstalling Pipelines: a member who manages nothing still has Install on its row, since everyone installs their own features."
+                label="Catalog, feature uninstalled"
+                number="12"
+                screen="12-catalog-feature-uninstalled-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginsPage
+                    onPluginInstall={settle}
+                    onPluginOpen={() => undefined}
+                    plugins={featureUninstalled}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The installed feature plugin's page: Uninstall on its one installation, with nothing to sign in or label, and the note that uninstalling deletes nothing."
+                label="Feature plugin, installed"
+                number="13"
+                screen="13-feature-installed-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginPage
+                    {...detailHandlers}
+                    pluginId="pipelines"
+                    plugins={featureInstalled}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The feature plugin's page once uninstalled: Install, for a member who manages nothing."
+                label="Feature plugin, uninstalled"
+                number="14"
+                screen="14-feature-uninstalled-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginPage
+                    {...detailHandlers}
+                    pluginId="pipelines"
+                    plugins={featureUninstalled}
                 />
             </FullScreenSpecimen>
         </ComponentPage>

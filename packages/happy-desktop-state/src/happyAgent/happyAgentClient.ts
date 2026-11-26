@@ -164,10 +164,10 @@ import {
     type HappyAgentComputeStore,
 } from "./happyAgentComputeStore.js";
 import {
-    accountFeaturesStoreCreate,
-    type AccountFeaturesStore,
-    type AccountFeaturesWriter,
-} from "../accountFeatures/accountFeaturesStore.js";
+    featureAvailabilityStoreCreate,
+    type FeatureAvailabilityStore,
+    type FeatureAvailabilityWriter,
+} from "../features/featureAvailabilityStore.js";
 import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
 import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
 import { pipelineRunStoreCreate, type PipelineRunStore } from "../pipelines/pipelineRunStore.js";
@@ -352,15 +352,16 @@ export interface HappyAgentWorkspaceClient {
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /**
-     * The features the person has on or off for their account, on Happy Cloud;
-     * undefined anywhere else, where every feature is on.
+     * Which features are available to the person, by the feature plugins their
+     * account has installed, on Happy Cloud; undefined anywhere else, where
+     * every feature is available.
      */
-    accountFeatures(): AccountFeaturesStore | undefined;
+    featureAvailability(): FeatureAvailabilityStore | undefined;
     /**
      * The team's pipelines on Happy Cloud. Undefined anywhere else, and while
      * the server's health does not say it serves pipelines. A pipeline route
-     * refused because Pipelines are off for the account turns them off in
-     * `accountFeatures()`.
+     * refused because the person's account has not installed Pipelines makes
+     * them unavailable in `featureAvailability()`.
      */
     pipelines(): PipelinesStore | undefined;
     /** One pipeline's page; materialized per pipeline and kept. Undefined where `pipelines()` is. */
@@ -899,19 +900,19 @@ export function happyAgentWorkspaceClientCreate(
     let pluginsStore: HappyAgentPluginsStore | undefined;
     let genUiActions: HappyAgentGenUiActions | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
-    let accountFeatures:
-        | { readonly store: AccountFeaturesStore; readonly writer: AccountFeaturesWriter }
+    let featureAvailability:
+        | { readonly store: FeatureAvailabilityStore; readonly writer: FeatureAvailabilityWriter }
         | undefined;
-    const accountFeaturesOf = (request: HappyCloudRequest) =>
-        (accountFeatures ??= accountFeaturesStoreCreate({
+    const featureAvailabilityOf = (request: HappyCloudRequest) =>
+        (featureAvailability ??= featureAvailabilityStoreCreate({
             request,
             sync: deps.connection.sync,
             ...(deps.viewersActivity ? { activity: deps.viewersActivity } : {}),
         }));
-    /** The pipeline routes' requests, whose refusal while Pipelines are off turns them off here. */
+    /** The pipeline routes' requests, whose refusal while Pipelines are uninstalled hides them here. */
     let pipelineRequest: HappyCloudRequest | undefined;
     const pipelineRequestOf = (request: HappyCloudRequest): HappyCloudRequest =>
-        (pipelineRequest ??= accountFeaturesOf(request).writer.requestWatch(request));
+        (pipelineRequest ??= featureAvailabilityOf(request).writer.requestWatch(request));
     let pipelinesStore: PipelinesStore | undefined;
     const pipelineStores = new Map<string, PipelineStore>();
     let pipelineRunCache: PipelineRunCache | undefined;
@@ -1440,10 +1441,10 @@ export function happyAgentWorkspaceClientCreate(
             computeStore ??= happyAgentComputeStoreCreate({ request, sync: deps.connection.sync });
             return computeStore;
         },
-        accountFeatures() {
+        featureAvailability() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
-            return request ? accountFeaturesOf(request).store : undefined;
+            return request ? featureAvailabilityOf(request).store : undefined;
         },
         pipelines() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -1818,8 +1819,8 @@ export function happyAgentWorkspaceClientCreate(
             pluginsStore = undefined;
             computeStore?.[Symbol.dispose]();
             computeStore = undefined;
-            accountFeatures?.store[Symbol.dispose]();
-            accountFeatures = undefined;
+            featureAvailability?.store[Symbol.dispose]();
+            featureAvailability = undefined;
             pipelineRequest = undefined;
             pipelinesStore?.[Symbol.dispose]();
             pipelinesStore = undefined;

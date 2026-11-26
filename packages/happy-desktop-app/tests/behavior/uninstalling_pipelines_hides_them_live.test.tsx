@@ -12,7 +12,7 @@ import type {
     HappyAgentWorkspaceStore,
 } from "happy-desktop-state";
 import {
-    accountFeaturesStoreCreate,
+    featureAvailabilityStoreCreate,
     appearanceStoreCreate,
     experimentsStoreCreate,
     happyAgentGroupAccessRefused,
@@ -35,20 +35,21 @@ import {
 } from "../../sources/navigation/happyAgentRouter";
 
 /*
- * A person may turn Pipelines off for their whole account, from any server
- * and any app. While they are off, this window offers no way into them: the
- * sidebar loses its row as the switch arrives, an open Pipelines page gives
- * way to the server's chats, and a pipeline route refused because they are off
- * is taken as the switch itself rather than shown as an error.
+ * A person uninstalls the Pipelines feature plugin for their whole account,
+ * from any server and any app. While it is uninstalled, this window offers no
+ * way into Pipelines: the sidebar loses its row as `features.updated` arrives,
+ * an open Pipelines page gives way to the server's chats, and a pipeline route
+ * refused because it is uninstalled is taken as that rather than shown as an error.
  */
 
 const CONNECTED = { connection: "connected", daemon: "ready", attempt: 0 } as const;
 const PANEL_CLOSED = { open: false, tabs: [] } as const;
 const MODELS_LOADING = { type: "loading" } as const;
 const OFF_REFUSAL = {
-    error: "Pipelines are turned off for your account. Turn them on in your account settings to use them again.",
+    error: "Pipelines are not installed for your account. Install the Pipelines plugin to use them again.",
     code: "feature_not_installed",
     feature: "pipelines",
+    plugin: "pipelines",
 };
 
 function workspace(): HappyAgentWorkspaceStore {
@@ -127,7 +128,11 @@ function connection() {
                 followers.delete(follower);
             }
         },
-        health: () => undefined,
+        // A Happy Cloud server with feature plugins says so, outside the daemon's protocol.
+        health: () =>
+            ({ capabilities: { features: true } }) as unknown as ReturnType<
+                HappyAgentSync["health"]
+            >,
     };
     const event = (type: string, payload: unknown): void => {
         for (const follower of followers) {
@@ -144,10 +149,8 @@ function connection() {
     };
     return {
         sync,
-        featuresUpdated(enabled: boolean): void {
-            event("account.features.updated", {
-                features: [{ id: "pipelines", name: "Pipelines", enabled }],
-            });
+        featuresUpdated(available: boolean): void {
+            event("features.updated", { features: [{ id: "pipelines", available }] });
         },
         /** A pipeline changed, which the Pipelines page reads again on. */
         pipelineUpdated(): void {
@@ -156,12 +159,12 @@ function connection() {
     };
 }
 
-/** A Happy Cloud server whose Pipelines switch the test sets behind the window's back. */
+/** A Happy Cloud server whose Pipelines plugin the test installs and uninstalls behind the window's back. */
 function server() {
     let enabled = true;
     const request = vi.fn((method: string, path: string): Promise<unknown> => {
-        if (method === "GET" && path === "v0/account/features")
-            return Promise.resolve({ features: [{ id: "pipelines", name: "Pipelines", enabled }] });
+        if (method === "GET" && path === "v0/features")
+            return Promise.resolve({ features: [{ id: "pipelines", available: enabled }] });
         if (path.startsWith("v0/pipeline"))
             return enabled
                 ? Promise.resolve(path === "v0/pipelines" ? { pipelines: [] } : { runs: [] })
@@ -187,7 +190,7 @@ function directory(
     live: ReturnType<typeof connection>,
     cloud: ReturnType<typeof server>,
 ): AppHappyAgentDirectoryStore {
-    const features = accountFeaturesStoreCreate({ request: cloud.request, sync: live.sync });
+    const features = featureAvailabilityStoreCreate({ request: cloud.request, sync: live.sync });
     const pipelines = pipelinesStoreCreate({
         request: features.writer.requestWatch(cloud.request),
         sync: live.sync,
@@ -206,7 +209,7 @@ function directory(
                 projects: [],
                 projectsStatus: "ready",
                 session: {
-                    accountFeatures: () => features.store,
+                    featureAvailability: () => features.store,
                     clock: {
                         get: () => 1_764_000_000_000,
                         subscribe: () => () => undefined,
@@ -258,7 +261,7 @@ async function windowOpen(address: string) {
     return { view, router, rows, pathname, live, cloud };
 }
 
-it("takes Pipelines out of the sidebar and off the screen as the switch arrives, and back", async () => {
+it("takes Pipelines out of the sidebar and off the screen as the uninstall arrives, and back", async () => {
     const window = await windowOpen("/pipelines/cloud");
     await waitFor(() => expect(window.rows()).toContain("pipelines"));
 
@@ -274,11 +277,11 @@ it("takes Pipelines out of the sidebar and off the screen as the switch arrives,
     expect(window.pathname()).toBe("/chats/cloud");
 });
 
-it("takes a pipeline route refused because Pipelines are off as the switch, not an error", async () => {
+it("takes a pipeline route refused because Pipelines are uninstalled as that, not an error", async () => {
     const window = await windowOpen("/pipelines/cloud");
     await waitFor(() => expect(window.rows()).toContain("pipelines"));
 
-    // Turned off elsewhere: the switch's event has not come, but the next read is refused.
+    // Uninstalled elsewhere: its event has not come, but the next read is refused.
     window.cloud.set(false);
     await act(async () => window.live.pipelineUpdated());
     await waitFor(() => expect(window.rows()).not.toContain("pipelines"));
@@ -286,7 +289,7 @@ it("takes a pipeline route refused because Pipelines are off as the switch, not 
     expect(window.view.container.textContent).not.toContain(OFF_REFUSAL.error);
 });
 
-it("leaves an address to Pipelines that are already off for the server's chats", async () => {
+it("leaves an address to Pipelines that are already uninstalled for the server's chats", async () => {
     const window = await windowOpen("/pipeline-runs/cloud/run_1");
     window.cloud.set(false);
     await act(async () => window.live.featuresUpdated(false));

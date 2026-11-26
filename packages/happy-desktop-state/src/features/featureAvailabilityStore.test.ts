@@ -6,23 +6,24 @@ import type {
 import { HappyCloudRequestRefusal } from "../happyAgent/happyAgentProviderCredentials.js";
 import type { HappyAgentViewersActivity } from "../viewers/viewersStore.js";
 import {
-    accountFeatureEnabled,
-    accountFeaturesStoreCreate,
-    type AccountFeaturesStore,
-} from "./accountFeaturesStore.js";
+    featureAvailable,
+    featureAvailabilityStoreCreate,
+    type FeatureAvailabilityStore,
+} from "./featureAvailabilityStore.js";
 
-const FEATURES = "v0/account/features";
+const FEATURES = "v0/features";
 const OFF_REFUSAL = {
-    error: "Pipelines are turned off for your account. Turn them on in your account settings to use them again.",
+    error: "Pipelines are not installed for your account. Install the Pipelines plugin to use them again.",
     code: "feature_not_installed",
     feature: "pipelines",
+    plugin: "pipelines",
 };
 
-/** A server holding the account's Pipelines switch; records every request. */
+/** A server where the person has the Pipelines feature plugin installed or not; records every request. */
 function server(options: { readonly status?: number } = {}) {
     let enabled = true;
     const sent: { method: string; path: string; body?: unknown }[] = [];
-    const list = () => ({ features: [{ id: "pipelines", name: "Pipelines", enabled }] });
+    const list = () => ({ features: [{ id: "pipelines", available: enabled }] });
     const request = vi.fn((method: string, path: string, body?: unknown): Promise<unknown> => {
         sent.push({ method, path, ...(body === undefined ? {} : { body }) });
         if (path === FEATURES && method === "GET") {
@@ -62,7 +63,7 @@ function server(options: { readonly status?: number } = {}) {
 }
 
 /** A connection whose events and reconnects the test sends one by one. */
-function connection() {
+function connection(options: { readonly features?: boolean } = {}) {
     const queue: HappyAgentSyncInput[] = [];
     let wake: (() => void) | undefined;
     const sync: HappyAgentSync = {
@@ -81,7 +82,11 @@ function connection() {
                 });
             }
         },
-        health: () => undefined,
+        // Happy Cloud says `features`, which the daemon's protocol does not name.
+        health: () =>
+            ({ capabilities: { features: options.features ?? true } }) as unknown as ReturnType<
+                HappyAgentSync["health"]
+            >,
     };
     const push = (input: HappyAgentSyncInput): void => {
         queue.push(input);
@@ -96,9 +101,9 @@ function connection() {
                     kind: "event",
                     event: {
                         cursor: "c1",
-                        type: "account.features.updated",
+                        type: "features.updated",
                         occurredAt: 1_795_737_600_000,
-                        payload: { features: [{ id: "pipelines", name: "Pipelines", enabled }] },
+                        payload: { features: [{ id: "pipelines", available: enabled }] },
                     },
                 } as never,
             });
@@ -132,13 +137,13 @@ function window() {
 /** Lets reads that would follow a hint start and land. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
-const disposables: AccountFeaturesStore[] = [];
+const disposables: FeatureAvailabilityStore[] = [];
 
-function featuresStore(options: { readonly status?: number } = {}) {
+function featuresStore(options: { readonly status?: number; readonly features?: boolean } = {}) {
     const fake = server(options);
-    const live = connection();
+    const live = connection(options);
     const focus = window();
-    const created = accountFeaturesStoreCreate({
+    const created = featureAvailabilityStoreCreate({
         request: fake.request,
         sync: live.sync,
         activity: focus.activity,
@@ -147,14 +152,13 @@ function featuresStore(options: { readonly status?: number } = {}) {
     return { ...created, fake, live, focus };
 }
 
-const pipelinesOn = (store: AccountFeaturesStore) =>
-    accountFeatureEnabled(store.get(), "pipelines");
+const pipelinesOn = (store: FeatureAvailabilityStore) => featureAvailable(store.get(), "pipelines");
 
 afterEach(() => {
     for (const store of disposables.splice(0)) store[Symbol.dispose]();
 });
 
-describe("account features", () => {
+describe("feature availability", () => {
     it("counts every feature on until the server answers, then keeps the list it answered", async () => {
         const { store, fake } = featuresStore();
         fake.set(false);
@@ -164,9 +168,7 @@ describe("account features", () => {
         store.subscribe(() => undefined);
         await vi.waitFor(() => expect(store.get().loading).toBe(false));
         expect(store.get().served).toBe(true);
-        expect(store.get().features).toEqual([
-            { id: "pipelines", name: "Pipelines", enabled: false },
-        ]);
+        expect(store.get().features).toEqual([{ id: "pipelines", available: false }]);
         expect(pipelinesOn(store)).toBe(false);
     });
 
@@ -233,6 +235,15 @@ describe("account features", () => {
             expect(pipelinesOn(store)).toBe(true);
         },
     );
+
+    it("has every feature available, reading nothing, where health does not say features", async () => {
+        const { store, fake } = featuresStore({ features: false });
+        store.subscribe(() => undefined);
+        await vi.waitFor(() => expect(store.get().loading).toBe(false));
+        expect(store.get().served).toBe(false);
+        expect(pipelinesOn(store)).toBe(true);
+        expect(fake.reads()).toBe(0);
+    });
 
     it("turns a feature off when its route refuses because it is off, and still rejects", async () => {
         const { store, writer, fake } = featuresStore();

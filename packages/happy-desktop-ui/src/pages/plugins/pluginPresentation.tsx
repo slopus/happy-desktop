@@ -71,6 +71,13 @@ export function PluginInstallationStatus(props: {
     );
 }
 
+/**
+ * What a feature plugin is, said wherever one is installed or uninstalled: the
+ * person's own, and uninstalling it keeps everything.
+ */
+export const FEATURE_PLUGIN_NOTE =
+    "Just for you, in every team you belong to. Uninstalling hides it for you and deletes nothing: what your team made with it stays, other members keep using it, and installing it again brings everything back.";
+
 /** How one installation is named: the plugin name, with its label when the person gave one. */
 export function pluginInstallationTitle(installation: HappyAgentPluginInstallation): string {
     return installation.label ? `${installation.name} · ${installation.label}` : installation.name;

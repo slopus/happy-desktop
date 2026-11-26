@@ -31,8 +31,8 @@ export interface HappyAgentPluginsPageProps {
 /**
  * HappyAgentPluginsPage — what the team has installed, the custom plugins
  * agents made, then every plugin the server offers. A row opens the plugin; a
- * manager installs one from its row. Custom plugins are only shown: agents
- * make, change and delete them.
+ * manager installs one from its row, and anyone installs a feature plugin for
+ * themselves. Custom plugins are only shown: agents make, change and delete them.
  */
 export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
     const snapshot = props.plugins;
@@ -118,9 +118,13 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                             )}
                             <section className="happy-agent-plugins__section">
                                 <h2 className="happy-agent-plugins__heading">Available</h2>
-                                {snapshot.manage ? null : (
+                                {snapshot.manage ||
+                                snapshot.plugins.every(
+                                    (plugin) => plugin.kind === "feature",
+                                ) ? null : (
                                     <p className="happy-agent-plugins__note">
-                                        Only people who manage plugins can install them.
+                                        Only people who manage plugins can install them, except
+                                        features, which everyone installs for themselves.
                                     </p>
                                 )}
                                 <div className="happy-agent-plugins__list" role="list">
@@ -166,6 +170,7 @@ function InstallationRow(props: {
                         {pluginInstallationTitle(installation)}
                     </span>
                     <span className="happy-agent-plugin-row__meta">
+                        {installation.kind === "feature" ? "Feature · " : null}
                         <PluginInstallationStatus installation={installation} />
                     </span>
                 </span>
@@ -232,6 +237,8 @@ function PluginRow(props: {
 }) {
     const plugin = props.plugin;
     const install = usePluginAct();
+    // A feature plugin is the reader's own, whoever manages the team's.
+    const installable = props.manage || plugin.kind === "feature";
     return (
         <div className="happy-agent-plugins__item" role="listitem">
             <button
@@ -245,13 +252,14 @@ function PluginRow(props: {
                     <span className="happy-agent-plugin-row__name">{plugin.name}</span>
                     <span className="happy-agent-plugin-row__meta">
                         {plugin.catalog === "cluster" ? "Your cluster · " : null}
+                        {plugin.kind === "feature" ? "Feature · " : null}
                         {install.error ??
                             plugin.installRefusal ??
                             (plugin.description || `Version ${plugin.version}`)}
                     </span>
                 </span>
             </button>
-            {props.manage && (plugin.multiInstance || !props.installed) ? (
+            {installable && (plugin.multiInstance || !props.installed) ? (
                 <div className="happy-agent-plugins__row-action">
                     <Button
                         disabled={plugin.installRefusal !== null}
