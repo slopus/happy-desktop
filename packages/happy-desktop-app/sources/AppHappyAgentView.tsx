@@ -142,6 +142,7 @@ import type {
     HappyAgentSubtaskRoot,
     HappyAgentTask,
     HappyAgentTaskId,
+    HappyAgentTaskRepository,
     HappyAgentBotId,
     HappyAgentFeedUnreadSnapshot,
     HappyAgentFeedUnreadStore,
@@ -369,6 +370,7 @@ import {
     type FileTreeCheckout,
     type FileTreeNode,
     type KeyboardShortcut,
+    type RepositoryStackEntry,
     type SidebarItem,
     type SidebarNumberShortcutTarget,
     type SidebarReorder,
@@ -423,6 +425,11 @@ import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurfa
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { HappyAgentViewersSlot } from "./views/HappyAgentViewersSlot";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
+import {
+    subtaskRepositoryStack,
+    taskRepositoryStack,
+    type TaskRepositories,
+} from "./taskRepositories";
 import { sidebarReadAheadRows } from "./sidebarReadAhead";
 import type {
     AppHappyAgentDaemonSnapshot,
@@ -646,6 +653,12 @@ export interface AppHappyAgentEntry {
      * task's row is a bot's row worn by its owner's face. Absent reads as none.
      */
     readonly tasks?: readonly HappyAgentTask[];
+    /**
+     * The repositories each joined task works in, by task, which its row and
+     * header wear instead of the owner's face. Absent on anything but Happy
+     * Cloud, and a task missing from it wears its face as before.
+     */
+    readonly taskRepositories?: TaskRepositories;
     /**
      * Task acts the host refused — a join, leave, move, archive, or rename —
      * by task. The reason is stated under the Tasks heading. Absent reads as none.
@@ -1292,18 +1305,27 @@ export function botCreatingSidebarItem(
  * owns wears the placeholder its own id picks, so it survives every rename
  * (`taskFace`).
  *
+ * On Happy Cloud a task that works in repositories wears their photos
+ * instead: one repository's photo for a task scoped to it, or all of them
+ * piled for a task working across several (`RepositoryStack`).
+ *
  * The trailing control leaves the task. Leaving is the reader's own act on
  * their own list and loses nothing — the task carries on for everyone else and
  * can be joined again — so it is the row's default; archiving, which ends the
  * task for everybody, waits in the row's menu for the people allowed to.
  */
-function taskSidebarItem(task: HappyAgentTask, titleShimmerEnabled: boolean): SidebarItem {
+function taskSidebarItem(
+    task: HappyAgentTask,
+    titleShimmerEnabled: boolean,
+    repositories: readonly RepositoryStackEntry[],
+): SidebarItem {
     return {
         id: task.workspaceId,
         kind: "project",
         label: task.name,
         labelShimmer: titleShimmerEnabled,
         ...taskFace(task),
+        ...(repositories.length > 0 ? { repositories } : {}),
         action: {
             icon: "close" as const,
             label: `Leave ${task.name}`,
@@ -1319,6 +1341,10 @@ function botSubtaskSidebarItems(
     projects: readonly HappyAgentProjectGroup[],
     titleShimmerEnabled: boolean,
     depth = 1,
+    /** What the server said about repositories, so a subtask scoped to one wears its photo. */
+    repositories?: TaskRepositories,
+    /** The repositories of the joined task these subtasks are under, if they are under one. */
+    taskListed?: readonly HappyAgentTaskRepository[],
 ): SidebarItem[] {
     return tasks.flatMap((task) => {
         const project = projects.find((candidate) =>
@@ -1329,6 +1355,7 @@ function botSubtaskSidebarItems(
         // are said here. A task sharing its bot's folder has no checkout of its
         // own and so no delta to report.
         const worktree = project?.worktrees.find((entry) => entry.id === task.workspaceId);
+        const scoped = subtaskRepositoryStack(repositories, taskListed, task);
         return [
             {
                 id: task.conversation.id,
@@ -1336,6 +1363,7 @@ function botSubtaskSidebarItems(
                 depth,
                 label: task.conversation.title,
                 labelShimmer: titleShimmerEnabled,
+                ...(scoped.length > 0 ? { repositories: scoped } : {}),
                 ...(project
                     ? {
                           contextAvatars: [
@@ -1362,7 +1390,14 @@ function botSubtaskSidebarItems(
                       }
                     : {}),
             },
-            ...botSubtaskSidebarItems(task.subtasks, projects, titleShimmerEnabled, depth + 1),
+            ...botSubtaskSidebarItems(
+                task.subtasks,
+                projects,
+                titleShimmerEnabled,
+                depth + 1,
+                repositories,
+                taskListed,
+            ),
         ];
     });
 }
@@ -2738,6 +2773,8 @@ function happyAgentSections(
                             bot.subtasks,
                             happyAgent.projects,
                             titleShimmerEnabled,
+                            1,
+                            happyAgent.taskRepositories,
                         ).map((item) => (muted ? { ...item, muted: true } : item)),
                     ];
                 }),
@@ -2808,8 +2845,19 @@ function happyAgentTasksSection(
         label: "Tasks",
         items: happyAgentSidebarTree(happyAgent)
             .tasks.flatMap((task) => [
-                taskSidebarItem(task, titleShimmerEnabled),
-                ...botSubtaskSidebarItems(task.subtasks, happyAgent.projects, titleShimmerEnabled),
+                taskSidebarItem(
+                    task,
+                    titleShimmerEnabled,
+                    taskRepositoryStack(happyAgent.taskRepositories, task),
+                ),
+                ...botSubtaskSidebarItems(
+                    task.subtasks,
+                    happyAgent.projects,
+                    titleShimmerEnabled,
+                    1,
+                    happyAgent.taskRepositories,
+                    happyAgent.taskRepositories?.tasks.get(task.id),
+                ),
             ])
             .map((item) => ({
                 ...item,

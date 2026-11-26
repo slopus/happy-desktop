@@ -125,6 +125,12 @@ export {
     type ViewerStackTier,
 } from "./ViewerStack";
 export {
+    RepositoryStack,
+    type RepositoryStackCheckout,
+    type RepositoryStackEntry,
+    type RepositoryStackProps,
+} from "./RepositoryStack";
+export {
     AVATAR_PLACEHOLDER_COUNT,
     AvatarPlaceholder,
     avatarPlaceholderIndex,

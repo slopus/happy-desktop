@@ -26,6 +26,7 @@ import type {
 import { happyAgentServiceTierFromWire } from "../happyAgentServiceTier.js";
 import { happyAgentConversationActivityProject } from "../happyAgent/happyAgentConversationAuthors.js";
 import type {
+    HappyAgentAgentScope,
     HappyAgentAnsweredUserInput,
     HappyAgentCompute,
     HappyAgentRepositoryBinding,
@@ -187,6 +188,37 @@ function repositoryProject(agent: object): HappyAgentRepositoryBinding | undefin
                 ? checkout.status
                 : "pending",
         ...(message ? { error: message } : {}),
+    };
+}
+
+/**
+ * The repository checkout a Happy Cloud agent is scoped to. `agent.scope` is
+ * not in happy-agent-client's agent type yet, so the wire field is read here,
+ * at that boundary, and carried typed from here on.
+ */
+function scopeProject(agent: object, endpoint: string): HappyAgentAgentScope | undefined {
+    const wire = (agent as { readonly scope?: unknown }).scope;
+    if (typeof wire !== "object" || wire === null) return undefined;
+    const scope = wire as Record<string, unknown>;
+    if (typeof scope.repositoryId !== "string" || scope.repositoryId === "") return undefined;
+    const avatar = scope.avatar as { readonly thumbhash?: unknown } | null | undefined;
+    const thumbhash =
+        typeof avatar?.thumbhash === "string" && avatar.thumbhash !== "" ? avatar.thumbhash : null;
+    return {
+        repositoryId: scope.repositoryId,
+        folder: typeof scope.folder === "string" ? scope.folder : "",
+        name: typeof scope.name === "string" && scope.name !== "" ? scope.name : scope.repositoryId,
+        avatar:
+            thumbhash === null
+                ? null
+                : {
+                      url: happyAgentImageUrl(
+                          endpoint,
+                          `/v0/repositories/${encodeURIComponent(scope.repositoryId)}/avatar`,
+                          thumbhash,
+                      ),
+                      thumbhash,
+                  },
     };
 }
 
@@ -1089,8 +1121,10 @@ function agentSubtasksProject(
         .filter((child) => child.archivedAt === null)
         .map((child) => {
             const workspace = workspaceOf(child.workspaceId);
+            const scope = scopeProject(child, endpoint);
             return {
                 workspaceId: child.workspaceId,
+                ...(scope ? { scope } : {}),
                 path:
                     child.workspaceId === owner.workspaceId
                         ? computePath(owner.compute)
