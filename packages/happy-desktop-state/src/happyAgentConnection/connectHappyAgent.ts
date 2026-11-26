@@ -411,8 +411,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
      * tool call whose presentation is of a type this build does not know comes
      * back without it, a plain call. A message that is not readable is
      * undefined: it leaves the session's messages and takes a placeholder in
-     * its place, named by its ID, run, time and what is wrong with it; its
-     * payload is logged, and goes no further. `runId` undefined keeps the run
+     * its place, named by its ID, run, time and what is wrong with it. Its
+     * payload goes no further, not even into the log: the log names the
+     * message and the paths that failed, and nothing it said. `runId` undefined keeps the run
      * the message already sits in. The caller publishes the session.
      */
     const messageAdmit = <M extends Message>(
@@ -428,7 +429,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 presentationsDroppedLogged.add(key);
                 console.warn(
                     "A Happy Agent tool call has a presentation this build does not know; it shows as a plain call.",
-                    { agentId, messageId: admission.message.id, ...dropped },
+                    {
+                        agentId,
+                        messageId: admission.message.id,
+                        toolCallId: dropped.toolCallId,
+                        type: dropped.type.slice(0, 64),
+                    },
                 );
             }
             // Dropping a presentation keeps the message's role and every other field.
@@ -445,7 +451,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     ? "A Happy Agent message without an ID does not match the protocol; it is left out."
                     : "A Happy Agent message does not match the protocol; a placeholder shows in its place.",
                 { agentId, messageId: id, errors: problem.errors },
-                message,
             );
         }
         const entry = sessions.get(agentId);

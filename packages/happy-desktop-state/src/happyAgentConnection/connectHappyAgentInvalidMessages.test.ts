@@ -111,7 +111,9 @@ it("draws a placeholder for an unreadable message in history, and every message 
         messageId: CARD_ID,
         errors: CARD_ERRORS,
     });
-    expect(warn.mock.calls[0]![2]).toEqual(card);
+    // The log names the message and what failed, and carries none of it.
+    expect(warn.mock.calls[0]).toHaveLength(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("Who should review this change?");
 });
 
 it("puts a live message the protocol does not describe in its place, and the next valid snapshot over it", async () => {

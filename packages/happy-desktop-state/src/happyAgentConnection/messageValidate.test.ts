@@ -184,6 +184,34 @@ it("allows a question with an empty header", () => {
     expect(messageProblem(card)).toBeUndefined();
 });
 
+it("names a hostile message's faults without quoting anything it holds", () => {
+    const secret = "sk-live-do-not-leak";
+    const hostile = {
+        id: "msghostile0000000000000001",
+        role: { token: secret, nested: { more: secret } },
+        createdAt: 1,
+        metadata: {},
+        content: [
+            { type: secret, text: secret },
+            {
+                type: "tool_call",
+                id: "toolhostile00000000000001",
+                name: "x",
+                status: secret,
+                arguments: { [`${secret}-${"k".repeat(200)}`]: secret },
+            },
+        ],
+    };
+    const errors = messageProblem(hostile)!.errors;
+    expect(errors).toEqual(['/role: Expected one of "user", "agent", "system", "service"']);
+    for (const error of errors) expect(error).not.toContain(secret);
+    // Inside a known role, a bad block names its path and what it may be, never what it was.
+    const agent = { ...hostile, role: "agent" };
+    const inner = messageProblem(agent)!.errors;
+    expect(inner.length).toBeGreaterThan(0);
+    for (const error of inner) expect(error).not.toContain(secret);
+});
+
 it("checks a payload once, however often it is asked about", () => {
     const card = protocolMessageFixtures("invalid")[0]!.message;
     expect(messageProblem(card)).toBe(messageProblem(card));

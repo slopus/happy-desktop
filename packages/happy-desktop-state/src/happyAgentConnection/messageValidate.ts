@@ -331,7 +331,10 @@ function admissionOf(value: unknown): MessageAdmission {
 }
 
 /**
- * Collects the first few failures under `schema`. A union reports only that
+ * Collects the first few failures under `schema`, each a field path and what
+ * was expected there. They name nothing the payload holds, so they may go
+ * into a bug report as they are: a received value is never quoted, and a
+ * path segment a payload key supplies is cut short. A union reports only that
  * no variant matched, so where the value names its variant — by `role`,
  * `type`, `kind`, `status` or `outcome` — the failures inside that variant are
  * reported instead, down to the field that is wrong.
@@ -339,7 +342,7 @@ function admissionOf(value: unknown): MessageAdmission {
 function errorsExplain(schema: TSchema, value: unknown, prefix: string, errors: string[]): void {
     for (const error of Value.Errors(schema, value)) {
         if (errors.length >= MESSAGE_PROBLEM_ERROR_LIMIT) return;
-        const path = prefix + error.path;
+        const path = prefix + pathBounded(error.path);
         const choices = literalsOf(error.schema);
         if (choices !== undefined) {
             errorPush(errors, `${path}: Expected one of ${choices.join(", ")}`);
@@ -350,9 +353,9 @@ function errorsExplain(schema: TSchema, value: unknown, prefix: string, errors: 
             if (variant.kind === "unknown") {
                 errorPush(
                     errors,
-                    variant.value === undefined
+                    variant.missing
                         ? `${path}/${variant.key}: Missing ${variant.key}`
-                        : `${path}/${variant.key}: Unknown ${variant.key} ${JSON.stringify(variant.value)}`,
+                        : `${path}/${variant.key}: Expected one of ${variant.expected.join(", ")}`,
                 );
                 continue;
             }
@@ -373,6 +376,20 @@ function errorsExplain(schema: TSchema, value: unknown, prefix: string, errors: 
     }
 }
 
+/** The longest a path segment reads in a diagnostic: a key, unlike an index, is the payload's. */
+const PATH_SEGMENT_LIMIT = 64;
+
+function pathBounded(path: string): string {
+    return path
+        .split("/")
+        .map((segment) =>
+            segment.length > PATH_SEGMENT_LIMIT
+                ? `${segment.slice(0, PATH_SEGMENT_LIMIT)}…`
+                : segment,
+        )
+        .join("/");
+}
+
 function errorPush(errors: string[], error: string): void {
     if (errors.length < MESSAGE_PROBLEM_ERROR_LIMIT && !errors.includes(error)) errors.push(error);
 }
@@ -390,7 +407,13 @@ const DISCRIMINANTS = ["role", "type", "kind", "status", "outcome"] as const;
 
 type UnionVariant =
     | { readonly kind: "variant"; readonly schema: TSchema }
-    | { readonly kind: "unknown"; readonly key: string; readonly value: unknown }
+    | {
+          readonly kind: "unknown";
+          readonly key: string;
+          readonly missing: boolean;
+          /** The values `key` may take, as JSON. */
+          readonly expected: readonly string[];
+      }
     | { readonly kind: "none" };
 
 /** The variant of a union a value was meant as, when it says which. */
@@ -403,8 +426,16 @@ function unionVariant(union: TSchema, value: unknown): UnionVariant {
             if (literals.every((values) => values === undefined)) continue;
             const named = candidates.filter((_, index) => literals[index]?.has(record[key]));
             const open = candidates.filter((_, index) => literals[index] === undefined);
+            if (named.length === 0 && open.length === 0)
+                return {
+                    kind: "unknown",
+                    key,
+                    missing: record[key] === undefined,
+                    expected: [...new Set(literals.flatMap((values) => [...(values ?? [])]))].map(
+                        (literal) => JSON.stringify(literal),
+                    ),
+                };
             candidates = named.length > 0 ? named : open;
-            if (candidates.length === 0) return { kind: "unknown", key, value: record[key] };
             if (candidates.length === 1) break;
         }
     }
