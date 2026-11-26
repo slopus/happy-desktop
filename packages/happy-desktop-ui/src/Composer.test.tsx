@@ -1534,3 +1534,61 @@ it("handles typing, sending, and mention picking", async () => {
     expect(popoverOf("composer-nav")).not.toBeNull();
     await view.screenshot("Composer.mention.test");
 });
+it("keeps Enter that confirms an IME composition from sending or picking", async () => {
+    const picked: string[] = [];
+    const ImeHarness = (props: { initial: string; testid: string }) => {
+        const [value, setValue] = useState(props.initial);
+        return (
+            <div style={{ paddingTop: "200px" }}>
+                <Composer
+                    commands={
+                        value.startsWith("/")
+                            ? [{ id: "agents", slash: "/agents", description: "Agents", icon: "users" }]
+                            : []
+                    }
+                    data-testid={props.testid}
+                    mentions={mentions}
+                    onCommandSelect={(id) => picked.push(`command:${id}`)}
+                    onMentionSelect={(mention) => picked.push(`mention:${mention.id}`)}
+                    onSend={() => picked.push(`send:${value}`)}
+                    onValueChange={setValue}
+                    value={value}
+                />
+            </div>
+        );
+    };
+    const view = createRenderer();
+    for (const testid of ["ime-send", "ime-command", "ime-mention"])
+        view.render(() => <ImeHarness initial="" testid={testid} />, {
+            width: 620,
+            height: 400,
+            padding: 20,
+        });
+    await view.ready();
+    const cases = [
+        { testid: "ime-send", typed: "你好" },
+        { testid: "ime-command", typed: "/ag" },
+        { testid: "ime-mention", typed: "@co" },
+    ];
+    for (const { testid, typed } of cases) {
+        const textarea = view.$(
+            `[data-testid="${testid}"] [data-happy-desktop-ui="composer-textarea"]`,
+        ).element as HTMLTextAreaElement;
+        await userEvent.click(textarea);
+        await userEvent.keyboard(typed);
+        const popover = `[data-testid="${testid}"] [data-happy-desktop-ui="composer-popover"]`;
+        expect(view.container.querySelector(popover) !== null, testid).toBe(
+            testid !== "ime-send",
+        );
+        const enter = new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            isComposing: true,
+            key: "Enter",
+        });
+        textarea.dispatchEvent(enter);
+        expect(enter.defaultPrevented, testid).toBe(false);
+        expect(picked, testid).toEqual([]);
+        expect(textarea.value, testid).toBe(typed);
+    }
+});
