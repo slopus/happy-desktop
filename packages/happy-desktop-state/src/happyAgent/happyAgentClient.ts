@@ -168,6 +168,7 @@ import {
     type FeatureAvailabilityStore,
     type FeatureAvailabilityWriter,
 } from "../features/featureAvailabilityStore.js";
+import { happyAgentZonesStoreCreate, type HappyAgentZonesStore } from "./happyAgentZonesStore.js";
 import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
 import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
 import { pipelineRunStoreCreate, type PipelineRunStore } from "../pipelines/pipelineRunStore.js";
@@ -351,6 +352,8 @@ export interface HappyAgentWorkspaceClient {
     genUiActions(): HappyAgentGenUiActions | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
+    /** Settings › Permissions on Happy Cloud: the team's zones; undefined anywhere else. */
+    zones(): HappyAgentZonesStore | undefined;
     /**
      * Which features are available to the person, by the feature plugins their
      * account has installed, on Happy Cloud; undefined anywhere else, where
@@ -913,6 +916,7 @@ export function happyAgentWorkspaceClientCreate(
     let pipelineRequest: HappyCloudRequest | undefined;
     const pipelineRequestOf = (request: HappyCloudRequest): HappyCloudRequest =>
         (pipelineRequest ??= featureAvailabilityOf(request).writer.requestWatch(request));
+    let zonesStore: HappyAgentZonesStore | undefined;
     let pipelinesStore: PipelinesStore | undefined;
     const pipelineStores = new Map<string, PipelineStore>();
     let pipelineRunCache: PipelineRunCache | undefined;
@@ -1446,6 +1450,17 @@ export function happyAgentWorkspaceClientCreate(
             const request = deps.cloudRequest;
             return request ? featureAvailabilityOf(request).store : undefined;
         },
+        zones() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            zonesStore ??= happyAgentZonesStoreCreate({
+                request,
+                endpoint: deps.client.endpoint,
+                sync: deps.connection.sync,
+            });
+            return zonesStore;
+        },
         pipelines() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1822,6 +1837,8 @@ export function happyAgentWorkspaceClientCreate(
             featureAvailability?.store[Symbol.dispose]();
             featureAvailability = undefined;
             pipelineRequest = undefined;
+            zonesStore?.[Symbol.dispose]();
+            zonesStore = undefined;
             pipelinesStore?.[Symbol.dispose]();
             pipelinesStore = undefined;
             for (const store of pipelineStores.values()) store[Symbol.dispose]();

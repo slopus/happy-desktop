@@ -445,7 +445,7 @@ export function HappyCloudRepositoriesFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, a repository a plugin manages, and the repositories a task's agent checked out, listed with its computer in the chat's Activity tab."
+            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a member sees, a repository a plugin manages, and the repositories a task's agent checked out, listed with its computer in the chat's Activity tab."
             title="Happy Cloud repositories flow"
             width={WINDOWS[0].width + 96}
         >
@@ -534,19 +534,19 @@ export function HappyCloudRepositoriesFlowPage() {
                 <List manage />
                 <HappyAgentRepositoryDeleteDialog name="rig" onClose={noop} onDelete={resolved} />
             </Screen>
-            <Screen detail="seen by a viewer: no adding" number="09" screen="09-viewer-list">
+            <Screen detail="seen by a member: no adding" number="09" screen="09-member-list">
                 <List manage={false} />
             </Screen>
             <Screen
-                detail="seen by a viewer: read-only, no check"
+                detail="seen by a member: read-only, with a check"
                 number="10"
-                screen="10-viewer-detail"
+                screen="10-member-detail"
             >
                 <List manage={false} />
                 <HappyAgentRepositoryDialog
                     {...detail}
                     check={{ state: "unchecked" }}
-                    checkAllowed={false}
+                    checkAllowed
                     manage={false}
                 />
             </Screen>
@@ -603,15 +603,15 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Screen
-                detail="added by the GitHub plugin, seen by a viewer"
+                detail="added by the GitHub plugin, seen by a member"
                 number="14"
-                screen="14-plugin-viewer"
+                screen="14-plugin-member"
             >
                 <List manage={false} />
                 <HappyAgentRepositoryDialog
                     {...managed}
                     check={{ state: "unchecked" }}
-                    checkAllowed={false}
+                    checkAllowed
                     manage={false}
                     plugin={{
                         name: "GitHub",

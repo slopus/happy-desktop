@@ -149,6 +149,7 @@
 @import "./styles/happy-agent-mobile-link.css";
 @import "./styles/happy-agent-secret-settings.css";
 @import "./styles/happy-agent-cluster-secret-settings.css";
+@import "./styles/happy-agent-zones-settings.css";
 @import "./styles/secret-value-field.css";
 @import "./styles/happy-agent-file-tier-settings.css";
 @import "./styles/happy-agent-usage-settings.css";
