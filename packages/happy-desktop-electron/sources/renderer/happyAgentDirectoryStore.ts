@@ -478,6 +478,21 @@ export function happyAgentDirectoryStoreCreate(
         });
     let rosterUnsubscribe: (() => void) | undefined;
     let sessionsUnsubscribe: (() => void) | undefined;
+    /**
+     * The membership a roster opened again by Reset & reconnect starts from:
+     * the live one it replaces. Storage may be unavailable or behind it, and a
+     * remote the new roster did not list would be closed before the daemon
+     * had confirmed anything.
+     */
+    let rosterSeed: readonly HappyAgentConnectionItem[] | undefined;
+    const rosterPersistence: HappyAgentConnectionsPersistence = {
+        read() {
+            const seed = rosterSeed;
+            rosterSeed = undefined;
+            return seed ?? connectionsPersistence.read();
+        },
+        write: (items) => connectionsPersistence.write(items),
+    };
 
     const host: HappyAgentHost = {
         applicationMenuOpen: () => void bridge.applicationMenuOpen().catch(() => undefined),
@@ -1061,7 +1076,7 @@ export function happyAgentDirectoryStoreCreate(
                 happyAgentConnectionsStoreCreate(
                     client,
                     happyAgent.connection!.sync,
-                    connectionsPersistence,
+                    rosterPersistence,
                 ),
                 client,
                 base,
@@ -1237,8 +1252,10 @@ export function happyAgentDirectoryStoreCreate(
             // again with it; the remotes it lists keep their connections, and
             // the window stays on the server it was showing.
             const selected = roster?.get().selectedId;
+            rosterSeed = roster?.get().items.filter((item) => item.remoteId !== undefined);
             connectionClose(happyAgent);
             localReconcile();
+            rosterSeed = undefined;
             if (selected !== undefined) roster?.connectionSelect(selected);
         },
         ...(deps.servers
