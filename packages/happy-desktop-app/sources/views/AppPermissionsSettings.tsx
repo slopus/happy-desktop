@@ -1,9 +1,14 @@
-import type {
-    HappyAgentBot,
-    HappyAgentZone,
-    HappyAgentZonePerson,
-    HappyAgentZonesSnapshot,
-    HappyAgentZonesStore,
+import {
+    happyAgentZonePolicyTargetKey,
+    happyAgentZonePolicyTargetRead,
+    type HappyAgentBot,
+    type HappyAgentZone,
+    type HappyAgentZoneInstallation,
+    type HappyAgentZonePerson,
+    type HappyAgentZonePlugin,
+    type HappyAgentZonePolicyTarget,
+    type HappyAgentZonesSnapshot,
+    type HappyAgentZonesStore,
 } from "happy-desktop-state";
 import {
     HappyAgentPermissionsSettings,
@@ -11,6 +16,9 @@ import {
     HappyAgentZoneDetailsDialog,
     HappyAgentZonePage,
     HappyAgentZonePickDialog,
+    HappyAgentZonePluginsSection,
+    HappyAgentZonePoliciesSection,
+    HappyAgentZonePolicyPage,
     type HappyAgentZoneBotRow,
     type HappyAgentZoneCandidateRow,
     type HappyAgentZonePersonRow,
@@ -48,17 +56,88 @@ export function AppPermissionsSettings(props: {
         onlyCritical(snapshot, described);
     const deleteBlocked = described ? deleteBlockedText(snapshot, described) : undefined;
     const pick = open?.pick;
+    const reach = open?.reach.kind === "ready" ? open.reach : undefined;
     const listed: readonly string[] = !opened
         ? []
         : pick?.kind === "bots"
           ? opened.bots
-          : (opened.members ?? []);
+          : pick?.kind === "plugins"
+            ? (reach?.plugins.map((plugin) => plugin.id) ?? [])
+            : (opened.members ?? []);
     const candidates: readonly HappyAgentZoneCandidateRow[] = (
-        pick?.kind === "bots" ? teamBots : people
+        pick?.kind === "bots"
+            ? teamBots
+            : pick?.kind === "plugins"
+              ? (reach?.installations.map(installationRow) ?? [])
+              : people
     ).filter((candidate) => !listed.includes(candidate.id));
+    const policy = open?.policy;
+    const plugins = reach?.plugins ?? [];
     return (
         <>
-            {opened ? (
+            {opened && policy ? (
+                <HappyAgentZonePolicyPage
+                    {...(policy.error ? { error: policy.error.message } : {})}
+                    {...(policy.testError ? { testError: policy.testError.message } : {})}
+                    {...(policy.test
+                        ? {
+                              test: {
+                                  verdict: policy.test.verdict,
+                                  ...(policy.test.message === null
+                                      ? {}
+                                      : { message: policy.test.message }),
+                                  diagnostics: policy.test.diagnostics,
+                                  output: policy.test.output,
+                                  ...(policy.test.traceback === null
+                                      ? {}
+                                      : { traceback: policy.test.traceback }),
+                                  durationMs: policy.test.durationMs,
+                              },
+                          }
+                        : {})}
+                    clock={policy.clock}
+                    clockPinned={policy.clockPinned}
+                    code={policy.code}
+                    deleting={policy.deleting}
+                    description={policy.description}
+                    diagnostics={policy.diagnostics}
+                    edited={policy.edited}
+                    enabled={policy.enabled}
+                    manage={snapshot.manage}
+                    onClockChange={(value) => store.zonePolicyClockUpdate(value)}
+                    onClockPinnedChange={(pinned) => store.zonePolicyClockPinnedUpdate(pinned)}
+                    onCodeChange={(value) => store.zonePolicyCodeUpdate(value)}
+                    onDelete={() => store.zonePolicyDelete()}
+                    onDescriptionChange={(value) => store.zonePolicyDescriptionUpdate(value)}
+                    onDiscard={() => store.zonePolicyClose()}
+                    onEnabledChange={(enabled) => store.zonePolicyEnabledUpdate(enabled)}
+                    onSampleChange={(value) => store.zonePolicySampleUpdate(value)}
+                    onSave={() => store.zonePolicySave()}
+                    onTargetChange={(key) => {
+                        const target = happyAgentZonePolicyTargetRead(key);
+                        if (target) store.zonePolicyTargetUpdate(target);
+                    }}
+                    onTest={() => store.zonePolicyTest()}
+                    sample={policy.sample}
+                    saved={policy.policyId !== undefined}
+                    saving={policy.saving}
+                    target={happyAgentZonePolicyTargetKey(policy.target)}
+                    targets={plugins
+                        .flatMap((plugin) => [
+                            { kind: "plugin" as const, installationId: plugin.id },
+                            ...plugin.tools.map((tool) => ({
+                                kind: "tool" as const,
+                                installationId: plugin.id,
+                                tool: tool.name,
+                            })),
+                        ])
+                        .map((target) => ({
+                            value: happyAgentZonePolicyTargetKey(target),
+                            label: targetLabel(plugins, target),
+                        }))}
+                    testing={policy.testing}
+                />
+            ) : opened ? (
                 <HappyAgentZonePage
                     {...(open?.error ? { error: open.error.message } : {})}
                     {...(open?.removing === undefined ? {} : { removing: open.removing })}
@@ -69,7 +148,47 @@ export function AppPermissionsSettings(props: {
                     onMemberRemove={(userId) => store.zoneMemberRemove(userId)}
                     onMembersAdd={() => store.zoneMembersPickOpen()}
                     zone={zoneRow(snapshot, teamBots, opened)}
-                />
+                >
+                    {/* A server from before phase 2 lists no installations, and gets neither. */}
+                    {reach ? (
+                        <>
+                            <HappyAgentZonePluginsSection
+                                {...(open?.removing === undefined
+                                    ? {}
+                                    : { removing: open.removing })}
+                                expanded={open?.expanded ?? []}
+                                manage={snapshot.manage}
+                                onAdd={() => store.zonePluginsPickOpen()}
+                                onRemove={(installationId) =>
+                                    store.zonePluginRemove(installationId)
+                                }
+                                onToggle={(installationId) =>
+                                    store.zonePluginToggle(installationId)
+                                }
+                                plugins={reach.plugins.map((plugin) => ({
+                                    id: plugin.id,
+                                    name: plugin.name,
+                                    ...(plugin.label === null ? {} : { label: plugin.label }),
+                                    ...(plugin.image ? { imageUrl: plugin.image.url } : {}),
+                                    policyCount: plugin.policyCount,
+                                    tools: plugin.tools,
+                                }))}
+                            />
+                            <HappyAgentZonePoliciesSection
+                                canAdd={reach.plugins.length > 0}
+                                manage={snapshot.manage}
+                                onAdd={() => store.zonePolicyCreateOpen()}
+                                onOpen={(policyId) => store.zonePolicyOpen(policyId)}
+                                policies={reach.policies.map((entry) => ({
+                                    id: entry.id,
+                                    description: entry.description,
+                                    targetLabel: targetLabel(reach.plugins, entry.target),
+                                    enabled: entry.enabled,
+                                }))}
+                            />
+                        </>
+                    ) : null}
+                </HappyAgentZonePage>
             ) : (
                 <HappyAgentPermissionsSettings
                     {...(snapshot.error ? { error: snapshot.error.message } : {})}
@@ -158,6 +277,16 @@ export function appPermissionsHeading(
     | undefined {
     const open = snapshot.open;
     if (!open || !zoneOf(snapshot, open.zoneId)) return undefined;
+    const policy = open.policy;
+    if (policy)
+        return {
+            title: policy.policyId === undefined ? "New policy" : "Policy",
+            description: targetLabel(
+                open.reach.kind === "ready" ? open.reach.plugins : [],
+                policy.target,
+            ),
+            onBack: () => store.zonePolicyClose(),
+        };
     return {
         title: "Permissions",
         description: "A zone, and who may join it",
@@ -192,6 +321,28 @@ function personRow(person: HappyAgentZonePerson): HappyAgentZonePersonRow {
         name: person.name ?? "A member without a name",
         ...(person.photo ? { imageUrl: person.photo.url } : {}),
         ...(person.role === null ? {} : { role: person.role }),
+    };
+}
+
+/** "Stripe · create_refund", or "Stripe · every tool" for a policy on the whole installation. */
+function targetLabel(
+    plugins: readonly HappyAgentZonePlugin[],
+    target: HappyAgentZonePolicyTarget,
+): string {
+    const plugin = plugins.find((entry) => entry.id === target.installationId);
+    const name = plugin ? pluginName(plugin) : "A removed plugin";
+    return `${name} · ${target.kind === "plugin" ? "every tool" : target.tool}`;
+}
+
+function pluginName(installation: HappyAgentZoneInstallation): string {
+    return installation.label ? `${installation.name} · ${installation.label}` : installation.name;
+}
+
+function installationRow(installation: HappyAgentZoneInstallation): HappyAgentZoneCandidateRow {
+    return {
+        id: installation.id,
+        name: pluginName(installation),
+        ...(installation.image ? { imageUrl: installation.image.url } : {}),
     };
 }
 

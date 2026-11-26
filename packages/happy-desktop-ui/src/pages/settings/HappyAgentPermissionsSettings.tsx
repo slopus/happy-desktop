@@ -881,7 +881,7 @@ export interface HappyAgentZoneCandidateRow {
 }
 
 export interface HappyAgentZonePickDialogProps {
-    readonly kind: "members" | "bots";
+    readonly kind: "members" | "bots" | "plugins";
     /** Who may be added: everyone not listed yet. */
     readonly candidates: readonly HappyAgentZoneCandidateRow[];
     readonly query: string;
@@ -896,9 +896,24 @@ export interface HappyAgentZonePickDialogProps {
     onClose: () => void;
 }
 
+/** What each add modal is called, searches and says once everything is listed. */
+const PICK_TEXT = {
+    members: {
+        title: "Add members",
+        search: "Search members",
+        none: "Every member is listed already.",
+    },
+    bots: { title: "Add bots", search: "Search bots", none: "Every bot is listed already." },
+    plugins: {
+        title: "Add plugins",
+        search: "Search plugins",
+        none: "Every plugin installation is listed already.",
+    },
+} as const;
+
 /**
- * Adds several members, or on a critical zone several bots, to a zone at
- * once: a searchable list of those it doesn't list yet, each picked with a
+ * Adds several members, on a critical zone several bots, or several plugin
+ * installations to a zone at once: a searchable list of those it doesn't list yet, each picked with a
  * checkbox, and Add for all of them.
  */
 export function HappyAgentZonePickDialog(props: HappyAgentZonePickDialogProps) {
@@ -910,6 +925,7 @@ export function HappyAgentZonePickDialog(props: HappyAgentZonePickDialogProps) {
             candidate.role?.toLowerCase().includes(query) === true,
     );
     const members = props.kind === "members";
+    const text = PICK_TEXT[props.kind];
     const close = (): void => {
         if (!props.saving) props.onClose();
     };
@@ -933,13 +949,13 @@ export function HappyAgentZonePickDialog(props: HappyAgentZonePickDialogProps) {
                     <Box className="happy-agent-zones__search">
                         <SearchField
                             onChange={props.onQueryChange}
-                            placeholder={members ? "Search members" : "Search bots"}
+                            placeholder={text.search}
                             shortcutHint={false}
                             value={props.query}
                         />
                     </Box>
                 }
-                title={members ? "Add members" : "Add bots"}
+                title={text.title}
             >
                 <Box className="happy-agent-zones__form" data-happy-desktop-ui="zone-pick">
                     {props.error ? (
@@ -950,9 +966,7 @@ export function HappyAgentZonePickDialog(props: HappyAgentZonePickDialogProps) {
                     {shown.length === 0 ? (
                         <Box className="happy-agent-zones__none">
                             {props.candidates.length === 0
-                                ? members
-                                    ? "Every member is listed already."
-                                    : "Every bot is listed already."
+                                ? text.none
                                 : `Nothing matches “${props.query.trim()}”.`}
                         </Box>
                     ) : (

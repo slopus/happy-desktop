@@ -6,6 +6,9 @@ import {
     HappyAgentZoneDetailsDialog,
     HappyAgentZonePage,
     HappyAgentZonePickDialog,
+    HappyAgentZonePluginsSection,
+    HappyAgentZonePoliciesSection,
+    HappyAgentZonePolicyPage,
     type HappyAgentSettingsCategory,
     type HappyAgentZoneBotRow,
     type HappyAgentZoneDeleteDialogProps,
@@ -13,6 +16,8 @@ import {
     type HappyAgentZoneDraftView,
     type HappyAgentZonePageProps,
     type HappyAgentZonePersonRow,
+    type HappyAgentZonePluginRow,
+    type HappyAgentZonePolicyPageProps,
     type HappyAgentZoneRow,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -121,6 +126,99 @@ const zones: readonly HappyAgentZoneRow[] = [
     },
 ];
 
+/** The installations the Payments zone lists, with their tools. */
+const zonePlugins: readonly HappyAgentZonePluginRow[] = [
+    {
+        id: "i-stripe",
+        name: "Stripe",
+        policyCount: 0,
+        tools: [
+            {
+                name: "create_refund",
+                description: "Refunds a charge, in full or in part.",
+                critical: true,
+                policyCount: 1,
+            },
+            {
+                name: "create_payment_link",
+                description: "Makes a link a customer pays through.",
+                critical: true,
+                policyCount: 0,
+            },
+            {
+                name: "list_charges",
+                description: "Lists recent charges, newest first.",
+                critical: false,
+                policyCount: 0,
+            },
+        ],
+    },
+    {
+        id: "i-ledger",
+        name: "Ledger",
+        label: "Finance",
+        policyCount: 1,
+        tools: [
+            {
+                name: "reconcile",
+                description: "Matches payouts to ledger entries.",
+                critical: false,
+                policyCount: 0,
+            },
+            {
+                name: "export_report",
+                description: "Exports a month's ledger as CSV.",
+                critical: false,
+                policyCount: 0,
+            },
+        ],
+    },
+];
+
+/** The team's installations the zone doesn't list yet. */
+const otherInstallations = [
+    { id: "i-github", name: "GitHub" },
+    { id: "i-linear", name: "Linear" },
+    { id: "i-slack", name: "Slack" },
+];
+
+/** Every plugin and tool a policy of the Payments zone may be on. */
+const policyTargets = [
+    { value: "plugin:i-stripe", label: "Stripe · every tool" },
+    { value: "tool:i-stripe/create_refund", label: "Stripe · create_refund" },
+    { value: "tool:i-stripe/create_payment_link", label: "Stripe · create_payment_link" },
+    { value: "tool:i-stripe/list_charges", label: "Stripe · list_charges" },
+    { value: "plugin:i-ledger", label: "Ledger · Finance · every tool" },
+    { value: "tool:i-ledger/reconcile", label: "Ledger · Finance · reconcile" },
+    { value: "tool:i-ledger/export_report", label: "Ledger · Finance · export_report" },
+];
+
+const WEEKENDS_CODE = `# plugin access: no refunds on weekends, UTC.
+from datetime import datetime, timezone
+
+now = datetime.now(timezone.utc)
+print("weekday", now.weekday())
+if isinstance(request, Call) and request.tool == "create_refund":
+    assert now.weekday() < 5, "Refunds are not issued on weekends."
+`;
+
+const WEEKENDS_CODE_TYPO = WEEKENDS_CODE.replace("request.tool ==", "request.tol ==");
+
+const WEEKENDS_SAMPLE = JSON.stringify(
+    {
+        user: { id: "u-steve", roles: ["owner"], permissions: [] },
+        agent: { id: "a_1", kind: "task", mode: "auto" },
+        action: "call",
+        request: { tool: "create_refund", arguments: { charge: "ch_3PqL2", amount: 4200 } },
+    },
+    null,
+    2,
+);
+
+const TYPO_DIAGNOSTICS = [
+    "policy.py:6:23: error[unresolved-attribute] Object of type `Call` has no attribute `tol`",
+];
+
 /** The window Happy opens at, and its minimum. */
 const WINDOWS = [
     { width: 1100, height: 760 },
@@ -200,6 +298,80 @@ function Page(props: Partial<HappyAgentZonePageProps> & { readonly zoneId: strin
             onMembersAdd={noop}
             zone={zoneOf(zoneId)}
             {...rest}
+        />
+    );
+}
+
+/** The Payments zone's page with what it may reach: its plugins, and the policies on them. */
+function ReachPage(props: { readonly manage: boolean; readonly expanded: readonly string[] }) {
+    return (
+        <Page manage={props.manage} zoneId="z-payments">
+            <HappyAgentZonePluginsSection
+                expanded={props.expanded}
+                manage={props.manage}
+                onAdd={noop}
+                onRemove={noop}
+                onToggle={noop}
+                plugins={zonePlugins}
+            />
+            <HappyAgentZonePoliciesSection
+                canAdd
+                manage={props.manage}
+                onAdd={noop}
+                onOpen={noop}
+                policies={[
+                    {
+                        id: "p-weekends",
+                        description: "No refunds on weekends",
+                        targetLabel: "Stripe · create_refund",
+                        enabled: true,
+                    },
+                    {
+                        id: "p-exports",
+                        description: "Ledger exports only for finance",
+                        targetLabel: "Ledger · Finance · every tool",
+                        enabled: false,
+                    },
+                ]}
+            />
+        </Page>
+    );
+}
+
+/** The settings header over the "not on weekends" policy. */
+const POLICY_HEADING: Heading = { title: "Policy", description: "Stripe · create_refund" };
+
+/** The "not on weekends" policy on Stripe's refund tool, on its own page. */
+function Policy(props: Partial<HappyAgentZonePolicyPageProps>) {
+    return (
+        <HappyAgentZonePolicyPage
+            clock="2026-11-28T10:00:00Z"
+            clockPinned
+            code={WEEKENDS_CODE}
+            deleting={false}
+            description="No refunds on weekends"
+            diagnostics={[]}
+            edited={false}
+            enabled
+            manage
+            onClockChange={noop}
+            onClockPinnedChange={noop}
+            onCodeChange={noop}
+            onDelete={noop}
+            onDescriptionChange={noop}
+            onDiscard={noop}
+            onEnabledChange={noop}
+            onSampleChange={noop}
+            onSave={noop}
+            onTargetChange={noop}
+            onTest={noop}
+            sample={WEEKENDS_SAMPLE}
+            saved
+            saving={false}
+            target="tool:i-stripe/create_refund"
+            targets={policyTargets}
+            testing={false}
+            {...props}
         />
     );
 }
@@ -428,6 +600,126 @@ export function HappyCloudPermissionsFlowPage() {
                     error="A team keeps at least one critical zone."
                     zoneId="z-critical"
                 />
+            </Screen>
+            <Screen
+                detail="a zone's plugins, one expanded to its tools, and its policies"
+                heading={ZONE_HEADING}
+                number="17"
+                screen="17-plugins"
+            >
+                <ReachPage expanded={["i-stripe"]} manage />
+            </Screen>
+            <Screen
+                detail="adding a plugin installation to the zone"
+                heading={ZONE_HEADING}
+                number="18"
+                screen="18-add-plugins"
+            >
+                <ReachPage expanded={[]} manage />
+                <HappyAgentZonePickDialog
+                    candidates={otherInstallations}
+                    kind="plugins"
+                    onAdd={noop}
+                    onClose={noop}
+                    onQueryChange={noop}
+                    onToggle={noop}
+                    query=""
+                    saving={false}
+                    selected={["i-linear"]}
+                />
+            </Screen>
+            <Screen
+                detail="the zone's plugins and policies, read-only for a member"
+                heading={ZONE_HEADING}
+                number="19"
+                screen="19-plugins-read-only"
+            >
+                <ReachPage expanded={["i-stripe"]} manage={false} />
+            </Screen>
+            <Screen
+                detail="writing a new policy"
+                heading={{ title: "New policy", description: "Stripe · create_refund" }}
+                number="20"
+                screen="20-policy-new"
+            >
+                <Policy
+                    clockPinned={false}
+                    code={"# Deny by ending in a message, or with an assert:\n"}
+                    description=""
+                    saved={false}
+                />
+            </Screen>
+            <Screen
+                detail="not on weekends, tested on a Saturday: denied"
+                heading={POLICY_HEADING}
+                number="21"
+                screen="21-policy-deny"
+            >
+                <Policy
+                    test={{
+                        verdict: "deny",
+                        message: "Refunds are not issued on weekends.",
+                        diagnostics: [],
+                        output: "weekday 5\n",
+                        durationMs: 0.8,
+                    }}
+                />
+            </Screen>
+            <Screen
+                detail="not on weekends, tested on a Monday: allowed"
+                heading={POLICY_HEADING}
+                number="22"
+                screen="22-policy-allow"
+            >
+                <Policy
+                    clock="2026-11-30T10:00:00Z"
+                    test={{
+                        verdict: "allow",
+                        diagnostics: [],
+                        output: "weekday 0\n",
+                        durationMs: 0.7,
+                    }}
+                />
+            </Screen>
+            <Screen
+                detail="a typo, tested: an error with the type checker's findings"
+                heading={POLICY_HEADING}
+                number="23"
+                screen="23-policy-error"
+            >
+                <Policy
+                    code={WEEKENDS_CODE_TYPO}
+                    edited
+                    test={{
+                        verdict: "error",
+                        message:
+                            'The policy "No refunds on weekends" doesn\'t type-check, so this is denied.',
+                        diagnostics: TYPO_DIAGNOSTICS,
+                        output: "",
+                        durationMs: 0.3,
+                    }}
+                />
+            </Screen>
+            <Screen
+                detail="saving a typo: refused with the type checker's findings"
+                heading={POLICY_HEADING}
+                number="24"
+                screen="24-policy-refused"
+            >
+                <Policy
+                    code={WEEKENDS_CODE_TYPO}
+                    diagnostics={TYPO_DIAGNOSTICS}
+                    edited
+                    error="The policy doesn't type-check, so it wasn't saved."
+                />
+            </Screen>
+            <Screen
+                detail="a policy, read-only for a member"
+                heading={POLICY_HEADING}
+                number="25"
+                screen="25-policy-read-only"
+            >
+                <Policy clockPinned={false} manage={false} />
             </Screen>
             <Screen
                 detail="deleting an empty zone"

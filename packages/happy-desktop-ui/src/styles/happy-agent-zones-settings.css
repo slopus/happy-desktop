@@ -419,6 +419,147 @@
     cursor: pointer;
 }
 
+/* An installation a zone lists, and its tools when it is open. */
+.happy-agent-zones__plugin {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-zones__disclosure {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-agent-zones__chevron {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+    transition: transform 120ms ease;
+}
+
+.happy-agent-zones__chevron[data-open] {
+    transform: rotate(90deg);
+}
+
+/* Inset under the installation's name, past its chevron and picture. */
+.happy-agent-zones__tools {
+    display: flex;
+    flex-direction: column;
+    padding-left: 66px;
+}
+
+.happy-agent-zones__tool {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-zones__tool-name {
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-zones__count {
+    flex: none;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-zones__count[data-none] {
+    color: var(--text-secondary);
+}
+
+/* What the cluster printed or found, kept as it wrote it. */
+.happy-agent-zones__mono {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* A code editor in a card of its own height. */
+.happy-agent-zones__code {
+    box-sizing: border-box;
+    display: flex;
+    height: 240px;
+    padding: 8px 0;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.happy-agent-zones__code[data-size="small"] {
+    height: 200px;
+}
+
+.happy-agent-zones__push {
+    display: flex;
+    margin-left: auto;
+}
+
+/* A test's verdict and what came with it. */
+.happy-agent-zones__result {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+}
+
+.happy-agent-zones__verdict {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-agent-zones__verdict-tag {
+    padding: 2px 10px;
+    border-radius: var(--happy-radius-pill);
+    color: var(--button-primary-tint);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-agent-zones__verdict-tag[data-verdict="allow"] {
+    background: var(--happy-tile-green);
+}
+
+.happy-agent-zones__verdict-tag[data-verdict="deny"] {
+    background: var(--happy-tile-red);
+}
+
+.happy-agent-zones__verdict-tag[data-verdict="error"] {
+    background: var(--happy-tile-orange);
+}
+
 /* A field's value where the reader may not change it. */
 .happy-agent-zones__value {
     color: var(--text);
