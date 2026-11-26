@@ -160,6 +160,23 @@
     font-size: max(6.5px, 0.3125em);
     line-height: 1.8em;
     transform: translateY(-50%);
+    /*
+     * The badge's own nudges are pixels measured for its 18px size. Here the
+     * caps' ink sits 0.05em right of centre at every size (the B's side
+     * bearing outweighs the A's), measured at 3x on both tags.
+     */
+    --happy-badge-label-x: -0.05em;
+    --happy-badge-label-y: 0px;
+}
+
+/*
+ * The caps are centred on their own ink: the line is trimmed to the cap
+ * height and the baseline, so the pill centres the letters rather than the
+ * font's line box.
+ */
+.happy-welcome-tag .happy-badge__label {
+    line-height: 1;
+    text-box: trim-both cap alphabetic;
 }
 
 /*
