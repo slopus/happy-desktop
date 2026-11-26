@@ -1,7 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type {
-    AccountFeatureId,
-    AccountFeaturesSnapshot,
     AppearanceStore,
     HappyAgentAttentionStore,
     HappyAgentCompletionSound,
@@ -36,8 +34,6 @@ import type {
     UsageAnalyticsStore,
 } from "happy-desktop-state";
 import {
-    accountFeatureEnabled,
-    accountFeaturesStoreNone,
     EXPERIMENTAL_FEATURES,
     HAPPY_AGENT_CHANGE_TIERS_MAX,
     HAPPY_AGENT_INSTRUCTIONS_MAX_BYTES,
@@ -98,8 +94,6 @@ import {
 import {
     happyAgentComposerModelControlProps,
     GptLiveVoiceSettings,
-    HappyAgentAccountFeatureSettings,
-    type HappyAgentAccountFeatureRow,
     HappyAgentAccountSettings,
     HappyAgentGeneralSettings,
     HappyAgentExperimentalSettings,
@@ -465,35 +459,6 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     payments: "Credit, the card on file and what agents spend",
 };
 
-/** How Settings › Account lists each feature the person may turn off for their account. */
-const ACCOUNT_FEATURE_ROWS: Readonly<
-    Record<AccountFeatureId, Omit<HappyAgentAccountFeatureRow, "id" | "enabled" | "saving">>
-> = {
-    pipelines: {
-        label: "Pipelines",
-        description: "Pipelines in the sidebar, and the runs agents start.",
-        icon: "pipeline",
-        tone: "teal",
-    },
-};
-
-/** Each feature's switch: what the server last said, or the value sent and not yet answered. */
-function accountFeatureRows(
-    snapshot: AccountFeaturesSnapshot,
-): readonly HappyAgentAccountFeatureRow[] {
-    return (Object.keys(ACCOUNT_FEATURE_ROWS) as AccountFeatureId[]).map((id) => {
-        const pending = snapshot.pending.get(id);
-        const name = snapshot.features.find((feature) => feature.id === id)?.name;
-        return {
-            ...ACCOUNT_FEATURE_ROWS[id],
-            id,
-            ...(name === undefined ? {} : { label: name }),
-            enabled: pending ?? accountFeatureEnabled(snapshot, id),
-            ...(pending === undefined ? {} : { saving: true }),
-        };
-    });
-}
-
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
 
@@ -692,13 +657,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const owner = members.roleId === "owner";
     const adminAbsent = !membersStore || (!members.loading && !owner);
-    // The person's own feature switches, on a Happy Cloud server that has them.
-    const accountFeaturesStore = host?.session?.accountFeatures?.() ?? accountFeaturesStoreNone;
-    const accountFeatures = useSyncExternalStore(
-        accountFeaturesStore.subscribe,
-        accountFeaturesStore.get,
-        accountFeaturesStore.get,
-    );
     const section =
         happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
         !(ADMIN_CATEGORIES.has(props.section) && adminAbsent) &&
@@ -1461,25 +1419,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(profile.saveError ? { saveError: profile.saveError } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
-                    {/* A server older than the switches has every feature on. */}
-                    {accountFeatures.served ? (
-                        <HappyAgentAccountFeatureSettings
-                            {...(accountFeatures.loading || unavailable !== undefined
-                                ? { disabled: true }
-                                : {})}
-                            {...(accountFeatures.error
-                                ? { error: accountFeatures.error.message }
-                                : {})}
-                            features={accountFeatureRows(accountFeatures)}
-                            onFeatureChange={(id, enabled) => {
-                                const featureId = (
-                                    Object.keys(ACCOUNT_FEATURE_ROWS) as AccountFeatureId[]
-                                ).find((known) => known === id);
-                                if (featureId && happyAgentOnline())
-                                    accountFeaturesStore.featureEnabledUpdate(featureId, enabled);
-                            }}
-                        />
-                    ) : null}
                     {/* The web app's Happy Cloud session stands in for the
                         machine's own WorkOS connection, which it has none of. */}
                     {happyCloud || props.cloudWebSession ? null : (

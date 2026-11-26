@@ -1061,11 +1061,6 @@ export {
     type HappyAgentAccountSettingsProps,
 } from "./pages/settings/HappyAgentAccountSettings";
 export {
-    HappyAgentAccountFeatureSettings,
-    type HappyAgentAccountFeatureRow,
-    type HappyAgentAccountFeatureSettingsProps,
-} from "./pages/settings/HappyAgentAccountFeatureSettings";
-export {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,
     type HappyAgentMobileStatus,

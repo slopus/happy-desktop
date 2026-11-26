@@ -22,8 +22,6 @@ const OFF_REFUSAL = {
 function server(options: { readonly status?: number } = {}) {
     let enabled = true;
     const sent: { method: string; path: string; body?: unknown }[] = [];
-    let putAnswer: ((answer: unknown) => void) | undefined;
-    let putFail: ((error: unknown) => void) | undefined;
     const list = () => ({ features: [{ id: "pipelines", name: "Pipelines", enabled }] });
     const request = vi.fn((method: string, path: string, body?: unknown): Promise<unknown> => {
         sent.push({ method, path, ...(body === undefined ? {} : { body }) });
@@ -39,11 +37,6 @@ function server(options: { readonly status?: number } = {}) {
                 );
             return Promise.resolve(list());
         }
-        if (path === `${FEATURES}/pipelines` && method === "PUT")
-            return new Promise((resolve, reject) => {
-                putAnswer = resolve;
-                putFail = reject;
-            });
         if (path.startsWith("v0/pipelines"))
             return enabled
                 ? Promise.resolve({ pipelines: [] })
@@ -64,13 +57,6 @@ function server(options: { readonly status?: number } = {}) {
             sent.filter((entry) => entry.method === "GET" && entry.path === FEATURES).length,
         set(value: boolean) {
             enabled = value;
-        },
-        putAnswer(value: boolean) {
-            enabled = value;
-            putAnswer?.({ feature: { id: "pipelines", name: "Pipelines", enabled: value } });
-        },
-        putFail(error: unknown) {
-            putFail?.(error);
         },
     };
 }
@@ -245,47 +231,8 @@ describe("account features", () => {
             expect(store.get().served).toBe(false);
             expect(store.get().features).toEqual([]);
             expect(pipelinesOn(store)).toBe(true);
-            expect(store.get().error).toBeUndefined();
         },
     );
-
-    it("switches a feature with the server, showing the value asked for until it answers", async () => {
-        const { store, fake } = featuresStore();
-        store.subscribe(() => undefined);
-        await vi.waitFor(() => expect(store.get().loading).toBe(false));
-
-        store.featureEnabledUpdate("pipelines", false);
-        expect(fake.sent.at(-1)).toEqual({
-            method: "PUT",
-            path: `${FEATURES}/pipelines`,
-            body: { enabled: false },
-        });
-        expect(store.get().pending.get("pipelines")).toBe(false);
-        // Nothing is hidden on the strength of the request alone.
-        expect(pipelinesOn(store)).toBe(true);
-
-        fake.putAnswer(false);
-        await vi.waitFor(() => expect(pipelinesOn(store)).toBe(false));
-        expect(store.get().pending.size).toBe(0);
-    });
-
-    it("keeps the feature as it was and says why when a switch fails", async () => {
-        const { store, fake } = featuresStore();
-        store.subscribe(() => undefined);
-        await vi.waitFor(() => expect(store.get().loading).toBe(false));
-
-        store.featureEnabledUpdate("pipelines", false);
-        fake.putFail(
-            new HappyCloudRequestRefusal("The server is busy.", undefined, 503, undefined),
-        );
-        await vi.waitFor(() => expect(store.get().error?.message).toBe("The server is busy."));
-        expect(store.get().pending.size).toBe(0);
-        expect(pipelinesOn(store)).toBe(true);
-
-        // The next switch clears it.
-        store.featureEnabledUpdate("pipelines", false);
-        expect(store.get().error).toBeUndefined();
-    });
 
     it("turns a feature off when its route refuses because it is off, and still rejects", async () => {
         const { store, writer, fake } = featuresStore();

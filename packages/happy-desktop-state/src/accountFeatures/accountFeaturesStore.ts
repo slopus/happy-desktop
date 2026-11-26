@@ -4,8 +4,7 @@ import {
     HappyCloudRequestRefusal,
     type HappyCloudRequest,
 } from "../happyAgent/happyAgentProviderCredentials.js";
-import { happyAgentUserError, referencesPreserve } from "../happyAgent/happyAgentSupport.js";
-import { UserError } from "../types.js";
+import { referencesPreserve } from "../happyAgent/happyAgentSupport.js";
 import type { HappyAgentViewersActivity } from "../viewers/viewersStore.js";
 
 /** A feature a person may turn off for their account. Pipelines is the only one today. */
@@ -36,10 +35,6 @@ export interface AccountFeaturesSnapshot {
     readonly served: boolean;
     /** As the server last answered or announced, in its order. */
     readonly features: readonly AccountFeature[];
-    /** Switches sent and not answered yet, with the value each asked for. */
-    readonly pending: ReadonlyMap<AccountFeatureId, boolean>;
-    /** Why the last switch failed. The next switch clears it. */
-    readonly error?: UserError;
 }
 
 /**
@@ -49,16 +44,11 @@ export interface AccountFeaturesSnapshot {
  *
  * Subscribing reads the list, then reads it again on every reconnect and each
  * time the window comes back to the foreground. Every feature counts as on
- * until the server says it is off.
+ * until the server says it is off. Nothing here turns one on or off.
  */
 export interface AccountFeaturesStore {
     get(): AccountFeaturesSnapshot;
     subscribe(listener: () => void): () => void;
-    /**
-     * Turns one feature on or off for the account. The list changes only once
-     * the server answers; until then the value asked for is in `pending`.
-     */
-    featureEnabledUpdate(featureId: AccountFeatureId, enabled: boolean): void;
     [Symbol.dispose](): void;
 }
 
@@ -127,7 +117,6 @@ const EMPTY: AccountFeaturesSnapshot = {
     loading: true,
     served: true,
     features: [],
-    pending: new Map(),
 };
 
 export function accountFeaturesStoreCreate(deps: {
@@ -150,17 +139,13 @@ export function accountFeaturesStoreCreate(deps: {
     let generation = 0;
 
     /** Replaces the list with what the server said, keeping unchanged entries. */
-    const featuresApply = (
-        features: readonly AccountFeature[],
-        pending?: ReadonlyMap<AccountFeatureId, boolean>,
-    ): void => {
+    const featuresApply = (features: readonly AccountFeature[]): void => {
         generation += 1;
         const current = store.getState();
         store.setState({
             loading: false,
             served: true,
             features: referencesPreserve(current.features, features),
-            ...(pending ? { pending } : {}),
         });
     };
 
@@ -292,45 +277,6 @@ export function accountFeaturesStoreCreate(deps: {
                 activityRelease = undefined;
             };
         },
-        featureEnabledUpdate(featureId, enabled) {
-            if (disposed) return;
-            const { error: _cleared, ...current } = store.getState();
-            store.setState(
-                { ...current, pending: new Map(current.pending).set(featureId, enabled) },
-                true,
-            );
-            const sent = generation;
-            void deps
-                .request("PUT", `${FEATURES}/${encodeURIComponent(featureId)}`, { enabled })
-                .then(
-                    (answer) => {
-                        if (disposed) return;
-                        const feature = featureRead(recordOf(answer)?.feature);
-                        const pending = new Map(store.getState().pending);
-                        if (pending.get(featureId) === enabled) pending.delete(featureId);
-                        // A change announced since is newer than this answer.
-                        if (!feature || generation !== sent) {
-                            store.setState({ pending });
-                            return;
-                        }
-                        const features = store.getState().features;
-                        featuresApply(
-                            features.some((entry) => entry.id === feature.id)
-                                ? features.map((entry) =>
-                                      entry.id === feature.id ? feature : entry,
-                                  )
-                                : [...features, feature],
-                            pending,
-                        );
-                    },
-                    (error: unknown) => {
-                        if (disposed) return;
-                        const pending = new Map(store.getState().pending);
-                        if (pending.get(featureId) === enabled) pending.delete(featureId);
-                        store.setState({ pending, error: happyAgentUserError(error) });
-                    },
-                );
-        },
         [Symbol.dispose]() {
             disposed = true;
             follow?.abort();
@@ -360,10 +306,9 @@ export function accountFeaturesStoreCreate(deps: {
 
 const NONE: AccountFeaturesSnapshot = { ...EMPTY, loading: false, served: false };
 
-/** For a connection without account features: every feature is on, and none can be turned off. */
+/** For a connection without account features: every feature is on. */
 export const accountFeaturesStoreNone: AccountFeaturesStore = {
     get: () => NONE,
     subscribe: () => () => undefined,
-    featureEnabledUpdate: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
