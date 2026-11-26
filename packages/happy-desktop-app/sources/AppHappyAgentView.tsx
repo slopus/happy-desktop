@@ -353,6 +353,7 @@ import {
     TerminalPanel,
     ToolCallPreview,
     TransferZone,
+    RenderErrorBoundary,
     RetainedViews,
     type TabTransferTarget,
     WindowDragRegion,
@@ -872,6 +873,11 @@ export interface AppHappyAgentDirectoryStore {
     happyAgentSignIn?(id: string): void;
     /** Stops the sign-in whose browser is open for a server, back to wanting one. */
     happyAgentSignInCancel?(id: string): void;
+    /**
+     * Drops what this window holds for one Happy Agent and connects to it
+     * afresh, leaving every other one alone. Absent on a host that cannot.
+     */
+    happyAgentReset?(id: string): void;
 }
 
 /**
@@ -5470,7 +5476,63 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             // screen; the header offers it only while the sidebar hides.
                             sidebarOwnsCreate={sidebarTaskCreateHappyAgent !== undefined}
                         >
-                            {routeContent()}
+                            {/* A view that fails to render takes down only itself:
+                the sidebar and every other server stay usable, and the
+                reader can render it again or start this server over. */}
+                            <RenderErrorBoundary
+                                fallback={(error, retry) => (
+                                    <>
+                                        {desktop ? <WindowDragRegion /> : null}
+                                        <EmptyState
+                                            action={{
+                                                icon: "repeat",
+                                                label: "Retry",
+                                                onClick: retry,
+                                            }}
+                                            data-testid="happy-agent-view-failed"
+                                            description={error.message}
+                                            icon="alert"
+                                            {...(props.happyAgents.happyAgentReset
+                                                ? {
+                                                      secondaryAction: {
+                                                          label: "Reset & reconnect",
+                                                          onClick: () => {
+                                                              props.happyAgents.happyAgentReset?.(
+                                                                  props.happyAgentId,
+                                                              );
+                                                              retry();
+                                                          },
+                                                      },
+                                                  }
+                                                : {})}
+                                            size="panel"
+                                            title="This view stopped working"
+                                        />
+                                    </>
+                                )}
+                                resetKey={[
+                                    props.happyAgentId,
+                                    props.groupId,
+                                    props.chatId,
+                                    props.surfaceId,
+                                    props.artifactId,
+                                    props.pluginId,
+                                    props.pipelineId,
+                                    props.pipelineRunId,
+                                    props.userProfileId,
+                                    props.inboxOpen,
+                                    props.feedOpen,
+                                    props.artifactsOpen,
+                                    props.pluginsOpen,
+                                    props.pipelinesOpen,
+                                    props.botCreateOpen,
+                                    props.taskCreateOpen,
+                                    props.bugReportCreateOpen,
+                                    props.blueprintOpen,
+                                ].join("\u0000")}
+                            >
+                                {routeContent()}
+                            </RenderErrorBoundary>
                         </AppShell>
                         {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.

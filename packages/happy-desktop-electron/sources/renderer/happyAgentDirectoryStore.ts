@@ -162,6 +162,13 @@ export interface HappyAgentDirectoryStore {
     subscribe(listener: () => void): () => void;
     happyAgentActivate(id: string): void;
     happyAgentReorder(id: string, afterId: string | null): void;
+    /**
+     * Drops everything this window holds for one Happy Agent — its sessions,
+     * transcripts, and pending state — and connects to it afresh, so the next
+     * screen is read from the server alone. Every other Happy Agent is left as
+     * it is.
+     */
+    happyAgentReset?(id: string): void;
     /** Signs in again to a remote that wants it; absent without a server source. */
     happyAgentSignIn?(id: string): void;
     /** Stops a remote's sign-in whose browser is open; present with `happyAgentSignIn`. */
@@ -1211,6 +1218,28 @@ export function happyAgentDirectoryStoreCreate(
         },
         happyAgentReorder(id, afterId) {
             roster?.connectionReorder(id, afterId);
+        },
+        happyAgentReset(id) {
+            const remote = remotes.get(id);
+            if (remote) {
+                if (!remote.reopen) return;
+                remote.reopen();
+                remote.entry = {
+                    ...remote.entry,
+                    status: "connecting",
+                    message: "Connecting to this Happy Agent.",
+                };
+                publish();
+                return;
+            }
+            if (id !== LOCAL_HAPPY_AGENT_ID || !happyAgent.connection) return;
+            // The roster follows the local connection's feed, so it is opened
+            // again with it; the remotes it lists keep their connections, and
+            // the window stays on the server it was showing.
+            const selected = roster?.get().selectedId;
+            connectionClose(happyAgent);
+            localReconcile();
+            if (selected !== undefined) roster?.connectionSelect(selected);
         },
         ...(deps.servers
             ? {

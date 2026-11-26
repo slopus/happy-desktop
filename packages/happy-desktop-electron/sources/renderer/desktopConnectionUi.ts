@@ -149,6 +149,9 @@ export function desktopConnectionUiCreate(input: {
             // Routing within an inactive connection must not select it globally.
             happyAgentActivate: () => undefined,
             happyAgentReorder: input.directory.happyAgentReorder,
+            ...(input.directory.happyAgentReset
+                ? { happyAgentReset: input.directory.happyAgentReset }
+                : {}),
             ...(input.directory.happyAgentSignIn
                 ? { happyAgentSignIn: input.directory.happyAgentSignIn }
                 : {}),

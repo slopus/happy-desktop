@@ -73,6 +73,27 @@ export function EmptyStatePage() {
                         <DimensionRule label="medallion 48 · title only" />
                     </div>
                 </Specimen>
+
+                <Specimen
+                    detail="panel · two ways out · secondary + ghost action, 8px apart"
+                    label="Panel — two actions"
+                    number="E-06"
+                    stage="app"
+                >
+                    <div style={panelStage}>
+                        <div style={{ width: "440px", height: "320px" }}>
+                            <EmptyState
+                                action={{ icon: "repeat", label: "Retry", onClick: noop }}
+                                description="Cannot read properties of null (reading 'reviewer')"
+                                icon="alert"
+                                secondaryAction={{ label: "Reset & reconnect", onClick: noop }}
+                                size="panel"
+                                title="This view stopped working"
+                            />
+                        </div>
+                        <DimensionRule label="440 × 320 host · actions centered as one row" />
+                    </div>
+                </Specimen>
             </div>
 
             <div className="specimen-grid">

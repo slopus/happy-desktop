@@ -29,6 +29,8 @@ export type EmptyStateProps = {
     title: string;
     description?: string;
     action?: EmptyStateAction;
+    /** A second way out beside `action`, for a state with two obvious recoveries. */
+    secondaryAction?: EmptyStateAction;
     size?: EmptyStateSize;
     /** Larger, higher-contrast copy for an introduction that deserves attention. */
     emphasis?: "standard" | "prominent";
@@ -85,6 +87,7 @@ export function EmptyState(props: EmptyStateProps) {
         "description",
         "emphasis",
         "icon",
+        "secondaryAction",
         "size",
         "style",
         "title",
@@ -155,6 +158,16 @@ export function EmptyState(props: EmptyStateProps) {
                           >
                               {action.label}
                           </Button>
+                          {local.secondaryAction ? (
+                              <Button
+                                  icon={local.secondaryAction.icon}
+                                  onClick={local.secondaryAction.onClick}
+                                  size={actionSize[size()]}
+                                  variant="ghost"
+                              >
+                                  {local.secondaryAction.label}
+                              </Button>
+                          ) : null}
                       </span>
                   ))(local.action)
                 : null}

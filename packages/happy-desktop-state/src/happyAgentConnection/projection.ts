@@ -1,3 +1,5 @@
+import { Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { happyAgentPreviewResultRead } from "../happyAgent/happyAgentPreviewsStore.js";
 import { happyAgentToolCheckoutsRead } from "../happyAgent/happyAgentCheckoutsStore.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
@@ -1990,6 +1992,27 @@ function usageTotal(usage: UsageBreakdown): number {
     return total;
 }
 
+/**
+ * The shape an answered question's card is read in: every question it asked
+ * and, for each, the values given. Narrower than the published schema's
+ * bounds — Happy Cloud writes an empty header for a question without one —
+ * but strict about what the transcript dereferences. Happy Cloud records a
+ * question settled by a chat reply as a `user_input` card with
+ * `answers: null`, which this keeps from reaching the transcript.
+ */
+const userInputPresentationShape = Type.Object({
+    questions: Type.Array(
+        Type.Object({
+            id: Type.String(),
+            header: Type.String(),
+            question: Type.String(),
+            multiSelect: Type.Boolean(),
+            options: Type.Array(Type.Object({ label: Type.String(), description: Type.String() })),
+        }),
+    ),
+    answers: Type.Record(Type.String(), Type.Array(Type.String())),
+});
+
 type ToolPresentationWire = NonNullable<
     Extract<MessageBlock, { type: "tool_call" }>["presentation"]
 >;
@@ -2078,6 +2101,13 @@ function projectToolPresentation(
                 display: artifactDisplayProject(presentation.display),
             };
         case "user_input":
+            // A record that is not the questions and the answers they were
+            // given stays out of the transcript: the call shows as the plain
+            // tool call it was, as a cancelled ask does on happy-agent.
+            if (!Value.Check(userInputPresentationShape, presentation)) {
+                console.warn("Ignored a malformed user_input presentation.", presentation);
+                return undefined;
+            }
             return {
                 kind: "user_input",
                 questions: presentation.questions,

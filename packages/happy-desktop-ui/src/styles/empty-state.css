@@ -158,6 +158,7 @@
 .happy-empty-state__description {
     max-width: 320px;
     margin: 6px 0 0;
+    overflow-wrap: anywhere;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 400;
@@ -172,6 +173,7 @@
 .happy-empty-state__actions {
     display: flex;
     flex: none;
+    gap: 8px;
     justify-content: center;
     margin: 20px 0 0;
 }

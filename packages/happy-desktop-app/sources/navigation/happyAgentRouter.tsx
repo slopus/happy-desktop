@@ -2,6 +2,7 @@ import {
     createRootRouteWithContext,
     createRoute,
     createRouter,
+    type ErrorComponentProps,
     Outlet,
     redirect,
     useMatches,
@@ -1023,7 +1024,49 @@ export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaul
         // What `false` leaves is a reset of the window, which never scrolls.
         scrollRestoration: false,
         scrollToTopSelectors: [],
+        defaultErrorComponent: HappyAgentRouteError,
     });
+}
+
+/**
+ * What a route shows when it fails outside the content region's own boundary:
+ * each Happy Agent has its own router, so this stands in for one server's
+ * window and leaves the rail and every other server as they were.
+ */
+function HappyAgentRouteError(props: ErrorComponentProps) {
+    const context = useRouteContext({ strict: false }) as HappyAgentRouterContext | undefined;
+    const router = useRouter();
+    const params = useParams({ strict: false });
+    // Rendering again is reloading the address: the boundary resets on load.
+    const retry = () => {
+        props.reset();
+        void router.invalidate();
+    };
+    const reset = context?.happyAgents?.happyAgentReset;
+    return (
+        <>
+            <WindowDragRegion />
+            <EmptyState
+                action={{ icon: "repeat", label: "Retry", onClick: retry }}
+                data-testid="happy-agent-route-failed"
+                description={props.error.message}
+                icon="alert"
+                {...(reset
+                    ? {
+                          secondaryAction: {
+                              label: "Reset & reconnect",
+                              onClick: () => {
+                                  reset(params.happyAgentId ?? happyAgentDefaultId(context));
+                                  retry();
+                              },
+                          },
+                      }
+                    : {})}
+                size="panel"
+                title="This view stopped working"
+            />
+        </>
+    );
 }
 
 /**

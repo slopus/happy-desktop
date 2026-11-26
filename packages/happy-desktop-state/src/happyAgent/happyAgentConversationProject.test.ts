@@ -3,7 +3,7 @@ import type {
     CompactionElement,
     ToolCallElement,
 } from "../happyAgentConnection/index.js";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { entryEquivalent } from "../conversation/conversationEntries.js";
 import { happyAgentConversationProject } from "./happyAgentConversationProject.js";
 import type { MessageBlock } from "@slopus/happy-agent-client";
@@ -35,6 +35,81 @@ function historicalElements(content: MessageBlock[]) {
         slashCommands: [],
     });
 }
+
+it("leaves out a question card Happy Cloud settled by a chat reply with no answers", () => {
+    /* Happy Cloud's hc-agent `resume_question_after_human_message` records a
+       question the person answered in chat as this card. Read as an answered
+       question, its `answers[question.id]` threw "Cannot read properties of
+       null (reading 'reviewer')" and took the window down. */
+    const question = {
+        id: "reviewer",
+        header: "",
+        question: "Who should review this change?",
+        multiSelect: false,
+        options: [{ label: "Steve", description: "" }],
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const elements = historicalElements([
+        {
+            type: "tool_call",
+            id: "ask-cancelled",
+            name: "request_user_input",
+            status: "completed",
+            arguments: { questions: [question] },
+            presentation: {
+                type: "user_input",
+                questions: [question],
+                status: "canceled",
+                answers: null,
+            } as unknown as Extract<MessageBlock, { type: "tool_call" }>["presentation"],
+        },
+        {
+            type: "tool_call",
+            id: "ask-answered",
+            name: "request_user_input",
+            status: "completed",
+            arguments: { questions: [question] },
+            presentation: {
+                type: "user_input",
+                questions: [question],
+                answers: { reviewer: ["Steve"] },
+            },
+        },
+    ]);
+    const presentations = elements.flatMap((element) =>
+        element.kind === "tool_call" ? [[element.toolCallId, element.presentation]] : [],
+    );
+    expect(presentations).toEqual([
+        ["ask-cancelled", undefined],
+        [
+            "ask-answered",
+            { kind: "user_input", questions: [question], answers: { reviewer: ["Steve"] } },
+        ],
+    ]);
+    expect(warn).toHaveBeenCalledOnce();
+    const rows = happyAgentConversationProject({
+        elements,
+        sessionId: "agent-history",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [],
+        answeredUserInputs: [],
+        expandedGroupIds: new Set(),
+        subagents: [],
+    });
+    const requests = rows.flatMap((entry) =>
+        entry.kind === "request" && entry.request.kind === "userInput"
+            ? [
+                  [
+                      entry.request.requestId,
+                      entry.request.status === "answered" && entry.request.answers,
+                  ],
+              ]
+            : [],
+    );
+    expect(requests).toEqual([["ask-answered", { reviewer: ["Steve"] }]]);
+    warn.mockRestore();
+});
 
 it("restores direct Gen UI from persisted tool content and keeps it outside folded traces", () => {
     const document = {
