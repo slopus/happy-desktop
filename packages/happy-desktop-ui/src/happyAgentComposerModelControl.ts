@@ -203,9 +203,13 @@ function usageWindow(
  */
 function blockingWindows(reading: HappyAgentProviderUsageReading) {
     if (reading.exhausted !== true) return [];
-    const windows = [reading.fiveHour, reading.weekly, reading.monthly].filter(
-        (window): window is HappyAgentProviderUsageWindow => window !== undefined,
-    );
+    const windows = [
+        reading.fiveHour,
+        reading.weekly,
+        reading.monthly,
+        reading.claudeGptFiveHour,
+        reading.claudeGptWeekly,
+    ].filter((window): window is HappyAgentProviderUsageWindow => window !== undefined);
     const full = windows.filter((window) => window.usedPercent >= 100);
     return full.length > 0
         ? full
@@ -247,10 +251,14 @@ export function happyAgentComposerModelUsageProject(
     const usage = new Map<string, ComposerModelAccountUsage>();
     for (const entry of snapshot.providers) {
         const reading = entry.usage;
+        const hasDualScope =
+            reading !== undefined &&
+            (reading.claudeGptFiveHour !== undefined || reading.claudeGptWeekly !== undefined);
         const hasPlan =
             reading !== undefined &&
             (reading.fiveHour !== undefined ||
                 reading.weekly !== undefined ||
+                hasDualScope ||
                 reading.planName !== undefined);
         // A daemon before protocol 29 says when its reading was taken, not
         // when the account was last read; that is the closest it can tell.
@@ -260,14 +268,23 @@ export function happyAgentComposerModelUsageProject(
         const signedOut = entry.signIn === "signed_out";
         if (!hasPlan && !entry.refreshing && refreshError === undefined && !signedOut) continue;
         const blocking = hasPlan ? blockingWindows(reading) : [];
-        const week = hasPlan ? usageWindow("Week", reading.weekly, blocking, now) : undefined;
-        const session = hasPlan
-            ? usageWindow("Session", reading.fiveHour, blocking, now)
+        const week = hasPlan
+            ? usageWindow(hasDualScope ? "Gemini Week" : "Week", reading.weekly, blocking, now)
             : undefined;
+        const session = hasPlan
+            ? usageWindow(hasDualScope ? "Gemini 5h" : "Session", reading.fiveHour, blocking, now)
+            : undefined;
+        const extraWindows = hasPlan
+            ? [
+                  usageWindow("Claude/GPT Week", reading.claudeGptWeekly, blocking, now),
+                  usageWindow("Claude/GPT 5h", reading.claudeGptFiveHour, blocking, now),
+              ].filter((window): window is NonNullable<typeof window> => window !== undefined)
+            : [];
         const limit = hasPlan ? accountLimit(reading, blocking, now) : undefined;
         usage.set(entry.providerId, {
             ...(week === undefined ? {} : { week }),
             ...(session === undefined ? {} : { session }),
+            ...(extraWindows.length === 0 ? {} : { extraWindows }),
             ...(updatedAt === undefined ? {} : { updatedAt }),
             ...(entry.refreshing ? { refreshing: true } : {}),
             ...(refreshError === undefined ? {} : { refreshError }),

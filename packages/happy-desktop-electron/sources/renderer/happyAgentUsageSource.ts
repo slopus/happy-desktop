@@ -369,9 +369,15 @@ function accountUsageProject(
     usage: happyAgentProtocol.ProviderAccountUsage,
     models: readonly HappyAgentProviderModelTokenUsage[],
 ): HappyAgentProviderUsageReading {
-    const fiveHour = windowProject(usage.windows.fiveHour);
-    const weekly = windowProject(usage.windows.weekly);
-    const monthly = windowProject(usage.windows.monthly);
+    const windows = usage.windows as happyAgentProtocol.ProviderAccountUsage["windows"] & {
+        readonly claudeGptFiveHour?: happyAgentProtocol.ProviderAccountUsage["windows"]["fiveHour"];
+        readonly claudeGptWeekly?: happyAgentProtocol.ProviderAccountUsage["windows"]["fiveHour"];
+    };
+    const fiveHour = windowProject(windows.fiveHour);
+    const weekly = windowProject(windows.weekly);
+    const monthly = windowProject(windows.monthly);
+    const claudeGptFiveHour = windowProject(windows.claudeGptFiveHour ?? null);
+    const claudeGptWeekly = windowProject(windows.claudeGptWeekly ?? null);
     return {
         capturedAt: usage.capturedAt,
         exhausted: usage.exhausted,
@@ -379,6 +385,8 @@ function accountUsageProject(
         ...(fiveHour === undefined ? {} : { fiveHour }),
         ...(weekly === undefined ? {} : { weekly }),
         ...(monthly === undefined ? {} : { monthly }),
+        ...(claudeGptFiveHour === undefined ? {} : { claudeGptFiveHour }),
+        ...(claudeGptWeekly === undefined ? {} : { claudeGptWeekly }),
         ...(usage.credits === null
             ? {}
             : {

@@ -38,6 +38,8 @@ export interface HappyAgentProviderUsageReading {
     readonly fiveHour?: HappyAgentProviderUsageWindow;
     readonly weekly?: HappyAgentProviderUsageWindow;
     readonly monthly?: HappyAgentProviderUsageWindow;
+    readonly claudeGptFiveHour?: HappyAgentProviderUsageWindow;
+    readonly claudeGptWeekly?: HappyAgentProviderUsageWindow;
     readonly credits?: HappyAgentProviderUsageCredits;
     /**
      * Absolute token counts reported by Happy Agent. These stay separated by

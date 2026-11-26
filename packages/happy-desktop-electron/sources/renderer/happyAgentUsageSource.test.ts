@@ -559,3 +559,90 @@ it("rejects a re-check the daemon refused, so the picker can say so", async () =
     daemon.usageRefreshSupportedSet(false);
     await expect(h.source.recheck()).rejects.toThrow();
 });
+
+it("projects Antigravity Gemini and Claude/GPT quota windows", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const capturedAt = 1_700_000_000_000;
+    const antigravityUsage = {
+        providerId: "antigravity",
+        vendor: "antigravity",
+        capturedAt,
+        planName: null,
+        exhausted: false,
+        windows: {
+            fiveHour: {
+                usedPercent: 10,
+                resetsAt: 1_700_018_000_000,
+                startsAt: null,
+                durationMs: 18_000_000,
+                capturedAt,
+            },
+            weekly: {
+                usedPercent: 76,
+                resetsAt: 1_700_500_000_000,
+                startsAt: null,
+                durationMs: 604_800_000,
+                capturedAt,
+            },
+            monthly: null,
+            claudeGptFiveHour: {
+                usedPercent: 0,
+                resetsAt: null,
+                startsAt: null,
+                durationMs: 18_000_000,
+                capturedAt,
+            },
+            claudeGptWeekly: {
+                usedPercent: 25,
+                resetsAt: 1_700_600_000_000,
+                startsAt: null,
+                durationMs: 604_800_000,
+                capturedAt,
+            },
+        },
+        credits: null,
+    } as unknown as happyAgentProtocol.ProviderAccountUsage;
+
+    usageSet(daemon, [
+        entry({
+            providerId: "antigravity",
+            type: "antigravity",
+            refreshedAt: capturedAt,
+            usage: antigravityUsage,
+        }),
+    ]);
+
+    const h = harness(daemon);
+    await vi.waitFor(() => {
+        const provider = h.seen
+            .at(-1)
+            ?.providers.find((candidate) => candidate.providerId === "antigravity");
+        expect(provider?.usage).toEqual({
+            capturedAt,
+            exhausted: false,
+            fiveHour: {
+                usedPercent: 10,
+                resetsAt: 1_700_018_000_000,
+                durationMs: 18_000_000,
+                capturedAt,
+            },
+            weekly: {
+                usedPercent: 76,
+                resetsAt: 1_700_500_000_000,
+                durationMs: 604_800_000,
+                capturedAt,
+            },
+            claudeGptFiveHour: {
+                usedPercent: 0,
+                durationMs: 18_000_000,
+                capturedAt,
+            },
+            claudeGptWeekly: {
+                usedPercent: 25,
+                resetsAt: 1_700_600_000_000,
+                durationMs: 604_800_000,
+                capturedAt,
+            },
+        });
+    });
+});
