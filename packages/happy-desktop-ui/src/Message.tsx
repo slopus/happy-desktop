@@ -1064,6 +1064,17 @@ const ROW_REFINE_COMMIT_MS = 200;
 const MESSAGE_LIST_FOOTER_KEY = "__happy_message_list_footer__";
 /** Reserved stable entity key for the optional first header row. */
 const MESSAGE_LIST_HEADER_KEY = "__happy_message_list_header__";
+/** Whether two lists of row values hold the same values in the same order. */
+function messageListRowsSame(
+    left: readonly unknown[] | undefined,
+    right: readonly unknown[] | undefined,
+): boolean {
+    if (left === right) return true;
+    if (left === undefined || right === undefined || left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1)
+        if (!Object.is(left[index], right[index])) return false;
+    return true;
+}
 /** Native read-back can differ by a fraction; one pixel starts a new reading point. */
 function messageListScrollOffsetMoved(next: number, previous: number): boolean {
     return Math.abs(next - previous) >= 1;
@@ -3096,11 +3107,17 @@ export function MessageList(props: MessageListProps) {
         positionReport();
     }
     viewportGeometryCommitCurrent.current = viewportGeometryCommit;
+    /* Whether the model was laid out from this render's rows. A caller that
+       renders again hands over a new array holding the same rows, and those
+       rows are still current. Counted as new, a commit would skip placing the
+       reader, and the frames until the next one would be painted at an offset
+       the model has already moved away from: a conversation returned to, which
+       its window renders several times as it shows it, opened part way up. */
     function rowModelCurrent() {
         return (
             !virtualized ||
             (rowSizeModel.keys.length === items.length &&
-                props.estimateRows === modelInputs.current.rows &&
+                messageListRowsSame(props.estimateRows, modelInputs.current.rows) &&
                 props.estimateVersion === modelInputs.current.estimateVersion)
         );
     }
