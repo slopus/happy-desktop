@@ -694,10 +694,10 @@ async function switchWatch(
                     const poll = (): void => {
                         if (state.clickAt !== undefined) {
                             const loading = shown("conversation-loading");
-                            // A spinner counts once a reader can see it, not while its reveal is held back.
+                            // The loading face counts once a reader can see it, not while its reveal is held back.
                             const spinner =
                                 loading
-                                    ?.querySelector('[data-happy-desktop-ui="spinner"]')
+                                    ?.querySelector('[data-happy-desktop-ui="empty-state"]')
                                     ?.checkVisibility({ visibilityProperty: true }) === true;
                             if (spinner && state.spinnerAt === undefined)
                                 state.spinnerAt = performance.now();

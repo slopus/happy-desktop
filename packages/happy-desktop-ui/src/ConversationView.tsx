@@ -101,8 +101,8 @@ import {
 } from "./messageTextLayout";
 import type { HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { ScrollArea } from "./Scrollbar";
-import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
+import { RetainedViewWaitedContext } from "./RetainedViews";
 import { WindowOverlay } from "./WindowOverlay";
 import { conversationMediaRunRows, conversationMediaRuns } from "./conversationMediaRuns";
 import { conversationInlineLayouts } from "./conversationInlineLayouts";
@@ -138,7 +138,12 @@ export type ConversationViewProps = {
     running?: boolean;
     /** The message this client most recently sent during a running turn. */
     steeringSendId?: string;
-    /** True while the addressed conversation is hydrating its transcript. */
+    /**
+     * True while the addressed conversation is hydrating its transcript. Its
+     * place shows the reading snail after a quiet moment, so a transcript that
+     * arrives quickly never flashes it; never the empty state, which would say
+     * a transcript not read yet holds nothing.
+     */
     loading?: boolean;
     /** Elapsed run time in ms, supplied by the owner (no timers live in the UI). */
     elapsedMs?: number;
@@ -1097,16 +1102,23 @@ export function ConversationView(props: ConversationViewProps) {
             ) : props.loading ? (
                 <ScrollArea
                     axes="both"
-                    className="happy-conversation__empty happy-conversation__loading"
+                    className="happy-conversation__empty"
                     data-happy-desktop-ui="conversation-loading"
                     viewportClassName="happy-conversation__empty-viewport"
                 >
-                    <Spinner
-                        className="happy-conversation__loading-spinner"
-                        label="Loading conversation"
-                        size={20}
-                        tone="muted"
-                        variant="line"
+                    <EmptyState
+                        animation="snail"
+                        // A switch already held the last view on screen for its
+                        // quiet moment, so the snail comes in at once.
+                        className={
+                            use(RetainedViewWaitedContext)
+                                ? undefined
+                                : "happy-conversation__loading-delayed"
+                        }
+                        description="Reading its transcript."
+                        icon="chat"
+                        size="panel"
+                        title="Loading conversation…"
                     />
                 </ScrollArea>
             ) : props.entries.length === 0 && props.leadingHeader === undefined ? (

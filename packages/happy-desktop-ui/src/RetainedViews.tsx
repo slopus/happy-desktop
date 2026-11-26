@@ -1,4 +1,12 @@
-import { Activity, memo, useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+    Activity,
+    createContext,
+    memo,
+    useCallback,
+    useState,
+    useSyncExternalStore,
+    type ReactNode,
+} from "react";
 import { WindowOverlayRetainedContext } from "./WindowOverlay";
 
 export type RetainedView = {
@@ -16,6 +24,14 @@ export type RetainedView = {
      */
     readonly ready?: boolean;
 };
+
+/**
+ * True inside the view on screen while it is shown before it was ready,
+ * because the wait for it ran out. The reader has already waited that long
+ * for it, so whatever it shows while it gets ready can appear at once rather
+ * than after a quiet moment of its own.
+ */
+export const RetainedViewWaitedContext = createContext(false);
 
 export type RetainedViewsProps = {
     /** The view on screen. Absent keeps every view out of sight, such as while something else covers the pane. */
@@ -92,6 +108,7 @@ export function RetainedViews(props: RetainedViewsProps) {
                     id={view.id}
                     key={view.id}
                     onHide={props.onViewHide}
+                    waited={waited && !activeReady && view.id === displayedId}
                 />
             ))}
         </>
@@ -127,6 +144,8 @@ type RetainedViewEntryProps = {
     held: boolean;
     id: string;
     onHide: RetainedViewsProps["onViewHide"];
+    /** On screen only because the wait for it ran out; see `RetainedViewWaitedContext`. */
+    waited: boolean;
 };
 
 /*
@@ -145,6 +164,7 @@ const RetainedViewEntry = memo(
                     inert={props.held}
                     id={props.id}
                     onHide={props.onHide}
+                    waited={props.waited}
                 />
             </Activity>
         );
@@ -154,6 +174,7 @@ const RetainedViewEntry = memo(
         previous.held === next.held &&
         previous.id === next.id &&
         previous.onHide === next.onHide &&
+        previous.waited === next.waited &&
         (!next.active || next.held || previous.content === next.content),
 );
 
@@ -165,6 +186,7 @@ type RetainedViewFrameProps = {
     inert: boolean;
     id: string;
     onHide: RetainedViewsProps["onViewHide"];
+    waited: boolean;
 };
 
 /*
@@ -207,7 +229,9 @@ const RetainedViewFrame = memo(
                 ref={frame}
             >
                 <WindowOverlayRetainedContext.Provider value>
-                    {props.hidden ? drawn : props.content}
+                    <RetainedViewWaitedContext.Provider value={props.waited}>
+                        {props.hidden ? drawn : props.content}
+                    </RetainedViewWaitedContext.Provider>
                 </WindowOverlayRetainedContext.Provider>
             </div>
         );
@@ -218,5 +242,6 @@ const RetainedViewFrame = memo(
             previous.inert === next.inert &&
             previous.content === next.content &&
             previous.id === next.id &&
-            previous.onHide === next.onHide),
+            previous.onHide === next.onHide &&
+            previous.waited === next.waited),
 );

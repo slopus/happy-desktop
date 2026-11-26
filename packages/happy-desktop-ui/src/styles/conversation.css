@@ -187,14 +187,10 @@
     overflow: auto;
 }
 
-.happy-conversation__loading > .happy-conversation__empty-viewport {
-    align-items: center;
-    justify-content: center;
-}
-
-/* A conversation that arrives within a moment shows nothing rather than flashing a spinner. */
-.happy-conversation__loading-spinner {
-    animation: happy-conversation-loading-reveal 0s 200ms both;
+/* A conversation that arrives within a moment shows nothing rather than
+   flashing the snail: the same 250ms `RetainedViews` holds a switch for. */
+.happy-conversation__loading-delayed {
+    animation: happy-conversation-loading-reveal 0s 250ms both;
 }
 
 @keyframes happy-conversation-loading-reveal {
