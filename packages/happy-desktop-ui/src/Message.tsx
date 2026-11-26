@@ -1236,9 +1236,11 @@ export function MessageList(props: MessageListProps) {
     positionChange.current = props.onScrollPositionChange;
     const startReached = useRef(props.onStartReached);
     startReached.current = props.onStartReached;
-    /* The content height the unscrollable list last asked about, so a commit
-       that brought nothing new does not ask again. */
-    const startReportedHeight = useRef(-1);
+    /* The rows the unscrollable list last asked about — its oldest row and how
+       many it holds — so a commit that brought nothing new does not ask again.
+       Not its height: a list shorter than its pane is as tall as the pane, so
+       a page of turns folded to a line each would never ask for the next. */
+    const startReportedRows = useRef<string | undefined>(undefined);
     const expectedScrollTop = useRef<number | undefined>(undefined);
     /* The reader's opening position — the newest content, or the restored
        one — is written once, by the first commit whose DOM carries the real
@@ -1516,10 +1518,14 @@ export function MessageList(props: MessageListProps) {
             Math.max(START_REACHED_THRESHOLD, element.clientHeight * START_READ_AHEAD_SCREENS)
         )
             return;
-        startReportedHeight.current = element.scrollHeight;
+        startReportedRows.current = startRows();
         startReached.current?.();
     };
     const entryItems = Children.toArray(props.children);
+    const startRows = () => {
+        const oldest = entryItems[0];
+        return `${String(isValidElement(oldest) ? oldest.key : undefined)}:${entryItems.length}`;
+    };
     const headerLeads = props.header !== undefined;
     /* Where the caller's row `index` sits among the list's own rows. */
     const headerOffset = headerLeads ? 1 : 0;
@@ -3490,12 +3496,12 @@ export function MessageList(props: MessageListProps) {
         endAwayUpdate(element);
         /* A transcript that fits the scrollport has no scrolling left to do, so
            no gesture of the reader's will ever reach past its oldest row. Ask
-           for the page before it here — once per content height, so a commit
+           for the page before it here — once per set of rows, so a commit
            that added nothing does not ask twice. A list that does scroll is the
            reader's to drive, and asks from `onScroll` instead. */
         if (
             element.scrollHeight - element.clientHeight <= START_REACHED_THRESHOLD &&
-            element.scrollHeight !== startReportedHeight.current
+            startRows() !== startReportedRows.current
         )
             startReachedReport(element);
     });
