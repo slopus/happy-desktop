@@ -9670,11 +9670,13 @@ function HappyAgentFileBody(props: {
             </>
         );
     if (
-        (file.kind === "file" || file.kind === "document") &&
+        // A diff whose old side the server cannot give is read as the file it is now.
+        (file.kind === "file" || file.kind === "document" || file.kind === "diff") &&
         file.document.type === "ready" &&
         "content" in file.document.value
     ) {
         const content = file.document.value.content;
+        const diffUnavailable = file.document.value.diffUnavailable;
         const dirty = file.draft !== undefined && file.draft !== content;
         const text = file.draft ?? content;
         const status =
@@ -9685,7 +9687,18 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <FileEditor
-                banner={happyAgentFileNotices(file)}
+                banner={
+                    diffUnavailable === undefined ? (
+                        happyAgentFileNotices(file)
+                    ) : (
+                        <>
+                            <Banner tone="info" title={diffUnavailable}>
+                                Showing the file as it is now.
+                            </Banner>
+                            {happyAgentFileNotices(file)}
+                        </>
+                    )
+                }
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
@@ -10698,6 +10711,11 @@ function changesCheckoutTotals(changes: readonly HappyAgentPanelChange[]): {
     };
 }
 
+/** Where a cloud checkout is: its branch, then the computer it is on where the server says. */
+function checkoutDetail(checkout: HappyAgentCheckout): string {
+    return [checkout.branch, checkout.computer ?? ""].filter((part) => part !== "").join(" · ");
+}
+
 /** A project's picture, as a checkout heading wears it. */
 function changesProjectMark(project: HappyAgentProjectGroup): FileTreeCheckout["mark"] {
     return {
@@ -10793,7 +10811,9 @@ function changesCheckoutsOf(input: {
                             ? { imageUrl: checkout.repository.avatar.url }
                             : {}),
                     },
-                    ...(checkout.branch === "" ? {} : { detail: checkout.branch }),
+                    ...(checkoutDetail(checkout) === ""
+                        ? {}
+                        : { detail: checkoutDetail(checkout) }),
                     ...changesCheckoutTotals(changes),
                 },
                 changes,

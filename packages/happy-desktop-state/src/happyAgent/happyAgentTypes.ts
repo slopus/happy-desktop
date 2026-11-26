@@ -745,6 +745,11 @@ export interface HappyAgentWorkspaceFileDocument {
     readonly content: string;
     /** SHA-256 identity returned by Happy Agent and required for a conflict-safe save. */
     readonly hash: string;
+    /**
+     * Set on a changed file's diff tab when the server cannot give the old side
+     * to compare against: the file is shown as it is now, and this says why.
+     */
+    readonly diffUnavailable?: string;
 }
 
 /**

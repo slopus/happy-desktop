@@ -768,6 +768,9 @@ export async function happyAgentWorkspaceFileTreeRead(
     };
 }
 
+/** Why a changed file shows no diff on a server that cannot read its old side. */
+export const HAPPY_AGENT_DIFF_UNAVAILABLE = "Diff not available on this server yet.";
+
 async function changedFileRead(
     client: Pick<HappyAgentClient, "readFile" | "readFileRevision">,
     groupId: HappyAgentGroupId,
@@ -794,8 +797,8 @@ async function changedFileRead(
                               // cannot give the old side, so there is no diff.
                               if (error instanceof HappyAgentApiError && error.status === 501)
                                   throw new UserError(
-                                      "This server cannot show what changed in this file yet.",
-                                      "unsupported",
+                                      HAPPY_AGENT_DIFF_UNAVAILABLE,
+                                      "diffUnavailable",
                                       error,
                                   );
                               throw error;
@@ -1523,6 +1526,8 @@ export function happyAgentWorkspaceClientCreate(
             if (known?.key === key) return known.store;
             const store = happyAgentTaskCheckoutsStoreCreate({
                 agentIds,
+                request: deps.cloudRequest,
+                sync: deps.connection.sync,
                 checkouts: (agentId) => workspace.checkouts(agentId),
             });
             taskCheckoutStores.set(root, { key, store });
@@ -1768,6 +1773,8 @@ export function happyAgentWorkspaceClientCreate(
             userProfileStores.clear();
             for (const store of checkoutStores.values()) store[Symbol.dispose]();
             checkoutStores.clear();
+            for (const { store } of taskCheckoutStores.values()) store[Symbol.dispose]();
+            taskCheckoutStores.clear();
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();

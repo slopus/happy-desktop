@@ -52,6 +52,8 @@ export interface HappyAgentCheckout {
     readonly error: string | null;
     /** Null until Git has looked at it. */
     readonly changes: HappyAgentCheckoutChanges | null;
+    /** The computer it was made on, by its name; null where the server does not say. */
+    readonly computer: string | null;
 }
 
 export interface HappyAgentCheckoutsSnapshot {
@@ -302,6 +304,7 @@ export function happyAgentCheckoutsStoreCreate(deps: {
                       files,
                   }
                 : null,
+            computer: null,
         };
     };
 

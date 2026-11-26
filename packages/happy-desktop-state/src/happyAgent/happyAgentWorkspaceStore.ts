@@ -3866,7 +3866,19 @@ export function happyAgentWorkspaceStoreCreate(
         return (signal) =>
             change === undefined
                 ? Promise.reject(new Error("That file is no longer changed."))
-                : client.changedFileRead(groupId, path, change, signal);
+                : client
+                      .changedFileRead(groupId, path, change, signal)
+                      .catch(async (error: unknown) => {
+                          // A server that cannot give the old side still has
+                          // the file: it is shown as it is now, saying so.
+                          if (
+                              !(error instanceof UserError && error.code === "diffUnavailable") ||
+                              change.status === "deleted"
+                          )
+                              throw error;
+                          const file = await client.workspaceFileRead(groupId, path, signal);
+                          return { ...file, diffUnavailable: error.message };
+                      });
     };
 
     const filePreprocessLoadPump = (): void => {
