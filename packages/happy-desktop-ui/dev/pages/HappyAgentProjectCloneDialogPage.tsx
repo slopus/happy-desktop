@@ -35,7 +35,7 @@ export function HappyAgentProjectCloneDialogPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Cloning a GitHub repository onto one Happy Agent: paste a GitHub URL or write owner/repository, then let that Happy Agent create the checkout."
+            summary="Cloning a GitHub repository onto one Happy Agent: paste a GitHub URL or write owner/repository, then let that Happy Agent create the checkout. A Happy Agent on a computer of the reader's own also opens a folder already there, written as its path in the same field."
             title="HappyAgentProjectCloneDialog"
         >
             <Specimen
@@ -88,6 +88,65 @@ export function HappyAgentProjectCloneDialogPage() {
                         {...handlers}
                         repository="owner/project"
                         submitDisabledReason="This Happy Agent is reconnecting. Try again when it is online."
+                    />,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="480px · Happy Agent on the reader's own computer · folder or repository, Clone project disabled"
+                label="Folder offered"
+                number="05"
+                stage="app"
+            >
+                {frame(<HappyAgentProjectCloneDialog {...handlers} folderOffered repository="" />)}
+            </Specimen>
+
+            <Specimen
+                detail="480px · draft names a folder · primary action opens it"
+                label="Folder named"
+                number="06"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectCloneDialog
+                        {...handlers}
+                        folderNamed
+                        folderOffered
+                        repository="~/Projects/app"
+                    />,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="480px · folder being opened · controls inert"
+                label="Opening"
+                number="07"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectCloneDialog
+                        {...handlers}
+                        folderNamed
+                        folderOffered
+                        repository="~/Projects/app"
+                        submitting
+                    />,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="480px · folder error remains beside the retained path"
+                label="Folder error"
+                number="08"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectCloneDialog
+                        {...handlers}
+                        error="There is no folder at ~/Projects/missing."
+                        folderNamed
+                        folderOffered
+                        repository="~/Projects/missing"
                     />,
                 )}
             </Specimen>
