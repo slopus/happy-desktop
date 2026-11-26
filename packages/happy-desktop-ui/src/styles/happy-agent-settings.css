@@ -1906,6 +1906,44 @@
     min-width: 0;
 }
 
+.happy-agent-compute__system {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-agent-compute__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+}
+
+.happy-agent-compute__fact {
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-compute__fact > dt {
+    flex: none;
+    width: 96px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-compute__fact > dd {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .happy-agent-compute__heading {
     color: var(--text);
     font-size: 12px;

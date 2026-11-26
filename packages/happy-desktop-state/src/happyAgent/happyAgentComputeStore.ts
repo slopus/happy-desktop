@@ -61,6 +61,27 @@ export type HappyAgentComputeBoundary =
     | { readonly available: true }
     | { readonly available: false; readonly reason: string | null };
 
+/** What a computer's supervisor reported of itself; a field is null where it did not say. */
+export interface HappyAgentComputeMachineSystem {
+    readonly osVersion: string | null;
+    readonly cpuCores: number | null;
+    readonly memoryBytes: number | null;
+    readonly diskBytes: number | null;
+    /** The supervisor's version. */
+    readonly version: string | null;
+}
+
+/**
+ * How much one command may use on a computer: its own setting, null where it
+ * follows the server's default, and that default.
+ */
+export interface HappyAgentComputeCommandLimits {
+    readonly memoryBytes: number | null;
+    readonly processes: number | null;
+    readonly defaultMemoryBytes: number;
+    readonly defaultProcesses: number;
+}
+
 /** One machine agents can join. */
 export interface HappyAgentComputeMachine {
     readonly id: string;
@@ -88,6 +109,9 @@ export interface HappyAgentComputeMachine {
     readonly manageable: boolean;
     /** When the status last changed, in milliseconds. */
     readonly since: number;
+    readonly system: HappyAgentComputeMachineSystem;
+    /** Null where the server does not say, as an older one does not. */
+    readonly commandLimits: HappyAgentComputeCommandLimits | null;
 }
 
 /** An agent waiting for the reader to let it join one of their private machines. */
@@ -155,6 +179,10 @@ export type HappyAgentComputeMachineAdd =
 export interface HappyAgentComputeMachineEditDraft extends HappyAgentComputeConcurrencyDraft {
     readonly name: string;
     readonly description: string;
+    /** Memory per command in GiB, as typed; empty follows the server's default. */
+    readonly commandMemory: string;
+    /** Processes per command, as typed; empty follows the server's default. */
+    readonly commandProcesses: string;
 }
 
 /** One machine's dialog, while it is open: its agents, and its fields for a reader who may edit them. */
@@ -236,6 +264,8 @@ export interface HappyAgentComputeStore {
     /** Chooses no limit, or a limit, keeping the number typed. */
     machineLimitedUpdate(limited: boolean): void;
     machineConcurrencyUpdate(value: string): void;
+    machineCommandMemoryUpdate(value: string): void;
+    machineCommandProcessesUpdate(value: string): void;
     /** Saves the open machine's changed fields. */
     machineSave(): void;
     /** Takes an agent off a machine, freeing its place. */
@@ -270,6 +300,71 @@ function numberOr(value: unknown, fallback: number): number {
 
 function countOrNull(value: unknown): number | null {
     return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function sizeOrNull(value: unknown): number | null {
+    return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function systemRead(computer: Record<string, unknown>): HappyAgentComputeMachineSystem {
+    const host = recordOf(computer.host);
+    return {
+        osVersion: textOrNull(computer.osVersion),
+        cpuCores: countOrNull(host?.cpuCores),
+        memoryBytes: sizeOrNull(host?.totalMemoryBytes),
+        diskBytes: sizeOrNull(host?.totalDiskBytes),
+        version: textOrNull(computer.version),
+    };
+}
+
+function commandLimitsRead(
+    computer: Record<string, unknown>,
+): HappyAgentComputeCommandLimits | null {
+    const defaultMemoryBytes = sizeOrNull(computer.defaultCommandMemoryBytes);
+    const defaultProcesses = countOrNull(computer.defaultCommandProcesses);
+    if (defaultMemoryBytes === null || defaultProcesses === null) return null;
+    return {
+        memoryBytes: sizeOrNull(computer.commandMemoryBytes),
+        processes: countOrNull(computer.commandProcesses),
+        defaultMemoryBytes,
+        defaultProcesses,
+    };
+}
+
+const GIB = 1024 ** 3;
+
+/** Memory in GiB as a person types it: whole where it is whole, else to the MiB. */
+function commandMemoryText(bytes: number | null): string {
+    if (bytes === null) return "";
+    const gib = bytes / GIB;
+    return Number.isInteger(gib) ? String(gib) : String(Math.round(gib * 1024) / 1024);
+}
+
+/**
+ * The command limits to send, or why they can't be sent: only what changed,
+ * with `null` for a field emptied back to the server's default. The server
+ * checks the bounds, which depend on the computer.
+ */
+function commandLimitsParse(
+    draft: HappyAgentComputeMachineEditDraft,
+    limits: HappyAgentComputeCommandLimits | null,
+): { commandMemoryBytes?: number | null; commandProcesses?: number | null } | UserError {
+    if (!limits) return {};
+    const memoryText = draft.commandMemory.trim();
+    const processesText = draft.commandProcesses.trim();
+    const gib = /^\d+(\.\d+)?$/.test(memoryText) ? Number(memoryText) : Number.NaN;
+    const memory = memoryText === "" ? null : Math.round(gib * GIB);
+    if (memory !== null && !(Number.isSafeInteger(memory) && memory > 0))
+        return new UserError("Memory per command is a number of GiB, such as 4 or 0.5.");
+    const processes = processesText === "" ? null : Number(processesText);
+    if (processes !== null && !(/^\d+$/.test(processesText) && Number.isSafeInteger(processes)))
+        return new UserError("Processes per command is a whole number.");
+    return {
+        ...(memoryText === commandMemoryText(limits.memoryBytes)
+            ? {}
+            : { commandMemoryBytes: memory }),
+        ...(processes === limits.processes ? {} : { commandProcesses: processes }),
+    };
 }
 
 /** A concurrency limit, where 0 means no limit. */
@@ -421,6 +516,8 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
             reader.access === "manage" ||
             (access.kind === "private" && access.owner?.kind === "reader"),
         since: numberOr(computer.since, 0),
+        system: systemRead(computer),
+        commandLimits: commandLimitsRead(computer),
     };
 }
 
@@ -807,6 +904,11 @@ export function happyAgentComputeStoreCreate(deps: {
                         name: machine.name,
                         description: machine.description ?? "",
                         ...concurrencyDraftOf(machine.concurrency, machine.maxConcurrency),
+                        commandMemory: commandMemoryText(machine.commandLimits?.memoryBytes ?? null),
+                        commandProcesses:
+                            machine.commandLimits?.processes == null
+                                ? ""
+                                : String(machine.commandLimits.processes),
                     },
                 },
             });
@@ -835,6 +937,12 @@ export function happyAgentComputeStoreCreate(deps: {
         machineConcurrencyUpdate(value) {
             machineDraftUpdate({ concurrency: value });
         },
+        machineCommandMemoryUpdate(value) {
+            machineDraftUpdate({ commandMemory: value });
+        },
+        machineCommandProcessesUpdate(value) {
+            machineDraftUpdate({ commandProcesses: value });
+        },
         machineSave() {
             const snapshot = store.getState();
             const detail = snapshot.machineDetail;
@@ -855,12 +963,18 @@ export function happyAgentComputeStoreCreate(deps: {
                 refuse(concurrency);
                 return;
             }
+            const commandLimits = commandLimitsParse(detail.draft, machine.commandLimits);
+            if (commandLimits instanceof UserError) {
+                refuse(commandLimits);
+                return;
+            }
             const changes = {
                 ...(name === machine.name ? {} : { name }),
                 ...(description === (machine.description ?? "")
                     ? {}
                     : { description: description === "" ? null : description }),
                 ...(concurrency === machine.concurrency ? {} : { concurrency }),
+                ...commandLimits,
             };
             const close = (): void => {
                 const { machineDetail: _closed, ...rest } = store.getState();
@@ -1047,6 +1161,8 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     machineDescriptionUpdate: () => undefined,
     machineLimitedUpdate: () => undefined,
     machineConcurrencyUpdate: () => undefined,
+    machineCommandMemoryUpdate: () => undefined,
+    machineCommandProcessesUpdate: () => undefined,
     machineSave: () => undefined,
     machineAgentRemove: () => undefined,
     machineDeleteOpen: () => undefined,

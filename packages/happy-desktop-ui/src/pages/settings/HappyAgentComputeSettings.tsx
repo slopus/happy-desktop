@@ -441,6 +441,32 @@ export interface HappyAgentComputeMachineEditDraft {
     readonly limited: boolean;
     /** The limit as typed, kept while no limit is chosen. */
     readonly concurrency: string;
+    /** Memory per command in GiB; empty follows the server's default. */
+    readonly commandMemory: string;
+    /** Processes per command; empty follows the server's default. */
+    readonly commandProcesses: string;
+}
+
+/** What the machine reported of itself, each already worded; null where it did not say. */
+export interface HappyAgentComputeSystemView {
+    /** For example "Ubuntu 24.04 · x86_64". */
+    readonly platform: string | null;
+    /** For example "4 cores". */
+    readonly cpu: string | null;
+    /** For example "7.8 GiB". */
+    readonly memory: string | null;
+    readonly disk: string | null;
+    /** The supervisor's version. */
+    readonly supervisor: string | null;
+    /** What one command may use there, for example "4 GiB, 1024 processes". */
+    readonly perCommand: string | null;
+}
+
+/** The server's default for one command, as the empty fields show it. */
+export interface HappyAgentComputeCommandDefaults {
+    /** In GiB, for example "4". */
+    readonly memory: string;
+    readonly processes: string;
 }
 
 export interface HappyAgentComputeMachineDialogProps {
@@ -448,6 +474,9 @@ export interface HappyAgentComputeMachineDialogProps {
     readonly agents: readonly HappyAgentComputeMachineAgentRow[];
     /** The most agents it may take at once; null when its operator set no ceiling. */
     readonly maxConcurrency: number | null;
+    readonly system: HappyAgentComputeSystemView;
+    /** Null where the server sets no command limits per computer. */
+    readonly commandDefaults: HappyAgentComputeCommandDefaults | null;
     /** Shown only where `machine.manageable`. */
     readonly draft: HappyAgentComputeMachineEditDraft;
     readonly saving: boolean;
@@ -459,6 +488,8 @@ export interface HappyAgentComputeMachineDialogProps {
     onDescriptionChange: (value: string) => void;
     onLimitedChange: (limited: boolean) => void;
     onConcurrencyChange: (value: string) => void;
+    onCommandMemoryChange: (value: string) => void;
+    onCommandProcessesChange: (value: string) => void;
     onSave: () => void;
     onAgentRemove: (agentId: string) => void;
     /** Asks to delete it; offered only where `machine.manageable`. */
@@ -466,9 +497,84 @@ export interface HappyAgentComputeMachineDialogProps {
     onClose: () => void;
 }
 
+/** The machine's core facts, one per row, leaving out what it did not report. */
+function HappyAgentComputeSystem(props: { readonly system: HappyAgentComputeSystemView }) {
+    const rows = [
+        ["System", props.system.platform],
+        ["CPU", props.system.cpu],
+        ["Memory", props.system.memory],
+        ["Disk", props.system.disk],
+        ["Supervisor", props.system.supervisor],
+        ["Each command", props.system.perCommand],
+    ] as const;
+    return (
+        <Box className="happy-agent-compute__system" data-happy-desktop-ui="compute-machine-system">
+            <span className="happy-agent-compute__heading">System</span>
+            <dl className="happy-agent-compute__facts">
+                {rows.map(([label, value]) =>
+                    value === null ? null : (
+                        <Box className="happy-agent-compute__fact" key={label}>
+                            <dt>{label}</dt>
+                            <dd>{value}</dd>
+                        </Box>
+                    ),
+                )}
+            </dl>
+        </Box>
+    );
+}
+
+/** How much one command may use: memory and processes, each empty for the server's default. */
+function HappyAgentComputeCommandLimits(props: {
+    readonly defaults: HappyAgentComputeCommandDefaults;
+    readonly draft: HappyAgentComputeMachineEditDraft;
+    readonly disabled: boolean;
+    onMemoryChange: (value: string) => void;
+    onProcessesChange: (value: string) => void;
+    onSubmit: () => void;
+}) {
+    return (
+        <Box className="happy-agent-compute__concurrency">
+            <span className="happy-agent-compute__field-label">Each command</span>
+            <span className="happy-agent-compute__meta" data-wrap="">
+                The most one command and everything it starts may use. Leave a field empty for
+                the server's default. Linux and Windows enforce them; macOS can't.
+            </span>
+            <Box className="happy-agent-compute__limit">
+                <TextField
+                    aria-label="Memory per command, in GiB"
+                    className="happy-agent-compute__limit-field"
+                    disabled={props.disabled}
+                    onSubmit={props.onSubmit}
+                    onValueChange={props.onMemoryChange}
+                    placeholder={props.defaults.memory}
+                    size="small"
+                    value={props.draft.commandMemory}
+                />
+                <span className="happy-agent-compute__limit-unit">GiB of memory</span>
+            </Box>
+            <Box className="happy-agent-compute__limit">
+                <TextField
+                    aria-label="Processes per command"
+                    className="happy-agent-compute__limit-field"
+                    disabled={props.disabled}
+                    inputMode="numeric"
+                    onSubmit={props.onSubmit}
+                    onValueChange={props.onProcessesChange}
+                    placeholder={props.defaults.processes}
+                    size="small"
+                    value={props.draft.commandProcesses}
+                />
+                <span className="happy-agent-compute__limit-unit">processes and threads</span>
+            </Box>
+        </Box>
+    );
+}
+
 /**
- * One machine: who it is for, the agents on it, and, for a reader who may
- * manage it, its name, description and how many agents it takes at once.
+ * One machine: who it is for, what it reported of itself, the agents on it,
+ * and, for a reader who may manage it, its name, description, how many agents
+ * it takes at once and how much one command may use.
  */
 export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDialogProps) {
     const machine = props.machine;
@@ -533,6 +639,7 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                             {boundaryText(machine.boundary)}
                         </Banner>
                     ) : null}
+                    <HappyAgentComputeSystem system={props.system} />
                     <Box className="happy-agent-compute__agents">
                         <span className="happy-agent-compute__heading">
                             {machine.concurrency === 0
@@ -601,6 +708,16 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                                 onLimitedChange={props.onLimitedChange}
                                 onSubmit={props.onSave}
                             />
+                            {props.commandDefaults ? (
+                                <HappyAgentComputeCommandLimits
+                                    defaults={props.commandDefaults}
+                                    disabled={props.saving}
+                                    draft={props.draft}
+                                    onMemoryChange={props.onCommandMemoryChange}
+                                    onProcessesChange={props.onCommandProcessesChange}
+                                    onSubmit={props.onSave}
+                                />
+                            ) : null}
                             <Box className="happy-agent-compute__danger">
                                 <span className="happy-agent-compute__text">
                                     <span className="happy-agent-compute__name">

@@ -212,11 +212,16 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
                 description: machine.description ?? "",
                 limited: machine.concurrency > 0,
                 concurrency: String(machine.concurrency > 0 ? machine.concurrency : 8),
+                commandMemory: "",
+                commandProcesses: "",
             }}
+            commandDefaults={{ memory: "4", processes: "1024" }}
             machine={machine}
             maxConcurrency={null}
             onAgentRemove={noop}
             onClose={noop}
+            onCommandMemoryChange={noop}
+            onCommandProcessesChange={noop}
             onConcurrencyChange={noop}
             onDelete={noop}
             onDescriptionChange={noop}
@@ -224,6 +229,14 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
             onNameChange={noop}
             onSave={noop}
             saving={false}
+            system={{
+                platform: "Linux 24.04 · x86_64",
+                cpu: "8 cores",
+                memory: "31.3 GiB",
+                disk: "468.4 GiB",
+                supervisor: "0.2.8",
+                perCommand: "4 GiB, 1024 processes",
+            }}
             {...props}
         />
     );

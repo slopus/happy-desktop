@@ -13,6 +13,7 @@ import {
     type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddStage,
     type HappyAgentComputeMachineRow,
+    type HappyAgentComputeSystemView,
 } from "happy-desktop-ui";
 
 /** Settings › Compute on Happy Cloud, composed from its store. */
@@ -79,8 +80,18 @@ export function AppComputeSettings(props: {
                         removing: snapshot.agentRemovals.has(`${opened.id}/${agent.agentId}`),
                     }))}
                     draft={detail.draft}
+                    commandDefaults={
+                        opened.commandLimits
+                            ? {
+                                  memory: gibText(opened.commandLimits.defaultMemoryBytes),
+                                  processes: String(opened.commandLimits.defaultProcesses),
+                              }
+                            : null
+                    }
                     machine={machineRow(opened)}
                     maxConcurrency={opened.maxConcurrency}
+                    onCommandMemoryChange={(value) => store.machineCommandMemoryUpdate(value)}
+                    onCommandProcessesChange={(value) => store.machineCommandProcessesUpdate(value)}
                     onAgentRemove={(agentId) => store.machineAgentRemove(opened.id, agentId)}
                     onClose={() => store.machineDetailClose()}
                     onDelete={() => store.machineDeleteOpen(opened.id)}
@@ -90,6 +101,7 @@ export function AppComputeSettings(props: {
                     onNameChange={(value) => store.machineNameUpdate(value)}
                     onSave={() => store.machineSave()}
                     saving={detail.step === "saving"}
+                    system={systemView(opened)}
                 />
             ) : null}
         </>
@@ -159,6 +171,46 @@ function machineRow(machine: HappyAgentComputeMachine): HappyAgentComputeMachine
         concurrency: machine.concurrency,
         ...(machine.boundary.available ? {} : { boundary: { reason: machine.boundary.reason } }),
         manageable: machine.manageable,
+    };
+}
+
+const GIB = 1024 ** 3;
+
+/** Bytes in GiB, to one decimal where it is not whole, as "7.8". */
+function gibText(bytes: number): string {
+    const gib = bytes / GIB;
+    return Number.isInteger(gib) ? String(gib) : gib.toFixed(1);
+}
+
+function systemView(machine: HappyAgentComputeMachine): HappyAgentComputeSystemView {
+    const { system, commandLimits } = machine;
+    const platform = [
+        [machine.os ? (OS_NAMES[machine.os] ?? machine.os) : undefined, system.osVersion]
+            .filter(Boolean)
+            .join(" "),
+        machine.arch,
+    ]
+        .filter(Boolean)
+        .join(" · ");
+    const memory = commandLimits
+        ? (commandLimits.memoryBytes ?? commandLimits.defaultMemoryBytes)
+        : null;
+    const processes = commandLimits
+        ? (commandLimits.processes ?? commandLimits.defaultProcesses)
+        : null;
+    return {
+        platform: platform || null,
+        cpu:
+            system.cpuCores === null
+                ? null
+                : `${String(system.cpuCores)} ${system.cpuCores === 1 ? "core" : "cores"}`,
+        memory: system.memoryBytes === null ? null : `${gibText(system.memoryBytes)} GiB`,
+        disk: system.diskBytes === null ? null : `${gibText(system.diskBytes)} GiB`,
+        supervisor: system.version,
+        perCommand:
+            memory === null || processes === null
+                ? null
+                : `${gibText(memory)} GiB, ${String(processes)} processes`,
     };
 }
 

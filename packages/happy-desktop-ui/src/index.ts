@@ -1195,6 +1195,7 @@ export {
     HappyAgentComputeSettings,
     type HappyAgentComputeAccessName,
     type HappyAgentComputeAddAccess,
+    type HappyAgentComputeCommandDefaults,
     type HappyAgentComputeInstallView,
     type HappyAgentComputeJoinRequestRow,
     type HappyAgentComputeMachineAddDialogProps,
@@ -1208,6 +1209,7 @@ export {
     type HappyAgentComputeMachineRowStatus,
     type HappyAgentComputeSettingsProps,
     type HappyAgentComputeSystemName,
+    type HappyAgentComputeSystemView,
 } from "./pages/settings/HappyAgentComputeSettings";
 export {
     HappyAgentCredentialImport,
