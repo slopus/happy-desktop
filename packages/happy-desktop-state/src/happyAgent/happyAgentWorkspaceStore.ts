@@ -1729,6 +1729,12 @@ export interface HappyAgentWorkspaceStore {
      * goes at once and `groupCloseRequested` reports it.
      */
     taskArchive(taskId: HappyAgentTaskId): Promise<boolean>;
+    /**
+     * Brings an archived task back for everyone, when the host says the reader
+     * may. It stays archived until the host lists it again, and a refusal is
+     * kept in the list's `taskFailures`.
+     */
+    taskUnarchive(taskId: HappyAgentTaskId): Promise<void>;
     /** Opens the list of every task this Happy Agent holds, to join one. */
     taskBrowseOpen(): void;
     taskBrowseClose(): void;
@@ -8336,6 +8342,12 @@ export function happyAgentWorkspaceStoreCreate(
                 if (!taken) tasksArchivedHere.delete(taskId);
                 return taken;
             });
+        },
+        taskUnarchive: (taskId) => {
+            // Archived again later, anywhere, it is no longer one this window
+            // closed, so it stays readable where it is like any other.
+            tasksArchivedHere.delete(taskId);
+            return list.taskUnarchive(taskId);
         },
         taskBrowseOpen() {
             if (taskBrowseOpen) return;

@@ -642,8 +642,15 @@ export interface AppHappyAgentEntry {
      */
     readonly tasks?: readonly HappyAgentTask[];
     /**
-     * Task acts the host refused — a join, leave, move, archive, or rename —
-     * by task. The reason is stated under the Tasks heading. Absent reads as none.
+     * Every archived task on this Happy Agent, oldest first. They have no rows;
+     * the Tasks heading lists the ones the reader may bring back. Absent reads
+     * as none.
+     */
+    readonly tasksArchived?: readonly HappyAgentTask[];
+    /**
+     * Task acts the host refused — a join, leave, move, archive, unarchive, or
+     * rename — by task. The reason is stated under the Tasks heading. Absent
+     * reads as none.
      */
     readonly taskFailures?: ReadonlyMap<
         string,
@@ -1501,6 +1508,8 @@ const ROW_MENU_HIDE = "hide";
 /** The Bots heading's menu of hidden bots: one row per bot, and one for all of them. */
 const BOTS_MENU_SHOW_PREFIX = "show:";
 const BOTS_MENU_SHOW_ALL = "show-all";
+/** The Tasks heading's menu of archived tasks: one row per task, which brings it back. */
+const TASKS_MENU_UNARCHIVE_PREFIX = "unarchive:";
 const ROW_MENU_SURFACE_ADD = "surface-add";
 const ROW_MENU_SURFACE_REMOVE = "surface-remove";
 /** Puts the bot, task, or session a row or tab stands for on the clipboard, as its share link. */
@@ -2534,6 +2543,41 @@ function hiddenBotsAction(
 }
 
 /**
+ * The Tasks heading's way back to archived tasks: a control beside the +,
+ * there only while the reader may bring one back, opening a menu that names
+ * each, newest first. Choosing one unarchives it for everyone, which only the
+ * host can do, so while the machine is away the control stays but is disabled.
+ */
+function archivedTasksAction(
+    happyAgent: AppHappyAgentEntry,
+    offline: boolean,
+): Pick<SidebarSection, "secondaryAction"> {
+    // The host says who may: a task's owner and the team's owner in a team,
+    // the one person on a standalone machine.
+    const archived = (happyAgent.tasksArchived ?? []).filter((task) => task.canArchive);
+    if (archived.length === 0) return {};
+    return {
+        secondaryAction: {
+            disabled: offline,
+            icon: "archive",
+            label: "Archived tasks",
+            reveal: "hover",
+            menuItems: [
+                { kind: "label", label: "Archived tasks" },
+                ...[...archived].reverse().map(
+                    (task): MenuItem => ({
+                        kind: "item",
+                        id: `${TASKS_MENU_UNARCHIVE_PREFIX}${task.id}`,
+                        label: `Unarchive ${task.name}`,
+                        icon: "history",
+                    }),
+                ),
+            ],
+        },
+    };
+}
+
+/**
  * The sidebar rows a voice target can be: a subtask's own row, which is named
  * by its conversation, then the row of the group it lives in — a bot's or
  * task's workspace, a project, or a worktree. A session has no row of its own,
@@ -2745,7 +2789,8 @@ function happyAgentSections(
  * The reader's joined tasks, under a heading of their own below the bots and
  * in the reader's own order. Each is a bot's row with its owner's face, and its
  * delegated subtasks nest under it exactly as a bot's do. The heading stays
- * even when the list is empty, offering the first task from there.
+ * even when the list is empty, offering the first task from there, and it
+ * lists the archived tasks the reader may bring back.
  */
 function happyAgentTasksSection(
     happyAgent: AppHappyAgentEntry,
@@ -2788,6 +2833,7 @@ function happyAgentTasksSection(
             : materialized
               ? { emptyAction: { disabled: offline, icon: "search" as const, label: "Browse" } }
               : {}),
+        ...(materialized ? archivedTasksAction(happyAgent, offline) : {}),
     };
 }
 
@@ -3193,6 +3239,8 @@ function rowDestination(
  * a task's leave, move, archive, unarchive, or rename, a subtask's archive or
  * move, or a bot's archive. A refused row is back where the host keeps it, so
  * only the reason is left to say, and only while the row is still listed. A
+ * refused unarchive leaves its task archived, listed in the Tasks heading's
+ * menu rather than as a row, so it is said while the task is listed there. A
  * refused join names a task that is not listed here at all, and is said in the
  * browse dialog that asked for it instead.
  */
@@ -3201,7 +3249,7 @@ function sidebarMutationFailure(
 ): { readonly message: string; readonly dismiss: () => void } | undefined {
     for (const happyAgent of directory.happyAgents) {
         const workspace = happyAgent.session?.workspace;
-        for (const task of happyAgent.tasks ?? []) {
+        for (const task of [...(happyAgent.tasks ?? []), ...(happyAgent.tasksArchived ?? [])]) {
             const failure = happyAgent.taskFailures?.get(task.id);
             if (failure && failure.action !== "join")
                 return {
@@ -3792,6 +3840,32 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         void session.workspace
             .taskJoin(taskId)
             .then(() => taskJoinedThen(session.workspace, taskId, open))
+            .catch(() => undefined);
+    };
+    /**
+     * Brings an archived task back from its Tasks heading and opens it once
+     * the host lists it again. A reader who is not in it joins it first, the
+     * way opening one from the feed does.
+     */
+    const taskUnarchiveOpen = (happyAgent: AppHappyAgentEntry, taskId: HappyAgentTaskId): void => {
+        const workspace = happyAgent.session?.workspace;
+        if (!workspace || happyAgent.status !== "connected") return;
+        const open = (task: HappyAgentTask) =>
+            props.onChatSelect(happyAgent.id, task.workspaceId, task.conversation.id);
+        void workspace
+            .taskUnarchive(taskId)
+            .then(() =>
+                taskUnarchivedThen(workspace, taskId, (task) => {
+                    if (task.membership !== undefined) {
+                        open(task);
+                        return;
+                    }
+                    void workspace
+                        .taskJoin(taskId)
+                        .then(() => taskJoinedThen(workspace, taskId, open))
+                        .catch(() => undefined);
+                }),
+            )
             .catch(() => undefined);
     };
     /**
@@ -4611,9 +4685,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : workspace.projectArchive(owner.project.id)
                 ).catch(() => undefined);
             }}
-            // The Bots heading's menu of hidden bots puts one, or all, back.
+            // The Bots heading's menu of hidden bots puts one, or all, back,
+            // and the Tasks heading's menu of archived tasks brings one back.
             onSectionMenuSelect={(sectionId, _source, actionId) => {
                 const section = happyAgentSectionParse(sectionId);
+                if (section?.kind === "tasks") {
+                    const happyAgent = happyAgentOf(section.happyAgentId);
+                    if (happyAgent && actionId.startsWith(TASKS_MENU_UNARCHIVE_PREFIX))
+                        taskUnarchiveOpen(
+                            happyAgent,
+                            actionId.slice(TASKS_MENU_UNARCHIVE_PREFIX.length) as HappyAgentTaskId,
+                        );
+                    return;
+                }
                 if (section?.kind !== "bots") return;
                 const happyAgent = happyAgentOf(section.happyAgentId);
                 if (!happyAgent) return;
@@ -6929,6 +7013,48 @@ function taskJoinedThen(
     const unsubscribe = workspace.subscribe(() => {
         if (settled()) unsubscribe();
     });
+}
+
+/**
+ * How long a task brought back from the Tasks heading waits to be opened. A
+ * slower answer still brings it back, but no longer moves the reader to it:
+ * by then they have gone on to something else.
+ */
+const TASK_UNARCHIVE_OPEN_WAIT_MS = 30_000;
+
+/**
+ * Hands the task to `open` once the host lists it active again, and never if
+ * the host refuses. Unarchiving answers as soon as it is asked, so the task is
+ * back only once the host has answered.
+ */
+function taskUnarchivedThen(
+    workspace: HappyAgentWorkspaceStore,
+    taskId: HappyAgentTaskId,
+    open: (task: HappyAgentTask) => void,
+): void {
+    let done = false;
+    const settled = (): boolean => {
+        if (done) return true;
+        const list = workspace.get().list;
+        const refused = list.taskFailures.get(taskId)?.action === "unarchive";
+        const task = refused ? undefined : list.taskDirectory.find((entry) => entry.id === taskId);
+        done =
+            refused ||
+            task !== undefined ||
+            !list.tasksArchived.some((entry) => entry.id === taskId);
+        // Settled before it opens: opening, or joining first, moves the list,
+        // which calls back in here.
+        if (task !== undefined) open(task);
+        return done;
+    };
+    if (settled()) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = workspace.subscribe(() => {
+        if (!settled()) return;
+        unsubscribe();
+        clearTimeout(timer);
+    });
+    timer = setTimeout(unsubscribe, TASK_UNARCHIVE_OPEN_WAIT_MS);
 }
 
 /** What a reference Surface's page says about what it points at. */
