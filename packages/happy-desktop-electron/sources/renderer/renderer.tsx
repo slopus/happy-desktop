@@ -2195,88 +2195,102 @@ if (mediaPreviewBridge) {
                 keepAwakeReceived(next.keepAwake ?? "agent");
             });
         };
+        // Two last resorts, so nothing that fails leaves the window blank. The
+        // inner one catches the app, the rail included, and keeps the person's
+        // theme. The outer one catches the theme, the notices and the Cloud
+        // sheet themselves, so its fallback reads none of them: the system theme.
+        const windowFailed = (error: Error): ReactNode => (
+            <ViewErrorFallback
+                data-testid="happy-window-failed"
+                error={error}
+                onReload={() => window.location.reload()}
+                title="Happy stopped working"
+                windowDragRegion={!browserLocal}
+            />
+        );
         // This window renders the Happy Agent tree directly rather than through `App`, so
         // it has to start the highlighting pool itself: without this the file
         // viewer and every diff in the primary desktop surface tokenize on the
         // main thread, which is exactly where a large file must not be parsed.
         root.render(
-            <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
-                <DesktopZoomIndicator />
-                <DesktopCloudSignInNotice store={notices} />
-                <DesktopHappyLinkNotice store={happyLinkInbox} />
-                {/* The last resort: nothing that fails below, the rail included,
-                    leaves the window blank. */}
-                <RenderErrorBoundary
-                    fallback={(error) => (
-                        <ViewErrorFallback
-                            data-testid="happy-window-failed"
-                            error={error}
-                            onReload={() => window.location.reload()}
-                            title="Happy stopped working"
-                            windowDragRegion={!browserLocal}
-                        />
-                    )}
-                >
-                    <CodeHighlightWorkers>
-                        <DesktopWindowZoom reported={!browserLocal}>
-                            <DesktopRenderer
-                                connectionUis={connectionUis}
-                                appearance={appearance}
-                                commandPalette={commandPalette}
-                                {...(daemon ? { daemon } : {})}
-                                debug={debug}
-                                {...(livePerformance ? { performance: livePerformance } : {})}
-                                profiler={profiler}
-                                onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
-                                browserContent={
-                                    browserLocal ? undefined : desktopBrowserContentRender
-                                }
-                                htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
-                                artifactPage={browserLocal ? undefined : desktopArtifactPageRender}
-                                bridge={desktopBridge}
-                                mediaWindow={
-                                    browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
-                                }
-                                experiments={experiments}
-                                mobilePairingMethod={mobilePairingMethod}
-                                projectsVisibility={projectsVisibility}
-                                statusBar={statusBar}
-                                gptLive={gptLive}
-                                usageAnalytics={analytics.preference}
-                                {...(cloudConnect ? { cloudConnect } : {})}
-                                keepAwake={keepAwake}
-                                navigationOrder={navigationOrder}
-                                sidebarCollapse={sidebarCollapse}
-                                sidebarVisibility={sidebarVisibility}
-                                attention={attention}
-                                // Only the Electron window hides its title bar; the browser
-                                // development server renders the same tree with web chrome.
-                                platform={browserLocal ? "web" : "desktop"}
-                                happyAgentRouter={happyAgentRouter}
-                                happyAgents={happyAgents}
-                                localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                                settings={settings}
-                                titleShimmer={titleShimmer}
-                                startupValues={startupValuesStoreCreate()}
-                                store={runtimeStore}
-                                welcome={welcome}
-                                windowState={windowState}
-                                surfaceWindowState={surfaceWindowState}
-                                agentUpdate={agentUpdate}
-                                agentReleaseNotes={agentReleaseNotes}
-                                agentBroken={agentBroken}
-                                agentOutage={agentOutage}
-                            />
-                        </DesktopWindowZoom>
-                    </CodeHighlightWorkers>
-                </RenderErrorBoundary>
-                {/* After the app, not before it: the window folds drag regions in
+            <RenderErrorBoundary
+                fallback={(error) => <ThemeScope mode="system">{windowFailed(error)}</ThemeScope>}
+            >
+                <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
+                    <DesktopZoomIndicator />
+                    <DesktopCloudSignInNotice store={notices} />
+                    <DesktopHappyLinkNotice store={happyLinkInbox} />
+                    <RenderErrorBoundary fallback={windowFailed}>
+                        <CodeHighlightWorkers>
+                            <DesktopWindowZoom reported={!browserLocal}>
+                                <DesktopRenderer
+                                    connectionUis={connectionUis}
+                                    appearance={appearance}
+                                    commandPalette={commandPalette}
+                                    {...(daemon ? { daemon } : {})}
+                                    debug={debug}
+                                    {...(livePerformance ? { performance: livePerformance } : {})}
+                                    profiler={profiler}
+                                    onboarding={analytics.onboardingObserve(
+                                        onboardingStore,
+                                        welcome,
+                                    )}
+                                    browserContent={
+                                        browserLocal ? undefined : desktopBrowserContentRender
+                                    }
+                                    htmlPreview={
+                                        browserLocal ? undefined : desktopHtmlPreviewRender
+                                    }
+                                    artifactPage={
+                                        browserLocal ? undefined : desktopArtifactPageRender
+                                    }
+                                    bridge={desktopBridge}
+                                    mediaWindow={
+                                        browserLocal
+                                            ? undefined
+                                            : desktopMediaWindowOpen(desktopBridge)
+                                    }
+                                    experiments={experiments}
+                                    mobilePairingMethod={mobilePairingMethod}
+                                    projectsVisibility={projectsVisibility}
+                                    statusBar={statusBar}
+                                    gptLive={gptLive}
+                                    usageAnalytics={analytics.preference}
+                                    {...(cloudConnect ? { cloudConnect } : {})}
+                                    keepAwake={keepAwake}
+                                    navigationOrder={navigationOrder}
+                                    sidebarCollapse={sidebarCollapse}
+                                    sidebarVisibility={sidebarVisibility}
+                                    attention={attention}
+                                    // Only the Electron window hides its title bar; the browser
+                                    // development server renders the same tree with web chrome.
+                                    platform={browserLocal ? "web" : "desktop"}
+                                    happyAgentRouter={happyAgentRouter}
+                                    happyAgents={happyAgents}
+                                    localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                                    settings={settings}
+                                    titleShimmer={titleShimmer}
+                                    startupValues={startupValuesStoreCreate()}
+                                    store={runtimeStore}
+                                    welcome={welcome}
+                                    windowState={windowState}
+                                    surfaceWindowState={surfaceWindowState}
+                                    agentUpdate={agentUpdate}
+                                    agentReleaseNotes={agentReleaseNotes}
+                                    agentBroken={agentBroken}
+                                    agentOutage={agentOutage}
+                                />
+                            </DesktopWindowZoom>
+                        </CodeHighlightWorkers>
+                    </RenderErrorBoundary>
+                    {/* After the app, not before it: the window folds drag regions in
                     tree order and later ones win, so the app's title-bar band would
                     otherwise re-cover the sheet's close button and leave it dead. */}
-                {cloudConnect ? (
-                    <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
-                ) : null}
-            </DesktopAppearance>,
+                    {cloudConnect ? (
+                        <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
+                    ) : null}
+                </DesktopAppearance>
+            </RenderErrorBoundary>,
         );
     };
     void desktopBridge.desktopConfigGet().then(start, (error: unknown) => {
