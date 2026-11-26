@@ -44,7 +44,7 @@ function transcript(id: string): readonly ConversationEntry[] {
     }));
 }
 
-const TRANSCRIPTS = new Map(["a", "b", "c", "d"].map((id) => [id, transcript(id)]));
+const TRANSCRIPTS = new Map(["a", "b", "c", "d", "e"].map((id) => [id, transcript(id)]));
 
 type Shown = {
     readonly activeId: string | undefined;
@@ -466,7 +466,7 @@ it("holds a cold switch on the view on screen, then shows the snail, never an em
         while (performance.now() - start < ms) {
             await frame();
             expect(emptyShown()).toBe(false);
-            const on = ["a", "b", "c", "d"].find(shownOf)!;
+            const on = ["a", "b", "c", "d", "e"].find(shownOf)!;
             const snail = snailOf(on);
             samples.push({
                 at: performance.now() - start,
@@ -510,13 +510,24 @@ it("holds a cold switch on the view on screen, then shows the snail, never an em
     expect(quick.every((entry) => entry.on === "b" || entry.on === "c")).toBe(true);
     expect(quick.some((entry) => entry.snail)).toBe(false);
 
+    // A view its owner lets go as the switch begins is held all the same, and
+    // let go only once the switch settles.
+    shown.set({ activeId: "d", ids: ["a", "b", "d"], loading: new Set(["d"]) });
+    expect(shownOf("c")).toBe(true);
+    const dropped = await sample(400);
+    const keptOn = dropped.filter((entry) => entry.on === "c");
+    expect(keptOn.length).toBeGreaterThan(0);
+    expect(keptOn.at(-1)!.at).toBeGreaterThanOrEqual(200);
+    expect(dropped.slice(keptOn.length).every((entry) => entry.on === "d" && entry.snail)).toBe(
+        true,
+    );
+    expect(frameOf("c")).toBeNull();
+
     // With nothing on screen to hold, the view loading is shown at once, and
-    // its snail waits for the same quiet moment before it comes in.
-    shown.set({ activeId: undefined, ids: ["a", "b", "c"] });
+    // so is its snail: there is nothing else to look at.
+    shown.set({ activeId: undefined, ids: ["a", "b", "d"] });
     await frame();
-    shown.set({ activeId: "d", ids: ["a", "b", "c", "d"], loading: new Set(["d"]) });
-    const uncovered = await sample(400);
-    expect(uncovered.every((entry) => entry.on === "d")).toBe(true);
-    expect(uncovered.filter((entry) => entry.at < 200).some((entry) => entry.snail)).toBe(false);
-    expect(uncovered.at(-1)!.snail).toBe(true);
+    shown.set({ activeId: "e", ids: ["a", "b", "d", "e"], loading: new Set(["e"]) });
+    const uncovered = await sample(120);
+    expect(uncovered.every((entry) => entry.on === "e" && entry.snail)).toBe(true);
 });

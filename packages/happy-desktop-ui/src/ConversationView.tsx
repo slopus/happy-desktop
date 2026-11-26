@@ -102,7 +102,7 @@ import {
 import type { HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { ScrollArea } from "./Scrollbar";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
-import { RetainedViewWaitedContext } from "./RetainedViews";
+import { RetainedViewUnreadyContext } from "./RetainedViews";
 import { WindowOverlay } from "./WindowOverlay";
 import { conversationMediaRunRows, conversationMediaRuns } from "./conversationMediaRuns";
 import { conversationInlineLayouts } from "./conversationInlineLayouts";
@@ -1108,10 +1108,10 @@ export function ConversationView(props: ConversationViewProps) {
                 >
                     <EmptyState
                         animation="snail"
-                        // A switch already held the last view on screen for its
-                        // quiet moment, so the snail comes in at once.
+                        // Shown by a switch with nothing else to show, the snail
+                        // comes in at once; see `RetainedViewUnreadyContext`.
                         className={
-                            use(RetainedViewWaitedContext)
+                            use(RetainedViewUnreadyContext)
                                 ? undefined
                                 : "happy-conversation__loading-delayed"
                         }
