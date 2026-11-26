@@ -32,6 +32,7 @@ const EMPTY: HappyAgentPluginsSnapshot = {
     loading: true,
     plugins: [],
     installations: [],
+    customPlugins: [],
     manage: true,
 };
 /** How long a failed read waits before it is tried again while the list is watched. */

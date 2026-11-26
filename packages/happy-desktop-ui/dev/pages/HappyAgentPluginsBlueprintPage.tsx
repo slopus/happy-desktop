@@ -1,4 +1,5 @@
 import type {
+    HappyAgentCustomPlugin,
     HappyAgentPlugin,
     HappyAgentPluginInstallation,
     HappyAgentPluginsSnapshot,
@@ -119,6 +120,7 @@ const manager: HappyAgentPluginsSnapshot = {
     manage: true,
     plugins: [github, linear, weather],
     installations: [githubActive, githubSecond, retired],
+    customPlugins: [],
 };
 
 const member: HappyAgentPluginsSnapshot = { ...manager, manage: false };
@@ -128,6 +130,7 @@ const loading: HappyAgentPluginsSnapshot = {
     manage: false,
     plugins: [],
     installations: [],
+    customPlugins: [],
 };
 
 /* A Happy Agent's own plugins: skill bundles from its public and cluster catalogs. */
@@ -197,6 +200,78 @@ const daemon: HappyAgentPluginsSnapshot = {
             "The archive's checksum did not match the catalog.",
         ),
     ],
+    customPlugins: [],
+};
+
+/* Custom plugins agents made: one of the member's own, one shared, one with docs and no skills. */
+const happySkills: HappyAgentCustomPlugin = {
+    id: "happy-skills",
+    name: "Happy Skills",
+    description:
+        "Instruction skills for Happy Agent: code walkthroughs, blast-radius checks, TypeScript practices, prose cleanup, sync-to-main and visuals.",
+    image: null,
+    owner: "me",
+    skills: [
+        {
+            name: "blast-radius",
+            description:
+                "Investigate what a change could break beyond its diff and prove the key safety assumptions with real code.",
+        },
+        {
+            name: "bro",
+            description: "Restate the previous assistant message in simple, concise human language.",
+        },
+        {
+            name: "how",
+            description:
+                "Explain how a subsystem works, trace runtime behavior, or answer code ownership and layering questions.",
+        },
+        {
+            name: "sync-to-main",
+            description: "Commit all workspace work, rebase on main, and push to main without force.",
+        },
+        {
+            name: "unslop",
+            description:
+                "Edit prose to remove generic AI phrasing, jargon and filler while preserving meaning and tone.",
+        },
+    ],
+};
+
+const releaseChecklist: HappyAgentCustomPlugin = {
+    id: "release-checklist",
+    name: "Release checklist",
+    description: "The steps the team follows before every desktop release.",
+    image: null,
+    owner: "team",
+    skills: [
+        {
+            name: "release-preview",
+            description: "Cut a preview build from main and post its notes in the release chat.",
+        },
+    ],
+};
+
+const styleGuide: HappyAgentCustomPlugin = {
+    id: "style-guide",
+    name: "Style guide",
+    description: "",
+    image: null,
+    owner: "team",
+    skills: [],
+};
+
+const custom: HappyAgentPluginsSnapshot = {
+    ...manager,
+    customPlugins: [happySkills, releaseChecklist, styleGuide],
+};
+
+const customOnly: HappyAgentPluginsSnapshot = {
+    loading: false,
+    manage: false,
+    plugins: [],
+    installations: [],
+    customPlugins: [releaseChecklist],
 };
 
 const settle = (): Promise<void> => Promise.resolve();
@@ -316,6 +391,32 @@ export function HappyAgentPluginsBlueprintPage() {
                 window={WINDOW}
             >
                 <HappyAgentPluginPage {...detailHandlers} pluginId="github" plugins={member} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Custom plugins agents made sit between what is installed and what the server offers, each with its picture, whether the team shares it or it is the reader's own, and its skills. Nothing on them opens or installs: agents make, change and delete them. One has docs and no skills."
+                label="Catalog, custom plugins"
+                number="09"
+                screen="09-catalog-custom-1100x1200"
+                window={{ width: WINDOW.width, height: 1200 }}
+            >
+                <HappyAgentPluginsPage
+                    onPluginInstall={settle}
+                    onPluginOpen={() => undefined}
+                    plugins={custom}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A server that offers no plugins and has nothing installed still lists the team's custom plugins instead of saying there are none."
+                label="Catalog, custom plugins only"
+                number="10"
+                screen="10-catalog-custom-only-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginsPage
+                    onPluginInstall={settle}
+                    onPluginOpen={() => undefined}
+                    plugins={customOnly}
+                />
             </FullScreenSpecimen>
         </ComponentPage>
     );
