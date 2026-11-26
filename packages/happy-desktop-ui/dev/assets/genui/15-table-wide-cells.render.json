@@ -1,0 +1,1028 @@
+{
+    "genuiRender": 1,
+    "compiler": "1.0.0",
+    "fallback": "Запущенные dev-серверы: 4 процесса.",
+    "root": "card",
+    "elements": {
+        "card": {
+            "type": "box",
+            "props": {
+                "role": "card",
+                "gap": "blocks"
+            },
+            "children": ["card.header", "table"]
+        },
+        "card.header": {
+            "type": "box",
+            "props": {
+                "role": "header",
+                "direction": "row",
+                "gap": "inline",
+                "align": "start",
+                "justify": "between"
+            },
+            "children": ["card.heading"]
+        },
+        "card.heading": {
+            "type": "box",
+            "props": {
+                "gap": "tight",
+                "grow": true
+            },
+            "children": ["card.title", "card.subtitle"]
+        },
+        "card.title": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Запущенные dev-серверы"
+                    }
+                ],
+                "role": "title"
+            }
+        },
+        "card.subtitle": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "4 процесса на kirills-mac-mini"
+                    }
+                ],
+                "role": "subtitle"
+            }
+        },
+        "table": {
+            "type": "box",
+            "props": {
+                "gap": "labeled"
+            },
+            "children": ["table.table"]
+        },
+        "table.table": {
+            "type": "switch",
+            "props": {},
+            "slots": {
+                "compact": ["table.compact"],
+                "regular": ["table.regular"]
+            }
+        },
+        "table.regular.head.0": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Сайт/что"
+                    }
+                ],
+                "role": "column"
+            }
+        },
+        "table.regular.head.1": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Порт"
+                    }
+                ],
+                "role": "column"
+            }
+        },
+        "table.regular.head.2": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Работает · RAM"
+                    }
+                ],
+                "role": "column"
+            }
+        },
+        "table.regular.head.3": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Владелец"
+                    }
+                ],
+                "role": "column"
+            }
+        },
+        "table.regular.head.4": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Артефакт"
+                    }
+                ],
+                "role": "column"
+            }
+        },
+        "table.regular.head.5": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "ORPHAN"
+                    }
+                ],
+                "role": "column"
+            }
+        },
+        "table.regular.0.0": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "tattoodesigns.app · improve · превью сборки после рефакторинга галереи"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.regular.0.1": {
+            "type": "pill",
+            "props": {
+                "text": ":5173",
+                "tone": "neutral"
+            }
+        },
+        "table.regular.0.2": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "3 ч · 412 МБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.0.3": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "agent tattoo-improve"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.0.4": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Tattoo designs — превью галереи (v4)"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.0.5": {
+            "type": "pill",
+            "props": {
+                "text": "yes",
+                "tone": "warning"
+            }
+        },
+        "table.regular.1.0": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "happy.engineering · лендинг"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.regular.1.1": {
+            "type": "pill",
+            "props": {
+                "text": ":3000",
+                "tone": "neutral"
+            }
+        },
+        "table.regular.1.2": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "2 дн · 1.1 ГБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.1.3": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Kirill"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.1.4": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Лендинг, черновик 3"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.1.5": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "—"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.2.0": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "cluster dashboard · dev"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.regular.2.1": {
+            "type": "pill",
+            "props": {
+                "text": ":8080",
+                "tone": "neutral"
+            }
+        },
+        "table.regular.2.2": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "40 мин · 230 МБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.2.3": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "agent cluster-ui"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.2.4": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "—"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.2.5": {
+            "type": "pill",
+            "props": {
+                "text": "yes",
+                "tone": "warning"
+            }
+        },
+        "table.regular.3.0": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "docs preview · genui-spec"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.regular.3.1": {
+            "type": "pill",
+            "props": {
+                "text": ":4321",
+                "tone": "neutral"
+            }
+        },
+        "table.regular.3.2": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "12 мин · 96 МБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.3.3": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Steve"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.3.4": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Gen UI spec draft"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular.3.5": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "—"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.regular": {
+            "type": "grid",
+            "props": {
+                "columns": [
+                    {
+                        "width": "fill"
+                    },
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "auto"
+                    }
+                ],
+                "density": "table",
+                "divide": true,
+                "header": true
+            },
+            "children": [
+                "table.regular.head.0",
+                "table.regular.head.1",
+                "table.regular.head.2",
+                "table.regular.head.3",
+                "table.regular.head.4",
+                "table.regular.head.5",
+                "table.regular.0.0",
+                "table.regular.0.1",
+                "table.regular.0.2",
+                "table.regular.0.3",
+                "table.regular.0.4",
+                "table.regular.0.5",
+                "table.regular.1.0",
+                "table.regular.1.1",
+                "table.regular.1.2",
+                "table.regular.1.3",
+                "table.regular.1.4",
+                "table.regular.1.5",
+                "table.regular.2.0",
+                "table.regular.2.1",
+                "table.regular.2.2",
+                "table.regular.2.3",
+                "table.regular.2.4",
+                "table.regular.2.5",
+                "table.regular.3.0",
+                "table.regular.3.1",
+                "table.regular.3.2",
+                "table.regular.3.3",
+                "table.regular.3.4",
+                "table.regular.3.5"
+            ]
+        },
+        "table.compact.0": {
+            "type": "box",
+            "props": {
+                "role": "record",
+                "gap": "related"
+            },
+            "children": ["table.compact.0.line", "table.compact.0.fields"]
+        },
+        "table.compact.0.line": {
+            "type": "box",
+            "props": {
+                "direction": "row",
+                "gap": "inline",
+                "align": "center",
+                "justify": "between"
+            },
+            "children": ["table.compact.0.title", "table.compact.0.badge"]
+        },
+        "table.compact.0.title": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "tattoodesigns.app · improve · превью сборки после рефакторинга галереи"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.compact.0.badge": {
+            "type": "pill",
+            "props": {
+                "text": "ORPHAN",
+                "tone": "warning"
+            }
+        },
+        "table.compact.0.0.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Порт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.0.0.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": ":5173"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.0.1.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Работает · RAM"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.0.1.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "3 ч · 412 МБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.0.2.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Владелец"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.0.2.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "agent tattoo-improve"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.0.3.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Артефакт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.0.3.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Tattoo designs — превью галереи (v4)"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.0.fields": {
+            "type": "grid",
+            "props": {
+                "columns": [
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "fill",
+                        "align": "end"
+                    }
+                ],
+                "density": "pairs"
+            },
+            "children": [
+                "table.compact.0.0.label",
+                "table.compact.0.0.value",
+                "table.compact.0.1.label",
+                "table.compact.0.1.value",
+                "table.compact.0.2.label",
+                "table.compact.0.2.value",
+                "table.compact.0.3.label",
+                "table.compact.0.3.value"
+            ]
+        },
+        "table.compact.1": {
+            "type": "box",
+            "props": {
+                "role": "record",
+                "gap": "related"
+            },
+            "children": ["table.compact.1.line", "table.compact.1.fields"]
+        },
+        "table.compact.1.line": {
+            "type": "box",
+            "props": {
+                "direction": "row",
+                "gap": "inline",
+                "align": "center",
+                "justify": "between"
+            },
+            "children": ["table.compact.1.title"]
+        },
+        "table.compact.1.title": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "happy.engineering · лендинг"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.compact.1.0.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Порт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.1.0.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": ":3000"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.1.1.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Работает · RAM"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.1.1.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "2 дн · 1.1 ГБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.1.2.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Владелец"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.1.2.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Kirill"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.1.3.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Артефакт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.1.3.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Лендинг, черновик 3"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.1.fields": {
+            "type": "grid",
+            "props": {
+                "columns": [
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "fill",
+                        "align": "end"
+                    }
+                ],
+                "density": "pairs"
+            },
+            "children": [
+                "table.compact.1.0.label",
+                "table.compact.1.0.value",
+                "table.compact.1.1.label",
+                "table.compact.1.1.value",
+                "table.compact.1.2.label",
+                "table.compact.1.2.value",
+                "table.compact.1.3.label",
+                "table.compact.1.3.value"
+            ]
+        },
+        "table.compact.2": {
+            "type": "box",
+            "props": {
+                "role": "record",
+                "gap": "related"
+            },
+            "children": ["table.compact.2.line", "table.compact.2.fields"]
+        },
+        "table.compact.2.line": {
+            "type": "box",
+            "props": {
+                "direction": "row",
+                "gap": "inline",
+                "align": "center",
+                "justify": "between"
+            },
+            "children": ["table.compact.2.title", "table.compact.2.badge"]
+        },
+        "table.compact.2.title": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "cluster dashboard · dev"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.compact.2.badge": {
+            "type": "pill",
+            "props": {
+                "text": "ORPHAN",
+                "tone": "warning"
+            }
+        },
+        "table.compact.2.0.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Порт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.2.0.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": ":8080"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.2.1.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Работает · RAM"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.2.1.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "40 мин · 230 МБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.2.2.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Владелец"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.2.2.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "agent cluster-ui"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.2.3.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Артефакт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.2.3.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "—"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.2.fields": {
+            "type": "grid",
+            "props": {
+                "columns": [
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "fill",
+                        "align": "end"
+                    }
+                ],
+                "density": "pairs"
+            },
+            "children": [
+                "table.compact.2.0.label",
+                "table.compact.2.0.value",
+                "table.compact.2.1.label",
+                "table.compact.2.1.value",
+                "table.compact.2.2.label",
+                "table.compact.2.2.value",
+                "table.compact.2.3.label",
+                "table.compact.2.3.value"
+            ]
+        },
+        "table.compact.3": {
+            "type": "box",
+            "props": {
+                "role": "record",
+                "gap": "related"
+            },
+            "children": ["table.compact.3.line", "table.compact.3.fields"]
+        },
+        "table.compact.3.line": {
+            "type": "box",
+            "props": {
+                "direction": "row",
+                "gap": "inline",
+                "align": "center",
+                "justify": "between"
+            },
+            "children": ["table.compact.3.title"]
+        },
+        "table.compact.3.title": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "docs preview · genui-spec"
+                    }
+                ],
+                "role": "rowhead"
+            }
+        },
+        "table.compact.3.0.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Порт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.3.0.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": ":4321"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.3.1.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Работает · RAM"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.3.1.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "12 мин · 96 МБ"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.3.2.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Владелец"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.3.2.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Steve"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.3.3.label": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Артефакт"
+                    }
+                ],
+                "role": "label"
+            }
+        },
+        "table.compact.3.3.value": {
+            "type": "text",
+            "props": {
+                "spans": [
+                    {
+                        "text": "Gen UI spec draft"
+                    }
+                ],
+                "role": "cell"
+            }
+        },
+        "table.compact.3.fields": {
+            "type": "grid",
+            "props": {
+                "columns": [
+                    {
+                        "width": "auto"
+                    },
+                    {
+                        "width": "fill",
+                        "align": "end"
+                    }
+                ],
+                "density": "pairs"
+            },
+            "children": [
+                "table.compact.3.0.label",
+                "table.compact.3.0.value",
+                "table.compact.3.1.label",
+                "table.compact.3.1.value",
+                "table.compact.3.2.label",
+                "table.compact.3.2.value",
+                "table.compact.3.3.label",
+                "table.compact.3.3.value"
+            ]
+        },
+        "table.compact": {
+            "type": "box",
+            "props": {
+                "gap": "items",
+                "divide": "full"
+            },
+            "children": ["table.compact.0", "table.compact.1", "table.compact.2", "table.compact.3"]
+        }
+    }
+}

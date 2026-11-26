@@ -5,6 +5,7 @@ import { CopyButton } from "../CopyButton";
 import { Lightbox } from "../Lightbox";
 import { ModalOverlay } from "../ModalOverlay";
 import { thumbhashDataUrl } from "../thumbhashDataUrl";
+import { genUiGridExtents, genUiGridTemplate, type GenUiGridExtents } from "./genUiGridColumns";
 import { GenUiIcon } from "./GenUiIcon";
 import { genUiFill, genUiInk, genUiMarkerTones, genUiText } from "./genUiTheme";
 import { GenUiPlot } from "./GenUiPlot";
@@ -393,12 +394,38 @@ function GridView(props: { node: GenUiGrid }) {
             data-density={node.density}
             data-divide={node.divide ? "" : undefined}
             data-happy-desktop-ui="gen-ui-grid"
-            role="table"
-            style={{
-                gridTemplateColumns: node.columns
-                    .map((column) => (column.width === "fill" ? "minmax(0, 1fr)" : "auto"))
-                    .join(" "),
+            ref={(element) => {
+                if (!element) return;
+                /* Columns are shared out from what the cells hold, measured
+                   once they are laid out, before the first paint; a new width
+                   only shares the same extents out again. */
+                let extents: GenUiGridExtents | undefined;
+                const fit = () => {
+                    if (element.getBoundingClientRect().width <= 0) return;
+                    extents ??= genUiGridExtents(element, count);
+                    element.style.gridTemplateColumns = genUiGridTemplate(
+                        element,
+                        node.columns,
+                        extents,
+                    );
+                };
+                fit();
+                let live = true;
+                /* A face still loading changes every cell's width once it lands. */
+                if (document.fonts.status === "loading")
+                    void document.fonts.ready.then(() => {
+                        if (!live) return;
+                        extents = undefined;
+                        fit();
+                    });
+                const observer = new ResizeObserver(fit);
+                observer.observe(element);
+                return () => {
+                    live = false;
+                    observer.disconnect();
+                };
             }}
+            role="table"
         >
             {node.children.map((child, index) => {
                 const row = Math.floor(index / count);

@@ -587,6 +587,12 @@
     overflow-x: auto;
 }
 
+/* While a grid measures what can never wrap (genUiGridColumns.ts), wrapping
+   text breaks anywhere. */
+.gen-ui-grid[data-measuring] .gen-ui-text {
+    overflow-wrap: anywhere;
+}
+
 /* Table columns are spaced by their cells' own padding, so a row's hairline
    runs unbroken across the gutters. */
 .gen-ui-grid[data-density="table"] > .gen-ui-grid__cell {

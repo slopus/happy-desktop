@@ -39,6 +39,7 @@ import {
     type MessageMarkdownAst,
 } from "./messageMarkdownAst";
 import { messagePlainTextNormalize } from "./messagePlainText";
+import { tableColumnWidths } from "./tableColumnWidths";
 
 /**
  * Height of chat body copy, resolved from the font and the measure instead of
@@ -75,16 +76,6 @@ const CODE_GAP = 12;
 const RULE_HEIGHT = 1;
 const TABLE_CELL_PADDING = 8;
 const TABLE_CELL_INLINE_PADDING = 24;
-/** The narrowest a wrapping column gets (padding included): about 13
- * characters of body copy, so no column collapses into a strip of single
- * words. A table whose columns cannot all have this scrolls instead. */
-const TABLE_MIN_COLUMN = 136;
-/** A prose column's width (padding included) in a table that scrolls anyway:
- * about 28 characters of body copy per line. */
-const TABLE_READABLE_COLUMN = 240;
-/** The widest a single word holds a column open (padding included) in a
- * table that scrolls anyway; a longer URL or identifier breaks. */
-const TABLE_SCROLL_WORD_COLUMN = 400;
 /** Inline code in a cell no wider than this — about 22 characters — keeps one
  * line (`.happy-message__table-code-line`), so `agent = "claude"` never wraps at
  * its spaces; longer code wraps like prose. */
@@ -1851,66 +1842,6 @@ function markdownTableCellExtent(
     );
     return { min, max, hard, lines };
 }
-/**
- * Column widths at one whole-pixel measure. A table whose cells all fit on
- * one line keeps that natural width rather than stretching. Otherwise every
- * column gets a floor: its one-line width when that is narrow, else at least
- * `TABLE_MIN_COLUMN` and its widest word, but a word holds its column open
- * only up to an equal share of the measure — a longer identifier or URL
- * breaks the way it does in a paragraph instead of starving its neighbours.
- * Only a word that must not break (`hard`) floors its column at full width.
- * Above the floors, every column that wants more gets the same width (a
- * water level), so the last column is not left with whatever remains. When
- * even the floors are too wide, the table scrolls at readable widths.
- */
-function markdownTableColumnWidths(
-    min: readonly number[],
-    max: readonly number[],
-    hard: readonly number[],
-    target: number,
-): number[] {
-    const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
-    if (sum(max) <= target) return [...max];
-    const share = Math.floor(target / Math.max(1, max.length));
-    const floor = max.map((width, index) =>
-        Math.min(width, Math.max(hard[index]!, TABLE_MIN_COLUMN, Math.min(min[index]!, share))),
-    );
-    if (sum(floor) > target)
-        return max.map((width, index) =>
-            Math.max(
-                floor[index]!,
-                Math.min(
-                    width,
-                    Math.max(
-                        hard[index]!,
-                        TABLE_READABLE_COLUMN,
-                        Math.min(min[index]!, TABLE_SCROLL_WORD_COLUMN),
-                    ),
-                ),
-            ),
-        );
-    const at = (level: number) =>
-        max.map((width, index) => Math.min(width, Math.max(floor[index]!, level)));
-    /* The highest whole-pixel level that fits; the pixels it leaves go one
-       each to the columns still growing at that level, first to last. */
-    let low = 0;
-    let high = Math.max(...max);
-    while (low < high) {
-        const level = Math.ceil((low + high) / 2);
-        if (sum(at(level)) <= target) low = level;
-        else high = level - 1;
-    }
-    const widths = at(low);
-    let remainder = target - sum(widths);
-    for (const [index, width] of widths.entries()) {
-        if (remainder <= 0) break;
-        if (width === low && width < max[index]!) {
-            widths[index] = width + 1;
-            remainder -= 1;
-        }
-    }
-    return widths;
-}
 function markdownTableCodeLineKeeps(value: string, cache: MessageTextLayoutCache): boolean {
     return (
         naturalTextWidth(value.replace(/\r?\n|\r/gu, " "), INLINE_CODE_FONT, cache) <=
@@ -1960,7 +1891,7 @@ function markdownTableLayout(
                 Math.ceil(hard[index]!) + TABLE_CELL_INLINE_PADDING,
             );
     }
-    const columnWidths = markdownTableColumnWidths(
+    const columnWidths = tableColumnWidths(
         min,
         max,
         hard,
