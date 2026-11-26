@@ -122,6 +122,7 @@ export function AppPermissionsSettings(props: {
                     saved={policy.policyId !== undefined}
                     saving={policy.saving}
                     target={happyAgentZonePolicyTargetKey(policy.target)}
+                    targetKind={policy.target.kind}
                     targets={plugins
                         .flatMap((plugin) => [
                             { kind: "plugin" as const, installationId: plugin.id },

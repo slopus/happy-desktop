@@ -292,6 +292,8 @@ export interface HappyAgentZonePolicyPageProps {
     /** Every plugin and tool of the zone a policy may be on, by API key. */
     readonly targets: readonly { readonly value: string; readonly label: string }[];
     readonly target: string;
+    /** Whether `target` is a whole plugin or one of its tools. */
+    readonly targetKind: "plugin" | "tool";
     readonly description: string;
     readonly code: string;
     readonly enabled: boolean;
@@ -370,7 +372,11 @@ export function HappyAgentZonePolicyPage(props: HappyAgentZonePolicyPageProps) {
                             />
                         )
                     }
-                    description="A policy on a plugin covers all of its tools in this zone."
+                    description={
+                        props.targetKind === "plugin"
+                            ? "It covers every tool of this plugin in this zone."
+                            : "It covers this one tool in this zone."
+                    }
                     label="On"
                 />
                 <FormRow

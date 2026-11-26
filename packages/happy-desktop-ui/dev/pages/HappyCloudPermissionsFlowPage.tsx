@@ -369,6 +369,7 @@ function Policy(props: Partial<HappyAgentZonePolicyPageProps>) {
             saved
             saving={false}
             target="tool:i-stripe/create_refund"
+            targetKind="tool"
             targets={policyTargets}
             testing={false}
             {...props}
