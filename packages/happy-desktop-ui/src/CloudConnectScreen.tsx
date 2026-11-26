@@ -312,6 +312,7 @@ const CLOUD_SLIDES: readonly WelcomeSlide[] = [
         copy: "A hardened, high-performance control plane for your agents, hosted by Happy.",
         id: "cloud",
         title: "Happy Cloud",
+        tag: "Beta",
     },
     {
         art: { kind: "scene", name: "robot" },

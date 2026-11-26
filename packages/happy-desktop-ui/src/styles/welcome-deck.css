@@ -135,6 +135,25 @@
 }
 
 /*
+ * The tag takes no width, so the title stays centred on its own words; the
+ * badge hangs from the anchor off the end of the last word, raised like a
+ * superscript.
+ */
+.happy-welcome-deck__tag {
+    position: relative;
+    display: inline-flex;
+    width: 0;
+    height: 0;
+    vertical-align: top;
+}
+
+.happy-welcome-deck__tag > .happy-badge {
+    position: absolute;
+    top: 3px;
+    left: 6px;
+}
+
+/*
  * Narrow on purpose. Centred text is only readable in short lines, and the
  * reference this screen is drawn from puts the slogan on two of them; 400px at
  * 16px is about fifty characters a line.
@@ -153,6 +172,11 @@
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__title,
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__copy {
     color: var(--onboarding-foreground);
+}
+
+.happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__tag > .happy-badge {
+    border-color: color-mix(in srgb, var(--onboarding-foreground) 40%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
 }
 
 /* ---- Dots ------------------------------------------------------------- */

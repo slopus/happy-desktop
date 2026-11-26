@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { happyLogoBlackUrl } from "./assets";
+import { Badge } from "./Badge";
 import { LiquidMetalMark } from "./LiquidMetalMark";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
@@ -15,6 +16,11 @@ export interface WelcomeSlide {
     readonly id: string;
     readonly art: WelcomeSlideArt;
     readonly title: string;
+    /**
+     * A short tag hung off the title's top-right, such as "Beta". It is drawn
+     * only: the title the slide is known by stays its own words.
+     */
+    readonly tag?: string;
     readonly copy: string;
 }
 
@@ -206,6 +212,15 @@ export function WelcomeDeck(props: WelcomeDeckProps) {
                                 data-happy-desktop-ui="welcome-title"
                             >
                                 {slide.title}
+                                {slide.tag ? (
+                                    <span
+                                        aria-hidden="true"
+                                        className="happy-welcome-deck__tag"
+                                        data-happy-desktop-ui="welcome-tag"
+                                    >
+                                        <Badge label={slide.tag} variant="outline" />
+                                    </span>
+                                ) : null}
                             </h1>
                             <p
                                 className="happy-welcome-deck__copy"
