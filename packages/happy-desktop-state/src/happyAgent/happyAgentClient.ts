@@ -1,4 +1,5 @@
 import type { HappyAgentProviderCredentialsApi } from "./happyAgentProviderCredentials.js";
+import type { HappyAgentSideQuestionsApi } from "./happyAgentSideQuestions.js";
 import type {
     TerminalColorScheme,
     TerminalDriverCreate,
@@ -338,6 +339,13 @@ export interface HappyAgentWorkspaceClient {
      * such as secret forms. Undefined while its health does not say it serves them.
      */
     genUiActions(): HappyAgentGenUiActions | undefined;
+    /**
+     * Side questions (Claude Code's `/btw`), asked of the harness running a
+     * conversation without adding to it. Undefined while the server's health
+     * does not say it answers them; which conversations do is their models' to
+     * say (`HappyAgentModel.sideQuestions`).
+     */
+    sideQuestions(): HappyAgentSideQuestionsApi | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /**
@@ -620,6 +628,8 @@ export interface HappyAgentWorkspaceClientDeps {
         /** Whether the daemon runs on this computer, where a browser sign-in can finish. */
         readonly daemonLocal: boolean;
     };
+    /** The side-question routes over this connection's transport; omitted, no chat offers `/btw`. */
+    readonly sideQuestions?: HappyAgentSideQuestionsApi;
     /** The desktop shell's credential import, for a Happy Cloud server. */
     readonly credentialImportHost?: HappyAgentCredentialImportHost;
     /**
@@ -1360,6 +1370,14 @@ export function happyAgentWorkspaceClientCreate(
                 ? happyAgentGenUiClusterActionsCreate({ request })
                 : happyAgentGenUiDaemonActionsCreate({ client: deps.client });
             return genUiActions;
+        },
+        sideQuestions() {
+            // Asked whenever a chat's commands are reconciled, so a connection
+            // going away answers that it has none rather than throwing.
+            if (disposed) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "sideQuestions"))
+                return undefined;
+            return deps.sideQuestions;
         },
         compute() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");

@@ -159,6 +159,46 @@
 }
 
 /*
+ * What the reader opened beside the conversation, such as a side question's
+ * panel, floats over the top of the transcript. It is drawn over the body's own
+ * box, out of the flow, so nothing in the column moves when it opens, grows, or
+ * closes, and it stops 8px short of the body's lower edge, however long it
+ * grows, so it never covers the dock or takes its clicks. It stacks over the
+ * transcript's rows and under the dock's popovers. Only what it holds takes the
+ * pointer.
+ */
+.happy-conversation__aside {
+    position: absolute;
+    inset: 8px 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+/* The dock's own measure and insets, so this card and the composer card share
+   their left and right edges at every width. It takes at most three fifths of
+   the view's height, so the transcript stays in sight under it. */
+.happy-conversation__aside-measure {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    max-height: 60cqh;
+    max-width: var(--happy-content-measure);
+    padding-right: 20px;
+    padding-left: 12px;
+}
+
+.happy-conversation__aside-measure > * {
+    flex: 0 1 auto;
+    min-height: 0;
+    pointer-events: auto;
+}
+
+/*
  * Steering the reader has queued but the turn has not taken yet. It sits below
  * the live status line rather than among the rows above it, because it is the
  * one thing in the transcript that has not happened: ordered as history it

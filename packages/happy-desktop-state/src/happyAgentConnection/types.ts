@@ -516,6 +516,12 @@ export interface SessionState {
     draftUpdatedAt?: number;
     modelId: string;
     providerId: string;
+    /**
+     * The model of the session's own stored mode, the one its latest message
+     * went with, whatever the draft has picked since: the model the daemon
+     * answers side questions with. Absent while the session has no mode yet.
+     */
+    storedModelId?: string;
     title?: string;
     recap?: string;
     titleStatus: "error" | "generating" | "idle" | "ready";

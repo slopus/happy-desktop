@@ -584,6 +584,7 @@ function sessionProject(session: SessionState): HappyAgentSession {
         displayCwd: session.cwd,
         providerId: session.providerId,
         modelId: session.modelId,
+        ...(session.storedModelId === undefined ? {} : { storedModelId: session.storedModelId }),
         models: [],
         ...(session.effort === undefined
             ? {}

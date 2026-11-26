@@ -1,0 +1,205 @@
+/*
+ * SideQuestionPanel: a card floating over the top of a conversation, holding the
+ * questions asked on the side and their answers. Counting its 1px border, what
+ * it shows sits 20px from each edge of the frame: the title's ink and the left
+ * of the thread, the close glyph's ink on the right and at the top, and the
+ * follow-up field and its button at the bottom. The thread scrolls, full-bleed,
+ * between the header and the field, 12px from each: 8px here and the 4px the
+ * thread keeps inside itself for a focus ring.
+ */
+.happy-side-question {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-shell);
+    /* The ring in the surface's own tone clears what hangs a pixel or two past
+       the card over a transcript, such as an author's mark in its gutter, so
+       nothing peeks out from under the frame. On the surface itself it shows
+       nothing. */
+    box-shadow:
+        0 0 0 2px var(--surface),
+        0 8px 24px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+/* The 28px close sits 5px higher than the title's line, so its glyph centres on
+   the title's capitals, and both keep the frame's distance from its edges
+   (measured on the 2x capture: 20px to the capitals, 21px to the glyph). */
+.happy-side-question__header {
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 9px 0 19px;
+}
+
+.happy-side-question__heading {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding-top: 5px;
+}
+
+.happy-side-question__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-side-question__subtitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 18px;
+}
+
+.happy-side-question__close {
+    flex: none;
+}
+
+.happy-side-question__thread {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* No line under the header; once answers scroll under it, they fade into the
+   card's own tone at that edge. */
+.happy-side-question__thread::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 12px;
+    background: linear-gradient(var(--surface), transparent);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.happy-side-question__thread[data-scrolled]::before {
+    opacity: 1;
+}
+
+/* Bringing an exchange into view, as a new question or answer does and as
+   focus does, stops 4px short of the scrolling edge, where the list's own 4px
+   leaves room for a control's focus ring and the 12px to the header and the
+   field stays whole. */
+.happy-side-question__thread-viewport {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-padding-block: 4px;
+}
+
+/* The scrollbar's lane is part of the right inset, so the thread's right edge
+   keeps the header's 20px from the frame. Above and below, the 4px a focus ring
+   paints outside a control, so neither the first nor the last control has its
+   ring cut off by the scrolling edge. */
+.happy-side-question__questions {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin: 0;
+    padding: 4px calc(19px - var(--happy-scrollbar-track)) 4px 19px;
+    list-style: none;
+}
+
+.happy-side-question__exchange {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* The question reads as the reader's own message does in the transcript. */
+.happy-side-question__question {
+    align-self: flex-end;
+    max-width: 76%;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--happy-radius-md);
+    background: var(--user-message-background);
+    color: var(--user-message-text);
+    font-size: 15px;
+    line-height: 22px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+/* What stands under a question; a new one takes its place when the answer lands. */
+.happy-side-question__reply {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-side-question__answer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+/* The base a reply's body reads at in the transcript; its paragraphs take the
+   Markdown ramp's own size, as they do there. */
+.happy-side-question__markdown {
+    min-width: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 22px;
+    overflow-wrap: break-word;
+}
+
+.happy-side-question__answer-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* A thread is short and each answer is its own, so its copy stays in view. */
+.happy-side-question__answer-actions .happy-copy-button {
+    opacity: 1;
+}
+
+/* Why a question has no answer yet, or none at all, in the transcript's muted
+   service-line voice. */
+.happy-side-question__status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.happy-side-question__status[data-failed] {
+    color: var(--text-destructive);
+}
+
+.happy-side-question__follow-up {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 0 19px 19px;
+}
+
+.happy-side-question__field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
