@@ -112,6 +112,7 @@ import {
     ConnectionSurface,
     happyAgentSurfaceBackdropsPreload,
     RenderErrorBoundary,
+    themeFontsLoad,
     ViewErrorFallback,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
@@ -1379,7 +1380,15 @@ const bridge =
     window.happyDesktop ??
     (cloudWeb ? cloudWebBridgeCreate() : browserLocal ? browserDevBridgeCreate() : undefined);
 desktopRowHeightCheckInstall();
-const root = createRoot(document.getElementById("root")!);
+const rootElement = document.getElementById("root")!;
+// The window renders at once but shows nothing until its faces are in, so its
+// first painted frame already has every word and icon rather than filling them
+// in a frame later. Transparent rather than hidden, so autofocus still lands.
+rootElement.style.opacity = "0";
+void themeFontsLoad(1000).then(() => {
+    rootElement.style.opacity = "";
+});
+const root = createRoot(rootElement);
 // The cloud web app has no session, on a first visit or after one ended (its
 // data is then already being erased): the whole page becomes the way to sign in,
 // with nothing else on it.

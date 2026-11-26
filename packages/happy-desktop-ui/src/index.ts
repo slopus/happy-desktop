@@ -8,6 +8,7 @@ export {
 } from "./pages/surfaces/HappyAgentSystemMonitorProcessesPanel";
 
 export { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
+export { themeFontsLoad } from "./themeFonts";
 export {
     ChangedFileDiff,
     changedFileDiffModeResolve,
