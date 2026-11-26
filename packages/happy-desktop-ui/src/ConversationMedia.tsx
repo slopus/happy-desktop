@@ -1,6 +1,17 @@
-import { Fragment, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import {
+    Fragment,
+    useContext,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type CSSProperties,
+    type MouseEvent,
+} from "react";
 import type { ConversationMediaItem, ConversationMediaLayout } from "happy-desktop-state";
 import { artifactSizeText } from "./pages/artifacts/artifactPresentation";
+import { ContextMenu } from "./ContextMenu";
+import { fileRevealMenuItems, fileRevealMenuSelect } from "./FileRevealMenu";
+import { FileRevealContext } from "./LinkContextMenu";
 import { conversationMediaPlan, mediaFlowPointSize } from "./mediaLayout";
 import { MediaFlow } from "./MediaFlow";
 import { MediaVideoTile } from "./MediaVideoTile";
@@ -13,6 +24,7 @@ import {
 } from "./mediaVideoFrames";
 import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
 import { Icon } from "./Icon";
+import type { MenuItem } from "./Menu";
 import { ResultCard } from "./ResultCard";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
 
@@ -47,6 +59,8 @@ export type MediaImageTileProps = {
     pointSize?: { readonly width: number; readonly height: number };
     /** Opens the picture full size. Absent leaves the tile a picture, not a fake button. */
     onOpen?: () => void;
+    /** Asks for the picture's own menu, as a right-click does. */
+    onContextMenu?: (event: MouseEvent<HTMLElement>) => void;
     /**
      * Draws only the picture's first frame, for one that may be animated
      * where it must hold still: a small thumbnail, or a reader who asked for
@@ -152,6 +166,7 @@ export function MediaImageTile(props: MediaImageTileProps) {
         "data-state": state,
         "data-still": props.still ? "" : undefined,
         "data-testid": props["data-testid"],
+        onContextMenu: props.onContextMenu,
         style:
             props.width === undefined || props.height === undefined
                 ? props.style
@@ -210,6 +225,9 @@ export type ConversationMediaProps = {
     onItemOpen?: (index: number) => void;
 };
 
+/** The media menu's own row; the rest are any file's (`fileRevealMenuItems`). */
+const MEDIA_MENU_OPEN = "open";
+
 /** What kind of file a presented item is, in a word, from its declared media type. */
 function mediaTypeLabel(item: ConversationMediaItem): string {
     if (item.mimeType === "application/pdf") return "PDF";
@@ -250,6 +268,50 @@ export function ConversationMedia(props: ConversationMediaProps) {
     const items = mediaItemsFramed(props.items, unframed ? framesAt : undefined);
     const open = props.onItemOpen;
     const className = ["happy-conversation-media", props.className].filter(Boolean).join(" ");
+    /* Every item is a file on the agent's machine, and its right-click offers
+       what a file's name does elsewhere: open it, as a click does, show it in
+       Finder where a host can, and copy its path, when the item kept the file
+       it was shown from. The menu floats over the transcript, so asking for it
+       moves nothing. */
+    const reveal = useContext(FileRevealContext);
+    // Which item asked for its menu, and where the pointer was, while it is up.
+    const [menuAt, setMenuAt] = useState<{ index: number; x: number; y: number }>();
+    const menuItems = (item: ConversationMediaItem): MenuItem[] => {
+        const opening: MenuItem[] = open
+            ? [{ kind: "item", id: MEDIA_MENU_OPEN, label: "Open", icon: "panel-expand" }]
+            : [];
+        if (item.source === undefined) return opening;
+        return [
+            ...opening,
+            ...(opening.length > 0 ? [{ kind: "separator" } as const] : []),
+            ...fileRevealMenuItems(reveal),
+        ];
+    };
+    const menuOpen = (index: number) =>
+        menuItems(items[index]!).length === 0
+            ? undefined
+            : (event: MouseEvent<HTMLElement>) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setMenuAt({ index, x: event.clientX, y: event.clientY });
+              };
+    const menuItem = menuAt === undefined ? undefined : items[menuAt.index];
+    const menu =
+        menuAt === undefined || menuItem === undefined ? null : (
+            <ContextMenu
+                data-testid="conversation-media-menu"
+                items={menuItems(menuItem)}
+                onClose={() => setMenuAt(undefined)}
+                onSelect={(id) => {
+                    setMenuAt(undefined);
+                    if (id === MEDIA_MENU_OPEN) open?.(menuAt.index);
+                    else if (menuItem.source)
+                        fileRevealMenuSelect(reveal, menuItem.source.absolutePath, id);
+                }}
+                x={menuAt.x}
+                y={menuAt.y}
+            />
+        );
     const image = (tile: {
         index: number;
         style: CSSProperties;
@@ -270,6 +332,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
                 {...(tile.position ? { position: tile.position } : {})}
                 {...(pointSize ? { pointSize } : {})}
                 {...(placeholderUrl ? { placeholderUrl } : {})}
+                onContextMenu={menuOpen(index)}
                 {...(open ? { onOpen: () => open(index) } : {})}
                 style={tile.style}
                 url={item.url}
@@ -290,6 +353,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
                 {...(tile.className ? { className: tile.className } : {})}
                 name={tile.name ?? item.name}
                 {...(posterUrl ? { posterUrl } : {})}
+                onContextMenu={menuOpen(index)}
                 {...(open ? { onOpen: () => open(index) } : {})}
                 style={tile.style}
                 url={item.url}
@@ -307,6 +371,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
                         <FileTreeFamilyIcon family={family} size={20} />
                     </span>
                 }
+                onContextMenu={menuOpen(index)}
                 {...(open ? { onOpen: () => open(index) } : {})}
                 title={item.name}
             />
@@ -350,6 +415,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
                     }}
                     root={layout.root}
                 />
+                {menu}
             </div>
         );
     const indexed = items.map((item, index) => ({ item, index }));
@@ -385,6 +451,7 @@ export function ConversationMedia(props: ConversationMediaProps) {
                     <Fragment key={index}>{card(index)}</Fragment>
                 ),
             )}
+            {menu}
         </div>
     );
 }

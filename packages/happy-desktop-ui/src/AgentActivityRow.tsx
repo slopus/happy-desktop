@@ -724,6 +724,17 @@ function toolSubjectPath(tool: ConversationToolCall): string | undefined {
 }
 
 /**
+ * The one file a call put in front of the reader, as it resolved on the agent's
+ * machine, when it showed exactly one and kept where it came from. Its line
+ * then reveals that file, as its card does.
+ */
+function presentedFilePath(tool: ConversationToolCall): string | undefined {
+    const presentation = tool.presentation;
+    if (presentation?.type !== "media" || presentation.items.length !== 1) return undefined;
+    return presentation.items[0]!.source?.absolutePath;
+}
+
+/**
  * What a scheduled wait is waiting for, in the words its own arguments use:
  * `wait_until`'s date, or `wait`'s duration as text or as one count per unit.
  */
@@ -1122,8 +1133,8 @@ function AgentToolActivity(props: {
         !tool.failed;
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
     // Any file the call is about can be shown in Finder, including one Happy
-    // has no preview for.
-    const revealMenu = useFileRevealMenu(toolSubjectPath(tool));
+    // has no preview for, and so can the one file a call showed the reader.
+    const revealMenu = useFileRevealMenu(toolSubjectPath(tool) ?? presentedFilePath(tool));
 
     /* Only a row that is open, and open on its arguments, ever prints them.
        Serializing them anyway cost the whole argument tree on every frame of a
