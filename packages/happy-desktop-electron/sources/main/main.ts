@@ -32,6 +32,7 @@ import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
 import { happyCloudCreate } from "./happyCloud";
 import { happyCloudVaultCreate } from "./happyCloudVault";
+import { happyAgentVersionKind } from "./happyAgentVersion";
 import { happyCloudServerNameOf } from "../shared/happyCloud";
 import { browserPermissionsInstall } from "./browserPermissions";
 import { desktopInstanceMenuTargets } from "./applicationMenu";
@@ -491,11 +492,14 @@ const serverOAuthRedirect = new URL(serverOAuthRedirectUri);
 /**
  * Happy Cloud, which this app signs in to and talks to itself, never through
  * the host Happy Agent. Only builds that are not production offer it: a
- * development checkout and the Nightly flavor. Its tokens stay in memory like
+ * development checkout, the Nightly flavor, and any preview release, whose
+ * stamped version is `YYYY.M.C-preview.N`. Its tokens stay in memory like
  * every team server's; the servers the person added are remembered in a file.
  */
 const happyCloud =
-    buildIdentity !== undefined || desktopFlavor.kind === "local-web"
+    buildIdentity !== undefined ||
+    desktopFlavor.kind === "local-web" ||
+    happyAgentVersionKind(app.getVersion()) === "preview"
         ? happyCloudCreate({
               listPath: join(app.getPath("userData"), "happy-cloud-servers.json"),
               fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),

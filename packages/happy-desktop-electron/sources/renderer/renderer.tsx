@@ -1804,14 +1804,9 @@ if (mediaPreviewBridge) {
             ...(serverHost
                 ? { servers: serverHost.source, serverSessions: serverHost.sessions }
                 : {}),
-            // Happy Cloud is offered only by builds that are not production, the
-            // hosted Nightly renderer and development windows, and only on a
-            // shell that reaches it itself.
-            ...(serverHost &&
-            desktopBridge.happyCloud &&
-            (localWebBuild !== undefined || desktopBridge.buildIdentity !== undefined)
-                ? { cloud: true }
-                : {}),
+            // Happy Cloud is offered only on a shell that reaches it itself. The
+            // shell decides which builds do: development, Nightly, and previews.
+            ...(serverHost && desktopBridge.happyCloud ? { cloud: true } : {}),
             attentionFollow(id, source) {
                 preferencesFor(id);
                 const attentionStop = attentionFollow(id, source);
