@@ -108,6 +108,7 @@
 /* Under the row, saying the picture beside the name takes a dropped one. */
 .happy-cloud-onboarding__picture-hint {
     margin: 0;
+    text-align: center;
     color: color-mix(in srgb, var(--onboarding-foreground) 60%, transparent);
     font-family: var(--happy-font-ui);
     font-size: 12px;

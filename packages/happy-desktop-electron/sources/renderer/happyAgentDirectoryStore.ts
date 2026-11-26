@@ -149,6 +149,8 @@ export interface HappyAgentDirectoryEntry {
     readonly setup?: HappyAgentConnectionHandle["setup"];
     /** The server refused this window's sign-in; absent while it holds. */
     readonly signIn?: HappyAgentDirectorySignIn;
+    /** Why the picture chosen when this server was created was not kept; until dismissed. */
+    readonly pictureFailure?: string;
 }
 
 export interface HappyAgentDirectorySnapshot {
@@ -164,6 +166,8 @@ export interface HappyAgentDirectoryStore {
     subscribe(listener: () => void): () => void;
     happyAgentActivate(id: string): void;
     happyAgentReorder(id: string, afterId: string | null): void;
+    /** Puts away an entry's `pictureFailure`. */
+    pictureFailureDismiss?(id: string): void;
     /** Signs in again to a remote that wants it; absent without a server source. */
     happyAgentSignIn?(id: string): void;
     /** Stops a remote's sign-in whose browser is open; present with `happyAgentSignIn`. */
@@ -182,6 +186,8 @@ export interface HappyAgentDirectoryStore {
     /** Stops listing a Happy Cloud server the shell removed. */
     happyAgentCloudForget?(connectionId: string): void;
 }
+
+const PICTURE_FAILED = "Couldn't set the server picture. You can change it later in Settings.";
 
 /** How long a Happy Cloud server may take to be reported signed in after the shell holds its tokens. */
 const CLOUD_SIGNED_IN_WAIT_MS = 15_000;
@@ -732,9 +738,16 @@ export function happyAgentDirectoryStoreCreate(
      * since the server is there either way.
      */
     const nodePictureSend = (id: string, picture: HappyAgentAvatarImage): void => {
+        const failed = (error: unknown): void => {
+            console.warn("The new server's picture was not sent.", error);
+            const remote = remotes.get(id);
+            if (!remote) return;
+            remote.entry = { ...remote.entry, pictureFailure: PICTURE_FAILED };
+            publish();
+        };
         const url = remotes.get(id)?.url;
         if (url === undefined) {
-            console.warn("The new server's picture was not sent: it has no connection yet.");
+            failed(new Error("The server has no connection yet."));
             return;
         }
         void happyCloudRequestCreate({ endpoint: url, token: "happy-local-capability" })(
@@ -742,9 +755,7 @@ export function happyAgentDirectoryStoreCreate(
             "v0/node/avatar",
             new Blob([picture.data], { type: picture.contentType }),
             { "content-type": picture.contentType },
-        ).catch((error: unknown) => {
-            console.warn("The new server's picture was not sent.", error);
-        });
+        ).catch(failed);
     };
 
     function cloudForget(connectionId: string): void {
@@ -1235,6 +1246,13 @@ export function happyAgentDirectoryStoreCreate(
         },
         happyAgentActivate(id) {
             roster?.connectionSelect(id);
+        },
+        pictureFailureDismiss(id) {
+            const remote = remotes.get(id);
+            if (remote?.entry.pictureFailure === undefined) return;
+            const { pictureFailure: _dismissed, ...entry } = remote.entry;
+            remote.entry = entry;
+            publish();
         },
         happyAgentReorder(id, afterId) {
             roster?.connectionReorder(id, afterId);
