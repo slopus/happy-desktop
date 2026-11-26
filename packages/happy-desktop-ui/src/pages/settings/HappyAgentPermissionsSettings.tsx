@@ -8,11 +8,9 @@ import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
 import { Spinner } from "../../Spinner";
+import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
-
-/** What a zone is for: Default runs everyday tools, Critical the ones that need a members list. */
-export type HappyAgentZoneKindName = "default" | "critical";
 
 /** The fixed palette a zone's colour is picked from. */
 export type HappyAgentZoneColorName =
@@ -54,22 +52,6 @@ const COLOR_LABEL: Readonly<Record<HappyAgentZoneColorName, string>> = {
     pink: "Pink",
 };
 
-const KINDS: Readonly<
-    Record<HappyAgentZoneKindName, { readonly label: string; readonly description: string }>
-> = {
-    default: {
-        label: "Default",
-        description: "For everyday work. Default plugin tools run here.",
-    },
-    critical: {
-        label: "Critical",
-        description:
-            "For sensitive work. Critical plugin tools run only here, and only the members listed may join.",
-    },
-};
-
-const KIND_ORDER: readonly HappyAgentZoneKindName[] = ["default", "critical"];
-
 /** A team member, as a zone names them. */
 export interface HappyAgentZonePersonRow {
     readonly id: string;
@@ -83,7 +65,9 @@ export interface HappyAgentZoneRow {
     readonly id: string;
     readonly name: string;
     readonly description: string;
-    readonly kind: HappyAgentZoneKindName;
+    /** The team's one default zone, open to every member. */
+    readonly isDefault: boolean;
+    readonly critical: boolean;
     readonly color: HappyAgentZoneColorName;
     readonly imageUrl?: string;
     /** Who may join besides owners and admins: every member, or the ones listed. */
@@ -94,11 +78,13 @@ export interface HappyAgentZoneRow {
 }
 
 /**
- * A zone's picture, or a tile in its colour with its kind's glyph where it has
- * none. The colour is the zone's, never its state.
+ * A zone's picture, or a tile in its colour where it has none, with a home
+ * for the default zone, a shield for a critical one and a globe for the rest.
+ * The colour is the zone's, never its state.
  */
 export function HappyAgentZoneMark(props: {
-    readonly kind: HappyAgentZoneKindName;
+    readonly isDefault: boolean;
+    readonly critical: boolean;
     readonly color: HappyAgentZoneColorName;
     readonly imageUrl?: string;
     readonly size?: "medium" | "large";
@@ -120,7 +106,7 @@ export function HappyAgentZoneMark(props: {
                 />
             ) : (
                 <Icon
-                    name={props.kind === "critical" ? "shield" : "globe"}
+                    name={props.isDefault ? "home" : props.critical ? "shield" : "globe"}
                     size={props.size === "large" ? 24 : 18}
                 />
             )}
@@ -133,9 +119,9 @@ function agentsText(count: number): string {
 }
 
 function membersText(members: HappyAgentZoneRow["members"]): string {
-    if (members === "everyone") return "Every member may join";
-    if (members.length === 0) return "Only owners and admins may join";
-    return `${members.map((member) => member.name).join(", ")} may join`;
+    if (members === "everyone") return "Every member";
+    if (members.length === 0) return "Only owners and admins";
+    return members.map((member) => member.name).join(", ");
 }
 
 function HappyAgentZoneOwner(props: { readonly owner: HappyAgentZonePersonRow }) {
@@ -162,15 +148,21 @@ function HappyAgentZoneItem(props: {
         <Box className="happy-agent-zones__row" data-happy-desktop-ui="zone">
             <HappyAgentZoneMark
                 color={zone.color}
-                kind={zone.kind}
+                critical={zone.critical}
+                isDefault={zone.isDefault}
                 {...(zone.imageUrl ? { imageUrl: zone.imageUrl } : {})}
             />
             <span className="happy-agent-zones__text">
                 <span className="happy-agent-zones__title">
                     <span className="happy-agent-zones__name">{zone.name}</span>
-                    <span className="happy-agent-zones__tag" data-kind={zone.kind}>
-                        {KINDS[zone.kind].label}
-                    </span>
+                    {zone.isDefault ? (
+                        <span className="happy-agent-zones__tag">Default</span>
+                    ) : null}
+                    {zone.critical ? (
+                        <span className="happy-agent-zones__tag" data-critical="">
+                            Critical
+                        </span>
+                    ) : null}
                     <span className="happy-agent-zones__color" data-color={zone.color}>
                         <span className="happy-agent-zones__swatch-dot" />
                         {COLOR_LABEL[zone.color]}
@@ -200,15 +192,16 @@ export interface HappyAgentPermissionsSettingsProps {
     readonly error?: string;
     /** Whether the reader may create, change and delete zones. */
     readonly manage: boolean;
-    /** Default zones first, then Critical. */
+    /** The default zone first, then the other zones, then the critical ones. */
     readonly zones: readonly HappyAgentZoneRow[];
     onZoneCreate: () => void;
     onZoneEdit: (zoneId: string) => void;
 }
 
 /**
- * Settings › Permissions on a Happy Cloud server: the team's zones, grouped by
- * kind, with who may join each and how many agents are in it. Someone without
+ * Settings › Permissions on a Happy Cloud server: the team's zones, the
+ * default one first and the critical ones last, with who may join each and
+ * how many agents are in it. Someone without
  * `zones.manage` reads the same list with nothing to change.
  */
 export function HappyAgentPermissionsSettings(props: HappyAgentPermissionsSettingsProps) {
@@ -232,38 +225,21 @@ export function HappyAgentPermissionsSettings(props: HappyAgentPermissionsSettin
                     Only owners, admins and roles allowed to manage zones can change them.
                 </Banner>
             )}
-            {KIND_ORDER.map((kind) => {
-                const zones = props.zones.filter((zone) => zone.kind === kind);
-                return (
-                    <HappyAgentSettingsSection
-                        description={
-                            kind === "default"
-                                ? "An agent joins one zone, once. Until it does, it can't use computers, repositories or plugin tools. Owners and admins may join any zone."
-                                : "Critical plugin tools run only for agents in a Critical zone. Only the members listed, owners and admins may join one."
-                        }
-                        key={kind}
-                        title={kind === "default" ? "Default zones" : "Critical zones"}
-                    >
-                        <Box
-                            className="happy-agent-zones__list"
-                            data-happy-desktop-ui={`zones-${kind}`}
-                        >
-                            {zones.length === 0 ? (
-                                <Box className="happy-agent-zones__none">No zone of this kind.</Box>
-                            ) : (
-                                zones.map((zone) => (
-                                    <HappyAgentZoneItem
-                                        key={zone.id}
-                                        manage={props.manage}
-                                        onEdit={props.onZoneEdit}
-                                        zone={zone}
-                                    />
-                                ))
-                            )}
-                        </Box>
-                    </HappyAgentSettingsSection>
-                );
-            })}
+            <HappyAgentSettingsSection
+                description="An agent joins one zone, once. Until it does, it can't use computers, repositories or plugin tools. Critical plugin tools run only in a critical zone. Owners and admins may join any zone."
+                title="Zones"
+            >
+                <Box className="happy-agent-zones__list" data-happy-desktop-ui="zones">
+                    {props.zones.map((zone) => (
+                        <HappyAgentZoneItem
+                            key={zone.id}
+                            manage={props.manage}
+                            onEdit={props.onZoneEdit}
+                            zone={zone}
+                        />
+                    ))}
+                </Box>
+            </HappyAgentSettingsSection>
             {props.manage ? (
                 <Box className="happy-agent-zones__actions">
                     <Button
@@ -284,9 +260,9 @@ export function HappyAgentPermissionsSettings(props: HappyAgentPermissionsSettin
 export interface HappyAgentZoneDraftView {
     readonly name: string;
     readonly description: string;
-    readonly kind: HappyAgentZoneKindName;
+    readonly critical: boolean;
     readonly color: HappyAgentZoneColorName;
-    /** `null` lets every member join. */
+    /** `null` lets every member join, which a critical zone can't. */
     readonly members: readonly string[] | null;
     readonly owner: string | null;
 }
@@ -296,8 +272,13 @@ export interface HappyAgentZoneDialogProps {
     readonly zone?: {
         readonly imageUrl?: string;
         readonly agentCount: number;
-        /** Why its kind can't change, such as being the team's only zone of its kind. */
-        readonly kindLocked?: string;
+        /**
+         * The default zone: its critical flag, owner and members are fixed,
+         * and it can't be deleted.
+         */
+        readonly isDefault: boolean;
+        /** Why it can't stop being critical, such as being the team's only critical zone. */
+        readonly criticalLocked?: string;
     };
     readonly draft: HappyAgentZoneDraftView;
     /** The team's members, for its owner and its members list. */
@@ -308,7 +289,7 @@ export interface HappyAgentZoneDialogProps {
     readonly error?: string;
     onNameChange: (value: string) => void;
     onDescriptionChange: (value: string) => void;
-    onKindChange: (kind: HappyAgentZoneKindName) => void;
+    onCriticalChange: (critical: boolean) => void;
     onColorChange: (color: HappyAgentZoneColorName) => void;
     onOwnerChange: (userId: string | null) => void;
     onEveryoneChange: (everyone: boolean) => void;
@@ -317,7 +298,7 @@ export interface HappyAgentZoneDialogProps {
     onImagePick: (file: File) => void;
     onImageRemove: () => void;
     onSave: () => void;
-    /** Asks to delete it; only for an existing zone. */
+    /** Asks to delete it; only for an existing zone other than the default one. */
     onDelete: () => void;
     onClose: () => void;
 }
@@ -352,14 +333,16 @@ function HappyAgentZoneOption(props: {
 }
 
 /**
- * Creating or changing a zone: its name, picture, colour, kind, owner and who
- * may join. The form says the cluster's rules where they apply: a Critical zone
- * always lists its members, and a team keeps one zone of each kind.
+ * Creating or changing a zone: its name, picture, colour, whether it is
+ * critical, its owner and who may join. The form says the cluster's rules
+ * where they apply: the default zone is open to everyone and has no owner, a
+ * critical zone always lists its members, and a team keeps a critical zone.
  */
 export function HappyAgentZoneDialog(props: HappyAgentZoneDialogProps) {
     const imageInput = useRef<HTMLInputElement>(null);
     const draft = props.draft;
     const busy = props.saving || props.imageSaving;
+    const isDefault = props.zone?.isDefault === true;
     const close = (): void => {
         if (!busy) props.onClose();
     };
@@ -372,7 +355,7 @@ export function HappyAgentZoneDialog(props: HappyAgentZoneDialogProps) {
             <Modal
                 footer={
                     <>
-                        {props.zone ? (
+                        {props.zone && !isDefault ? (
                             <Button
                                 className="happy-agent-zones__delete"
                                 disabled={busy}
@@ -398,13 +381,14 @@ export function HappyAgentZoneDialog(props: HappyAgentZoneDialogProps) {
                 leading={
                     <HappyAgentZoneMark
                         color={draft.color}
-                        kind={draft.kind}
+                        critical={draft.critical}
+                        isDefault={isDefault}
                         {...(props.zone?.imageUrl ? { imageUrl: props.zone.imageUrl } : {})}
                     />
                 }
                 onClose={busy ? undefined : close}
                 size="medium"
-                title={props.zone ? "Edit zone" : "New zone"}
+                title={isDefault ? "Edit the default zone" : props.zone ? "Edit zone" : "New zone"}
             >
                 <Box className="happy-agent-zones__form" data-happy-desktop-ui="zone-form">
                     {props.error ? (
@@ -431,59 +415,58 @@ export function HappyAgentZoneDialog(props: HappyAgentZoneDialogProps) {
                         rows={3}
                         value={draft.description}
                     />
-                    <Box className="happy-agent-zones__field">
-                        <span className="happy-agent-zones__field-label" id="happy-agent-zone-kind">
-                            Kind
-                        </span>
-                        <Box
-                            aria-labelledby="happy-agent-zone-kind"
-                            className="happy-agent-zones__options"
-                            role="radiogroup"
-                        >
-                            {KIND_ORDER.map((kind) => (
-                                <HappyAgentZoneOption
-                                    checked={draft.kind === kind}
-                                    description={KINDS[kind].description}
-                                    disabled={props.saving || props.zone?.kindLocked !== undefined}
-                                    key={kind}
-                                    label={KINDS[kind].label}
-                                    onSelect={() => props.onKindChange(kind)}
-                                />
-                            ))}
+                    {isDefault ? null : (
+                        <Box className="happy-agent-zones__field">
+                            <Switch
+                                checked={draft.critical}
+                                description="Critical plugin tools run only in a critical zone, and only the members listed, owners and admins may join it."
+                                disabled={props.saving || props.zone?.criticalLocked !== undefined}
+                                label="Critical"
+                                onChange={props.onCriticalChange}
+                            />
+                            {props.zone?.criticalLocked ? (
+                                <span className="happy-agent-zones__note">
+                                    {props.zone.criticalLocked}
+                                </span>
+                            ) : null}
                         </Box>
-                        {props.zone?.kindLocked ? (
-                            <span className="happy-agent-zones__note">{props.zone.kindLocked}</span>
-                        ) : null}
-                    </Box>
+                    )}
                     <Box className="happy-agent-zones__field">
                         <span className="happy-agent-zones__field-label" id="happy-agent-zone-join">
                             Who may join
                         </span>
-                        <Box
-                            aria-labelledby="happy-agent-zone-join"
-                            className="happy-agent-zones__options"
-                            role="radiogroup"
-                        >
-                            <HappyAgentZoneOption
-                                checked={draft.members === null}
-                                description={
-                                    draft.kind === "critical"
-                                        ? "A Critical zone always lists who may join."
-                                        : "Every member of the team."
-                                }
-                                disabled={props.saving || draft.kind === "critical"}
-                                label="Everyone"
-                                onSelect={() => props.onEveryoneChange(true)}
-                            />
-                            <HappyAgentZoneOption
-                                checked={draft.members !== null}
-                                description="Only the members listed below. Owners and admins may join any zone."
-                                disabled={props.saving}
-                                label="Listed members"
-                                onSelect={() => props.onEveryoneChange(false)}
-                            />
-                        </Box>
-                        {draft.members === null ? null : (
+                        {isDefault ? (
+                            <span className="happy-agent-zones__note">
+                                Every member. The default zone is open to the whole team and has no
+                                owner.
+                            </span>
+                        ) : (
+                            <Box
+                                aria-labelledby="happy-agent-zone-join"
+                                className="happy-agent-zones__options"
+                                role="radiogroup"
+                            >
+                                <HappyAgentZoneOption
+                                    checked={draft.members === null}
+                                    description={
+                                        draft.critical
+                                            ? "A critical zone always lists who may join."
+                                            : "Every member of the team."
+                                    }
+                                    disabled={props.saving || draft.critical}
+                                    label="Everyone"
+                                    onSelect={() => props.onEveryoneChange(true)}
+                                />
+                                <HappyAgentZoneOption
+                                    checked={draft.members !== null}
+                                    description="Only the members listed below. Owners and admins may join any zone."
+                                    disabled={props.saving}
+                                    label="Listed members"
+                                    onSelect={() => props.onEveryoneChange(false)}
+                                />
+                            </Box>
+                        )}
+                        {isDefault || draft.members === null ? null : (
                             <Box
                                 className="happy-agent-zones__members"
                                 data-happy-desktop-ui="zone-members"
@@ -540,28 +523,31 @@ export function HappyAgentZoneDialog(props: HappyAgentZoneDialogProps) {
                             </Box>
                         )}
                     </Box>
-                    <Select
-                        disabled={props.saving}
-                        fullWidth
-                        hint="Shown as the zone's author. It grants nothing."
-                        label="Owner"
-                        onValueChange={(id) => props.onOwnerChange(id === NO_OWNER ? null : id)}
-                        options={[
-                            { value: NO_OWNER, label: "No owner" },
-                            ...props.people.map((person) => ({
-                                value: person.id,
-                                label: person.name,
-                            })),
-                        ]}
-                        value={draft.owner ?? NO_OWNER}
-                    />
+                    {isDefault ? null : (
+                        <Select
+                            disabled={props.saving}
+                            fullWidth
+                            hint="Shown as the zone's author. It grants nothing."
+                            label="Owner"
+                            onValueChange={(id) => props.onOwnerChange(id === NO_OWNER ? null : id)}
+                            options={[
+                                { value: NO_OWNER, label: "No owner" },
+                                ...props.people.map((person) => ({
+                                    value: person.id,
+                                    label: person.name,
+                                })),
+                            ]}
+                            value={draft.owner ?? NO_OWNER}
+                        />
+                    )}
                     <Box className="happy-agent-zones__field">
                         <span className="happy-agent-zones__field-label">Picture</span>
                         {props.zone ? (
                             <Box className="happy-agent-zones__picture">
                                 <HappyAgentZoneMark
                                     color={draft.color}
-                                    kind={draft.kind}
+                                    critical={draft.critical}
+                                    isDefault={isDefault}
                                     size="large"
                                     {...(props.zone.imageUrl
                                         ? { imageUrl: props.zone.imageUrl }
@@ -649,7 +635,7 @@ export interface HappyAgentZoneDeleteDialogProps {
     readonly name: string;
     /**
      * Why the cluster will refuse, as far as this list can tell: agents in it,
-     * or the team's only zone of its kind. The delete button is held back.
+     * or the team's only critical zone. The delete button is held back.
      */
     readonly blocked?: string;
     readonly deleting: boolean;
@@ -659,7 +645,10 @@ export interface HappyAgentZoneDeleteDialogProps {
     onClose: () => void;
 }
 
-/** Confirms deleting a zone, which only an empty zone that isn't its kind's last may be. */
+/**
+ * Confirms deleting a zone, which only an empty zone may be, other than the
+ * default one and the team's last critical zone.
+ */
 export function HappyAgentZoneDeleteDialog(props: HappyAgentZoneDeleteDialogProps) {
     const close = props.deleting ? undefined : props.onClose;
     return (
@@ -699,7 +688,7 @@ export function HappyAgentZoneDeleteDialog(props: HappyAgentZoneDeleteDialogProp
                     {props.blocked === undefined && props.error === undefined ? (
                         <p className="happy-agent-zones__note">
                             Only an empty zone can be deleted, and a team always keeps at least one
-                            Default and one Critical zone.
+                            critical zone.
                         </p>
                     ) : null}
                 </Box>

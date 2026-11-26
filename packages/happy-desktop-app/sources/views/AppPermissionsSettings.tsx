@@ -25,7 +25,7 @@ export function AppPermissionsSettings(props: {
     const people = [...snapshot.people.values()]
         .map(personRow)
         .sort((left, right) => left.name.localeCompare(right.name));
-    const kindLocked = editing ? onlyOfKind(snapshot, editing) : false;
+    const criticalLocked = editing?.critical === true && onlyCritical(snapshot, editing);
     const deleteBlocked = deleting ? deleteBlockedText(snapshot, deleting) : undefined;
     return (
         <>
@@ -54,10 +54,12 @@ export function AppPermissionsSettings(props: {
                         ? {
                               zone: {
                                   agentCount: editing.agentCount,
+                                  isDefault: editing.isDefault,
                                   ...(editing.image ? { imageUrl: editing.image.url } : {}),
-                                  ...(kindLocked
+                                  ...(criticalLocked
                                       ? {
-                                            kindLocked: `This is your team's only ${KIND_NAME[editing.kind]} zone. Add another before changing its kind.`,
+                                            criticalLocked:
+                                                "This is your team's only critical zone, and a team always keeps one. Make another zone critical first.",
                                         }
                                       : {}),
                               },
@@ -74,7 +76,7 @@ export function AppPermissionsSettings(props: {
                     onEveryoneChange={(everyone) => store.zoneMembersEveryoneUpdate(everyone)}
                     onImagePick={(file) => store.zoneImageUpload(file)}
                     onImageRemove={() => store.zoneImageRemove()}
-                    onKindChange={(kind) => store.zoneKindUpdate(kind)}
+                    onCriticalChange={(critical) => store.zoneCriticalUpdate(critical)}
                     onMemberAdd={(userId) => store.zoneMemberAdd(userId)}
                     onMemberRemove={(userId) => store.zoneMemberRemove(userId)}
                     onNameChange={(value) => store.zoneNameUpdate(value)}
@@ -88,15 +90,13 @@ export function AppPermissionsSettings(props: {
     );
 }
 
-const KIND_NAME = { default: "Default", critical: "Critical" } as const;
-
 function zoneOf(snapshot: HappyAgentZonesSnapshot, zoneId: string): HappyAgentZone | undefined {
     return snapshot.zones.find((zone) => zone.id === zoneId);
 }
 
-/** Whether the cluster would refuse to leave the team without a zone of this one's kind. */
-function onlyOfKind(snapshot: HappyAgentZonesSnapshot, zone: HappyAgentZone): boolean {
-    return !snapshot.zones.some((other) => other.id !== zone.id && other.kind === zone.kind);
+/** Whether the cluster would refuse to leave the team without a critical zone. */
+function onlyCritical(snapshot: HappyAgentZonesSnapshot, zone: HappyAgentZone): boolean {
+    return !snapshot.zones.some((other) => other.id !== zone.id && other.critical);
 }
 
 /** Why the cluster will refuse the deletion, as far as the list can tell. */
@@ -106,8 +106,8 @@ function deleteBlockedText(
 ): string | undefined {
     if (zone.agentCount > 0)
         return `${String(zone.agentCount)} ${zone.agentCount === 1 ? "agent is" : "agents are"} in it, and agents never leave a zone. Only an empty zone can be deleted.`;
-    if (onlyOfKind(snapshot, zone))
-        return `It's your team's only ${KIND_NAME[zone.kind]} zone, and a team always keeps one.`;
+    if (zone.critical && onlyCritical(snapshot, zone))
+        return "It's your team's only critical zone, and a team always keeps one.";
     return undefined;
 }
 
@@ -133,10 +133,12 @@ function zoneRow(snapshot: HappyAgentZonesSnapshot, zone: HappyAgentZone): Happy
         id: zone.id,
         name: zone.name,
         description: zone.description,
-        kind: zone.kind,
+        isDefault: zone.isDefault,
+        critical: zone.critical,
         color: zone.color,
         ...(zone.image ? { imageUrl: zone.image.url } : {}),
-        members: zone.members === null ? "everyone" : zone.members.map(named),
+        // The default zone is open to every member by definition.
+        members: zone.isDefault || zone.members === null ? "everyone" : zone.members.map(named),
         ...(zone.owner === null ? {} : { owner: named(zone.owner) }),
         agentCount: zone.agentCount,
     };

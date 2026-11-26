@@ -5,12 +5,6 @@ import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 
-/**
- * What a zone is for. Every team keeps at least one of each: the cluster
- * refuses a delete or a kind change that would leave none.
- */
-export type HappyAgentZoneKind = "default" | "critical";
-
 /** The fixed palette a zone's colour is picked from; the cluster refuses any other. */
 export type HappyAgentZoneColor =
     | "gray"
@@ -37,8 +31,6 @@ export const HAPPY_AGENT_ZONE_COLORS: readonly HappyAgentZoneColor[] = [
     "pink",
 ];
 
-const ZONE_KINDS: readonly HappyAgentZoneKind[] = ["default", "critical"];
-
 /** The longest name and description the cluster takes. */
 export const HAPPY_AGENT_ZONE_NAME_MAX = 64;
 export const HAPPY_AGENT_ZONE_DESCRIPTION_MAX = 500;
@@ -53,12 +45,21 @@ export interface HappyAgentZone {
     readonly id: string;
     readonly name: string;
     readonly description: string;
-    readonly kind: HappyAgentZoneKind;
+    /**
+     * The team's one default zone, which every member may join. It is never
+     * critical, has no owner, and can't be deleted.
+     */
+    readonly isDefault: boolean;
+    /**
+     * Whether critical plugin tools run in it. A critical zone always lists
+     * its members, and a team always keeps at least one.
+     */
+    readonly critical: boolean;
     readonly color: HappyAgentZoneColor;
     readonly image: HappyAgentZoneImage | null;
     /**
      * Who may join, by user ID; owners and admins may join any zone. `null`
-     * is every member, which only a Default zone may be.
+     * is every member, which a critical zone never is.
      */
     readonly members: readonly string[] | null;
     /** The member shown as its author; `null` for the seeded zones. It grants nothing. */
@@ -83,9 +84,9 @@ export interface HappyAgentZonePerson {
 export interface HappyAgentZoneDraft {
     readonly name: string;
     readonly description: string;
-    readonly kind: HappyAgentZoneKind;
+    readonly critical: boolean;
     readonly color: HappyAgentZoneColor;
-    /** `null` lets every member join; only a Default zone may say so. */
+    /** `null` lets every member join, which a critical zone can't. */
     readonly members: readonly string[] | null;
     readonly owner: string | null;
 }
@@ -94,6 +95,8 @@ export interface HappyAgentZoneDraft {
 export interface HappyAgentZoneEditor {
     /** The zone being changed; absent while a new one is being made. */
     readonly zoneId?: string;
+    /** Changing the default zone, of which only the name, description, colour and picture can change. */
+    readonly isDefault: boolean;
     readonly draft: HappyAgentZoneDraft;
     readonly saving: boolean;
     /** A picture being sent or taken off; only an existing zone has one. */
@@ -114,7 +117,7 @@ export interface HappyAgentZoneDeletion {
 export interface HappyAgentZonesSnapshot {
     /** True until the first answer, so "no zones" is never claimed early. */
     readonly loading: boolean;
-    /** Default zones first, then Critical, each oldest first. */
+    /** The default zone first, then the other zones, then the critical ones, each oldest first. */
     readonly zones: readonly HappyAgentZone[];
     /** Whether the reader holds `zones.manage`; everyone else reads the list. */
     readonly manage: boolean;
@@ -139,11 +142,11 @@ export interface HappyAgentZonesStore {
     zoneEditorClose(): void;
     zoneNameUpdate(value: string): void;
     zoneDescriptionUpdate(value: string): void;
-    /** A Critical zone always lists its members, so choosing it from "everyone" starts an empty list. */
-    zoneKindUpdate(kind: HappyAgentZoneKind): void;
+    /** A critical zone always lists its members, so turning it on from "everyone" starts an empty list. */
+    zoneCriticalUpdate(critical: boolean): void;
     zoneColorUpdate(color: HappyAgentZoneColor): void;
     zoneOwnerUpdate(userId: string | null): void;
-    /** Every member, or only the listed ones; a Critical zone can't let everyone in. */
+    /** Every member, or only the listed ones; a critical zone can't let everyone in. */
     zoneMembersEveryoneUpdate(everyone: boolean): void;
     zoneMemberAdd(userId: string): void;
     zoneMemberRemove(userId: string): void;
@@ -174,7 +177,7 @@ function stringList(value: unknown): readonly string[] {
 const DRAFT_EMPTY: HappyAgentZoneDraft = {
     name: "",
     description: "",
-    kind: "default",
+    critical: false,
     color: "blue",
     members: null,
     owner: null,
@@ -203,20 +206,28 @@ export function happyAgentZonesStoreCreate(deps: {
     const zonePath = (id: string): string => `v0/zones/${encodeURIComponent(id)}`;
 
     /**
-     * Nothing for an entry this client can't read whole: a colour or kind
-     * outside the contract would be drawn as something it isn't.
+     * Nothing for an entry this client can't read whole: a colour outside
+     * the palette, or a zone that doesn't say whether it is the default or
+     * critical, would be drawn as something it isn't.
      */
     const zoneRead = (value: unknown): HappyAgentZone | undefined => {
         const entry = recordOf(value);
-        const kind = ZONE_KINDS.find((candidate) => candidate === entry?.kind);
         const color = HAPPY_AGENT_ZONE_COLORS.find((candidate) => candidate === entry?.color);
-        if (!entry || typeof entry.id !== "string" || !kind || !color) return undefined;
+        if (
+            !entry ||
+            typeof entry.id !== "string" ||
+            typeof entry.isDefault !== "boolean" ||
+            typeof entry.critical !== "boolean" ||
+            !color
+        )
+            return undefined;
         const image = recordOf(entry.image);
         return {
             id: entry.id,
             name: typeof entry.name === "string" ? entry.name : entry.id,
             description: typeof entry.description === "string" ? entry.description : "",
-            kind,
+            isDefault: entry.isDefault,
+            critical: entry.critical,
             color,
             image:
                 typeof image?.url === "string" && typeof image.digest === "string"
@@ -231,8 +242,9 @@ export function happyAgentZonesStoreCreate(deps: {
         };
     };
 
+    const zoneRank = (zone: HappyAgentZone): number => (zone.isDefault ? 0 : zone.critical ? 2 : 1);
     const zoneOrder = (left: HappyAgentZone, right: HappyAgentZone): number =>
-        ZONE_KINDS.indexOf(left.kind) - ZONE_KINDS.indexOf(right.kind) ||
+        zoneRank(left) - zoneRank(right) ||
         left.createdAt - right.createdAt ||
         left.name.localeCompare(right.name);
 
@@ -436,7 +448,14 @@ export function happyAgentZonesStoreCreate(deps: {
             const current = store.getState();
             if (disposed || !current.manage || current.editor?.saving) return;
             store.setState(
-                { editor: { draft: DRAFT_EMPTY, saving: false, imageSaving: false } },
+                {
+                    editor: {
+                        isDefault: false,
+                        draft: DRAFT_EMPTY,
+                        saving: false,
+                        imageSaving: false,
+                    },
+                },
                 false,
             );
         },
@@ -448,10 +467,11 @@ export function happyAgentZonesStoreCreate(deps: {
                 {
                     editor: {
                         zoneId,
+                        isDefault: zone.isDefault,
                         draft: {
                             name: zone.name,
                             description: zone.description,
-                            kind: zone.kind,
+                            critical: zone.critical,
                             color: zone.color,
                             members: zone.members,
                             owner: zone.owner,
@@ -474,23 +494,25 @@ export function happyAgentZonesStoreCreate(deps: {
         zoneDescriptionUpdate(value) {
             draftUpdate({ description: value });
         },
-        zoneKindUpdate(kind) {
-            const draft = store.getState().editor?.draft;
-            if (!draft) return;
+        zoneCriticalUpdate(critical) {
+            const editor = store.getState().editor;
+            if (!editor || editor.isDefault) return;
             draftUpdate({
-                kind,
-                ...(kind === "critical" && draft.members === null ? { members: [] } : {}),
+                critical,
+                ...(critical && editor.draft.members === null ? { members: [] } : {}),
             });
         },
         zoneColorUpdate(color) {
             draftUpdate({ color });
         },
         zoneOwnerUpdate(userId) {
+            if (store.getState().editor?.isDefault) return;
             draftUpdate({ owner: userId });
         },
         zoneMembersEveryoneUpdate(everyone) {
-            const draft = store.getState().editor?.draft;
-            if (!draft || (everyone && draft.kind === "critical")) return;
+            const editor = store.getState().editor;
+            const draft = editor?.draft;
+            if (!draft || editor.isDefault || (everyone && draft.critical)) return;
             if (everyone === (draft.members === null)) return;
             draftUpdate({ members: everyone ? null : [] });
         },
@@ -525,13 +547,14 @@ export function happyAgentZonesStoreCreate(deps: {
             if (editor.zoneId !== undefined && !zone)
                 return refuse("This zone was deleted in the meantime.");
             store.setState({ editor: { ...rest, saving: true } }, false);
+            // The default zone's critical flag, members and owner are fixed; only the rest is sent.
             const body = {
                 name,
                 description: draft.description.trim(),
-                kind: draft.kind,
                 color: draft.color,
-                members: draft.members,
-                owner: draft.owner,
+                ...(editor.isDefault
+                    ? {}
+                    : { critical: draft.critical, members: draft.members, owner: draft.owner }),
             };
             void (
                 zone
@@ -560,7 +583,14 @@ export function happyAgentZonesStoreCreate(deps: {
         zoneDeleteOpen(zoneId) {
             const current = store.getState();
             const zone = zoneOf(zoneId);
-            if (disposed || !current.manage || !zone || current.deletion?.deleting) return;
+            if (
+                disposed ||
+                !current.manage ||
+                !zone ||
+                zone.isDefault ||
+                current.deletion?.deleting
+            )
+                return;
             store.setState({ deletion: { zoneId, name: zone.name, deleting: false } }, false);
         },
         zoneDeleteClose() {
@@ -625,7 +655,7 @@ export const happyAgentZonesStoreNoop: HappyAgentZonesStore = {
     zoneEditorClose: () => undefined,
     zoneNameUpdate: () => undefined,
     zoneDescriptionUpdate: () => undefined,
-    zoneKindUpdate: () => undefined,
+    zoneCriticalUpdate: () => undefined,
     zoneColorUpdate: () => undefined,
     zoneOwnerUpdate: () => undefined,
     zoneMembersEveryoneUpdate: () => undefined,

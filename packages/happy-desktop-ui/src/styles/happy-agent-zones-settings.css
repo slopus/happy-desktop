@@ -76,7 +76,7 @@
     white-space: nowrap;
 }
 
-/* Its kind: a word in a quiet pill, in sentence case; Critical in red ink. */
+/* Default or Critical: a word in a quiet pill, in sentence case; Critical in red ink. */
 .happy-agent-zones__tag {
     flex: none;
     padding: 0 6px;
@@ -88,7 +88,7 @@
     line-height: 16px;
 }
 
-.happy-agent-zones__tag[data-kind="critical"] {
+.happy-agent-zones__tag[data-critical] {
     border-color: var(--happy-tile-red);
     color: var(--happy-tile-red);
 }

@@ -1230,7 +1230,6 @@ export {
     type HappyAgentZoneDeleteDialogProps,
     type HappyAgentZoneDialogProps,
     type HappyAgentZoneDraftView,
-    type HappyAgentZoneKindName,
     type HappyAgentZonePersonRow,
     type HappyAgentZoneRow,
 } from "./pages/settings/HappyAgentPermissionsSettings";
