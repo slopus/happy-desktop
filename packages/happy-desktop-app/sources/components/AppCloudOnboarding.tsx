@@ -416,7 +416,7 @@ export function AppCloudOnboarding(props: {
                         kind: "mobileApp",
                         appStoreUrl: gate.appStoreUrl,
                         playStoreUrl: gate.playStoreUrl,
-                        registered: gate.registered || done,
+                        registered: gate.registered || gate.status === "done",
                     },
                     action: proceed,
                     ...(skip ? { skip } : {}),
