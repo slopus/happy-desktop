@@ -24,6 +24,7 @@
 .happy-setup-page__copy,
 .happy-setup-page__header,
 .happy-setup-page__core,
+.happy-setup-page__core-content,
 .happy-setup-page__footer,
 .happy-setup-page__progress,
 .happy-setup-page__progress-track,
@@ -181,6 +182,164 @@
 .happy-setup-page__balance {
     flex: 1 1 0;
     min-height: 16px;
+}
+
+/*
+ * A top page is a frame that holds still while a sequence of unequal bodies
+ * passes through it:
+ *
+ *   header   title and the subtitle's one line, at a fixed distance from the
+ *            top of the window
+ *   core     a scrollport of its own, from 16px under the subtitle to the
+ *            footer; the body hangs from its top and grows downward
+ *   footer   pinned, as on every setup page
+ *
+ * The title's top edge follows the window's height at half speed, so a taller
+ * window shares its extra room between the space above the words and the body
+ * under them: 112px in the 640px minimum window, where the body keeps 280px,
+ * and 172px in the 760px window Happy opens at, where it keeps 340px. Above
+ * 976px the title stops descending and the body takes the rest.
+ */
+.happy-setup-page[data-placement="top"] {
+    --happy-setup-title-top: clamp(112px, 50cqh - 208px, 280px);
+}
+
+/* The bands own the page's 40px side inset here, so the scrollport between
+   them can run the column's full width and keep its bar clear of the body. */
+.happy-setup-page[data-placement="top"] .happy-setup-page__body {
+    padding: 0;
+}
+
+.happy-setup-page[data-placement="top"] .happy-setup-page__header {
+    justify-content: flex-start;
+    min-height: auto;
+    padding: var(--happy-setup-title-top) 40px 16px;
+}
+
+/* The words' boxes are the same on every page, so only what is written in
+   them changes: the title spans the column, and the subtitle is its one line
+   whatever it says. Copy too long for the body's measure gets up to 640px
+   before it wraps, centred over the column, and a second line hangs into the
+   32px between the words and the body instead of pushing the body down. */
+.happy-setup-page[data-placement="top"] .happy-setup-page__title {
+    align-self: stretch;
+}
+
+.happy-setup-page[data-placement="top"] .happy-setup-page__copy {
+    flex: none;
+    width: min(640px, 100cqw - 80px);
+    height: 24px;
+}
+
+.happy-setup-page[data-placement="top"] .happy-setup-page__core {
+    flex: 1 1 0;
+    align-items: stretch;
+    gap: 0;
+    min-height: 120px;
+    padding-top: 0;
+}
+
+/* Content fades out through 16px at each end of the scrollport rather than
+   being cut by an edge the sky does not have, and is gone 8px short of the
+   action under it. The content's own padding keeps a body at rest clear of
+   both fades. */
+.happy-setup-page__core-viewport {
+    overflow: auto;
+    scrollbar-gutter: stable both-edges;
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black 16px,
+        black calc(100% - 24px),
+        transparent calc(100% - 8px)
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black 16px,
+        black calc(100% - 24px),
+        transparent calc(100% - 8px)
+    );
+}
+
+/* 32px beside the 8px lanes makes the page's 40px inset, so the body is the
+   same 480px measure as the words above it. */
+.happy-setup-page__core-content {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-height: 100%;
+    padding: 16px 32px 24px;
+}
+
+/* The body's box is all of its area, so a body can give what is left under
+   its own content to something that grows, such as a list. */
+.happy-setup-page__core-content > .happy-setup-page__slot {
+    flex: 1 0 auto;
+}
+
+/*
+ * A swapped part: the new one fades in where the old one's picture fades out.
+ * The old words are gone before the new ones are half there, so two titles
+ * are never legible on top of each other. Opacity only: nothing is laid out
+ * again while it runs.
+ */
+.happy-setup-page[data-placement="top"] .happy-setup-page__title,
+.happy-setup-page[data-placement="top"] .happy-setup-page__copy {
+    position: relative;
+}
+
+.happy-setup-page__title > .happy-setup-page__swap,
+.happy-setup-page__copy > .happy-setup-page__swap {
+    display: block;
+}
+
+.happy-setup-page[data-transition] .happy-setup-page__swap {
+    animation: happy-setup-page-crossfade-in 220ms ease 60ms both;
+}
+
+/* Out of the flow and over the part's parent, which is positioned for it. An
+   empty layer has no box worth hitting and never takes the pointer. */
+.happy-setup-page__swap-ghosts {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+}
+
+/* A body that was taller than the one replacing it must not stretch the
+   scrollport while its picture fades. */
+.happy-setup-page__core-content > .happy-setup-page__swap-ghosts {
+    overflow: hidden;
+}
+
+.happy-setup-page__swap-ghosts:empty {
+    display: none;
+}
+
+.happy-setup-page[data-transition] .happy-setup-page__swap.happy-setup-page__swap-ghost {
+    position: absolute;
+    margin: 0;
+    animation: happy-setup-page-crossfade-out 120ms ease-out both;
+}
+
+/* The picture holds still while it fades: nothing copied into it replays an
+   arrival of its own, whatever rule gave it one. */
+.happy-setup-page__swap-ghost * {
+    animation: none !important;
+}
+
+@keyframes happy-setup-page-crossfade-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
 }
 
 /* The subtitle and the live line read as one sentence and its state. */
@@ -394,6 +553,12 @@
 
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"] {
     background: var(--onboarding-foreground);
+    color: var(--onboarding-action-label);
+}
+
+/* The busy mark is drawn in the label's ink: the button's own inverse tint is
+   the colour this backdrop gives the button itself. */
+.happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"] .happy-spinner {
     color: var(--onboarding-action-label);
 }
 
@@ -681,8 +846,10 @@
  * full track — visibly not a finished download, and visibly not stalled at zero.
  */
 @media (prefers-reduced-motion: reduce) {
-    .happy-setup-page[data-transition] .happy-setup-page__body {
+    .happy-setup-page[data-transition] .happy-setup-page__body,
+    .happy-setup-page[data-transition] .happy-setup-page__swap {
         animation-duration: 1ms;
+        animation-delay: 0s;
     }
 
     .happy-setup-page__progress {

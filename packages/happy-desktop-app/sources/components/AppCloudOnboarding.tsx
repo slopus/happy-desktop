@@ -390,6 +390,7 @@ export function AppCloudOnboarding(props: {
                         busy: invites.creating === "email",
                         invites: invites.sent,
                         ...(invites.link ? { link: invites.link } : {}),
+                        linkBusy: invites.creating === "link",
                         ...((invites.error ?? flow.error)
                             ? { error: invites.error ?? flow.error }
                             : {}),
@@ -499,8 +500,12 @@ export function AppCloudOnboarding(props: {
                 appearance={props.appearance}
                 currentStep={gate.id}
                 steps={flow.sequence.map((id) => {
-                    const kind = flow.gates.find((entry) => entry.id === id)?.kind ?? "unknown";
-                    return { id, label: STEP_LABELS[kind] };
+                    const entry = flow.gates.find((entry) => entry.id === id);
+                    return {
+                        id,
+                        label: STEP_LABELS[entry?.kind ?? "unknown"],
+                        done: entry?.status === "done" || entry?.status === "skipped",
+                    };
                 })}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}

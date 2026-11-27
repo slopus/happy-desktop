@@ -3,6 +3,7 @@ import type { HappyAgentPluginImage } from "happy-desktop-state";
 import { CopyButton } from "./CopyButton";
 import { PluginMark } from "./pages/plugins/pluginPresentation";
 import { QRCode } from "./QRCode";
+import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
 import { AvatarPlaceholder } from "./AvatarPlaceholder";
 import { OnboardingHelp } from "./OnboardingHelp";
@@ -20,6 +21,12 @@ import { Icon } from "./Icon";
 export interface CloudOnboardingStep {
     readonly id: string;
     readonly label: string;
+    /**
+     * Finished or skipped, wherever the reader stands. The bar draws what is
+     * finished and where the reader is as two separate things, so someone who
+     * steps back sees the steps ahead they already finished.
+     */
+    readonly done: boolean;
 }
 
 /** A way to connect inference, as one tile of the row. */
@@ -50,7 +57,7 @@ export interface CloudOnboardingPlugin {
     readonly onSelect?: () => void;
 }
 
-/** An invite sent from the teammates gate, newest first. */
+/** An invite sent from the teammates gate. The caller lists them newest first. */
 export interface CloudOnboardingInvite {
     readonly id: string;
     readonly email: string;
@@ -104,8 +111,10 @@ export type CloudOnboardingView =
           readonly email: string;
           readonly busy: boolean;
           readonly invites: readonly CloudOnboardingInvite[];
-          /** A link invite made because this server cannot send email, shown this once. */
+          /** The link invite, once one is made. The server keeps none, so it shows this once. */
           readonly link?: string;
+          /** A link was asked for and has not come back yet. */
+          readonly linkBusy?: boolean;
           readonly error?: string;
           onEmailChange(value: string): void;
           onInvite(): void;
@@ -206,17 +215,60 @@ function Tag(props: { readonly label: string; readonly tone?: "attention" }) {
     );
 }
 
-/** The reserved line under a form where a refusal is said, so it never moves the page. */
-function Hint(props: { readonly text: string | undefined }) {
+/** Invite lists that have opened, so a row can tell arriving later from arriving with them. */
+const inviteListsOpened = new WeakSet<Element>();
+
+/**
+ * The list rests on its newest invite. It opens there. React attaches a row's
+ * ref before its list's, so the rows a list opens with find it unopened and
+ * leave it alone.
+ */
+function inviteListRef(node: HTMLDivElement | null): void {
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "instant" });
+    inviteListsOpened.add(node);
+}
+
+/** A row sent while the list is open brings the list to it, one row's glide. */
+function inviteRowRef(node: HTMLDivElement | null): void {
+    const list = node?.parentElement;
+    if (list && inviteListsOpened.has(list)) list.scrollTo({ top: list.scrollHeight });
+}
+
+/**
+ * The reserved two lines under a form where a refusal is said. The box is the
+ * same whether it is empty, holds one line, or holds a message too long for
+ * two: that one scrolls inside it, so no refusal moves what is under it.
+ */
+function Hint(props: {
+    readonly text: string | undefined;
+    /** `list`: between the invite link and the invites, read with both. */
+    readonly place?: "list";
+}) {
     return (
-        <p
-            className="happy-cloud-onboarding__hint"
-            data-tone={props.text ? "attention" : undefined}
-            role="status"
-        >
-            {props.text}
-        </p>
+        <div className="happy-cloud-onboarding__hint" data-place={props.place}>
+            <p
+                className="happy-cloud-onboarding__hint-text"
+                data-happy-desktop-ui="cloud-onboarding-hint"
+                data-tone={props.text ? "attention" : undefined}
+                role="status"
+            >
+                {props.text}
+            </p>
+        </div>
     );
+}
+
+/**
+ * The plugins step before its catalog is read: the frames of the three rows it
+ * offers when no plugin is required, so the rows arrive in room that was held.
+ */
+function PluginRowsPending() {
+    return [0, 1, 2].map((index) => (
+        <div className="happy-cloud-onboarding__row" data-pending="true" key={index}>
+            {index === 1 ? <Spinner size={16} /> : null}
+        </div>
+    ));
 }
 
 function InferenceTile(props: { readonly option: CloudOnboardingInferenceOption }) {
@@ -377,9 +429,7 @@ function page(
                         data-happy-desktop-ui="cloud-onboarding-plugins"
                     >
                         {view.loading && view.plugins.length === 0 ? (
-                            <div className="happy-cloud-onboarding__loading">
-                                <Spinner size={16} />
-                            </div>
+                            <PluginRowsPending />
                         ) : (
                             view.plugins.map((plugin) => (
                                 <div
@@ -424,7 +474,7 @@ function page(
         case "teammates":
             return {
                 title: "Invite your team",
-                copy: `Happy works best with the people you build with on ${server}.`,
+                copy: `Everyone you invite joins ${server} as a member.`,
                 body: (
                     <div
                         className="happy-cloud-onboarding__invite"
@@ -445,7 +495,7 @@ function page(
                                 value={view.email}
                             />
                             <Button
-                                disabled={view.email.trim() === ""}
+                                disabled={view.email.trim() === "" || view.linkBusy}
                                 loading={view.busy}
                                 onClick={view.onInvite}
                                 size="large"
@@ -455,68 +505,108 @@ function page(
                                 Invite
                             </Button>
                         </div>
-                        <Hint text={view.error} />
-                        {view.link ? (
-                            <div className="happy-cloud-onboarding__note">
-                                <span className="happy-cloud-onboarding__note-title">
-                                    <Icon name="link" size={14} />
-                                    Invite link
-                                </span>
-                                <span className="happy-cloud-onboarding__link">
-                                    <span className="happy-cloud-onboarding__link-text">
-                                        {view.link}
-                                    </span>
-                                    <CopyButton
-                                        caption="Copy"
-                                        label="Copy invite link"
-                                        text={view.link}
-                                    />
-                                </span>
-                            </div>
-                        ) : null}
-                        {view.invites.length > 0 ? (
-                            <div className="happy-cloud-onboarding__list">
-                                {view.invites.map((invite) => (
-                                    <div className="happy-cloud-onboarding__row" key={invite.id}>
-                                        <span className="happy-cloud-onboarding__row-text">
-                                            <span className="happy-cloud-onboarding__row-title">
-                                                {invite.email}
-                                            </span>
-                                        </span>
-                                        <span
-                                            className="happy-cloud-onboarding__done"
-                                            data-tone={
-                                                invite.delivery === "failed"
-                                                    ? "attention"
-                                                    : undefined
-                                            }
-                                        >
-                                            {invite.delivery === "sending" ? (
-                                                <Spinner size={14} />
-                                            ) : invite.delivery === "sent" ? (
-                                                <Icon name="check" size={14} />
-                                            ) : (
-                                                <Icon name="alert" size={14} />
-                                            )}
-                                            {invite.delivery === "sending"
-                                                ? "Sending"
-                                                : invite.delivery === "sent"
-                                                  ? "Invited"
-                                                  : "Not sent"}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : null}
-                        {view.onLinkCreate && !view.link ? (
-                            <Button
-                                className="happy-cloud-onboarding__other"
-                                onClick={view.onLinkCreate}
-                                size="small"
-                                variant="ghost"
+                        {/* One row from the first frame: asking for the link
+                            turns its button busy, and the link then stands in
+                            the words and the box that were already there. */}
+                        {view.link || view.onLinkCreate ? (
+                            <div
+                                className="happy-cloud-onboarding__row"
+                                data-happy-desktop-ui="cloud-onboarding-invite-link"
                             >
-                                Get an invite link instead
-                            </Button>
+                                <span className="happy-cloud-onboarding__row-text">
+                                    <span className="happy-cloud-onboarding__row-title">
+                                        <Icon name="link" size={14} />
+                                        Invite link
+                                    </span>
+                                    {view.link ? (
+                                        <span
+                                            className="happy-cloud-onboarding__link-text"
+                                            key="link"
+                                        >
+                                            {view.link}
+                                        </span>
+                                    ) : (
+                                        <span className="happy-cloud-onboarding__row-detail">
+                                            Anyone with the link can join.
+                                        </span>
+                                    )}
+                                </span>
+                                <span className="happy-cloud-onboarding__row-action">
+                                    {view.link ? (
+                                        <CopyButton
+                                            caption="Copy"
+                                            label="Copy invite link"
+                                            text={view.link}
+                                        />
+                                    ) : (
+                                        <Button
+                                            disabled={view.busy}
+                                            loading={view.linkBusy}
+                                            onClick={view.onLinkCreate}
+                                            size="small"
+                                            variant="secondary"
+                                            width={96}
+                                        >
+                                            Create link
+                                        </Button>
+                                    )}
+                                </span>
+                            </div>
+                        ) : null}
+                        {/* Under the link rather than the field, so the link
+                            stands right under the form; the line is kept whether
+                            or not it says anything, so a refusal moves nothing. */}
+                        <Hint place="list" text={view.error} />
+                        {/* Oldest first: a new invite lands in the free room
+                            under the others instead of pushing them down. The
+                            list scrolls inside that room and fades at its
+                            edges, so the form above it never leaves. */}
+                        {view.invites.length > 0 ? (
+                            <div className="happy-cloud-onboarding__rows-room">
+                                <ScrollArea
+                                    className="happy-cloud-onboarding__rows-area"
+                                    data-scrollbar-always=""
+                                    viewportClassName="happy-cloud-onboarding__rows"
+                                    viewportRef={inviteListRef}
+                                >
+                                    {[...view.invites].reverse().map((invite) => (
+                                        <div
+                                            className="happy-cloud-onboarding__row"
+                                            data-happy-desktop-ui="cloud-onboarding-invite"
+                                            data-size="compact"
+                                            key={invite.id}
+                                            ref={inviteRowRef}
+                                        >
+                                            <span className="happy-cloud-onboarding__row-text">
+                                                <span className="happy-cloud-onboarding__row-title">
+                                                    {invite.email}
+                                                </span>
+                                            </span>
+                                            <span
+                                                className="happy-cloud-onboarding__done"
+                                                data-tone={
+                                                    invite.delivery === "failed"
+                                                        ? "attention"
+                                                        : undefined
+                                                }
+                                            >
+                                                {invite.delivery === "sending" ? (
+                                                    <Spinner size={14} />
+                                                ) : invite.delivery === "sent" ? (
+                                                    <Icon name="check" size={14} />
+                                                ) : (
+                                                    <Icon name="alert" size={14} />
+                                                )}
+                                                {invite.delivery === "sending"
+                                                    ? "Sending"
+                                                    : invite.delivery === "sent"
+                                                      ? "Invited"
+                                                      : "Not sent"}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </ScrollArea>
+                            </div>
                         ) : null}
                     </div>
                 ),
@@ -722,7 +812,6 @@ function NoticeMark(props: {
  */
 export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
     const current = page(props.view, props.serverLabel);
-    const currentIndex = props.steps.findIndex((step) => step.id === props.currentStep);
     return (
         <SetupPage
             {...(props.action ? { action: props.action } : {})}
@@ -737,24 +826,31 @@ export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
             copy={current.copy}
             data-testid="cloud-onboarding-screen"
             help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
-            // Centred, like the Happy Cloud pages that lead here: a gate's body
-            // varies in height, and the centred bands hold it at every size.
-            placement="centered"
+            // A gate's body varies in height and changes while it is open, so
+            // the words hold one line and the body hangs under them.
+            placement="top"
             steps={
                 props.steps.length > 1 ? (
                     <SegmentedProgress
                         label="Setup"
                         mode="steps"
-                        segments={props.steps.map((step, index) => ({
-                            id: step.id,
-                            label: step.label,
-                            state:
-                                index < currentIndex
-                                    ? "done"
-                                    : index === currentIndex
-                                      ? "running"
-                                      : "pending",
-                        }))}
+                        segments={props.steps.map((step) =>
+                            step.id === props.currentStep
+                                ? // The step you are on fills its whole segment, in
+                                  // the strongest ink: the person sets the pace, so
+                                  // there is no share of it to draw.
+                                  {
+                                      id: step.id,
+                                      label: step.label,
+                                      state: "running" as const,
+                                      fraction: 1,
+                                  }
+                                : {
+                                      id: step.id,
+                                      label: step.label,
+                                      state: step.done ? ("done" as const) : ("pending" as const),
+                                  },
+                        )}
                         // The sky follows the appearance, and so does the ink on it.
                         tone="default"
                     />

@@ -496,6 +496,16 @@ entirely.
 
 Moving between two setup screens must change the words, not where they are.
 
+A sequence whose bodies differ in height, or grow while they are open, uses
+`placement="top"`: the title holds one line near the top of the window at the
+same coordinate on every page, with the subtitle's line reserved under it. The
+body hangs under the words and scrolls inside its own area, so it never moves
+the title or the primary action. Anything that can appear in a body has its
+box reserved from the first frame, and a list that can outgrow its room
+scrolls in its own area and fades at its edges. Between stages only the words
+and the body crossfade; the frame stays mounted. Happy Cloud onboarding and the
+Cloud connect create and join steps use it.
+
 ## User-facing errors
 
 Prefer fewer buttons.

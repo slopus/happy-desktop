@@ -111,6 +111,8 @@ export interface SetupPageProps {
     /**
      * Stable identity of the setup stage. Changing it dissolves the new page
      * content into the retained frame; updates within one stage stay still.
+     * A `top` page keeps its title, subtitle, body area and footer mounted
+     * and crossfades only what is written in them.
      */
     readonly transitionKey?: string;
     /**
@@ -128,9 +130,13 @@ export interface SetupPageProps {
      * centre line under a fixed scene square, so they hold one height across
      * the sequence. `centered` drops the scene square and centres title and
      * content together above the footer, for a page that is a choice rather
-     * than a report.
+     * than a report. `top` is for a sequence whose bodies differ in height: no
+     * scene square, the title on one line near the top of the window, the
+     * subtitle's one line reserved under it, and the content hanging from
+     * there in a scrollport of its own that ends at the footer. Nothing a body
+     * does can move the words above it or the action below it.
      */
-    readonly placement?: "line" | "centered";
+    readonly placement?: "line" | "centered" | "top";
     readonly title: string;
     /** One short line under the title; may carry an inline link. Reserved when absent. */
     readonly copy?: ReactNode;
@@ -174,6 +180,13 @@ export interface SetupPageProps {
  * So the words, the content, and the button stay where they are as the
  * sequence moves; only what is written in them changes.
  *
+ * `placement` chooses how the words are held. `line` is the default above.
+ * `centered` centres words and content for a page that is a choice. `top` is
+ * for a sequence whose bodies differ in height or change while they are open:
+ * the title holds one line near the top of the window, the body hangs under
+ * it in a scrollport of its own, and a new stage crossfades the words and the
+ * body inside a frame that stays mounted.
+ *
  * Onboarding may supply a compact stage indicator. It stays outside the
  * transitioning content and reports actual stages, not individual loading states.
  *
@@ -213,15 +226,21 @@ export function SetupPage(props: SetupPageProps) {
         "steps",
     ]);
     const centered = local.placement === "centered";
+    const top = local.placement === "top";
     // The subtitle keeps its line when a page has none, so the status and
-    // content below start at one height. A centred page carries it in the
-    // header, with the title, above its content.
+    // content below start at one height. A centred or top page carries it in
+    // the header, with the title, above its content.
+    const headed = centered || top;
     const lead = (
         <div className="happy-setup-page__lead">
             <p className="happy-setup-page__copy" data-happy-desktop-ui="setup-page-copy">
-                {local.copy}
+                {top ? (
+                    <SetupPageSwap swapKey={local.transitionKey}>{local.copy}</SetupPageSwap>
+                ) : (
+                    local.copy
+                )}
             </p>
-            {local.statusReserved ? (
+            {top ? null : local.statusReserved ? (
                 <div
                     aria-label="Status"
                     className="happy-setup-page__status-slot"
@@ -252,7 +271,7 @@ export function SetupPage(props: SetupPageProps) {
             data-testid={local["data-testid"]}
             data-steps={local.steps ? "true" : undefined}
             data-identity={local.identity ? "true" : undefined}
-            data-placement={centered ? "centered" : undefined}
+            data-placement={headed ? local.placement : undefined}
             style={local.style}
         >
             {local.backdrop ? <OnboardingSky appearance={local.backdrop.appearance} /> : null}
@@ -267,7 +286,8 @@ export function SetupPage(props: SetupPageProps) {
                 <div
                     className="happy-setup-page__body"
                     data-happy-desktop-ui="setup-page-body"
-                    key={local.transitionKey}
+                    // A top page is one retained frame; its words swap inside it.
+                    key={top ? undefined : local.transitionKey}
                 >
                     {/* Scene and title, packed to the bottom of a band that ends
                         on the centre line, so the title sits at the same height on
@@ -276,7 +296,7 @@ export function SetupPage(props: SetupPageProps) {
                         className="happy-setup-page__header"
                         data-happy-desktop-ui="setup-page-header"
                     >
-                        {centered ? null : (
+                        {headed ? null : (
                             /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a hidden, pointer-only gesture by design */
                             <span
                                 className="happy-setup-page__stage"
@@ -298,24 +318,66 @@ export function SetupPage(props: SetupPageProps) {
                             className="happy-setup-page__title"
                             data-happy-desktop-ui="setup-page-title"
                         >
-                            {local.title}
+                            {top ? (
+                                <SetupPageSwap swapKey={local.transitionKey}>
+                                    {local.title}
+                                </SetupPageSwap>
+                            ) : (
+                                local.title
+                            )}
                         </h1>
-                        {centered ? lead : null}
+                        {headed ? lead : null}
                     </div>
-                    <div className="happy-setup-page__core" data-happy-desktop-ui="setup-page-core">
-                        {centered ? null : lead}
-                        {local.command === undefined ? null : (
-                            <SetupCommand command={local.command} label="command" />
-                        )}
-                        {local.children === undefined ? null : (
-                            <div
-                                className="happy-setup-page__slot"
-                                data-happy-desktop-ui="setup-page-slot"
-                            >
-                                {local.children}
+                    {top ? (
+                        /* The content's own scrollport, from under the words to
+                           the footer: a body that outgrows the window scrolls
+                           here instead of pushing anything. */
+                        <ScrollArea
+                            className="happy-setup-page__core"
+                            data-happy-desktop-ui="setup-page-core"
+                            viewportClassName="happy-setup-page__core-viewport"
+                        >
+                            <div className="happy-setup-page__core-content">
+                                {/* The live line opens the body here: under the
+                                    words it would push the body off its height. */}
+                                {local.status ? (
+                                    <SetupStatus
+                                        status={local.status}
+                                        tone={local.backdrop ? "inverse" : "default"}
+                                    />
+                                ) : null}
+                                {local.command === undefined ? null : (
+                                    <SetupCommand command={local.command} label="command" />
+                                )}
+                                <SetupPageSwap
+                                    block
+                                    className="happy-setup-page__slot"
+                                    part="setup-page-slot"
+                                    swapKey={local.transitionKey}
+                                >
+                                    {local.children}
+                                </SetupPageSwap>
                             </div>
-                        )}
-                    </div>
+                        </ScrollArea>
+                    ) : (
+                        <div
+                            className="happy-setup-page__core"
+                            data-happy-desktop-ui="setup-page-core"
+                        >
+                            {centered ? null : lead}
+                            {local.command === undefined ? null : (
+                                <SetupCommand command={local.command} label="command" />
+                            )}
+                            {local.children === undefined ? null : (
+                                <div
+                                    className="happy-setup-page__slot"
+                                    data-happy-desktop-ui="setup-page-slot"
+                                >
+                                    {local.children}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {/* The band under the content matches the header's above it,
                         so the content sits in the middle and the words centre in
                         the band between it and the step bar. */}
@@ -388,6 +450,84 @@ export function SetupPage(props: SetupPageProps) {
             ) : null}
         </div>
     );
+}
+
+/**
+ * One of a top page's changing parts: the title's words, the subtitle's, or
+ * the body. Its box is fixed by the frame around it, so a new stage only
+ * changes what is inside.
+ *
+ * The part that leaves has no React tree left to fade, so its last picture is
+ * kept instead: a lifeless copy of its DOM, laid exactly over where it stood
+ * in a layer React renders empty and never looks into again. The copy fades
+ * out there while the new part fades in underneath, and removes itself.
+ */
+function SetupPageSwap(props: {
+    readonly swapKey: string | undefined;
+    readonly children: ReactNode;
+    /** A block of content rather than a run of words. */
+    readonly block?: boolean;
+    readonly className?: string;
+    readonly part?: string;
+}) {
+    const Part = props.block ? "div" : "span";
+    return (
+        <>
+            <Part
+                className={["happy-setup-page__swap", props.className].filter(Boolean).join(" ")}
+                data-happy-desktop-ui={props.part}
+                key={props.swapKey}
+                ref={setupPageSwapRef}
+            >
+                {props.children}
+            </Part>
+            <Part aria-hidden className="happy-setup-page__swap-ghosts" />
+        </>
+    );
+}
+
+/**
+ * Runs when a swapped part mounts, and its cleanup just before React takes the
+ * old one out of the document, while it is still laid out where it stood.
+ */
+function setupPageSwapRef(node: HTMLElement | null): (() => void) | undefined {
+    if (!node) return undefined;
+    // A new stage starts at its top, whatever the last one was scrolled to.
+    node.closest("[data-scrollbar-viewport]")?.scrollTo(0, 0);
+    return () => {
+        const layer = node.nextElementSibling;
+        // A page hidden with its server draws nothing, so its animations never
+        // end: a picture made there would wait and flash when the page returns.
+        if (!(layer instanceof HTMLElement) || node.offsetParent === null) return;
+        const ghost = node.cloneNode(true) as HTMLElement;
+        // A picture, not a second page: nothing in it may be found, focused,
+        // or submitted, and nothing may share an identity with the live part.
+        ghost.inert = true;
+        for (const element of [ghost, ...ghost.querySelectorAll("*")])
+            for (const name of ["id", "for", "name", "autofocus", "data-happy-desktop-ui"])
+                element.removeAttribute(name);
+        ghost.classList.add("happy-setup-page__swap-ghost");
+        ghost.style.top = `${String(node.offsetTop)}px`;
+        // Every part is centred in the column, and one stage's column may be
+        // wider than the last: held by its centre, the picture stays put.
+        ghost.style.left = `calc(50% - ${String(node.offsetWidth / 2)}px)`;
+        ghost.style.width = `${String(node.offsetWidth)}px`;
+        ghost.style.height = `${String(node.offsetHeight)}px`;
+        ghost.addEventListener("animationend", (event) => {
+            if (event.target === ghost) ghost.remove();
+        });
+        layer.replaceChildren(ghost);
+        // A copy starts unscrolled: a list scrolled inside the part is pictured
+        // where it stood.
+        const pictured = ghost.querySelectorAll("[data-scrollbar-viewport]");
+        node.querySelectorAll("[data-scrollbar-viewport]").forEach((port, index) => {
+            pictured[index]?.scrollTo({
+                top: port.scrollTop,
+                left: port.scrollLeft,
+                behavior: "instant",
+            });
+        });
+    };
 }
 
 /** The header's live line: a bar when the work has a length, a quiet line otherwise. */

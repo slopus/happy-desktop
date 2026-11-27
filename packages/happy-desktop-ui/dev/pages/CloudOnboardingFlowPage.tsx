@@ -3,6 +3,7 @@ import { CloudOnboardingPluginDialog } from "../../src/CloudOnboardingPluginDial
 import {
     CloudOnboardingScreen,
     type CloudOnboardingScreenProps,
+    type CloudOnboardingStep,
 } from "../../src/CloudOnboardingScreen";
 import { ThemeScope, type ThemeMode } from "../../src/ThemeScope";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -26,6 +27,12 @@ const STEPS = [
     { id: "mobileApp", label: "Phone" },
     { id: "paymentMethod", label: "Payment" },
 ];
+
+/** The bar for someone walking forward: every step before `current` is finished. */
+function stepsBefore(current: string): readonly CloudOnboardingStep[] {
+    const index = STEPS.findIndex((step) => step.id === current);
+    return STEPS.map((step, position) => ({ ...step, done: position < index }));
+}
 const APP_STORE = "https://apps.apple.com/us/app/happy-claude-code-client/id6748571505";
 const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.ex3ndr.happy";
 
@@ -264,6 +271,32 @@ const screens: readonly Screen[] = [
         },
     },
     {
+        id: "teammates-many",
+        label: "Team · a link and more invites than the room holds",
+        props: {
+            currentStep: "teammates",
+            serverLabel: "Acme",
+            action: { label: "Continue", onSelect: noop },
+            view: {
+                kind: "teammates",
+                email: "",
+                busy: false,
+                invites: [
+                    { id: "i6", email: "sam@acme.dev", delivery: "sent" },
+                    { id: "i5", email: "mira@acme.dev", delivery: "sent" },
+                    { id: "i4", email: "olga@acme.dev", delivery: "sent" },
+                    { id: "i3", email: "kirill@acme.dev", delivery: "sent" },
+                    { id: "i2", email: "anna@acme.dev", delivery: "sent" },
+                    { id: "i1", email: "lee@acme.dev", delivery: "failed" },
+                ],
+                link: "https://acme.happybases.com/invite/7Hq2mZpX4t",
+                onEmailChange: noop,
+                onInvite: noop,
+                onLinkCreate: noop,
+            },
+        },
+    },
+    {
         id: "teammates-link",
         label: "Team · email unavailable",
         props: {
@@ -430,7 +463,7 @@ export function CloudOnboardingFlowPage() {
                                     <ThemeScope mode={mode}>
                                         <CloudOnboardingScreen
                                             appearance={mode}
-                                            steps={STEPS}
+                                            steps={stepsBefore(screen.props.currentStep)}
                                             {...screen.props}
                                         />
                                         {screen.dialog}

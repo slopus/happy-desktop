@@ -1,10 +1,34 @@
 /* A Happy Cloud server's onboarding: one gate per page, drawn in SetupPage's
    bands. Ink follows the onboarding foreground so the same body reads on the
    sky and on the app's own surface. */
+/* Two lines, 4px under the form, whatever is said in them. A refusal longer
+   than that scrolls inside the box instead of pushing the page under it. */
 .happy-cloud-onboarding__hint {
+    display: flex;
+    flex: none;
+    flex-direction: column;
     align-self: stretch;
-    min-height: 32px;
-    margin: 4px 0 0;
+    box-sizing: border-box;
+    height: 36px;
+    padding-top: 4px;
+}
+
+/* The Team step's line, between the invite link and the invites: two lines
+   with no padding, the invite column's own gap above and below. It stays over
+   the list's fading edge so its words can still be read and scrolled. */
+.happy-cloud-onboarding__hint[data-place="list"] {
+    position: relative;
+    z-index: 1;
+    height: 32px;
+    padding-top: 0;
+}
+
+.happy-cloud-onboarding__hint-text {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
     color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-family: var(--happy-font-ui);
     font-size: 13px;
@@ -12,7 +36,7 @@
     text-align: center;
 }
 
-.happy-cloud-onboarding__hint[data-tone="attention"] {
+.happy-cloud-onboarding__hint-text[data-tone="attention"] {
     color: var(--onboarding-foreground);
     font-weight: 600;
 }
@@ -276,15 +300,6 @@
     color: var(--onboarding-foreground);
 }
 
-.happy-cloud-onboarding__other {
-    align-self: center;
-}
-
-.happy-setup-page[data-backdrop="sky"]
-    .happy-cloud-onboarding__other.happy-button[data-variant="ghost"] {
-    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
-}
-
 /* Rows of plugins or invites: one framed list, each row the same 16px inset
    on every side as the note above it. */
 .happy-cloud-onboarding__list {
@@ -296,8 +311,75 @@
     max-width: 480px;
 }
 
+/* Invites sent, oldest first, in the free room under the form: whatever the
+   body's area has left. The list scrolls inside that room and fades through
+   16px at each edge, as the step body does. Its scrollport reaches 16px past
+   the room at both ends, and 16px of its own space at each end keeps the rows
+   at rest exactly where the room puts them, clear of both fades. */
+.happy-cloud-onboarding__rows-room {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 44px;
+}
+
+/* The bar's lane and 4px of air stand outside the column, so a row is as wide
+   as the invite link box above it whether or not the list scrolls. */
+.happy-cloud-onboarding__rows-room > .happy-scroll-area.happy-cloud-onboarding__rows-area {
+    position: absolute;
+    inset: -16px calc(-4px - var(--happy-scrollbar-track)) -16px 0;
+}
+
+.happy-cloud-onboarding__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    /* Resting on the newest invite stays resting there when the room or the
+       rows settle after the list opened; anywhere else scrolls freely. */
+    scroll-snap-type: y proximity;
+    scroll-padding-block: 16px;
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black 16px,
+        black calc(100% - 16px),
+        transparent
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black 16px,
+        black calc(100% - 16px),
+        transparent
+    );
+}
+
+/* With the list's gap, the 16px each end keeps clear of its fade. */
+.happy-cloud-onboarding__rows::before,
+.happy-cloud-onboarding__rows::after {
+    content: "";
+    flex: none;
+    height: 8px;
+}
+
+.happy-cloud-onboarding__rows > .happy-cloud-onboarding__row {
+    margin-right: 4px;
+}
+
+.happy-cloud-onboarding__rows > .happy-cloud-onboarding__row:last-child {
+    scroll-snap-align: end;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .happy-cloud-onboarding__rows {
+        scroll-behavior: smooth;
+    }
+}
+
 .happy-cloud-onboarding__row {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 12px;
     box-sizing: border-box;
@@ -307,6 +389,57 @@
     background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
     color: var(--onboarding-foreground);
+}
+
+/* A row's place before there is anything to say in it. */
+.happy-cloud-onboarding__row[data-pending] {
+    justify-content: center;
+    background: color-mix(in srgb, var(--onboarding-foreground) 3%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+}
+
+/* A row of one line: its 28px status box and 8px above and below it, which
+   leaves the email's ink 16px from the top of the frame, as it is from the left. */
+.happy-cloud-onboarding__row[data-size="compact"] {
+    min-height: 44px;
+    padding-block: 8px;
+}
+
+/* What arrives after the page is up fades into its place: a row into free
+   room, a row's words into a frame that was held for them, the link into the
+   line that offered it. Opacity only. */
+.happy-cloud-onboarding__rows > .happy-cloud-onboarding__row,
+.happy-cloud-onboarding__list > .happy-cloud-onboarding__row:not([data-pending]) > *,
+.happy-cloud-onboarding__link-text {
+    animation: happy-cloud-onboarding-arrive 160ms ease-out both;
+}
+
+@keyframes happy-cloud-onboarding-arrive {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-cloud-onboarding__rows > .happy-cloud-onboarding__row,
+    .happy-cloud-onboarding__list > .happy-cloud-onboarding__row:not([data-pending]) > *,
+    .happy-cloud-onboarding__link-text {
+        animation: none;
+    }
+}
+
+/* The box a row's button stands in, kept for whatever replaces the button. */
+.happy-cloud-onboarding__row-action {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    height: 28px;
 }
 
 .happy-cloud-onboarding__row-text {
@@ -371,16 +504,9 @@
     line-height: 20px;
 }
 
-.happy-cloud-onboarding__loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 64px;
-    color: var(--onboarding-foreground);
-}
-
 .happy-cloud-onboarding__invite {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     align-items: stretch;
     align-self: center;
@@ -400,15 +526,7 @@
     min-width: 0;
 }
 
-.happy-cloud-onboarding__link {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-
 .happy-cloud-onboarding__link-text {
-    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     font-family: var(--happy-font-mono);
@@ -533,19 +651,6 @@
     color: var(--text);
     font-size: 13px;
     line-height: 18px;
-}
-
-/* The words and what the step asks for read as one block, centred between the
-   step bar and the footer, rather than the words floating halfway up. */
-.happy-setup-page.happy-cloud-onboarding[data-placement="centered"]
-    .happy-setup-page__body::before {
-    content: "";
-    flex: 1 1 0;
-}
-
-.happy-setup-page.happy-cloud-onboarding[data-placement="centered"] .happy-setup-page__header {
-    flex: none;
-    padding: 0 0 32px;
 }
 
 .happy-cloud-onboarding__notice-body {

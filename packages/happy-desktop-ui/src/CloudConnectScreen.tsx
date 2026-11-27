@@ -691,8 +691,8 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                           },
                                       }
                                     : {})}
-                                copy="Your account is already on these servers. Join as many as you like. Got an invite? Open its link, and its server appears here."
-                                placement="centered"
+                                copy="Join the servers your account is on, as many as you like."
+                                placement="top"
                                 secondary={back(joins.includes("joining"))}
                                 {...(view.servers.status === "loading"
                                     ? { status: { busy: true, label: "Loading your servers…" } }
@@ -779,9 +779,9 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 copy={
                                     view.back
                                         ? "Name your team’s new server. You can change it later."
-                                        : "Your account has no servers yet. Name your team’s first one, or open an invite link you were sent."
+                                        : "Name your team’s first server, or open an invite link."
                                 }
-                                placement="centered"
+                                placement="top"
                                 secondary={back(view.busy)}
                                 title="Bootstrap a server"
                             >

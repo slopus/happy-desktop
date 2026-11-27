@@ -109,6 +109,23 @@
     transition: transform 260ms ease-out;
 }
 
+/*
+ * An empty segment paints no fill at all. Slid a full width to the left, the
+ * fill's trailing edge shares a device pixel with the track's rounded clip
+ * wherever the track starts between pixels, and the two partial coverages
+ * multiply into a sliver of full ink at the left of a track that should be
+ * bare. Equal tracks across a window seldom start on a whole pixel, so the
+ * fill is taken out of paint instead of trusted to be clipped. It leaves only
+ * once it has finished sliding out, and returns the moment it has a share to
+ * show.
+ */
+.happy-segmented-progress__segment[data-empty="true"] .happy-segmented-progress__fill {
+    visibility: hidden;
+    transition:
+        transform 260ms ease-out,
+        visibility 0s linear 260ms;
+}
+
 /* Grows from empty even when its first paint already carries a number: a bar
    that appears part full reads as one that lost its beginning. A row of steps
    is not a measurement filling up: it appears where it stands, and glides only
@@ -224,7 +241,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy-segmented-progress[data-mode="steps"] .happy-segmented-progress__fill {
+    .happy-segmented-progress[data-mode="steps"] .happy-segmented-progress__fill,
+    .happy-segmented-progress[data-mode="steps"]
+        .happy-segmented-progress__segment[data-empty="true"]
+        .happy-segmented-progress__fill {
         transition: none;
     }
 }
