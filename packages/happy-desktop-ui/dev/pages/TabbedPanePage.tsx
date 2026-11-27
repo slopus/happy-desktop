@@ -50,6 +50,7 @@ function Pane(props: {
     withTrailing?: boolean;
     barOverlay?: boolean;
     barHidden?: boolean;
+    barBandKept?: boolean;
 }) {
     return (
         <div
@@ -75,6 +76,7 @@ function Pane(props: {
                     ) : undefined
                 }
                 activeId={props.active}
+                barBandKept={props.barBandKept}
                 barHidden={props.barHidden}
                 barOverlay={props.barOverlay}
                 closeLabel="Close session"
@@ -204,7 +206,7 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="The bar floats over the body, which keeps its height clear as top padding. With one tab the bar is left out and the padding goes to zero; the body's box never moves, and its scrollports hold what they show."
+                    detail="The bar floats over the body, which keeps its height clear as top padding. With one tab the bar is left out and the padding goes to zero; the body's box never moves, and its scrollports hold what they show. A hidden bar can keep its band clear, for a document with a header of its own."
                     label="Overlaid bar, shown and hidden"
                     number="T-08"
                     stage="app"
@@ -219,7 +221,14 @@ export function TabbedPanePage() {
                     >
                         <Pane active="one" barOverlay tabs={sessionTabs} withAction />
                         <Pane active="one" barHidden barOverlay tabs={sessionTabs.slice(0, 1)} />
-                        <DimensionRule label="bar absolute over the body · body padding-top = bar height, 0 when hidden" />
+                        <Pane
+                            active="one"
+                            barBandKept
+                            barHidden
+                            barOverlay
+                            tabs={sessionTabs.slice(0, 1)}
+                        />
+                        <DimensionRule label="bar absolute over the body · body padding-top = bar height, 0 when hidden, bar height again when the band is kept" />
                     </div>
                 </Specimen>
             </div>

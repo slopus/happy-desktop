@@ -93,6 +93,15 @@
     --happy-main-cover-top: var(--happy-tabbed-pane-bar-height);
 }
 
+/* A hidden bar can keep its band: the body stays clear of it exactly as under
+   a shown bar, and nothing stands under the controls that ride it. A document
+   with a header of its own, such as a review, keeps that header and its
+   controls in reach instead of under the veil. */
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden][data-bar-band-kept] {
+    --happy-main-inset-top: var(--happy-tabbed-pane-bar-height);
+    --happy-main-cover-top: 0px;
+}
+
 .happy-tabbed-pane[data-bar-overlay] > .happy-tabbed-pane__bar {
     position: absolute;
     z-index: 3;
@@ -165,6 +174,16 @@
     );
     pointer-events: none;
     user-select: none;
+}
+
+/* Over a kept band the veil is that band and no more: nothing scrolls up under
+   it to dissolve, and it holds the window by the band alone, never by the
+   header below it. */
+.happy-tabbed-pane[data-bar-overlay][data-bar-hidden][data-bar-band-kept]
+    > .happy-tabbed-pane__body
+    > .happy-tabbed-pane__veil {
+    height: var(--happy-tabbed-pane-bar-height);
+    background: var(--surface);
 }
 
 .happy-tabbed-pane__scroller {
