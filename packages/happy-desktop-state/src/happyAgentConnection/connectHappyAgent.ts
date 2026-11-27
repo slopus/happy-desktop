@@ -404,8 +404,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
     /** The protocol errors last logged for each message, so a placeholder is reported once. */
     const invalidMessagesLogged = new Map<string, string>();
-    /** The unknown presentations already logged, by agent, message and tool call. */
-    const presentationsDroppedLogged = new Set<string>();
+    /**
+     * The unknown presentation types already logged. A newer server sends its
+     * type on every call that uses it, and showing those as plain calls is how
+     * this build is meant to read them, not a fault: each type is noted once
+     * per connection, at debug level, with the first call that carried it.
+     */
+    const presentationTypesDroppedLogged = new Set<string>();
     /**
      * The message from the server as this client reads it: every message that
      * reaches a session is checked here first, once, against the protocol. A
@@ -425,11 +430,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const admission = messageAdmission(message);
         if (admission.kind === "valid") {
             for (const dropped of admission.presentationsDropped) {
-                const key = `${agentId}/${admission.message.id}/${dropped.toolCallId}`;
-                if (presentationsDroppedLogged.has(key)) continue;
-                presentationsDroppedLogged.add(key);
-                console.warn(
-                    "A Happy Agent tool call has a presentation this build does not know; it shows as a plain call.",
+                if (presentationTypesDroppedLogged.has(dropped.type)) continue;
+                presentationTypesDroppedLogged.add(dropped.type);
+                console.debug(
+                    "A Happy Agent tool call has a presentation this build does not know; calls with it show as plain calls.",
                     {
                         agentId,
                         messageId: admission.message.id,

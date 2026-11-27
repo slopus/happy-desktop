@@ -186,8 +186,9 @@ it("puts a live message the protocol does not describe in its place, and the nex
     expect(warn).toHaveBeenCalledTimes(2);
 });
 
-it("shows a tool call whose presentation this build does not know as a plain call, logged once", async () => {
+it("shows a tool call whose presentation this build does not know as a plain call, its type noted once at debug level", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
     const call = fixture(unknownPresentation);
     const { daemon, agentId, watched } = await sessionOpen([
         fakeRun({ id: "run-1", status: "running", messages: [call] }),
@@ -201,16 +202,29 @@ it("shows a tool call whose presentation this build does not know as a plain cal
     expect(tool()).not.toHaveProperty("presentation");
     expect(rows(watched.elements)).not.toContain(`invalid_message:${call.id}`);
 
-    // The same call arriving again is not logged again.
+    // The same call arriving again, and another call with the same type, are not logged again.
     daemon.eventEmit("message.updated", {
         agentId,
         runId: "run-1",
         message: fixture(unknownPresentation),
     });
+    const another = fixture(unknownPresentation);
+    daemon.eventEmit("message.updated", {
+        agentId,
+        runId: "run-1",
+        message: {
+            ...another,
+            id: `${another.id}2`,
+            content: another.content.map((block) =>
+                block.type === "tool_call" ? { ...block, id: `${block.id}2` } : block,
+            ),
+        } as Message,
+    });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(tool()).toBeDefined();
-    expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0]![1]).toEqual({
+    expect(warn).not.toHaveBeenCalled();
+    expect(debug).toHaveBeenCalledOnce();
+    expect(debug.mock.calls[0]![1]).toEqual({
         agentId: "agent-a",
         messageId: call.id,
         toolCallId: "toolunknownpresent000001",

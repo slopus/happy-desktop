@@ -66,7 +66,7 @@ Each file is one JSON object:
 - `valid/agent-presentation-unknown-type.json` is what a newer server's tool
   presentation looks like to an older client. A presentation whose `type`
   the client does not know is read as no presentation: the client shows the
-  plain tool call and logs it once. A presentation of a known type with a bad
+  plain tool call and notes the type once, at debug level. A presentation of a known type with a bad
   shape, such as the card above, still fails the whole message.
 - `valid/user-legacy-null-mode.json` is such a user message with `mode: null`;
   `invalid/user-missing-mode.json`, with no `mode` at all, still fails.
