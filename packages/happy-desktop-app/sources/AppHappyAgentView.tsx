@@ -5,6 +5,7 @@ import {
     useMemo,
     useRef,
     useSyncExternalStore,
+    type ReactElement,
     type ReactNode,
 } from "react";
 import type { ConversationSummary, HappyAgentSystemMonitorStore } from "happy-desktop-state";
@@ -67,6 +68,8 @@ import type {
     CommandPaletteStore,
     HappyAgentArtifactCatalogStore,
     HappyAgentArtifactChatContext,
+    HappyAgentArtifactCreationSnapshot,
+    HappyAgentArtifactCreationStore,
     HappyAgentArtifactId,
     HappyAgentArtifactLive,
     HappyAgentArtifactPlaces,
@@ -289,6 +292,7 @@ import {
     FormRow,
     type FilePreviewKind,
     filePreviewKind,
+    FileModal,
     Lightbox,
     MarkdownDiff,
     markdownDiffCompute,
@@ -398,9 +402,11 @@ import {
     type WorkspaceLifecyclePhase,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
+import { workspaceChatsMenuChoice, workspaceChatsMenuItems } from "./workspaceChatsMenu";
 import { happyAgentConversationContent } from "happy-desktop-state";
 import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
 import {
+    closedChatLatestFind,
     commandPaletteIndexMove,
     commandPaletteResults,
     commandPaletteRowAt,
@@ -435,6 +441,7 @@ import { useFeatureAvailable } from "./featureAvailable";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { HappyAgentViewersSlot } from "./views/HappyAgentViewersSlot";
+import { FLOATY_ARTIFACT_PREFIX, workFloatyDestination } from "./workFloatyDestination";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
 import {
     subtaskRepositoryStack,
@@ -1098,6 +1105,8 @@ export interface AppHappyAgentViewProps {
         chatId: string,
         fallbackChatId?: string,
     ): boolean;
+    /** Puts back the history `onChatClose` removed when the host refused that archive. */
+    onChatCloseRefused?(happyAgentId: string, groupId: string, chatId: string): void;
     /** Removes every history visit to a file tab that the reader closed. */
     onFileClose(happyAgentId: string, groupId: string, path: string): void;
     /**
@@ -1159,6 +1168,21 @@ export interface AppHappyAgentViewProps {
     onPipelineRunOpen?(happyAgentId: string, runId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
+    /**
+     * Leaves whichever page is in front — the artifacts, an artifact, the
+     * feed, a Surface, the inbox, a profile, a new bot or task — for where the
+     * reader was before it. Command-W on a page; absent, the chord is unbound
+     * there.
+     */
+    onPageClose?(): void;
+    /**
+     * Closes the window. Command-W asks for it only once it has found nothing
+     * of the window's own left to close: no tab, no pane, no project open, no
+     * machine. Supplied by a shell that can close its window; absent in a
+     * browser tab and under a shell too old to offer it, where the chord then
+     * does nothing.
+     */
+    onWindowClose?(): void;
     /** The person whose profile the URL opens, on the addressed Happy Agent. */
     userProfileId?: string;
     /** Addresses one person's profile on one Happy Agent. */
@@ -1891,13 +1915,25 @@ function toolTabsPlaced(
  * What Command-W closes: the right pane's tab while the keyboard is in the
  * pane, or the pane itself when nothing in it is closable; otherwise the main
  * content's tab, exactly as before the pane had tabs of its own.
+ *
+ * One case follows what the reader did rather than where the keyboard is. A
+ * link, a card, or a command in the conversation opens its view beside it and
+ * leaves the keyboard where it was, so the view the reader has just opened is
+ * `panelFronted`: it is the thing in front, and it closes before the
+ * conversation it was opened from. Only a view with a close of its own counts;
+ * the permanent lists never stand between Command-W and the main content.
  */
 export function workspaceCloseTargetFind(
     focusedPane: AppShellFocusedPane,
     panel: HappyAgentPanelSnapshot,
     checkoutClosed: boolean,
+    panelFronted = false,
 ): { type: "view"; viewId: string } | { type: "pane" } | { type: "main" } {
-    if (focusedPane !== "panel" || !panel.open || checkoutClosed) return { type: "main" };
+    if (!panel.open || checkoutClosed) return { type: "main" };
+    if (focusedPane !== "panel") {
+        const fronted = panelFronted ? panelFrontedCloseTargetFind(panel) : undefined;
+        return fronted === undefined ? { type: "main" } : { type: "view", viewId: fronted };
+    }
     const viewId =
         panelCloseTargetFind(panel) ??
         (panel.activeViewId === "files" && panel.filesViewOpen ? "files" : undefined);
@@ -1918,6 +1954,107 @@ function panelCloseTargetFind(panel: HappyAgentPanelSnapshot): string | undefine
         (entry) => entry.id === panel.activeViewId && entry.placement === "panel",
     );
     return tab?.id;
+}
+
+/**
+ * The view in front of the pane that the conversation can open from where the
+ * keyboard is: a preview, a file, a change, an artifact, another chat, or one
+ * of its own tabs. A terminal or a page the reader started is theirs to close
+ * from inside the pane, never by a Command-W meant for the conversation.
+ */
+function panelFrontedCloseTargetFind(panel: HappyAgentPanelSnapshot): string | undefined {
+    const viewId = panelCloseTargetFind(panel);
+    const tab = panel.tabs.find((entry) => entry.id === viewId);
+    if (tab === undefined) return viewId;
+    return tab.kind === "chat" || (tab.kind === "browser" && tab.artifactId !== undefined)
+        ? viewId
+        : undefined;
+}
+
+/**
+ * Which pane the reader last touched, with the conversation that was open,
+ * the tab the main content had in front, and what the pane beside it had in
+ * front at that moment.
+ */
+interface WorkspacePaneTouch {
+    readonly pane: AppShellFocusedPane;
+    readonly scope: string;
+    readonly main: string;
+    readonly front: string;
+}
+
+/** A surface nobody has touched yet: no conversation's pane is newer than it. */
+const WORKSPACE_PANE_UNTOUCHED: WorkspacePaneTouch = {
+    pane: "workspace",
+    scope: "",
+    main: "",
+    front: "",
+};
+
+/**
+ * The conversation on screen, the tab the main content has in front of it, and
+ * what the pane beside it has in front, as three comparable values. A view
+ * that is replaced in place — the preview, a file, an artifact — is named with
+ * what it shows, so opening the next one reads as a different view in front.
+ */
+function workspacePaneStanding(
+    workspace: HappyAgentWorkspaceStore,
+): Pick<WorkspacePaneTouch, "scope" | "main" | "front"> {
+    const { activeMainViewId, address, fileTabs } = workspace.get();
+    const panel = workspace.panel.get();
+    const scope = `${address.groupId ?? ""}/${address.conversationId ?? ""}`;
+    const main = activeMainViewId ?? "";
+    if (!panel.open) return { scope, main, front: "closed" };
+    switch (panel.activeViewId) {
+        case "preview":
+            return {
+                scope,
+                main,
+                front: `preview:${panel.previewEntryId ?? ""}:${String(panel.previewMediaIndex ?? "")}`,
+            };
+        case "change":
+            return { scope, main, front: `change:${panel.changeViewPath ?? ""}` };
+        case HAPPY_AGENT_PANEL_FILE_VIEW_ID:
+            return {
+                scope,
+                main,
+                front: `file:${fileTabs.find((tab) => tab.placement === "panel")?.id ?? ""}`,
+            };
+        case "artifact":
+            return {
+                scope,
+                main,
+                front: `artifact:${panel.artifactView?.artifactId ?? ""}@${String(panel.artifactView?.version ?? "")}`,
+            };
+        default:
+            return { scope, main, front: panel.activeViewId };
+    }
+}
+
+/** What a window without artifacts reads for a new artifact's outcome: nothing, ever. */
+const ARTIFACT_CREATION_NOTHING: HappyAgentArtifactCreationSnapshot = {};
+const ARTIFACT_CREATION_NONE: HappyAgentArtifactCreationStore = {
+    get: () => ARTIFACT_CREATION_NOTHING,
+    subscribe: () => () => undefined,
+    failureDismiss: () => undefined,
+};
+
+/**
+ * Whether the main content has brought something forward since the reader last
+ * touched the pane beside it: another conversation, or another tab of the main
+ * strip. A row in the pane's Activity opens a subagent's own tab, a file or a
+ * tool moves out of the pane into the main strip; either way the reader's hand
+ * was in the pane and what they opened is not. It is what they are looking at,
+ * so it is what Command-W closes, before anything in the pane they opened it
+ * from.
+ */
+function workspaceMainCameForward(
+    touch: WorkspacePaneTouch,
+    standing: Pick<WorkspacePaneTouch, "scope" | "main">,
+): boolean {
+    return (
+        touch.pane === "panel" && (touch.scope !== standing.scope || touch.main !== standing.main)
+    );
 }
 
 /**
@@ -2065,6 +2202,64 @@ function previewMediaFind(
               index,
               item,
           };
+}
+
+/**
+ * What a message opened over its conversation, drawn over it: the file viewer's
+ * file, or one file a tool call presented. Escape, Command-W and a click on the
+ * dim put it away; a file holding an unsaved edit then moves beside instead.
+ */
+function conversationModal(input: {
+    conversation: HappyAgentWorkspaceSnapshot["conversation"];
+    panel: HappyAgentPanelSnapshot;
+    workspace: HappyAgentWorkspaceStore;
+    panelFile?: HappyAgentFileTabSnapshot;
+    fileBody?: (file: HappyAgentFileTabSnapshot) => ReactNode;
+    onFileReveal?: () => void;
+}): ReactNode {
+    const modal = input.panel.modal;
+    if (modal === undefined) return undefined;
+    const close = (): void => input.workspace.modalClose();
+    const beside = (): void => input.workspace.panel.modalBesideOpen();
+    if (modal.kind === "media") {
+        const media = previewMediaFind(
+            input.conversation,
+            previewToolFind(input.conversation, modal.entryId),
+            modal.mediaIndex,
+        );
+        if (media === undefined) return undefined;
+        return (
+            <ModalOverlay onDismiss={close}>
+                <FileModal
+                    data-testid="happy-agent-file-modal"
+                    onBesideOpen={beside}
+                    onClose={close}
+                    path={media.item.name}
+                >
+                    <HappyAgentToolMediaPreview
+                        documents={input.workspace.toolMediaDocument()}
+                        media={media}
+                        pathHidden
+                    />
+                </FileModal>
+            </ModalOverlay>
+        );
+    }
+    const file = input.panelFile;
+    if (file === undefined || input.fileBody === undefined) return undefined;
+    return (
+        <ModalOverlay onDismiss={close}>
+            <FileModal
+                data-testid="happy-agent-file-modal"
+                onBesideOpen={beside}
+                onClose={close}
+                {...(input.onFileReveal === undefined ? {} : { onReveal: input.onFileReveal })}
+                path={file.path}
+            >
+                {input.fileBody(file)}
+            </FileModal>
+        </ModalOverlay>
+    );
 }
 
 /** One tab per session in the open group, marked while the agent is working. */
@@ -3152,6 +3347,61 @@ function surfaceSidebarItem(
     };
 }
 
+/** No row stands for the place on screen besides its own. */
+const SIDEBAR_ALIASES_NONE: readonly string[] = [];
+
+/**
+ * The artifacts the workspace has in front of the reader besides the
+ * conversation: the one open in the pane beside it — in the artifact tab, or
+ * as a live page — and the one that is the main content's selected tab. Their
+ * ids, one to a line, so the answer is a value a subscription can compare.
+ */
+function workspaceArtifactsInFront(workspace: HappyAgentWorkspaceStore): string {
+    const panel = workspace.panel.get();
+    const tabArtifact = (tab: HappyAgentPanelTabSnapshot | undefined): string | undefined =>
+        tab?.kind === "artifact" || tab?.kind === "browser" ? tab.artifactId : undefined;
+    const mainViewId = workspace.get().activeMainViewId;
+    const main = tabArtifact(
+        panel.tabs.find((tab) => tab.id === mainViewId && tab.placement === "main"),
+    );
+    const beside = !panel.open
+        ? undefined
+        : panel.activeViewId === "artifact"
+          ? panel.artifactView?.artifactId
+          : tabArtifact(
+                panel.tabs.find(
+                    (tab) => tab.id === panel.activeViewId && tab.placement === "panel",
+                ),
+            );
+    return [beside, main].filter((id) => id !== undefined).join("\n");
+}
+
+/**
+ * The rows of the artifacts kept at the top of the sidebar that the workspace
+ * has in front. Such an artifact has no row of its own anywhere else, so while
+ * it is open beside the conversation its kept row is marked with the
+ * conversation's.
+ */
+function surfaceRowsShowing(
+    happyAgentId: string,
+    joined: readonly HappyAgentSurface[],
+    artifactsInFront: string,
+): readonly string[] {
+    const artifacts = new Set(artifactsInFront.split("\n").filter((id) => id !== ""));
+    if (artifacts.size === 0) return SIDEBAR_ALIASES_NONE;
+    const rows = joined
+        .filter((surface) => {
+            const target = surface.target;
+            return (
+                target?.state === "available" &&
+                target.kind === "artifact" &&
+                artifacts.has(target.id)
+            );
+        })
+        .map((surface) => happyAgentItemId(happyAgentId, surfaceRowId(surface.id)));
+    return rows.length === 0 ? SIDEBAR_ALIASES_NONE : rows;
+}
+
 /** The bots and tasks a reference Surface's row borrows its face from. */
 interface SurfacePlaces {
     readonly bots: readonly HappyAgentBot[];
@@ -3420,6 +3670,15 @@ function rowDestination(
             openGroupFind(happyAgent.projects, happyAgent.bots, happyAgent.tasks ?? [], [], rowId)
                 ?.conversations[0]?.id,
     };
+}
+
+/** A conversation whose close was refused, by its title once it is back in the strip. */
+function conversationArchiveFailureName(
+    group: OpenGroup | undefined,
+    conversationId: string,
+): string {
+    const title = group?.conversations.find((summary) => summary.id === conversationId)?.title;
+    return title ? `“${title}”` : "this chat";
 }
 
 /**
@@ -4076,9 +4335,27 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
      * with no conversation to sit beside, opens the artifact's own page.
      */
     const artifactOpen = props.onArtifactOpen
-        ? (happyAgentId: string, artifactId: string): void => {
-              const pageOpen = () => props.onArtifactOpen!(happyAgentId, artifactId);
+        ? (
+              happyAgentId: string,
+              artifactId: string,
+              version?: number,
+              /** Where an artifact that is not a live page opens, in place of its own page. */
+              page?: () => void,
+          ): void => {
               const session = happyAgentOf(happyAgentId)?.session;
+              const pageOpen = () => {
+                  if (page) {
+                      page();
+                      return;
+                  }
+                  // The page shows the version its viewer holds; a link naming
+                  // one has it selected before the page arrives.
+                  if (version !== undefined)
+                      session?.artifacts
+                          ?.viewer()
+                          .artifactOpen(artifactId as HappyAgentArtifactId, version);
+                  props.onArtifactOpen!(happyAgentId, artifactId);
+              };
               const address = session?.workspace.get().address;
               const groupId = address?.groupId;
               const conversationId = address?.conversationId;
@@ -4090,6 +4367,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                   artifacts: session.artifacts,
                   panel: session.workspace.panel,
                   artifactId: artifactId as HappyAgentArtifactId,
+                  ...(version === undefined ? {} : { version }),
                   otherwise: pageOpen,
                   liveOpened: () => props.onChatSelect(happyAgentId, groupId, conversationId),
               });
@@ -4228,6 +4506,65 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const surfaceSectionShown =
         props.surfaceSection?.section ??
         (openSurface === undefined ? undefined : happyAgentSurfaceSectionOf(openSurface.type));
+    // A section shows its documents or todo lists as tabs, and its strip binds
+    // Command-W to the tab in front, as the workspace does to its own. The
+    // page is left by the chord only from its bare list.
+    const surfaceSectionTabOnScreen = props.surfaceId ?? props.surfaceSection?.listTabId;
+    const surfaceSectionTabInFront =
+        surfaceSectionShown !== undefined &&
+        active?.session?.surfaces !== undefined &&
+        surfaceSectionTabOnScreen !== undefined &&
+        surfaceSectionTabsShown(
+            surfaceTabs[surfaceSectionShown],
+            surfaceCatalog,
+            props.surfaceId as HappyAgentSurfaceId | undefined,
+        ).some((tab) => happyAgentSurfaceTabId(tab) === surfaceSectionTabOnScreen);
+    // The row the place on screen is: a page's own row, else the row of the
+    // conversation the address names.
+    const sidebarPageItemId =
+        experimental.inbox && props.inboxOpen
+            ? INBOX_ITEM
+            : props.artifactsOpen
+              ? artifactsItemId
+              : props.pipelinesOpen && pipelinesAvailable
+                ? PIPELINES_ITEM
+                : props.feedOpen
+                  ? FEED_ITEM
+                  : surfaceSectionShown !== undefined
+                    ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
+                    : props.surfaceId !== undefined
+                      ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
+                      : undefined;
+    const sidebarConversationRowId =
+        sidebarPageItemId === undefined && props.groupId
+            ? activeRowId(active?.bots ?? [], active?.tasks ?? [], props.groupId, props.chatId)
+            : undefined;
+    // What the workspace has in front of the reader besides the conversation:
+    // an artifact open beside it or as a tab of its own. Read as one value so
+    // the window renders again only when that changes. It is one answer kept
+    // current by two stores: the pane says what is beside the conversation,
+    // and the workspace which tab the main content has selected.
+    const frontWorkspace = active?.session?.workspace;
+    const frontArtifactsGet = () =>
+        frontWorkspace ? workspaceArtifactsInFront(frontWorkspace) : "";
+    useSyncExternalStore(
+        frontWorkspace?.panel.subscribe ?? SUBSCRIBE_NONE,
+        frontArtifactsGet,
+        frontArtifactsGet,
+    );
+    const frontArtifacts = useSyncExternalStore(
+        frontWorkspace ? reactFrameSubscribe(frontWorkspace) : SUBSCRIBE_NONE,
+        frontArtifactsGet,
+        frontArtifactsGet,
+    );
+    // An artifact kept at the top of the sidebar that opens beside the
+    // conversation leaves the address on the conversation. While it is in
+    // front there, the row kept for it is marked too, so the row the reader
+    // clicked does not hand its mark to the conversation's alone.
+    const sidebarAliasIds =
+        sidebarConversationRowId === undefined
+            ? SIDEBAR_ALIASES_NONE
+            : surfaceRowsShowing(props.happyAgentId, surfaceCatalog.joined, frontArtifacts);
     /**
      * Goes to one tab of a section, or to its list when there is none. The
      * tab comes to the front first, so opening a Surface from its own tab
@@ -4689,30 +5026,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 addressedProject?.id,
             )}
             activeItemId={
-                experimental.inbox && props.inboxOpen
-                    ? INBOX_ITEM
-                    : props.artifactsOpen
-                      ? artifactsItemId
-                      : props.pipelinesOpen && pipelinesAvailable
-                        ? PIPELINES_ITEM
-                        : props.feedOpen
-                          ? FEED_ITEM
-                          : surfaceSectionShown !== undefined
-                            ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
-                            : props.surfaceId !== undefined
-                              ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                              : props.groupId
-                                ? happyAgentItemId(
-                                      props.happyAgentId,
-                                      activeRowId(
-                                          active?.bots ?? [],
-                                          active?.tasks ?? [],
-                                          props.groupId,
-                                          props.chatId,
-                                      ),
-                                  )
-                                : ""
+                sidebarPageItemId ??
+                (sidebarConversationRowId === undefined
+                    ? ""
+                    : happyAgentItemId(props.happyAgentId, sidebarConversationRowId))
             }
+            activeItemAliasIds={sidebarAliasIds}
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
             brand={false}
@@ -4966,16 +5285,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (actionId !== ROW_MENU_ARCHIVE) return;
-                // Deliberately no navigation here. A worktree's row goes at
-                // once and the workspace reports its closing, so the reader
-                // leaves with it; a project stays until the host's catalog no
-                // longer holds it, which is reported the same way as an
+                // Archiving a project or workspace removes its worktree folders,
+                // so the row asks first, in the same dialog Command-W raises.
+                // Deliberately no navigation here. Once confirmed, a worktree's
+                // row goes at once and the workspace reports its closing, so the
+                // reader leaves with it; a project stays until the host's catalog
+                // no longer holds it, which is reported the same way as an
                 // archive performed from another window or machine.
-                void (
-                    owner.worktreeId
-                        ? workspace.worktreeArchive(owner.project.id, owner.worktreeId)
-                        : workspace.projectArchive(owner.project.id)
-                ).catch(() => undefined);
+                workspace.groupArchiveOpen(
+                    (owner.worktreeId ?? owner.project.id) as HappyAgentGroupId,
+                );
             }}
             // The Bots heading's menu of hidden bots puts one, or all, back.
             onSectionMenuSelect={(sectionId, _source, actionId) => {
@@ -5024,8 +5343,24 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ?.catalog()
                         .get()
                         .surfaces.find((entry) => entry.id === surfaceId);
-                    // An artifact, bot, or task opens where it always does;
-                    // only one that cannot be opened from here shows its page.
+                    // A kept artifact opens on its Surface's page, which shows
+                    // the artifact with the chat every Surface has; a live one
+                    // still opens as its browser tab.
+                    const target = surface?.target;
+                    if (
+                        target?.state === "available" &&
+                        target.kind === "artifact" &&
+                        artifactOpen !== undefined &&
+                        props.onSurfaceOpen !== undefined
+                    ) {
+                        const surfacePageOpen = props.onSurfaceOpen;
+                        artifactOpen(happyAgent.id, target.id, undefined, () =>
+                            surfacePageOpen(happyAgent.id, surfaceId),
+                        );
+                        return;
+                    }
+                    // A bot or task opens where it always does; only one that
+                    // cannot be opened from here shows its page.
                     if (surface !== undefined && surfaceTargetOpen(happyAgent, surface)) return;
                     props.onSurfaceOpen?.(happyAgent.id, surfaceId);
                     return;
@@ -5336,7 +5671,11 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // early returns because the window's own dialogs are mounted beside it: a
     // surface that answers on one route and not another is not a window-level
     // surface at all.
-    const routeContent = (): ReactNode => {
+    //
+    // A page is any screen other than the conversations' workspace. Nothing
+    // for an address that shows the workspace, or one whose page cannot be
+    // shown yet and so falls through to it.
+    const pageContent = (): ReactElement | undefined => {
         // The workbench belongs to no machine and needs no connection: it renders the
         // component pages themselves, so it is independent of every Happy Agent.
         if (props.blueprintOpen)
@@ -5388,41 +5727,51 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         // headers carry controls — Back, History, Delete — so the headers
         // themselves are the window's drag band; a drag overlay would sit on
         // those controls and take every click.
+        // The artifacts' page and one artifact's own page, which a Surface
+        // keeping that artifact shows too, with its chat.
+        const artifactsSurface = (
+            artifacts: HappyAgentArtifacts,
+            artifactId: HappyAgentArtifactId | undefined,
+            chat?: HappyAgentSurfaceChatToggle,
+        ): ReactNode =>
+            active ? (
+                <HappyAgentArtifactsSurface
+                    artifacts={artifacts}
+                    {...(artifactLiveTabOpen ? { onLiveOpen: artifactLiveTabOpen } : {})}
+                    {...(props.browserContent
+                        ? {
+                              artifactLive: artifactLiveRendererCreate(
+                                  props.browserContent,
+                                  active.remoteId ?? null,
+                              ),
+                          }
+                        : {})}
+                    {...(active.session?.surfaces
+                        ? { surfaces: active.session.surfaces.catalog() }
+                        : {})}
+                    {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
+                    {...(artifactId === undefined ? {} : { artifactId })}
+                    {...(chat ? { chat } : {})}
+                    {...(active.instanceId === undefined ? {} : { instanceId: active.instanceId })}
+                    onArtifactClose={() => props.onArtifactClose?.(active.id)}
+                    onArtifactOpen={(artifactId) => props.onArtifactOpen?.(active.id, artifactId)}
+                    places={{
+                        bots: active.bots,
+                        projects: active.projects,
+                        tasks: active.tasks ?? [],
+                    }}
+                />
+            ) : null;
         if (props.artifactsOpen && active?.session?.artifacts) {
             const artifacts = active.session.artifacts;
             return (
                 <>
-                    <HappyAgentArtifactsSurface
-                        artifacts={artifacts}
-                        {...(artifactLiveTabOpen ? { onLiveOpen: artifactLiveTabOpen } : {})}
-                        {...(props.browserContent
-                            ? {
-                                  artifactLive: artifactLiveRendererCreate(
-                                      props.browserContent,
-                                      active.remoteId ?? null,
-                                  ),
-                              }
-                            : {})}
-                        {...(active.session.surfaces
-                            ? { surfaces: active.session.surfaces.catalog() }
-                            : {})}
-                        {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
-                        {...(props.artifactId === undefined
-                            ? {}
-                            : { artifactId: props.artifactId as HappyAgentArtifactId })}
-                        {...(active.instanceId === undefined
-                            ? {}
-                            : { instanceId: active.instanceId })}
-                        onArtifactClose={() => props.onArtifactClose?.(active.id)}
-                        onArtifactOpen={(artifactId) =>
-                            props.onArtifactOpen?.(active.id, artifactId)
-                        }
-                        places={{
-                            bots: active.bots,
-                            projects: active.projects,
-                            tasks: active.tasks ?? [],
-                        }}
-                    />
+                    {artifactsSurface(
+                        artifacts,
+                        props.artifactId === undefined
+                            ? undefined
+                            : (props.artifactId as HappyAgentArtifactId),
+                    )}
                 </>
             );
         }
@@ -5554,6 +5903,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         key={props.surfaceId}
                         {...(session.viewers ? { viewers: session.viewers } : {})}
                         {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
+                        {...(artifactsAvailable && session.artifacts
+                            ? {
+                                  artifactView: (
+                                      artifactId: HappyAgentArtifactId,
+                                      chat: HappyAgentSurfaceChatToggle | undefined,
+                                  ) => artifactsSurface(session.artifacts!, artifactId, chat),
+                              }
+                            : {})}
                         support={surfaceSupport}
                         {...(props.surfaceChat ? { chat: props.surfaceChat } : {})}
                         chatConversation={(chat, surfaceName) => (
@@ -5623,7 +5980,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         surfaces={active.session.surfaces}
                     />
                 );
-            if (surfaceSectionShown === undefined) return surfaceContent;
+            if (surfaceSectionShown === undefined) return surfaceContent ?? undefined;
             const section = surfaceSectionShown;
             const createKind: HappyAgentSurfaceCreateKind =
                 section === "documents" ? "document" : "todo";
@@ -5683,6 +6040,39 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 </>
             );
 
+        // An address for a page this Happy Agent has no way to show — artifacts
+        // on one that keeps none, a profile off Happy Cloud, an inbox while the
+        // experiment is off, a Surface where there are none — says so, rather
+        // than falling through to the workspace and its "No project open" under
+        // an address that names something else.
+        const unavailablePage = props.artifactsOpen
+            ? { icon: "package" as const, title: "Artifacts aren't available here" }
+            : props.userProfileId !== undefined
+              ? { icon: "agents" as const, title: "Profiles aren't available here" }
+              : props.inboxOpen
+                ? { icon: "feed" as const, title: "The inbox isn't available here" }
+                : props.surfaceId !== undefined
+                  ? { icon: "doc" as const, title: "This Surface isn't available here" }
+                  : undefined;
+        if (unavailablePage && active?.session)
+            return (
+                <>
+                    {desktop ? <WindowDragRegion /> : null}
+                    <EmptyState
+                        description={`${active.label} has no page for this address.`}
+                        icon={unavailablePage.icon}
+                        size="panel"
+                        title={unavailablePage.title}
+                    />
+                </>
+            );
+
+        return undefined;
+    };
+
+    // The conversations' workspace, which is what the window shows when no
+    // page is in front of it.
+    const workspaceContent = (): ReactNode => {
         if (active?.session)
             return (
                 <HappyAgentWorkspaceSurface
@@ -5728,10 +6118,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             props.onChatClose?.(active.id, groupId, chatId, fallbackChatId) ?? false
                         );
                     }}
+                    onChatCloseRefused={(groupId, chatId) =>
+                        props.onChatCloseRefused?.(active.id, groupId, chatId)
+                    }
                     onFileClose={(groupId, path) => props.onFileClose(active.id, groupId, path)}
                     onFileSelect={(groupId, chatId, path, kind, replace) =>
                         props.onFileSelect(active.id, groupId, chatId, path, kind, replace)
                     }
+                    {...(props.onWindowClose ? { onWindowClose: props.onWindowClose } : {})}
                     onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
                     linkOpenDefault={settings.linkOpenPlacement}
                     platform={props.platform}
@@ -5750,8 +6144,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ? {
                               artifacts: active.session.artifacts,
                               ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
-                              onArtifactOpen: (artifactId: string) =>
-                                  artifactOpen?.(active.id, artifactId),
+                              onArtifactOpen: (artifactId: string, version?: number) =>
+                                  artifactOpen?.(active.id, artifactId, version),
                           }
                         : {})}
                 />
@@ -5818,6 +6212,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
               ...(genUiActions ? genUiSecretHostsCreate(genUiActions) : {}),
           }
         : {};
+    const page = pageContent();
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
             <GenUiMachineContext value={genUiMachine}>
@@ -5907,9 +6302,30 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                     props.blueprintOpen,
                                 ].join("\u0000")}
                             >
-                                {routeContent()}
+                                {page ?? workspaceContent()}
                             </RenderErrorBoundary>
                         </AppShell>
+                        {/* Command-W on a page leaves it for where the reader was
+                            before it, as the page's own Back does where it has one.
+                            The workspace binds the chord itself, to the tab or pane
+                            in front, and so does a section of documents or todo
+                            lists to its tab, so the two never answer at once. */}
+                        {page !== undefined && props.onPageClose && !surfaceSectionTabInFront ? (
+                            <WindowShortcuts
+                                actions={[
+                                    { run: props.onPageClose, shortcut: APP_SHORTCUTS.tabClose },
+                                ]}
+                            />
+                        ) : null}
+                        {/* A window still waiting for its machine holds nothing to
+                            close, so the chord closes the window itself. */}
+                        {page === undefined && !active?.session && props.onWindowClose ? (
+                            <WindowShortcuts
+                                actions={[
+                                    { run: props.onWindowClose, shortcut: APP_SHORTCUTS.tabClose },
+                                ]}
+                            />
+                        ) : null}
                         {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.
                 It only opens. The dispatcher stands down while any dialog is
@@ -6831,6 +7247,8 @@ function HappyAgentArtifactsSurface(props: {
     /** The Happy Agent's Surfaces, which an open artifact can be kept among. */
     surfaces?: HappyAgentSurfaceCatalogStore;
     places: HappyAgentArtifactPlaces;
+    /** The chat of the Surface the open artifact is shown on, when it is. */
+    chat?: HappyAgentSurfaceChatToggle;
     onArtifactOpen(artifactId: string): void;
     onArtifactClose(): void;
 }) {
@@ -6869,6 +7287,7 @@ function HappyAgentArtifactsSurface(props: {
                                   ? {}
                                   : { instanceId: props.instanceId })}
                               labels={labels}
+                              {...(props.chat ? { chat: props.chat } : {})}
                               onArtifactOpen={props.onArtifactOpen}
                               onClose={props.onArtifactClose}
                               surfaces={props.surfaces ?? happyAgentSurfaceCatalogStoreNoop}
@@ -6928,6 +7347,7 @@ function HappyAgentArtifactViewerSurface(props: {
     onArtifactOpen(artifactId: string): void;
     onClose(): void;
     surfaces: HappyAgentSurfaceCatalogStore;
+    chat?: HappyAgentSurfaceChatToggle;
 }) {
     const genUiViewerHost = useGenUiViewerHost();
     const store = props.artifacts.viewer();
@@ -6960,6 +7380,7 @@ function HappyAgentArtifactViewerSurface(props: {
     return (
         <HappyAgentArtifactViewer
             genUi={genUiViewerHost}
+            {...(props.chat ? { chat: props.chat } : {})}
             entities={entities}
             labels={props.labels}
             onBack={props.onClose}
@@ -7225,6 +7646,14 @@ function HappyAgentSurfaceContent(props: {
     ) => ReactNode;
     /** Shows a vault's HTML artifact entry served as a live site, where the host can. */
     artifactPage?: HtmlPreviewRenderer;
+    /**
+     * The artifact an artifact Surface keeps, drawn as its own page with the
+     * Surface's chat toggle. Absent, the Surface's page offers to open it.
+     */
+    artifactView?: (
+        artifactId: HappyAgentArtifactId,
+        chat: HappyAgentSurfaceChatToggle | undefined,
+    ) => ReactNode;
 }) {
     const catalogStore = props.surfaces.catalog();
     const support = props.support;
@@ -7238,17 +7667,38 @@ function HappyAgentSurfaceContent(props: {
     // in the catalog the moment it is asked for, and one opened on launch
     // appears as the catalog arrives, so there is no loader or error to show.
     // One the reader made here and the Happy Agent turned down says why
-    // instead.
+    // instead. Once the Happy Agent has answered with its catalog, one it does
+    // not name — deleted, out of the reader's sight, or never there — is not
+    // coming, and the page says so rather than staying empty.
     if (surface === undefined) {
         const refusal = catalog.createsRefused.get(props.surfaceId);
-        return refusal === undefined ? (
-            <WindowDragRegion />
-        ) : (
-            <HappyAgentSurfaceNotMadePage
-                name={refusal.name}
-                reason={refusal.error.message}
-                type={refusal.type}
-            />
+        if (refusal !== undefined)
+            return (
+                <HappyAgentSurfaceNotMadePage
+                    name={refusal.name}
+                    reason={refusal.error.message}
+                    type={refusal.type}
+                />
+            );
+        if (
+            catalog.availability === "checking" ||
+            catalog.membershipPending.has(props.surfaceId as HappyAgentSurfaceId)
+        )
+            return <WindowDragRegion />;
+        return (
+            <>
+                <WindowDragRegion />
+                <EmptyState
+                    description={
+                        catalog.availability === "available"
+                            ? "It may have been deleted, or it isn't shared with you."
+                            : "This Happy Agent has no Surfaces."
+                    }
+                    icon="doc"
+                    size="panel"
+                    title="This Surface isn't available"
+                />
+            </>
         );
     }
     const presented = surfaceViewOf(catalog, surface);
@@ -7382,6 +7832,15 @@ function HappyAgentSurfaceContent(props: {
                     surface={view}
                 />
             );
+        // An artifact the reader can see is shown as itself, with the chat
+        // every Surface has at its header's edge.
+        if (
+            surface.type.kind === "artifact" &&
+            surface.target?.state === "available" &&
+            surface.target.kind === "artifact" &&
+            props.artifactView
+        )
+            return props.artifactView(surface.target.id as HappyAgentArtifactId, chat);
         if (
             surface.type.kind === "artifact" ||
             surface.type.kind === "bot" ||
@@ -7476,6 +7935,11 @@ function HappyAgentSurfaceChat(props: {
         props.workspace.get,
         props.workspace.get,
     );
+    const panel = useSyncExternalStore(
+        props.workspace.panel.subscribe,
+        props.workspace.panel.get,
+        props.workspace.panel.get,
+    );
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
     // The address applies the conversation before this renders; one still
@@ -7512,6 +7976,7 @@ function HappyAgentSurfaceChat(props: {
             onChatSelect={(groupId, chatId) => props.onChatSelect(groupId, chatId)}
             onFileOpen={() => undefined}
             onFileLinkOpen={() => undefined}
+            modal={conversationModal({ conversation, panel, workspace: props.workspace })}
             onLinkOpen={(url) => props.onExternalLinkOpen(url)}
             onPreviewOpen={(previewId) =>
                 conversationPreviewOpen({
@@ -8089,8 +8554,11 @@ interface HappyAgentWorkspaceSurfaceProps {
     taskCheckoutsOf?: (agentIds: readonly string[]) => HappyAgentCheckoutsStore | undefined;
     /** Shows an HTML artifact opened beside the conversation as a site of its own. */
     artifactPage?: HtmlPreviewRenderer;
-    /** Opens one artifact in the viewer. */
-    onArtifactOpen?: (artifactId: string) => void;
+    /**
+     * Opens one artifact where its sidebar row does — its own page, or a live
+     * one's browser tab — at `version` when a link named one.
+     */
+    onArtifactOpen?: (artifactId: string, version?: number) => void;
     /** Account usage for the model picker's account submenu; read only while that submenu is open. */
     providerUsage?: HappyAgentProviderUsageStore;
     /** The conversation a voice call points at in this Happy Agent, marked on its tab. */
@@ -8137,6 +8605,9 @@ interface HappyAgentWorkspaceSurfaceProps {
     onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
     /** Selects a chat of this Happy Agent and brings its row into view in the sidebar. */
     onSidebarReveal(groupId: string, chatId: string): void;
+    onChatCloseRefused(groupId: string, chatId: string): void;
+    /** Closes the window, once Command-W has nothing in the workspace left to close. */
+    onWindowClose?(): void;
     onFileClose(groupId: string, path: string): void;
     onFileSelect(
         groupId: string,
@@ -8191,12 +8662,20 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         checkoutsStore?.get ?? checkoutsNoop,
         checkoutsStore?.get ?? checkoutsNoop,
     );
-    const workspaceFocusedPane = useRef<AppShellFocusedPane>("workspace");
+    // Which pane the reader last touched, and what the pane beside the
+    // conversation showed at that moment, which is how Command-W tells a view
+    // opened since then from one that was already there.
+    const workspacePaneTouch = useRef<WorkspacePaneTouch>(WORKSPACE_PANE_UNTOUCHED);
     // AppShell's panel callback ref treats this callback's identity as the
-    // panel lifetime, so ordinary store renders must keep it stable.
-    const workspaceFocusedPaneChange = useCallback((pane: AppShellFocusedPane): void => {
-        workspaceFocusedPane.current = pane;
-    }, []);
+    // panel lifetime, so ordinary store renders must keep it stable. The
+    // workspace store is one per connection, as this surface is.
+    const workspaceStore = props.workspace;
+    const workspaceFocusedPaneChange = useCallback(
+        (pane: AppShellFocusedPane): void => {
+            workspacePaneTouch.current = { pane, ...workspacePaneStanding(workspaceStore) };
+        },
+        [workspaceStore],
+    );
     const workspace = useSyncExternalStore(
         reactFrameSubscribe(props.workspace),
         props.workspace.get,
@@ -8403,6 +8882,14 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const mainTools = openGroup ? toolTabsPlaced(panel, "main") : [];
     // An artifact moved here is named by the same live title as everywhere else.
     const artifactTitlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
+    // A new artifact is asked for from a row beside the chat that goes away
+    // when it works; when it does not, this is where the reader is told.
+    const artifactCreationStore = props.artifacts?.creation() ?? ARTIFACT_CREATION_NONE;
+    const artifactCreation = useSyncExternalStore(
+        artifactCreationStore.subscribe,
+        artifactCreationStore.get,
+        artifactCreationStore.get,
+    );
     const artifactTitles = useSyncExternalStore(
         artifactTitlesStore.subscribe,
         artifactTitlesStore.get,
@@ -8632,8 +9119,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     );
     const floatyOutputs = workFloatyOutputs(floatyCatalog.artifacts, props.chatId);
     // What the work changed and published leads the panel's Activity tab, above
-    // the session's own agents and terminals. Every row opens beside the chat,
-    // which stays where it was: a place as its changes, an artifact as itself.
+    // the session's own agents and terminals.
     const workList =
         floatyPlaces.length > 0 || floatyOutputs.length > 0 ? (
             <WorkFloaty
@@ -8641,23 +9127,42 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 artifacts={floatyOutputs.slice(0, FLOATY_ARTIFACTS)}
                 changes={floatyPlaces.map((place) => place.row)}
                 history={floatyOutputs.slice(FLOATY_ARTIFACTS)}
+                // A row goes where its sidebar row would; see
+                // `workFloatyDestination`.
                 onRowOpen={(id) => {
-                    const place = floatyPlaces.find((candidate) => candidate.row.id === id);
-                    if (place?.workspaceId !== undefined) workspaceOpen(place.workspaceId);
-                    else if (place) {
-                        if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, "changed");
-                        props.workspace.panel.filesSelect();
-                    } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX)) {
-                        const artifactId = id.slice(
-                            FLOATY_ARTIFACT_PREFIX.length,
-                        ) as HappyAgentArtifactId;
-                        if (props.artifacts)
-                            artifactBesideOpen({
-                                artifacts: props.artifacts,
-                                panel: props.workspace.panel,
-                                artifactId,
-                            });
-                        else props.workspace.panel.artifactViewOpen(artifactId);
+                    const destination = workFloatyDestination({
+                        rowId: id,
+                        places: floatyPlaces.map((place) => ({
+                            rowId: place.row.id,
+                            ...(place.workspaceId === undefined
+                                ? {}
+                                : { workspaceId: place.workspaceId }),
+                        })),
+                        agentIds: [],
+                        subtasks: happyAgentBotSubtasks([
+                            ...workspace.list.bots,
+                            ...workspace.list.tasks,
+                        ]),
+                        groupId: props.groupId,
+                    });
+                    switch (destination?.kind) {
+                        case "chat":
+                            props.onChatSelect(destination.groupId, destination.chatId);
+                            return;
+                        case "workspace":
+                            workspaceOpen(destination.groupId as HappyAgentGroupId);
+                            return;
+                        case "changes":
+                            if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, "changed");
+                            props.workspace.panel.filesSelect();
+                            return;
+                        case "artifact":
+                            if (props.onArtifactOpen) props.onArtifactOpen(destination.artifactId);
+                            else
+                                props.workspace.panel.artifactViewOpen(
+                                    destination.artifactId as HappyAgentArtifactId,
+                                );
+                            return;
                     }
                 }}
                 placement="panel"
@@ -8736,9 +9241,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             }
             const repaired = props.onChatClose(currentGroup.id, tabId, fallbackSessionId);
             if (tabId === current.address.conversationId) selectedHistoryRepaired = repaired;
+            // The tab goes now; a refusal brings it back with the reason on
+            // the workspace, and Back can reach it again.
+            const groupId = currentGroup.id;
             void props.workspace
                 .conversationArchive(tabId as HappyAgentSessionId)
-                .catch(() => undefined);
+                .catch(() => props.onChatCloseRefused(groupId, tabId));
         }
         // A router-backed window repairs and lands through its navigation stack,
         // which preserves the most recently visited survivor. Standalone
@@ -8759,9 +9267,16 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             return;
         }
         // A detached subagent's tab is an address, not a member of the list:
-        // closing it only steps back to the sessions that are listed.
+        // closing it only steps back to the sessions that are listed. The
+        // window's navigation knows which of them the reader came from, so it
+        // lands there; the first listed session is only where a window with
+        // no such memory goes.
         if (tabId === detachedConversationId) {
-            props.onChatSelect(openGroup?.id, openGroup?.conversations[0]?.id, true);
+            const fallbackSessionId = openGroup?.conversations[0]?.id;
+            const landed =
+                openGroup !== undefined &&
+                props.onChatClose(openGroup.id, tabId, fallbackSessionId);
+            if (!landed) props.onChatSelect(openGroup?.id, fallbackSessionId, true);
             return;
         }
         groupTabsClose([tabId]);
@@ -8776,11 +9291,73 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         else if (viewId === "artifact") props.workspace.panel.artifactViewClose();
         else props.workspace.panel.tabClose(viewId as HappyAgentPanelTabId);
     };
+    // The chat most recently closed here, which the reopen chord brings back
+    // to the strip with everything said in it. A bot's or a task's single
+    // conversation is not a tab that closes, so there is none to bring back.
+    const closedChat =
+        openGroup === undefined || openGroup.singleConversationId !== undefined
+            ? undefined
+            : closedChatLatestFind(workspace.list.archivedSessions, openGroup.id);
+    // A closed chat is asked of the host by id and addressed only once it is
+    // back: the host stopped listing it when it was archived, so there is no
+    // entry to check the request against first. The reopen chord, the strip's
+    // chats menu, and the palette's archived rows all bring one back this way.
+    const closedChatRestore = (sessionId: HappyAgentSessionId) => {
+        if (!openGroup || !happyAgentOnline()) return;
+        const groupId = openGroup.id;
+        void props.workspace
+            .conversationRestore(sessionId)
+            .then(() => props.onChatSelect(groupId, sessionId))
+            .catch(() => undefined);
+    };
+    const closedChatReopen = () => {
+        if (closedChat) closedChatRestore(closedChat.id);
+    };
+    // The strip's own menu of this place's chats, open and closed. Offered
+    // where the strip's tabs are chats that close and come back: a project or
+    // a workspace. A bot's or a task's one conversation, and a subagent shown
+    // on its own, have no such history to offer.
+    const chatsMenu =
+        openGroup === undefined ||
+        openGroup.singleConversationId !== undefined ||
+        detachedConversationId !== undefined
+            ? undefined
+            : {
+                  // Read when the menu opens, so each row's time is told then.
+                  items: () =>
+                      workspaceChatsMenuItems({
+                          archivedSessions: workspace.list.archivedSessions,
+                          groupId: openGroup.id,
+                          now: props.clock.get(),
+                          online: availability.online,
+                          open: openGroup.conversations,
+                      }),
+                  onSelect: (id: string) => {
+                      const choice = workspaceChatsMenuChoice(id, {
+                          archivedSessions: workspace.list.archivedSessions,
+                          groupId: openGroup.id,
+                          open: openGroup.conversations,
+                      });
+                      if (choice?.kind === "open")
+                          props.onChatSelect(openGroup.id, choice.sessionId);
+                      else if (choice?.kind === "closed") closedChatRestore(choice.sessionId);
+                  },
+              };
     const activeTabClose = () => {
+        const standing = workspacePaneStanding(props.workspace);
+        // What the reader opened in the main content from the pane is in front
+        // of the pane, and from here on the main content is where they are.
+        if (workspaceMainCameForward(workspacePaneTouch.current, standing))
+            workspacePaneTouch.current = { pane: "workspace", ...standing };
+        const touch = workspacePaneTouch.current;
         const target = workspaceCloseTargetFind(
-            workspaceFocusedPane.current,
+            touch.pane,
             props.workspace.panel.get(),
             checkoutClosed,
+            // The same conversation, and a different view in front of the
+            // pane than when the reader last touched the main content: they
+            // opened it from here, and it is what they are looking at.
+            touch.scope === standing.scope && touch.front !== standing.front,
         );
         if (target.type !== "main") {
             if (target.type === "view") panelViewClose(target.viewId);
@@ -8797,14 +9374,20 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     '[data-happy-desktop-ui="app-shell-workspace"] [data-happy-desktop-ui="tab"][aria-selected="true"]',
                 );
                 mainTab?.focus();
-                workspaceFocusedPane.current = "workspace";
+                workspacePaneTouch.current = {
+                    pane: "workspace",
+                    ...workspacePaneStanding(props.workspace),
+                };
             }
             return;
         }
         const current = props.workspace.get();
         const tabId = current.activeMainViewId ?? current.address.conversationId;
         if (tabId) tabCloseRequest(tabId);
-        else if (openGroup) props.workspace.groupArchiveOpen(openGroup.id);
+        // A project with no tab open has nothing left to close, so the chord
+        // closes the window. It does not offer to archive the project: that is
+        // asked for by name, from the project's own menu in the sidebar.
+        else props.onWindowClose?.();
     };
     /**
      * One tab closed by the reader — Cmd-W, its ×, or its menu's single-tab
@@ -9203,6 +9786,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
+                {...(props.onArtifactOpen ? { onArtifactOpen: props.onArtifactOpen } : {})}
                 inlineEngines={{
                     ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
                     ...(props.browserContent ? { browserContent: props.browserContent } : {}),
@@ -9214,18 +9798,49 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 onReferenceGroupOpen={referenceGroupOpen}
                 activitySelected={panel.open && panel.activeViewId === "activity"}
                 conversation={conversation}
-                {...(workspace.fileOpenFailure === undefined
+                {...(workspace.fileOpenFailure === undefined &&
+                workspace.conversationArchiveFailure === undefined &&
+                artifactCreation.failure === undefined
                     ? {}
                     : {
                           notice: (
-                              <Banner
-                                  data-testid="file-reference-failure"
-                                  onDismiss={() => props.workspace.fileOpenFailureDismiss()}
-                                  title={`Could not open ${workspace.fileOpenFailure.path}`}
-                                  tone="warning"
-                              >
-                                  {workspace.fileOpenFailure.message}
-                              </Banner>
+                              <>
+                                  {workspace.conversationArchiveFailure === undefined ? null : (
+                                      <Banner
+                                          data-testid="conversation-archive-failure"
+                                          onDismiss={() =>
+                                              props.workspace.conversationArchiveFailureDismiss()
+                                          }
+                                          title={`Could not close ${conversationArchiveFailureName(
+                                              openGroup,
+                                              workspace.conversationArchiveFailure.conversationId,
+                                          )}`}
+                                          tone="danger"
+                                      >
+                                          {workspace.conversationArchiveFailure.message}
+                                      </Banner>
+                                  )}
+                                  {workspace.fileOpenFailure === undefined ? null : (
+                                      <Banner
+                                          data-testid="file-reference-failure"
+                                          onDismiss={() => props.workspace.fileOpenFailureDismiss()}
+                                          title={`Could not open ${workspace.fileOpenFailure.path}`}
+                                          tone="warning"
+                                      >
+                                          {workspace.fileOpenFailure.message}
+                                      </Banner>
+                                  )}
+                                  {artifactCreation.failure === undefined ? null : (
+                                      <Banner
+                                          data-testid="artifact-create-failure"
+                                          onDismiss={() => artifactCreationStore.failureDismiss()}
+                                          title="Could not create the artifact"
+                                          tone="warning"
+                                      >
+                                          {artifactCreation.failure.message}
+                                      </Banner>
+                                  )}
+                              </>
                           ),
                       })}
                 emptyContent={
@@ -9262,15 +9877,31 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         target,
                         fileTabKind(target),
                         selection,
+                        "modal",
                     );
                 }}
                 // A link into another agent's or workspace's folder opens a
-                // read-only preview beside this conversation. It is not gated
+                // read-only preview over this conversation. It is not gated
                 // on the connection here: an unreachable Happy Agent is one of
                 // the reasons the notice gives, rather than a silent no-op.
                 onFileLinkOpen={(link) =>
-                    props.workspace.fileLinkOpen(link, fileTabKind(link.path))
+                    props.workspace.fileLinkOpen(link, fileTabKind(link.path), "modal")
                 }
+                modal={conversationModal({
+                    conversation,
+                    panel,
+                    workspace: props.workspace,
+                    ...(workspace.panelFile ? { panelFile: workspace.panelFile } : {}),
+                    fileBody: mainFileBody,
+                    ...(fileReveal === undefined
+                        ? {}
+                        : {
+                              onFileReveal: () => {
+                                  const file = workspace.panelFile;
+                                  if (file) fileTabReveal(file)?.path(file.path);
+                              },
+                          }),
+                })}
                 onLinkOpen={(url, placement) => {
                     // The side panel's browser tab is this workspace's own; the
                     // machine's browser is the host's door, and only the host
@@ -9382,6 +10013,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                       panelStore.artifactViewOpen(artifactId);
                                                       panelStore.tabClose(replacing);
                                                   },
+                                                  // The artifacts' own store has put the
+                                                  // failure up over the conversation.
                                                   () => undefined,
                                               );
                                       },
@@ -9575,9 +10208,17 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             actions={[
                                 // Cmd-W is consistently the workspace's close
                                 // command. The live handler simply has nothing to
-                                // do when Files or an offline session is the only
-                                // current target.
+                                // do when an offline session is the only current
+                                // target, and closes the window when no tab is.
                                 { run: activeTabClose, shortcut: APP_SHORTCUTS.tabClose },
+                                ...(closedChat
+                                    ? [
+                                          {
+                                              run: closedChatReopen,
+                                              shortcut: APP_SHORTCUTS.chatReopen,
+                                          },
+                                      ]
+                                    : []),
                                 ...(checkoutClosed
                                     ? []
                                     : [
@@ -9687,14 +10328,36 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     ) : null
                                 }
                                 activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
-                                // Who else is looking at the session, while the
-                                // session is what the main pane shows.
+                                // The place's chats, open and closed, and who else is
+                                // looking at the session while the session is what
+                                // the main pane shows.
                                 trailing={
-                                    props.chatId !== undefined && mainConversationDisplayed ? (
-                                        <HappyAgentViewersSlot
-                                            target={{ type: "agent", id: props.chatId }}
-                                            viewers={props.viewers}
-                                        />
+                                    chatsMenu ||
+                                    (props.chatId !== undefined && mainConversationDisplayed) ? (
+                                        <>
+                                            {chatsMenu ? (
+                                                <MenuButton
+                                                    align="end"
+                                                    icon="history"
+                                                    iconSize={12}
+                                                    items={chatsMenu.items}
+                                                    label="Show chats"
+                                                    menuLabel="Chats"
+                                                    menuMaxHeight={420}
+                                                    menuPageSize={100}
+                                                    menuWidth={300}
+                                                    onSelect={chatsMenu.onSelect}
+                                                    overlay
+                                                />
+                                            ) : null}
+                                            {props.chatId !== undefined &&
+                                            mainConversationDisplayed ? (
+                                                <HappyAgentViewersSlot
+                                                    target={{ type: "agent", id: props.chatId }}
+                                                    viewers={props.viewers}
+                                                />
+                                            ) : null}
+                                        </>
                                     ) : undefined
                                 }
                                 // One document needs no strip: the band floats over the
@@ -10005,6 +10668,15 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                         {desktop ? <WindowDragRegion /> : null}
+                        {/* Nor is there anything for Command-W to close but the
+                        window. */}
+                        {props.onWindowClose ? (
+                            <WindowShortcuts
+                                actions={[
+                                    { run: props.onWindowClose, shortcut: APP_SHORTCUTS.tabClose },
+                                ]}
+                            />
+                        ) : null}
                         {/* No banner for an unreachable Happy Agent here either. The sidebar
                         footer is the window's one account
                         of the machine being out of touch, and this screen has
@@ -10141,14 +10813,15 @@ function HappyAgentFileBody(props: {
                     ...(selection === undefined ? {} : { selection }),
                 },
                 kind,
+                "viewer",
             );
         else if (file.placement === "panel")
-            workspace.fileReferenceOpen(file.groupId, target, kind, selection);
+            workspace.fileReferenceOpen(file.groupId, target, kind, selection, "viewer");
         else props.onMainFileOpen(target, kind, selection);
     };
-    /** Follows a `happy://` or `happy-file://` file link the document carries, into the panel. */
+    /** Follows a `happy://` or `happy-file://` file link the document carries, into the viewer. */
     const fileLinkOpen: FileLinkOpenHandler = (link): void =>
-        workspace.fileLinkOpen(link, fileTabKind(link.path));
+        workspace.fileLinkOpen(link, fileTabKind(link.path), "viewer");
     // Typing into a document that could never be written back is worse than not
     // offering the editor at all: the reader loses what they typed and learns
     // why only when they try to save it.
@@ -10822,6 +11495,11 @@ function HappyAgentConversationBody(props: {
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
     /**
+     * Opens an artifact a reference names where its sidebar row does, at the
+     * version the link named. Absent, it opens beside the conversation.
+     */
+    onArtifactOpen?: (artifactId: HappyAgentArtifactId, version?: number) => void;
+    /**
      * The host's engines for pages tool calls show inline, and the connection
      * a web page's network belongs to. Absent, every such call keeps its card.
      */
@@ -10889,6 +11567,8 @@ function HappyAgentConversationBody(props: {
     /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
     viewerId: string;
+    /** What a message opened over this conversation, drawn over it; see `conversationModal`. */
+    modal?: ReactNode;
     workspace: HappyAgentWorkspaceStore;
 }) {
     const conversation = props.conversation;
@@ -10898,6 +11578,7 @@ function HappyAgentConversationBody(props: {
                 instanceId={props.instanceId}
                 activitySelected={props.activitySelected}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
+                {...(props.onArtifactOpen ? { onArtifactOpen: props.onArtifactOpen } : {})}
                 {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
                 referenceEntities={props.referenceEntities}
                 {...(props.chiefOfStaffName === undefined
@@ -10907,6 +11588,7 @@ function HappyAgentConversationBody(props: {
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 modelUsageWatch={props.modelUsageWatch}
                 conversation={conversation.value}
+                {...(props.modal === undefined ? {} : { modal: props.modal })}
                 emptyContent={props.emptyContent}
                 focusOnType={props.focusOnType}
                 groupId={props.groupId}
@@ -11358,9 +12040,6 @@ function changesCheckoutsOf(input: {
     return { sections, targets };
 }
 
-/** A floaty row that opens an artifact rather than an agent's chat. */
-const FLOATY_ARTIFACT_PREFIX = "artifact:";
-
 /**
  * What one chat has published, newest change first. The list beside a chat
  * may have been widened, so the floaty narrows it back to this conversation.
@@ -11441,6 +12120,11 @@ function HappyAgentConversationSurface(props: {
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
     /**
+     * Opens an artifact a reference names where its sidebar row does, at the
+     * version the link named. Absent, it opens beside the conversation.
+     */
+    onArtifactOpen?: (artifactId: HappyAgentArtifactId, version?: number) => void;
+    /**
      * The host's engines for pages tool calls show inline, and the connection
      * a web page's network belongs to. Absent, every such call keeps its card.
      */
@@ -11503,6 +12187,8 @@ function HappyAgentConversationSurface(props: {
     /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
     viewerId: string;
+    /** What a message opened over this conversation, drawn over it; see `conversationModal`. */
+    modal?: ReactNode;
     workspace: HappyAgentWorkspaceStore;
 }) {
     const genUiMachine = use(GenUiMachineContext);
@@ -11601,6 +12287,19 @@ function HappyAgentConversationSurface(props: {
               },
           })
         : undefined;
+    const artifactReferenceOpen = (artifactId: HappyAgentArtifactId, version?: number): void => {
+        if (props.onArtifactOpen) {
+            props.onArtifactOpen(artifactId, version);
+            return;
+        }
+        if (props.artifacts)
+            artifactBesideOpen({
+                artifacts: props.artifacts,
+                panel: workspace.panel,
+                artifactId,
+                ...(version === undefined ? {} : { version }),
+            });
+    };
     const references = messageReferencesCreate({
         instanceId: props.instanceId,
         titles,
@@ -11623,15 +12322,10 @@ function HappyAgentConversationSurface(props: {
             : {}),
         ...(props.artifacts
             ? {
-                  // A reference opens beside the conversation, the way a file
-                  // the transcript names does, rather than leaving it.
+                  // A reference opens where the artifact's sidebar row does;
+                  // without a page to go to, it opens beside the conversation.
                   onArtifactOpen: (artifactId: HappyAgentArtifactId, version?: number) =>
-                      artifactBesideOpen({
-                          artifacts: props.artifacts!,
-                          panel: workspace.panel,
-                          artifactId,
-                          ...(version === undefined ? {} : { version }),
-                      }),
+                      artifactReferenceOpen(artifactId, version),
               }
             : {}),
     });
@@ -11653,12 +12347,7 @@ function HappyAgentConversationSurface(props: {
                   agentId: conversation.conversationId,
                   artifactOpen: (artifactId, version) =>
                       props.artifacts
-                          ? artifactBesideOpen({
-                                artifacts: props.artifacts,
-                                panel: workspace.panel,
-                                artifactId,
-                                ...(version === undefined ? {} : { version }),
-                            })
+                          ? artifactReferenceOpen(artifactId, version)
                           : workspace.panel.artifactViewOpen(artifactId, version),
                   pageOpen: (url) => workspace.panel.browserAdd(url),
                   entities: references,
@@ -11939,13 +12628,13 @@ function HappyAgentConversationSurface(props: {
             onToolMediaOpen={(entryId, tool, index) => {
                 // A picture opens full size over the conversation, stepping
                 // through every picture it shows; a document or any other file
-                // opens in the preview beside it.
+                // opens over it too, in a card with a way to move it beside.
                 const item =
                     tool.presentation?.type === "media"
                         ? tool.presentation.items[index]
                         : undefined;
                 if (item?.kind === "image") workspace.toolImageOpen(entryId, index);
-                else if (item !== undefined) workspace.panel.previewOpen(entryId, index);
+                else if (item !== undefined) workspace.panel.modalMediaOpen(entryId, index);
             }}
             onDelegationSelect={(sessionId) =>
                 props.onChatSelect(props.groupId, sessionId as HappyAgentSessionId)
@@ -11997,7 +12686,9 @@ function HappyAgentConversationSurface(props: {
                                 : {})}
                         />
                     </ModalOverlay>
-                ) : undefined
+                ) : (
+                    props.modal
+                )
             }
             requestSubmissions={conversation.requestSubmissions}
             requestSelections={conversation.requestSelections}

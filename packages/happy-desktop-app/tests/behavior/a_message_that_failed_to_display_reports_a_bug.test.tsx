@@ -82,6 +82,7 @@ function workspace() {
             bots: [],
             tasks: [],
             taskDirectory: [],
+            archivedSessions: [],
             projects: { type: "ready" as const, value: PROJECTS },
         },
         conversation: {
