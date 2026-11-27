@@ -1958,7 +1958,7 @@ function messageElementsProject(
                 status: projectToolStatus(block.status, runStatus),
                 ...(block.result === undefined || preview
                     ? {}
-                    : { result: stringify(block.result) }),
+                    : { result: stringify(block.result), resultValue: block.result }),
                 ...(preview
                     ? { presentation: { kind: "preview" as const, ...preview } }
                     : presentation === undefined

@@ -1316,6 +1316,9 @@ function toolProject(
         ...(!waitWokeFromInput && (element.result ?? element.progress)
             ? { display: element.result ?? element.progress }
             : {}),
+        ...(waitWokeFromInput || element.resultValue === undefined
+            ? {}
+            : { result: jsonProject(element.resultValue) }),
         failed: element.status === "failed",
         ...presentationEntry(element.presentation, agents),
         ...(element.checkoutFailures === undefined

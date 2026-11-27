@@ -8,30 +8,20 @@ import { ConversationMedia } from "./ConversationMedia";
 import { conversationMediaVisible } from "./conversationInlineLayouts";
 import { codeBlockLanguage } from "./codeBlockLanguage";
 import { DiffSnippet, type DiffLine, type DiffSnippetSource } from "./DiffSnippet";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
 import { ResultCard } from "./ResultCard";
 import { ScrollArea } from "./Scrollbar";
+import {
+    humanizeToolKey,
+    JsonFields,
+    knownToolPreview,
+    PreviewSection,
+    resultWords,
+} from "./toolCallPreviewKnown";
 
 export interface ToolCallPreviewProps {
     readonly tool: ConversationToolCall;
-}
-
-function humanize(name: string): string {
-    return name
-        .replace(/[_-]+/gu, " ")
-        .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-        .replace(/\s+/gu, " ")
-        .trim()
-        .replace(/^./u, (character) => character.toUpperCase());
-}
-
-function json(value: ConversationToolCall["arguments"]): string {
-    try {
-        return JSON.stringify(value, null, 2);
-    } catch {
-        return String(value);
-    }
 }
 
 /**
@@ -91,10 +81,46 @@ function presentationTitle(
     return "Tool call";
 }
 
+function presentationIcon(title: ReturnType<typeof presentationTitle>): IconName {
+    if (title === "Terminal") return "terminal";
+    if (title === "File edit" || title === "Presented files") return "doc";
+    if (title === "Artifact") return "package";
+    if (title === "Sub-agent spawn") return "agents";
+    return "zap";
+}
+
+/** The result read as words where it is words, else as its own labeled fields. */
+function ResultSection(props: { tool: ConversationToolCall; shown?: string }) {
+    const { tool } = props;
+    const failed = tool.failed || tool.status === "failed";
+    const message = tool.failure?.message;
+    const words =
+        message ??
+        resultWords(tool.result) ??
+        (tool.result === undefined ? tool.display : undefined);
+    // A terminal already shows the output its result repeats.
+    if (words !== undefined && words === props.shown) return null;
+    if (words) {
+        return (
+            <PreviewSection label={failed ? "Failure" : "Result"}>
+                <pre
+                    className="happy-tool-call-preview__result"
+                    data-failed={failed ? "" : undefined}
+                >
+                    {words}
+                </pre>
+            </PreviewSection>
+        );
+    }
+    if (tool.result === undefined) return null;
+    return <JsonFields failed={failed} label={failed ? "Failure" : "Result"} value={tool.result} />;
+}
+
 /**
  * Full, read-only body of one tool invocation. Rich producers render as a terminal
- * transcript or file diff; everything else keeps the exact typed arguments and
- * result text visible instead of guessing a tool-specific interface.
+ * transcript or file diff; a tool the inspector knows by name reads its own
+ * arguments and structured result; everything else shows its arguments and
+ * result as labeled fields, text kept as text.
  */
 export function ToolCallPreview(props: ToolCallPreviewProps) {
     const { tool } = props;
@@ -116,36 +142,30 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
             : presentation?.type === "backgroundTerminalInteraction"
               ? presentation.input
               : undefined;
+    const known = presentation === undefined ? knownToolPreview(tool) : undefined;
+    const generic = known === undefined && title === "Tool call";
+    const heading = known?.title ?? (generic ? humanizeToolKey(tool.toolName) : title);
+    const detail =
+        presentation?.type === "agentSpawn"
+            ? (presentation.model?.name ?? "Model unresolved")
+            : (tool.summary ??
+              known?.detail ??
+              (generic ? "Tool call" : humanizeToolKey(tool.toolName)));
     return (
         <section
             className="happy-tool-call-preview"
+            data-fills={known?.fills ? "" : undefined}
             data-happy-desktop-ui="tool-call-preview"
             data-kind={presentation?.type ?? "generic"}
+            data-tool={known === undefined ? undefined : tool.toolName}
         >
             <header className="happy-tool-call-preview__heading">
                 <span aria-hidden="true" className="happy-tool-call-preview__icon">
-                    <Icon
-                        name={
-                            title === "Terminal"
-                                ? "terminal"
-                                : title === "File edit" || title === "Presented files"
-                                  ? "doc"
-                                  : title === "Artifact"
-                                    ? "package"
-                                    : title === "Sub-agent spawn"
-                                      ? "agents"
-                                      : "zap"
-                        }
-                        size={16}
-                    />
+                    <Icon name={known?.icon ?? presentationIcon(title)} size={16} />
                 </span>
                 <span className="happy-tool-call-preview__heading-copy">
-                    <strong>{title}</strong>
-                    <span>
-                        {presentation?.type === "agentSpawn"
-                            ? (presentation.model?.name ?? "Model unresolved")
-                            : humanize(tool.toolName)}
-                    </span>
+                    <strong>{heading}</strong>
+                    <span>{detail}</span>
                 </span>
                 <span
                     className="happy-tool-call-preview__status"
@@ -160,6 +180,7 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                 viewportClassName="happy-tool-call-preview__scroll-viewport"
             >
                 <div className="happy-tool-call-preview__content">
+                    {known?.body}
                     {presentation?.type === "agentSpawn" ? (
                         <>
                             {presentation.model ? (
@@ -257,7 +278,7 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                                         className="happy-tool-call-preview__operation"
                                         key={`${operation.kind}:${index}`}
                                     >
-                                        <span>{humanize(operation.kind)}</span>
+                                        <span>{humanizeToolKey(operation.kind)}</span>
                                         <code>
                                             {operation.kind === "list"
                                                 ? operation.target
@@ -270,26 +291,20 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                             </div>
                         </section>
                     ) : null}
-                    {presentation === undefined || presentation.type === "agentSpawn" ? (
-                        <section className="happy-tool-call-preview__section">
-                            <span className="happy-tool-call-preview__label">Arguments</span>
-                            <pre className="happy-tool-call-preview__arguments">
-                                {json(tool.arguments)}
-                            </pre>
-                        </section>
+                    {known === undefined &&
+                    (presentation === undefined || presentation.type === "agentSpawn") ? (
+                        <JsonFields
+                            label="Arguments"
+                            // The heading already reads the call's description.
+                            skip={tool.summaryKind === "description" ? ["description"] : []}
+                            value={tool.arguments}
+                        />
                     ) : null}
-                    {tool.display || tool.failure?.message ? (
-                        <section className="happy-tool-call-preview__section">
-                            <span className="happy-tool-call-preview__label">
-                                {tool.failed ? "Failure" : "Result"}
-                            </span>
-                            <pre
-                                className="happy-tool-call-preview__result"
-                                data-failed={tool.failed ? "" : undefined}
-                            >
-                                {tool.failure?.message ?? tool.display}
-                            </pre>
-                        </section>
+                    {known === undefined ? (
+                        <ResultSection
+                            tool={tool}
+                            {...(terminalBody === undefined ? {} : { shown: terminalBody })}
+                        />
                     ) : null}
                 </div>
             </ScrollArea>

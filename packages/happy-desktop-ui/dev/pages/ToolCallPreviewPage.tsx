@@ -80,6 +80,130 @@ const patch: ConversationToolCall = {
     },
 };
 
+/* Calls with no presentation, as Happy Cloud records them: the inspector
+   reads each known tool's own arguments and structured result. */
+const cloudBash: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-bash",
+    toolName: "Bash",
+    arguments: {
+        command:
+            "cd happy-cluster && ls crates/hc-store/src | tr '\\n' ' '; echo; grep -rn \"pub async fn join\" crates --include=*.rs | head",
+        description: "Explore compute model in cluster",
+    },
+    status: "success",
+    failed: false,
+    summary: "Explore compute model in cluster",
+    summaryKind: "description",
+    result: {
+        command: "cd happy-cluster && ls crates/hc-store/src",
+        stdout: "agents.rs archive.rs artifact_data.rs artifacts.rs attachments.rs blobs.rs\nbot_replies.rs bots.rs calendar.rs catalog.rs checkouts.rs compute.rs\ncrates/hc-api/src/routes/pools.rs:41:pub async fn join_computer(",
+        stderr: "",
+        exitCode: 0,
+        truncated: false,
+        wallTimeSeconds: 0.412,
+    },
+};
+
+const cloudBashFailed: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-bash-failed",
+    toolName: "Bash",
+    arguments: { command: "pnpm typecheck", description: "Typecheck the workspace" },
+    status: "failed",
+    failed: true,
+    summary: "Typecheck the workspace",
+    summaryKind: "description",
+    result: {
+        command: "pnpm typecheck",
+        stdout: "> tsc --project tsconfig.json",
+        stderr: "src/App.tsx(12,7): error TS2322: Type 'string' is not assignable to type 'number'.",
+        exitCode: 2,
+        truncated: false,
+        wallTimeSeconds: 6.8,
+    },
+};
+
+const cloudRead: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-read",
+    toolName: "Read",
+    arguments: {
+        file_path: "happy-desktop/packages/happy-desktop-ui/src/Icon.tsx",
+        offset: 7,
+        limit: 4,
+    },
+    status: "success",
+    failed: false,
+    result: {
+        outcome: "text",
+        path: "/work/happy-desktop/packages/happy-desktop-ui/src/Icon.tsx",
+        content: '7\texport type IconName =\n8\t    | "home"\n9\t    | "inbox"\n10\t    | "chat"',
+        start_line: 7,
+        returned_lines: 4,
+        total_lines: 420,
+        truncated: true,
+    },
+};
+
+const cloudEdit: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-edit",
+    toolName: "Edit",
+    arguments: {
+        file_path: "happy-desktop/packages/happy-desktop-state/src/happyAgentConnection/types.ts",
+        old_string: "    result?: string;\n    presentation?: ToolPresentation;",
+        new_string:
+            "    result?: string;\n    resultValue?: unknown;\n    presentation?: ToolPresentation;",
+    },
+    status: "success",
+    failed: false,
+    result: {
+        path: "/work/happy-desktop/packages/happy-desktop-state/src/happyAgentConnection/types.ts",
+        replacements: 1,
+    },
+};
+
+const cloudGrep: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-grep",
+    toolName: "Grep",
+    arguments: {
+        pattern: "ToolCallPreview",
+        path: "packages",
+        glob: "*.tsx",
+        output_mode: "files_with_matches",
+    },
+    status: "success",
+    failed: false,
+    result: {
+        text: "packages/happy-desktop-ui/src/ToolCallPreview.tsx\npackages/happy-desktop-app/sources/AppHappyAgentView.tsx",
+        matched_files: 2,
+        match_count: 2,
+        truncated: false,
+    },
+};
+
+const cloudPython: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-python",
+    toolName: "python",
+    arguments: {
+        code: "from pathlib import Path\nprint(len(list(Path('/local').iterdir())))",
+        description: "Count local files",
+    },
+    status: "success",
+    failed: false,
+    summary: "Count local files",
+    summaryKind: "description",
+    result: { output: "12\n", error: null },
+};
+
+const cloudGeneric: ConversationToolCall = {
+    toolCallId: "tool-preview-cloud-generic",
+    toolName: "attach_repository",
+    arguments: { repository: "happy-desktop", description: "Check out happy-desktop" },
+    status: "success",
+    failed: false,
+    summary: "Check out happy-desktop",
+    summaryKind: "description",
+    result: "happy-desktop is checked out at `happy-desktop` in the workspace on branch happy/kmwzeddd.",
+};
+
 function Preview(props: { tool: ConversationToolCall; width: number }) {
     return (
         <div
@@ -166,6 +290,30 @@ export function ToolCallPreviewPage() {
                         <DimensionRule label="250px · highlighted file lines" />
                     </div>
                 </Specimen>
+                {(
+                    [
+                        ["T-05", "Cloud Bash call", cloudBash],
+                        ["T-06", "Cloud Bash call · nonzero exit", cloudBashFailed],
+                        ["T-07", "Read", cloudRead],
+                        ["T-08", "Edit", cloudEdit],
+                        ["T-09", "Grep", cloudGrep],
+                        ["T-10", "Python", cloudPython],
+                        ["T-11", "Unknown tool", cloudGeneric],
+                    ] as const
+                ).map(([number, label, tool]) => (
+                    <Specimen
+                        detail="300px inspector · a call with no presentation reads its known tool's arguments and structured result instead of JSON"
+                        key={number}
+                        label={label}
+                        number={number}
+                        stage="app"
+                    >
+                        <div style={{ padding: "24px" }}>
+                            <Preview tool={tool} width={300} />
+                            <DimensionRule label="300px · known tool body" />
+                        </div>
+                    </Specimen>
+                ))}
             </div>
         </ComponentPage>
     );

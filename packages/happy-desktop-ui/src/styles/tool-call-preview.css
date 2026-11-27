@@ -150,6 +150,7 @@
     line-height: 18px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    tab-size: 4;
 }
 
 .happy-tool-call-preview__terminal {
@@ -197,4 +198,60 @@
     font-family: var(--happy-font-mono);
     font-size: 12px;
     line-height: 18px;
+}
+
+/* A known tool whose body is a terminal fills the panel the same way. */
+.happy-tool-call-preview[data-fills] .happy-tool-call-preview__content {
+    flex: 1 1 0%;
+    min-height: 100%;
+}
+
+.happy-tool-call-preview__meta {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+}
+
+.happy-tool-call-preview__arguments[data-failed] {
+    color: var(--status-error);
+}
+
+.happy-tool-call-preview__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+}
+
+.happy-tool-call-preview__fact {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-tool-call-preview__fact dt {
+    flex: none;
+    width: 80px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.happy-tool-call-preview__fact dd {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
 }

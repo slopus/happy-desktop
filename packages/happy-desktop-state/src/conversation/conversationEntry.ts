@@ -481,6 +481,12 @@ export interface ConversationToolCall {
     readonly arguments: ConversationJson;
     readonly status: ConversationActivityStatus;
     readonly display?: string;
+    /**
+     * The result as the tool returned it: `display` is its text. A detail
+     * surface reads a known tool's own fields from it, such as a command's
+     * `stdout` and `exitCode`, instead of showing the whole value as JSON.
+     */
+    readonly result?: ConversationJson;
     readonly failed: boolean;
     readonly failure?: ConversationActivityFailure;
     readonly presentation?: ConversationActivityPresentation;

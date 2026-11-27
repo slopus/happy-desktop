@@ -595,6 +595,9 @@ function toolEqual(left: ConversationToolCall, right: ConversationToolCall): boo
         left.summary === right.summary &&
         left.summaryKind === right.summaryKind &&
         jsonEqual(left.arguments, right.arguments) &&
+        (left.result === undefined || right.result === undefined
+            ? left.result === right.result
+            : jsonEqual(left.result, right.result)) &&
         failureEqual(left.failure, right.failure) &&
         presentationEqual(left.presentation, right.presentation) &&
         reviewEqual(left.review, right.review)

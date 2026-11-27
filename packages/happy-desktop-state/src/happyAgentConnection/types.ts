@@ -343,6 +343,8 @@ export interface ToolCallElement extends BaseChatElement {
     status: ToolCallStatus;
     progress?: string;
     result?: string;
+    /** The result as the tool returned it, before `result` turned it into text. */
+    resultValue?: unknown;
     presentation?: ToolPresentation;
     /** Repository checkouts that failed in this call, or that it reported to the model. */
     checkoutFailures?: readonly HappyAgentCheckoutFailure[];
