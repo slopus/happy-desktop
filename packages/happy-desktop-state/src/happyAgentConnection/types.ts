@@ -1143,9 +1143,9 @@ export interface ConnectHappyAgentOptions {
     preloadedSessions?: number;
     /**
      * This device's environment, read whenever the connection goes live and at each
-     * `environmentCheck`, and reported when it differs from what the server last stored. Once
-     * the server stores it, or its health says it takes reports, every send names the device.
-     * Unset, nothing is reported and no send names a device.
+     * `environmentCheck`, and reported when it differs from what the server last stored. Only a
+     * server whose health reports `capabilities.userEnvironment` is sent a report, and every send
+     * to it names the device. Unset, nothing is reported and no send names a device.
      */
     environment?: () => UserEnvironmentReport;
 }

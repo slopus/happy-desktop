@@ -72,14 +72,15 @@ const refused = (status: number) => (): never => {
 
 /**
  * A live connection to a fake daemon. `answer` replaces how the daemon answers a report;
- * unset, it is the fake's own route, which `userEnvironment` turns on along with health.
+ * unset, it is the fake's own route. `userEnvironment` is whether the daemon's health says it
+ * takes reports, which it does unless turned off.
  */
 function environmentOpen(
     answer?: () => ReportEnvironmentResponse,
     options: { readonly userEnvironment?: boolean } = {},
 ) {
     const daemon = fakeHappyAgentDaemonCreate();
-    daemon.userEnvironmentSupportedSet(options.userEnvironment ?? false);
+    daemon.userEnvironmentSupportedSet(options.userEnvironment ?? true);
     let environment: UserEnvironmentReport = {
         deviceId: "device-1",
         deviceKind: "desktop",
@@ -125,20 +126,30 @@ function environmentOpen(
     };
 }
 
+it("never asks a server whose health does not say it takes reports, and names no device to it", async () => {
+    const { connection, daemon, environmentSet, errors, reports, sent, sessionId, state } =
+        environmentOpen(undefined, { userEnvironment: false });
+    await vi.waitFor(() => expect(state()).toBe("live"));
+    connection.sendMessage(sessionId, "hello");
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
+    expect(sent(0)).not.toHaveProperty("deviceId");
+
+    // Neither going live again nor a window coming back with a different environment asks.
+    daemon.streamDropAll();
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+    await vi.waitFor(() => expect(state()).toBe("live"));
+    environmentSet({ deviceId: "device-1", deviceKind: "desktop", timeZone: "Europe/Berlin" });
+    connection.environmentCheck();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(reports).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+});
+
 it.each([404, 405, 500])(
-    "a server answering %i is left alone: no retry, no error, and no send names the device",
+    "a server answering %i is left alone: no retry of its own and no error",
     async (status) => {
-        const {
-            connection,
-            daemon,
-            debug,
-            environmentSet,
-            errors,
-            reports,
-            sent,
-            sessionId,
-            state,
-        } = environmentOpen(refused(status));
+        const { connection, daemon, debug, environmentSet, errors, reports, state } =
+            environmentOpen(refused(status));
         await vi.waitFor(() => expect(state()).toBe("live"));
         await vi.waitFor(() =>
             expect(debug.map((entry) => entry.message)).toContain(
@@ -153,20 +164,15 @@ it.each([404, 405, 500])(
             timeZone: "UTC",
         });
 
-        connection.sendMessage(sessionId, "hello");
-        await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
-        expect(sent(0)).not.toHaveProperty("deviceId");
-
         // Nothing retries on its own. Going live again, or a window coming back with a different
-        // environment, asks again after an ordinary failure, but never a server without the route.
+        // environment, asks again.
         daemon.streamDropAll();
         await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
         await vi.waitFor(() => expect(state()).toBe("live"));
         environmentSet({ deviceId: "device-1", deviceKind: "desktop", timeZone: "Europe/Berlin" });
         connection.environmentCheck();
         await new Promise((resolve) => setTimeout(resolve, 20));
-        if (status === 500) await vi.waitFor(() => expect(reports).toHaveBeenCalledTimes(3));
-        else expect(reports).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => expect(reports).toHaveBeenCalledTimes(3));
         expect(errors).toEqual([]);
         expect(
             debug.filter(
@@ -194,17 +200,17 @@ it("names the device on every send once the server stored its environment", asyn
 });
 
 it("does not take a successful answer that names no stored environment as one", async () => {
-    // Something in front of an older daemon may answer anything with 200.
-    const { connection, daemon, debug, sent, sessionId, state } = environmentOpen(
+    // Something in front of the daemon may answer anything with 200.
+    const { connection, debug, reports, state } = environmentOpen(
         () => ({}) as ReportEnvironmentResponse,
     );
     await vi.waitFor(() => expect(state()).toBe("live"));
     await vi.waitFor(() =>
         expect(debug.map((entry) => entry.message)).toContain("Device environment report failed"),
     );
-    connection.sendMessage(sessionId, "hello");
-    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
-    expect(sent(0)).not.toHaveProperty("deviceId");
+    // Nothing was stored, so the same environment is sent again at the next check.
+    connection.environmentCheck();
+    await vi.waitFor(() => expect(reports).toHaveBeenCalledTimes(2));
 });
 
 it("reports again only when the environment differs from what the server last stored", async () => {

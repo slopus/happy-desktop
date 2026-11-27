@@ -615,13 +615,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
     // The device's environment as this connection last had it stored, and the device it names.
-    // Sends name that device only once the server stored a report or says it takes them: a
-    // server without the route refuses a send that names one.
+    // It is reported, and sends name that device, only for a server whose health says it takes
+    // reports: a server without the route refuses a send that names one.
     let environmentStored: string | undefined;
     let environmentDeviceId: string | undefined;
-    // A server that answered the route with 404 or 405 is asked again only once its health says
-    // it takes reports.
-    let environmentUnsupported = false;
     // A report is on its way; a check that arrives meanwhile is made again once it lands.
     let environmentSending = false;
     let environmentRecheck = false;
@@ -4614,14 +4611,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     /**
      * Tells the server about this device's environment when it differs from what the server last
-     * stored from this connection. Runs while the connection is live; a server without the route
-     * is left alone, and no failure is retried or shown, though a later check sends again: the
-     * report only helps the agent and never holds anything up.
+     * stored from this connection. Runs while the connection is live, and only for a server whose
+     * health says it takes reports: one that does not is never asked, since the browser logs a
+     * refused request to the console whatever the caller does with it. No failure is retried or
+     * shown, though a later check sends again: the report only helps the agent and never holds
+     * anything up.
      */
     const environmentReport = (): void => {
         if (closed || options.environment === undefined) return;
         if (groupsStore.getState().connection !== "live") return;
-        if (environmentUnsupported && !environmentAccepted()) return;
+        if (!environmentAccepted()) return;
         if (environmentSending) {
             environmentRecheck = true;
             return;
@@ -4647,7 +4646,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             environmentSending = false;
             if (rootController.signal.aborted) return;
             if (result.outcome === "reported") environmentStored = payload;
-            environmentUnsupported = result.outcome === "unsupported";
             reportDebug({
                 detail: debugDetail(result),
                 level: "info",
@@ -4667,8 +4665,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     /**
-     * Sends one report; never throws. A server too old for the route, or one that does not serve
-     * it at all, answers 404 or 405 and is `unsupported`. A report counts as stored only when the
+     * Sends one report; never throws. A server that says it takes reports and still answers 404
+     * or 405 is `unsupported`. A report counts as stored only when the
      * answer names the device, so nothing in front of the server can be taken for it.
      */
     const environmentReportSend = async (
