@@ -51,6 +51,17 @@
     max-width: 460px;
 }
 
+/* What the bot can do and who may talk to it are one block: as wide as its
+   longest line and centred under the name, with every line starting on the
+   same edge. Long lines wrap inside the column instead of widening it. */
+.happy-cloud-onboarding__about {
+    display: flex;
+    flex-direction: column;
+    align-self: center;
+    gap: 12px;
+    max-width: 100%;
+}
+
 /* What the bot can do is the point of the page, so it reads at body size, a
    line each, rather than as small print in a box. */
 .happy-cloud-onboarding__points {
@@ -65,7 +76,7 @@
 .happy-cloud-onboarding__point {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 8px;
     color: var(--onboarding-foreground);
     font-family: var(--happy-font-ui);
     font-size: 16px;
@@ -73,6 +84,8 @@
     line-height: 24px;
 }
 
+/* A bare check in a slot as tall as one line, so it stays beside the first
+   line when a point wraps. It is quieter than the words it marks. */
 .happy-cloud-onboarding__point-mark {
     display: flex;
     flex: none;
@@ -80,9 +93,7 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    border-radius: 50%;
-    background: var(--onboarding-accent);
-    color: var(--onboarding-action-label);
+    color: color-mix(in srgb, var(--onboarding-foreground) 64%, transparent);
 }
 
 .happy-cloud-onboarding__lead {
@@ -96,7 +107,7 @@
 
 .happy-cloud-onboarding__footnote {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     gap: 6px;
     margin: 8px 0 0;
@@ -104,6 +115,26 @@
     font-family: var(--happy-font-ui);
     font-size: 12px;
     line-height: 16px;
+}
+
+.happy-cloud-onboarding__footnote-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    height: 16px;
+}
+
+/* Under the points the note is the block's last line: its shield sits in the
+   checks' column and its words start where theirs do. */
+.happy-cloud-onboarding__about .happy-cloud-onboarding__footnote {
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 0;
+}
+
+.happy-cloud-onboarding__about .happy-cloud-onboarding__footnote-mark {
+    width: 24px;
 }
 
 .happy-cloud-onboarding__bot-row {

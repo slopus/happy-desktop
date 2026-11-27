@@ -280,6 +280,18 @@ function PluginRowsPending() {
     ));
 }
 
+/** Who may talk to the admin bot, said once under what it can do. */
+function AdminBotNote(props: { readonly text: string }) {
+    return (
+        <p className="happy-cloud-onboarding__footnote">
+            <span className="happy-cloud-onboarding__footnote-mark" aria-hidden>
+                <Icon name="shield" size={14} />
+            </span>
+            {props.text}
+        </p>
+    );
+}
+
 function InferenceTile(props: { readonly option: CloudOnboardingInferenceOption }) {
     const { option } = props;
     const known = INFERENCE[option.id];
@@ -346,7 +358,7 @@ function page(
                 // say them twice; the line under the title only introduces them.
                 copy:
                     view.points.length > 0
-                        ? "It has expanded capabilities, so it can shape Happy around your team."
+                        ? "It has extra powers, so it can shape Happy around your team."
                         : `Your admin bot runs ${server} with you.`,
                 body: (
                     <div
@@ -385,28 +397,28 @@ function page(
                         </div>
                         <Hint text={view.error} />
                         {view.points.length > 0 ? (
-                            <ul className="happy-cloud-onboarding__points">
-                                {view.points.map((point) => (
-                                    <li className="happy-cloud-onboarding__point" key={point}>
-                                        <span
-                                            className="happy-cloud-onboarding__point-mark"
-                                            aria-hidden
-                                        >
-                                            <Icon name="check" size={14} />
-                                        </span>
-                                        {point}
-                                    </li>
-                                ))}
-                            </ul>
+                            <div className="happy-cloud-onboarding__about">
+                                <ul className="happy-cloud-onboarding__points">
+                                    {view.points.map((point) => (
+                                        <li className="happy-cloud-onboarding__point" key={point}>
+                                            <span
+                                                className="happy-cloud-onboarding__point-mark"
+                                                aria-hidden
+                                            >
+                                                <Icon name="check" size={18} />
+                                            </span>
+                                            {point}
+                                        </li>
+                                    ))}
+                                </ul>
+                                {view.note ? <AdminBotNote text={view.note} /> : null}
+                            </div>
                         ) : (
-                            <p className="happy-cloud-onboarding__lead">{view.description}</p>
+                            <>
+                                <p className="happy-cloud-onboarding__lead">{view.description}</p>
+                                {view.note ? <AdminBotNote text={view.note} /> : null}
+                            </>
                         )}
-                        {view.note ? (
-                            <p className="happy-cloud-onboarding__footnote">
-                                <Icon name="shield" size={12} />
-                                {view.note}
-                            </p>
-                        ) : null}
                     </div>
                 ),
             };
@@ -633,7 +645,7 @@ function page(
                     >
                         {view.registered ? (
                             <span className="happy-cloud-onboarding__done" data-size="large">
-                                <Icon name="check-circle" size={20} />
+                                <Icon name="check" size={18} />
                                 Signed in on your phone
                             </span>
                         ) : (
@@ -733,7 +745,7 @@ function page(
                 copy: `${view.botName || "The admin bot"} works with the people who manage bots.`,
                 body: (
                     <NoticeMark
-                        icon="check-circle"
+                        icon="check"
                         next="Your team's chats and tasks are waiting for you."
                     />
                 ),
@@ -797,7 +809,7 @@ const NOTICES: Readonly<
 
 /** The notice's picture, and what happens next in one quiet line under it. */
 function NoticeMark(props: {
-    readonly icon: "clock" | "arrow-down" | "check-circle";
+    readonly icon: "clock" | "arrow-down" | "check";
     readonly next: string;
 }) {
     return (
