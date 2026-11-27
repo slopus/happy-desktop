@@ -239,6 +239,8 @@ describe("isolated Happy Agent HTTP transport", () => {
         // connection's apps included.
         for (const path of [
             "/open-in-targets",
+            "/file-open",
+            "/connections/team/file-open-applications",
             "/vault-app?surfaceId=s&fileId=f&version=3",
             "/connections/team/vault-app?surfaceId=s&fileId=f&version=3",
             "/connections/cloud-acme/html-preview?workspaceId=w&path=a.html",

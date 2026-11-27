@@ -55,6 +55,7 @@ import type {
     HappyAgentFileSearchResult,
     HappyAgentGitChangedFile,
     HappyAgentGroupId,
+    HappyAgentFileApplication,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
     HappyAgentWorkspaceFileBytes,
@@ -606,6 +607,17 @@ export interface HappyAgentWorkspaceClient {
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     /** Selects one file, relative to the group's root or absolute, in the machine's file manager. */
     fileReveal(groupId: HappyAgentGroupId, path: string): Promise<void>;
+    /** The applications this machine offers to open one file in, the default first. */
+    fileApplicationsRead(
+        groupId: HappyAgentGroupId,
+        path: string,
+    ): Promise<readonly HappyAgentFileApplication[]>;
+    /** Opens one file, relative to the group's root or absolute, in one of those applications. */
+    fileApplicationOpen(
+        groupId: HappyAgentGroupId,
+        path: string,
+        applicationId: string,
+    ): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
         groupId: HappyAgentGroupId,
@@ -1158,6 +1170,10 @@ export function happyAgentWorkspaceClientCreate(
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
         openIn: (groupId, target) => deps.hostServices.openIn(groupId, target),
         fileReveal: (groupId, path) => deps.hostServices.fileReveal(groupId, path),
+        fileApplicationsRead: (groupId, path) =>
+            deps.hostServices.fileApplicationsRead(groupId, path),
+        fileApplicationOpen: (groupId, path, applicationId) =>
+            deps.hostServices.fileApplicationOpen(groupId, path, applicationId),
         sessionList() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!sessionListStore) {

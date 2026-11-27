@@ -1,7 +1,10 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, request as httpRequest, type Server } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import type { HappyAgentDeviceBridgeHostState } from "happy-desktop-state";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeviceBridgeHost } from "./deviceBridgeHost";
 import { happyAgentProxyHandle, type HappyAgentProxyClient } from "./happyAgentProxyHandle";
 
@@ -57,9 +60,13 @@ function hostFake() {
     return { host, stops };
 }
 
-async function serverCreate(deviceBridges?: DeviceBridgeHost): Promise<string> {
+async function serverCreate(
+    deviceBridges?: DeviceBridgeHost,
+    fields: Partial<HappyAgentProxyClient> = {},
+): Promise<string> {
     const client: HappyAgentProxyClient = {
         connection: () => client,
+        ...fields,
     } as unknown as HappyAgentProxyClient;
     const server = createServer((request, response) => {
         const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -212,5 +219,96 @@ describe("happyAgentProxyHandle bridge routes", () => {
         const response = await fetch(`${base}/bridge-events`);
         expect(response.status).toBe(501);
         expect(response.headers.get("content-type")).toBe("application/json");
+    });
+});
+
+describe("happyAgentProxyHandle file-open routes", () => {
+    let root: string;
+    beforeEach(async () => {
+        root = await mkdtemp(join(tmpdir(), "happy-proxy-file-open-"));
+    });
+    afterEach(async () => {
+        await rm(root, { recursive: true, force: true });
+    });
+
+    function workspaceRead(type: "host" | "container") {
+        return vi.fn(async () => ({
+            workspace: { compute: type === "host" ? { type, path: root } : { type } },
+        }));
+    }
+
+    it("refuses a file on another machine before asking it about the workspace", async () => {
+        const getWorkspace = workspaceRead("host");
+        const base = await serverCreate(undefined, {
+            getWorkspace,
+        } as unknown as Partial<HappyAgentProxyClient>);
+        for (const route of ["file-open", "file-open-applications"])
+            expect(
+                await post(`${base}/connections/team/${route}`, {
+                    workspaceId: "w1",
+                    path: "/tmp/sales-report.xlsx",
+                    appId: "com.apple.Numbers",
+                }),
+            ).toEqual({
+                status: 502,
+                body: { error: "A file on another machine cannot be opened on this Mac." },
+            });
+        expect(getWorkspace).not.toHaveBeenCalled();
+    });
+
+    it("refuses a container's file and a relative path that climbs out of the workspace", async () => {
+        const container = await serverCreate(undefined, {
+            getWorkspace: workspaceRead("container"),
+        } as unknown as Partial<HappyAgentProxyClient>);
+        expect(
+            await post(`${container}/file-open`, {
+                workspaceId: "w1",
+                path: "sales-report.xlsx",
+                appId: "com.apple.Numbers",
+            }),
+        ).toEqual({
+            status: 502,
+            body: { error: "A file in a container cannot be opened on this Mac." },
+        });
+        const host = await serverCreate(undefined, {
+            getWorkspace: workspaceRead("host"),
+        } as unknown as Partial<HappyAgentProxyClient>);
+        expect(
+            await post(`${host}/file-open-applications`, {
+                workspaceId: "w1",
+                path: "../sales-report.xlsx",
+            }),
+        ).toEqual({ status: 502, body: { error: "That path is outside this workspace." } });
+    });
+
+    it("offers nothing for a script and refuses to open one, whatever application is asked for", async () => {
+        await writeFile(join(root, "run.command"), "echo");
+        const base = await serverCreate(undefined, {
+            getWorkspace: workspaceRead("host"),
+        } as unknown as Partial<HappyAgentProxyClient>);
+        expect(
+            await post(`${base}/file-open-applications`, {
+                workspaceId: "w1",
+                path: "run.command",
+            }),
+        ).toEqual({ status: 200, body: { applications: [] } });
+        expect(
+            await post(`${base}/file-open`, {
+                workspaceId: "w1",
+                path: "run.command",
+                appId: "com.apple.TextEdit",
+            }),
+        ).toEqual({
+            status: 502,
+            body: {
+                error:
+                    process.platform === "darwin"
+                        ? "A .command file is not opened from Happy."
+                        : "Opening a file in another application is only supported on macOS.",
+            },
+        });
+        expect(
+            (await post(`${base}/file-open`, { workspaceId: "w1", path: "run.command" })).body,
+        ).toEqual({ error: "appId is required." });
     });
 });

@@ -1,4 +1,4 @@
-import { Fragment, useState, type CSSProperties } from "react";
+import { Fragment, useContext, useState, type CSSProperties, type MouseEvent } from "react";
 import type {
     ConversationActivity,
     ConversationActivityPresentation,
@@ -32,6 +32,8 @@ import { ScrollingText } from "./ScrollingText";
 import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
 import { useFileRevealMenu } from "./FileRevealMenu";
+import { FileRevealContext } from "./LinkContextMenu";
+import { FileOpenContext, usePresentedFileMenu } from "./PresentedFileMenu";
 import { toolCheckoutFailureLines } from "./toolCheckoutFailures";
 import { TypedText } from "./TypedText";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
@@ -724,6 +726,17 @@ function toolSubjectPath(tool: ConversationToolCall): string | undefined {
 }
 
 /**
+ * The one file a call put in front of the reader, as it resolved on the agent's
+ * machine, when it showed exactly one and kept where it came from. Its line
+ * then reveals that file, as its card does.
+ */
+function presentedFilePath(tool: ConversationToolCall): string | undefined {
+    const presentation = tool.presentation;
+    if (presentation?.type !== "media" || presentation.items.length !== 1) return undefined;
+    return presentation.items[0]!.source?.absolutePath;
+}
+
+/**
  * What a scheduled wait is waiting for, in the words its own arguments use:
  * `wait_until`'s date, or `wait`'s duration as text or as one count per unit.
  */
@@ -1122,8 +1135,19 @@ function AgentToolActivity(props: {
         !tool.failed;
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
     // Any file the call is about can be shown in Finder, including one Happy
-    // has no preview for.
+    // has no preview for. The one file a call showed the reader has the menu
+    // its card has, less Open: the card below it opens it.
     const revealMenu = useFileRevealMenu(toolSubjectPath(tool));
+    const presentedMenu = usePresentedFileMenu();
+    const presentedPath = presentedFilePath(tool);
+    const revealHost = useContext(FileRevealContext);
+    const openHost = useContext(FileOpenContext);
+    const presentedOffered = revealHost !== undefined || openHost !== undefined;
+    const lineContextMenu =
+        revealMenu.onContextMenu ??
+        (presentedPath !== undefined && presentedOffered
+            ? (event: MouseEvent<HTMLElement>) => presentedMenu.ask(event, presentedPath, [])
+            : undefined);
 
     /* Only a row that is open, and open on its arguments, ever prints them.
        Serializing them anyway cost the whole argument tree on every frame of a
@@ -1364,9 +1388,15 @@ function AgentToolActivity(props: {
             <div
                 className="happy-agent-activity__line"
                 data-happy-desktop-ui="agent-activity-line"
-                onContextMenu={revealMenu.onContextMenu}
+                onContextMenu={lineContextMenu}
+                onPointerEnter={
+                    revealMenu.onContextMenu === undefined && presentedPath !== undefined
+                        ? () => presentedMenu.warm(presentedPath)
+                        : undefined
+                }
             >
                 {revealMenu.menu}
+                {presentedMenu.menu}
                 {singleLine && (spawnedOpen || props.onSelect) ? (
                     // A spawned agent opens itself, wherever its row is drawn.
                     <button

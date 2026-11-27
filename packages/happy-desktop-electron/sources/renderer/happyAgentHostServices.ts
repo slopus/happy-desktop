@@ -4,6 +4,7 @@ import type {
     HappyAgentDeviceBridgeHost,
     HappyAgentDeviceBridgeHostState,
     HappyAgentHostServices,
+    HappyAgentFileApplication,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
     HappyAgentWorkspaceFileBytes,
@@ -268,6 +269,21 @@ export function happyAgentHostServicesCreate(
         },
         fileReveal: async (workspaceId, path) => {
             await postJson<Record<string, never>>(baseUrl, "/file-reveal", { workspaceId, path });
+        },
+        fileApplicationsRead: async (workspaceId, path) =>
+            (
+                await postJson<{ applications: HappyAgentFileApplication[] }>(
+                    baseUrl,
+                    "/file-open-applications",
+                    { workspaceId, path },
+                )
+            ).applications,
+        fileApplicationOpen: async (workspaceId, path, appId) => {
+            await postJson<Record<string, never>>(baseUrl, "/file-open", {
+                workspaceId,
+                path,
+                appId,
+            });
         },
         workspaceFileBytesRead: async (
             workspaceId,
