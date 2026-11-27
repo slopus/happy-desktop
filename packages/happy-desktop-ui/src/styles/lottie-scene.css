@@ -34,7 +34,11 @@
 /* The rest frame as a picture, under the canvas until the player has drawn it
    (`still`), so the scene is on screen with the page rather than a moment
    after it. The canvas is transparent until then, and the two are the same
-   frame, so the hand-over does not show. */
+   frame, so the hand-over does not show. The still is a picture, not a
+   colour, so it is set as the background image alone. */
 .happy-lottie-scene[data-still="shown"] {
-    background: var(--happy-lottie-scene-still) center / contain no-repeat;
+    background-image: var(--happy-lottie-scene-still);
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
 }

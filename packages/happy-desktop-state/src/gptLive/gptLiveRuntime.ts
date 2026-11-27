@@ -39,7 +39,6 @@ export interface GptLiveAvailability {
     readonly accounts: readonly GptLiveAccount[];
 }
 
-
 export interface GptLiveTranscriptFragment {
     readonly id: string;
     readonly role: "user" | "assistant";

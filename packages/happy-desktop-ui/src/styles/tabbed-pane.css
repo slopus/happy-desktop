@@ -400,7 +400,7 @@
                     var(--happy-tabbed-pane-label-fade-inset) *
                         var(--happy-tabbed-pane-label-overflows)
                 ),
-            #000
+            black
                 calc(
                     (var(--happy-tabbed-pane-label-fade-inset) + var(--happy-label-fade)) *
                         var(--happy-tabbed-pane-label-overflows)
