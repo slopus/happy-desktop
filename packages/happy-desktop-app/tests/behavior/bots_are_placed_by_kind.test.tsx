@@ -25,7 +25,7 @@ import {
 } from "../../sources/AppHappyAgentView";
 
 /* Happy Cloud places each bot by its kind. A shared bot is a destination of
- * the sidebar's first group, beside Activity and Artifacts, and is not under
+ * the sidebar's first group, above Activity and Artifacts, and is not under
  * Bots; a personal bot is under Bots and opens the reader's own conversation.
  * Nobody makes a bot from the sidebar there, and only a bot the host reports
  * editable offers its settings. A Happy Agent daemon sends no kind, and its
@@ -221,10 +221,10 @@ const menuLabels = () =>
 const menuClose = () =>
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
-it("shows an owner the shared bot beside Activity and Artifacts, and not under Bots", () => {
+it("shows an owner the shared bot first in the main group, and not under Bots", () => {
     const { container, onChatSelect } = view([CHIEF_SHARED, WRITER], { happyCloud: true });
     const [first, ...rest] = sections(container);
-    expect(first!.rows).toEqual(["feed", "artifacts", "local/ws_chief"]);
+    expect(first!.rows).toEqual(["local/ws_chief", "feed", "artifacts"]);
     const bots = rest.find((section) => section.label === "Bots");
     expect(bots?.rows).toEqual(["local/ws_writer"]);
 

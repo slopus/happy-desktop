@@ -3271,11 +3271,10 @@ function surfaceTargetLink(
 }
 
 /**
- * The first group in the sidebar, under no heading. Activity leads it,
- * Artifacts under it; both are always there, never move, and nothing is dragged
- * past them. Happy Cloud's shared bots follow the fixed rows as destinations of
- * their own, each opening its one conversation with its subtasks beneath, and
- * are not dragged either. The reader's
+ * The first group in the sidebar, under no heading. Happy Cloud's shared bots
+ * lead it, as the phone lists them, each opening its one conversation with its
+ * subtasks beneath. Activity follows, Artifacts under it; both are always
+ * there, and nothing is dragged past them or the shared bots. The reader's
  * Surfaces follow in their own order and are dragged among themselves only.
  * Every type is listed by its own name and picture, including a type this
  * build cannot show; only opening one depends on its type. Every act on them
@@ -3307,14 +3306,14 @@ function happyAgentTopSection(
                   error: `Could not join “${refused ?? "this Surface"}”. ${failure.error.message}`,
               }),
         items: [
+            ...(happyAgent
+                ? sharedBotSidebarItems(happyAgent, titleShimmerEnabled, attention)
+                : []),
             { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ARTIFACTS_SIDEBAR_ITEM,
             ...(happyAgent?.session?.plugins?.() ? [PLUGINS_SIDEBAR_ITEM] : []),
             ...(pipelinesAvailable && happyAgent?.session?.pipelines?.()
                 ? [PIPELINES_SIDEBAR_ITEM]
-                : []),
-            ...(happyAgent
-                ? sharedBotSidebarItems(happyAgent, titleShimmerEnabled, attention)
                 : []),
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>

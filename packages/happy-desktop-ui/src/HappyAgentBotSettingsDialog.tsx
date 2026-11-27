@@ -155,7 +155,7 @@ export function HappyAgentBotSettingsDialog(props: HappyAgentBotSettingsDialogPr
                         data-testid="happy-agent-bot-settings-instructions"
                         disabled={submitting}
                         fullWidth
-                        hint={`Takes effect in every member's conversation with this bot from its next message. ${bytesLabel(props.instructionsBytes)} of ${bytesLabel(props.instructionsMaximumBytes)}.`}
+                        hint={`Saved changes reach everyone's conversation with this bot at its next turn. ${bytesLabel(props.instructionsBytes)} of ${bytesLabel(props.instructionsMaximumBytes)}.`}
                         label="Instructions"
                         multiline
                         onValueChange={props.onInstructionsChange}

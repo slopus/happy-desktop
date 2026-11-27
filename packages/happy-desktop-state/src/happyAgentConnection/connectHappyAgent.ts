@@ -6362,13 +6362,30 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "update_bot",
                 mutationId,
-                () => {
+                async () => {
                     const bot = botOf(botId);
                     if (bot === undefined) throw new Error("The bot is not loaded.");
-                    return client.renameBot(bot.id, updateBotRequestOf({ ...update, mutationId }), {
-                        ifMatch: bot.version,
-                        signal: rootController.signal,
-                    });
+                    const request = updateBotRequestOf({ ...update, mutationId });
+                    try {
+                        return await client.renameBot(bot.id, request, {
+                            ifMatch: bot.version,
+                            signal: rootController.signal,
+                        });
+                    } catch (error) {
+                        // The bot changed since it was read, as a rename by
+                        // its admin bot does. The reader saved what they
+                        // wrote, so it is sent once more against the host's
+                        // current version rather than refused.
+                        if (!(error instanceof HappyAgentApiError) || error.status !== 409)
+                            throw error;
+                        const { bot: current } = await client.getBot(bot.id, {
+                            signal: rootController.signal,
+                        });
+                        return await client.renameBot(bot.id, request, {
+                            ifMatch: current.version,
+                            signal: rootController.signal,
+                        });
+                    }
                 },
                 ({ bot }) => {
                     groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));

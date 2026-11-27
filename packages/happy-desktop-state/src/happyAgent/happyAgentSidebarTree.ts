@@ -18,7 +18,7 @@ export interface HappyAgentSidebarProject {
  * voice — so the order and the filtering are decided once.
  *
  * Happy Cloud's shared bots are not among the bots: each is a destination of
- * the sidebar's first group, beside Activity and Artifacts, so they are listed
+ * the sidebar's first group, above Activity and Artifacts, so they are listed
  * apart. Only a bot the host says is `shared` goes there; a personal bot and
  * every bot of a Happy Agent daemon, which sends no kind, stay under Bots.
  *
