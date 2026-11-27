@@ -7,12 +7,14 @@
     overflow: hidden;
     /*
      * Paper inside the tile on top of the symbol's own four-module quiet zone,
-     * so a dense code's finder eyes clear the rounded corners at any size.
+     * so a dense code's finder eyes clear the rounded corners at any size. The
+     * border is part of those 10px, so the symbol keeps its size in every theme.
      */
-    padding: 10px;
+    padding: 9px;
+    border: 1px solid var(--qr-code-border);
     border-radius: var(--happy-radius-shell);
     background: var(--page-canvas);
-    box-shadow: 0 12px 36px var(--shadow-floating);
+    box-shadow: var(--qr-code-shadow);
     color: var(--qr-code-module);
     /* The mark is measured against the symbol, inside the padding. */
     container-type: size;

@@ -74,16 +74,18 @@
     flex: none;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
+    border: 1px solid var(--qr-code-border);
     border-radius: var(--happy-radius-shell);
     background: var(--page-canvas);
-    box-shadow: 0 12px 36px var(--shadow-floating);
+    box-shadow: var(--qr-code-shadow);
     color: var(--text-secondary);
 }
 
 /* The card is the code's white in either theme, so its spinner takes the
    code's own ink rather than the page's, which is light in the dark. */
 .happy-mobile-pairing__placeholder > .happy-spinner {
-    color: var(--button-primary-background);
+    color: var(--qr-code-module);
 }
 
 .happy-mobile-pairing__note,

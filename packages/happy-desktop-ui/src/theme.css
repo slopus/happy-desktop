@@ -126,6 +126,10 @@
     --qr-code-mark: #6e6e73;
     /* A QR code's modules, black in every theme so a camera always reads them. */
     --qr-code-module: #000000;
+    /* The QR tile's edge: a hairline on a light page, where a shadow reads as
+       smudge, and a lifting shadow in the dark, where a white tile needs no line. */
+    --qr-code-border: var(--divider);
+    --qr-code-shadow: none;
     --divider: #eaeaea;
     --shadow-color: rgb(0 0 0 / 0.1);
     --shadow-opacity: 0.1;
@@ -488,6 +492,8 @@
         --surface-inverse: #f2f2f7;
         --text-inverse: #1c1c1e;
         --divider: #292929;
+        --qr-code-border: transparent;
+        --qr-code-shadow: 0 12px 36px var(--shadow-floating);
         --shadow-color: rgb(0 0 0 / 0.1);
         --shadow-opacity: 0.1;
         --shadow-subtle: rgb(0 0 0 / 0.24);
@@ -722,6 +728,8 @@
     --surface-inverse: #f2f2f7;
     --text-inverse: #1c1c1e;
     --divider: #292929;
+    --qr-code-border: transparent;
+    --qr-code-shadow: 0 12px 36px var(--shadow-floating);
     --shadow-color: rgb(0 0 0 / 0.1);
     --shadow-opacity: 0.1;
     --shadow-subtle: rgb(0 0 0 / 0.24);
