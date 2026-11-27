@@ -234,6 +234,27 @@ function ModalOverlaySurface(props: ModalOverlayProps) {
         document.addEventListener("pointerdown", onPointerDown, true);
         return () => document.removeEventListener("pointerdown", onPointerDown, true);
     }, [clear]);
+    const keyFromPage = useEffectEvent((event: KeyboardEvent) => {
+        const overlay = overlayEl.current;
+        const focused = document.activeElement;
+        if (!overlay || event.defaultPrevented || (focused !== null && focused !== document.body))
+            return;
+        const overlays = document.querySelectorAll(".happy-modal-overlay:not([inert])");
+        if (overlays[overlays.length - 1] !== overlay) return;
+        // Tab now walks on from the overlay into the card.
+        overlay.focus();
+        const close = local.onEscape ?? local.onDismiss;
+        if (event.key !== "Escape" && !commandShortcutMatches(event, CLOSE_SHORTCUT)) return;
+        event.preventDefault();
+        close?.();
+    });
+    // eslint-disable-next-line happy-react/no-layout-effect -- a focused control disabled or taken away while the card works leaves focus on the page, where the overlay's own key handler never hears Escape or Tab; only the document does
+    useLayoutEffect(() => {
+        if (clear) return;
+        const onKeyDown = (event: KeyboardEvent) => keyFromPage(event);
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [clear]);
     return (
         <div
             {...rest}
