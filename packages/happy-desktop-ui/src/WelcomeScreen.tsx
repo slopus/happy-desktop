@@ -44,7 +44,7 @@ export interface WelcomeScreenProps {
     onAction(): void;
     /**
      * Another way forward, under the primary action and as large, in the
-     * secondary style. The secondary action then stands apart below the two.
+     * secondary style. The secondary action follows it at the same spacing.
      */
     readonly alternateAction?: {
         readonly label: string;
