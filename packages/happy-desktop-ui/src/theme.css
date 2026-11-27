@@ -124,6 +124,8 @@
        appearances: far enough from the modules that a camera and a reader never
        take it for one of them. */
     --qr-code-mark: #6e6e73;
+    /* A QR code's modules, black in every theme so a camera always reads them. */
+    --qr-code-module: #000000;
     --divider: #eaeaea;
     --shadow-color: rgb(0 0 0 / 0.1);
     --shadow-opacity: 0.1;

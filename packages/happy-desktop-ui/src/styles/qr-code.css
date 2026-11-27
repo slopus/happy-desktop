@@ -13,7 +13,7 @@
     border-radius: var(--happy-radius-shell);
     background: var(--page-canvas);
     box-shadow: 0 12px 36px var(--shadow-floating);
-    color: var(--button-primary-background);
+    color: var(--qr-code-module);
     /* The mark is measured against the symbol, inside the padding. */
     container-type: size;
 }
