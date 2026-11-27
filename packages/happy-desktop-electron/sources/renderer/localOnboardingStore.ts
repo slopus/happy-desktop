@@ -6,6 +6,7 @@ import type {
     LocalOnboardingCustom,
     LocalOnboardingKeyAdd,
     LocalOnboardingKeyCredential,
+    LocalOnboardingKeyRowId,
     LocalOnboardingProviderRowId,
     LocalOnboardingView,
     OnboardingStage,
@@ -29,6 +30,7 @@ import type {
 import {
     LocalProviderClisUnavailable,
     LocalProviderCliRouteMissing,
+    LOCAL_PROVIDER_CLIS_REFUSED,
     LocalProviderCliRefused,
     localProviderClisApiCreate,
     type LocalProviderCli,
@@ -1059,7 +1061,7 @@ export function localOnboardingStoreCreate(
         const connectionId = runtime.connectionId;
         // Whether keys can be added is asked once per connection, beside the CLIs;
         // a Happy Agent that cannot answer cannot add them either.
-        void api.providerCreateSupported().then(
+        void api.providerAccountsSupported().then(
             (supported) => keyAddSupportedPublish(connectionId, supported),
             () => keyAddSupportedPublish(connectionId, false),
         );
@@ -1345,7 +1347,7 @@ export function localOnboardingStoreCreate(
             if (!api || keyAdd?.supported !== true || keyAdd.phase === "saving") return;
             const row = credential.kind === "aws" ? "bedrock" : credential.type;
             publish({ ...snapshot, keyAdd: { phase: "saving", row, supported: true } });
-            api.providerCreate(
+            api.providerAccountAdd(
                 credential.kind === "aws"
                     ? {
                           bedrock: {
@@ -1365,13 +1367,7 @@ export function localOnboardingStoreCreate(
                     publish({
                         ...snapshot,
                         keyAdd: {
-                            error:
-                                error instanceof LocalProviderCliRouteMissing
-                                    ? "This version of Happy Agent can't add keys yet. Update Happy Agent, then try again."
-                                    : error instanceof LocalProviderCliRefused ||
-                                        error instanceof LocalProviderClisUnavailable
-                                      ? error.message
-                                      : "Happy couldn't reach Happy Agent. Try again.",
+                            error: keyAddFailure(error, row),
                             phase: "failed",
                             row,
                             supported: true,
@@ -1871,6 +1867,37 @@ function customProvidersFind(config: Awaited<ReturnType<HappyAgentClient["getCon
 }
 
 const LOCAL_PROVIDER_IDS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "antigravity"]);
+
+/** Who issues each kind of key, as a refusal names them. */
+const KEY_VENDORS: Readonly<Record<LocalOnboardingKeyRowId, string>> = {
+    bedrock: "AWS",
+    claude: "Anthropic",
+    codex: "OpenAI",
+    grok: "xAI",
+};
+
+/**
+ * Why a key was not added, in words for under its field. A key the vendor
+ * refused and one that could not be checked at all read differently: the
+ * second says nothing against the key.
+ */
+function keyAddFailure(error: unknown, row: LocalOnboardingKeyRowId): string {
+    const vendor = KEY_VENDORS[row];
+    if (error instanceof LocalProviderCliRouteMissing)
+        return "This version of Happy Agent can't add keys yet. Update Happy Agent, then try again.";
+    if (error instanceof LocalProviderCliRefused) {
+        // The vendor's own refusal says best what is wrong with the key.
+        if (error.code === "verification_failed")
+            return error.message !== LOCAL_PROVIDER_CLIS_REFUSED
+                ? error.message
+                : `${vendor} didn't accept ${row === "bedrock" ? "these keys" : "this key"}. Check that ${row === "bedrock" ? "they're" : "it's"} whole and still active.`;
+        if (error.code === "verification_unavailable")
+            return `Happy Agent couldn't check ${row === "bedrock" ? "these keys" : "the key"} with ${vendor} right now. ${row === "bedrock" ? "They" : "It"} may be fine; try again in a moment.`;
+        return error.message;
+    }
+    if (error instanceof LocalProviderClisUnavailable) return error.message;
+    return "Happy couldn't reach Happy Agent. Try again.";
+}
 
 /**
  * The Connect your AI row a configured provider counts toward. An account of

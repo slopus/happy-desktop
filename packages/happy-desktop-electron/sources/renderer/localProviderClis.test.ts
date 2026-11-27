@@ -158,12 +158,14 @@ describe("Antigravity", () => {
         const fetch = vi
             .fn()
             .mockResolvedValueOnce(Response.json({ capabilities: { providerClis: true } }))
-            .mockResolvedValueOnce(Response.json({ capabilities: { providerCreate: true } }))
-            .mockResolvedValueOnce(Response.json({}));
+            .mockResolvedValueOnce(Response.json({ capabilities: { providerAccounts: true } }))
+            .mockResolvedValueOnce(
+                Response.json({ config: {}, providerId: "bedrock_2" }, { status: 201 }),
+            );
         vi.stubGlobal("fetch", fetch);
-        expect(await api().providerCreateSupported()).toBe(false);
-        expect(await api().providerCreateSupported()).toBe(true);
-        await api().providerCreate(
+        expect(await api().providerAccountsSupported()).toBe(false);
+        expect(await api().providerAccountsSupported()).toBe(true);
+        await api().providerAccountAdd(
             {
                 bedrock: { accessKeyId: "AKIA1", region: "us-east-1", secretAccessKey: "secret" },
                 type: "bedrock",
