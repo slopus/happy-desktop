@@ -9,7 +9,6 @@ import {
     type HappyAgentClockStore,
     type HappyAgentOnboardingStore,
     type HappyAgentProfileStore,
-    type MobilePairingMethodStore,
     type WelcomeStore,
 } from "happy-desktop-state";
 import {
@@ -21,7 +20,7 @@ import {
 } from "happy-desktop-ui";
 import { happyAgentWelcomeSlides } from "../onboarding/happyAgentWelcomeSlides";
 import { AppCloudOnboarding } from "./AppCloudOnboarding";
-import { appMobileRelayFromOnboarding, useAppMobilePairingOptions } from "./AppMobilePairing";
+import { useAppMobilePairingOptions } from "./AppMobilePairing";
 
 export function HappyAgentOnboardingBoundary(props: {
     readonly store: HappyAgentOnboardingStore;
@@ -34,8 +33,6 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly serverLabel?: string;
     /** What a new member's placeholder is picked by until they choose a photo. */
     readonly placeholderSeed: string;
-    /** Which pairing method shows: this computer's default until the person picks on the page. */
-    readonly mobilePairingMethod: MobilePairingMethodStore;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
     /** A Happy Cloud server's AI connections, plugins and payments, for its gates. */
@@ -66,33 +63,12 @@ export function HappyAgentOnboardingBoundary(props: {
         props.store.mobile.get,
         props.store.mobile.get,
     );
-    const methodStore = props.mobilePairingMethod;
-    const { method } = useSyncExternalStore(
-        methodStore.subscribe,
-        methodStore.get,
-        methodStore.get,
-    );
     const online = props.online;
-    // The relay offer leads to methods: the direct pairing opens with it,
-    // and the connector is read only while Direct is on screen.
-    const pairing =
-        snapshot.state?.completed === false &&
-        (mobile.status === "pairing" || mobile.status === "failed");
+    // The offer leads to the direct code; the connector is read only while it is on screen.
+    const pairing = snapshot.state?.completed === false && mobile.status === "pairing";
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
-        method,
-        // Choosing Direct asks for a direct code.
-        onMethodSelect: (next) => {
-            if (next === "direct") props.store.mobile.direct.pairingOpen();
-            methodStore.methodSelect(next, "onboarding");
-        },
-        relay: appMobileRelayFromOnboarding(mobile),
-        relayStarting: mobile.status === "failed" && mobile.pending,
-        onRelayRetry: props.store.mobile.happyMobileConnect,
-        direct:
-            pairing && method === "direct"
-                ? props.store.mobile.direct
-                : happyAgentMobileConnectorStoreUnfollowed,
+        direct: pairing ? props.store.mobile.direct : happyAgentMobileConnectorStoreUnfollowed,
         clock: props.clock,
         online: () => online,
         ...(online ? {} : { unavailable: "Happy can't reach this Happy Agent right now." }),
@@ -189,14 +165,12 @@ export function HappyAgentOnboardingBoundary(props: {
             case "offer":
                 return {
                     kind: "happy-mobile-offer",
-                    busy: mobile.pending || !props.online,
+                    busy: !props.online,
                     ...(mobile.message ? { message: mobile.message } : {}),
                 };
             case "pairing":
-            case "failed":
                 return { kind: "happy-mobile-pairing" };
             case "configured":
-            case "disabled":
             case "skipped":
                 return { kind: "checking", message: snapshot.error ?? "Finishing setup…" };
         }
@@ -208,11 +182,7 @@ export function HappyAgentOnboardingBoundary(props: {
             onExternalOpen={props.onExternalOpen}
             onAssistantsContinue={() => undefined}
             onConnectRetry={props.onRetry}
-            onHappyMobileConnect={() => {
-                // Linking from the offer opens the pairing page on the default.
-                if (mobile.status === "offer") methodStore.methodReset();
-                props.store.mobile.happyMobileConnect();
-            }}
+            onHappyMobileConnect={props.store.mobile.happyMobileConnect}
             onHappyMobileSkip={props.store.mobile.happyMobileSkip}
             happyMobilePairingOptions={pairingOptions}
         />

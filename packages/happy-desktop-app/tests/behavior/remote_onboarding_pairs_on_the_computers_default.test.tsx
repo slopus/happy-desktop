@@ -1,9 +1,7 @@
-import { act, fireEvent, render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
     appearanceStoreCreate,
-    MOBILE_PAIRING_METHOD_DEFAULT,
-    mobilePairingMethodStoreCreate,
     type HappyAgentClockStore,
     type HappyAgentOnboardingSnapshot,
     type HappyAgentOnboardingStore,
@@ -15,8 +13,8 @@ import { HappyAgentOnboardingBoundary } from "../../sources/components/HappyAgen
 
 /*
  * Onboarding against a remote Happy Agent links a phone on the same pairing
- * page as this computer's own setup, opening on the same default, Direct. A
- * pick on the page lasts until the next pairing page opens from the offer.
+ * page as this computer's own setup: the direct code alone, with no method
+ * control.
  */
 
 const clock = {
@@ -61,16 +59,9 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-const pairing: HappyMobileOnboardingSnapshot = {
-    status: "pairing",
-    data: "happy://relay",
-    expiresAt: 300_000,
-};
+const pairing: HappyMobileOnboardingSnapshot = { status: "pairing" };
 
-function boundary(
-    initial: HappyMobileOnboardingSnapshot = pairing,
-    methods = mobilePairingMethodStoreCreate({ defaultMethod: MOBILE_PAIRING_METHOD_DEFAULT }),
-) {
+function boundary(initial: HappyMobileOnboardingSnapshot = pairing) {
     let mobile = initial;
     const listeners = new Set<() => void>();
     const store = {
@@ -108,7 +99,6 @@ function boundary(
         <HappyAgentOnboardingBoundary
             appearance={appearanceStoreCreate()}
             clock={clock}
-            mobilePairingMethod={methods}
             online
             onRetry={() => undefined}
             placeholderSeed="work"
@@ -125,42 +115,21 @@ function boundary(
                 '[data-happy-desktop-ui="mobile-pairing-options-slot"]',
             ),
         ].map((slot) => slot.dataset.method ?? "");
-    const pressed = () =>
-        view.container.querySelector<HTMLElement>(
-            '[data-testid="mobile-pairing-method"] [aria-pressed="true"]',
-        )?.dataset.value;
-    return { view, shown, pressed };
+    const control = () => view.container.querySelector('[data-testid="mobile-pairing-method"]');
+    return { view, shown, control };
 }
 
-it("opens a remote Happy Agent's pairing page on Direct, with Relay beside it", () => {
-    const { view, shown, pressed } = boundary();
+it("opens a remote Happy Agent's pairing page on the direct code alone", () => {
+    const { view, shown, control } = boundary();
     expect(shown()).toEqual(["direct"]);
-    expect(pressed()).toBe("direct");
-    expect(
-        view.container.querySelector('[data-testid="mobile-pairing-method"] [data-value="relay"]'),
-    ).not.toBeNull();
+    expect(control()).toBeNull();
     view.unmount();
 });
 
-it("keeps a pick on the page only until the next pairing page opens from the offer", () => {
-    // One window's store, shared by every Happy Agent's onboarding in it.
-    const methods = mobilePairingMethodStoreCreate({ defaultMethod: "direct" });
-    const first = boundary({ status: "offer", pending: false }, methods);
-    fireEvent.click(first.view.getByRole("button", { name: "Link Mobile App" }));
-    expect(first.shown()).toEqual(["direct"]);
-    fireEvent.click(
-        first.view.container.querySelector<HTMLElement>(
-            '[data-testid="mobile-pairing-method"] [data-value="relay"]',
-        )!,
-    );
-    expect(first.shown()).toEqual(["relay"]);
-    first.view.unmount();
-    expect(methods.get().method).toBe("relay");
-
-    const second = boundary({ status: "offer", pending: false }, methods);
-    act(() => {
-        fireEvent.click(second.view.getByRole("button", { name: "Link Mobile App" }));
-    });
-    expect(second.shown()).toEqual(["direct"]);
-    second.view.unmount();
+it("links a phone from the offer straight to the direct code", () => {
+    const offer = boundary({ status: "offer" });
+    fireEvent.click(offer.view.getByRole("button", { name: "Link Mobile App" }));
+    expect(offer.shown()).toEqual(["direct"]);
+    expect(offer.control()).toBeNull();
+    offer.view.unmount();
 });

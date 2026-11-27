@@ -19,7 +19,6 @@ import {
     happyAgentHostNoop,
     happyAgentSettingsStoreCreate,
     HappyCloudRequestRefusal,
-    mobilePairingMethodStoreCreate,
     pipelinesStoreCreate,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     HAPPY_AGENT_RETAINED_CONVERSATIONS_NONE,
@@ -247,7 +246,6 @@ async function windowOpen(address: string) {
         appearance: appearanceStoreCreate({ mode: "light" }),
         happyAgents: directory(live, cloud),
         settings: happyAgentSettingsStoreCreate(),
-        mobilePairingMethod: mobilePairingMethodStoreCreate({ defaultMethod: "direct" }),
         experiments: experimentsStoreCreate(),
     };
     router.update({ context });

@@ -250,7 +250,7 @@ export function happyAgentOnboardingStoreCreate(
         readonly onMobileSkip?: () => void;
         /** The local desktop pairs Happy Mobile through the guided setup. */
         readonly guidedMobileSetup?: boolean;
-        /** The connection's direct connector, offered beside the relay code. */
+        /** The connection's direct connector, whose code the phone step offers. */
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
         /** Happy Cloud's own routes, which skip gates and name the admin bot. */
         readonly cloudRequest?: HappyCloudRequest;
@@ -376,8 +376,7 @@ export function happyAgentOnboardingStoreCreate(
         if (!mobileUnsubscribe) mobileUnsubscribe = mobile.subscribe(setupSynchronize);
         const status = mobile.get().status;
         // Remote setup ends here. Its first project is created later in the workspace.
-        if (status === "configured" || status === "disabled" || status === "skipped")
-            onboardingComplete();
+        if (status === "configured" || status === "skipped") onboardingComplete();
     }
     /**
      * Once no gate is left to show, the server is told the reader finished.

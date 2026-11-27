@@ -12,7 +12,7 @@ import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentMobileLinkSettingsProps {
     readonly step: DesktopMobileSetupStep;
-    /** Both pairing methods; the view is MobilePairingOptions in its `settings` layout. */
+    /** The direct pairing code; the view is MobilePairingOptions in its `settings` layout. */
     readonly pairingOptions: DesktopMobilePairingOptions;
     readonly onContinue: () => void;
     /** Opens an external page: the host owns how a link leaves the app. */
@@ -32,7 +32,7 @@ export function happyAgentMobileLinkHeading(
 
 /**
  * Linking a phone from Settings › Mobile Access: the same two steps as
- * first-run setup — the store code, then both pairing codes — drawn on the
+ * first-run setup — the store code, then the pairing code — drawn on the
  * Settings surface beside its category column rather than on a setup page.
  * The Settings header carries the step's name and the way back.
  */

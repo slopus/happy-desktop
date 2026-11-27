@@ -146,8 +146,7 @@ export function happyAgentMobileConnectorStoreCreate(
     /**
      * Keeps a code on an open surface: the first one, and a new one when it
      * expires unused. Only while something shows the connector: a pairing
-     * opened with nothing on screen (a pairing page showing Relay)
-     * makes no code until a surface follows it.
+     * opened with nothing on screen makes no code until a surface follows it.
      */
     function refresh(): void {
         const current = store.getState();
@@ -463,9 +462,8 @@ export const happyAgentMobileConnectorStoreNoop: HappyAgentMobileConnectorStore 
 };
 
 /**
- * A stand-in for a connector this page does not follow while it shows Relay.
- * Not followed is not off: it reads as not yet known, so the Direct | Relay
- * control stays and choosing Direct follows the real connector.
+ * A stand-in for a connector this page does not follow while its code is not
+ * on screen. Not followed is not off: it reads as not yet known.
  */
 export const happyAgentMobileConnectorStoreUnfollowed: HappyAgentMobileConnectorStore = {
     ...happyAgentMobileConnectorStoreNoop,

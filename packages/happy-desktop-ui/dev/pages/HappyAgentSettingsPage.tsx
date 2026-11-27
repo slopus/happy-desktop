@@ -33,7 +33,7 @@ import {
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import { settingsDefaultModel, settingsMenus } from "./happyAgentSettingsFixtures";
-import { direct, relayWaiting } from "./mobilePairingFixtures";
+import { direct } from "./mobilePairingFixtures";
 import {
     directSectionSpecimen,
     mobileLinkSpecimen,
@@ -1271,9 +1271,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         onPairingOptionsOpen={noop}
                         pairingOptions={pairingOptionsSpecimen("dialog", {
                             direct: direct.waiting,
-                            relay: relayWaiting,
                         })}
-                        status="pairing"
+                        status="disconnected"
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
@@ -1312,28 +1311,14 @@ export function HappyAgentSettingsBlueprintPage() {
                 {mobileLinkSpecimen({ categories, step: { kind: "intro" } })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A failed native status read shows its reason in the relay slot; the direct code stays usable."
-                label="Happy Mobile — native status unavailable"
+                detail="A direct connection that could not be read says so in the code's place."
+                label="Happy Mobile — direct connection unavailable"
                 number="01f-read-failed"
             >
                 {mobileLinkSpecimen({
                     categories,
-                    step: {
-                        kind: "link",
-                        phase: {
-                            kind: "failed",
-                            message:
-                                "Happy cannot reach the local Happy Agent. Reconnect and try again.",
-                        },
-                    },
-                    pairing: {
-                        direct: direct.waiting,
-                        relay: {
-                            kind: "failed",
-                            message:
-                                "Happy cannot reach the local Happy Agent. Reconnect and try again.",
-                        },
-                    },
+                    step: { kind: "link" },
+                    pairing: { direct: direct.readFailed },
                 })}
             </FullScreenSpecimen>
             <FullScreenSpecimen

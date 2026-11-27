@@ -13,8 +13,6 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import {
     DesktopStartupScreen,
-    appMobileRelayFromLink,
-    appMobileRelayFromOnboarding,
     useAppMobilePairingOptions,
     happyAgentHistoryCreate,
     happyAgentWelcomeSlides,
@@ -78,7 +76,6 @@ import {
     type HappyAgentCompletionSound,
     type CommandPaletteStore,
     type ExperimentsStore,
-    type MobilePairingMethodStore,
     type ProjectsVisibilityStore,
     type StatusBarStore,
     type UsageAnalyticsStore,
@@ -488,7 +485,6 @@ function HappyAgentBoundary(props: {
     artifactPage?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
-    mobilePairingMethod: MobilePairingMethodStore;
     projectsVisibility: ProjectsVisibilityStore;
     statusBar: StatusBarStore;
     keepAwake: KeepAwakeStore;
@@ -545,7 +541,6 @@ function HappyAgentBoundary(props: {
                       }
                     : {}),
                 experiments: props.experiments,
-                mobilePairingMethod: props.mobilePairingMethod,
                 projectsVisibility: props.projectsVisibility,
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
@@ -582,7 +577,6 @@ function DesktopOnboardingGate(props: {
     children: ReactNode;
     clock: HappyAgentClockStore;
     happyAgents: HappyAgentDirectoryStore;
-    mobilePairingMethod: MobilePairingMethodStore;
     platform: "desktop" | "web";
     store: LocalOnboardingStore;
 }) {
@@ -602,36 +596,16 @@ function DesktopOnboardingGate(props: {
         props.appearance.get,
         props.appearance.get,
     );
-    const { method } = useSyncExternalStore(
-        props.mobilePairingMethod.subscribe,
-        props.mobilePairingMethod.get,
-        props.mobilePairingMethod.get,
-    );
     const view = snapshot.onboarding ? localOnboardingView(snapshot) : undefined;
-    const linkPhase =
-        view?.kind === "happy-mobile-desktop" && view.step.kind === "link"
-            ? view.step.phase
-            : undefined;
-    // Linking offers both methods; the direct connector is read only while Direct shows.
-    const linking = linkPhase !== undefined || view?.kind === "happy-mobile-pairing";
+    // The direct connector is read only while its code is on screen.
+    const linking =
+        (view?.kind === "happy-mobile-desktop" && view.step.kind === "link") ||
+        view?.kind === "happy-mobile-pairing";
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
-        method,
-        // Choosing Direct asks for a direct code.
-        onMethodSelect: (next) => {
-            if (next === "direct") props.store.happyMobileDirect().pairingOpen();
-            props.mobilePairingMethod.methodSelect(next, "onboarding");
-        },
-        relay: linkPhase
-            ? appMobileRelayFromLink(linkPhase)
-            : snapshot.happyMobile
-              ? appMobileRelayFromOnboarding(snapshot.happyMobile)
-              : { kind: "starting" },
-        onRelayRetry: () => props.store.happyMobileConnect(),
-        direct:
-            linking && method === "direct"
-                ? props.store.happyMobileDirect()
-                : happyAgentMobileConnectorStoreUnfollowed,
+        direct: linking
+            ? props.store.happyMobileDirect()
+            : happyAgentMobileConnectorStoreUnfollowed,
         clock: props.clock,
         online: () => true,
     });
@@ -767,7 +741,6 @@ interface DesktopRendererProps {
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
-    mobilePairingMethod: MobilePairingMethodStore;
     projectsVisibility: ProjectsVisibilityStore;
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
@@ -1056,7 +1029,6 @@ function DesktopScreens(props: DesktopRendererProps) {
                                         commandPalette={ui.commandPalette}
                                         connectionOnboarding
                                         experiments={props.experiments}
-                                        mobilePairingMethod={props.mobilePairingMethod}
                                         projectsVisibility={props.projectsVisibility}
                                         statusBar={props.statusBar}
                                         gptLive={props.gptLive}
@@ -1116,7 +1088,6 @@ function DesktopLocalScreens(props: DesktopRendererProps) {
                 bridge={props.bridge}
                 clock={onboardingClock}
                 happyAgents={props.happyAgents}
-                mobilePairingMethod={props.mobilePairingMethod}
                 platform={props.platform}
                 store={props.onboarding}
             >
@@ -1339,7 +1310,6 @@ function DesktopRuntimeContent(
             artifactPage={props.artifactPage}
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
-            mobilePairingMethod={props.mobilePairingMethod}
             projectsVisibility={props.projectsVisibility}
             statusBar={props.statusBar}
             keepAwake={props.keepAwake}
@@ -1709,8 +1679,8 @@ if (mediaPreviewBridge) {
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
         const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
-        // Which way the open pairing page shows: what the person picked on
-        // it, else this computer's default. Nothing is kept between pages.
+        // The method analytics reports pairing pages show: Direct, the only
+        // one they offer.
         const mobilePairingMethod = mobilePairingMethodStoreCreate({
             defaultMethod: MOBILE_PAIRING_METHOD_DEFAULT,
             onOutput: (output) => analytics.mobilePairingMethodSelected(output),
@@ -2247,7 +2217,6 @@ if (mediaPreviewBridge) {
                                             : desktopMediaWindowOpen(desktopBridge)
                                     }
                                     experiments={experiments}
-                                    mobilePairingMethod={mobilePairingMethod}
                                     projectsVisibility={projectsVisibility}
                                     statusBar={statusBar}
                                     gptLive={gptLive}

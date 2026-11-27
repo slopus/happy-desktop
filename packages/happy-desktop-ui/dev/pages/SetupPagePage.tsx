@@ -9,13 +9,13 @@ import { SetupHandoff, SetupPage } from "../../src/SetupPage";
 import { SetupPrompt } from "../../src/SetupPrompt";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, FullScreenSpecimen, Specimen } from "../kit";
-import type { MobileRelayPairingState } from "../../src/MobilePairingOptions";
+import type { MobileDirectConnectorState } from "../../src/MobileDirectConnection";
 import {
     customProviders,
     customProvidersAssistants,
     customProvidersChecking,
 } from "./customProviderFixtures";
-import { direct, relayWaiting } from "./mobilePairingFixtures";
+import { direct } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
 
 /** One setup step drawn alone, the way the flow's retained `SetupPage` draws it. */
@@ -59,41 +59,18 @@ const handoffSteps: readonly { label: string; busy: boolean; message?: string }[
     },
 ];
 
-const mobileSteps: readonly { label: string; step: DesktopMobileSetupStep }[] = [
+const mobileSteps: readonly {
+    label: string;
+    step: DesktopMobileSetupStep;
+    direct?: MobileDirectConnectorState;
+}[] = [
     { label: "Mobile · get the app", step: { kind: "intro" } },
-    { label: "Mobile · code on its way", step: { kind: "link", phase: { kind: "checking" } } },
-    {
-        label: "Mobile · device QR",
-        step: {
-            kind: "link",
-            phase: {
-                kind: "pairing",
-                data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                expiresAt: 1924992000000,
-            },
-        },
-    },
-    {
-        label: "Mobile · code expired",
-        step: {
-            kind: "link",
-            phase: {
-                kind: "failed",
-                message: "The pairing code expired or was cancelled. Try again for a new code.",
-            },
-        },
-    },
+    { label: "Mobile · code on its way", step: { kind: "link" }, direct: direct.loading },
+    { label: "Mobile · device QR", step: { kind: "link" }, direct: direct.waiting },
+    { label: "Mobile · code expired", step: { kind: "link" }, direct: direct.expiredBeforeScan },
     { label: "Mobile · connected", step: { kind: "connected", online: true } },
     { label: "Mobile · linked and offline", step: { kind: "connected", online: false } },
 ];
-
-/** The relay slot for a link step, drawn at the fixtures' fixed time. */
-function relayOf(step: DesktopMobileSetupStep): MobileRelayPairingState {
-    if (step.kind !== "link" || step.phase.kind === "checking") return { kind: "starting" };
-    return step.phase.kind === "pairing"
-        ? relayWaiting
-        : { kind: "failed", message: step.phase.message };
-}
 
 /** Setup fills the window, so every specimen gets a window-shaped frame. */
 const frame = {
@@ -782,7 +759,7 @@ export function SetupPagePage() {
             </Specimen>
 
             <Specimen
-                detail="a relay failure stays in its own slot · retry is local to it · the direct code and Skip stay available"
+                detail="a direct failure stays in the code's place · retry is local to it · Skip stays available"
                 label="Happy Mobile failure"
                 number="17"
                 stage="surface"
@@ -791,12 +768,7 @@ export function SetupPagePage() {
                     <ThemeScope mode="dark">
                         <LocalOnboardingScreen
                             happyMobilePairingOptions={setupPairingOptions({
-                                direct: direct.waiting,
-                                relay: {
-                                    kind: "failed",
-                                    message:
-                                        "The pairing code expired before Happy Mobile approved it.",
-                                },
+                                direct: direct.socketFailed,
                             })}
                             appearance="dark"
                             onAssistantsContinue={noop}
@@ -833,7 +805,7 @@ export function SetupPagePage() {
                     </div>
                 </Specimen>
             ))}
-            {mobileSteps.map(({ label, step }, index) => (
+            {mobileSteps.map(({ label, step, direct: pairing }, index) => (
                 <Specimen
                     key={label}
                     detail="Optional mobile setup · bundled animated sticker · no runtime or account required"
@@ -850,8 +822,7 @@ export function SetupPagePage() {
                                 onContinue={noop}
                                 onSkip={noop}
                                 pairingOptions={setupPairingOptions({
-                                    direct: direct.waiting,
-                                    relay: relayOf(step),
+                                    direct: pairing ?? direct.waiting,
                                 })}
                             />
                         </ThemeScope>

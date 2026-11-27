@@ -62,7 +62,7 @@ export interface HappyAgentMobileSettingsProps {
     onReconnect?(): void;
     onManagementCancel?(): void;
     onManagementConfirm?(): void;
-    /** Opens pairing: Relay or Direct, or only Direct with `pairingDirectOnly`. */
+    /** Opens pairing: the direct code. */
     onPairingOptionsOpen(): void;
     /**
      * This computer is already linked through the Happy server, so phones on

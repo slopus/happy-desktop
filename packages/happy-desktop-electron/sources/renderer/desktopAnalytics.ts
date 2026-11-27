@@ -393,16 +393,9 @@ function relayPageOfStep(step: HappyDesktopMobileStep): RelayPage {
     switch (step.kind) {
         case "intro":
             return RELAY_CLOSED;
+        // The link step shows the direct code; the desktop starts no relay code.
         case "link":
-            return {
-                shown: true,
-                phase:
-                    step.phase.kind === "pairing"
-                        ? "waiting"
-                        : step.phase.kind === "failed"
-                          ? "failed"
-                          : "idle",
-            };
+            return { shown: true, phase: "idle" };
         case "connected":
             return { shown: false, phase: "completed" };
     }
@@ -414,10 +407,7 @@ function relayPageOfOnboarding(snapshot: HappyMobileOnboardingSnapshot): RelayPa
         case "desktop":
             return relayPageOfStep(snapshot.step);
         case "pairing":
-            return { shown: true, phase: "waiting" };
-        // A pending failure is a new code on its way.
-        case "failed":
-            return { shown: true, phase: snapshot.pending ? "idle" : "failed" };
+            return { shown: true, phase: "idle" };
         case "configured":
             return { shown: false, phase: "completed" };
         default:
@@ -425,23 +415,9 @@ function relayPageOfOnboarding(snapshot: HappyMobileOnboardingSnapshot): RelayPa
     }
 }
 
-/** Mobile Access: the local desktop's guided setup, or a remote Happy Agent's pairing card. */
+/** Mobile Access: the local desktop's guided setup; a remote Happy Agent pairs in the connector's dialog. */
 function relayPageOfIntegration(snapshot: HappyAgentIntegrationSnapshot): RelayPage {
-    if (snapshot.setup) return relayPageOfStep(snapshot.setup);
-    if (!snapshot.pairingOpen) return RELAY_CLOSED;
-    // As the card's relay slot reads it: a refused start, or a pairing that
-    // stopped or was cancelled, unless a new code is already on its way.
-    if (snapshot.pairingError) return { shown: true, phase: "failed" };
-    if (snapshot.configured === true) return { shown: true, phase: "completed" };
-    switch (snapshot.status) {
-        case "pairing":
-            return { shown: true, phase: snapshot.pairing ? "waiting" : "idle" };
-        case "failed":
-        case "disconnected":
-            return { shown: true, phase: snapshot.pairingStarting ? "idle" : "failed" };
-        default:
-            return { shown: true, phase: "idle" };
-    }
+    return snapshot.setup ? relayPageOfStep(snapshot.setup) : RELAY_CLOSED;
 }
 
 /**

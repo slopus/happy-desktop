@@ -4,15 +4,14 @@ import {
     type MobilePairingOptionsProps,
 } from "../../src/MobilePairingOptions";
 import { ComponentPage, Specimen } from "../kit";
-import { direct, now, relayWaiting } from "./mobilePairingFixtures";
+import { direct, now } from "./mobilePairingFixtures";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-299";
 
 const noop = () => undefined;
 
-type Variant = Pick<MobilePairingOptionsProps, "direct" | "relay"> &
-    Partial<MobilePairingOptionsProps>;
+type Variant = Pick<MobilePairingOptionsProps, "direct"> & Partial<MobilePairingOptionsProps>;
 
 function options(variant: Variant, layout: "settings" | "dialog" = "settings") {
     return (
@@ -24,7 +23,6 @@ function options(variant: Variant, layout: "settings" | "dialog" = "settings") {
             onDirectErrorAssist={noop}
             onDirectReject={noop}
             onDirectStart={noop}
-            onRelayRetry={noop}
             {...variant}
         />
     );
@@ -50,109 +48,59 @@ const states: readonly {
 }[] = [
     {
         id: "01",
-        label: "Both codes",
-        detail: "Opening the pairing UI starts both; each code has Copy auth link and its own countdown",
-        variant: { direct: direct.waiting, relay: relayWaiting },
+        label: "Direct code",
+        detail: "Opening the pairing UI starts a direct code, with Copy auth link and its countdown",
+        variant: { direct: direct.waiting },
     },
     {
         id: "02",
-        label: "Both on their way",
-        detail: "Each card holds its place until its code arrives",
-        variant: { direct: direct.starting, directStarting: true, relay: { kind: "starting" } },
+        label: "On its way",
+        detail: "The code's place is held until it arrives",
+        variant: { direct: direct.starting, directStarting: true },
     },
     {
         id: "03",
-        label: "Phone connected directly",
-        detail: "Past waiting: the direct step takes the surface and the relay code steps aside",
-        variant: { direct: direct.connected, relay: relayWaiting },
+        label: "Phone connected",
+        detail: "Past waiting: the emoji step takes the surface",
+        variant: { direct: direct.connected },
     },
     {
         id: "04",
         label: "Emoji step",
         detail: "The four emoji, the phone's claim, and both confirmations",
-        variant: { direct: direct.phoneConfirmed, relay: relayWaiting },
+        variant: { direct: direct.phoneConfirmed },
     },
     {
         id: "05",
-        label: "Direct completed",
+        label: "Completed",
         detail: "Close becomes Done",
-        variant: { direct: direct.completed, relay: relayWaiting },
+        variant: { direct: direct.completed },
     },
     {
         id: "06",
-        label: "Relay already connected",
-        detail: "Relay slot reports its state; direct still pairs another phone",
-        variant: { direct: direct.waiting, relay: { kind: "connected" } },
+        label: "Direct disabled",
+        detail: "The Happy Agent turned direct off: the note stands in the code's place",
+        variant: { direct: direct.disabled },
     },
     {
         id: "07",
-        label: "Relay disabled · direct disabled",
-        detail: "Each slot explains itself; neither blocks the other",
-        variant: { direct: direct.disabled, relay: { kind: "disabled" } },
+        label: "Older Happy Agent",
+        detail: "Direct answered 404: the note asks for a newer Happy Agent",
+        variant: { direct: direct.unsupported },
     },
     {
         id: "08",
-        label: "Older Happy Agent",
-        detail: "Direct answered 404; relay is unaffected",
-        variant: { direct: direct.unsupported, relay: relayWaiting },
+        label: "Direct socket failed",
+        detail: "Failure and retry stay in the code's place",
+        variant: { direct: direct.socketFailed },
     },
     {
         id: "09",
-        label: "Direct socket failed",
-        detail: "Failure and retry stay inside the direct slot",
-        variant: { direct: direct.socketFailed, relay: relayWaiting },
-    },
-    {
-        id: "10",
-        label: "Relay failed",
-        detail: "The relay's reason and Try again stay inside its slot",
-        variant: {
-            direct: direct.waiting,
-            relay: { kind: "failed", message: "Happy couldn't reach its server." },
-        },
-    },
-    {
-        id: "11",
         label: "Happy Agent unavailable",
-        detail: "Reason beside the surface; every action disabled",
+        detail: "Reason above the surface; every action disabled",
         variant: {
             direct: direct.waiting,
-            relay: relayWaiting,
             unavailable: "Happy Agent is reconnecting. Codes refresh when it is back.",
-        },
-    },
-    {
-        id: "12",
-        label: "Relay chosen",
-        detail: "Relay | Direct at the top, Relay selected: the relay code stands alone, its countdown under it",
-        variant: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
-    },
-    {
-        id: "13",
-        label: "Direct chosen",
-        detail: "Direct selected: the direct code in the same place the relay code was, with Use Relay for older phone apps",
-        variant: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
-    },
-    {
-        id: "14",
-        label: "Direct only",
-        detail: "The Happy Agent reports its relay off: no Relay | Direct control, the direct code alone",
-        variant: {
-            direct: direct.waiting,
-            relay: relayWaiting,
-            method: "direct",
-            methodFixed: true,
-        },
-    },
-    {
-        id: "15",
-        label: "Relay only",
-        detail: "The Happy Agent reports direct pairing off: no Relay | Direct control, the relay code alone",
-        variant: {
-            direct: direct.waiting,
-            relay: relayWaiting,
-            method: "relay",
-            methodFixed: true,
         },
     },
 ];
@@ -166,20 +114,15 @@ const dialogs: readonly {
 }[] = [
     {
         id: "d1",
-        label: "Dialog · Direct chosen",
-        detail: "Settings opens pairing in a dialog: a 240px code, with Older phone app? Use Relay beside it",
-        variant: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+        label: "Dialog · direct code",
+        detail: "Settings opens pairing in a dialog: a 224px code, with how to scan it under it",
+        variant: { direct: direct.waiting },
     },
     {
         id: "d2",
-        label: "Dialog · direct only",
-        detail: "A computer already linked through the Happy server: the direct code alone",
-        variant: {
-            direct: direct.waiting,
-            relay: { kind: "connected" },
-            method: "direct",
-            methodFixed: true,
-        },
+        label: "Dialog · direct disabled",
+        detail: "The Happy Agent turned direct off: the note stands in the code's place",
+        variant: { direct: direct.disabled },
     },
 ];
 
@@ -204,7 +147,7 @@ export function MobilePairingOptionsPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Both ways to pair a phone, side by side: Happy relay through the Happy server and a direct Tailcat connection. Each slot shows its own state; once a phone connects directly, the emoji step takes the surface."
+            summary="Pairing a phone: the direct Tailcat code with its countdown. A Happy Agent that reports direct off or unavailable says so in the code's place; once a phone connects, the emoji step takes the surface."
             title="MobilePairingOptions"
         >
             {states.map((state) => (

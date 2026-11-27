@@ -1,21 +1,16 @@
 import { useSyncExternalStore } from "react";
 import type {
     HappyAgentClockStore,
-    HappyAgentIntegrationSnapshot,
     HappyAgentMobileConnectorRead,
     HappyAgentMobileConnectorSnapshot,
     HappyAgentMobileConnectorStore,
-    HappyMobileLinkPhase,
-    HappyMobileOnboardingSnapshot,
 } from "happy-desktop-state";
 import {
     MobileDirectConnectionSection,
     MobilePairingOptions,
     mobileDirectPairingEngaged,
     type DesktopMobilePairingOptions,
-    type MobilePairingMethod,
     type MobilePairingOptionsLayout,
-    type MobileRelayPairingState,
 } from "happy-desktop-ui";
 
 /**
@@ -30,92 +25,8 @@ export function appMobileDirectOff(connector: HappyAgentMobileConnectorRead): bo
     );
 }
 
-/** The guided setup's link step, as the relay slot shows it. */
-export function appMobileRelayFromLink(phase: HappyMobileLinkPhase): MobileRelayPairingState {
-    switch (phase.kind) {
-        case "checking":
-            return { kind: "starting" };
-        case "pairing":
-            return { kind: "waiting", data: phase.data, expiresAt: phase.expiresAt };
-        case "failed":
-            return { kind: "failed", message: phase.message };
-    }
-}
-
-/** A remote Happy Agent's onboarding pairing, as the relay slot shows it. */
-export function appMobileRelayFromOnboarding(
-    snapshot: HappyMobileOnboardingSnapshot,
-): MobileRelayPairingState {
-    switch (snapshot.status) {
-        case "pairing":
-            return { kind: "waiting", data: snapshot.data, expiresAt: snapshot.expiresAt };
-        case "failed":
-            return snapshot.pending
-                ? { kind: "starting" }
-                : { kind: "failed", message: snapshot.message };
-        case "configured":
-            return { kind: "connected" };
-        case "disabled":
-            return { kind: "disabled" };
-        default:
-            return { kind: "starting" };
-    }
-}
-
-/** The Happy Mobile integration in Settings, as the relay slot shows it. */
-export function appMobileRelayFromIntegration(
-    snapshot: HappyAgentIntegrationSnapshot,
-): MobileRelayPairingState {
-    if (snapshot.pairingError) return { kind: "failed", message: snapshot.pairingError.message };
-    if (snapshot.configured === true) return { kind: "connected" };
-    switch (snapshot.status) {
-        case "pairing":
-            return snapshot.pairing
-                ? {
-                      kind: "waiting",
-                      data: snapshot.pairing.data,
-                      expiresAt: snapshot.pairing.expiresAt,
-                  }
-                : { kind: "starting" };
-        case "disabled":
-            return { kind: "disabled" };
-        case "unavailable":
-            return { kind: "unavailable" };
-        case "failed":
-            return snapshot.pairingStarting
-                ? { kind: "starting" }
-                : {
-                      kind: "failed",
-                      message: snapshot.message ?? "The last pairing attempt did not finish.",
-                  };
-        case "disconnected":
-            return snapshot.pairingStarting
-                ? { kind: "starting" }
-                : {
-                      kind: "failed",
-                      message:
-                          snapshot.message ??
-                          "The pairing code was cancelled. Try again for a new code.",
-                  };
-        default:
-            return { kind: "starting" };
-    }
-}
-
 export interface AppMobilePairingProps {
     readonly layout: MobilePairingOptionsLayout;
-    /**
-     * The method shown under the Direct | Relay control: the person's choice,
-     * else Direct. With Relay shown the direct connector is not followed.
-     * Phones already paired directly keep working either way.
-     */
-    readonly method: MobilePairingMethod;
-    /** The computer is already linked through the Happy server: only the direct code is offered. */
-    readonly directOnly?: boolean;
-    onMethodSelect(method: MobilePairingMethod): void;
-    readonly relay: MobileRelayPairingState;
-    readonly relayStarting?: boolean;
-    onRelayRetry?(): void;
     readonly direct: HappyAgentMobileConnectorStore;
     readonly clock: HappyAgentClockStore;
     /** Why actions cannot currently reach this Happy Agent. */
@@ -125,37 +36,17 @@ export interface AppMobilePairingProps {
 }
 
 /**
- * The pairing methods for one Happy Agent, with what the page around them
+ * The direct pairing code for one Happy Agent, with what the page around it
  * needs to know: whether the emoji step leads and whether a phone paired.
- * With Relay shown the direct connection is not followed.
- * `snapshot` is the caller's one subscription to the direct connector.
- *
- * A method the Happy Agent reports off is never offered: the other one shows
- * alone, without the Direct | Relay control.
+ * `snapshot` is the caller's one subscription to the direct connector. A
+ * Happy Agent that reports direct off shows that in the code's place.
  */
 export function appMobilePairingOptions(
     props: AppMobilePairingProps & { readonly snapshot: HappyAgentMobileConnectorSnapshot },
 ): DesktopMobilePairingOptions {
     const { connector } = props.snapshot;
-    const relayOff = props.relay.kind === "disabled";
-    const directOff = appMobileDirectOff(connector);
-    const method: MobilePairingMethod =
-        relayOff || props.directOnly ? "direct" : directOff ? "relay" : props.method;
-    const shown = {
-        ...props,
-        method,
-        methodFixed: relayOff || directOff || props.directOnly === true,
-    };
-    if (method === "relay")
-        return {
-            view: <AppMobilePairingOptions {...shown} />,
-            verifying: false,
-            completed: false,
-            method: "relay",
-        };
     return {
-        view: <AppMobilePairingOptions {...shown} />,
-        method: "direct",
+        view: <AppMobilePairingOptions {...props} />,
         verifying: mobileDirectPairingEngaged(connector),
         completed:
             connector.kind === "ready" && connector.connector.pairing?.status === "completed",
@@ -199,12 +90,9 @@ export function AppMobileDirectSection(props: {
     );
 }
 
-/** Owns the countdown's clock subscription, so only the codes repaint every second. */
+/** Owns the countdown's clock subscription, so only the code repaints every second. */
 function AppMobilePairingOptions(
-    props: AppMobilePairingProps & {
-        readonly snapshot: HappyAgentMobileConnectorSnapshot;
-        readonly methodFixed: boolean;
-    },
+    props: AppMobilePairingProps & { readonly snapshot: HappyAgentMobileConnectorSnapshot },
 ) {
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const { snapshot } = props;
@@ -215,12 +103,6 @@ function AppMobilePairingOptions(
         <MobilePairingOptions
             layout={props.layout}
             now={now}
-            method={props.method}
-            onMethodSelect={props.onMethodSelect}
-            methodFixed={props.methodFixed}
-            relay={props.relay}
-            {...(props.relayStarting === undefined ? {} : { relayStarting: props.relayStarting })}
-            {...(props.onRelayRetry ? { onRelayRetry: guarded(props.onRelayRetry) } : {})}
             direct={snapshot.connector}
             directStarting={snapshot.starting}
             directConfirming={snapshot.confirming}

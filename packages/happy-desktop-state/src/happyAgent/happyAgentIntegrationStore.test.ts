@@ -255,21 +255,6 @@ describe("Disconnect removes this computer from Happy", () => {
         test.unsubscribe();
     });
 
-    it("pairs again after a completed removal", async () => {
-        const test = harness();
-        await removalRefused(test);
-        test.client.disconnectHappyIntegration.mockResolvedValueOnce({ integration: unlinked });
-        test.store.mobileManagementConfirm();
-        await settle();
-        test.client.startHappyIntegration.mockReturnValueOnce(new Promise(() => undefined));
-
-        test.store.happyIntegrationPair();
-
-        expect(test.client.startHappyIntegration).toHaveBeenCalledTimes(1);
-        expect(test.store.get().pairingStarting).toBe(true);
-        test.unsubscribe();
-    });
-
     it("ignores a 503 body that is not an integration snapshot", async () => {
         const test = harness();
         test.stream.bootstrap(connected);
