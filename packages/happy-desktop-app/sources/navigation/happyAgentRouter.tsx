@@ -56,6 +56,7 @@ import {
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
     type LivePerformanceStore,
+    type ConsoleWatchStore,
     type MediaWindowOpener,
 } from "happy-desktop-ui";
 import { artifactBesideOpen } from "../artifactOpen";
@@ -122,6 +123,8 @@ export interface HappyAgentRouterContext {
     readonly debug?: AppHappyAgentDebugStore;
     /** Live renderer diagnostics, present only in an explicitly debug-launched desktop window. */
     readonly performance?: LivePerformanceStore;
+    /** The console mark and its switch; absent from production builds. */
+    readonly consoleWatch?: ConsoleWatchStore;
     readonly daemon?: AppHappyAgentDaemonStore;
     /** The local Happy Agent update card, beside `daemon` and only with it. */
     readonly agentUpdate?: AppHappyAgentUpdateStore;
@@ -818,6 +821,7 @@ function HappyAgentWorkspaceLayout() {
             buildIdentity={context.buildIdentity}
             {...(context.bugReportHost ? { bugReportHost: context.bugReportHost } : {})}
             performance={context.performance}
+            {...(context.consoleWatch ? { consoleWatch: context.consoleWatch } : {})}
             htmlPreview={context.htmlPreview}
             {...(context.artifactPage ? { artifactPage: context.artifactPage } : {})}
             mediaWindow={context.mediaWindow}
@@ -1085,6 +1089,7 @@ function HappyAgentSettingsRoute() {
             onUpdateApply={context.onUpdateApply}
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.debug ? { debug: context.debug } : {})}
+            {...(context.consoleWatch ? { consoleWatch: context.consoleWatch } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.projectsVisibility

@@ -397,6 +397,15 @@ export {
 } from "./SidebarConnectionAction";
 export { SidebarErrorNotice, type SidebarErrorNoticeProps } from "./SidebarErrorNotice";
 export {
+    SidebarConsoleAction,
+    consoleWatchStoreNoop,
+    type ConsoleWatchEntry,
+    type ConsoleWatchSnapshot,
+    type ConsoleWatchSource,
+    type ConsoleWatchStore,
+    type SidebarConsoleActionProps,
+} from "./SidebarConsoleAction";
+export {
     SidebarKeepAwakeMenu,
     type SidebarKeepAwakeMenuProps,
     type SidebarKeepAwakeMode,
@@ -1118,6 +1127,10 @@ export {
     type HappyAgentDebugSettingsProps,
     type HappyAgentDebugTarget,
 } from "./pages/settings/HappyAgentDebugSettings";
+export {
+    HappyAgentConsoleWatchSettings,
+    type HappyAgentConsoleWatchSettingsProps,
+} from "./pages/settings/HappyAgentConsoleWatchSettings";
 export {
     HappyAgentDebugLogPanel,
     type HappyAgentDebugLogPanelEntry,

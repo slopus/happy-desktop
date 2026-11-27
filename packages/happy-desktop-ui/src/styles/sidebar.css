@@ -2206,6 +2206,88 @@
     margin-top: auto;
 }
 
+/* The preview-build console mark: the footer marks' trigger widened to carry a
+   count, and their card widened to the footer row so a line of console text
+   has room. The list scrolls inside the card instead of growing it. */
+.happy-sidebar-console-action__trigger {
+    gap: 4px;
+    width: auto;
+    min-width: 28px;
+    padding: 0 6px;
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-sidebar-console-action[data-level="error"] .happy-sidebar-update__trigger {
+    color: var(--status-error);
+}
+
+.happy-sidebar-console-action__panel {
+    max-width: none;
+    max-height: 320px;
+}
+
+.happy-sidebar-console-action__head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 6px 6px 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-sidebar-console-action__list {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.happy-sidebar-console-action__entry {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 12px;
+}
+
+.happy-sidebar-console-action__entry + .happy-sidebar-console-action__entry {
+    border-top: 1px solid var(--divider);
+}
+
+.happy-sidebar-console-action__source {
+    color: var(--box-warning-text);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 14px;
+}
+
+.happy-sidebar-console-action__entry[data-level="error"] .happy-sidebar-console-action__source {
+    color: var(--status-error);
+}
+
+.happy-sidebar-console-action__text {
+    display: -webkit-box;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 15px;
+    user-select: text;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
 /* A refused sidebar act, on the same card as the footer marks but as wide as
    the footer row: the warning glyph, the reason, and the control that puts it
    away. Even 6px insets keep the dismiss button's corner parallel to the

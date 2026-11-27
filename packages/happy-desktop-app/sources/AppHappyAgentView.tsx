@@ -263,6 +263,9 @@ import {
     HtmlPreviewFrame,
     type HtmlPreviewRenderer,
     type LivePerformanceStore,
+    type ConsoleWatchStore,
+    consoleWatchStoreNoop,
+    SidebarConsoleAction,
     type MediaWindowOpener,
     Button,
     CommandPalette,
@@ -947,6 +950,8 @@ export interface AppHappyAgentViewProps {
     bugReportHost?: AppBugReportHost;
     /** Live renderer diagnostics, supplied only by an explicitly debug-launched desktop window. */
     performance?: LivePerformanceStore;
+    /** The console mark's source; absent from production builds. */
+    consoleWatch?: ConsoleWatchStore;
     /** Which Happy Agent the URL addresses; its projects and sessions fill the window. */
     happyAgentId: string;
     /** Theme selection behind the status bar's theme menu. */
@@ -3915,6 +3920,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         keepAwakeStore.get,
     );
     const statusBarStore = props.statusBar ?? statusBarStoreNoop;
+    const consoleWatchStore = props.consoleWatch ?? consoleWatchStoreNoop;
+    const consoleWatch = useSyncExternalStore(
+        consoleWatchStore.subscribe,
+        consoleWatchStore.get,
+        consoleWatchStore.get,
+    );
     const statusBar = useSyncExternalStore(
         statusBarStore.subscribe,
         statusBarStore.get,
@@ -4519,6 +4530,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {remoteConnection}
                     {sidebarSetup}
                     {sidebarUpdate}
+                    {consoleWatch.enabled ? (
+                        <SidebarConsoleAction
+                            entries={consoleWatch.entries}
+                            errorCount={consoleWatch.errorCount}
+                            onClear={consoleWatchStore.entriesClear}
+                            warningCount={consoleWatch.warningCount}
+                        />
+                    ) : null}
                     <SidebarErrorNotice
                         message={mutationFailure?.message}
                         onDismiss={() => mutationFailure?.dismiss()}

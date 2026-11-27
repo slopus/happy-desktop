@@ -114,6 +114,7 @@ import {
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
     type LivePerformanceStore,
+    type ConsoleWatchStore,
     type MediaWindowOpener,
     type MenuItem,
 } from "happy-desktop-ui";
@@ -182,6 +183,7 @@ import { desktopDebugStoreCreate } from "./desktopDebugStore";
 import { desktopRowHeightCheckInstall } from "./desktopRowHeightCheck";
 import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
+import { desktopConsoleWatchCreate } from "./desktopConsoleWatch";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopAgentReleaseNotesStoreCreate } from "./desktopAgentReleaseNotesStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
@@ -478,6 +480,7 @@ function HappyAgentBoundary(props: {
     agentOutage?: AppHappyAgentOutageStore;
     debug?: AppHappyAgentDebugStore;
     performance?: LivePerformanceStore;
+    consoleWatch?: ConsoleWatchStore;
     profiler?: AppHappyAgentProfilerStore;
     connectionOnboarding?: boolean;
     bridge: HappyDesktopBridge;
@@ -522,6 +525,7 @@ function HappyAgentBoundary(props: {
                 ...(props.agentOutage ? { agentOutage: props.agentOutage } : {}),
                 debug: props.debug,
                 ...(props.performance ? { performance: props.performance } : {}),
+                ...(props.consoleWatch ? { consoleWatch: props.consoleWatch } : {}),
                 profiler: props.profiler,
                 htmlPreview: props.htmlPreview,
                 artifactPage: props.artifactPage,
@@ -734,6 +738,7 @@ interface DesktopRendererProps {
     daemon?: AppHappyAgentDaemonStore;
     debug: AppHappyAgentDebugStore;
     performance?: LivePerformanceStore;
+    consoleWatch?: ConsoleWatchStore;
     profiler: AppHappyAgentProfilerStore;
     onboarding: LocalOnboardingStore;
     browserContent?: BrowserContentRenderer;
@@ -1305,6 +1310,7 @@ function DesktopRuntimeContent(
                 : {})}
             debug={props.debug}
             {...(props.performance ? { performance: props.performance } : {})}
+            {...(props.consoleWatch ? { consoleWatch: props.consoleWatch } : {})}
             profiler={props.profiler}
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
@@ -1649,6 +1655,15 @@ if (mediaPreviewBridge) {
         const livePerformance = desktopBridge.debugMetricsEnabled
             ? desktopMetricsStoreCreate()
             : undefined;
+        // The console mark exists only in builds that are not production. The
+        // shell already says which those are: a development checkout has a
+        // build identity, and Nightly and previews are the builds it lets
+        // reach Happy Cloud. Created, it still observes nothing until the
+        // reader turns it on in Settings → Dev tools.
+        const consoleWatch =
+            desktopBridge.buildIdentity !== undefined || desktopBridge.happyCloud !== undefined
+                ? desktopConsoleWatchCreate()
+                : undefined;
         const profiler = desktopProfilerStoreCreate(desktopBridge);
         // The main connection keeps the existing desktop defaults. Remote UIs
         // receive their own settings and model preference persistence below.
@@ -2205,6 +2220,7 @@ if (mediaPreviewBridge) {
                                     {...(daemon ? { daemon } : {})}
                                     debug={debug}
                                     {...(livePerformance ? { performance: livePerformance } : {})}
+                                    {...(consoleWatch ? { consoleWatch } : {})}
                                     profiler={profiler}
                                     onboarding={analytics.onboardingObserve(
                                         onboardingStore,

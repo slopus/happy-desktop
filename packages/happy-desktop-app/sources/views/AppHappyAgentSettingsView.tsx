@@ -99,6 +99,9 @@ import {
     HappyAgentConnectionSettingsSection,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
+    HappyAgentConsoleWatchSettings,
+    type ConsoleWatchStore,
+    consoleWatchStoreNoop,
     HappyAgentFileTierSettings,
     HappyAgentInstructionsSettings,
     HappyAgentMobileLinkSettings,
@@ -533,6 +536,8 @@ export interface AppHappyAgentSettingsViewProps {
     sidebarVisibility?: HappyAgentSidebarVisibilityStore;
     /** Every Happy Agent in this window, including the one whose catalog is read. */
     debug?: AppHappyAgentDebugStore;
+    /** The console mark's switch; absent from production builds. */
+    consoleWatch?: ConsoleWatchStore;
     profiler?: AppHappyAgentProfilerStore;
     happyAgents: AppHappyAgentDirectoryStore;
     onClose(): void;
@@ -962,6 +967,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const debugStore = (section === "debug" ? props.debug : undefined) ?? debugStoreNoop;
     const debug = useSyncExternalStore(debugStore.subscribe, debugStore.get, debugStore.get);
+    const consoleWatchStore = props.consoleWatch ?? consoleWatchStoreNoop;
+    const consoleWatch = useSyncExternalStore(
+        consoleWatchStore.subscribe,
+        consoleWatchStore.get,
+        consoleWatchStore.get,
+    );
     const debugLogStore = section === "debug" ? host?.session?.debugLog : undefined;
     const debugLog = useSyncExternalStore(
         debugLogStore?.subscribe ?? noSubscribe,
@@ -1337,6 +1348,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         renderer={debug.renderer}
                         supported={debug.supported}
                     />
+                    {props.consoleWatch ? (
+                        <HappyAgentConsoleWatchSettings
+                            enabled={consoleWatch.enabled}
+                            onEnabledChange={consoleWatchStore.enabledUpdate}
+                        />
+                    ) : null}
                     <HappyAgentProfilerSettings
                         artifactPath={profiler.artifactPath}
                         capabilities={profiler.capabilities}
