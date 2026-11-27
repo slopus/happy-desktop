@@ -8,6 +8,11 @@ import type {
     HappyAgentConnectionStore,
     HappyAgentModelStore,
     HappyAgentPanelStore,
+    HappyAgentSurface,
+    HappyAgentSurfaceCatalogSnapshot,
+    HappyAgentSurfaceCatalogStore,
+    HappyAgentSurfaceId,
+    HappyAgentSurfaces,
     HappyAgentWorkspaceStore,
     HappyAgentWorktreeId,
 } from "happy-desktop-state";
@@ -16,6 +21,7 @@ import {
     happyAgentAttentionStoreCreate,
     happyAgentGroupAccessRefused,
     happyAgentHostNoop,
+    happyAgentSurfaceSupportStoreNone,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
 } from "happy-desktop-state";
 import {
@@ -25,7 +31,7 @@ import {
 } from "../../sources/AppHappyAgentView";
 
 /* Happy Cloud places each bot by its kind. A shared bot is a destination of
- * the sidebar's first group, above Activity and Artifacts, and is not under
+ * the sidebar's first group, after everything else in it, and is not under
  * Bots; a personal bot is under Bots and opens the reader's own conversation.
  * Nobody makes a bot from the sidebar there, and only a bot the host reports
  * editable offers its settings. A Happy Agent daemon sends no kind, and its
@@ -133,9 +139,60 @@ function workspace(
     } as unknown as HappyAgentWorkspaceStore;
 }
 
+const PLAN: HappyAgentSurface = {
+    id: "srf_plan" as HappyAgentSurfaceId,
+    type: { kind: "document" },
+    name: "Launch plan",
+    image: null,
+    members: [{ userId: null, orderKey: "a", joinedAt: 1 }],
+    creatorUserId: null,
+    chatAgentId: null,
+    version: "1",
+    updatedAt: 1,
+};
+
+// The first group only asks whether these exist; nothing reads them.
+const PLUGINS = {} as never;
+const PIPELINES = {} as never;
+
+const SURFACE_CATALOG: HappyAgentSurfaceCatalogSnapshot = {
+    availability: "available",
+    surfaces: [PLAN],
+    joined: [PLAN],
+    viewer: { userId: null },
+    users: new Map(),
+    membershipPending: new Set(),
+    activeTodoCounts: new Map(),
+    activeTodos: new Map(),
+    create: { phase: "closed" },
+    createsRefused: new Map(),
+    chatsOpening: new Map(),
+    chats: new Map(),
+    chatActivity: new Map(),
+    chatsShown: new Set(),
+    expanded: new Set(),
+};
+
+const SURFACE_CATALOG_STORE = {
+    get: () => SURFACE_CATALOG,
+    subscribe: () => () => undefined,
+    [Symbol.dispose]: () => undefined,
+} as unknown as HappyAgentSurfaceCatalogStore;
+
+/** A joined Surface, so the first group holds every kind of row it can. */
+const SURFACES = {
+    catalog: () => SURFACE_CATALOG_STORE,
+    support: () => happyAgentSurfaceSupportStoreNone,
+} as unknown as HappyAgentSurfaces;
+
 function view(
     bots: readonly HappyAgentBot[],
-    options: { happyCloud?: true; botSettings?: HappyAgentBotSettingsSnapshot } = {},
+    options: {
+        happyCloud?: true;
+        botSettings?: HappyAgentBotSettingsSnapshot;
+        /** Plugins, Pipelines, and a joined Surface in the first group. */
+        everyTopRow?: true;
+    } = {},
 ) {
     const actions: BotActions = {
         botSettingsOpen: vi.fn(),
@@ -171,6 +228,13 @@ function view(
                 [Symbol.dispose]: () => undefined,
             } as unknown as HappyAgentModelStore,
             workspace: workspace(bots, actions, options.botSettings),
+            ...(options.everyTopRow
+                ? {
+                      plugins: () => PLUGINS,
+                      pipelines: () => PIPELINES,
+                      surfaces: SURFACES,
+                  }
+                : {}),
         },
         status: "connected",
     };
@@ -221,10 +285,10 @@ const menuLabels = () =>
 const menuClose = () =>
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
-it("shows an owner the shared bot first in the main group, and not under Bots", () => {
+it("shows an owner the shared bot last in the main group, and not under Bots", () => {
     const { container, onChatSelect } = view([CHIEF_SHARED, WRITER], { happyCloud: true });
     const [first, ...rest] = sections(container);
-    expect(first!.rows).toEqual(["local/ws_chief", "feed", "artifacts"]);
+    expect(first!.rows).toEqual(["feed", "artifacts", "local/ws_chief"]);
     const bots = rest.find((section) => section.label === "Bots");
     expect(bots?.rows).toEqual(["local/ws_writer"]);
 
@@ -232,6 +296,18 @@ it("shows an owner the shared bot first in the main group, and not under Bots", 
     expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_chief", "ses_chief");
     fireEvent.click(row(container, "ws_writer"));
     expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_writer", "ses_writer");
+});
+
+it("closes the main group with the shared bot, after Plugins, Pipelines, and Surfaces", () => {
+    const { container } = view([CHIEF_SHARED, WRITER], { happyCloud: true, everyTopRow: true });
+    expect(sections(container)[0]!.rows).toEqual([
+        "feed",
+        "artifacts",
+        "plugins",
+        "pipelines",
+        "local/surface:srf_plan",
+        "local/ws_chief",
+    ]);
 });
 
 it("shows a member, who is sent no shared bot, only the personal bots under Bots", () => {
