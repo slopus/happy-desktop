@@ -53,6 +53,7 @@ export type HappyCloudEventType =
     | "zone.created"
     | "zone.updated"
     | "zone.deleted"
+    | "zone.plugins"
     | "agent.zone";
 
 /**

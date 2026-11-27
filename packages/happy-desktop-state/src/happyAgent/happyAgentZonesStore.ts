@@ -2,8 +2,26 @@ import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
-import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import {
+    HappyCloudRequestRefusal,
+    type HappyCloudRequest,
+} from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
+import {
+    HAPPY_AGENT_ZONE_POLICY_CODE_START,
+    happyAgentZoneDiagnosticsRead,
+    happyAgentZoneInstallationRead,
+    happyAgentZonePluginRead,
+    happyAgentZonePolicyRead,
+    happyAgentZonePolicySample,
+    happyAgentZonePolicyTargetKey,
+    happyAgentZonePolicyTestRead,
+    type HappyAgentZonePlugin,
+    type HappyAgentZonePolicy,
+    type HappyAgentZonePolicyPage,
+    type HappyAgentZonePolicyTarget,
+    type HappyAgentZoneReach,
+} from "./happyAgentZoneReach.js";
 
 /** The fixed palette a zone's colour is picked from; the cluster refuses any other. */
 export type HappyAgentZoneColor =
@@ -34,6 +52,9 @@ export const HAPPY_AGENT_ZONE_COLORS: readonly HappyAgentZoneColor[] = [
 /** The longest name and description the cluster takes. */
 export const HAPPY_AGENT_ZONE_NAME_MAX = 64;
 export const HAPPY_AGENT_ZONE_DESCRIPTION_MAX = 500;
+/** The longest policy description and code the cluster takes (docs/policies.md §1). */
+export const HAPPY_AGENT_ZONE_POLICY_DESCRIPTION_MAX = 500;
+export const HAPPY_AGENT_ZONE_POLICY_CODE_MAX = 16 * 1024;
 
 /** A picture the server serves, addressed by its content so a new one is never cached as the old. */
 export interface HappyAgentZoneImage {
@@ -117,9 +138,9 @@ export interface HappyAgentZoneDetails {
     readonly error?: UserError;
 }
 
-/** Choosing members or bots to add to the open zone, in its own modal. */
+/** Choosing members, bots or plugin installations to add to the open zone, in its own modal. */
 export interface HappyAgentZonePick {
-    readonly kind: "members" | "bots";
+    readonly kind: "members" | "bots" | "plugins";
     /** What the list is narrowed to, as typed. */
     readonly query: string;
     /** User or bot IDs, in the order they were picked. */
@@ -132,9 +153,15 @@ export interface HappyAgentZonePick {
 /** One zone's page in Settings › Permissions, opened from its row. */
 export interface HappyAgentZoneOpen {
     readonly zoneId: string;
-    /** The member or bot whose removal is on its way to the cluster. */
+    /** The member, bot or installation whose removal is on its way to the cluster. */
     readonly removing?: string;
     readonly pick?: HappyAgentZonePick;
+    /** The installations the zone lists and the policies on them, once read. */
+    readonly reach: HappyAgentZoneReach;
+    /** The installations whose tools are shown, by ID. */
+    readonly expanded: readonly string[];
+    /** A policy's own sub-page, in place of the zone's page. */
+    readonly policy?: HappyAgentZonePolicyPage;
     /** Why the last removal did not go through. */
     readonly error?: UserError;
 }
@@ -210,6 +237,29 @@ export interface HappyAgentZonesStore {
     zonePickClose(): void;
     zoneMemberRemove(userId: string): void;
     zoneBotRemove(botId: string): void;
+    /** Opens the modal to add plugin installations to the open zone. */
+    zonePluginsPickOpen(): void;
+    zonePluginRemove(installationId: string): void;
+    /** Shows or hides an installation's tools. */
+    zonePluginToggle(installationId: string): void;
+    /** Opens a new policy's sub-page, on `target` or the zone's first installation. */
+    zonePolicyCreateOpen(target?: HappyAgentZonePolicyTarget): void;
+    zonePolicyOpen(policyId: string): void;
+    /** Goes back to the zone's page, dropping any change not saved. */
+    zonePolicyClose(): void;
+    /** Only a new policy's target can change. */
+    zonePolicyTargetUpdate(target: HappyAgentZonePolicyTarget): void;
+    zonePolicyDescriptionUpdate(value: string): void;
+    zonePolicyCodeUpdate(value: string): void;
+    zonePolicyEnabledUpdate(enabled: boolean): void;
+    zonePolicySampleUpdate(value: string): void;
+    zonePolicyClockPinnedUpdate(pinned: boolean): void;
+    zonePolicyClockUpdate(value: string): void;
+    /** Saves the policy; the cluster type-checks it and refuses it with its findings. */
+    zonePolicySave(): void;
+    zonePolicyDelete(): void;
+    /** Runs the policy against the sample input, saving nothing. */
+    zonePolicyTest(): void;
     /** Asks to delete the zone in the details modal, over the page. */
     zoneDeleteOpen(): void;
     zoneDeleteClose(): void;
@@ -418,6 +468,8 @@ export function happyAgentZonesStoreCreate(deps: {
             true,
         );
         openFollow();
+        const open = store.getState().open;
+        if (open) reachRead(open.zoneId);
     };
 
     /**
@@ -482,12 +534,33 @@ export function happyAgentZonesStoreCreate(deps: {
             let greeted = false;
             for await (const input of sync.follow({
                 signal: active.signal,
-                events: ["zone.created", "zone.updated", "zone.deleted", "agent.zone"],
+                events: [
+                    "zone.created",
+                    "zone.updated",
+                    "zone.deleted",
+                    "zone.plugins",
+                    "agent.zone",
+                    "plugins.changed",
+                ],
             })) {
                 const greeting = !greeted;
                 greeted = true;
                 // The first read was sent after this subscription was installed.
                 if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
+                if (input.kind === "update" && input.update.kind === "event") {
+                    // The published client does not name this event; its payload is read here.
+                    const event = input.update.event as {
+                        readonly type: string;
+                        readonly payload: unknown;
+                    };
+                    if (event.type === "zone.plugins") {
+                        // Only the page of the zone it changed shows its plugins.
+                        const zoneId = recordOf(event.payload)?.zoneId;
+                        const open = store.getState().open;
+                        if (open && open.zoneId === zoneId) reachRead(open.zoneId);
+                        continue;
+                    }
+                }
                 load();
             }
         })().catch(() => undefined);
@@ -603,12 +676,195 @@ export function happyAgentZonesStoreCreate(deps: {
         const zone = openZone();
         const open = store.getState().open;
         if (!zone || !open || open.pick?.saving) return;
-        // Only a zone that lists its members takes more, and only a critical one takes bots.
-        if (kind === "members" ? zone.isDefault || zone.members === null : !zone.critical) return;
+        // Only a zone that lists its members takes more, only a critical one takes bots,
+        // and installations only once the cluster says which the zone lists.
+        if (kind === "members" && (zone.isDefault || zone.members === null)) return;
+        if (kind === "bots" && !zone.critical) return;
+        if (kind === "plugins" && open.reach.kind !== "ready") return;
         store.setState(
             { open: { ...open, pick: { kind, query: "", selected: [], saving: false } } },
             false,
         );
+    };
+
+    /**
+     * Reads what the open zone may reach: the installations it lists, every
+     * installation of the team for adding one, and the policies on whatever
+     * has any. A server without the route, or a zone without `plugins`,
+     * leaves the page without both sections. A change to the zone's plugins
+     * is `answered` with the same body as the read, which is not asked again.
+     */
+    const reachRead = (zoneId: string, answered?: unknown): void => {
+        void (async (): Promise<HappyAgentZoneReach> => {
+            const detail =
+                answered ??
+                (await deps.request("GET", zonePath(zoneId)).catch((error: unknown) => {
+                    if (error instanceof UserError && error.code === "not_found") return undefined;
+                    throw error;
+                }));
+            const listed = recordOf(detail)?.plugins;
+            if (!Array.isArray(listed)) return { kind: "unavailable" };
+            const plugins = listed.flatMap((value) => {
+                const plugin = happyAgentZonePluginRead(deps.endpoint, value);
+                return plugin ? [plugin] : [];
+            });
+            // Policies arrive after plugins: the policies of the zone's first installation
+            // say whether the server has them at all. Any refusal, or no installation to
+            // ask about, leaves every part of the page about policies out.
+            const probe: HappyAgentZonePolicyTarget | undefined = plugins[0]
+                ? { kind: "plugin", installationId: plugins[0].id }
+                : undefined;
+            const [installed, probed] = await Promise.all([
+                deps.request("GET", "v0/plugins/installations").catch(() => undefined),
+                probe
+                    ? deps.request("GET", policiesPath(zoneId, probe)).then(
+                          (answer) => ({ answer }),
+                          () => undefined,
+                      )
+                    : undefined,
+            ]);
+            const installations = listOf(recordOf(installed)?.installations).flatMap((value) => {
+                const installation = happyAgentZoneInstallationRead(deps.endpoint, value);
+                return installation ? [installation] : [];
+            });
+            if (!probe || !probed) return { kind: "ready", plugins, installations, policies: null };
+            const targets: HappyAgentZonePolicyTarget[] = plugins.flatMap((plugin) => [
+                ...(plugin.policyCount > 0 && plugin.id !== probe.installationId
+                    ? [{ kind: "plugin" as const, installationId: plugin.id }]
+                    : []),
+                ...plugin.tools
+                    .filter((tool) => tool.policyCount > 0)
+                    .map((tool) => ({
+                        kind: "tool" as const,
+                        installationId: plugin.id,
+                        tool: tool.name,
+                    })),
+            ]);
+            const lists = await Promise.all(
+                targets.map((target) =>
+                    deps.request("GET", policiesPath(zoneId, target)).catch(() => undefined),
+                ),
+            );
+            return {
+                kind: "ready",
+                plugins,
+                installations,
+                policies: [probed.answer, ...lists].flatMap((list) =>
+                    listOf(recordOf(list)?.policies).flatMap((value) => {
+                        const policy = happyAgentZonePolicyRead(value);
+                        return policy ? [policy] : [];
+                    }),
+                ),
+            };
+        })().then(
+            (reach) => {
+                const open = store.getState().open;
+                if (disposed || open?.zoneId !== zoneId) return;
+                // A server that no longer answers for policies takes their page with it.
+                const { policy, ...rest } = open;
+                const kept = reach.kind === "ready" && reach.policies !== null;
+                store.setState(
+                    {
+                        open: {
+                            ...rest,
+                            reach: reachKeep(open.reach, reach),
+                            ...(policy && (kept || policy.saving || policy.deleting)
+                                ? { policy }
+                                : {}),
+                        },
+                    },
+                    false,
+                );
+            },
+            () => {
+                // A refused read keeps what the page shows; the first one shows nothing.
+                const open = store.getState().open;
+                if (disposed || open?.zoneId !== zoneId || open.reach.kind !== "reading") return;
+                store.setState({ open: { ...open, reach: { kind: "unavailable" } } }, false);
+            },
+        );
+    };
+
+    /**
+     * Takes the zone and its plugins a change to them answered with, the same
+     * body as `GET v0/zones/{id}`, or reads them again where it has neither.
+     */
+    const pluginsAnswered = (zoneId: string, answer: unknown): void => {
+        const answered = recordOf(answer);
+        zoneAnswered(answered);
+        reachRead(zoneId, Array.isArray(answered?.plugins) ? answered : undefined);
+    };
+
+    /** The new reach, keeping each unchanged entry's reference. */
+    const reachKeep = (
+        before: HappyAgentZoneReach,
+        after: HappyAgentZoneReach,
+    ): HappyAgentZoneReach =>
+        before.kind === "ready" && after.kind === "ready"
+            ? {
+                  kind: "ready",
+                  plugins: referencesPreserve(before.plugins, after.plugins),
+                  policies:
+                      before.policies && after.policies
+                          ? referencesPreserve(before.policies, after.policies)
+                          : after.policies,
+                  installations: referencesPreserve(before.installations, after.installations),
+              }
+            : after;
+
+    const policiesPath = (zoneId: string, target: HappyAgentZonePolicyTarget): string =>
+        `${zonePath(zoneId)}/policies?target=${encodeURIComponent(happyAgentZonePolicyTargetKey(target))}`;
+
+    const policyUpdate = (change: Partial<HappyAgentZonePolicyPage>): void => {
+        const open = store.getState().open;
+        if (open?.policy)
+            store.setState({ open: { ...open, policy: { ...open.policy, ...change } } }, false);
+    };
+    /** A change to the policy being written, by a reader who may change it. */
+    const policyEdit = (change: Partial<HappyAgentZonePolicyPage>): void => {
+        const { open, manage } = store.getState();
+        const policy = open?.policy;
+        if (!policy || !manage || policy.saving || policy.deleting) return;
+        const { error: _cleared, ...rest } = policy;
+        store.setState({ open: { ...open, policy: { ...rest, ...change, edited: true } } }, false);
+    };
+    /** The test's input changes without touching the policy itself. */
+    const policyTestEdit = (change: Partial<HappyAgentZonePolicyPage>): void => {
+        const policy = store.getState().open?.policy;
+        if (!policy || policy.testing) return;
+        const { testError: _cleared, ...rest } = policy;
+        const open = store.getState().open;
+        if (open) store.setState({ open: { ...open, policy: { ...rest, ...change } } }, false);
+    };
+
+    /** A policy page for a target, opened on a new policy or a saved one. */
+    const policyPage = (
+        target: HappyAgentZonePolicyTarget,
+        plugins: readonly HappyAgentZonePlugin[],
+        policy?: HappyAgentZonePolicy,
+    ): HappyAgentZonePolicyPage => ({
+        ...(policy ? { policyId: policy.id } : {}),
+        target,
+        description: policy?.description ?? "",
+        code: policy?.code ?? HAPPY_AGENT_ZONE_POLICY_CODE_START,
+        enabled: policy?.enabled ?? true,
+        edited: false,
+        saving: false,
+        deleting: false,
+        diagnostics: [],
+        sample: happyAgentZonePolicySample(target, plugins),
+        clockPinned: false,
+        clock: new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/u, "Z"),
+        testing: false,
+    });
+
+    /** The policy being written's refusal, with the type checker's findings where it sent them. */
+    const policyRefusal = (
+        error: unknown,
+    ): { readonly error: UserError; readonly diagnostics: readonly string[] } => {
+        const body = error instanceof HappyCloudRequestRefusal ? recordOf(error.body) : undefined;
+        const diagnostics = happyAgentZoneDiagnosticsRead(body?.diagnostics);
+        return { error: changeRefusal(error), diagnostics };
     };
 
     return {
@@ -632,11 +888,13 @@ export function happyAgentZonesStoreCreate(deps: {
         },
         zoneOpen(zoneId) {
             if (disposed || !zoneOf(zoneId)) return;
-            store.setState({ open: { zoneId } }, false);
+            store.setState({ open: { zoneId, reach: { kind: "reading" }, expanded: [] } }, false);
+            reachRead(zoneId);
         },
         zoneClose() {
             const { open, details, ...rest } = store.getState();
             if (disposed || !open || open.removing !== undefined || open.pick?.saving) return;
+            if (open.policy?.saving || open.policy?.deleting) return;
             if (details?.saving || details?.imageSaving) return;
             store.setState(rest, true);
         },
@@ -763,7 +1021,16 @@ export function happyAgentZonesStoreCreate(deps: {
                     const { details: _saved, ...after } = store.getState();
                     // A new zone's page opens once the cluster names it.
                     store.setState(
-                        !zone && answered ? { ...after, open: { zoneId: answered.id } } : after,
+                        !zone && answered
+                            ? {
+                                  ...after,
+                                  open: {
+                                      zoneId: answered.id,
+                                      reach: { kind: "reading" },
+                                      expanded: [],
+                                  },
+                              }
+                            : after,
                         true,
                     );
                     load();
@@ -804,9 +1071,41 @@ export function happyAgentZonesStoreCreate(deps: {
             const open = store.getState().open;
             const pick = open?.pick;
             if (!zone || !open || !pick || pick.saving || pick.selected.length === 0) return;
+            const { error: _cleared, ...rest } = pick;
+            if (pick.kind === "plugins") {
+                store.setState({ open: { ...open, pick: { ...rest, saving: true } } }, false);
+                // One at a time, so the last answer lists every installation added.
+                void pick.selected
+                    .reduce<Promise<unknown>>(
+                        (before, id) =>
+                            before.then(() =>
+                                deps.request(
+                                    "PUT",
+                                    `${zonePath(zone.id)}/plugins/${encodeURIComponent(id)}`,
+                                ),
+                            ),
+                        Promise.resolve(undefined),
+                    )
+                    .then(
+                        (answer) => {
+                            if (disposed) return;
+                            const current = store.getState().open;
+                            if (current) {
+                                const { pick: _added, ...after } = current;
+                                store.setState({ open: after }, false);
+                            }
+                            pluginsAnswered(zone.id, answer);
+                        },
+                        (error: unknown) => {
+                            if (disposed) return;
+                            pickUpdate({ saving: false, error: changeRefusal(error) });
+                            reachRead(zone.id);
+                        },
+                    );
+                return;
+            }
             const listed = pick.kind === "members" ? (zone.members ?? []) : zone.bots;
             const added = pick.selected.filter((id) => !listed.includes(id));
-            const { error: _cleared, ...rest } = pick;
             store.setState({ open: { ...open, pick: { ...rest, saving: true } } }, false);
             void zonePatch(zone, { [pick.kind]: [...listed, ...added] }).then(
                 (answer) => {
@@ -837,6 +1136,268 @@ export function happyAgentZonesStoreCreate(deps: {
         },
         zoneBotRemove(botId) {
             listRemove("bots", botId);
+        },
+        zonePluginsPickOpen() {
+            pickOpen("plugins");
+        },
+        zonePluginRemove(installationId) {
+            const zone = openZone();
+            const open = store.getState().open;
+            if (!zone || !open || open.removing !== undefined || open.reach.kind !== "ready")
+                return;
+            if (!open.reach.plugins.some((plugin) => plugin.id === installationId)) return;
+            const { error: _cleared, ...rest } = open;
+            store.setState({ open: { ...rest, removing: installationId } }, false);
+            void deps
+                .request(
+                    "DELETE",
+                    `${zonePath(zone.id)}/plugins/${encodeURIComponent(installationId)}`,
+                )
+                .then(
+                    (answer) => ({ answer }),
+                    (error: unknown) => ({ refused: changeRefusal(error) }),
+                )
+                .then((result) => {
+                    if (disposed) return;
+                    const current = store.getState().open;
+                    if (current) {
+                        const { removing: _done, ...after } = current;
+                        store.setState(
+                            {
+                                open:
+                                    "refused" in result
+                                        ? { ...after, error: result.refused }
+                                        : after,
+                            },
+                            false,
+                        );
+                    }
+                    if ("answer" in result) pluginsAnswered(zone.id, result.answer);
+                    else reachRead(zone.id);
+                });
+        },
+        zonePluginToggle(installationId) {
+            const open = store.getState().open;
+            if (disposed || !open) return;
+            store.setState(
+                {
+                    open: {
+                        ...open,
+                        expanded: open.expanded.includes(installationId)
+                            ? open.expanded.filter((id) => id !== installationId)
+                            : [...open.expanded, installationId],
+                    },
+                },
+                false,
+            );
+        },
+        zonePolicyCreateOpen(target) {
+            const { open, manage } = store.getState();
+            if (disposed || !manage || !open || open.reach.kind !== "ready" || open.policy) return;
+            // Only a server that has policies gets a page to write one on.
+            if (open.reach.policies === null) return;
+            const plugins = open.reach.plugins;
+            const chosen: HappyAgentZonePolicyTarget | undefined =
+                target ??
+                (plugins[0] ? { kind: "plugin", installationId: plugins[0].id } : undefined);
+            if (!chosen) return;
+            store.setState({ open: { ...open, policy: policyPage(chosen, plugins) } }, false);
+        },
+        zonePolicyOpen(policyId) {
+            const open = store.getState().open;
+            if (disposed || !open || open.reach.kind !== "ready" || open.policy) return;
+            const policy = open.reach.policies?.find((entry) => entry.id === policyId);
+            if (!policy) return;
+            store.setState(
+                {
+                    open: {
+                        ...open,
+                        policy: policyPage(policy.target, open.reach.plugins, policy),
+                    },
+                },
+                false,
+            );
+        },
+        zonePolicyClose() {
+            const open = store.getState().open;
+            if (disposed || !open?.policy || open.policy.saving || open.policy.deleting) return;
+            const { policy: _closed, ...rest } = open;
+            store.setState({ open: rest }, false);
+        },
+        zonePolicyTargetUpdate(target) {
+            const open = store.getState().open;
+            const policy = open?.policy;
+            // A saved policy keeps its target; a new one is written for any.
+            if (!policy || policy.policyId !== undefined || open.reach.kind !== "ready") return;
+            policyEdit({
+                target,
+                // The sample follows the target until the reader writes their own.
+                ...(policy.sample === happyAgentZonePolicySample(policy.target, open.reach.plugins)
+                    ? { sample: happyAgentZonePolicySample(target, open.reach.plugins) }
+                    : {}),
+            });
+        },
+        zonePolicyDescriptionUpdate(value) {
+            policyEdit({ description: value });
+        },
+        zonePolicyCodeUpdate(value) {
+            policyEdit({ code: value, diagnostics: [] });
+        },
+        zonePolicyEnabledUpdate(enabled) {
+            policyEdit({ enabled });
+        },
+        zonePolicySampleUpdate(value) {
+            policyTestEdit({ sample: value });
+        },
+        zonePolicyClockPinnedUpdate(pinned) {
+            policyTestEdit({ clockPinned: pinned });
+        },
+        zonePolicyClockUpdate(value) {
+            policyTestEdit({ clock: value });
+        },
+        zonePolicySave() {
+            const zone = openZone();
+            const open = store.getState().open;
+            const policy = open?.policy;
+            if (!zone || !open || !policy || policy.saving || policy.deleting) return;
+            const { error: _cleared, ...rest } = policy;
+            const description = policy.description.trim();
+            const refuse = (message: string): void =>
+                policyUpdate({ ...rest, error: new UserError(message), diagnostics: [] });
+            if (description === "") return refuse("Say what the policy does in its description.");
+            if (description.length > HAPPY_AGENT_ZONE_POLICY_DESCRIPTION_MAX)
+                return refuse(
+                    `A policy's description is at most ${String(HAPPY_AGENT_ZONE_POLICY_DESCRIPTION_MAX)} characters.`,
+                );
+            if (policy.code.trim() === "") return refuse("Write the policy's code.");
+            if (new TextEncoder().encode(policy.code).length > HAPPY_AGENT_ZONE_POLICY_CODE_MAX)
+                return refuse("A policy's code is at most 16 KiB.");
+            const saved =
+                policy.policyId === undefined || open.reach.kind !== "ready"
+                    ? undefined
+                    : open.reach.policies?.find((entry) => entry.id === policy.policyId);
+            if (policy.policyId !== undefined && !saved)
+                return refuse("This policy was deleted in the meantime.");
+            store.setState(
+                { open: { ...open, policy: { ...rest, saving: true, diagnostics: [] } } },
+                false,
+            );
+            const body = { description, code: policy.code, enabled: policy.enabled };
+            void (
+                saved
+                    ? deps.request(
+                          "PATCH",
+                          `${zonePath(zone.id)}/policies/${encodeURIComponent(saved.id)}`,
+                          body,
+                          {
+                              "if-match": saved.version,
+                          },
+                      )
+                    : deps.request("POST", policiesPath(zone.id, policy.target), {
+                          ...body,
+                          target: happyAgentZonePolicyTargetKey(policy.target),
+                          scope: "access",
+                      })
+            ).then(
+                (answer) => {
+                    if (disposed) return;
+                    const made = happyAgentZonePolicyRead(recordOf(answer)?.policy ?? answer);
+                    policyUpdate({
+                        saving: false,
+                        edited: false,
+                        ...(made ? { policyId: made.id } : {}),
+                    });
+                    reachRead(zone.id);
+                },
+                (error: unknown) => {
+                    if (disposed) return;
+                    policyUpdate({ saving: false, ...policyRefusal(error) });
+                },
+            );
+        },
+        zonePolicyDelete() {
+            const zone = openZone();
+            const policy = store.getState().open?.policy;
+            if (!zone || policy?.policyId === undefined || policy.saving || policy.deleting) return;
+            const { error: _cleared, ...rest } = policy;
+            policyUpdate({ ...rest, deleting: true });
+            void deps
+                .request(
+                    "DELETE",
+                    `${zonePath(zone.id)}/policies/${encodeURIComponent(policy.policyId)}`,
+                )
+                .then(
+                    () => {
+                        if (disposed) return;
+                        const current = store.getState().open;
+                        if (current) {
+                            const { policy: _gone, ...after } = current;
+                            store.setState({ open: after }, false);
+                        }
+                        reachRead(zone.id);
+                    },
+                    (error: unknown) => {
+                        if (disposed) return;
+                        policyUpdate({ deleting: false, error: changeRefusal(error) });
+                    },
+                );
+        },
+        zonePolicyTest() {
+            const open = store.getState().open;
+            const policy = open?.policy;
+            if (disposed || !open || !policy || policy.testing) return;
+            const { testError: _cleared, test: _previous, ...rest } = policy;
+            let context: unknown;
+            try {
+                context = JSON.parse(policy.sample);
+            } catch (error) {
+                policyUpdate({
+                    ...rest,
+                    testError: new UserError(
+                        `The sample input isn't valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+                    ),
+                });
+                return;
+            }
+            const clock = policy.clock.trim();
+            if (policy.clockPinned && Number.isNaN(Date.parse(clock))) {
+                policyUpdate({
+                    ...rest,
+                    testError: new UserError(
+                        "Pin the clock to an instant such as 2026-11-28T10:00:00Z.",
+                    ),
+                });
+                return;
+            }
+            store.setState({ open: { ...open, policy: { ...rest, testing: true } } }, false);
+            void deps
+                .request("POST", `${zonePath(open.zoneId)}/policies/test`, {
+                    target: happyAgentZonePolicyTargetKey(policy.target),
+                    description: policy.description.trim(),
+                    code: policy.code,
+                    context,
+                    ...(policy.clockPinned ? { clock } : {}),
+                })
+                .then(
+                    (answer) => {
+                        if (disposed) return;
+                        const test = happyAgentZonePolicyTestRead(answer);
+                        policyUpdate(
+                            test
+                                ? { testing: false, test }
+                                : {
+                                      testing: false,
+                                      testError: new UserError(
+                                          "The cluster answered the test without a verdict.",
+                                      ),
+                                  },
+                        );
+                    },
+                    (error: unknown) => {
+                        if (disposed) return;
+                        policyUpdate({ testing: false, testError: happyAgentUserError(error) });
+                    },
+                );
         },
         zoneDeleteOpen() {
             const current = store.getState();
@@ -938,6 +1499,22 @@ export const happyAgentZonesStoreNoop: HappyAgentZonesStore = {
     zonePickClose: () => undefined,
     zoneMemberRemove: () => undefined,
     zoneBotRemove: () => undefined,
+    zonePluginsPickOpen: () => undefined,
+    zonePluginRemove: () => undefined,
+    zonePluginToggle: () => undefined,
+    zonePolicyCreateOpen: () => undefined,
+    zonePolicyOpen: () => undefined,
+    zonePolicyClose: () => undefined,
+    zonePolicyTargetUpdate: () => undefined,
+    zonePolicyDescriptionUpdate: () => undefined,
+    zonePolicyCodeUpdate: () => undefined,
+    zonePolicyEnabledUpdate: () => undefined,
+    zonePolicySampleUpdate: () => undefined,
+    zonePolicyClockPinnedUpdate: () => undefined,
+    zonePolicyClockUpdate: () => undefined,
+    zonePolicySave: () => undefined,
+    zonePolicyDelete: () => undefined,
+    zonePolicyTest: () => undefined,
     zoneDeleteOpen: () => undefined,
     zoneDeleteClose: () => undefined,
     zoneDelete: () => undefined,

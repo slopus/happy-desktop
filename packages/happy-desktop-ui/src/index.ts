@@ -1240,6 +1240,18 @@ export {
     type HappyAgentZoneRow,
 } from "./pages/settings/HappyAgentPermissionsSettings";
 export {
+    HappyAgentZonePluginsSection,
+    HappyAgentZonePoliciesSection,
+    HappyAgentZonePolicyPage,
+    type HappyAgentZonePluginRow,
+    type HappyAgentZonePluginsSectionProps,
+    type HappyAgentZonePoliciesSectionProps,
+    type HappyAgentZonePolicyPageProps,
+    type HappyAgentZonePolicyRow,
+    type HappyAgentZonePolicyTestView,
+    type HappyAgentZoneToolRow,
+} from "./pages/settings/HappyAgentZoneAccess";
+export {
     HappyAgentCredentialImport,
     type HappyAgentCredentialImportProps,
     type HappyAgentCredentialImportRow,
