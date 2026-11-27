@@ -1230,9 +1230,9 @@ function windowOptions(
         width: bounds?.width ?? 1100,
         height: bounds?.height ?? 760,
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
-        /* Happy's native desktop minimum; AppShell states the same contract. */
-        minWidth: 720,
-        minHeight: 640,
+        /* Happy's native desktop minimum (DESIGN.md); AppShell's own floor sits below it. */
+        minWidth: 760,
+        minHeight: 670,
         ...(applicationIconPath ? { icon: applicationIconPath } : {}),
         show: false,
         ...platformWindowChrome(),

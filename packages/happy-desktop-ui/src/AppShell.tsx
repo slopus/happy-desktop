@@ -183,8 +183,8 @@ function panelShareOf(): number {
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const REVEAL_WIDTH = 48;
 /**
- * The workspace's floor at Happy's 720px desktop minimum, beside its side
- * lanes. The same number app-shell.css states.
+ * What the workspace keeps, beside its side lanes, at the shell's 720px
+ * floor. The same number app-shell.css states.
  */
 const WORKSPACE_MIN_WIDTH = 140;
 /**

@@ -5,13 +5,14 @@
  * navigation, workspace, and optional inspector meet on shared hairlines rather
  * than floating as separate rounded cards.
  *
- * Happy's native desktop minimum is 720×640. At that width the side lanes
- * still leave a real 140px workspace; the resize hit lanes
- * overlay the joins instead of consuming more room.
+ * Happy's native desktop minimum is 760×670. The shell's own floor sits a
+ * little below it, at 720×640, where the side lanes still leave a real 140px
+ * workspace; the resize hit lanes overlay the joins instead of consuming more
+ * room.
  */
 
 .happy-desktop-app-shell {
-    /* What each region keeps at the 720px desktop minimum. */
+    /* What each region keeps at the shell's 720px floor. */
     --happy-desktop-app-shell-lane-min: 250px;
     --happy-desktop-app-shell-workspace-min: 140px;
     position: relative;
