@@ -48,7 +48,7 @@ function storeCreate(onboarding: object, onFinished?: () => void) {
     });
     const unsubscribe = store.subscribe(() => undefined);
     writer.onboardingReceived({ onboarding: onboarding as never, profile: null as never });
-    return { store, calls, unsubscribe };
+    return { store, calls, unsubscribe, writer };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
@@ -179,6 +179,45 @@ it("takes a reader with an admin bot gate they may talk to to the Chief of Staff
     store.gateContinue("adminBot");
     await settle();
     expect(finished).toBe(1);
+    expect(store.get().finale).toBeUndefined();
+    unsubscribe();
+});
+
+it("leaves a reader at work when their last step is finished elsewhere while they are away", async () => {
+    let finished = 0;
+    const adminBot = {
+        id: "adminBot",
+        scope: "server",
+        requirement: "optional",
+        status: "open",
+        blocking: false,
+        canComplete: true,
+        data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
+    };
+    const { store, calls, unsubscribe, writer } = storeCreate(
+        { finished: false, completed: false, blocking: [], gates: [mobileOpen, adminBot], steps },
+        () => finished++,
+    );
+    await settle();
+    store.gateContinue("mobileApp");
+    await settle();
+    store.onboardingExit();
+    writer.onboardingReceived({
+        onboarding: {
+            finished: true,
+            completed: true,
+            blocking: [],
+            gates: [
+                { ...mobileOpen, status: "skipped" },
+                { ...adminBot, status: "done" },
+            ],
+            steps,
+        } as never,
+        profile: null as never,
+    });
+    await settle();
+    expect(calls).toContain("POST v0/onboarding/complete");
+    expect(finished).toBe(0);
     expect(store.get().finale).toBeUndefined();
     unsubscribe();
 });

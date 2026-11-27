@@ -311,6 +311,8 @@ export function happyAgentOnboardingStoreCreate(
      */
     let returnTo: string | undefined;
     let away: "now" | "earlier" | undefined = options.away ? "earlier" : undefined;
+    /** The last open steps were finished elsewhere while the reader was away. */
+    let finishedAway = false;
     let gatePending: string | undefined;
     let gateError: { readonly gate: string; readonly message: string } | undefined;
     let gateAction: AbortController | undefined;
@@ -338,7 +340,10 @@ export function happyAgentOnboardingStoreCreate(
         // the first step still open, and to none once the rest was done elsewhere.
         pinned = away ? undefined : flow.current?.id;
         if (returnTo !== undefined && !flow.sequence.includes(returnTo)) returnTo = undefined;
-        if (away && !flow.current) awaySet(undefined);
+        if (away && !flow.current) {
+            finishedAway = true;
+            awaySet(undefined);
+        }
         return flow;
     };
     function awaySet(next: "now" | undefined): void {
@@ -421,7 +426,7 @@ export function happyAgentOnboardingStoreCreate(
         gatesCompletion = active;
         // A reader whose last steps were finished elsewhere while they were
         // away is at work in the app, and is not taken out of it.
-        const walked = passed.size > 0 && !away;
+        const walked = passed.size > 0 && !away && !finishedAway;
         void client
             .completeOnboarding({ signal: active.signal })
             .then(() => {
