@@ -193,6 +193,11 @@ export type HappyAgentProjectArchiveResult =
 /** Verified outcome of removing one worktree and its checkout. */
 export type HappyAgentWorktreeArchiveResult = HappyAgentProjectArchiveResult;
 
+/** Authoritative outcome of closing one session out of its strip. */
+export type HappyAgentSessionArchiveResult =
+    | { readonly type: "archived" }
+    | { readonly type: "failed"; readonly error: UserError };
+
 /** Authoritative outcome of returning one archived session to its strip. */
 export type HappyAgentSessionRestoreResult =
     | { readonly type: "restored" }
@@ -333,10 +338,12 @@ export interface HappyAgentSessionListStore {
     ): Promise<HappyAgentSessionLocation | undefined>;
     /**
      * Closes a session: it leaves this list immediately and stays out of it
-     * durably, without ending the session itself. A failure is recorded in
-     * `mutationError` and the row returns on the following reconcile.
+     * durably, without ending the session itself. The answer comes once the
+     * host's catalog lists it archived, or once the host refuses, when the
+     * failure is also recorded in `mutationError` and the row returns on the
+     * following reconcile.
      */
-    sessionArchive(sessionId: HappyAgentSessionId): Promise<void>;
+    sessionArchive(sessionId: HappyAgentSessionId): Promise<HappyAgentSessionArchiveResult>;
     /** Returns an archived session to its workspace strip and verifies the host's answer. */
     sessionRestore(sessionId: HappyAgentSessionId): Promise<HappyAgentSessionRestoreResult>;
     /** Moves one session after `afterId`, or to the front of its workspace when null. */
@@ -1038,6 +1045,11 @@ export function happyAgentSessionListStoreCreate(
         stopObservation?: () => void;
     }
     const sessionRestoreWaiters = new Map<string, SessionRestoreWaiter>();
+    interface SessionArchiveWaiter {
+        readonly resolve: (result: HappyAgentSessionArchiveResult) => void;
+        stopObservation?: () => void;
+    }
+    const sessionArchiveWaiters = new Map<string, SessionArchiveWaiter>();
     interface ProjectArchiveWaiter {
         readonly projectId: HappyAgentProjectId;
         readonly resolve: (result: HappyAgentProjectArchiveResult) => void;
@@ -1148,6 +1160,17 @@ export function happyAgentSessionListStoreCreate(
         waiter.resolve(result);
     };
 
+    const sessionArchiveSettle = (
+        mutationId: string,
+        result: HappyAgentSessionArchiveResult,
+    ): void => {
+        const waiter = sessionArchiveWaiters.get(mutationId);
+        if (waiter === undefined) return;
+        sessionArchiveWaiters.delete(mutationId);
+        waiter.stopObservation?.();
+        waiter.resolve(result);
+    };
+
     const projectArchivesConfirmAbsent = (): void => {
         for (const [mutationId, waiter] of projectArchiveWaiters) {
             if (
@@ -1194,6 +1217,7 @@ export function happyAgentSessionListStoreCreate(
                 sessionArchiveMutationIds.delete(intent.mutationId);
                 pendingMutationIds.delete(intent.mutationId);
                 if (!intent.archived) sessionRestoreSettle(intent.mutationId, { type: "restored" });
+                else sessionArchiveSettle(intent.mutationId, { type: "archived" });
                 continue;
             }
             const summary = activeSummary ?? archivedSummary ?? intent.summary;
@@ -2218,6 +2242,7 @@ export function happyAgentSessionListStoreCreate(
             type: "failed",
             error,
         });
+        sessionArchiveSettle(rejection.mutationId, { type: "failed", error });
         store.setState({
             ...previous,
             botFailures,
@@ -2359,6 +2384,8 @@ export function happyAgentSessionListStoreCreate(
                 sessionArchiveMutationIds.delete(expired);
                 if (sessionId && sessionArchiveIntents.get(sessionId)?.mutationId === expired)
                     sessionArchiveIntents.delete(sessionId);
+                // No refusal can be heard any more, and none was.
+                sessionArchiveSettle(expired, { type: "archived" });
                 botAvatarIntentWithdraw(expired);
                 nameIntentWithdraw(expired);
                 // Too old for an answer to be heard: the row goes back to
@@ -2739,8 +2766,10 @@ export function happyAgentSessionListStoreCreate(
                 }),
             ) as HappyAgentProjectId;
         },
-        sessionArchive: (sessionId) =>
-            mutate(async () => {
+        sessionArchive: (sessionId) => {
+            store.setState({ ...store.getState(), mutationError: undefined });
+            let mutationId: string;
+            try {
                 // The row leaves the list before the host confirms, because
                 // closing a tab must feel immediate. A failed archive is
                 // recorded in `mutationError`; its rejection then reconciles
@@ -2762,7 +2791,7 @@ export function happyAgentSessionListStoreCreate(
                     };
                 });
                 publish();
-                const mutationId = connectMutationTrack(
+                mutationId = connectMutationTrack(
                     deps.connectActions.setSessionArchived(sessionId, true),
                 );
                 sessionArchiveIntents.set(sessionId, {
@@ -2771,10 +2800,42 @@ export function happyAgentSessionListStoreCreate(
                     ...(closing === undefined ? {} : { summary: closing }),
                 });
                 sessionArchiveMutationIds.set(mutationId, sessionId);
-            }),
+            } catch (error) {
+                const failure = happyAgentUserError(error);
+                if (!disposed) store.setState({ ...store.getState(), mutationError: failure });
+                return Promise.resolve({ type: "failed", error: failure });
+            }
+            // The answer is the catalog's or the host's refusal, and either is
+            // heard even while nobody is watching this list.
+            return new Promise<HappyAgentSessionArchiveResult>((resolve) => {
+                const waiter: SessionArchiveWaiter = { resolve };
+                sessionArchiveWaiters.set(mutationId, waiter);
+                const unsubscribeCatalog = deps.catalogSource.subscribe(
+                    () => {
+                        void reconcile();
+                    },
+                    () => {
+                        void reconcile();
+                    },
+                );
+                const unsubscribeMutation = deps.connectMutationSubscribe(
+                    // Its own listener, not the list's: a set of listeners holds
+                    // one function once, and letting go of a shared one here
+                    // would end the list's own subscription with this wait.
+                    (rejection) => mutationRejected(rejection),
+                );
+                waiter.stopObservation = () => {
+                    unsubscribeCatalog();
+                    unsubscribeMutation();
+                };
+            });
+        },
         async sessionRestore(sessionId) {
             const state = internal.getState();
             if (sessionFind(sessionId) !== undefined) return { type: "restored" };
+            // Taking a close back answers it: there is nothing left to refuse.
+            const closing = sessionArchiveIntents.get(sessionId);
+            if (closing?.archived) sessionArchiveSettle(closing.mutationId, { type: "archived" });
             const restoring = state.archivedSessions.find((existing) => existing.id === sessionId);
             store.setState({ ...store.getState(), mutationError: undefined });
             internal.setState((current) => ({
@@ -2808,7 +2869,12 @@ export function happyAgentSessionListStoreCreate(
                         void reconcile();
                     },
                 );
-                const unsubscribeMutation = deps.connectMutationSubscribe(mutationRejected);
+                const unsubscribeMutation = deps.connectMutationSubscribe(
+                    // Its own listener, not the list's: a set of listeners holds
+                    // one function once, and letting go of a shared one here
+                    // would end the list's own subscription with this wait.
+                    (rejection) => mutationRejected(rejection),
+                );
                 waiter.stopObservation = () => {
                     unsubscribeCatalog();
                     unsubscribeMutation();
@@ -2894,7 +2960,12 @@ export function happyAgentSessionListStoreCreate(
                         void reconcile();
                     },
                 );
-                const unsubscribeMutation = deps.connectMutationSubscribe(mutationRejected);
+                const unsubscribeMutation = deps.connectMutationSubscribe(
+                    // Its own listener, not the list's: a set of listeners holds
+                    // one function once, and letting go of a shared one here
+                    // would end the list's own subscription with this wait.
+                    (rejection) => mutationRejected(rejection),
+                );
                 waiter.stopObservation = () => {
                     unsubscribeCatalog();
                     unsubscribeMutation();
@@ -3335,7 +3406,12 @@ export function happyAgentSessionListStoreCreate(
                         void reconcile();
                     },
                 );
-                const unsubscribeMutation = deps.connectMutationSubscribe(mutationRejected);
+                const unsubscribeMutation = deps.connectMutationSubscribe(
+                    // Its own listener, not the list's: a set of listeners holds
+                    // one function once, and letting go of a shared one here
+                    // would end the list's own subscription with this wait.
+                    (rejection) => mutationRejected(rejection),
+                );
                 waiter.stopObservation = () => {
                     unsubscribeCatalog();
                     unsubscribeMutation();
@@ -3406,6 +3482,12 @@ export function happyAgentSessionListStoreCreate(
             }
             for (const mutationId of sessionRestoreWaiters.keys()) {
                 sessionRestoreSettle(mutationId, {
+                    type: "failed",
+                    error: happyAgentUserError(cancelled),
+                });
+            }
+            for (const mutationId of sessionArchiveWaiters.keys()) {
+                sessionArchiveSettle(mutationId, {
                     type: "failed",
                     error: happyAgentUserError(cancelled),
                 });

@@ -13,7 +13,18 @@ import {
 /** How many places a window remembers, oldest dropped first. */
 const ENTRY_LIMIT = 100;
 
+/** How many closed sessions' visits are kept in case their archive is refused. */
+const SESSION_FORGOTTEN_LIMIT = 16;
+
 type LocationState = HistoryLocation["state"];
+
+/** A visit one forget took out, and the place it followed then. */
+interface ForgottenVisit {
+    readonly after: HappyAgentRoute | undefined;
+    readonly route: HappyAgentRoute;
+    readonly state: LocationState;
+    readonly slot: string | undefined;
+}
 
 /**
  * One window's stack as it is written down: places it has been, oldest first,
@@ -57,12 +68,25 @@ export interface HappyAgentRouterHistory extends RouterHistory {
         fallbackSessionId?: string,
     ): boolean;
     /**
+     * Puts back the visits the last `sessionForget` of one session took, each
+     * after the place it followed, when the archive behind it was refused. The
+     * reader stays where they are. Answers whether the stack changed.
+     */
+    sessionRemember(happyAgentId: string, groupId: string, sessionId: string): boolean;
+    /**
      * Removes every remembered place inside one group, showing the nearest
      * survivor if the window stood on one. Answers whether the stack changed,
      * which is not the same as the window having moved: places behind the reader
      * can go without disturbing where they stand.
      */
     groupForget(happyAgentId: string, groupId: string): boolean;
+    /**
+     * Removes every remembered place inside one connection's groups that its
+     * first catalog read did not list: work archived while the window was
+     * closed, which no removal will ever be reported for. The place on screen
+     * stays, since a group not yet listed may be one still arriving.
+     */
+    groupsUnlistedForget(happyAgentId: string, listed: ReadonlySet<string>): boolean;
     /**
      * Removes every place in one connection, as when its sign-in ended and
      * nothing of it may stay on this machine. A reader standing in one lands
@@ -621,11 +645,18 @@ export function happyAgentHistoryCreate(
         browserDispose = () => window.removeEventListener("hashchange", hashChange);
     }
 
+    // What each closed session's forget took, by session, until its archive
+    // is answered; oldest dropped first.
+    const sessionForgotten = new Map<string, readonly ForgottenVisit[]>();
+    const sessionKey = (happyAgentId: string, groupId: string, sessionId: string): string =>
+        JSON.stringify([happyAgentId, groupId, sessionId]);
+
     /** Removes matching places and repairs the cursor around what survives. */
     const forget = (
         matches: (route: HappyAgentRoute) => boolean,
         fallback: HappyAgentRoute,
         preferred?: (route: HappyAgentRoute) => boolean,
+        taken?: ForgottenVisit[],
     ): boolean => {
         const standingRemoved = matches(entries[index]);
         const keptEntries: HappyAgentRoute[] = [];
@@ -635,8 +666,15 @@ export function happyAgentHistoryCreate(
         for (let at = 0; at < entries.length; at++) {
             const route = entries[at];
             const slot = slots[at];
+            const visit = (): ForgottenVisit => ({
+                after: entries[at - 1],
+                route,
+                state: states[at],
+                slot,
+            });
             if (matches(route)) {
                 if (slot !== undefined) forgotten.add(slot);
+                taken?.push(visit());
                 continue;
             }
             // Removing what sat between two visits to one place would leave
@@ -646,7 +684,10 @@ export function happyAgentHistoryCreate(
                 keptEntries.push(route);
                 keptStates.push(states[at]);
                 keptSlots.push(slot);
-            } else if (slot !== undefined) forgotten.add(slot);
+            } else {
+                if (slot !== undefined) forgotten.add(slot);
+                taken?.push(visit());
+            }
             if (at <= index) keptIndex = keptEntries.length - 1;
         }
         if (keptEntries.length === entries.length) return false;
@@ -744,6 +785,7 @@ export function happyAgentHistoryCreate(
                     path: route.path,
                 };
             });
+            const taken: ForgottenVisit[] = [];
             const removed = forget(
                 (route) =>
                     route.kind === "chat" &&
@@ -762,8 +804,52 @@ export function happyAgentHistoryCreate(
                     (route.kind === "chat" || route.kind === "file") &&
                     route.happyAgentId === happyAgentId &&
                     route.groupId === groupId,
+                taken,
             );
+            const key = sessionKey(happyAgentId, groupId, sessionId);
+            sessionForgotten.delete(key);
+            if (taken.length > 0) {
+                sessionForgotten.set(key, taken);
+                for (const oldest of sessionForgotten.keys()) {
+                    if (sessionForgotten.size <= SESSION_FORGOTTEN_LIMIT) break;
+                    sessionForgotten.delete(oldest);
+                }
+            }
             if (removed || !fileRouteUpdated) return removed;
+            settle();
+            history.notify({ type: "REPLACE" });
+            return true;
+        },
+        sessionRemember: (happyAgentId: string, groupId: string, sessionId: string): boolean => {
+            const key = sessionKey(happyAgentId, groupId, sessionId);
+            const visits = sessionForgotten.get(key);
+            sessionForgotten.delete(key);
+            let restored = false;
+            // In the order they were taken, so a visit that followed another
+            // taken one finds it already back.
+            for (const visit of visits ?? []) {
+                let at = 0;
+                const after = visit.after;
+                if (after !== undefined) {
+                    // The place it followed, or that place as a later
+                    // replace rewrote it; a visit whose place is gone stays gone.
+                    let found = entries.indexOf(after);
+                    for (let back = entries.length - 1; found === -1 && back >= 0; back--)
+                        if (happyAgentRouteSame(entries[back], after)) found = back;
+                    if (found === -1) continue;
+                    at = found + 1;
+                }
+                const slot =
+                    visit.slot !== undefined && forgotten.delete(visit.slot)
+                        ? visit.slot
+                        : undefined;
+                entries.splice(at, 0, visit.route);
+                states.splice(at, 0, visit.state);
+                slots.splice(at, 0, slot);
+                if (at <= index) index += 1;
+                restored = true;
+            }
+            if (!restored) return false;
             settle();
             history.notify({ type: "REPLACE" });
             return true;
@@ -773,6 +859,17 @@ export function happyAgentHistoryCreate(
                 (route) => happyAgentRouteInGroup(route, happyAgentId, groupId),
                 HAPPY_AGENT_ROUTE_HOME,
             ),
+        groupsUnlistedForget: (happyAgentId: string, listed: ReadonlySet<string>): boolean => {
+            const standing = entries[index];
+            return forget(
+                (route) =>
+                    route !== standing &&
+                    (route.kind === "group" || route.kind === "chat" || route.kind === "file") &&
+                    route.happyAgentId === happyAgentId &&
+                    !listed.has(route.groupId),
+                HAPPY_AGENT_ROUTE_HOME,
+            );
+        },
         connectionForget: (happyAgentId: string): boolean =>
             forget(
                 (route) => happyAgentRouteInConnection(route, happyAgentId),
