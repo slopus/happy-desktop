@@ -233,6 +233,13 @@ export interface HappyAgentHostServicesOptions {
      * would change nothing.
      */
     readonly deviceBridges?: boolean;
+    /**
+     * Whether this is a Happy Cloud server. Its projects are on no computer
+     * this desktop can open an application on, and the host answers every
+     * desktop service asked of it with 501, so what it could be opened in is
+     * known to be nothing without asking.
+     */
+    readonly happyCloud?: boolean;
 }
 
 /**
@@ -247,6 +254,7 @@ export function happyAgentHostServicesCreate(
     const capability = capabilityOf(baseUrl);
     return {
         openInTargetsRead: async (): Promise<HappyAgentOpenInTargets> => {
+            if (options.happyCloud) return { targets: [] };
             const targets = await getJson<readonly HappyAgentOpenInTarget[]>(
                 baseUrl,
                 "/open-in-targets",

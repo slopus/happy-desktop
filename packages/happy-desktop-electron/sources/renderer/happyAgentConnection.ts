@@ -528,7 +528,7 @@ export function happyAgentConnectionOpen(input: {
     const hostServices = happyAgentHostServicesCreate(
         input.hostServicesUrl ?? input.happyAgentHttpUrl,
         input.happyAgentHttpUrl,
-        { deviceBridges: input.deviceBridges ?? false },
+        { deviceBridges: input.deviceBridges ?? false, happyCloud: input.happyCloud === true },
     );
     const welcome = welcomeStoreCreate(desktopWelcomePersistence(input.happyAgentId));
     // A Happy Cloud server is reached through Happy Cloud's own welcome, so it
