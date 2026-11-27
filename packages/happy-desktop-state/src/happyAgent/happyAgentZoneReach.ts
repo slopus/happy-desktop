@@ -56,8 +56,9 @@ export interface HappyAgentZonePolicy {
 
 /**
  * What a zone may reach, as `GET v0/zones/{id}` answers: the installations
- * it lists, and the policies on them. A server from before phase 2 has no
- * such route, or answers without `plugins`, and the page leaves both out.
+ * it lists, each as `GET v0/plugins/installations` lists it plus its tools,
+ * and the policies on them. A server from before phase 2 has no such route,
+ * and the page leaves both out.
  */
 export type HappyAgentZoneReach =
     | { readonly kind: "reading" }
@@ -173,14 +174,14 @@ export function happyAgentZoneInstallationRead(
 ): HappyAgentZoneInstallation | undefined {
     const entry = recordOf(value);
     const id = textOrNull(entry?.id);
-    const pluginId = textOrNull(entry?.plugin ?? entry?.pluginId);
+    const pluginId = textOrNull(entry?.plugin);
     if (!entry || id === null || pluginId === null) return undefined;
     const image = recordOf(entry.image);
     const digest = textOrNull(image?.digest);
     return {
         id,
         pluginId,
-        name: textOrNull(entry.pluginName ?? entry.name) ?? pluginId,
+        name: textOrNull(entry.pluginName) ?? pluginId,
         label: textOrNull(entry.label),
         image:
             digest === null

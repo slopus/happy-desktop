@@ -452,6 +452,15 @@
     transform: rotate(90deg);
 }
 
+/* Keeps the installation's picture in line with the others. */
+.happy-agent-zones__chevron[data-empty] {
+    visibility: hidden;
+}
+
+.happy-agent-zones__disclosure[data-static] {
+    cursor: default;
+}
+
 /* Inset under the installation's name, past its chevron and picture. */
 .happy-agent-zones__tools {
     display: flex;

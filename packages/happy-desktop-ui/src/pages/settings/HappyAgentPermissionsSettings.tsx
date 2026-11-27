@@ -908,6 +908,7 @@ const PICK_TEXT = {
         title: "Add plugins",
         search: "Search plugins",
         none: "Every plugin installation is listed already.",
+        help: "An installation added after zones exist is in no zone until someone adds it to one.",
     },
 } as const;
 
@@ -958,6 +959,9 @@ export function HappyAgentZonePickDialog(props: HappyAgentZonePickDialogProps) {
                 title={text.title}
             >
                 <Box className="happy-agent-zones__form" data-happy-desktop-ui="zone-pick">
+                    {"help" in text ? (
+                        <span className="happy-agent-zones__note">{text.help}</span>
+                    ) : null}
                     {props.error ? (
                         <Banner tone="danger" title="Not added">
                             {props.error}

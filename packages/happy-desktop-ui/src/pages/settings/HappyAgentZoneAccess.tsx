@@ -44,7 +44,9 @@ function policiesText(count: number): string {
 function pluginMeta(plugin: HappyAgentZonePluginRow, policies: boolean): string {
     const critical = plugin.tools.filter((tool) => tool.critical).length;
     return [
-        countText(plugin.tools.length, "tool", "tools"),
+        plugin.tools.length === 0
+            ? "No tools listed"
+            : countText(plugin.tools.length, "tool", "tools"),
         ...(critical > 0 ? [`${String(critical)} critical`] : []),
         ...(policies && plugin.policyCount > 0
             ? [`${countText(plugin.policyCount, "policy", "policies")} on every tool`]
@@ -85,7 +87,36 @@ export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSection
                     </Box>
                 ) : (
                     props.plugins.map((plugin) => {
-                        const open = props.expanded.includes(plugin.id);
+                        const open = props.expanded.includes(plugin.id) && plugin.tools.length > 0;
+                        const face = (
+                            <>
+                                <span
+                                    aria-hidden="true"
+                                    className="happy-agent-zones__chevron"
+                                    data-empty={plugin.tools.length === 0 ? "" : undefined}
+                                    data-open={open ? "" : undefined}
+                                >
+                                    <Icon name="chevron-right" size={14} />
+                                </span>
+                                <Avatar
+                                    initials={plugin.name.slice(0, 1).toUpperCase()}
+                                    placeholderSeed={plugin.id}
+                                    size="sm"
+                                    type="agent"
+                                    {...(plugin.imageUrl ? { imageUrl: plugin.imageUrl } : {})}
+                                />
+                                <span className="happy-agent-zones__text">
+                                    <span className="happy-agent-zones__name">
+                                        {plugin.label
+                                            ? `${plugin.name} · ${plugin.label}`
+                                            : plugin.name}
+                                    </span>
+                                    <span className="happy-agent-zones__meta">
+                                        {pluginMeta(plugin, props.policies)}
+                                    </span>
+                                </span>
+                            </>
+                        );
                         return (
                             <Box
                                 className="happy-agent-zones__plugin"
@@ -93,39 +124,24 @@ export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSection
                                 key={plugin.id}
                             >
                                 <Box className="happy-agent-zones__entry">
-                                    <button
-                                        aria-expanded={open}
-                                        className="happy-agent-zones__disclosure"
-                                        onClick={() => props.onToggle(plugin.id)}
-                                        type="button"
-                                    >
-                                        <span
-                                            aria-hidden="true"
-                                            className="happy-agent-zones__chevron"
-                                            data-open={open ? "" : undefined}
+                                    {/* Nothing to expand where the installation lists no tools. */}
+                                    {plugin.tools.length === 0 ? (
+                                        <Box
+                                            className="happy-agent-zones__disclosure"
+                                            data-static=""
                                         >
-                                            <Icon name="chevron-right" size={14} />
-                                        </span>
-                                        <Avatar
-                                            initials={plugin.name.slice(0, 1).toUpperCase()}
-                                            placeholderSeed={plugin.id}
-                                            size="sm"
-                                            type="agent"
-                                            {...(plugin.imageUrl
-                                                ? { imageUrl: plugin.imageUrl }
-                                                : {})}
-                                        />
-                                        <span className="happy-agent-zones__text">
-                                            <span className="happy-agent-zones__name">
-                                                {plugin.label
-                                                    ? `${plugin.name} · ${plugin.label}`
-                                                    : plugin.name}
-                                            </span>
-                                            <span className="happy-agent-zones__meta">
-                                                {pluginMeta(plugin, props.policies)}
-                                            </span>
-                                        </span>
-                                    </button>
+                                            {face}
+                                        </Box>
+                                    ) : (
+                                        <button
+                                            aria-expanded={open}
+                                            className="happy-agent-zones__disclosure"
+                                            onClick={() => props.onToggle(plugin.id)}
+                                            type="button"
+                                        >
+                                            {face}
+                                        </button>
+                                    )}
                                     {props.manage ? (
                                         <Button
                                             disabled={
@@ -146,51 +162,43 @@ export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSection
                                         className="happy-agent-zones__tools"
                                         data-happy-desktop-ui="zone-plugin-tools"
                                     >
-                                        {plugin.tools.length === 0 ? (
-                                            <Box className="happy-agent-zones__none">
-                                                It has no tools.
-                                            </Box>
-                                        ) : (
-                                            plugin.tools.map((tool) => (
-                                                <Box
-                                                    className="happy-agent-zones__tool"
-                                                    key={tool.name}
-                                                >
-                                                    <span className="happy-agent-zones__text">
-                                                        <span className="happy-agent-zones__title">
-                                                            <span className="happy-agent-zones__tool-name">
-                                                                {tool.name}
-                                                            </span>
-                                                            {tool.critical ? (
-                                                                <span
-                                                                    className="happy-agent-zones__tag"
-                                                                    data-critical=""
-                                                                >
-                                                                    Critical
-                                                                </span>
-                                                            ) : null}
+                                        {plugin.tools.map((tool) => (
+                                            <Box
+                                                className="happy-agent-zones__tool"
+                                                key={tool.name}
+                                            >
+                                                <span className="happy-agent-zones__text">
+                                                    <span className="happy-agent-zones__title">
+                                                        <span className="happy-agent-zones__tool-name">
+                                                            {tool.name}
                                                         </span>
-                                                        {tool.description ? (
-                                                            <span className="happy-agent-zones__meta">
-                                                                {tool.description}
+                                                        {tool.critical ? (
+                                                            <span
+                                                                className="happy-agent-zones__tag"
+                                                                data-critical=""
+                                                            >
+                                                                Critical
                                                             </span>
                                                         ) : null}
                                                     </span>
-                                                    {props.policies ? (
-                                                        <span
-                                                            className="happy-agent-zones__count"
-                                                            data-none={
-                                                                tool.policyCount === 0
-                                                                    ? ""
-                                                                    : undefined
-                                                            }
-                                                        >
-                                                            {policiesText(tool.policyCount)}
+                                                    {tool.description ? (
+                                                        <span className="happy-agent-zones__meta">
+                                                            {tool.description}
                                                         </span>
                                                     ) : null}
-                                                </Box>
-                                            ))
-                                        )}
+                                                </span>
+                                                {props.policies ? (
+                                                    <span
+                                                        className="happy-agent-zones__count"
+                                                        data-none={
+                                                            tool.policyCount === 0 ? "" : undefined
+                                                        }
+                                                    >
+                                                        {policiesText(tool.policyCount)}
+                                                    </span>
+                                                ) : null}
+                                            </Box>
+                                        ))}
                                     </Box>
                                 ) : null}
                             </Box>

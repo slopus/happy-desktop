@@ -538,6 +538,7 @@ export function happyAgentZonesStoreCreate(deps: {
                     "zone.created",
                     "zone.updated",
                     "zone.deleted",
+                    "zone.plugins",
                     "agent.zone",
                     "plugins.changed",
                 ],
@@ -546,6 +547,20 @@ export function happyAgentZonesStoreCreate(deps: {
                 greeted = true;
                 // The first read was sent after this subscription was installed.
                 if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
+                if (input.kind === "update" && input.update.kind === "event") {
+                    // The published client does not name this event; its payload is read here.
+                    const event = input.update.event as {
+                        readonly type: string;
+                        readonly payload: unknown;
+                    };
+                    if (event.type === "zone.plugins") {
+                        // Only the page of the zone it changed shows its plugins.
+                        const zoneId = recordOf(event.payload)?.zoneId;
+                        const open = store.getState().open;
+                        if (open && open.zoneId === zoneId) reachRead(open.zoneId);
+                        continue;
+                    }
+                }
                 load();
             }
         })().catch(() => undefined);
@@ -676,14 +691,17 @@ export function happyAgentZonesStoreCreate(deps: {
      * Reads what the open zone may reach: the installations it lists, every
      * installation of the team for adding one, and the policies on whatever
      * has any. A server without the route, or a zone without `plugins`,
-     * leaves the page without both sections.
+     * leaves the page without both sections. A change to the zone's plugins
+     * is `answered` with the same body as the read, which is not asked again.
      */
-    const reachRead = (zoneId: string): void => {
+    const reachRead = (zoneId: string, answered?: unknown): void => {
         void (async (): Promise<HappyAgentZoneReach> => {
-            const detail = await deps.request("GET", zonePath(zoneId)).catch((error: unknown) => {
-                if (error instanceof UserError && error.code === "not_found") return undefined;
-                throw error;
-            });
+            const detail =
+                answered ??
+                (await deps.request("GET", zonePath(zoneId)).catch((error: unknown) => {
+                    if (error instanceof UserError && error.code === "not_found") return undefined;
+                    throw error;
+                }));
             const listed = recordOf(detail)?.plugins;
             if (!Array.isArray(listed)) return { kind: "unavailable" };
             const plugins = listed.flatMap((value) => {
@@ -765,6 +783,16 @@ export function happyAgentZonesStoreCreate(deps: {
                 store.setState({ open: { ...open, reach: { kind: "unavailable" } } }, false);
             },
         );
+    };
+
+    /**
+     * Takes the zone and its plugins a change to them answered with, the same
+     * body as `GET v0/zones/{id}`, or reads them again where it has neither.
+     */
+    const pluginsAnswered = (zoneId: string, answer: unknown): void => {
+        const answered = recordOf(answer);
+        zoneAnswered(answered);
+        reachRead(zoneId, Array.isArray(answered?.plugins) ? answered : undefined);
     };
 
     /** The new reach, keeping each unchanged entry's reference. */
@@ -1046,29 +1074,34 @@ export function happyAgentZonesStoreCreate(deps: {
             const { error: _cleared, ...rest } = pick;
             if (pick.kind === "plugins") {
                 store.setState({ open: { ...open, pick: { ...rest, saving: true } } }, false);
-                void Promise.all(
-                    pick.selected.map((id) =>
-                        deps.request(
-                            "PUT",
-                            `${zonePath(zone.id)}/plugins/${encodeURIComponent(id)}`,
-                        ),
-                    ),
-                ).then(
-                    () => {
-                        if (disposed) return;
-                        const current = store.getState().open;
-                        if (current) {
-                            const { pick: _added, ...after } = current;
-                            store.setState({ open: after }, false);
-                        }
-                        reachRead(zone.id);
-                    },
-                    (error: unknown) => {
-                        if (disposed) return;
-                        pickUpdate({ saving: false, error: changeRefusal(error) });
-                        reachRead(zone.id);
-                    },
-                );
+                // One at a time, so the last answer lists every installation added.
+                void pick.selected
+                    .reduce<Promise<unknown>>(
+                        (before, id) =>
+                            before.then(() =>
+                                deps.request(
+                                    "PUT",
+                                    `${zonePath(zone.id)}/plugins/${encodeURIComponent(id)}`,
+                                ),
+                            ),
+                        Promise.resolve(undefined),
+                    )
+                    .then(
+                        (answer) => {
+                            if (disposed) return;
+                            const current = store.getState().open;
+                            if (current) {
+                                const { pick: _added, ...after } = current;
+                                store.setState({ open: after }, false);
+                            }
+                            pluginsAnswered(zone.id, answer);
+                        },
+                        (error: unknown) => {
+                            if (disposed) return;
+                            pickUpdate({ saving: false, error: changeRefusal(error) });
+                            reachRead(zone.id);
+                        },
+                    );
                 return;
             }
             const listed = pick.kind === "members" ? (zone.members ?? []) : zone.bots;
@@ -1121,20 +1154,26 @@ export function happyAgentZonesStoreCreate(deps: {
                     `${zonePath(zone.id)}/plugins/${encodeURIComponent(installationId)}`,
                 )
                 .then(
-                    () => undefined,
-                    (error: unknown) => changeRefusal(error),
+                    (answer) => ({ answer }),
+                    (error: unknown) => ({ refused: changeRefusal(error) }),
                 )
-                .then((refused) => {
+                .then((result) => {
                     if (disposed) return;
                     const current = store.getState().open;
                     if (current) {
                         const { removing: _done, ...after } = current;
                         store.setState(
-                            { open: refused ? { ...after, error: refused } : after },
+                            {
+                                open:
+                                    "refused" in result
+                                        ? { ...after, error: result.refused }
+                                        : after,
+                            },
                             false,
                         );
                     }
-                    reachRead(zone.id);
+                    if ("answer" in result) pluginsAnswered(zone.id, result.answer);
+                    else reachRead(zone.id);
                 });
         },
         zonePluginToggle(installationId) {

@@ -173,6 +173,8 @@ const zonePlugins: readonly HappyAgentZonePluginRow[] = [
             },
         ],
     },
+    // The built-in plugin lists no tools of its own.
+    { id: "i-happy", name: "Happy", policyCount: 0, tools: [] },
 ];
 
 /** The team's installations the zone doesn't list yet. */
