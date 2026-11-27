@@ -153,4 +153,34 @@ describe("Antigravity", () => {
             },
         );
     });
+
+    it("adds a provider from a key only where Happy Agent says it can", async () => {
+        const fetch = vi
+            .fn()
+            .mockResolvedValueOnce(Response.json({ capabilities: { providerClis: true } }))
+            .mockResolvedValueOnce(Response.json({ capabilities: { providerCreate: true } }))
+            .mockResolvedValueOnce(Response.json({}));
+        vi.stubGlobal("fetch", fetch);
+        expect(await api().providerCreateSupported()).toBe(false);
+        expect(await api().providerCreateSupported()).toBe(true);
+        await api().providerCreate(
+            {
+                bedrock: { accessKeyId: "AKIA1", region: "us-east-1", secretAccessKey: "secret" },
+                type: "bedrock",
+            },
+            "mutation",
+        );
+        expect(fetch).toHaveBeenLastCalledWith("https://agent.example/v0/providers", {
+            method: "POST",
+            headers: {
+                authorization: "Bearer local-capability",
+                "content-type": "application/json",
+            },
+            body: JSON.stringify({
+                bedrock: { accessKeyId: "AKIA1", region: "us-east-1", secretAccessKey: "secret" },
+                type: "bedrock",
+                mutationId: "mutation",
+            }),
+        });
+    });
 });

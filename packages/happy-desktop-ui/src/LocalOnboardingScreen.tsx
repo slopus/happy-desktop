@@ -9,7 +9,7 @@ import {
 } from "./DesktopMobileSetup";
 import {
     LocalOnboardingProviderDialog,
-    type LocalOnboardingHandOff,
+    type LocalOnboardingApiKey,
     type LocalOnboardingProviderWay,
 } from "./LocalOnboardingProviderDialog";
 import { OnboardingHelp } from "./OnboardingHelp";
@@ -89,6 +89,34 @@ export type LocalOnboardingAssistantOperation =
           readonly expiresAt?: number;
       }
     | { readonly kind: "install" | "sign-in"; readonly status: "failed"; readonly message: string };
+
+/** The rows whose dialog takes a key: three assistants' API keys, and AWS keys for Bedrock. */
+export type LocalOnboardingKeyRowId = "claude" | "codex" | "grok" | "bedrock";
+
+/** A key to add as a new account, as the dialog collected it. */
+export type LocalOnboardingKeyCredential =
+    | {
+          readonly kind: "api-key";
+          readonly type: "claude" | "codex" | "grok";
+          readonly apiKey: string;
+      }
+    | {
+          readonly kind: "aws";
+          readonly accessKeyId: string;
+          readonly secretAccessKey: string;
+          readonly region: string;
+      };
+
+/** Adding an account from a key: whether this Happy Agent can, and how the last one went. */
+export interface LocalOnboardingKeyAdd {
+    /** Whether Happy Agent takes keys at all. Absent while it is still being asked. */
+    readonly supported?: boolean;
+    readonly phase: "idle" | "saving" | "failed" | "saved";
+    /** The row the last save was for. */
+    readonly row?: LocalOnboardingKeyRowId;
+    /** Why it was refused, when it was. */
+    readonly error?: string;
+}
 
 /** Saving a Claude setup token: idle, on its way, refused, or saved. */
 export interface LocalOnboardingClaudeToken {
@@ -180,6 +208,8 @@ export type LocalOnboardingView =
           readonly installShell: LocalOnboardingInstallShell;
           /** Saving a Claude setup token, on a Happy Agent that takes one. */
           readonly claudeToken?: LocalOnboardingClaudeToken;
+          /** Adding an account from an API key or AWS keys. */
+          readonly keyAdd?: LocalOnboardingKeyAdd;
       }
     | {
           /**
@@ -257,6 +287,10 @@ export interface LocalOnboardingScreenProps {
     onClaudeTokenSubmit?(token: string): void;
     /** The Claude dialog opened again: forget how the last save went. */
     onClaudeTokenReset?(): void;
+    /** An API key or AWS keys, for Happy Agent to add as a new account. */
+    onKeyAdd?(credential: LocalOnboardingKeyCredential): void;
+    /** A dialog opened again: forget how the last key save went. */
+    onKeyAddReset?(): void;
 }
 
 /** What a reader is told to run when Happy cannot start their Happy Agent itself. */
@@ -319,19 +353,6 @@ function byteSize(bytes: number): string {
  */
 const HAPPY_DOCS = "~/.happy/docs";
 
-/**
- * An API key handed to the person's own coding agent: Happy Agent keeps keys
- * only in its `happy.toml`, which nothing in this window can write.
- */
-function keyHandOff(key: string, assistant: string, vendor: string): LocalOnboardingHandOff {
-    return {
-        asks: `your ${key}`,
-        label: key,
-        note: `Billed to your ${vendor} account for what agents use.`,
-        prompt: `Set up Happy Agent on this computer to use my ${key} with ${assistant}. Ask me for the key, add it to Happy's happy.toml as a ${assistant} provider, then reload Happy Agent. Guide: ${HAPPY_DOCS}/configuration.md (Providers).`,
-    };
-}
-
 const ASSISTANTS: Record<
     LocalOnboardingAssistantId,
     {
@@ -352,7 +373,7 @@ const ASSISTANTS: Record<
         plan: string;
         planNote: string;
         /** An API key instead, where the assistant takes one. */
-        key?: LocalOnboardingHandOff;
+        key?: LocalOnboardingApiKey;
     }
 > = {
     claude: {
@@ -370,7 +391,13 @@ const ASSISTANTS: Record<
         pastesCode: false,
         plan: "Claude plan",
         planNote: "Uses the Claude plan you already pay for, through a token from Claude Code.",
-        key: keyHandOff("Anthropic API key", "Claude Code", "Anthropic"),
+        key: {
+            keysUrl: "https://console.anthropic.com/settings/keys",
+            label: "Anthropic API key",
+            placeholder: "sk-ant-api03-…",
+            type: "claude",
+            vendor: "Anthropic",
+        },
     },
     codex: {
         command: "codex",
@@ -389,7 +416,13 @@ const ASSISTANTS: Record<
         pastesCode: false,
         plan: "ChatGPT plan",
         planNote: "Uses the ChatGPT plan you already pay for. No key needed.",
-        key: keyHandOff("OpenAI API key", "Codex", "OpenAI"),
+        key: {
+            keysUrl: "https://platform.openai.com/api-keys",
+            label: "OpenAI API key",
+            placeholder: "sk-…",
+            type: "codex",
+            vendor: "OpenAI",
+        },
     },
     grok: {
         command: "grok",
@@ -406,7 +439,13 @@ const ASSISTANTS: Record<
         pastesCode: false,
         plan: "Grok plan",
         planNote: "Uses the Grok plan you already pay for. No key needed.",
-        key: keyHandOff("xAI API key", "Grok", "xAI"),
+        key: {
+            keysUrl: "https://console.x.ai",
+            label: "xAI API key",
+            placeholder: "xai-…",
+            type: "grok",
+            vendor: "xAI",
+        },
     },
     antigravity: {
         command: "agy",
@@ -428,41 +467,32 @@ const ASSISTANTS: Record<
 };
 
 /**
- * The rows after the assistants: model access no assistant signs in to, each
- * set up by the person's own coding agent.
+ * The rows after the assistants: model access no assistant signs in to.
+ * Bedrock takes AWS keys here; a custom endpoint is found and set up by the
+ * person's own coding agent from one prompt.
  */
-const OTHERS: Record<
-    "bedrock" | "custom",
-    {
-        readonly name: string;
-        readonly mark: SetupProviderMark;
-        readonly offer: string;
-        readonly handOff: LocalOnboardingHandOff;
-    }
-> = {
+const OTHERS = {
     bedrock: {
-        handOff: {
-            asks: "an AWS profile or a Bedrock API key",
-            label: "AWS keys",
-            note: "Billed to your AWS account.",
-            prompt: `Set up Amazon Bedrock for Happy Agent on this computer. Ask me whether to use an AWS profile or a Bedrock API key, add the Bedrock provider to Happy's happy.toml, then reload Happy Agent. Guide: ${HAPPY_DOCS}/configuration.md (Amazon Bedrock).`,
-        },
         mark: { kind: "ionicon", name: "cloud-outline" },
         name: "Amazon Bedrock",
         offer: "AWS keys, billed to your AWS account",
     },
     custom: {
-        handOff: {
-            asks: "the server's address, its key and its models",
-            label: "Endpoint",
-            note: "",
-            prompt: `Set up Happy Agent on this computer with my custom model access: an OpenAI-compatible endpoint, a gateway, or a custom base URL or proxy for Claude Code or Codex. Read the env block in ~/.claude/settings.json and ~/.codex/config.toml, ask me for anything missing, add the matching provider to Happy's happy.toml, then reload Happy Agent. Guide: ${HAPPY_DOCS}/configuration.md (OpenAI-compatible endpoints).`,
-        },
         mark: { kind: "ionicon", name: "code-slash-outline" },
         name: "Custom endpoint",
         offer: "Any server that speaks OpenAI’s API",
     },
-};
+} as const satisfies Record<
+    "bedrock" | "custom",
+    { readonly name: string; readonly mark: SetupProviderMark; readonly offer: string }
+>;
+
+/**
+ * Everything the person's coding agent needs to set a custom endpoint up on
+ * its own: where to look, where it goes, and how to apply it. Nothing in it
+ * asks the person for anything.
+ */
+const CUSTOM_ENDPOINT_PROMPT = `Set up Happy Agent on this computer to use my custom model endpoint, and do all of it yourself without asking me to paste a key or anything else. Find the endpoint's base URL, its API key and the models it serves: look in my environment variables, the env block of ~/.claude/settings.json, ~/.codex/config.toml, and any gateway or proxy configuration on this machine. Add it to Happy Agent's user happy.toml as the matching provider (an OpenAI-compatible endpoint, or a base URL for Claude Code or Codex), using api_key_env when the key is already in an environment variable. Then reload Happy Agent as the guide's "Applying configuration changes" says, and check that the provider works. If something can't be found, tell me exactly what is missing. Guide: ${HAPPY_DOCS}/configuration.md (OpenAI-compatible endpoints, Providers).`;
 
 /**
  * One card on the report that follows an install: what is on the machine, and
@@ -788,6 +818,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     const machineSetup = machineSetupProject(view, {
         onOpen: (row, way) => {
             if (row === "claude") props.onClaudeTokenReset?.();
+            props.onKeyAddReset?.();
             dialogOpenSet({ connected: connectedNow(row), row, ...(way ? { way } : {}) });
         },
     });
@@ -795,6 +826,9 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         if (!dialogOpen || view.kind !== "provider-authentication") return null;
         const common = {
             installShell: view.installShell,
+            ...(view.keyAdd ? { keyAdd: view.keyAdd } : {}),
+            ...(props.onKeyAdd ? { onKeyAdd: props.onKeyAdd } : {}),
+            ...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {}),
             onClose: () => dialogOpenSet(undefined),
             ...(dialogOpen.way ? { way: dialogOpen.way } : {}),
             ...(props.onCommandCopy
@@ -807,21 +841,31 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                   }
                 : {}),
         };
-        if (dialogOpen.row === "bedrock" || dialogOpen.row === "custom") {
-            const other = OTHERS[dialogOpen.row];
+        // Keys saved are the end of what a key form asked.
+        if (view.keyAdd?.phase === "saved" && view.keyAdd.row === dialogOpen.row) return null;
+        if (dialogOpen.row === "custom")
             return (
                 <LocalOnboardingProviderDialog
                     {...common}
                     target={{
-                        handOff: other.handOff,
-                        id: dialogOpen.row,
-                        kind: "hand-off",
-                        mark: other.mark,
-                        name: other.name,
+                        kind: "custom",
+                        mark: OTHERS.custom.mark,
+                        name: OTHERS.custom.name,
+                        prompt: CUSTOM_ENDPOINT_PROMPT,
                     }}
                 />
             );
-        }
+        if (dialogOpen.row === "bedrock")
+            return (
+                <LocalOnboardingProviderDialog
+                    {...common}
+                    target={{
+                        kind: "bedrock",
+                        mark: OTHERS.bedrock.mark,
+                        name: OTHERS.bedrock.name,
+                    }}
+                />
+            );
         const opened = view.assistants.find((assistant) => assistant.id === dialogOpen.row);
         // A sign-in or a saved token finishing is the end of what the dialog
         // asked; one opened on a connected row stays until it is closed.
@@ -842,7 +886,6 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 {...(props.onClaudeTokenSubmit
                     ? { onClaudeTokenSubmit: props.onClaudeTokenSubmit }
                     : {})}
-                {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
                 {...(props.onAssistantInstall ? { onInstall: props.onAssistantInstall } : {})}
                 {...(props.onAssistantSignIn ? { onSignIn: props.onAssistantSignIn } : {})}
                 {...(props.onAssistantSignInCode

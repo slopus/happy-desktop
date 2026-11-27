@@ -4,6 +4,8 @@ import type {
     LocalOnboardingAssistantOperation,
     LocalOnboardingClaudeToken,
     LocalOnboardingCustom,
+    LocalOnboardingKeyAdd,
+    LocalOnboardingKeyCredential,
     LocalOnboardingProviderRowId,
     LocalOnboardingView,
     OnboardingStage,
@@ -116,6 +118,11 @@ export interface LocalOnboardingViewSnapshot {
     readonly providerClis?: ReadonlyMap<LocalProviderCliId, LocalProviderCli>;
     /** Saving a pasted Claude setup token; absent until one is pasted. */
     readonly claudeToken?: LocalOnboardingClaudeToken;
+    /**
+     * Adding an account from an API key or AWS keys: whether this Happy Agent
+     * can, read with the provider CLIs, and how the last save went.
+     */
+    readonly keyAdd?: LocalOnboardingKeyAdd;
 }
 
 export interface LocalOnboardingStore {
@@ -141,6 +148,10 @@ export interface LocalOnboardingStore {
     claudeSetupTokenSave(token: string): void;
     /** Forgets how the last token save went, as the dialog opens again. */
     claudeSetupTokenReset(): void;
+    /** Asks Happy Agent to add an API key or AWS keys as a new account. */
+    providerKeyAdd(credential: LocalOnboardingKeyCredential): void;
+    /** A key dialog opened again: forget how the last save went. */
+    providerKeyAddReset(): void;
     /** Starts Windows sandbox setup; Windows' administrator prompt opens from here. */
     sandboxSetup(): void;
     happyMobileConnect(): void;
@@ -1046,6 +1057,12 @@ export function localOnboardingStoreCreate(
         if (providerClisReadFor === runtime.connectionId || providerClisReading) return;
         providerClisReading = true;
         const connectionId = runtime.connectionId;
+        // Whether keys can be added is asked once per connection, beside the CLIs;
+        // a Happy Agent that cannot answer cannot add them either.
+        void api.providerCreateSupported().then(
+            (supported) => keyAddSupportedPublish(connectionId, supported),
+            () => keyAddSupportedPublish(connectionId, false),
+        );
         void api
             .list()
             .then(
@@ -1067,6 +1084,15 @@ export function localOnboardingStoreCreate(
                 providerClisReading = false;
                 providerClisPollSynchronize();
             });
+    }
+
+    function keyAddSupportedPublish(connectionId: number, supported: boolean) {
+        const runtime = snapshot.runtime;
+        if (runtime?.phase !== "ready" || runtime.connectionId !== connectionId) return;
+        publish({
+            ...snapshot,
+            keyAdd: { ...(snapshot.keyAdd ?? { phase: "idle" }), supported },
+        });
     }
 
     /** One install, sign-in, or cancel; a refusal still carries the object as it is. */
@@ -1313,6 +1339,58 @@ export function localOnboardingStoreCreate(
             if (snapshot.claudeToken?.phase === "saving") return;
             publish({ ...snapshot, claudeToken: { phase: "idle" } });
         },
+        providerKeyAdd(credential) {
+            const api = providerClisApi();
+            const keyAdd = snapshot.keyAdd;
+            if (!api || keyAdd?.supported !== true || keyAdd.phase === "saving") return;
+            const row = credential.kind === "aws" ? "bedrock" : credential.type;
+            publish({ ...snapshot, keyAdd: { phase: "saving", row, supported: true } });
+            api.providerCreate(
+                credential.kind === "aws"
+                    ? {
+                          bedrock: {
+                              accessKeyId: credential.accessKeyId,
+                              region: credential.region,
+                              secretAccessKey: credential.secretAccessKey,
+                          },
+                          type: "bedrock",
+                      }
+                    : { apiKey: credential.apiKey, type: credential.type },
+                crypto.randomUUID(),
+            ).then(
+                // The new account is a configured provider: the next pass reads
+                // and checks it like any other, and its row counts it.
+                () => publish({ ...snapshot, keyAdd: { phase: "saved", row, supported: true } }),
+                (error: unknown) => {
+                    publish({
+                        ...snapshot,
+                        keyAdd: {
+                            error:
+                                error instanceof LocalProviderCliRouteMissing
+                                    ? "This version of Happy Agent can't add keys yet. Update Happy Agent, then try again."
+                                    : error instanceof LocalProviderCliRefused ||
+                                        error instanceof LocalProviderClisUnavailable
+                                      ? error.message
+                                      : "Happy couldn't reach Happy Agent. Try again.",
+                            phase: "failed",
+                            row,
+                            supported: true,
+                        },
+                    });
+                },
+            );
+        },
+        providerKeyAddReset() {
+            const keyAdd = snapshot.keyAdd;
+            if (!keyAdd || keyAdd.phase === "saving") return;
+            publish({
+                ...snapshot,
+                keyAdd:
+                    keyAdd.supported === undefined
+                        ? { phase: "idle" }
+                        : { phase: "idle", supported: keyAdd.supported },
+            });
+        },
         sandboxSetup() {
             attempt(bridge.onboardingSandboxSetup(), "Happy could not start sandbox setup.");
         },
@@ -1393,6 +1471,7 @@ export function localOnboardingView(
                     snapshot.providerClis,
                 ),
                 ...(snapshot.claudeToken ? { claudeToken: snapshot.claudeToken } : {}),
+                ...(snapshot.keyAdd ? { keyAdd: snapshot.keyAdd } : {}),
                 custom: customProject(snapshot),
                 kind: "provider-authentication",
                 installShell: onboarding.installShell ?? rendererInstallShell(),

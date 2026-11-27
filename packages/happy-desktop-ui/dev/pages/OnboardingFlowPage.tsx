@@ -3,6 +3,7 @@ import {
     LocalOnboardingScreen,
     type LocalOnboardingAssistant,
     type LocalOnboardingCustomProvider,
+    type LocalOnboardingKeyAdd,
     type LocalOnboardingProviderRowId,
     type LocalOnboardingView,
 } from "../../src/LocalOnboardingScreen";
@@ -230,9 +231,11 @@ const antigravityWaiting = antigravityOperation({
 function rowsView(
     assistants: readonly LocalOnboardingAssistant[],
     providers: readonly LocalOnboardingCustomProvider[] = [],
+    keyAdd: LocalOnboardingKeyAdd = { phase: "idle", supported: true },
 ): LocalOnboardingView {
     return {
         assistants,
+        keyAdd,
         custom: {
             authentication: providers.some((provider) => provider.authentication === "valid")
                 ? "valid"
@@ -335,8 +338,27 @@ const connectAiScreens: readonly {
     {
         dialog: "claude",
         id: "ai-claude-key",
-        label: "Claude Code dialog · Anthropic API key, set up by your agent",
+        label: "Claude Code dialog · Anthropic API key",
         view: rowsView(signedOut),
+        way: "key",
+    },
+    {
+        dialog: "codex",
+        id: "ai-codex-key-refused",
+        label: "Codex dialog · OpenAI API key, refused",
+        view: rowsView(signedOut, [], {
+            error: "OpenAI didn't accept this key. Check that it's whole and still active.",
+            phase: "failed",
+            row: "codex",
+            supported: true,
+        }),
+        way: "key",
+    },
+    {
+        dialog: "grok",
+        id: "ai-grok-key-unsupported",
+        label: "Grok dialog · xAI API key, on a Happy Agent that can't add keys yet",
+        view: rowsView(signedOut, [], { phase: "idle", supported: false }),
         way: "key",
     },
     {
@@ -371,13 +393,13 @@ const connectAiScreens: readonly {
     {
         dialog: "bedrock",
         id: "ai-bedrock",
-        label: "Amazon Bedrock dialog · set up by your agent",
+        label: "Amazon Bedrock dialog · AWS access keys",
         view: rowsView(signedOut),
     },
     {
         dialog: "custom",
         id: "ai-custom",
-        label: "Custom endpoint dialog · set up by your agent",
+        label: "Custom endpoint dialog · one prompt for your coding agent",
         view: rowsView(signedOut),
     },
     {

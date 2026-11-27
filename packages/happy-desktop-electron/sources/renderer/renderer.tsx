@@ -707,6 +707,8 @@ function DesktopOnboardingGate(props: {
             onAssistantConnectCancel={(id) => props.store.assistantConnectCancel(id)}
             onClaudeTokenSubmit={(token) => props.store.claudeSetupTokenSave(token)}
             onClaudeTokenReset={() => props.store.claudeSetupTokenReset()}
+            onKeyAdd={(credential) => props.store.providerKeyAdd(credential)}
+            onKeyAddReset={() => props.store.providerKeyAddReset()}
             onExternalOpen={
                 props.platform === "desktop"
                     ? desktopExternalLinkOpen(props.bridge)

@@ -7,6 +7,8 @@ import type {
     LocalOnboardingAssistantId,
     LocalOnboardingClaudeToken,
     LocalOnboardingInstallShell,
+    LocalOnboardingKeyAdd,
+    LocalOnboardingKeyCredential,
 } from "./LocalOnboardingScreen";
 import { SetupCommand } from "./SetupCommand";
 import {
@@ -22,20 +24,18 @@ import {
 import type { SetupProviderMark } from "./SetupProviderRows";
 import { TextField } from "./TextField";
 
-/**
- * A way in that Happy Agent cannot take from this window: an API key, AWS
- * keys or an endpoint, which only its own `happy.toml` holds. The steps hand a
- * prompt to the coding agent the person already uses, which writes it there.
- */
-export interface LocalOnboardingHandOff {
-    /** The way's name where it is one of several, for example "Anthropic API key". */
+/** An API key as an assistant's second way in. */
+export interface LocalOnboardingApiKey {
+    /** What Happy Agent's account for it is, for example `claude`. */
+    readonly type: "claude" | "codex" | "grok";
+    /** The way's name, for example "Anthropic API key". */
     readonly label: string;
-    /** What it uses and who bills it, said under the choice. */
-    readonly note: string;
-    /** What the person's agent will ask them for, for example "your Anthropic API key". */
-    readonly asks: string;
-    /** Exactly what is copied for that agent. */
-    readonly prompt: string;
+    /** Who issues and bills it, for example "Anthropic". */
+    readonly vendor: string;
+    /** That vendor's page for making one. */
+    readonly keysUrl: string;
+    /** How the key starts, for the field's placeholder. */
+    readonly placeholder: string;
 }
 
 /** What the dialog needs to know about the assistant it is for. */
@@ -51,22 +51,23 @@ export interface LocalOnboardingProviderVendor {
     readonly plan: string;
     readonly planNote: string;
     /** An API key instead, where the assistant takes one. */
-    readonly key?: LocalOnboardingHandOff;
+    readonly key?: LocalOnboardingApiKey;
 }
 
-/** The dialog's subject: an assistant Happy Agent signs in, or access set up another way. */
+/** The dialog's subject: an assistant, Amazon Bedrock, or a custom endpoint. */
 export type LocalOnboardingProviderDialogTarget =
     | {
           readonly kind: "assistant";
           readonly assistant: LocalOnboardingAssistant;
           readonly vendor: LocalOnboardingProviderVendor;
       }
+    | { readonly kind: "bedrock"; readonly name: string; readonly mark: SetupProviderMark }
     | {
-          readonly kind: "hand-off";
-          readonly id: "bedrock" | "custom";
+          readonly kind: "custom";
           readonly name: string;
           readonly mark: SetupProviderMark;
-          readonly handOff: LocalOnboardingHandOff;
+          /** What is copied for the person's coding agent, which does the rest itself. */
+          readonly prompt: string;
       };
 
 /** Which way an assistant's dialog shows: its own sign-in, or an API key. */
@@ -78,6 +79,8 @@ export interface LocalOnboardingProviderDialogProps {
     readonly way?: LocalOnboardingProviderWay;
     readonly installShell: LocalOnboardingInstallShell;
     readonly claudeToken?: LocalOnboardingClaudeToken;
+    /** Adding an account from a key: whether Happy Agent can, and how it went. */
+    readonly keyAdd?: LocalOnboardingKeyAdd;
     readonly onClose: () => void;
     readonly onInstall?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onSignIn?: (assistant: LocalOnboardingAssistantId) => void;
@@ -85,23 +88,38 @@ export interface LocalOnboardingProviderDialogProps {
     readonly onCancel?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onExternalOpen?: (url: string) => void;
     readonly onClaudeTokenSubmit?: (token: string) => void;
-    /** A hand-off prompt was copied. */
+    /** A key or AWS keys to add as a new account. */
+    readonly onKeyAdd?: (credential: LocalOnboardingKeyCredential) => void;
+    /** The custom endpoint's prompt was copied. */
     readonly onPromptCopy?: () => void;
 }
 
-/** One way's steps and the action under them. */
+/** One way's body and the action under it. */
 interface WayView {
     readonly steps: ReactNode;
     readonly action?: SetupProviderDialogAction;
+}
+
+/** What the person typed into a key form, kept by the dialog across ways. */
+interface KeyFields {
+    readonly apiKey: string;
+    readonly apiKeySet: (value: string) => void;
+    readonly accessKeyId: string;
+    readonly accessKeyIdSet: (value: string) => void;
+    readonly secretAccessKey: string;
+    readonly secretAccessKeySet: (value: string) => void;
+    readonly region: string;
+    readonly regionSet: (value: string) => void;
 }
 
 /**
  * One provider's dialog on Connect your AI, opened from its row whether or
  * not it is connected. Claude takes a setup token made in Terminal; the other
  * assistants install and sign in through Happy Agent with the vendor's own
- * page, and a page that shows a code takes it back here. An API key, Amazon
- * Bedrock or a custom endpoint is handed to the person's own coding agent.
- * An assistant that also takes a key offers both, plan first.
+ * page, and a page that shows a code takes it back here. An API key or AWS
+ * keys are pasted here and saved by Happy Agent as a new account; a custom
+ * endpoint is set up by the person's own coding agent from one prompt. An
+ * assistant that also takes a key offers both, plan first.
  */
 export function LocalOnboardingProviderDialog(props: LocalOnboardingProviderDialogProps) {
     const target = props.target;
@@ -113,24 +131,45 @@ export function LocalOnboardingProviderDialog(props: LocalOnboardingProviderDial
     // A sign-in runs twice: starting, and checking a pasted code. Which one
     // this is, is the one thing only this dialog knows.
     const [codeSent, codeSentSet] = useState(false);
-    const close = { label: "Done", onSelect: props.onClose } as const;
-    if (target.kind === "hand-off")
+    const [apiKey, apiKeySet] = useState("");
+    const [accessKeyId, accessKeyIdSet] = useState("");
+    const [secretAccessKey, secretAccessKeySet] = useState("");
+    const [region, regionSet] = useState("");
+    const fields: KeyFields = {
+        accessKeyId,
+        accessKeyIdSet,
+        apiKey,
+        apiKeySet,
+        region,
+        regionSet,
+        secretAccessKey,
+        secretAccessKeySet,
+    };
+    if (target.kind !== "assistant") {
+        const view =
+            target.kind === "bedrock"
+                ? bedrockView(props, fields)
+                : {
+                      action: { label: "Done", onSelect: props.onClose },
+                      steps: customSteps(target.prompt, target.name, props.onPromptCopy),
+                  };
         return (
             <SetupProviderDialog
-                action={close}
+                {...(view.action ? { action: view.action } : {})}
                 data-testid="local-onboarding-provider-dialog"
                 mark={target.mark}
                 name={target.name}
                 onClose={props.onClose}
             >
-                {handOffSteps(target.handOff, target.name, props.onPromptCopy)}
+                {view.steps}
             </SetupProviderDialog>
         );
+    }
     const { assistant, vendor } = target;
     const key = vendor.key;
     const shown = key && way === "key" ? key : undefined;
     const view: WayView = shown
-        ? { action: close, steps: handOffSteps(shown, vendor.name, props.onPromptCopy) }
+        ? keyView(props, shown, fields)
         : assistant.id === "claude"
           ? claudeView(props, assistant, vendor, token, tokenSet)
           : signInView(props, assistant, vendor, {
@@ -153,7 +192,11 @@ export function LocalOnboardingProviderDialog(props: LocalOnboardingProviderDial
                     value={shown ? "key" : "plan"}
                     ways={[
                         { label: vendor.plan, note: vendor.planNote, value: "plan" },
-                        { label: key.label, note: key.note, value: "key" },
+                        {
+                            label: key.label,
+                            note: `Billed to your ${key.vendor} account for what agents use.`,
+                            value: "key",
+                        },
                     ]}
                 />
             ) : null}
@@ -162,20 +205,164 @@ export function LocalOnboardingProviderDialog(props: LocalOnboardingProviderDial
     );
 }
 
-/** A prompt for the person's own coding agent, and what it will do with it. */
-function handOffSteps(handOff: LocalOnboardingHandOff, name: string, onCopy?: () => void) {
+/**
+ * Where a key form stands: still asking Happy Agent whether it takes keys, a
+ * Happy Agent that does not, saving, or refused. One for this form's row only.
+ */
+function keyFormState(keyAdd: LocalOnboardingKeyAdd | undefined, row: string) {
+    const mine = keyAdd?.row === row ? keyAdd : undefined;
+    return {
+        saving: mine?.phase === "saving",
+        supported: keyAdd?.supported === true,
+        ...(keyAdd?.supported === false
+            ? {
+                  problem:
+                      "This version of Happy Agent can't add keys yet. Update Happy Agent, then try again.",
+              }
+            : mine?.phase === "failed" && mine.error
+              ? { problem: mine.error }
+              : {}),
+    };
+}
+
+/** An assistant's API key: one field, where to get one, and Connect. */
+function keyView(
+    props: LocalOnboardingProviderDialogProps,
+    key: LocalOnboardingApiKey,
+    fields: KeyFields,
+): WayView {
+    const state = keyFormState(props.keyAdd, key.type);
+    const value = fields.apiKey.trim();
+    const submit = () => {
+        if (value === "" || state.saving || !state.supported) return;
+        props.onKeyAdd?.({ apiKey: value, kind: "api-key", type: key.type });
+    };
+    return {
+        action: {
+            disabled: value === "" || state.saving || !state.supported,
+            label: "Connect",
+            loading: state.saving,
+            onSelect: submit,
+        },
+        steps: (
+            <div className="happy-setup-provider-dialog__form">
+                <TextField
+                    autoComplete="off"
+                    disabled={state.saving}
+                    fullWidth
+                    label={key.label}
+                    onSubmit={submit}
+                    onValueChange={fields.apiKeySet}
+                    placeholder={key.placeholder}
+                    type="password"
+                    value={fields.apiKey}
+                    {...(state.problem
+                        ? { error: state.problem }
+                        : { hint: `Happy checks the key with ${key.vendor} before using it.` })}
+                />
+                <span
+                    className="happy-setup-provider-dialog__help"
+                    data-happy-desktop-ui="setup-provider-dialog-help"
+                >
+                    <span className="happy-setup-provider-dialog__help-text">
+                        <span className="happy-setup-provider-dialog__title">No key yet?</span>
+                        <SetupProviderHint>
+                            {`Create one on ${key.vendor}’s API keys page, then paste it above.`}
+                        </SetupProviderHint>
+                    </span>
+                    <Button
+                        icon="open-external"
+                        onClick={() => props.onExternalOpen?.(key.keysUrl)}
+                        size="small"
+                        variant="secondary"
+                    >
+                        {`Open ${key.vendor}`}
+                    </Button>
+                </span>
+            </div>
+        ),
+    };
+}
+
+/** Amazon Bedrock, signed with AWS access keys in one region. */
+function bedrockView(props: LocalOnboardingProviderDialogProps, fields: KeyFields): WayView {
+    const state = keyFormState(props.keyAdd, "bedrock");
+    const credential = {
+        accessKeyId: fields.accessKeyId.trim(),
+        region: fields.region.trim(),
+        secretAccessKey: fields.secretAccessKey.trim(),
+    };
+    const complete =
+        credential.accessKeyId !== "" &&
+        credential.region !== "" &&
+        credential.secretAccessKey !== "";
+    const submit = () => {
+        if (!complete || state.saving || !state.supported) return;
+        props.onKeyAdd?.({ ...credential, kind: "aws" });
+    };
+    return {
+        action: {
+            disabled: !complete || state.saving || !state.supported,
+            label: "Connect",
+            loading: state.saving,
+            onSelect: submit,
+        },
+        steps: (
+            <div className="happy-setup-provider-dialog__form">
+                <div className="happy-setup-provider-dialog__pair">
+                    <TextField
+                        autoComplete="off"
+                        className="happy-setup-provider-dialog__wide"
+                        disabled={state.saving}
+                        fullWidth
+                        label="Access key ID"
+                        onValueChange={fields.accessKeyIdSet}
+                        placeholder="AKIA…"
+                        value={fields.accessKeyId}
+                    />
+                    <TextField
+                        autoComplete="off"
+                        className="happy-setup-provider-dialog__narrow"
+                        disabled={state.saving}
+                        fullWidth
+                        label="Region"
+                        onValueChange={fields.regionSet}
+                        placeholder="us-east-1"
+                        value={fields.region}
+                    />
+                </div>
+                <TextField
+                    autoComplete="off"
+                    disabled={state.saving}
+                    fullWidth
+                    label="Secret access key"
+                    onSubmit={submit}
+                    onValueChange={fields.secretAccessKeySet}
+                    type="password"
+                    value={fields.secretAccessKey}
+                    {...(state.problem
+                        ? { error: state.problem }
+                        : {
+                              hint: "Billed to your AWS account. Requests go to the region above.",
+                          })}
+                />
+            </div>
+        ),
+    };
+}
+
+/** The custom endpoint: one prompt for the person's coding agent, which does the rest. */
+function customSteps(prompt: string, name: string, onCopy?: () => void) {
     return (
         <SetupProviderSteps>
-            <SetupProviderStep n={1} title="Copy this prompt">
+            <SetupProviderStep n={1} title="Copy this prompt for your coding agent">
                 <SetupProviderPrompt
                     label={`${name} setup prompt`}
                     {...(onCopy ? { onCopy } : {})}
-                    text={handOff.prompt}
+                    text={prompt}
                 />
-            </SetupProviderStep>
-            <SetupProviderStep n={2} title="Paste it into the coding agent you already use">
                 <SetupProviderHint>
-                    {`It asks you for ${handOff.asks}, saves it in Happy Agent's settings and reloads Happy Agent. ${name} shows as connected here once it works.`}
+                    {`It finds your endpoint, key and models, adds them to Happy Agent and reloads it. ${name} shows as connected here once it works.`}
                 </SetupProviderHint>
             </SetupProviderStep>
         </SetupProviderSteps>

@@ -153,7 +153,29 @@ export interface LocalProviderClisApi {
      * Happy Agent takes one yet; those answer `LocalProviderClisUnavailable`.
      */
     claudeSetupTokenSave(token: string, mutationId: string): Promise<void>;
+    /**
+     * Whether this Happy Agent adds a provider from a key: `capabilities.providerCreate`
+     * in `GET /v0/health`. Proposed in the happy-agent API; no Happy Agent says so yet.
+     */
+    providerCreateSupported(signal?: AbortSignal): Promise<boolean>;
+    /**
+     * Adds a new, enabled provider from an API key or AWS keys:
+     * `POST /v0/providers`, the route proposed beside that capability.
+     */
+    providerCreate(request: LocalProviderCreate, mutationId: string): Promise<void>;
 }
+
+/** The body of the proposed `POST /v0/providers`, without its mutation ID. */
+export type LocalProviderCreate =
+    | { readonly type: "claude" | "codex" | "grok"; readonly apiKey: string }
+    | {
+          readonly type: "bedrock";
+          readonly bedrock: {
+              readonly accessKeyId: string;
+              readonly secretAccessKey: string;
+              readonly region: string;
+          };
+      };
 
 /** The routes on the local Happy Agent, over its HTTP endpoint. */
 export function localProviderClisApiCreate(input: {
@@ -242,6 +264,13 @@ export function localProviderClisApiCreate(input: {
                 token: token.replace(/[\s\p{White_Space}]/gu, ""),
                 mutationId,
             });
+        },
+        async providerCreateSupported(signal) {
+            const health = await request("GET", "v0/health", undefined, signal);
+            return recordOf(health?.capabilities)?.providerCreate === true;
+        },
+        async providerCreate(body, mutationId) {
+            await request("POST", "v0/providers", { ...body, mutationId });
         },
     };
 }
