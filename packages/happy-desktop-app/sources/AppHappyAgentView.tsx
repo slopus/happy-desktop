@@ -4268,6 +4268,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 key={active.id}
                 defaultOpen={setupFlow.away === "now"}
                 location={active.label}
+                onClose={setupStore.awayCardClose}
                 onResume={setupStore.onboardingResume}
                 stepsLeft={setupFlow.remaining}
             />

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
@@ -14,6 +14,8 @@ export interface SidebarSetupActionProps {
      * and this is where it went.
      */
     readonly defaultOpen?: boolean;
+    /** The card was closed, so a later mount need not open it by itself. */
+    onClose?(): void;
 }
 
 /**
@@ -24,16 +26,20 @@ export interface SidebarSetupActionProps {
 export function SidebarSetupAction(props: SidebarSetupActionProps) {
     const [open, setOpen] = useState(props.defaultOpen ?? false);
     const root = useRef<HTMLDivElement>(null);
+    const close = () => {
+        setOpen(false);
+        props.onClose?.();
+    };
+    const dismiss = useEffectEvent(close);
     const left = `${String(props.stepsLeft)} ${props.stepsLeft === 1 ? "step" : "steps"} left`;
     // eslint-disable-next-line happy-react/no-layout-effect -- the open popover owns document-level outside-pointer and Escape listeners, with complete cleanup
     useLayoutEffect(() => {
         if (!open) return;
         const outside = (event: PointerEvent) => {
-            if (event.target instanceof Node && !root.current?.contains(event.target))
-                setOpen(false);
+            if (event.target instanceof Node && !root.current?.contains(event.target)) dismiss();
         };
         const escape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Escape") dismiss();
         };
         document.addEventListener("pointerdown", outside, true);
         document.addEventListener("keydown", escape, true);
@@ -55,7 +61,7 @@ export function SidebarSetupAction(props: SidebarSetupActionProps) {
                 aria-label={`Finish setting up ${props.location}, ${left}`}
                 aria-pressed={open}
                 className="happy-sidebar-update__trigger"
-                onClick={() => setOpen((current) => !current)}
+                onClick={() => (open ? close() : setOpen(true))}
                 type="button"
             >
                 <Ionicon name="flag-outline" size={20} />

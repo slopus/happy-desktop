@@ -156,6 +156,8 @@ export interface HappyAgentOnboardingStore {
     onboardingExit(): void;
     /** Returns to setup at the first step still open. */
     onboardingResume(): void;
+    /** The card that opened as the reader left setup was closed; it no longer opens by itself. */
+    awayCardClose(): void;
     adminBotNameUpdate(value: string): void;
     /** Names the server's admin bot with the typed name, or keeps its own, then leaves its gate. */
     adminBotNameSubmit(): void;
@@ -785,6 +787,11 @@ export function happyAgentOnboardingStoreCreate(
             publish(snapshot, true);
             // Leaving on a last step already done ends the flow here.
             setupSynchronize();
+        },
+        awayCardClose() {
+            if (away !== "now") return;
+            away = "earlier";
+            publish(snapshot, true);
         },
         onboardingResume() {
             if (!away) return;
