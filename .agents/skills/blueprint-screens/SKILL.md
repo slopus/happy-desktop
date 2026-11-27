@@ -13,10 +13,10 @@ contracts in `DESIGN.md`, and it is not a reason to write tests.
 ## Rules
 
 - **One browser.** Chromium only. No Firefox/WebKit passes while iterating.
-- **Two window sizes.** The window Happy opens at, 1100 × 760, and its minimum,
+- **Two window sizes.** The window Happy opens at, 1280 × 792, and its minimum,
   760 × 670 (`packages/happy-desktop-electron/sources/main/main.ts`). Flow pages
-  written before that minimum capture 720 × 640, the shell's own floor; keep
-  their size. Add a size only when the person asks for one.
+  written before these sizes capture 1100 × 760 and 720 × 640; keep their
+  sizes. Add a size only when the person asks for one.
 - **One happy path.** Show the screens in the order a person meets them. Add an
   error or edge state only when it is what is being reviewed.
 - **Real components, fixture props.** Blueprint pages compose the shipped

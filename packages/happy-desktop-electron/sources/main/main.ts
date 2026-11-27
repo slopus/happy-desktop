@@ -1227,8 +1227,9 @@ function windowOptions(
     return {
         backgroundColor: windowBackgroundColor(),
         title: windowTitle,
-        width: bounds?.width ?? 1100,
-        height: bounds?.height ?? 760,
+        /* A golden-ratio window for a first launch; a saved size wins. */
+        width: bounds?.width ?? 1280,
+        height: bounds?.height ?? 792,
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
         /* Happy's native desktop minimum (DESIGN.md); AppShell's own floor sits below it. */
         minWidth: 760,
