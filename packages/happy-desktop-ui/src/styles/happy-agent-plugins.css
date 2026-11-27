@@ -407,3 +407,18 @@
     justify-content: flex-start;
     gap: 8px;
 }
+
+/* ---- Embedded ---------------------------------------------------------- */
+
+/* Inside Settings, whose body already scrolls and is the content column: the
+   pages lend it their content and take neither its surface nor its gutter. */
+.happy-agent-plugins--embedded {
+    flex: none;
+    background: none;
+}
+
+.happy-agent-plugins--embedded > .happy-agent-plugins__content {
+    max-width: none;
+    margin-inline: 0;
+    padding: 0;
+}

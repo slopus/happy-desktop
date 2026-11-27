@@ -154,8 +154,7 @@ const PLAN: HappyAgentSurface = {
     updatedAt: 1,
 };
 
-// The first group only asks whether these exist; nothing reads them.
-const PLUGINS = {} as never;
+// The first group only asks whether this exists; nothing reads it.
 const PIPELINES = {} as never;
 
 const SURFACE_CATALOG: HappyAgentSurfaceCatalogSnapshot = {
@@ -196,7 +195,7 @@ function view(
     options: {
         happyCloud?: true;
         botSettings?: HappyAgentBotSettingsSnapshot;
-        /** Plugins, Pipelines, and a joined Surface in the first group. */
+        /** Pipelines, Documents, TODOs, and a joined Surface in the first group. */
         everyTopRow?: true;
     } = {},
 ) {
@@ -236,7 +235,6 @@ function view(
             workspace: workspace(bots, actions, options.botSettings),
             ...(options.everyTopRow
                 ? {
-                      plugins: () => PLUGINS,
                       pipelines: () => PIPELINES,
                       surfaces: SURFACES,
                   }
@@ -304,15 +302,14 @@ it("shows an owner the shared bot last in the main group, and not under Bots", (
     expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_writer", "ses_writer");
 });
 
-it("closes the main group with the shared bot, after Plugins, Pipelines, Documents, TODOs, and Surfaces", () => {
+it("closes the main group with the shared bot, after Documents, TODOs, Pipelines, and Surfaces", () => {
     const { container } = view([CHIEF_SHARED, WRITER], { happyCloud: true, everyTopRow: true });
     expect(sections(container)[0]!.rows).toEqual([
         "feed",
         "artifacts",
-        "plugins",
-        "pipelines",
         "documents",
         "todos",
+        "pipelines",
         "local/surface:srf_plan",
         "local/ws_chief",
     ]);

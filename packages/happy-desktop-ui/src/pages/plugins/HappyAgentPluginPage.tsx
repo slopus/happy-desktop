@@ -49,6 +49,11 @@ export interface HappyAgentPluginPageProps {
     /** Starts an OAuth sign-in in the person's browser. */
     onConnect: (installationId: string, methodId: string) => Promise<unknown>;
     onDisconnect: (installationId: string) => Promise<unknown>;
+    /**
+     * Drawn inside a page that already has the header and the scrolling, such
+     * as Settings: just the content, with no header or scrollport of its own.
+     */
+    embedded?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -81,13 +86,121 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
         </Button>
     ) : undefined;
     const name = plugin?.name ?? installations[0]?.name ?? props.pluginId;
+    const content = (
+        <div className="happy-agent-plugins__content">
+            {snapshot.error ? (
+                <Banner tone="danger" title="Plugins may be out of date">
+                    {snapshot.error.message}
+                </Banner>
+            ) : null}
+            {plugin === undefined && installations.length === 0 ? (
+                <EmptyState
+                    description={
+                        snapshot.loading
+                            ? "Reading the plugins this server offers."
+                            : "This server does not offer this plugin."
+                    }
+                    icon={snapshot.loading ? "clock" : "plugin"}
+                    size="panel"
+                    title={snapshot.loading ? "Loading plugin…" : "Plugin not found"}
+                />
+            ) : (
+                <>
+                    <section
+                        className="happy-agent-plugin__summary"
+                        data-happy-desktop-ui="happy-agent-plugin-summary"
+                    >
+                        <PluginMark
+                            image={plugin?.image ?? installations[0]?.image ?? null}
+                            size="hero"
+                        />
+                        <div className="happy-agent-plugin__summary-text">
+                            <p className="happy-agent-plugin__description">
+                                {plugin?.description || "This server no longer offers this plugin."}
+                            </p>
+                            {feature ? (
+                                <p className="happy-agent-plugins__note">{FEATURE_PLUGIN_NOTE}</p>
+                            ) : null}
+                            {install.error ? (
+                                <p className="happy-agent-plugin__error">{install.error}</p>
+                            ) : plugin?.installRefusal ? (
+                                <p className="happy-agent-plugins__note">{plugin.installRefusal}</p>
+                            ) : null}
+                        </div>
+                        {plugin &&
+                        (snapshot.manage || feature) &&
+                        (plugin.multiInstance || installations.length === 0) ? (
+                            <Button
+                                disabled={plugin.installRefusal !== null}
+                                loading={install.pending}
+                                onClick={() => void install.run(() => props.onInstall(plugin.id))}
+                                size="small"
+                                variant={installations.length > 0 ? "secondary" : "primary"}
+                            >
+                                {installations.length > 0 ? "Install again" : "Install"}
+                            </Button>
+                        ) : null}
+                    </section>
+                    {installations.length > 0 ? (
+                        <section className="happy-agent-plugins__section">
+                            <h2 className="happy-agent-plugins__heading">Installed</h2>
+                            <div className="happy-agent-plugins__cards">
+                                {installations.map((installation) => (
+                                    <InstallationCard
+                                        installation={installation}
+                                        key={installation.id}
+                                        manage={snapshot.manage}
+                                        onConfigure={props.onConfigure}
+                                        onConnect={props.onConnect}
+                                        onDisconnect={props.onDisconnect}
+                                        onRemove={props.onRemove}
+                                        plugin={plugin}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+                    ) : null}
+                    {snapshot.manage || feature ? null : (
+                        <p className="happy-agent-plugins__note">
+                            Only people who manage plugins can install and set them up.
+                        </p>
+                    )}
+                    {plugin && plugin.tools.length > 0 ? (
+                        <section className="happy-agent-plugins__section">
+                            <h2 className="happy-agent-plugins__heading">Tools</h2>
+                            <ul className="happy-agent-plugin__tools">
+                                {plugin.tools.map((tool) => (
+                                    <li className="happy-agent-plugin__tool" key={tool.name}>
+                                        <code className="happy-agent-plugin__tool-name">
+                                            {tool.name}
+                                        </code>
+                                        <span className="happy-agent-plugin__tool-summary">
+                                            {tool.summary}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    ) : null}
+                </>
+            )}
+        </div>
+    );
+    const rootProps = {
+        className: [
+            "happy-agent-plugins",
+            props.embedded ? "happy-agent-plugins--embedded" : undefined,
+            props.className,
+        ]
+            .filter(Boolean)
+            .join(" "),
+        "data-happy-desktop-ui": "happy-agent-plugin",
+        "data-testid": props["data-testid"],
+        style: props.style,
+    };
+    if (props.embedded) return <div {...rootProps}>{content}</div>;
     return (
-        <div
-            className={["happy-agent-plugins", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="happy-agent-plugin"
-            data-testid={props["data-testid"]}
-            style={props.style}
-        >
+        <div {...rootProps}>
             <ArtifactHeader
                 className="happy-agent-plugins__header"
                 {...(back ? { leading: back } : {})}
@@ -98,114 +211,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                 className="happy-agent-plugins__scroll"
                 viewportClassName="happy-agent-plugins__scroll-viewport"
             >
-                <div className="happy-agent-plugins__content">
-                    {snapshot.error ? (
-                        <Banner tone="danger" title="Plugins may be out of date">
-                            {snapshot.error.message}
-                        </Banner>
-                    ) : null}
-                    {plugin === undefined && installations.length === 0 ? (
-                        <EmptyState
-                            description={
-                                snapshot.loading
-                                    ? "Reading the plugins this server offers."
-                                    : "This server does not offer this plugin."
-                            }
-                            icon={snapshot.loading ? "clock" : "plugin"}
-                            size="panel"
-                            title={snapshot.loading ? "Loading plugin…" : "Plugin not found"}
-                        />
-                    ) : (
-                        <>
-                            <section
-                                className="happy-agent-plugin__summary"
-                                data-happy-desktop-ui="happy-agent-plugin-summary"
-                            >
-                                <PluginMark
-                                    image={plugin?.image ?? installations[0]?.image ?? null}
-                                    size="hero"
-                                />
-                                <div className="happy-agent-plugin__summary-text">
-                                    <p className="happy-agent-plugin__description">
-                                        {plugin?.description ||
-                                            "This server no longer offers this plugin."}
-                                    </p>
-                                    {feature ? (
-                                        <p className="happy-agent-plugins__note">
-                                            {FEATURE_PLUGIN_NOTE}
-                                        </p>
-                                    ) : null}
-                                    {install.error ? (
-                                        <p className="happy-agent-plugin__error">{install.error}</p>
-                                    ) : plugin?.installRefusal ? (
-                                        <p className="happy-agent-plugins__note">
-                                            {plugin.installRefusal}
-                                        </p>
-                                    ) : null}
-                                </div>
-                                {plugin &&
-                                (snapshot.manage || feature) &&
-                                (plugin.multiInstance || installations.length === 0) ? (
-                                    <Button
-                                        disabled={plugin.installRefusal !== null}
-                                        loading={install.pending}
-                                        onClick={() =>
-                                            void install.run(() => props.onInstall(plugin.id))
-                                        }
-                                        size="small"
-                                        variant={installations.length > 0 ? "secondary" : "primary"}
-                                    >
-                                        {installations.length > 0 ? "Install again" : "Install"}
-                                    </Button>
-                                ) : null}
-                            </section>
-                            {installations.length > 0 ? (
-                                <section className="happy-agent-plugins__section">
-                                    <h2 className="happy-agent-plugins__heading">Installed</h2>
-                                    <div className="happy-agent-plugins__cards">
-                                        {installations.map((installation) => (
-                                            <InstallationCard
-                                                installation={installation}
-                                                key={installation.id}
-                                                manage={snapshot.manage}
-                                                onConfigure={props.onConfigure}
-                                                onConnect={props.onConnect}
-                                                onDisconnect={props.onDisconnect}
-                                                onRemove={props.onRemove}
-                                                plugin={plugin}
-                                            />
-                                        ))}
-                                    </div>
-                                </section>
-                            ) : null}
-                            {snapshot.manage || feature ? null : (
-                                <p className="happy-agent-plugins__note">
-                                    Only people who manage plugins can install and set them up.
-                                </p>
-                            )}
-                            {plugin && plugin.tools.length > 0 ? (
-                                <section className="happy-agent-plugins__section">
-                                    <h2 className="happy-agent-plugins__heading">Tools</h2>
-                                    <ul className="happy-agent-plugin__tools">
-                                        {plugin.tools.map((tool) => (
-                                            <li
-                                                className="happy-agent-plugin__tool"
-                                                key={tool.name}
-                                            >
-                                                <code className="happy-agent-plugin__tool-name">
-                                                    {tool.name}
-                                                </code>
-                                                <span className="happy-agent-plugin__tool-summary">
-                                                    {tool.summary}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </section>
-                            ) : null}
-                        </>
-                    )}
-                </div>
+                {content}
             </ScrollArea>
         </div>
     );

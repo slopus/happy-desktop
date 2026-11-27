@@ -64,6 +64,8 @@ export type HappyAgentRoute =
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
     | { readonly kind: "settingsSection"; readonly section: string }
+    /** One plugin of this window's Happy Agent, open inside Settings › Plugins. */
+    | { readonly kind: "settingsPlugin"; readonly pluginId: string }
     /**
      * One shared Surface on one machine, such as a todo list — with its shared
      * chat open beside it when `chat` names the conversation the chat is.
@@ -143,6 +145,8 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return "/settings";
         case "settingsSection":
             return `/settings/${part(route.section)}`;
+        case "settingsPlugin":
+            return `/settings/plugins/${part(route.pluginId)}`;
         case "surface": {
             const chat = route.chat
                 ? `/chat/${part(route.chat.groupId)}/${part(route.chat.chatId)}`
@@ -267,6 +271,8 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
                 : undefined;
         case "settings":
             if (first === undefined) return { kind: "settings" };
+            if (first === "plugins" && second !== undefined && segments.length === 3)
+                return { kind: "settingsPlugin", pluginId: second };
             return segments.length === 2 ? { kind: "settingsSection", section: first } : undefined;
         case "surfaces":
             if (first === undefined || second === undefined) return undefined;
@@ -411,6 +417,10 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         case "settingsSection": {
             const section = fieldOf(record, "section");
             return section ? { kind: "settingsSection", section } : undefined;
+        }
+        case "settingsPlugin": {
+            const pluginId = fieldOf(record, "pluginId");
+            return pluginId ? { kind: "settingsPlugin", pluginId } : undefined;
         }
         case "surface": {
             const happyAgentId = fieldOf(record, "happyAgentId");

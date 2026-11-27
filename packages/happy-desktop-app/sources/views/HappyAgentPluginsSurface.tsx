@@ -10,12 +10,15 @@ export function HappyAgentPluginsSurface(props: {
     onPluginsOpen(): void;
     /** Sends the person's browser to a provider's sign-in. */
     onExternalLinkOpen(url: string): void;
+    /** Drawn inside Settings, which supplies the header and the scrolling. */
+    readonly embedded?: boolean;
 }) {
     const store = props.store;
     const snapshot = useSyncExternalStore(store.subscribe, store.get, store.get);
     if (props.pluginId === undefined)
         return (
             <HappyAgentPluginsPage
+                {...(props.embedded ? { embedded: true } : {})}
                 onPluginInstall={store.pluginInstall}
                 onPluginOpen={props.onPluginOpen}
                 plugins={snapshot}
@@ -23,6 +26,7 @@ export function HappyAgentPluginsSurface(props: {
         );
     return (
         <HappyAgentPluginPage
+            {...(props.embedded ? { embedded: true } : {})}
             onBack={props.onPluginsOpen}
             onConfigure={async (installationId, methodId, values) => {
                 try {

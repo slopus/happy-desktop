@@ -780,7 +780,10 @@ export function happyAgentHistoryCreate(
             ),
         settingsForget: (): boolean =>
             forget(
-                (route) => route.kind === "settings" || route.kind === "settingsSection",
+                (route) =>
+                    route.kind === "settings" ||
+                    route.kind === "settingsSection" ||
+                    route.kind === "settingsPlugin",
                 HAPPY_AGENT_ROUTE_HOME,
             ),
     });

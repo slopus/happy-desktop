@@ -430,7 +430,6 @@ import {
     type HappyAgentPreviewMedia,
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
-import { HappyAgentPluginsSurface } from "./views/HappyAgentPluginsSurface";
 import { HappyAgentPipelinesSurface } from "./views/HappyAgentPipelinesSurface";
 import { useFeatureAvailable } from "./featureAvailable";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
@@ -1144,14 +1143,8 @@ export interface AppHappyAgentViewProps {
     onArtifactsOpen?(): void;
     /** Addresses one artifact on one Happy Agent. */
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
-    /** Whether the URL addresses the addressed Happy Agent's plugins. */
-    pluginsOpen?: boolean;
-    /** The plugin the URL opens, within those plugins. */
-    pluginId?: string;
-    /** Addresses one Happy Agent's plugins. */
-    onPluginsOpen?(happyAgentId: string): void;
-    /** Addresses one plugin on one Happy Agent. */
-    onPluginOpen?(happyAgentId: string, pluginId: string): void;
+    /** Addresses one plugin of this window's Happy Agent, in Settings › Plugins. */
+    onPluginOpen?(pluginId: string): void;
     /** Whether the URL addresses the addressed Happy Cloud server's pipelines. */
     pipelinesOpen?: boolean;
     /** The pipeline the URL opens, within those pipelines. */
@@ -3297,9 +3290,10 @@ function surfaceTargetLink(
  * The first group in the sidebar, under no heading. Activity leads it,
  * Artifacts under it; both are always there, never move, and nothing is dragged
  * past them. Documents and TODOs follow, just as fixed, and hold every document
- * and todo list, which are no rows of their own. The reader's other Surfaces
- * follow in their own order and are dragged among themselves only. Happy
- * Cloud's shared bots close the group, each
+ * and todo list, which are no rows of their own; then Pipelines, where the
+ * server runs them. A machine's plugins are in Settings, not here. The
+ * reader's other Surfaces follow in their own order and are dragged among
+ * themselves only. Happy Cloud's shared bots close the group, each
  * opening its one conversation with its subtasks beneath; they are fixed, so
  * no Surface is dragged past them either.
  * Every type is listed by its own name and picture, including a type this
@@ -3334,12 +3328,11 @@ function happyAgentTopSection(
         items: [
             { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ARTIFACTS_SIDEBAR_ITEM,
-            ...(happyAgent?.session?.plugins?.() ? [PLUGINS_SIDEBAR_ITEM] : []),
-            ...(pipelinesAvailable && happyAgent?.session?.pipelines?.()
-                ? [PIPELINES_SIDEBAR_ITEM]
-                : []),
             ...(catalog.availability === "available"
                 ? [DOCUMENTS_SIDEBAR_ITEM, TODOS_SIDEBAR_ITEM]
+                : []),
+            ...(pipelinesAvailable && happyAgent?.session?.pipelines?.()
+                ? [PIPELINES_SIDEBAR_ITEM]
                 : []),
             // A document or a todo list is found in its section, not as a row.
             ...(catalog.availability === "available"
@@ -3728,14 +3721,7 @@ const INBOX_ITEM = "inbox";
 const ARTIFACTS_ITEM = "artifacts";
 
 /**
- * The row that opens the addressed Happy Agent's plugins, directly under
- * Artifacts. Like it, it belongs to the machine rather than to any chat, and
- * it never moves. It is there only where the machine offers plugins.
- */
-const PLUGINS_ITEM = "plugins";
-
-/**
- * The row that opens a Happy Cloud server's pipelines, directly under Plugins.
+ * The row that opens a Happy Cloud server's pipelines, directly under TODOs.
  * The server runs them for the whole team rather than for any one chat, so the
  * row belongs to the machine and never moves. It is there only where the
  * server runs pipelines.
@@ -3744,7 +3730,7 @@ const PIPELINES_ITEM = "pipelines";
 
 /**
  * The rows that open the addressed Happy Agent's Documents and TODOs, under
- * Pipelines. Each lists every Surface of its type on the machine and opens the
+ * Artifacts. Each lists every Surface of its type on the machine and opens the
  * ones picked as tabs, so no document or todo list is a row of its own. Like
  * Artifacts, they belong to the machine and never move.
  */
@@ -3855,15 +3841,6 @@ const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
     id: ARTIFACTS_ITEM,
     kind: "project",
     label: "Artifacts",
-    reorderable: false,
-};
-
-const PLUGINS_SIDEBAR_ITEM: SidebarItem = {
-    icon: "plugin",
-    tint: "orange",
-    id: PLUGINS_ITEM,
-    kind: "project",
-    label: "Plugins",
     reorderable: false,
 };
 
@@ -4716,30 +4693,25 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     ? INBOX_ITEM
                     : props.artifactsOpen
                       ? artifactsItemId
-                      : props.pluginsOpen
-                        ? PLUGINS_ITEM
-                        : props.pipelinesOpen && pipelinesAvailable
-                          ? PIPELINES_ITEM
-                          : props.feedOpen
-                            ? FEED_ITEM
-                            : surfaceSectionShown !== undefined
-                              ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
-                              : props.surfaceId !== undefined
+                      : props.pipelinesOpen && pipelinesAvailable
+                        ? PIPELINES_ITEM
+                        : props.feedOpen
+                          ? FEED_ITEM
+                          : surfaceSectionShown !== undefined
+                            ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
+                            : props.surfaceId !== undefined
+                              ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
+                              : props.groupId
                                 ? happyAgentItemId(
                                       props.happyAgentId,
-                                      surfaceRowId(props.surfaceId),
+                                      activeRowId(
+                                          active?.bots ?? [],
+                                          active?.tasks ?? [],
+                                          props.groupId,
+                                          props.chatId,
+                                      ),
                                   )
-                                : props.groupId
-                                  ? happyAgentItemId(
-                                        props.happyAgentId,
-                                        activeRowId(
-                                            active?.bots ?? [],
-                                            active?.tasks ?? [],
-                                            props.groupId,
-                                            props.chatId,
-                                        ),
-                                    )
-                                  : ""
+                                : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -5033,10 +5005,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 if (id === FEED_ITEM) {
                     props.onFeedOpen?.();
-                    return;
-                }
-                if (id === PLUGINS_ITEM) {
-                    props.onPluginsOpen?.(active?.id ?? props.happyAgentId);
                     return;
                 }
                 if (id === PIPELINES_ITEM) {
@@ -5478,31 +5446,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 </>
             );
 
-        // The plugins belong to the addressed machine, like its artifacts. A
-        // machine that offers none says so, in case its address was reached
-        // some other way than its sidebar row.
-        if (props.pluginsOpen && active?.session) {
-            const plugins = active.session.plugins?.();
-            if (!plugins)
-                return (
-                    <EmptyState
-                        description="This Happy Agent does not offer plugins."
-                        icon="plugin"
-                        size="panel"
-                        title="No plugins here"
-                    />
-                );
-            return (
-                <HappyAgentPluginsSurface
-                    onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                    onPluginOpen={(pluginId) => props.onPluginOpen?.(active.id, pluginId)}
-                    onPluginsOpen={() => props.onPluginsOpen?.(active.id)}
-                    {...(props.pluginId === undefined ? {} : { pluginId: props.pluginId })}
-                    store={plugins}
-                />
-            );
-        }
-
         // The pipelines belong to the addressed Happy Cloud server. A server that
         // runs none says so, in case its address was reached some other way than
         // its sidebar row.
@@ -5869,7 +5812,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         ? {
               ...(props.onPluginOpen && active.session?.plugins?.()
                   ? {
-                        pluginOpen: (pluginId: string) => props.onPluginOpen?.(active.id, pluginId),
+                        pluginOpen: (pluginId: string) => props.onPluginOpen?.(pluginId),
                     }
                   : {}),
               ...(genUiActions ? genUiSecretHostsCreate(genUiActions) : {}),
@@ -5951,14 +5894,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                     props.surfaceSection?.section,
                                     props.surfaceSection?.listTabId,
                                     props.artifactId,
-                                    props.pluginId,
                                     props.pipelineId,
                                     props.pipelineRunId,
                                     props.userProfileId,
                                     props.inboxOpen,
                                     props.feedOpen,
                                     props.artifactsOpen,
-                                    props.pluginsOpen,
                                     props.pipelinesOpen,
                                     props.botCreateOpen,
                                     props.taskCreateOpen,

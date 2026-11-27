@@ -517,16 +517,27 @@ const userProfileRoute = createRoute({
     path: "/people/$happyAgentId/$userId",
 });
 
-/** The plugins one machine offers, and the team's installations of them. */
+/**
+ * Where a machine's plugins used to be addressed. Plugins live in Settings
+ * now, so an old address lands on the same page there.
+ */
 const pluginsRoute = createRoute({
-    getParentRoute: () => workspaceRoute,
+    getParentRoute: () => rootRoute,
     path: "/plugins/$happyAgentId",
+    beforeLoad: () => {
+        throw redirect({ params: { section: "plugins" }, replace: true, to: "/settings/$section" });
+    },
 });
-
-/** One plugin on the machine that offers it. */
 const pluginRoute = createRoute({
-    getParentRoute: () => workspaceRoute,
+    getParentRoute: () => rootRoute,
     path: "/plugins/$happyAgentId/$pluginId",
+    beforeLoad: ({ params }) => {
+        throw redirect({
+            params: { pluginId: params.pluginId },
+            replace: true,
+            to: "/settings/plugins/$pluginId",
+        });
+    },
 });
 
 /** The pipelines a Happy Cloud server runs. */
@@ -698,6 +709,13 @@ const settingsSectionRoute = createRoute({
     },
 });
 
+/** One plugin of this window's Happy Agent, open inside Settings › Plugins. */
+const settingsPluginRoute = createRoute({
+    component: HappyAgentSettingsRoute,
+    getParentRoute: () => rootRoute,
+    path: "/settings/plugins/$pluginId",
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
     chatsRootRoute,
@@ -710,8 +728,6 @@ const routeTree = rootRoute.addChildren([
         inboxRoute,
         artifactsRoute,
         artifactRoute,
-        pluginsRoute,
-        pluginRoute,
         pipelinesRoute,
         pipelineRoute,
         pipelineRunRoute,
@@ -729,6 +745,9 @@ const routeTree = rootRoute.addChildren([
     ]),
     settingsIndexRoute,
     settingsSectionRoute,
+    settingsPluginRoute,
+    pluginsRoute,
+    pluginRoute,
 ]);
 
 /**
@@ -773,7 +792,6 @@ function HappyAgentWorkspaceLayout() {
         botCreate: matched.has(botCreateRoute.id),
         feed: matched.has(feedRoute.id),
         inbox: matched.has(inboxRoute.id),
-        plugins: matched.has(pluginsRoute.id) || matched.has(pluginRoute.id),
         pipelines:
             matched.has(pipelinesRoute.id) ||
             matched.has(pipelineRoute.id) ||
@@ -830,18 +848,8 @@ function HappyAgentWorkspaceLayout() {
             inboxOpen={shows.inbox}
             artifactsOpen={shows.artifacts}
             feedOpen={shows.feed}
-            pluginsOpen={shows.plugins}
-            {...(shows.plugins && params.pluginId !== undefined
-                ? { pluginId: params.pluginId }
-                : {})}
-            onPluginsOpen={(happyAgentId) =>
-                void navigate({ params: { happyAgentId }, to: "/plugins/$happyAgentId" })
-            }
-            onPluginOpen={(happyAgentId, pluginId) =>
-                void navigate({
-                    params: { happyAgentId, pluginId },
-                    to: "/plugins/$happyAgentId/$pluginId",
-                })
+            onPluginOpen={(pluginId) =>
+                void navigate({ params: { pluginId }, to: "/settings/plugins/$pluginId" })
             }
             pipelinesOpen={shows.pipelines}
             {...(shows.pipelines && params.pipelineId !== undefined
@@ -1091,11 +1099,8 @@ function HappyAgentSettingsRoute() {
                 void navigate({ params: { section }, to: "/settings/$section" })
             }
             onClose={() => happyAgentRouterSettingsClose(router)}
-            onPluginOpen={(happyAgentId, pluginId) =>
-                void navigate({
-                    params: { happyAgentId, pluginId },
-                    to: "/plugins/$happyAgentId/$pluginId",
-                })
+            onPluginOpen={(pluginId) =>
+                void navigate({ params: { pluginId }, to: "/settings/plugins/$pluginId" })
             }
             onUserProfileOpen={(happyAgentId, userId) =>
                 void navigate({
@@ -1105,7 +1110,12 @@ function HappyAgentSettingsRoute() {
             }
             happyAgents={context.happyAgents}
             platform={context.platform}
-            section={params.section ?? HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY}
+            {...(params.pluginId === undefined ? {} : { pluginId: params.pluginId })}
+            section={
+                params.pluginId !== undefined
+                    ? "plugins"
+                    : (params.section ?? HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY)
+            }
             settings={context.settings}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             {...(context.sidebarVisibility ? { sidebarVisibility: context.sidebarVisibility } : {})}

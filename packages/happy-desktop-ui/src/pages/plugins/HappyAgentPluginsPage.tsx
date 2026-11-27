@@ -23,6 +23,11 @@ export interface HappyAgentPluginsPageProps {
     onPluginOpen: (pluginId: string) => void;
     /** Installs one plugin; rejects with the reason to show. */
     onPluginInstall: (pluginId: string) => Promise<unknown>;
+    /**
+     * Drawn inside a page that already has the header and the scrolling, such
+     * as Settings: just the content, with no header or scrollport of its own.
+     */
+    embedded?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -38,13 +43,102 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
     const snapshot = props.plugins;
     const installedCount = snapshot.installations.length;
     const customCount = snapshot.customPlugins.length;
+    const content = (
+        <div className="happy-agent-plugins__content">
+            {snapshot.error ? (
+                <Banner tone="danger" title="Plugins may be out of date">
+                    {snapshot.error.message}
+                </Banner>
+            ) : null}
+            {snapshot.loading || snapshot.plugins.length + installedCount + customCount === 0 ? (
+                <EmptyState
+                    description={
+                        snapshot.loading
+                            ? "Reading the plugins this server offers."
+                            : "This server offers no plugins yet."
+                    }
+                    icon={snapshot.loading ? "clock" : "plugin"}
+                    size="panel"
+                    title={snapshot.loading ? "Loading plugins…" : "No plugins"}
+                />
+            ) : (
+                <>
+                    <section className="happy-agent-plugins__section">
+                        <h2 className="happy-agent-plugins__heading">Installed</h2>
+                        {installedCount === 0 ? (
+                            <p className="happy-agent-plugins__note">
+                                {snapshot.manage
+                                    ? "Nothing installed yet. Install a plugin below to give agents its tools."
+                                    : "Nothing installed yet."}
+                            </p>
+                        ) : (
+                            <div className="happy-agent-plugins__list" role="list">
+                                {snapshot.installations.map((installation) => (
+                                    <InstallationRow
+                                        installation={installation}
+                                        key={installation.id}
+                                        onOpen={props.onPluginOpen}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                    {customCount === 0 ? null : (
+                        <section className="happy-agent-plugins__section">
+                            <h2 className="happy-agent-plugins__heading">Custom</h2>
+                            <p className="happy-agent-plugins__note">
+                                Made by agents. Ask one to add, change or remove a custom plugin.
+                            </p>
+                            <div className="happy-agent-plugins__list" role="list">
+                                {snapshot.customPlugins.map((plugin) => (
+                                    <CustomPluginRow key={plugin.id} plugin={plugin} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                    <section className="happy-agent-plugins__section">
+                        <h2 className="happy-agent-plugins__heading">Available</h2>
+                        {snapshot.manage ||
+                        snapshot.plugins.every((plugin) => plugin.kind === "feature") ? null : (
+                            <p className="happy-agent-plugins__note">
+                                Only people who manage plugins can install them, except features,
+                                which everyone installs for themselves.
+                            </p>
+                        )}
+                        <div className="happy-agent-plugins__list" role="list">
+                            {snapshot.plugins.map((plugin) => (
+                                <PluginRow
+                                    installed={snapshot.installations.some(
+                                        (installation) => installation.pluginId === plugin.id,
+                                    )}
+                                    key={plugin.id}
+                                    manage={snapshot.manage}
+                                    onInstall={props.onPluginInstall}
+                                    onOpen={props.onPluginOpen}
+                                    plugin={plugin}
+                                />
+                            ))}
+                        </div>
+                    </section>
+                </>
+            )}
+        </div>
+    );
+    const rootProps = {
+        className: [
+            "happy-agent-plugins",
+            props.embedded ? "happy-agent-plugins--embedded" : undefined,
+            props.className,
+        ]
+            .filter(Boolean)
+            .join(" "),
+        "data-happy-desktop-ui": "happy-agent-plugins",
+        "data-testid": props["data-testid"],
+        style: props.style,
+    };
+    if (props.embedded) return <div {...rootProps}>{content}</div>;
     return (
-        <div
-            className={["happy-agent-plugins", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="happy-agent-plugins"
-            data-testid={props["data-testid"]}
-            style={props.style}
-        >
+        <div {...rootProps}>
             <ArtifactHeader
                 className="happy-agent-plugins__header"
                 subtitle={
@@ -62,90 +156,7 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                 className="happy-agent-plugins__scroll"
                 viewportClassName="happy-agent-plugins__scroll-viewport"
             >
-                <div className="happy-agent-plugins__content">
-                    {snapshot.error ? (
-                        <Banner tone="danger" title="Plugins may be out of date">
-                            {snapshot.error.message}
-                        </Banner>
-                    ) : null}
-                    {snapshot.loading ||
-                    snapshot.plugins.length + installedCount + customCount === 0 ? (
-                        <EmptyState
-                            description={
-                                snapshot.loading
-                                    ? "Reading the plugins this server offers."
-                                    : "This server offers no plugins yet."
-                            }
-                            icon={snapshot.loading ? "clock" : "plugin"}
-                            size="panel"
-                            title={snapshot.loading ? "Loading plugins…" : "No plugins"}
-                        />
-                    ) : (
-                        <>
-                            <section className="happy-agent-plugins__section">
-                                <h2 className="happy-agent-plugins__heading">Installed</h2>
-                                {installedCount === 0 ? (
-                                    <p className="happy-agent-plugins__note">
-                                        {snapshot.manage
-                                            ? "Nothing installed yet. Install a plugin below to give agents its tools."
-                                            : "Nothing installed yet."}
-                                    </p>
-                                ) : (
-                                    <div className="happy-agent-plugins__list" role="list">
-                                        {snapshot.installations.map((installation) => (
-                                            <InstallationRow
-                                                installation={installation}
-                                                key={installation.id}
-                                                onOpen={props.onPluginOpen}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </section>
-                            {customCount === 0 ? null : (
-                                <section className="happy-agent-plugins__section">
-                                    <h2 className="happy-agent-plugins__heading">Custom</h2>
-                                    <p className="happy-agent-plugins__note">
-                                        Made by agents. Ask one to add, change or remove a custom
-                                        plugin.
-                                    </p>
-                                    <div className="happy-agent-plugins__list" role="list">
-                                        {snapshot.customPlugins.map((plugin) => (
-                                            <CustomPluginRow key={plugin.id} plugin={plugin} />
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-                            <section className="happy-agent-plugins__section">
-                                <h2 className="happy-agent-plugins__heading">Available</h2>
-                                {snapshot.manage ||
-                                snapshot.plugins.every(
-                                    (plugin) => plugin.kind === "feature",
-                                ) ? null : (
-                                    <p className="happy-agent-plugins__note">
-                                        Only people who manage plugins can install them, except
-                                        features, which everyone installs for themselves.
-                                    </p>
-                                )}
-                                <div className="happy-agent-plugins__list" role="list">
-                                    {snapshot.plugins.map((plugin) => (
-                                        <PluginRow
-                                            installed={snapshot.installations.some(
-                                                (installation) =>
-                                                    installation.pluginId === plugin.id,
-                                            )}
-                                            key={plugin.id}
-                                            manage={snapshot.manage}
-                                            onInstall={props.onPluginInstall}
-                                            onOpen={props.onPluginOpen}
-                                            plugin={plugin}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-                        </>
-                    )}
-                </div>
+                {content}
             </ScrollArea>
         </div>
     );

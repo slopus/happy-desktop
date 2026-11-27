@@ -27,6 +27,7 @@ import type {
     HappyAgentTaskSettingsSnapshot,
     HappyAgentSidebarVisibilityStore,
     HappyAgentWindowStore,
+    HappyAgentPluginsSnapshot,
     KeepAwakeStore,
     StatusBarStore,
     TitleShimmerStore,
@@ -142,6 +143,8 @@ import { AppComputeSettings } from "./AppComputeSettings";
 import { AppPermissionsSettings, appPermissionsHeading } from "./AppPermissionsSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
+import { HappyAgentPluginsSurface } from "./HappyAgentPluginsSurface";
+import { openExternalLink } from "../externalLink";
 import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
 import {
     AppMobileDirectSection,
@@ -176,6 +179,9 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     // way round: which of them exist, then what each has spent.
     { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    // The tools a machine offers agents and the team installed; listed only
+    // where the machine serves plugins.
+    { group: "Agents", icon: "plugin", id: "plugins", label: "Plugins", tone: "orange" },
     // Who is on a Happy Cloud server; offered only there.
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
     // The team's zones and who may join each; offered only on Happy Cloud.
@@ -448,6 +454,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "file-tiers": "Which changed files are listed apart",
     instructions: "Agent guidance and permission review for this machine",
     secrets: "Environment variables for agents",
+    plugins: "Tools agents use, and the services they connect to",
     providers: "The models agents run on, and the accounts behind them",
     members: "Who is on this server and what they may do",
     usage: "What each provider account has spent",
@@ -458,6 +465,19 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     danger: "Deleting this server for everyone",
     payments: "Credit, the card on file and what agents spend",
 };
+
+/** What a plugin's page inside Plugins is headed with: its name, and its version once known. */
+function pluginHeadingOf(
+    plugins: HappyAgentPluginsSnapshot,
+    pluginId: string,
+): { readonly title: string; readonly description?: string } {
+    const plugin = plugins.plugins.find((entry) => entry.id === pluginId);
+    const installation = plugins.installations.find((entry) => entry.pluginId === pluginId);
+    return {
+        title: plugin?.name ?? installation?.name ?? pluginId,
+        ...(plugin ? { description: `Version ${plugin.version}` } : {}),
+    };
+}
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
@@ -519,8 +539,10 @@ export interface AppHappyAgentSettingsViewProps {
     onCategorySelect(id: string): void;
     /** Opens a person's profile on a Happy Cloud server. */
     onUserProfileOpen?(happyAgentId: string, userId: string): void;
-    /** Opens one plugin of a Happy Agent, where it is set up and connected. */
-    onPluginOpen?(happyAgentId: string, pluginId: string): void;
+    /** Opens one plugin of this window's Happy Agent, where it is set up and connected. */
+    onPluginOpen?(pluginId: string): void;
+    /** The plugin open inside Plugins, when the address names one. */
+    pluginId?: string;
     platform?: "desktop" | "web";
     section: string;
     settings: HappyAgentSettingsStore;
@@ -648,12 +670,15 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (membersStore ?? happyAgentMembersStoreNoop).get,
     );
     const owner = members.roleId === "owner";
+    // Plugins is listed only where the machine serves them.
+    const pluginsStore = host?.session?.plugins?.();
     const adminAbsent = !membersStore || (!members.loading && !owner);
     const section =
         happyAgentSettingsCategoryAvailable(props.section, happyCloud) &&
         !(ADMIN_CATEGORIES.has(props.section) && adminAbsent) &&
         !(props.section === "administration" && onboardingAbsent) &&
         !(props.section === "payments" && paymentsAbsent) &&
+        !(props.section === "plugins" && pluginsStore === undefined) &&
         !(props.section === "instructions" && happyCloud && instructions.access === "unserved")
             ? props.section
             : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY;
@@ -670,6 +695,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined) &&
+            (category.id !== "plugins" || pluginsStore !== undefined) &&
             (category.id !== "permissions" || zonesStore !== undefined) &&
             (!ADMIN_CATEGORIES.has(category.id) || owner) &&
             (category.id !== "administration" ||
@@ -821,6 +847,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // Pools and machines are read, and re-read every few seconds, only while
     // Compute is on screen.
     const computeShown = section === "compute" ? computeStore : undefined;
+    const pluginsShown = section === "plugins" ? pluginsStore : undefined;
+    const plugins = useSyncExternalStore(
+        (pluginsShown ?? happyAgentPluginsStoreNone).subscribe,
+        (pluginsShown ?? happyAgentPluginsStoreNone).get,
+        (pluginsShown ?? happyAgentPluginsStoreNone).get,
+    );
     const compute = useSyncExternalStore(
         (computeShown ?? happyAgentComputeStoreNoop).subscribe,
         (computeShown ?? happyAgentComputeStoreNoop).get,
@@ -990,7 +1022,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         : undefined;
     // A zone's page is a page inside Permissions, its header leading back to the list.
     const zoneHeading = zonesShown ? appPermissionsHeading(zones, zonesShown) : undefined;
-    const subpageHeading = mobileLinkHeading ?? zoneHeading;
+    // A plugin's page is a page inside Plugins, its header leading back to the list.
+    const pluginOpen =
+        pluginsShown !== undefined && props.pluginId !== undefined ? props.pluginId : undefined;
+    const pluginHeading =
+        pluginOpen === undefined ? undefined : pluginHeadingOf(plugins, pluginOpen);
+    const subpageHeading = mobileLinkHeading ?? zoneHeading ?? pluginHeading;
     const content = (
         <HappyAgentSettingsShell
             activeCategoryId={section}
@@ -1010,7 +1047,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 ? { onBack: mobileLink.setup.close }
                 : zoneHeading
                   ? { onBack: zoneHeading.onBack }
-                  : {})}
+                  : pluginHeading
+                    ? { onBack: () => props.onCategorySelect("plugins") }
+                    : {})}
             title={
                 subpageHeading?.title ??
                 categories.find((category) => category.id === section)?.label ??
@@ -1650,14 +1689,22 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     />
                     <AppCustomProviderDialog snapshot={providers} store={providersStore} />
                 </>
+            ) : section === "plugins" ? (
+                pluginsShown ? (
+                    <HappyAgentPluginsSurface
+                        embedded
+                        onExternalLinkOpen={props.externalLinkOpen ?? openExternalLink}
+                        onPluginOpen={(pluginId) => props.onPluginOpen?.(pluginId)}
+                        onPluginsOpen={() => props.onCategorySelect("plugins")}
+                        {...(pluginOpen === undefined ? {} : { pluginId: pluginOpen })}
+                        store={pluginsShown}
+                    />
+                ) : null
             ) : section === "repositories" ? (
                 repositoriesShown ? (
                     <AppRepositoriesSettings
-                        {...(host && repositoryPluginsStore && props.onPluginOpen
-                            ? {
-                                  onPluginOpen: (pluginId: string) =>
-                                      props.onPluginOpen?.(host.id, pluginId),
-                              }
+                        {...(repositoryPluginsStore && props.onPluginOpen
+                            ? { onPluginOpen: props.onPluginOpen }
                             : {})}
                         onSecretsOpen={() => props.onCategorySelect("secrets")}
                         plugins={repositoryPlugins}
