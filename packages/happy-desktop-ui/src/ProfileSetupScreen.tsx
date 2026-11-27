@@ -1,6 +1,7 @@
-import { AvatarPlaceholder } from "./AvatarPlaceholder";
+import { Avatar } from "./Avatar";
 import type { ImageCropRegion } from "./imageCrop";
 import { OnboardingHelp } from "./OnboardingHelp";
+import { initialsOf } from "./pages/surfaces/surfacePresentation";
 import { PicturePicker } from "./PicturePicker";
 import type { ProfilePhotoCropSource } from "./ProfilePhotoCropDialog";
 import { SetupPage } from "./SetupPage";
@@ -16,7 +17,7 @@ export interface ProfileSetupScreenProps {
     readonly name: string;
     /** The server this profile is for, as the reader knows it. */
     readonly serverLabel?: string;
-    /** What the placeholder is picked by until a photo is chosen. */
+    /** Not drawn here any more: until a photo is chosen the picture is the initials. */
     readonly placeholderSeed: string;
     /** The chosen photo, cropped and held on this device until the name is saved. */
     readonly photoUrl?: string;
@@ -49,8 +50,10 @@ const AVATAR_SIDE = 120;
  * desktop's first-run sequence and draws no step bar.
  *
  * The avatar is the photo picker: pressing it, or the line under it, opens a
- * file, then the crop. A picture dropped on either is taken the same way. Until a photo is chosen it wears the placeholder this
- * person is given. The photo is optional; Continue waits only on a name.
+ * file, then the crop. A picture dropped on either is taken the same way.
+ * Until a photo is chosen it wears the person's initials, as the app draws
+ * anyone without a photo, following the name as it is typed; they are only
+ * drawn, never uploaded. The photo is optional; Continue waits only on a name.
  * Under the field sits one line kept whether or not it says anything, so an
  * error never moves the page.
  */
@@ -129,10 +132,16 @@ export function ProfileSetupForm(props: ProfileSetupFormProps) {
                 {...(props.photoOpening === undefined ? {} : { opening: props.photoOpening })}
                 {...(props.photoUrl === undefined ? {} : { pictureUrl: props.photoUrl })}
                 placeholder={
-                    <AvatarPlaceholder
+                    <Avatar
                         className="happy-picture-picker__image"
-                        seed={props.placeholderSeed}
-                        side={AVATAR_SIDE}
+                        initials={initialsOf(props.name)}
+                        size="lg"
+                        // The lg avatar's 14px initials, scaled to the picture's side.
+                        style={{
+                            width: AVATAR_SIDE,
+                            height: AVATAR_SIDE,
+                            fontSize: Math.round((14 * AVATAR_SIDE) / 44),
+                        }}
                     />
                 }
                 shape="circle"
