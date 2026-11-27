@@ -142,16 +142,30 @@ export function UsageActivityGrid(props: UsageActivityGridProps) {
                         <div
                             aria-hidden="true"
                             className="happy-usage-activity__months"
-                            style={{ width: `${String(columns * STEP - GAP)}px` }}
+                            style={{ minWidth: `${String(columns * STEP - GAP)}px` }}
                         >
-                            {monthLabels.map((month) => (
-                                <span
-                                    key={month.column}
-                                    style={{ left: `${String(month.column * STEP)}px` }}
-                                >
-                                    {month.label}
-                                </span>
-                            ))}
+                            {/* The newest label is in the row's flow, so a label longer
+                                than the weeks after it widens the grid rather than
+                                overflowing it: a grid of a day or two has nothing to
+                                scroll, and opening on today does not cut the weekdays. */}
+                            {monthLabels.map((month, index) =>
+                                index === monthLabels.length - 1 ? (
+                                    <span
+                                        data-last=""
+                                        key={month.column}
+                                        style={{ marginLeft: `${String(month.column * STEP)}px` }}
+                                    >
+                                        {month.label}
+                                    </span>
+                                ) : (
+                                    <span
+                                        key={month.column}
+                                        style={{ left: `${String(month.column * STEP)}px` }}
+                                    >
+                                        {month.label}
+                                    </span>
+                                ),
+                            )}
                         </div>
                     ) : null}
                     <div
