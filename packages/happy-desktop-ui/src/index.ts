@@ -885,6 +885,10 @@ export {
     type HappyAgentPluginSetupRefusal,
 } from "./pages/plugins/HappyAgentPluginPage";
 export {
+    HappyAgentPluginZoneSetupSheet,
+    type HappyAgentPluginZoneSetupSheetProps,
+} from "./pages/plugins/HappyAgentPluginZoneSetupSheet";
+export {
     HappyAgentCustomPluginPage,
     type HappyAgentCustomPluginPageProps,
 } from "./pages/plugins/HappyAgentCustomPluginPage";

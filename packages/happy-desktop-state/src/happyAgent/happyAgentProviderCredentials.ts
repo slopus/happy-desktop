@@ -255,13 +255,18 @@ export class HappyCloudRequestRefusal extends UserError {
     }
 }
 
-/** Retry an absolute assignment once when delivery is uncertain, with the same key and body. */
+/**
+ * Retry an absolute assignment once when delivery is uncertain, with the same
+ * key and body. A caller that may send the same assignment again later, such
+ * as after the person retries, passes the key it keeps for it.
+ */
 export async function happyCloudAssignment(
     request: HappyCloudRequest,
     path: string,
     body: unknown,
+    idempotencyKey: string = crypto.randomUUID(),
 ): Promise<unknown> {
-    const headers = { "Idempotency-Key": crypto.randomUUID() };
+    const headers = { "Idempotency-Key": idempotencyKey };
     try {
         return await request("PUT", path, body, headers);
     } catch (error) {

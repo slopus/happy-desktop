@@ -4,9 +4,11 @@ import type {
     HappyAgentPluginInstallation,
     HappyAgentPluginsSnapshot,
 } from "happy-desktop-state";
+import { ModalOverlay } from "../../src/ModalOverlay";
 import { HappyAgentPluginPage } from "../../src/pages/plugins/HappyAgentPluginPage";
 import { HappyAgentCustomPluginPage } from "../../src/pages/plugins/HappyAgentCustomPluginPage";
 import { HappyAgentPluginsPage } from "../../src/pages/plugins/HappyAgentPluginsPage";
+import { HappyAgentPluginZoneSetupSheet } from "../../src/pages/plugins/HappyAgentPluginZoneSetupSheet";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -17,6 +19,7 @@ const WINDOW = { width: 1100, height: 760 } as const;
 const zones = [
     { id: "default", name: "Default", color: "blue" },
     { id: "release", name: "Release", color: "purple" },
+    { id: "sandbox", name: "Sandbox", color: "teal" },
 ] as const;
 
 const github: HappyAgentPlugin = {
@@ -86,6 +89,17 @@ const weather: HappyAgentPlugin = {
     catalog: null,
 };
 
+const githubAccess = {
+    canManageZones: true,
+    zones: ["default", "release"],
+    allTools: [],
+    tools: [
+        { name: "list_issues", zones: ["default", "release"] },
+        { name: "create_pull_request", zones: ["release"] },
+        { name: "comment", zones: [] },
+    ],
+};
+
 const githubActive: HappyAgentPluginInstallation = {
     id: "inst-1",
     pluginId: "github",
@@ -99,13 +113,18 @@ const githubActive: HappyAgentPluginInstallation = {
     toolPrefix: "plugin_github_",
     image: null,
     available: true,
-    toolAccess: {
-        canManageZones: true,
-        tools: [
-            { name: "list_issues", critical: false, zones: ["default", "release"] },
-            { name: "create_pull_request", critical: true, zones: ["release"] },
-            { name: "comment", critical: false, zones: [] },
-        ],
+    enabled: true,
+    zoneAccess: githubAccess,
+};
+
+const githubDisabled: HappyAgentPluginInstallation = {
+    ...githubActive,
+    enabled: false,
+    zoneAccess: {
+        ...githubAccess,
+        zones: ["release"],
+        allTools: ["release"],
+        tools: githubAccess.tools.map((tool) => ({ ...tool, zones: ["release"] })),
     },
 };
 
@@ -117,9 +136,10 @@ const githubSecond: HappyAgentPluginInstallation = {
     status: "notConfigured",
     authMethod: null,
     toolPrefix: "plugin_github_2_",
-    toolAccess: {
-        canManageZones: true,
-        tools: githubActive.toolAccess!.tools.map((tool) => ({ ...tool, zones: [] })),
+    zoneAccess: {
+        ...githubAccess,
+        zones: [],
+        tools: githubAccess.tools.map((tool) => ({ ...tool, zones: [] })),
     },
 };
 
@@ -136,6 +156,7 @@ const retired: HappyAgentPluginInstallation = {
     toolPrefix: "plugin_jira_",
     image: null,
     available: false,
+    enabled: true,
 };
 
 /* A feature plugin: the reader's own Pipelines, installed by everyone until they uninstall it. */
@@ -175,6 +196,7 @@ const pipelinesInstalled: HappyAgentPluginInstallation = {
     toolPrefix: "",
     image: null,
     available: true,
+    enabled: true,
 };
 
 /** A member who manages nothing, with Pipelines installed, as everyone starts. */
@@ -204,8 +226,8 @@ const member: HappyAgentPluginsSnapshot = {
     ...manager,
     manage: false,
     installations: manager.installations.map((entry) =>
-        entry.toolAccess
-            ? { ...entry, toolAccess: { ...entry.toolAccess, canManageZones: false } }
+        entry.zoneAccess
+            ? { ...entry, zoneAccess: { ...entry.zoneAccess, canManageZones: false } }
             : entry,
     ),
 };
@@ -273,6 +295,7 @@ const daemonInstallation = (
     toolPrefix: null,
     image: null,
     available: true,
+    enabled: true,
 });
 
 const daemon: HappyAgentPluginsSnapshot = {
@@ -378,8 +401,12 @@ const detailHandlers = {
     onDisconnect: settle,
     onInstall: settle,
     onRemove: settle,
-    onToolCriticalChange: settle,
+    onZoneAdd: settle,
+    onZoneToolChange: settle,
+    onZoneToolsChange: settle,
 };
+
+const cloudDetailHandlers = { ...detailHandlers, onEnabledChange: settle };
 
 export function HappyAgentPluginsBlueprintPage() {
     const catalogHandlers = {
@@ -423,14 +450,14 @@ export function HappyAgentPluginsBlueprintPage() {
                 <HappyAgentPluginsPage {...catalogHandlers} plugins={loading} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="One plugin installed twice. Each installation shows its tools and allowed zones; a manager can change which tools are critical."
+                detail="One plugin installed twice. Each installation has its own Zones section and tool switches."
                 label="Plugin, installed twice"
                 number="04"
                 screen="04-plugin-1100x760"
                 window={WINDOW}
             >
                 <HappyAgentPluginPage
-                    {...detailHandlers}
+                    {...cloudDetailHandlers}
                     pluginId="github"
                     plugins={manager}
                     zones={zones}
@@ -475,7 +502,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 window={WINDOW}
             >
                 <HappyAgentPluginPage
-                    {...detailHandlers}
+                    {...cloudDetailHandlers}
                     pluginId="github"
                     plugins={member}
                     zones={zones}
@@ -554,6 +581,80 @@ export function HappyAgentPluginsBlueprintPage() {
                     customPluginId={happySkills.id}
                     onBack={detailHandlers.onBack}
                     plugins={custom}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="After installation, tool access starts off in every zone. One zone is expanded to show the individual switches."
+                label="Choose plugin zones after install"
+                number="16"
+                screen="16-plugin-zone-setup-1100x760"
+                window={WINDOW}
+            >
+                <div style={{ display: "flex", transform: "translateZ(0)" }}>
+                    <HappyAgentPluginsPage {...catalogHandlers} plugins={manager} />
+                    <ModalOverlay>
+                        <HappyAgentPluginZoneSetupSheet
+                            name={github.name}
+                            onClose={() => undefined}
+                            onDone={() => undefined}
+                            onToolToggle={() => undefined}
+                            onZoneAllChange={() => undefined}
+                            onZoneToggle={() => undefined}
+                            setup={{
+                                kind: "choose",
+                                installationId: githubActive.id,
+                                pluginId: github.id,
+                                tools: github.tools.map(({ name }) => name),
+                                enabled: new Map(),
+                                expanded: ["default"],
+                                saving: false,
+                            }}
+                            toolDescriptions={
+                                new Map(github.tools.map(({ name, summary }) => [name, summary]))
+                            }
+                            zones={zones}
+                        />
+                    </ModalOverlay>
+                </div>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An enabled installation with two zones and a tool not enabled anywhere."
+                label="Enabled installation"
+                number="17"
+                screen="17-plugin-enabled-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginPage
+                    {...cloudDetailHandlers}
+                    pluginId={github.id}
+                    plugins={{ ...manager, installations: [githubActive] }}
+                    zones={zones}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A disabled installation keeps its Zones section editable, including a legacy all-tools listing."
+                label="Disabled installation"
+                number="18"
+                screen="18-plugin-disabled-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginPage
+                    {...cloudDetailHandlers}
+                    pluginId={github.id}
+                    plugins={{ ...manager, installations: [githubDisabled] }}
+                    zones={zones}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The Installed list shows Disabled with a muted dot. Availability still reads Installed."
+                label="Catalog, disabled installation"
+                number="19"
+                screen="19-catalog-disabled-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentPluginsPage
+                    {...catalogHandlers}
+                    plugins={{ ...manager, installations: [githubDisabled] }}
                 />
             </FullScreenSpecimen>
         </ComponentPage>

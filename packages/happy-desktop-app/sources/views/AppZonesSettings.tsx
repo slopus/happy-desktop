@@ -181,6 +181,9 @@ export function AppZonesSettings(props: {
                                 onToggle={(installationId) =>
                                     store.zonePluginToggle(installationId)
                                 }
+                                onToolChange={(installationId, tool, enabled) =>
+                                    store.zonePluginToolEnabledUpdate(installationId, tool, enabled)
+                                }
                                 plugins={reach.plugins.map((plugin) => ({
                                     id: plugin.id,
                                     name: plugin.name,
@@ -188,8 +191,11 @@ export function AppZonesSettings(props: {
                                     ...(plugin.image ? { imageUrl: plugin.image.url } : {}),
                                     needsSetup: !plugin.active,
                                     policyCount: plugin.policyCount,
+                                    allTools: plugin.allTools,
+                                    toolsError: plugin.toolsError,
                                     tools: plugin.tools,
                                 }))}
+                                zoneName={opened.name}
                             />
                             {/* A server without policies yet gets nothing about them. */}
                             {reach.policies === null ? null : (

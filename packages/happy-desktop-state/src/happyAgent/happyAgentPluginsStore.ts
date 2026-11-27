@@ -8,6 +8,7 @@ import {
     type HappyCloudRequest,
 } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
+import { happyAgentZonePluginRead } from "./happyAgentZoneReach.js";
 
 /** A plugin's picture: its address, with the ThumbHash painted until it loads. */
 export interface HappyAgentPluginImage {
@@ -109,14 +110,56 @@ export type HappyAgentPluginInstallationStatus =
     | "notConfigured"
     | "methodUnavailable";
 
-interface HappyAgentPluginToolAccess {
-    readonly canManageZones: boolean;
-    readonly tools: readonly {
-        readonly name: string;
-        readonly critical: boolean;
-        readonly zones: readonly string[];
-    }[];
+/** One tool of an installation, with the zones that enable it. */
+export interface HappyAgentPluginToolZones {
+    readonly name: string;
+    /** The zones whose agents may use it, by ID; empty until someone enables it. */
+    readonly zones: readonly string[];
 }
+
+/** Where agents can use one installation's tools, read on the plugin page. */
+export interface HappyAgentPluginZoneAccess {
+    /** Whether the reader may list it in zones and enable its tools there. */
+    readonly canManageZones: boolean;
+    /** The zones that list it, by ID. A zone lists it before it enables any tool. */
+    readonly zones: readonly string[];
+    /**
+     * The zones that list it from before per-zone tools, which enable every
+     * tool it has or gets, by ID. Changing any tool there sends the explicit
+     * set, and the zone enables only those from then on.
+     */
+    readonly allTools: readonly string[];
+    /** Every tool of the installation. A tool starts disabled in every zone. */
+    readonly tools: readonly HappyAgentPluginToolZones[];
+}
+
+/**
+ * Right after an install: choosing where agents can use the new
+ * installation's tools, for a reader who may manage zones, or the word that
+ * someone who does must enable them, for anyone else.
+ */
+export type HappyAgentPluginZoneSetup =
+    | {
+          readonly kind: "choose";
+          readonly installationId: string;
+          readonly pluginId: string;
+          /** The installation's tools, in the plugin's order. */
+          readonly tools: readonly string[];
+          /** The tools switched on, by zone ID. Every tool starts off everywhere. */
+          readonly enabled: ReadonlyMap<string, readonly string[]>;
+          /** The zones whose tools are shown, by ID. */
+          readonly expanded: readonly string[];
+          readonly saving: boolean;
+          /** Zones accepted by a partially successful Done; they need not be saved again. */
+          readonly savedZones?: readonly string[];
+          /** Why the last Done did not go through for every zone. */
+          readonly error?: UserError;
+      }
+    | {
+          readonly kind: "notice";
+          readonly installationId: string;
+          readonly pluginId: string;
+      };
 
 /** One installation of a plugin on the team. A plugin may be installed more than once. */
 export interface HappyAgentPluginInstallation {
@@ -139,8 +182,14 @@ export interface HappyAgentPluginInstallation {
     readonly image: HappyAgentPluginImage | null;
     /** False for a plugin this server no longer offers; it cannot be changed or removed then. */
     readonly available: boolean;
-    /** Read on the plugin page, absent when the server has no tool access data. */
-    readonly toolAccess?: HappyAgentPluginToolAccess;
+    /**
+     * False while turned off: agents get none of its tools, skills or docs
+     * anywhere, and its zones and tools are kept for when it is back on. A
+     * feature installation is always enabled.
+     */
+    readonly enabled: boolean;
+    /** Read on the plugin page; absent where the server says nothing of zones. */
+    readonly zoneAccess?: HappyAgentPluginZoneAccess;
 }
 
 export interface HappyAgentPluginsSnapshot {
@@ -156,6 +205,8 @@ export interface HappyAgentPluginsSnapshot {
     readonly customPlugins: readonly HappyAgentCustomPlugin[];
     /** Whether the reader may install, set up and remove plugins. */
     readonly manage: boolean;
+    /** Where an installation just made should be enabled, until it is settled. */
+    readonly zoneSetup?: HappyAgentPluginZoneSetup;
 }
 
 /** What the person's browser is sent to for a sign-in. Never kept by the store. */
@@ -204,11 +255,45 @@ export interface HappyAgentPluginsStore {
     ): Promise<void>;
     /** Forgets every secret of an installation, revoking each grant upstream where it can. */
     installationDisconnect(installationId: string): Promise<void>;
-    /** Sets the critical flag for one installation's tool, where the server permits it. */
-    installationToolCriticalUpdate?(input: {
+    /**
+     * Turns an installation on or off everywhere. The switch moves at once and
+     * moves back when the server refuses, which rejects with its reason.
+     */
+    installationEnabledUpdate?(installationId: string, enabled: boolean): Promise<void>;
+    /**
+     * Asks, after `pluginInstall`, where agents can use the new installation:
+     * a reader who may manage zones chooses in `zoneSetup`, anyone else is
+     * told who must. Nothing opens for an installation without tools, or on a
+     * server that says nothing of zones.
+     */
+    pluginZoneSetupOpen?(pluginId: string, installationId: string): void;
+    /** Switches one tool on or off in one zone of the setup. */
+    zoneSetupToolToggle?(zoneId: string, tool: string): void;
+    /** Switches every tool on or off in one zone of the setup. */
+    zoneSetupZoneAllUpdate?(zoneId: string, enabled: boolean): void;
+    /** Shows or hides one zone's tools in the setup. */
+    zoneSetupZoneToggle?(zoneId: string): void;
+    /** Enables the chosen tools in each zone that has any, then closes the setup. */
+    zoneSetupApply?(zoneIds: readonly string[]): void;
+    /** Closes the setup, leaving every tool disabled. */
+    zoneSetupClose?(): void;
+    /** Enables or disables one tool of an installation in one zone, listing it there if needed. */
+    installationZoneToolEnabledUpdate?(input: {
         readonly installationId: string;
+        readonly zoneId: string;
         readonly tool: string;
-        readonly critical: boolean;
+        readonly enabled: boolean;
+    }): Promise<void>;
+    /** Replaces the tools an installation enables in one zone, listing it there if needed. */
+    installationZoneToolsEnabledUpdate?(input: {
+        readonly installationId: string;
+        readonly zoneId: string;
+        readonly enabled: readonly string[];
+    }): Promise<void>;
+    /** Lists an installation in one more zone, with none of its tools enabled. */
+    installationZoneAdd?(input: {
+        readonly installationId: string;
+        readonly zoneId: string;
     }): Promise<void>;
     [Symbol.dispose](): void;
 }
@@ -241,22 +326,28 @@ function listOf(value: unknown): readonly unknown[] {
     return Array.isArray(value) ? value : [];
 }
 
-function toolAccessRead(answer: unknown): HappyAgentPluginToolAccess | undefined {
+function zoneIdsRead(value: unknown): readonly string[] | undefined {
+    return Array.isArray(value) && value.every((id): id is string => typeof id === "string")
+        ? value
+        : undefined;
+}
+
+/**
+ * An installation's zones, as `GET v0/plugins/installations/{id}` answers. A
+ * server from before per-zone tools names no `zones`, and says nothing here.
+ */
+function zoneAccessRead(answer: unknown): HappyAgentPluginZoneAccess | undefined {
     const body = recordOf(answer);
     const toolZones = recordOf(body?.toolZones);
-    if (!toolZones) return undefined;
+    const zones = zoneIdsRead(body?.zones);
+    if (!toolZones || !zones) return undefined;
     return {
         canManageZones: body?.canManageZones === true,
+        zones,
+        allTools: zoneIdsRead(body?.allTools) ?? [],
         tools: Object.entries(toolZones).flatMap(([name, value]) => {
-            const entry = recordOf(value);
-            const zones: unknown = entry?.zones;
-            if (
-                typeof entry?.critical !== "boolean" ||
-                !Array.isArray(zones) ||
-                !zones.every((id): id is string => typeof id === "string")
-            )
-                return [];
-            return [{ name, critical: entry.critical, zones }];
+            const enabled = zoneIdsRead(recordOf(value)?.zones);
+            return enabled ? [{ name, zones: enabled }] : [];
         }),
     };
 }
@@ -334,15 +425,20 @@ export function happyAgentPluginsStoreCreate(deps: {
     const store = createStore<HappyAgentPluginsSnapshot>()(() => EMPTY);
     const listeners = new Set<() => void>();
     const watchedPlugins = new Map<string, number>();
-    const savingToolAccess = new Set<string>();
+    /** The key each zone's assignment in the open setup is sent with, by zone and tools. */
+    const setupKeys = new Map<string, string>();
+    /** Enabled switches sent and not yet answered, with the value asked for last. */
+    const enabledPending = new Map<string, boolean>();
     let disposed = false;
     let reading = false;
     let readAgain = false;
-    let toolWriteRevision = 0;
+    let writeRevision = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let follow: AbortController | undefined;
     const installation = (id: string): string =>
         `v0/plugins/installations/${encodeURIComponent(id)}`;
+    const zoneInstallation = (zoneId: string, installationId: string): string =>
+        `v0/zones/${encodeURIComponent(zoneId)}/plugins/${encodeURIComponent(installationId)}`;
 
     const imageRead = (value: unknown): HappyAgentPluginImage | null => {
         const image = recordOf(value);
@@ -413,10 +509,11 @@ export function happyAgentPluginsStoreCreate(deps: {
         const id = textOrNull(entry?.id);
         const pluginId = textOrNull(entry?.plugin);
         if (!entry || id === null || pluginId === null) return undefined;
+        const kind = kindRead(entry.kind);
         return {
             id,
             pluginId,
-            kind: kindRead(entry.kind),
+            kind,
             name: textOrNull(entry.pluginName) ?? pluginId,
             ordinal: typeof entry.ordinal === "number" ? entry.ordinal : 1,
             label: textOrNull(entry.label),
@@ -426,6 +523,8 @@ export function happyAgentPluginsStoreCreate(deps: {
             toolPrefix: textOrNull(entry.toolPrefix),
             image: imageRead(entry.image),
             available: entry.available !== false,
+            // A server from before the switch, and every feature, leaves it on.
+            enabled: kind === "feature" || entry.enabled !== false,
         };
     };
 
@@ -438,7 +537,7 @@ export function happyAgentPluginsStoreCreate(deps: {
     };
 
     const read = async (): Promise<void> => {
-        const revision = toolWriteRevision;
+        const revision = writeRevision;
         // Every member reads both; the installations say whether the reader may manage them.
         const [catalog, installed] = await Promise.all([
             deps.request("GET", "v0/plugins"),
@@ -450,17 +549,17 @@ export function happyAgentPluginsStoreCreate(deps: {
             return installation ? [installation] : [];
         });
         const previous = new Map(store.getState().installations.map((entry) => [entry.id, entry]));
-        const withTools = await Promise.all(
+        const withZones = await Promise.all(
             installations.map(async (entry) => {
-                const prior = previous.get(entry.id)?.toolAccess;
+                const prior = previous.get(entry.id)?.zoneAccess;
                 if (entry.kind === "feature" || !watchedPlugins.has(entry.pluginId)) {
-                    return prior ? { ...entry, toolAccess: prior } : entry;
+                    return prior ? { ...entry, zoneAccess: prior } : entry;
                 }
                 try {
-                    const toolAccess = toolAccessRead(
+                    const zoneAccess = zoneAccessRead(
                         await deps.request("GET", installation(entry.id)),
                     );
-                    return toolAccess ? { ...entry, toolAccess } : entry;
+                    return zoneAccess ? { ...entry, zoneAccess } : entry;
                 } catch (error) {
                     // Older servers may not have the detail route. Keep the last data on transient failures.
                     return prior &&
@@ -468,13 +567,13 @@ export function happyAgentPluginsStoreCreate(deps: {
                             error instanceof HappyCloudRequestRefusal &&
                             [403, 404].includes(error.status)
                         )
-                        ? { ...entry, toolAccess: prior }
+                        ? { ...entry, zoneAccess: prior }
                         : entry;
                 }
             }),
         );
         // A response begun before a toggle settled must not undo its answer.
-        if (disposed || revision !== toolWriteRevision) return;
+        if (disposed || revision !== writeRevision) return;
         const current = store.getState();
         const { error: _cleared, ...rest } = current;
         store.setState(
@@ -491,7 +590,10 @@ export function happyAgentPluginsStoreCreate(deps: {
                         })
                         .sort(compareByName),
                 ),
-                installations: referencesPreserve(current.installations, withTools),
+                installations: referencesPreserve(
+                    current.installations,
+                    withZones.map(enabledPendingShow),
+                ),
                 customPlugins: referencesPreserve(
                     current.customPlugins,
                     listOf(recordOf(catalog)?.customPlugins)
@@ -553,6 +655,116 @@ export function happyAgentPluginsStoreCreate(deps: {
             }
         })().catch(() => undefined);
     };
+
+    /** An installation with an Enabled switch still on its way shown as the reader left it. */
+    const enabledPendingShow = (
+        entry: HappyAgentPluginInstallation,
+    ): HappyAgentPluginInstallation => {
+        const pending = enabledPending.get(entry.id);
+        return pending === undefined || pending === entry.enabled
+            ? entry
+            : { ...entry, enabled: pending };
+    };
+    const installationEnabledShow = (installationId: string, enabled: boolean): void => {
+        store.setState((current) => ({
+            installations: current.installations.map((entry) =>
+                entry.id === installationId && entry.enabled !== enabled
+                    ? { ...entry, enabled }
+                    : entry,
+            ),
+        }));
+    };
+
+    const setupUpdate = (
+        change: Partial<Extract<HappyAgentPluginZoneSetup, { kind: "choose" }>>,
+    ): void => {
+        const setup = store.getState().zoneSetup;
+        if (setup?.kind === "choose") store.setState({ zoneSetup: { ...setup, ...change } });
+    };
+    /** A change to the setup's choice, while it is not being sent. */
+    const setupEnabledUpdate = (
+        zoneId: string,
+        tools: (
+            current: readonly string[],
+            setup: Extract<HappyAgentPluginZoneSetup, { kind: "choose" }>,
+        ) => readonly string[],
+    ): void => {
+        const setup = store.getState().zoneSetup;
+        if (
+            disposed ||
+            setup?.kind !== "choose" ||
+            setup.saving ||
+            setup.savedZones?.includes(zoneId)
+        )
+            return;
+        const enabled = new Map(setup.enabled);
+        const chosen = new Set(tools(enabled.get(zoneId) ?? [], setup));
+        // Kept in the installation's own order, whatever order they were switched on in.
+        const next = setup.tools.filter((tool) => chosen.has(tool));
+        if (next.length === 0) enabled.delete(zoneId);
+        else enabled.set(zoneId, next);
+        const { error: _cleared, ...rest } = setup;
+        store.setState({ zoneSetup: { ...rest, enabled } });
+    };
+    const setupClose = (): void => {
+        setupKeys.clear();
+        const { zoneSetup: _closed, ...rest } = store.getState();
+        store.setState(rest, true);
+    };
+
+    /**
+     * Sends one change to where an installation's tools are enabled, which
+     * the server answers with the zone's page, then reads the installation's
+     * zones again. A read begun before it settled is not let undo it.
+     */
+    const zoneWrite = (
+        input: { readonly installationId: string; readonly zoneId: string },
+        send: () => Promise<unknown>,
+    ): Promise<void> =>
+        write(async () => {
+            const answer = await send();
+            writeRevision += 1;
+            if (disposed) return;
+            const listing = listOf(recordOf(answer)?.plugins)
+                .flatMap((entry) => happyAgentZonePluginRead(deps.endpoint, entry) ?? [])
+                .find((entry) => entry.id === input.installationId);
+            if (!listing) return;
+            store.setState((current) => ({
+                installations: current.installations.map((entry) => {
+                    const access = entry.zoneAccess;
+                    if (entry.id !== input.installationId || !access) return entry;
+                    const tools = new Map(listing.tools.map((tool) => [tool.name, tool.enabled]));
+                    const withZone = (
+                        ids: readonly string[],
+                        included: boolean,
+                    ): readonly string[] =>
+                        included === ids.includes(input.zoneId)
+                            ? ids
+                            : included
+                              ? [...ids, input.zoneId]
+                              : ids.filter((id) => id !== input.zoneId);
+                    const nextTools = access.tools.map((tool) => {
+                        const enabled = tools.get(tool.name);
+                        tools.delete(tool.name);
+                        return typeof enabled === "boolean"
+                            ? { ...tool, zones: withZone(tool.zones, enabled) }
+                            : tool;
+                    });
+                    for (const [name, enabled] of tools) {
+                        nextTools.push({ name, zones: enabled ? [input.zoneId] : [] });
+                    }
+                    return {
+                        ...entry,
+                        zoneAccess: {
+                            ...access,
+                            zones: withZone(access.zones, true),
+                            allTools: withZone(access.allTools, listing.allTools),
+                            tools: nextTools,
+                        },
+                    };
+                }),
+            }));
+        });
 
     /** Runs one write, then reads the list again whether it succeeded or not. */
     const write = async <T>(send: () => Promise<T>): Promise<T> => {
@@ -651,40 +863,181 @@ export function happyAgentPluginsStoreCreate(deps: {
             write(async () => {
                 await deps.request("POST", `${installation(installationId)}/disconnect`, {});
             }),
-        installationToolCriticalUpdate: ({ installationId, tool, critical }) =>
-            write(async () => {
+        async installationEnabledUpdate(installationId, enabled) {
+            if (disposed) throw new UserError("This Happy Cloud connection is closed.");
+            const current = store.getState();
+            const entry = current.installations.find(
+                (candidate) => candidate.id === installationId,
+            );
+            if (!entry || entry.kind === "feature")
+                throw new UserError("This installation can't be turned off.");
+            if (!current.manage || !entry.available)
+                throw new UserError("You can't change this installation.");
+            if (entry.enabled === enabled || enabledPending.has(installationId)) return;
+            enabledPending.set(installationId, enabled);
+            installationEnabledShow(installationId, enabled);
+            try {
+                const answer = await happyCloudAssignment(
+                    deps.request,
+                    `${installation(installationId)}/enabled`,
+                    { enabled },
+                );
+                const answered = installationRead(recordOf(answer)?.installation);
+                if (!disposed && answered)
+                    installationEnabledShow(installationId, answered.enabled);
+            } catch (error) {
+                if (!disposed) installationEnabledShow(installationId, entry.enabled);
+                throw happyAgentUserError(error);
+            } finally {
+                enabledPending.delete(installationId);
+                writeRevision += 1;
+                load();
+            }
+        },
+        pluginZoneSetupOpen(pluginId, installationId) {
+            if (disposed) return;
+            const plugin = store.getState().plugins.find((entry) => entry.id === pluginId);
+            if (plugin?.kind === "feature") return;
+            void deps.request("GET", installation(installationId)).then(
+                (answer) => {
+                    const access = zoneAccessRead(answer);
+                    if (disposed || !access || access.tools.length === 0) return;
+                    if (store.getState().zoneSetup?.kind === "choose") return;
+                    setupKeys.clear();
+                    if (!access.canManageZones) {
+                        store.setState({ zoneSetup: { kind: "notice", installationId, pluginId } });
+                        return;
+                    }
+                    const order = plugin?.tools.map((tool) => tool.name) ?? [];
+                    const rank = (name: string): number => {
+                        const index = order.indexOf(name);
+                        return index === -1 ? order.length : index;
+                    };
+                    store.setState({
+                        zoneSetup: {
+                            kind: "choose",
+                            installationId,
+                            pluginId,
+                            tools: access.tools
+                                .map((tool) => tool.name)
+                                .sort((left, right) => rank(left) - rank(right)),
+                            enabled: new Map(),
+                            expanded: [],
+                            saving: false,
+                        },
+                    });
+                },
+                // A server without the route, or one that refused it, asks nothing.
+                () => undefined,
+            );
+        },
+        zoneSetupToolToggle(zoneId, tool) {
+            setupEnabledUpdate(zoneId, (current) =>
+                current.includes(tool)
+                    ? current.filter((entry) => entry !== tool)
+                    : [...current, tool],
+            );
+        },
+        zoneSetupZoneAllUpdate(zoneId, enabled) {
+            setupEnabledUpdate(zoneId, (_current, setup) => (enabled ? setup.tools : []));
+        },
+        zoneSetupZoneToggle(zoneId) {
+            const setup = store.getState().zoneSetup;
+            if (disposed || setup?.kind !== "choose") return;
+            setupUpdate({
+                expanded: setup.expanded.includes(zoneId)
+                    ? setup.expanded.filter((id) => id !== zoneId)
+                    : [...setup.expanded, zoneId],
+            });
+        },
+        zoneSetupApply(zoneIds) {
+            const setup = store.getState().zoneSetup;
+            if (disposed || setup?.kind !== "choose" || setup.saving) return;
+            const { error: _cleared, ...rest } = setup;
+            store.setState({ zoneSetup: { ...rest, saving: true } });
+            const assignments = [...setup.enabled].filter(
+                ([zoneId]) => zoneIds.includes(zoneId) && !setup.savedZones?.includes(zoneId),
+            );
+            void Promise.allSettled(
+                assignments.map(async ([zoneId, tools]) => {
+                    // The same assignment sent again, after a Done that failed somewhere, keeps its key.
+                    const assignment = JSON.stringify([setup.installationId, zoneId, tools]);
+                    const key = setupKeys.get(assignment) ?? crypto.randomUUID();
+                    setupKeys.set(assignment, key);
+                    await happyCloudAssignment(
+                        deps.request,
+                        `${zoneInstallation(zoneId, setup.installationId)}/tools`,
+                        { enabled: tools },
+                        key,
+                    );
+                    return zoneId;
+                }),
+            ).then((results) => {
+                if (disposed) return;
+                writeRevision += 1;
+                load();
+                const refused = results.find((result) => result.status === "rejected");
+                if (store.getState().zoneSetup?.installationId !== setup.installationId) return;
+                if (refused) {
+                    setupUpdate({
+                        saving: false,
+                        savedZones: [
+                            ...(setup.savedZones ?? []),
+                            ...results.flatMap((result) =>
+                                result.status === "fulfilled" ? [result.value] : [],
+                            ),
+                        ],
+                        error: happyAgentUserError(refused.reason),
+                    });
+                    return;
+                }
+                setupClose();
+            });
+        },
+        zoneSetupClose() {
+            const setup = store.getState().zoneSetup;
+            if (disposed || !setup || (setup.kind === "choose" && setup.saving)) return;
+            setupClose();
+        },
+        installationZoneToolEnabledUpdate: (input) =>
+            zoneWrite(input, () => {
+                const { installationId, zoneId, tool, enabled } = input;
                 const access = store
                     .getState()
-                    .installations.find((entry) => entry.id === installationId)?.toolAccess;
-                if (!access?.canManageZones || !access.tools.some((entry) => entry.name === tool)) {
-                    throw new UserError(
-                        "You can't change this tool's critical setting.",
-                        "forbidden",
-                    );
-                }
-                if (savingToolAccess.has(installationId)) {
-                    throw new UserError("Another tool change is still saving.");
-                }
-                savingToolAccess.add(installationId);
-                try {
-                    const answer = await happyCloudAssignment(
+                    .installations.find((entry) => entry.id === installationId)?.zoneAccess;
+                // A zone enabling every tool gets the explicit set: all of them but this one.
+                if (access?.allTools.includes(zoneId))
+                    return happyCloudAssignment(
                         deps.request,
-                        `${installation(installationId)}/tools/${encodeURIComponent(tool)}/zone`,
-                        { critical },
+                        `${zoneInstallation(zoneId, installationId)}/tools`,
+                        {
+                            enabled: access.tools
+                                .map((entry) => entry.name)
+                                .filter((name) => name !== tool || enabled),
+                        },
                     );
-                    if (disposed) return;
-                    const toolAccess = toolAccessRead(answer);
-                    if (!toolAccess) return;
-                    toolWriteRevision += 1;
-                    store.setState((current) => ({
-                        installations: current.installations.map((entry) =>
-                            entry.id === installationId ? { ...entry, toolAccess } : entry,
-                        ),
-                    }));
-                } finally {
-                    savingToolAccess.delete(installationId);
-                }
+                return happyCloudAssignment(
+                    deps.request,
+                    `${zoneInstallation(zoneId, installationId)}/tools/${encodeURIComponent(tool)}`,
+                    { enabled },
+                );
             }),
+        installationZoneToolsEnabledUpdate: (input) =>
+            zoneWrite(input, () =>
+                happyCloudAssignment(
+                    deps.request,
+                    `${zoneInstallation(input.zoneId, input.installationId)}/tools`,
+                    { enabled: input.enabled },
+                ),
+            ),
+        installationZoneAdd: (input) =>
+            zoneWrite(input, () =>
+                happyCloudAssignment(
+                    deps.request,
+                    zoneInstallation(input.zoneId, input.installationId),
+                    {},
+                ),
+            ),
         [Symbol.dispose]() {
             disposed = true;
             follow?.abort();

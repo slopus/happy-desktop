@@ -346,31 +346,84 @@
 
 .happy-agent-plugin-card__header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     min-width: 0;
     min-height: 28px;
 }
 
-.happy-agent-plugin-card__tools {
+.happy-agent-plugin-card__header > .happy-agent-plugin-status {
+    min-inline-size: 70px;
+}
+
+.happy-agent-plugin-card__zones {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--divider);
     font-size: 12px;
 }
 
-.happy-agent-plugin-card__tool-header {
+.happy-agent-plugin-card__zones[data-disabled]:not(:focus-within, :hover) {
+    opacity: 0.78;
+}
+
+.happy-agent-plugin-zone__list,
+.happy-agent-plugin-zone-setup,
+.happy-agent-plugin-zone-setup__list,
+.happy-agent-plugin-zone__unassigned {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-plugin-zone-setup__list {
+    gap: 0;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.happy-agent-plugin-zone-setup__list > .happy-agent-plugin-zone + .happy-agent-plugin-zone {
+    border-top: 1px solid var(--divider);
+}
+
+.happy-agent-plugin-zone__header,
+.happy-agent-plugin-zone__add {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    min-height: 24px;
+    gap: 12px;
+    min-height: 36px;
 }
 
-.happy-agent-plugin-card__tool-switch {
-    margin-left: auto;
+.happy-agent-plugin-zone__disclosure {
+    flex-wrap: wrap;
+    min-height: 36px;
+}
+
+.happy-agent-plugin-zone__header > .happy-switch {
+    margin-inline-start: auto;
+}
+
+.happy-agent-plugin-zone__tools,
+.happy-agent-plugin-zone__note {
+    margin-inline-start: 26px;
+}
+
+.happy-agent-plugin-zone__disclosure .happy-agent-plugins__note,
+.happy-agent-plugin-zone__note {
+    padding-inline: 0;
+}
+
+.happy-agent-plugin-zone__tools > .happy-agent-zones__tool:last-child {
+    border-bottom: 0;
+}
+
+.happy-agent-plugin-zone__unassigned .happy-agent-plugin__tools {
+    padding: 0;
 }
 
 .happy-agent-plugin-card__title {

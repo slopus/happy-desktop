@@ -5366,7 +5366,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ? {}
                         : { customPluginId: props.customPluginId })}
                     store={plugins}
-                    zonesStore={props.pluginId === undefined ? undefined : active.session.zones?.()}
+                    zonesStore={active.session.zones?.()}
                 />
             );
         }

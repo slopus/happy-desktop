@@ -14,6 +14,7 @@ import { ArtifactHeader } from "../artifacts/ArtifactHeader";
 import {
     PluginInstallationStatus,
     PluginMark,
+    PluginZoneSetupNotice,
     customPluginMeta,
     pluginInstallationTitle,
     usePluginAct,
@@ -27,6 +28,7 @@ export interface HappyAgentPluginsPageProps {
     onCustomPluginOpen: (customPluginId: string) => void;
     /** Installs one plugin; rejects with the reason to show. */
     onPluginInstall: (pluginId: string) => Promise<unknown>;
+    onZoneSetupDismiss?: (() => void) | undefined;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -69,6 +71,10 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                 viewportClassName="happy-agent-plugins__scroll-viewport"
             >
                 <div className="happy-agent-plugins__content">
+                    <PluginZoneSetupNotice
+                        onDismiss={props.onZoneSetupDismiss}
+                        plugins={snapshot}
+                    />
                     {snapshot.error ? (
                         <Banner tone="danger" title="Plugins may be out of date">
                             {snapshot.error.message}
@@ -93,7 +99,7 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                                 {installedCount === 0 ? (
                                     <p className="happy-agent-plugins__note">
                                         {snapshot.manage
-                                            ? "Nothing installed yet. Install a plugin below to give agents its tools."
+                                            ? "Nothing installed yet. Install a plugin below, then choose where agents can use its tools."
                                             : "Nothing installed yet."}
                                     </p>
                                 ) : (

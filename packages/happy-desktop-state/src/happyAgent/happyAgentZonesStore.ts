@@ -4,6 +4,7 @@ import { UserError } from "../types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 import {
     HappyCloudRequestRefusal,
+    happyCloudAssignment,
     type HappyCloudRequest,
 } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
@@ -72,8 +73,8 @@ export interface HappyAgentZone {
      */
     readonly isDefault: boolean;
     /**
-     * Whether critical plugin tools run in it. A critical zone always lists
-     * its members, and a team always keeps at least one.
+     * A critical zone always lists its members, takes bots only where it
+     * lists them, and a team always keeps at least one.
      */
     readonly critical: boolean;
     readonly color: HappyAgentZoneColor;
@@ -162,7 +163,7 @@ export interface HappyAgentZoneOpen {
     readonly expanded: readonly string[];
     /** A policy's own sub-page, in place of the zone's page. */
     readonly policy?: HappyAgentZonePolicyPage;
-    /** Why the last removal did not go through. */
+    /** Why the last change did not go through. */
     readonly error?: UserError;
 }
 
@@ -242,6 +243,11 @@ export interface HappyAgentZonesStore {
     zonePluginRemove(installationId: string): void;
     /** Shows or hides an installation's tools. */
     zonePluginToggle(installationId: string): void;
+    /**
+     * Enables or disables one of a listed installation's tools in the open
+     * zone. The switch moves at once; the cluster's answer settles it.
+     */
+    zonePluginToolEnabledUpdate(installationId: string, tool: string, enabled: boolean): void;
     /** Opens a new policy's sub-page, on `target` or the zone's first installation. */
     zonePolicyCreateOpen(target?: HappyAgentZonePolicyTarget): void;
     zonePolicyOpen(policyId: string): void;
@@ -322,9 +328,26 @@ export function happyAgentZonesStoreCreate(deps: {
     let disposed = false;
     let reading = false;
     let readAgain = false;
+    let reachReadSequence = 0;
     let follow: AbortController | undefined;
     let selfUserId: string | null = null;
+    /**
+     * Tool switches sent and not yet answered, by zone and installation: the
+     * value asked for last of each tool, and whether the listing left
+     * enabling every tool. A read or answer begun before they settle shows
+     * the switches where the reader left them.
+     */
+    const toolsPending = new Map<
+        string,
+        {
+            readonly tools: ReadonlyMap<string, boolean>;
+            readonly explicit: boolean;
+            readonly sent: Promise<unknown>;
+        }
+    >();
     const zonePath = (id: string): string => `v0/zones/${encodeURIComponent(id)}`;
+    const listingKey = (zoneId: string, installationId: string): string =>
+        JSON.stringify([zoneId, installationId]);
 
     /**
      * Nothing for an entry this client can't read whole: a colour outside
@@ -695,6 +718,7 @@ export function happyAgentZonesStoreCreate(deps: {
      * is `answered` with the same body as the read, which is not asked again.
      */
     const reachRead = (zoneId: string, answered?: unknown): void => {
+        const sequence = ++reachReadSequence;
         void (async (): Promise<HappyAgentZoneReach> => {
             const detail =
                 answered ??
@@ -759,7 +783,7 @@ export function happyAgentZonesStoreCreate(deps: {
         })().then(
             (reach) => {
                 const open = store.getState().open;
-                if (disposed || open?.zoneId !== zoneId) return;
+                if (disposed || open?.zoneId !== zoneId || sequence !== reachReadSequence) return;
                 // A server that no longer answers for policies takes their page with it.
                 const { policy, ...rest } = open;
                 const kept = reach.kind === "ready" && reach.policies !== null;
@@ -767,7 +791,7 @@ export function happyAgentZonesStoreCreate(deps: {
                     {
                         open: {
                             ...rest,
-                            reach: reachKeep(open.reach, reach),
+                            reach: reachKeep(open.reach, toolsPendingShow(zoneId, reach)),
                             ...(policy && (kept || policy.saving || policy.deleting)
                                 ? { policy }
                                 : {}),
@@ -779,7 +803,13 @@ export function happyAgentZonesStoreCreate(deps: {
             () => {
                 // A refused read keeps what the page shows; the first one shows nothing.
                 const open = store.getState().open;
-                if (disposed || open?.zoneId !== zoneId || open.reach.kind !== "reading") return;
+                if (
+                    disposed ||
+                    open?.zoneId !== zoneId ||
+                    open.reach.kind !== "reading" ||
+                    sequence !== reachReadSequence
+                )
+                    return;
                 store.setState({ open: { ...open, reach: { kind: "unavailable" } } }, false);
             },
         );
@@ -794,6 +824,32 @@ export function happyAgentZonesStoreCreate(deps: {
         zoneAnswered(answered);
         reachRead(zoneId, Array.isArray(answered?.plugins) ? answered : undefined);
     };
+
+    /** One listing with its tool switches still on their way shown as the reader left them. */
+    const pluginPendingShow = (
+        zoneId: string,
+        plugin: HappyAgentZonePlugin,
+    ): HappyAgentZonePlugin => {
+        const pending = toolsPending.get(listingKey(zoneId, plugin.id));
+        if (!pending) return plugin;
+        return {
+            ...plugin,
+            allTools: plugin.allTools && !pending.explicit,
+            tools: plugin.tools.map((tool) => {
+                const enabled = pending.tools.get(tool.name);
+                return enabled === undefined || enabled === tool.enabled
+                    ? tool
+                    : { ...tool, enabled };
+            }),
+        };
+    };
+    const toolsPendingShow = (zoneId: string, reach: HappyAgentZoneReach): HappyAgentZoneReach =>
+        reach.kind !== "ready" || toolsPending.size === 0
+            ? reach
+            : {
+                  ...reach,
+                  plugins: reach.plugins.map((plugin) => pluginPendingShow(zoneId, plugin)),
+              };
 
     /** The new reach, keeping each unchanged entry's reference. */
     const reachKeep = (
@@ -1191,6 +1247,80 @@ export function happyAgentZonesStoreCreate(deps: {
                 false,
             );
         },
+        zonePluginToolEnabledUpdate(installationId, tool, enabled) {
+            const zone = openZone();
+            const { open, manage } = store.getState();
+            if (
+                disposed ||
+                !manage ||
+                !zone ||
+                open?.reach.kind !== "ready" ||
+                open.removing === installationId
+            )
+                return;
+            const plugin = open.reach.plugins.find((entry) => entry.id === installationId);
+            const listed = plugin?.tools.find((entry) => entry.name === tool);
+            if (!plugin || !listed || listed.enabled === null || listed.enabled === enabled) return;
+            const key = listingKey(zone.id, installationId);
+            const before = toolsPending.get(key);
+            const path = `${zonePath(zone.id)}/plugins/${encodeURIComponent(installationId)}/tools`;
+            // A listing that enables every tool gets the explicit set, which ends that for good.
+            const explicit = plugin.allTools;
+            const enabledSet = plugin.tools
+                .filter((entry) => (entry === listed ? enabled : entry.enabled))
+                .map((entry) => entry.name);
+            const tools = new Map(before?.tools);
+            if (explicit)
+                for (const entry of plugin.tools)
+                    tools.set(entry.name, enabledSet.includes(entry.name));
+            else tools.set(tool, enabled);
+            const { error: _cleared, ...rest } = open;
+            // Switches of one listing go one after another, so the last one asked for is the last one saved.
+            const sent = (before?.sent ?? Promise.resolve())
+                .catch(() => undefined)
+                .then(() =>
+                    explicit
+                        ? happyCloudAssignment(deps.request, path, { enabled: enabledSet })
+                        : happyCloudAssignment(
+                              deps.request,
+                              `${path}/${encodeURIComponent(tool)}`,
+                              {
+                                  enabled,
+                              },
+                          ),
+                );
+            const pending = { tools, explicit: explicit || before?.explicit === true, sent };
+            toolsPending.set(key, pending);
+            store.setState(
+                {
+                    open: {
+                        ...rest,
+                        reach: {
+                            ...open.reach,
+                            plugins: open.reach.plugins.map((entry) =>
+                                entry === plugin ? pluginPendingShow(zone.id, entry) : entry,
+                            ),
+                        },
+                    },
+                },
+                false,
+            );
+            void sent.then(
+                (answer) => {
+                    if (toolsPending.get(key) === pending) toolsPending.delete(key);
+                    if (disposed) return;
+                    if (store.getState().open?.zoneId === zone.id) pluginsAnswered(zone.id, answer);
+                },
+                (error: unknown) => {
+                    if (toolsPending.get(key) === pending) toolsPending.delete(key);
+                    if (disposed) return;
+                    const current = store.getState().open;
+                    if (current?.zoneId !== zone.id) return;
+                    store.setState({ open: { ...current, error: changeRefusal(error) } }, false);
+                    reachRead(zone.id);
+                },
+            );
+        },
         zonePolicyCreateOpen(target) {
             const { open, manage } = store.getState();
             if (disposed || !manage || !open || open.reach.kind !== "ready" || open.policy) return;
@@ -1502,6 +1632,7 @@ export const happyAgentZonesStoreNoop: HappyAgentZonesStore = {
     zonePluginsPickOpen: () => undefined,
     zonePluginRemove: () => undefined,
     zonePluginToggle: () => undefined,
+    zonePluginToolEnabledUpdate: () => undefined,
     zonePolicyCreateOpen: () => undefined,
     zonePolicyOpen: () => undefined,
     zonePolicyClose: () => undefined,

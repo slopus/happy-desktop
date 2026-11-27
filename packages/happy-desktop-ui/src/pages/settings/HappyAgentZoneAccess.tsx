@@ -9,14 +9,19 @@ import { Select } from "../../Select";
 import { Spinner } from "../../Spinner";
 import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
+import {
+    LEGACY_ALL_TOOLS,
+    LEGACY_ALL_TOOLS_NOTE,
+    PluginToolSwitch,
+} from "../plugins/PluginZoneTools";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 /** One tool of an installation a zone lists. */
 export interface HappyAgentZoneToolRow {
     readonly name: string;
     readonly description: string;
-    /** Runs only in a critical zone. */
-    readonly critical: boolean;
+    /** Whether the zone enables it; null when the server did not report access. */
+    readonly enabled: boolean | null;
     /** Policies this zone has on this one tool. */
     readonly policyCount: number;
 }
@@ -32,6 +37,8 @@ export interface HappyAgentZonePluginRow {
     readonly needsSetup?: boolean;
     /** Policies this zone has on the whole installation. */
     readonly policyCount: number;
+    readonly allTools: boolean;
+    readonly toolsError: string | null;
     readonly tools: readonly HappyAgentZoneToolRow[];
 }
 
@@ -44,13 +51,17 @@ function policiesText(count: number): string {
 }
 
 function pluginMeta(plugin: HappyAgentZonePluginRow, policies: boolean): string {
-    const critical = plugin.tools.filter((tool) => tool.critical).length;
+    const reported = plugin.tools.some((tool) => tool.enabled !== null);
+    const enabled = plugin.tools.filter((tool) => tool.enabled).length;
     return [
         ...(plugin.needsSetup ? ["Needs setup"] : []),
-        plugin.tools.length === 0
-            ? "No tools listed"
-            : countText(plugin.tools.length, "tool", "tools"),
-        ...(critical > 0 ? [`${String(critical)} critical`] : []),
+        plugin.allTools
+            ? LEGACY_ALL_TOOLS
+            : plugin.tools.length === 0
+              ? "No tools listed"
+              : reported
+                ? `${String(enabled)} of ${String(plugin.tools.length)} enabled`
+                : countText(plugin.tools.length, "tool", "tools"),
         ...(policies && plugin.policyCount > 0
             ? [`${countText(plugin.policyCount, "policy", "policies")} on every tool`]
             : []),
@@ -59,6 +70,7 @@ function pluginMeta(plugin: HappyAgentZonePluginRow, policies: boolean): string 
 
 export interface HappyAgentZonePluginsSectionProps {
     readonly plugins: readonly HappyAgentZonePluginRow[];
+    readonly zoneName: string;
     /** The installations whose tools are shown. */
     readonly expanded: readonly string[];
     readonly manage: boolean;
@@ -69,19 +81,18 @@ export interface HappyAgentZonePluginsSectionProps {
     onAdd: () => void;
     onRemove: (installationId: string) => void;
     onToggle: (installationId: string) => void;
+    onToolChange: (installationId: string, tool: string, enabled: boolean) => void;
 }
 
 /**
- * The plugin installations a zone lists: only their tools reach agents in
- * it, and a critical tool only in a critical zone. Each expands to its tools,
- * with each one's critical badge and, on a server with policies, how many
- * policies it has here.
+ * The plugin installations a zone lists, with each tool's access switch and,
+ * on a server with policies, how many policies it has here.
  */
 export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSectionProps) {
     return (
         <>
             <HappyAgentSettingsSection
-                description="Agents in this zone get the tools of the installations listed here, and a critical tool only if the zone is critical."
+                description="Agents in this zone can use the tools enabled here when their plugins are turned on."
                 title="Plugins"
             >
                 {props.plugins.length === 0 ? (
@@ -160,48 +171,59 @@ export function HappyAgentZonePluginsSection(props: HappyAgentZonePluginsSection
                                         </Button>
                                     ) : null}
                                 </Box>
-                                {open ? (
+                                {open || plugin.toolsError || plugin.allTools ? (
                                     <Box
                                         className="happy-agent-zones__tools"
                                         data-happy-desktop-ui="zone-plugin-tools"
                                     >
-                                        {plugin.tools.map((tool) => (
-                                            <Box
-                                                className="happy-agent-zones__tool"
-                                                key={tool.name}
-                                            >
-                                                <span className="happy-agent-zones__text">
-                                                    <span className="happy-agent-zones__title">
-                                                        <span className="happy-agent-zones__tool-name">
-                                                            {tool.name}
-                                                        </span>
-                                                        {tool.critical ? (
-                                                            <span
-                                                                className="happy-agent-zones__tag"
-                                                                data-critical=""
-                                                            >
-                                                                Critical
-                                                            </span>
-                                                        ) : null}
-                                                    </span>
-                                                    {tool.description ? (
-                                                        <span className="happy-agent-zones__meta">
-                                                            {tool.description}
-                                                        </span>
-                                                    ) : null}
-                                                </span>
-                                                {props.policies ? (
-                                                    <span
-                                                        className="happy-agent-zones__count"
-                                                        data-none={
-                                                            tool.policyCount === 0 ? "" : undefined
-                                                        }
-                                                    >
-                                                        {policiesText(tool.policyCount)}
-                                                    </span>
-                                                ) : null}
-                                            </Box>
-                                        ))}
+                                        {plugin.toolsError ? (
+                                            <p className="happy-agent-zones__tool-note">
+                                                {plugin.toolsError}
+                                            </p>
+                                        ) : null}
+                                        {plugin.allTools ? (
+                                            <p className="happy-agent-zones__tool-note">
+                                                {LEGACY_ALL_TOOLS_NOTE}
+                                            </p>
+                                        ) : null}
+                                        {open
+                                            ? plugin.tools.map((tool) => (
+                                                  <PluginToolSwitch
+                                                      context={`${plugin.name}, ${props.zoneName}`}
+                                                      description={tool.description}
+                                                      enabled={
+                                                          plugin.allTools ? true : tool.enabled
+                                                      }
+                                                      key={tool.name}
+                                                      name={tool.name}
+                                                      onChange={
+                                                          props.manage &&
+                                                          props.removing !== plugin.id
+                                                              ? (enabled) =>
+                                                                    props.onToolChange(
+                                                                        plugin.id,
+                                                                        tool.name,
+                                                                        enabled,
+                                                                    )
+                                                              : undefined
+                                                      }
+                                                      trailing={
+                                                          props.policies ? (
+                                                              <span
+                                                                  className="happy-agent-zones__count"
+                                                                  data-none={
+                                                                      tool.policyCount === 0
+                                                                          ? ""
+                                                                          : undefined
+                                                                  }
+                                                              >
+                                                                  {policiesText(tool.policyCount)}
+                                                              </span>
+                                                          ) : null
+                                                      }
+                                                  />
+                                              ))
+                                            : null}
                                     </Box>
                                 ) : null}
                             </Box>

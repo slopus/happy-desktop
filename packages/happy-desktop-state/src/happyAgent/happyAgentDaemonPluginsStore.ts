@@ -128,6 +128,7 @@ function installationsProject(
                 toolPrefix: null,
                 image: null,
                 available: true,
+                enabled: true,
             };
         });
 }

@@ -4,7 +4,9 @@ import type {
     HappyAgentPluginImage,
     HappyAgentPluginInstallation,
     HappyAgentPluginInstallationStatus,
+    HappyAgentPluginsSnapshot,
 } from "happy-desktop-state";
+import { Banner } from "../../Banner";
 import { Icon } from "../../Icon";
 import { thumbhashDataUrl } from "../../thumbhashDataUrl";
 
@@ -55,20 +57,45 @@ export function PluginInstallationStatus(props: {
     readonly installation: HappyAgentPluginInstallation;
 }) {
     const status = props.installation.status;
-    const tone = !props.installation.available
-        ? "muted"
-        : status === "active"
-          ? "ready"
-          : status === "installing"
+    const disabled = props.installation.enabled === false;
+    const tone =
+        !props.installation.available || disabled
             ? "muted"
-            : status === "failed"
-              ? "failed"
-              : "attention";
+            : status === "active"
+              ? "ready"
+              : status === "installing"
+                ? "muted"
+                : status === "failed"
+                  ? "failed"
+                  : "attention";
     return (
         <span className="happy-agent-plugin-status" data-tone={tone}>
             <span aria-hidden="true" className="happy-agent-plugin-status__dot" />
-            {props.installation.available ? STATUS_LABEL[props.installation.status] : "Unavailable"}
+            {!props.installation.available
+                ? "Unavailable"
+                : disabled
+                  ? "Disabled"
+                  : STATUS_LABEL[status]}
         </span>
+    );
+}
+
+/** Readers who can install but not manage zones get a note, not the setup sheet. */
+export function PluginZoneSetupNotice(props: {
+    readonly plugins: HappyAgentPluginsSnapshot;
+    readonly onDismiss?: (() => void) | undefined;
+}) {
+    const setup = props.plugins.zoneSetup;
+    if (setup?.kind !== "notice") return null;
+    const name = props.plugins.plugins.find((plugin) => plugin.id === setup.pluginId)?.name;
+    return (
+        <Banner
+            tone="info"
+            title={name ? `${name} installed` : "Plugin installed"}
+            {...(props.onDismiss ? { onDismiss: props.onDismiss } : {})}
+        >
+            Someone who manages zones must enable its tools before agents can use them.
+        </Banner>
     );
 }
 

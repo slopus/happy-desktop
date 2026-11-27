@@ -1,25 +1,29 @@
 import type { ReactNode } from "react";
 import {
     HappyAgentZonesSettings,
-    HappyAgentSettingsShell,
     HappyAgentZoneDeleteDialog,
     HappyAgentZoneDetailsDialog,
     HappyAgentZonePage,
     HappyAgentZonePickDialog,
-    HappyAgentZonePluginsSection,
-    HappyAgentZonePoliciesSection,
-    HappyAgentZonePolicyPage,
-    type HappyAgentSettingsCategory,
     type HappyAgentZoneBotRow,
     type HappyAgentZoneDeleteDialogProps,
     type HappyAgentZoneDetailsDialogProps,
     type HappyAgentZoneDraftView,
     type HappyAgentZonePageProps,
     type HappyAgentZonePersonRow,
+    type HappyAgentZoneRow,
+} from "../../src/pages/settings/HappyAgentZonesSettings";
+import {
+    HappyAgentZonePluginsSection,
+    HappyAgentZonePoliciesSection,
+    HappyAgentZonePolicyPage,
     type HappyAgentZonePluginRow,
     type HappyAgentZonePolicyPageProps,
-    type HappyAgentZoneRow,
-} from "../../src";
+} from "../../src/pages/settings/HappyAgentZoneAccess";
+import {
+    HappyAgentSettingsShell,
+    type HappyAgentSettingsCategory,
+} from "../../src/pages/settings/HappyAgentSettingsShell";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
 /** The component plan this page documents. */
@@ -134,23 +138,25 @@ const zonePlugins: readonly HappyAgentZonePluginRow[] = [
         id: "i-stripe",
         name: "Stripe",
         policyCount: 0,
+        allTools: false,
+        toolsError: null,
         tools: [
             {
                 name: "create_refund",
                 description: "Refunds a charge, in full or in part.",
-                critical: true,
+                enabled: true,
                 policyCount: 1,
             },
             {
                 name: "create_payment_link",
                 description: "Makes a link a customer pays through.",
-                critical: true,
+                enabled: false,
                 policyCount: 0,
             },
             {
                 name: "list_charges",
                 description: "Lists recent charges, newest first.",
-                critical: false,
+                enabled: true,
                 policyCount: 0,
             },
         ],
@@ -161,23 +167,25 @@ const zonePlugins: readonly HappyAgentZonePluginRow[] = [
         label: "Finance",
         needsSetup: true,
         policyCount: 1,
+        allTools: true,
+        toolsError: "Couldn't list tools right now. Showing the last known tools.",
         tools: [
             {
                 name: "reconcile",
                 description: "Matches payouts to ledger entries.",
-                critical: false,
+                enabled: true,
                 policyCount: 0,
             },
             {
                 name: "export_report",
                 description: "Exports a month's ledger as CSV.",
-                critical: false,
+                enabled: true,
                 policyCount: 0,
             },
         ],
     },
     // The built-in plugin lists no tools of its own.
-    { id: "i-happy", name: "Happy", policyCount: 0, tools: [] },
+    { id: "i-happy", name: "Happy", policyCount: 0, allTools: false, toolsError: null, tools: [] },
 ];
 
 /** The team's installations the zone doesn't list yet. */
@@ -329,7 +337,9 @@ function ReachPage(props: {
                 onAdd={noop}
                 onRemove={noop}
                 onToggle={noop}
+                onToolChange={noop}
                 plugins={zonePlugins}
+                zoneName="Payments"
             />
             {policies ? (
                 <HappyAgentZonePoliciesSection
@@ -622,12 +632,12 @@ export function HappyCloudZonesFlowPage() {
                 />
             </Screen>
             <Screen
-                detail="a zone's plugins, one expanded to its tools, and its policies"
+                detail="a zone's tool switches, a legacy all-tools listing, and a tool discovery error"
                 heading={ZONE_HEADING}
                 number="17"
                 screen="17-plugins"
             >
-                <ReachPage expanded={["i-stripe"]} manage />
+                <ReachPage expanded={["i-stripe", "i-ledger"]} manage />
             </Screen>
             <Screen
                 detail="adding a plugin installation to the zone"

@@ -262,7 +262,7 @@ export function HappyAgentZonesSettings(props: HappyAgentZonesSettingsProps) {
                 </Banner>
             )}
             <HappyAgentSettingsSection
-                description="An agent joins one zone, once. Until it does, it can't use computers, repositories or plugin tools. Critical plugin tools run only in a critical zone. Owners and admins may join any zone."
+                description="An agent joins one zone, once. Its zone decides which computers, repositories and plugin tools it can use. Owners and admins may join any zone."
                 title="Zones"
             >
                 <Box className="happy-agent-zones__list" data-happy-desktop-ui="zones">
@@ -808,7 +808,7 @@ export function HappyAgentZoneDetailsDialog(props: HappyAgentZoneDetailsDialogPr
                                     <span className="happy-agent-zones__field-label">Critical</span>
                                     <span className="happy-agent-zones__note">
                                         {props.zone?.criticalLocked ??
-                                            "Critical plugin tools run only in a critical zone, and only the members and bots it lists may join."}
+                                            "A critical zone limits who may join to the members and bots it lists. Owners and admins may join any zone."}
                                     </span>
                                 </span>
                                 {readOnly ? (

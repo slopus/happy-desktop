@@ -8,7 +8,9 @@ import {
 import {
     HappyAgentCustomPluginPage,
     HappyAgentPluginPage,
+    HappyAgentPluginZoneSetupSheet,
     HappyAgentPluginsPage,
+    ModalOverlay,
 } from "happy-desktop-ui";
 
 /**
@@ -34,8 +36,11 @@ export function HappyAgentPluginsSurface(props: {
         [store, pluginId],
     );
     const snapshot = useSyncExternalStore(subscribe, store.get, store.get);
+    const setup = snapshot.zoneSetup;
     const zonesStore =
-        (pluginId === undefined ? undefined : props.zonesStore) ?? happyAgentZonesStoreNoop;
+        props.zonesStore && (pluginId !== undefined || setup?.kind === "choose")
+            ? props.zonesStore
+            : happyAgentZonesStoreNoop;
     const zones = useSyncExternalStore(zonesStore.subscribe, zonesStore.get, zonesStore.get);
     if (props.customPluginId !== undefined)
         return (
@@ -45,49 +50,75 @@ export function HappyAgentPluginsSurface(props: {
                 plugins={snapshot}
             />
         );
-    if (pluginId === undefined)
-        return (
-            <HappyAgentPluginsPage
-                onCustomPluginOpen={props.onCustomPluginOpen}
-                onPluginInstall={store.pluginInstall}
-                onPluginOpen={props.onPluginOpen}
-                plugins={snapshot}
-            />
-        );
-    const update = store.installationToolCriticalUpdate;
+    const install = async (id: string) => {
+        const installationId = await store.pluginInstall(id);
+        store.pluginZoneSetupOpen?.(id, installationId);
+    };
+    const setupPlugin = setup
+        ? snapshot.plugins.find((entry) => entry.id === setup.pluginId)
+        : undefined;
     return (
-        <HappyAgentPluginPage
-            onBack={props.onPluginsOpen}
-            onConfigure={async (installationId, methodId, values) => {
-                try {
-                    await store.installationConfigure(installationId, methodId, values);
-                    return undefined;
-                } catch (error) {
-                    if (error instanceof HappyAgentPluginFieldsError)
-                        return { message: error.message, fields: error.fields };
-                    throw error;
-                }
-            }}
-            onConnect={(installationId, methodId) =>
-                store.installationConnect(installationId, methodId, {
-                    open: props.onExternalLinkOpen,
-                })
-            }
-            onDisconnect={store.installationDisconnect}
-            onInstall={store.pluginInstall}
-            onRemove={store.installationRemove}
-            {...(update
-                ? {
-                      onToolCriticalChange: (
-                          installationId: string,
-                          tool: string,
-                          critical: boolean,
-                      ) => update({ installationId, tool, critical }),
-                  }
-                : {})}
-            {...(props.zonesStore ? { zones: zones.zones } : {})}
-            pluginId={pluginId}
-            plugins={snapshot}
-        />
+        <>
+            {pluginId === undefined ? (
+                <HappyAgentPluginsPage
+                    onCustomPluginOpen={props.onCustomPluginOpen}
+                    onPluginInstall={install}
+                    onPluginOpen={props.onPluginOpen}
+                    onZoneSetupDismiss={store.zoneSetupClose}
+                    plugins={snapshot}
+                />
+            ) : (
+                <HappyAgentPluginPage
+                    onBack={props.onPluginsOpen}
+                    onConfigure={async (installationId, methodId, values) => {
+                        try {
+                            await store.installationConfigure(installationId, methodId, values);
+                            return undefined;
+                        } catch (error) {
+                            if (error instanceof HappyAgentPluginFieldsError)
+                                return { message: error.message, fields: error.fields };
+                            throw error;
+                        }
+                    }}
+                    onConnect={(installationId, methodId) =>
+                        store.installationConnect(installationId, methodId, {
+                            open: props.onExternalLinkOpen,
+                        })
+                    }
+                    onDisconnect={store.installationDisconnect}
+                    onEnabledChange={store.installationEnabledUpdate}
+                    onInstall={install}
+                    onRemove={store.installationRemove}
+                    onZoneAdd={store.installationZoneAdd}
+                    onZoneSetupDismiss={store.zoneSetupClose}
+                    onZoneToolChange={store.installationZoneToolEnabledUpdate}
+                    onZoneToolsChange={store.installationZoneToolsEnabledUpdate}
+                    {...(props.zonesStore ? { zones: zones.zones } : {})}
+                    pluginId={pluginId}
+                    plugins={snapshot}
+                />
+            )}
+            {setup?.kind === "choose" ? (
+                <ModalOverlay>
+                    <HappyAgentPluginZoneSetupSheet
+                        name={setupPlugin?.name ?? setup.pluginId}
+                        onClose={() => store.zoneSetupClose?.()}
+                        onDone={() => store.zoneSetupApply?.(zones.zones.map((zone) => zone.id))}
+                        onToolToggle={(zoneId, tool) => store.zoneSetupToolToggle?.(zoneId, tool)}
+                        onZoneAllChange={(zoneId, enabled) =>
+                            store.zoneSetupZoneAllUpdate?.(zoneId, enabled)
+                        }
+                        onZoneToggle={(zoneId) => store.zoneSetupZoneToggle?.(zoneId)}
+                        setup={setup}
+                        toolDescriptions={
+                            new Map(setupPlugin?.tools.map(({ name, summary }) => [name, summary]))
+                        }
+                        zones={zones.zones}
+                        zonesError={zones.error?.message}
+                        zonesLoading={zones.loading}
+                    />
+                </ModalOverlay>
+            ) : null}
+        </>
     );
 }

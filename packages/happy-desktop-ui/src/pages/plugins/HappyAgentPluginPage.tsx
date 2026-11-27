@@ -17,11 +17,13 @@ import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
-import { ZoneAccessLabels, type ZoneAccessLabel } from "../settings/ZoneAccessLabels";
+import type { ZoneAccessLabel } from "../settings/ZoneAccessLabels";
+import { PluginInstallationZones, type PluginZoneActions } from "./PluginInstallationZones";
 import {
     FEATURE_PLUGIN_NOTE,
     PluginInstallationStatus,
     PluginMark,
+    PluginZoneSetupNotice,
     pluginInstallationTitle,
     usePluginAct,
 } from "./pluginPresentation";
@@ -32,7 +34,7 @@ export interface HappyAgentPluginSetupRefusal {
     readonly fields: ReadonlyMap<string, string>;
 }
 
-export interface HappyAgentPluginPageProps {
+export interface HappyAgentPluginPageProps extends PluginZoneActions {
     pluginId: string;
     plugins: HappyAgentPluginsSnapshot;
     onBack?: () => void;
@@ -52,11 +54,8 @@ export interface HappyAgentPluginPageProps {
     onConnect: (installationId: string, methodId: string) => Promise<unknown>;
     onDisconnect: (installationId: string) => Promise<unknown>;
     zones?: readonly ZoneAccessLabel[];
-    onToolCriticalChange?: (
-        installationId: string,
-        tool: string,
-        critical: boolean,
-    ) => Promise<unknown>;
+    onEnabledChange?: ((installationId: string, enabled: boolean) => Promise<unknown>) | undefined;
+    onZoneSetupDismiss?: (() => void) | undefined;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -107,6 +106,10 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                 viewportClassName="happy-agent-plugins__scroll-viewport"
             >
                 <div className="happy-agent-plugins__content">
+                    <PluginZoneSetupNotice
+                        onDismiss={props.onZoneSetupDismiss}
+                        plugins={snapshot}
+                    />
                     {snapshot.error ? (
                         <Banner tone="danger" title="Plugins may be out of date">
                             {snapshot.error.message}
@@ -180,7 +183,10 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                                 onConnect={props.onConnect}
                                                 onDisconnect={props.onDisconnect}
                                                 onRemove={props.onRemove}
-                                                onToolCriticalChange={props.onToolCriticalChange}
+                                                onEnabledChange={props.onEnabledChange}
+                                                onZoneAdd={props.onZoneAdd}
+                                                onZoneToolChange={props.onZoneToolChange}
+                                                onZoneToolsChange={props.onZoneToolsChange}
                                                 plugin={plugin}
                                                 zones={props.zones}
                                             />
@@ -197,8 +203,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                             plugin.tools.length > 0 &&
                             (feature ||
                                 installations.length === 0 ||
-                                (props.zones === undefined &&
-                                    !installations.some((entry) => entry.toolAccess))) ? (
+                                !installations.some((entry) => entry.zoneAccess)) ? (
                                 <section className="happy-agent-plugins__section">
                                     <h2 className="happy-agent-plugins__heading">Tools</h2>
                                     <ul className="happy-agent-plugin__tools">
@@ -226,18 +231,20 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
     );
 }
 
-function InstallationCard(props: {
-    readonly installation: HappyAgentPluginInstallation;
-    readonly plugin: HappyAgentPlugin | undefined;
-    /** Whether the reader may sign it in and out and remove it; without, the card only reads. */
-    readonly manage: boolean;
-    readonly onRemove: HappyAgentPluginPageProps["onRemove"];
-    readonly onConfigure: HappyAgentPluginPageProps["onConfigure"];
-    readonly onConnect: HappyAgentPluginPageProps["onConnect"];
-    readonly onDisconnect: HappyAgentPluginPageProps["onDisconnect"];
-    readonly onToolCriticalChange: HappyAgentPluginPageProps["onToolCriticalChange"];
-    readonly zones: HappyAgentPluginPageProps["zones"];
-}) {
+function InstallationCard(
+    props: PluginZoneActions & {
+        readonly installation: HappyAgentPluginInstallation;
+        readonly plugin: HappyAgentPlugin | undefined;
+        /** Whether the reader may sign it in and out and remove it; without, the card only reads. */
+        readonly manage: boolean;
+        readonly onRemove: HappyAgentPluginPageProps["onRemove"];
+        readonly onConfigure: HappyAgentPluginPageProps["onConfigure"];
+        readonly onConnect: HappyAgentPluginPageProps["onConnect"];
+        readonly onDisconnect: HappyAgentPluginPageProps["onDisconnect"];
+        readonly onEnabledChange: HappyAgentPluginPageProps["onEnabledChange"];
+        readonly zones: HappyAgentPluginPageProps["zones"];
+    },
+) {
     const installation = props.installation;
     // A feature installation is the reader's own and has no sign-in to set up.
     const feature = installation.kind === "feature";
@@ -246,6 +253,9 @@ function InstallationCard(props: {
     const [confirming, setConfirming] = useState(false);
     const remove = usePluginAct();
     const disconnect = usePluginAct();
+    const changeEnabled = usePluginAct();
+    const setEnabled = props.onEnabledChange;
+    const enabled = installation.enabled !== false;
     const signedIn =
         !feature && installation.status === "active" && installation.authMethod !== null;
     return (
@@ -258,6 +268,18 @@ function InstallationCard(props: {
                     {pluginInstallationTitle(installation)}
                 </span>
                 <PluginInstallationStatus installation={installation} />
+                {!feature && setEnabled ? (
+                    <Switch
+                        aria-label={`Enabled: ${pluginInstallationTitle(installation)}`}
+                        checked={enabled}
+                        disabled={!manage || !installation.available || changeEnabled.pending}
+                        label="Enabled"
+                        onChange={(next) =>
+                            void changeEnabled.run(() => setEnabled(installation.id, next))
+                        }
+                        size="small"
+                    />
+                ) : null}
                 {manage ? (
                     <span className="happy-agent-plugin-card__actions">
                         {signedIn ? (
@@ -285,6 +307,14 @@ function InstallationCard(props: {
                     </span>
                 ) : null}
             </header>
+            {!enabled ? (
+                <p className="happy-agent-plugins__note">Disabled: agents can't use it anywhere</p>
+            ) : null}
+            {changeEnabled.error ? (
+                <p className="happy-agent-plugin__error" role="alert">
+                    {changeEnabled.error}
+                </p>
+            ) : null}
             {installation.status === "failed" && installation.error ? (
                 <p className="happy-agent-plugin__error">{installation.error}</p>
             ) : null}
@@ -331,79 +361,19 @@ function InstallationCard(props: {
                     onConnect={props.onConnect}
                 />
             ) : null}
-            {!feature && (installation.toolAccess || props.zones !== undefined) ? (
-                <InstallationTools
+            {!feature && (installation.zoneAccess || props.zones !== undefined) ? (
+                <PluginInstallationZones
+                    descriptions={
+                        new Map(props.plugin?.tools.map(({ name, summary }) => [name, summary]))
+                    }
                     installation={installation}
-                    onToolCriticalChange={props.onToolCriticalChange}
-                    plugin={props.plugin}
+                    onZoneAdd={props.onZoneAdd}
+                    onZoneToolChange={props.onZoneToolChange}
+                    onZoneToolsChange={props.onZoneToolsChange}
                     zones={props.zones ?? []}
                 />
             ) : null}
         </article>
-    );
-}
-
-function InstallationTools(props: {
-    readonly installation: HappyAgentPluginInstallation;
-    readonly plugin: HappyAgentPlugin | undefined;
-    readonly zones: readonly ZoneAccessLabel[];
-    readonly onToolCriticalChange: HappyAgentPluginPageProps["onToolCriticalChange"];
-}) {
-    const { installation } = props;
-    const access = installation.toolAccess;
-    const entries = new Map(access?.tools.map((tool) => [tool.name, tool]));
-    const tools = new Map(props.plugin?.tools.map((tool) => [tool.name, tool.summary]));
-    for (const tool of entries.keys()) {
-        if (!tools.has(tool)) tools.set(tool, "");
-    }
-    const change = usePluginAct();
-    const update = access?.canManageZones ? props.onToolCriticalChange : undefined;
-    if (tools.size === 0) return null;
-    return (
-        <section className="happy-agent-plugin-card__tools">
-            <h3 className="happy-agent-plugins__heading">Tools</h3>
-            {change.error ? (
-                <p className="happy-agent-plugin__error" role="alert">
-                    {change.error}
-                </p>
-            ) : null}
-            <ul className="happy-agent-plugin__tools">
-                {[...tools].map(([name, summary]) => {
-                    const tool = entries.get(name);
-                    return (
-                        <li className="happy-agent-plugin__tool" key={name}>
-                            <div className="happy-agent-plugin-card__tool-header">
-                                <code className="happy-agent-plugin__tool-name">{name}</code>
-                                {tool?.critical ? (
-                                    <span className="happy-agent-zones__tag" data-critical="">
-                                        Critical
-                                    </span>
-                                ) : null}
-                                {tool && update ? (
-                                    <Switch
-                                        aria-label={`Critical: ${name}`}
-                                        checked={tool.critical}
-                                        className="happy-agent-plugin-card__tool-switch"
-                                        disabled={change.pending}
-                                        label="Critical"
-                                        onChange={(critical) =>
-                                            void change.run(() =>
-                                                update(installation.id, name, critical),
-                                            )
-                                        }
-                                        size="small"
-                                    />
-                                ) : null}
-                            </div>
-                            {summary ? (
-                                <span className="happy-agent-plugin__tool-summary">{summary}</span>
-                            ) : null}
-                            <ZoneAccessLabels ids={tool?.zones} zones={props.zones} />
-                        </li>
-                    );
-                })}
-            </ul>
-        </section>
     );
 }
 

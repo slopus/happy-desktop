@@ -6,8 +6,8 @@ export interface HappyAgentZoneTool {
     /** The tool's own name, without the installation's prefix. */
     readonly name: string;
     readonly description: string;
-    /** Whether it runs only in a critical zone. */
-    readonly critical: boolean;
+    /** Whether agents in this zone may use it. A tool starts disabled in every zone. */
+    readonly enabled: boolean | null;
     /** How many policies this zone has on this one tool. */
     readonly policyCount: number;
 }
@@ -35,6 +35,14 @@ export interface HappyAgentZoneInstallation {
 export interface HappyAgentZonePlugin extends HappyAgentZoneInstallation {
     /** How many policies this zone has on the whole installation. */
     readonly policyCount: number;
+    /**
+     * Listed from before per-zone tools: the zone enables every tool the
+     * installation has or gets. Changing any tool sends the explicit set, and
+     * the zone enables only those from then on.
+     */
+    readonly allTools: boolean;
+    /** Why the plugin couldn't list its tools just now; the tools shown are the ones last stored. */
+    readonly toolsError: string | null;
     readonly tools: readonly HappyAgentZoneTool[];
 }
 
@@ -209,6 +217,8 @@ export function happyAgentZonePluginRead(
     return {
         ...installation,
         policyCount: countOf(entry.policyCount),
+        allTools: entry.allTools === true,
+        toolsError: textOrNull(entry.toolsError),
         tools: listOf(entry.tools).flatMap((item) => {
             const tool = recordOf(item);
             const name = textOrNull(tool?.name);
@@ -217,7 +227,9 @@ export function happyAgentZonePluginRead(
                 {
                     name,
                     description: typeof tool.description === "string" ? tool.description : "",
-                    critical: tool.critical === true,
+                    enabled:
+                        entry.allTools === true ||
+                        (typeof tool.enabled === "boolean" ? tool.enabled : null),
                     policyCount: countOf(tool.policyCount),
                 },
             ];
