@@ -134,12 +134,6 @@
     min-width: 240px;
 }
 
-/* Two ways forward, then the way back, 36px clear of them. The pointer that
-   clicked the start page's Connect link rests in that gap, not on Back. */
-.happy-welcome-screen__alternate + .happy-welcome-screen__secondary {
-    margin-top: 28px;
-}
-
 .happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__secondary {
     color: var(--onboarding-foreground);
 }
