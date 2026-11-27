@@ -27,6 +27,8 @@ export interface HappyAgentZoneInstallation {
     /** What the team called this installation, where it has more than one. */
     readonly label: string | null;
     readonly image: HappyAgentZonePluginImage | null;
+    /** Whether it is set up; one that is `not_configured` gives agents nothing yet. */
+    readonly active: boolean;
 }
 
 /** An installation a zone lists, with its tools. */
@@ -183,6 +185,7 @@ export function happyAgentZoneInstallationRead(
         pluginId,
         name: textOrNull(entry.pluginName) ?? pluginId,
         label: textOrNull(entry.label),
+        active: entry.status === "active",
         image:
             digest === null
                 ? null

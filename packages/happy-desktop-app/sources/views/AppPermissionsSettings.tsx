@@ -172,6 +172,7 @@ export function AppPermissionsSettings(props: {
                                     name: plugin.name,
                                     ...(plugin.label === null ? {} : { label: plugin.label }),
                                     ...(plugin.image ? { imageUrl: plugin.image.url } : {}),
+                                    needsSetup: !plugin.active,
                                     policyCount: plugin.policyCount,
                                     tools: plugin.tools,
                                 }))}

@@ -157,6 +157,7 @@ const zonePlugins: readonly HappyAgentZonePluginRow[] = [
         id: "i-ledger",
         name: "Ledger",
         label: "Finance",
+        needsSetup: true,
         policyCount: 1,
         tools: [
             {

@@ -28,6 +28,8 @@ export interface HappyAgentZonePluginRow {
     readonly name: string;
     readonly label?: string;
     readonly imageUrl?: string;
+    /** Whether the installation still needs setting up before its tools work. */
+    readonly needsSetup?: boolean;
     /** Policies this zone has on the whole installation. */
     readonly policyCount: number;
     readonly tools: readonly HappyAgentZoneToolRow[];
@@ -44,6 +46,7 @@ function policiesText(count: number): string {
 function pluginMeta(plugin: HappyAgentZonePluginRow, policies: boolean): string {
     const critical = plugin.tools.filter((tool) => tool.critical).length;
     return [
+        ...(plugin.needsSetup ? ["Needs setup"] : []),
         plugin.tools.length === 0
             ? "No tools listed"
             : countText(plugin.tools.length, "tool", "tools"),
