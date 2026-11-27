@@ -68,6 +68,10 @@ import { desktopScrollMemoryPersistence } from "./desktopScrollMemory";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import {
+    desktopCloudOnboardingAway,
+    desktopCloudOnboardingAwayUpdate,
+} from "./desktopCloudOnboardingAway";
+import {
     desktopHappyMobileOnboardingSkip,
     desktopHappyMobileOnboardingSkipped,
 } from "./desktopHappyMobileOnboarding";
@@ -557,6 +561,9 @@ export function happyAgentConnectionOpen(input: {
         ...(cloudRequest
             ? {
                   cloudRequest,
+                  away: desktopCloudOnboardingAway(input.happyAgentId),
+                  onAwayChange: (away) =>
+                      desktopCloudOnboardingAwayUpdate(input.happyAgentId, away),
                   plugins: () => client.plugins(),
                   // The first owner to finish starts the Chief of Staff's first
                   // conversation, which is where the reader goes next.

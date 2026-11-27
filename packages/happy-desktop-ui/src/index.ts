@@ -390,6 +390,7 @@ export {
 } from "./WorkCoordinationSummary";
 export { SidebarBugReport, type SidebarBugReportProps } from "./SidebarBugReport";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
+export { SidebarSetupAction, type SidebarSetupActionProps } from "./SidebarSetupAction";
 export {
     SidebarConnectionAction,
     type SidebarConnectionActionProps,
@@ -802,6 +803,7 @@ export {
     SetupPage,
     SetupProgress,
     type SetupPageAction,
+    type SetupPageCornerAction,
     type SetupPageProgress,
     type SetupPageProps,
     type SetupProgressProps,
@@ -846,6 +848,7 @@ export {
     type BrowserStartTool,
 } from "./BrowserPanel";
 export { WindowCover } from "./WindowOverlay";
+export { SetupCover } from "./SetupCover";
 export { ZoomIndicator } from "./ZoomIndicator";
 export { WindowZoomProvider, useWindowZoom } from "./WindowZoom";
 export {

@@ -13,9 +13,12 @@ import {
 } from "happy-desktop-state";
 import {
     CloudOnboardingScreen,
+    EmptyState,
     LocalOnboardingScreen,
     ProfileSetupScreen,
+    SetupCover,
     WelcomeScreen,
+    WindowDragRegion,
     type LocalOnboardingView,
 } from "happy-desktop-ui";
 import { happyAgentWelcomeSlides } from "../onboarding/happyAgentWelcomeSlides";
@@ -76,38 +79,64 @@ export function HappyAgentOnboardingBoundary(props: {
     // A server with onboarding gates decides every step; the reader is in once
     // none is left on screen.
     if (snapshot.flow) {
+        // Setup takes the whole window, the connection rail included, and
+        // gives it back when the reader finishes or leaves.
         if (snapshot.finale)
             return (
-                <CloudOnboardingScreen
-                    action={{
-                        label: "Go to Happy",
-                        autoFocus: true,
-                        onSelect: props.store.finaleDismiss,
-                    }}
+                <SetupCover>
+                    <CloudOnboardingScreen
+                        action={{
+                            label: "Go to Happy",
+                            autoFocus: true,
+                            onSelect: props.store.finaleDismiss,
+                        }}
+                        appearance={appearance.mode}
+                        currentStep=""
+                        steps={[]}
+                        view={{ kind: "finished", botName: snapshot.finale.botName }}
+                        {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
+                        {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
+                    />
+                </SetupCover>
+            );
+        if (!snapshot.flow.current) return props.children;
+        if (snapshot.flow.away) {
+            // With only optional steps left the reader is in; the workspace
+            // offers the way back. A required step still holds the server
+            // shut, so its surface says so and nothing else.
+            if (!snapshot.flow.blocked) return props.children;
+            const left = snapshot.flow.remaining;
+            return (
+                <>
+                    <WindowDragRegion />
+                    <EmptyState
+                        action={{ label: "Continue setup", onClick: props.store.onboardingResume }}
+                        data-testid="cloud-onboarding-hold"
+                        description={`${String(left)} ${left === 1 ? "step" : "steps"} left. What you finished is saved.`}
+                        icon="spark"
+                        size="panel"
+                        title={`Finish setting up ${props.serverLabel ?? "this server"}`}
+                    />
+                </>
+            );
+        }
+        return (
+            <SetupCover>
+                <AppCloudOnboarding
                     appearance={appearance.mode}
-                    currentStep=""
-                    steps={[]}
-                    view={{ kind: "finished", botName: snapshot.finale.botName }}
+                    placeholderSeed={props.placeholderSeed}
+                    profile={props.profile}
+                    profileSnapshot={profile}
+                    snapshot={snapshot}
+                    store={props.store}
+                    {...(props.cloudProviders ? { cloudProviders: props.cloudProviders } : {})}
+                    {...(props.plugins ? { plugins: props.plugins } : {})}
+                    {...(props.payments ? { payments: props.payments } : {})}
+                    {...(props.providers ? { providers: props.providers } : {})}
                     {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                     {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
                 />
-            );
-        if (!snapshot.flow.current) return props.children;
-        return (
-            <AppCloudOnboarding
-                appearance={appearance.mode}
-                placeholderSeed={props.placeholderSeed}
-                profile={props.profile}
-                profileSnapshot={profile}
-                snapshot={snapshot}
-                store={props.store}
-                {...(props.cloudProviders ? { cloudProviders: props.cloudProviders } : {})}
-                {...(props.plugins ? { plugins: props.plugins } : {})}
-                {...(props.payments ? { payments: props.payments } : {})}
-                {...(props.providers ? { providers: props.providers } : {})}
-                {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
-                {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
-            />
+            </SetupCover>
         );
     }
     // A Happy Cloud member is in once their profile is saved. The server's own

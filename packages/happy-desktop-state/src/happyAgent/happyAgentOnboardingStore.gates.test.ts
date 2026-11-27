@@ -88,8 +88,8 @@ it("shows the gate flow once the server sends gates", async () => {
  * optional gate is still open for the reader. `finished` says whether anything
  * is left; a server that predates it is read from its gates, never `completed`. */
 
-const avatarOpen = {
-    id: "avatar",
+const mobileOpen = {
+    id: "mobileApp",
     scope: "member",
     requirement: "optional",
     status: "open",
@@ -103,11 +103,11 @@ it("shows an open optional gate while finished is false, though completed is tru
         finished: false,
         completed: true,
         blocking: [],
-        gates: [avatarOpen],
+        gates: [mobileOpen],
         steps,
     });
     await settle();
-    expect(store.get().flow?.current?.id).toBe("avatar");
+    expect(store.get().flow?.current?.id).toBe("mobileApp");
     expect(calls).not.toContain("POST v0/onboarding/complete");
     unsubscribe();
 });
@@ -116,11 +116,11 @@ it("shows an open optional gate from a server without finished, though completed
     const { store, unsubscribe } = storeCreate({
         completed: true,
         blocking: [],
-        gates: [avatarOpen],
+        gates: [mobileOpen],
         steps,
     });
     await settle();
-    expect(store.get().flow?.current?.id).toBe("avatar");
+    expect(store.get().flow?.current?.id).toBe("mobileApp");
     unsubscribe();
 });
 
@@ -129,7 +129,7 @@ it("shows nothing once the server says finished", async () => {
         finished: true,
         completed: true,
         blocking: [],
-        gates: [avatarOpen],
+        gates: [mobileOpen],
         steps,
     });
     await settle();
@@ -145,13 +145,13 @@ it("shows nothing once the server says finished", async () => {
 it("sends a reader with no admin bot gate home once they finish", async () => {
     let finished = 0;
     const { store, calls, unsubscribe } = storeCreate(
-        { finished: false, completed: false, blocking: [], gates: [avatarOpen], steps },
+        { finished: false, completed: false, blocking: [], gates: [mobileOpen], steps },
         () => finished++,
     );
     await settle();
-    store.gateContinue("avatar");
+    store.gateContinue("mobileApp");
     await settle();
-    expect(calls).toContain("POST v0/onboarding/gates/avatar/skip");
+    expect(calls).toContain("POST v0/onboarding/gates/mobileApp/skip");
     expect(calls).toContain("POST v0/onboarding/complete");
     expect(finished).toBe(0);
     expect(store.get().finale).toBeUndefined();
@@ -170,11 +170,11 @@ it("takes a reader with an admin bot gate they may talk to to the Chief of Staff
         data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
     };
     const { store, unsubscribe } = storeCreate(
-        { finished: false, completed: false, blocking: [], gates: [avatarOpen, adminBot], steps },
+        { finished: false, completed: false, blocking: [], gates: [mobileOpen, adminBot], steps },
         () => finished++,
     );
     await settle();
-    store.gateContinue("avatar");
+    store.gateContinue("mobileApp");
     await settle();
     store.gateContinue("adminBot");
     await settle();

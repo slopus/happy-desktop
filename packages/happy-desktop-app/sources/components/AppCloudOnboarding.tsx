@@ -275,10 +275,14 @@ export function AppCloudOnboarding(props: {
         switch (gate.kind) {
             case "profile": {
                 const create = async () => {
-                    await profile.profileCreate();
-                    // A photo chosen here completes the photo step too; one
-                    // left out is not asked for again when it is optional.
-                    if (!profile.get().saveError) store.gateContinue(gate.id, { also: ["avatar"] });
+                    // Back on a saved profile with nothing changed, there is nothing to send.
+                    if (
+                        !profileSnapshot.saved ||
+                        profileSnapshot.dirty ||
+                        profileSnapshot.photoStaged
+                    )
+                        await profile.profileCreate();
+                    if (!profile.get().saveError) store.gateContinue(gate.id);
                 };
                 const named = profileSnapshot.name.trim() !== "";
                 return {
@@ -286,8 +290,11 @@ export function AppCloudOnboarding(props: {
                         kind: "profile",
                         ask: "profile",
                         ...photo,
-                        ...(profileSnapshot.photoStaged
-                            ? { photoUrl: profileSnapshot.photoStaged.imageUrl }
+                        ...((profileSnapshot.photoStaged ?? profileSnapshot.photo)
+                            ? {
+                                  photoUrl: (profileSnapshot.photoStaged ?? profileSnapshot.photo)!
+                                      .imageUrl,
+                              }
                             : {}),
                         ...((profileSnapshot.saveError ?? flow.error)
                             ? { message: profileSnapshot.saveError ?? flow.error }
@@ -509,6 +516,15 @@ export function AppCloudOnboarding(props: {
                 })}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
+                {...(flow.previous === undefined
+                    ? {}
+                    : {
+                          back: {
+                              disabled: flow.pending !== undefined,
+                              onSelect: store.gateBack,
+                          },
+                      })}
+                exit={{ onSelect: store.onboardingExit }}
                 {...screen}
             />
             {pluginsStore && setup && setupPlugin && setupInstallation ? (

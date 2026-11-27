@@ -143,8 +143,19 @@ export interface HappyAgentOnboardingStore {
      * Leaves the gate on screen: it is done, or it is optional and is skipped
      * for the reader (a member gate) or the team (a server gate). A gate that
      * still blocks is read again and left only if the server now says it is done.
+     * After Back, it goes to the step after this one instead, one step at a
+     * time, until the step Back was first pressed on is on screen again.
      */
-    gateContinue(gateId: string, options?: { readonly also?: readonly string[] }): void;
+    gateContinue(gateId: string): void;
+    /** Puts the step before the one on screen back on screen; nothing on the first. */
+    gateBack(): void;
+    /**
+     * Leaves setup to finish later. Nothing is sent: what is done is the
+     * server's already, and the steps still open stay open.
+     */
+    onboardingExit(): void;
+    /** Returns to setup at the first step still open. */
+    onboardingResume(): void;
     adminBotNameUpdate(value: string): void;
     /** Names the server's admin bot with the typed name, or keeps its own, then leaves its gate. */
     adminBotNameSubmit(): void;
@@ -256,6 +267,10 @@ export function happyAgentOnboardingStoreCreate(
         readonly cloudRequest?: HappyCloudRequest;
         /** The server's plugins, which the plugins gate installs. */
         readonly plugins?: () => HappyAgentPluginsStore | undefined;
+        /** The reader left this server's setup to finish later, on an earlier run. */
+        readonly away?: boolean;
+        /** The reader left setup for later, or came back to it. */
+        readonly onAwayChange?: (away: boolean) => void;
         /**
          * The reader finished a flow that showed them at least one gate and
          * included the admin bot gate, and the server took the completion; the
@@ -290,7 +305,12 @@ export function happyAgentOnboardingStoreCreate(
     let pinned: string | undefined;
     /** Gates the reader left in this flow; the server may still show a blocking one again. */
     const passed = new Set<string>();
-    let sequence: readonly string[] = [];
+    /**
+     * The step Back was first pressed on. While it is set, Continue walks
+     * forward one step at a time, so Back then Continue is where the reader was.
+     */
+    let returnTo: string | undefined;
+    let away: "now" | "earlier" | undefined = options.away ? "earlier" : undefined;
     let gatePending: string | undefined;
     let gateError: { readonly gate: string; readonly message: string } | undefined;
     let gateAction: AbortController | undefined;
@@ -310,14 +330,22 @@ export function happyAgentOnboardingStoreCreate(
             owners,
             pinned,
             passed,
-            sequence,
+            ...(away ? { away } : {}),
             ...(gatePending === undefined ? {} : { pending: gatePending }),
             ...(gateError ? { error: gateError } : {}),
         });
-        pinned = flow.current?.id;
-        sequence = flow.sequence;
+        // Nothing is held on screen while the reader is away: they return to
+        // the first step still open, and to none once the rest was done elsewhere.
+        pinned = away ? undefined : flow.current?.id;
+        if (returnTo !== undefined && !flow.sequence.includes(returnTo)) returnTo = undefined;
+        if (away && !flow.current) awaySet(undefined);
         return flow;
     };
+    function awaySet(next: "now" | undefined): void {
+        if (away === next) return;
+        away = next;
+        options.onAwayChange?.(next !== undefined);
+    }
     /** `local` says the flow's own position changed, whatever the server said. */
     const publish = (next: HappyAgentOnboardingSnapshot, local = false): void => {
         const state = onboardingStatesEqual(snapshot.state, next.state)
@@ -391,11 +419,14 @@ export function happyAgentOnboardingStoreCreate(
         if (flow.current || gatesCompleted || gatesCompletion || gatesRetry) return;
         const active = new AbortController();
         gatesCompletion = active;
+        // A reader whose last steps were finished elsewhere while they were
+        // away is at work in the app, and is not taken out of it.
+        const walked = passed.size > 0 && !away;
         void client
             .completeOnboarding({ signal: active.signal })
             .then(() => {
                 gatesCompleted = true;
-                if (!passed.size) return;
+                if (!walked) return;
                 // A reader sent no admin bot gate, as a plain member is, lands
                 // home. One the server says may not talk to the admin bot is
                 // told so; one whose server does not say is taken to it.
@@ -439,7 +470,11 @@ export function happyAgentOnboardingStoreCreate(
     }
     function gateLeave(gateId: string): void {
         passed.add(gateId);
-        if (pinned === gateId) pinned = undefined;
+        if (pinned === gateId) {
+            const steps = snapshot.flow?.sequence ?? [];
+            pinned = returnTo === undefined ? undefined : steps[steps.indexOf(gateId) + 1];
+            if (pinned === undefined || pinned === returnTo) returnTo = undefined;
+        }
         gateError = undefined;
         publish(snapshot, true);
         setupSynchronize();
@@ -469,19 +504,14 @@ export function happyAgentOnboardingStoreCreate(
     /**
      * Leaves the gate on screen: one that is done goes; an optional one is
      * skipped; one that blocks is read again and goes if the server now says
-     * it is done. `first` says the reader asked for this gate; a gate named in
-     * `also` is passed only if it is the one on screen by then.
+     * it is done.
      */
-    async function gateLeaveOrSkip(
-        gateId: string,
-        signal: AbortSignal,
-        first: boolean,
-    ): Promise<boolean> {
+    async function gateLeaveOrSkip(gateId: string, signal: AbortSignal): Promise<void> {
         const gate = snapshot.flow?.current;
-        if (!gate || gate.id !== gateId) return !first;
+        if (!gate || gate.id !== gateId) return;
         if (gate.status === "done" || gate.status === "skipped") {
             gateLeave(gateId);
-            return true;
+            return;
         }
         if (!gate.blocking && gate.kind !== "unknown") {
             const state = await cloud()(
@@ -489,17 +519,16 @@ export function happyAgentOnboardingStoreCreate(
                 `v0/onboarding/gates/${encodeURIComponent(gateId)}/skip`,
                 {},
             );
-            if (signal.aborted) return false;
+            if (signal.aborted) return;
             publish({ ...snapshot, state: state as HappyAgentOnboardingState, available: true });
             gateLeave(gateId);
-            return true;
+            return;
         }
         // A step finished elsewhere may not have been heard about yet.
         await gatesRead(signal);
         const after = snapshot.flow?.current;
-        if (signal.aborted || after?.id !== gateId || after.blocking) return false;
+        if (signal.aborted || after?.id !== gateId || after.blocking) return;
         gateLeave(gateId);
-        return true;
     }
     /** Makes one invite with the member role; `email` absent makes a link. */
     function inviteCreate(email: string | undefined, notice?: string): void {
@@ -729,14 +758,32 @@ export function happyAgentOnboardingStoreCreate(
             setupActive = true;
             setupSynchronize();
         },
-        gateContinue(gateId, continueOptions) {
+        gateContinue(gateId) {
             const gate = snapshot.flow?.current;
             if (!gate || gate.id !== gateId || gatePending !== undefined) return;
-            gateRun(gateId, async (signal) => {
-                for (const id of [gateId, ...(continueOptions?.also ?? [])]) {
-                    if (!(await gateLeaveOrSkip(id, signal, id === gateId))) return;
-                }
-            });
+            gateRun(gateId, (signal) => gateLeaveOrSkip(gateId, signal));
+        },
+        gateBack() {
+            const flow = snapshot.flow;
+            if (!flow?.current || flow.previous === undefined || gatePending !== undefined) return;
+            returnTo ??= flow.current.id;
+            pinned = flow.previous;
+            gateError = undefined;
+            publish(snapshot, true);
+            setupSynchronize();
+        },
+        onboardingExit() {
+            if (!snapshot.flow?.current || away) return;
+            awaySet("now");
+            pinned = undefined;
+            returnTo = undefined;
+            publish(snapshot, true);
+        },
+        onboardingResume() {
+            if (!away) return;
+            awaySet(undefined);
+            publish(snapshot, true);
+            setupSynchronize();
         },
         adminBotNameUpdate(value) {
             publish({ ...snapshot, adminBotName: value }, true);

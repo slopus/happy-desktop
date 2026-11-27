@@ -10,6 +10,7 @@ import { SetupCommand } from "./SetupCommand";
 import { Spinner } from "./Spinner";
 import type { ThemeMode } from "./ThemeScope";
 import { WindowDragRegion } from "./TitleBar";
+import { useWindowCaptionTrailing } from "./windowCaption";
 
 /** Keep the workspace mounted while first-run draft preparation finishes. */
 export function SetupHandoff(props: {
@@ -98,6 +99,13 @@ export interface SetupPageSecondaryAction {
     onSelect(): void;
 }
 
+/** A way around the sequence, pinned to a corner of the window. */
+export interface SetupPageCornerAction {
+    readonly label: string;
+    readonly disabled?: boolean;
+    onSelect(): void;
+}
+
 export interface SetupPageProps {
     /** A retained, compact stage indicator above the scrolling page content. */
     readonly steps?: ReactNode;
@@ -162,6 +170,14 @@ export interface SetupPageProps {
     readonly footnote?: string;
     /** Pinned to the bottom-right corner, outside the page's own bands. */
     readonly help?: ReactNode;
+    /** The step before this one, pinned to the bottom-left corner. Omitted on the first. */
+    readonly back?: SetupPageCornerAction;
+    /**
+     * Leaving the sequence to finish it later: one control in the top corner
+     * the native window controls leave free, its close mark on the side
+     * nearest the window edge.
+     */
+    readonly exit?: SetupPageCornerAction;
     /** Pinned top-left where the connection rail's first tile stands: whose setup this is. */
     readonly identity?: ReactNode;
 }
@@ -221,12 +237,15 @@ export function SetupPage(props: SetupPageProps) {
         "secondary",
         "footnote",
         "help",
+        "back",
+        "exit",
         "identity",
         "placement",
         "steps",
     ]);
     const centered = local.placement === "centered";
     const top = local.placement === "top";
+    const captionTrailing = useWindowCaptionTrailing();
     // The subtitle keeps its line when a page has none, so the status and
     // content below start at one height. A centred or top page carries it in
     // the header, with the title, above its content.
@@ -272,6 +291,7 @@ export function SetupPage(props: SetupPageProps) {
             data-steps={local.steps ? "true" : undefined}
             data-identity={local.identity ? "true" : undefined}
             data-placement={headed ? local.placement : undefined}
+            data-caption={captionTrailing ? "trailing" : undefined}
             style={local.style}
         >
             {local.backdrop ? <OnboardingSky appearance={local.backdrop.appearance} /> : null}
@@ -435,9 +455,36 @@ export function SetupPage(props: SetupPageProps) {
                     </div>
                 </div>
             </ScrollArea>
+            {local.back ? (
+                <div className="happy-setup-page__back" data-happy-desktop-ui="setup-page-back">
+                    <Button
+                        disabled={local.back.disabled}
+                        icon="arrow-left"
+                        onClick={local.back.onSelect}
+                        size="medium"
+                        variant="ghost"
+                    >
+                        {local.back.label}
+                    </Button>
+                </div>
+            ) : null}
             {local.help ? (
                 <div className="happy-setup-page__help" data-happy-desktop-ui="setup-page-help">
                     {local.help}
+                </div>
+            ) : null}
+            {local.exit ? (
+                <div className="happy-setup-page__close" data-happy-desktop-ui="setup-page-close">
+                    <Button
+                        className="happy-setup-page__exit"
+                        disabled={local.exit.disabled}
+                        icon="close"
+                        onClick={local.exit.onSelect}
+                        size="medium"
+                        variant="ghost"
+                    >
+                        {local.exit.label}
+                    </Button>
                 </div>
             ) : null}
             {local.identity ? (

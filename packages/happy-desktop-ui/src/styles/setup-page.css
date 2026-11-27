@@ -83,6 +83,17 @@
     --happy-setup-pairing-single-qr-size: clamp(112px, var(--happy-setup-below) - 188px, 184px);
 }
 
+/* Fixed to the window from the cover lane, which no connection contains.
+   One step under `--happy-z-overlay`: above the rail, whose tiles and marks
+   stack on small z-indexes of their own, and below a modal-class overlay hung
+   from the same lane. */
+.happy-setup-cover {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--happy-z-overlay) - 1);
+    display: flex;
+}
+
 .happy-setup-page > .happy-window-drag-region {
     z-index: 2;
 }
@@ -373,6 +384,50 @@
     right: 24px;
     bottom: 24px;
     z-index: 2;
+}
+
+/* The step before this one, in the opposite corner at the same height and in
+   the same quiet button as help. It arrives with the page that first has a
+   step behind it, on that page's own dissolve. */
+.happy-setup-page__back {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    z-index: 2;
+    display: flex;
+    animation: happy-setup-page-crossfade-in 320ms ease both;
+}
+
+/* Leaving the sequence, once: the same quiet button as Back and help, in the
+   top corner and 12px from both edges, as the sheet that leads here. Its close
+   mark is on the side nearest the window edge, so here the words come first.
+   Above the drag lane, so a press leaves instead of moving the window. */
+.happy-setup-page__close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 3;
+    display: flex;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
+.happy-setup-page__close .happy-button__content {
+    flex-direction: row-reverse;
+}
+
+/* Where the caption buttons own the top-right corner, as on Windows, the
+   control takes the corner they leave free, centred in the 40px title band
+   beside them, and the close mark leads: two close glyphs side by side would
+   mean two different things. */
+.happy-setup-page[data-caption="trailing"] .happy-setup-page__close {
+    top: calc((var(--happy-window-controls-height) - 36px) / 2);
+    right: auto;
+    left: 12px;
+}
+
+.happy-setup-page[data-caption="trailing"] .happy-setup-page__close .happy-button__content {
+    flex-direction: row;
 }
 
 /* Whose setup this is, standing exactly where the connection rail's first

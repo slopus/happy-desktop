@@ -337,6 +337,7 @@ import {
     Sidebar,
     SidebarFooter,
     SidebarConnectionAction,
+    SidebarSetupAction,
     SidebarErrorNotice,
     MenuButton,
     SidebarAgentUpdate,
@@ -460,6 +461,8 @@ const sidebarDaemonUnavailable: AppHappyAgentDaemonSnapshot = {
     updateAvailable: false,
     versions: [],
 };
+
+const setupSubscribeNone = () => () => undefined;
 
 /** Stands in wherever no machine-local agent is managed, such as a browser. */
 const sidebarDaemonStoreNoop: AppHappyAgentDaemonStore = {
@@ -3951,6 +3954,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // the count is to be seen while the reader is doing something else.
     const inboxStore = active?.session?.inbox ?? happyAgentInboxStoreNoop;
     const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
+    // A Happy Cloud server's setup, left for later with only optional steps
+    // open, is come back to from the footer. Only that one field is read.
+    const setupStore = active?.happyCloud ? active.session?.onboarding : undefined;
+    const setupFlow = useSyncExternalStore(
+        setupStore?.subscribe ?? setupSubscribeNone,
+        () => setupStore?.get().flow,
+        () => setupStore?.get().flow,
+    );
     const daemonStore = props.daemon ?? sidebarDaemonStoreNoop;
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
@@ -4251,6 +4262,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       messageId,
                       errors,
                   });
+    const sidebarSetup =
+        active && setupStore && setupFlow?.away && !setupFlow.blocked ? (
+            <SidebarSetupAction
+                key={active.id}
+                defaultOpen={setupFlow.away === "now"}
+                location={active.label}
+                onResume={setupStore.onboardingResume}
+                stepsLeft={setupFlow.remaining}
+            />
+        ) : undefined;
     const sidebarFooter = (
         <SidebarFooter
             bugReport={
@@ -4285,6 +4306,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <>
                     {sidebarOutage}
                     {remoteConnection}
+                    {sidebarSetup}
                     {sidebarUpdate}
                     <SidebarErrorNotice
                         message={mutationFailure?.message}

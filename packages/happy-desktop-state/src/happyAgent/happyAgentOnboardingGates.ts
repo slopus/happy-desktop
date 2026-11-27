@@ -243,15 +243,27 @@ export function happyAgentOnboardingSummaryRead(onboarding: unknown): {
 }
 
 /**
- * Whether the flow puts this gate on screen: one the reader can act on that is
- * still open, or one that holds them back, which says why (waiting for an
- * admin, or an update) when they cannot act on it. An optional gate this
- * client does not know is passed over.
+ * Whether the reader can stand on this gate: a step of the flow, which the
+ * progress bar names and Back returns to whether or not it is finished. A gate
+ * that holds them back always is one. Otherwise it is one they can act on and
+ * the server can evaluate; an optional gate this client does not know is not.
  */
-export function happyAgentOnboardingGateShown(gate: HappyAgentOnboardingGate): boolean {
+export function happyAgentOnboardingGateStop(gate: HappyAgentOnboardingGate): boolean {
     if (gate.blocking) return true;
     if (gate.kind === "unknown") return false;
-    return gate.canComplete && gate.status === "open";
+    // An optional photo is asked for on the profile page. Only a required one
+    // is a page of its own, for a reader who has a name and no photo.
+    if (gate.kind === "avatar" && gate.requirement === "optional") return false;
+    return gate.canComplete && gate.status !== "unavailable";
+}
+
+/**
+ * Whether the flow puts this step in front of the reader on its own: it holds
+ * them back, which says why (waiting for an admin, or an update) when they
+ * cannot act on it, or it is still open.
+ */
+export function happyAgentOnboardingGateShown(gate: HappyAgentOnboardingGate): boolean {
+    return happyAgentOnboardingGateStop(gate) && (gate.blocking || gate.status === "open");
 }
 
 /** What the reader can do about the gate on screen. */
@@ -278,10 +290,26 @@ export function happyAgentOnboardingGateStance(
 export interface HappyAgentOnboardingFlow {
     /** Every gate, in the server's order. */
     readonly gates: readonly HappyAgentOnboardingGate[];
-    /** The gates the progress bar names: every one shown since this flow began, in order. */
+    /**
+     * The steps the progress bar names, in the server's order: every gate the
+     * reader can stand on, finished or not, so the list is the same after a
+     * restart as before it.
+     */
     readonly sequence: readonly string[];
     /** The gate on screen, or `undefined` once nothing is left to show. */
     readonly current?: HappyAgentOnboardingGate;
+    /** The step Back returns to: the one before the gate on screen. Absent on the first. */
+    readonly previous?: string;
+    /** A required step is still open, so the server refuses work until it is done. */
+    readonly blocked: boolean;
+    /** How many steps still ask something of the reader. */
+    readonly remaining: number;
+    /**
+     * The reader left setup to finish later, on this run of the app (`now`) or
+     * an earlier one. Steps are still left: what shows in their place is the
+     * caller's, by `blocked`. Absent while they are in setup.
+     */
+    readonly away?: "now" | "earlier";
     readonly stance?: HappyAgentOnboardingGateStance;
     /** The owners' names, for a reader waiting on one of them. */
     readonly owners: readonly string[];
@@ -305,7 +333,8 @@ export function happyAgentOnboardingFlowDerive(input: {
     readonly owners?: readonly string[];
     readonly pinned: string | undefined;
     readonly passed: ReadonlySet<string>;
-    readonly sequence: readonly string[];
+    /** The reader left setup for later, and when. */
+    readonly away?: "now" | "earlier";
     readonly pending?: string;
     readonly error?: { readonly gate: string; readonly message: string };
 }): HappyAgentOnboardingFlow {
@@ -323,17 +352,17 @@ export function happyAgentOnboardingFlowDerive(input: {
               // A gate that blocks is shown whether or not it was passed: the server
               // decides, and passing it here was only this client's guess.
               gates.find((gate) => gate.blocking)));
-    const known = new Set(gates.map((gate) => gate.id));
-    const sequence = input.sequence.filter((id) => known.has(id));
-    for (const gate of gates)
-        if (happyAgentOnboardingGateShown(gate) && !sequence.includes(gate.id))
-            sequence.push(gate.id);
-    const order = new Map(gates.map((gate, index) => [gate.id, index]));
-    sequence.sort((left, right) => (order.get(left) ?? 0) - (order.get(right) ?? 0));
+    // The gate on screen is always a step, even one the server stopped offering under it.
+    const sequence = gates
+        .filter((gate) => happyAgentOnboardingGateStop(gate) || gate.id === current?.id)
+        .map((gate) => gate.id);
+    const previous = current ? sequence[sequence.indexOf(current.id) - 1] : undefined;
     return {
         gates,
         sequence,
         owners: input.owners ?? [],
+        blocked: gates.some((gate) => gate.blocking),
+        remaining: gates.filter(happyAgentOnboardingGateShown).length,
         ...(current
             ? {
                   current,
@@ -341,6 +370,8 @@ export function happyAgentOnboardingFlowDerive(input: {
                   continuable: !current.blocking,
               }
             : { continuable: false }),
+        ...(previous === undefined ? {} : { previous }),
+        ...(input.away && current ? { away: input.away } : {}),
         ...(input.pending === undefined ? {} : { pending: input.pending }),
         ...(input.error && input.error.gate === current?.id ? { error: input.error.message } : {}),
     };

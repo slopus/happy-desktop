@@ -46,6 +46,7 @@ export type IconName =
     | "bell"
     | "more"
     | "arrow-down"
+    | "arrow-left"
     | "arrow-right"
     | "arrow-up"
     | "shield"
@@ -260,6 +261,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     hash: { set: "octicons", name: "hash" },
     bell: { set: "ionicons", name: "notifications-outline" },
     more: { set: "ionicons", name: "ellipsis-horizontal" },
+    "arrow-left": { set: "ionicons", name: "arrow-back-outline" },
     "arrow-right": { set: "ionicons", name: "arrow-forward-outline" },
     "arrow-up": { set: "ionicons", name: "arrow-up-outline" },
     "arrow-down": { set: "ionicons", name: "arrow-down-outline" },

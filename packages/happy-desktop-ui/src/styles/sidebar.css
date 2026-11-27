@@ -2176,6 +2176,26 @@
     user-select: text;
 }
 
+/* Setup left for later is not a warning: the mark is the footer's own quiet ink. */
+.happy-sidebar-setup-action .happy-sidebar-update__trigger {
+    color: var(--text-secondary);
+}
+
+/* Sentence case, as new headings are; the shared eyebrow's capitals are legacy. */
+.happy-sidebar-setup-action .happy-sidebar-update__eyebrow {
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.happy-sidebar-setup-action__bottom {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    height: 28px;
+}
+
 .happy-sidebar-connection-action__bottom {
     display: flex;
     flex: none;

@@ -464,6 +464,13 @@ export function CloudOnboardingFlowPage() {
                                         <CloudOnboardingScreen
                                             appearance={mode}
                                             steps={stepsBefore(screen.props.currentStep)}
+                                            {...(screen.props.view.kind === "finished"
+                                                ? {}
+                                                : { exit: { onSelect: noop } })}
+                                            {...(screen.props.currentStep === STEPS[0].id ||
+                                            screen.props.view.kind === "finished"
+                                                ? {}
+                                                : { back: { onSelect: noop } })}
                                             {...screen.props}
                                         />
                                         {screen.dialog}

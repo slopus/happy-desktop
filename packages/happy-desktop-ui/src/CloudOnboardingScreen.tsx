@@ -11,7 +11,12 @@ import { ProfileSetupForm, type ProfileSetupFormProps } from "./ProfileSetupScre
 import { SegmentedProgress } from "./SegmentedProgress";
 import { AssistantMark, type AssistantMarkName } from "./AssistantMark";
 import { Ionicon } from "./vectorIcons/VectorIcon";
-import { SetupPage, type SetupPageAction, type SetupPageSecondaryAction } from "./SetupPage";
+import {
+    SetupPage,
+    type SetupPageAction,
+    type SetupPageCornerAction,
+    type SetupPageSecondaryAction,
+} from "./SetupPage";
 import { TextField } from "./TextField";
 import { Button } from "./Button";
 import type { ThemeMode } from "./ThemeScope";
@@ -181,6 +186,10 @@ export interface CloudOnboardingScreenProps {
     readonly skip?: Omit<SetupPageSecondaryAction, "label">;
     /** Why the action is not available yet, said quietly under it when there is no skip. */
     readonly footnote?: string;
+    /** Returns to the step before this one. Omitted on the first step. */
+    readonly back?: Omit<SetupPageCornerAction, "label">;
+    /** Leaves setup to finish later; what is done stays done. */
+    readonly exit?: Omit<SetupPageCornerAction, "label">;
     onExternalOpen?(url: string): void;
 }
 
@@ -817,6 +826,8 @@ export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
             {...(props.action ? { action: props.action } : {})}
             {...(props.skip ? { secondary: { ...props.skip, label: "Skip for now" } } : {})}
             {...(props.footnote && props.action?.disabled ? { footnote: props.footnote } : {})}
+            {...(props.back ? { back: { ...props.back, label: "Back" } } : {})}
+            {...(props.exit ? { exit: { ...props.exit, label: "Save and exit" } } : {})}
             backdrop={{ appearance: props.appearance, kind: "sky" }}
             className={
                 props.view.kind === "inference"
