@@ -187,7 +187,10 @@ export function pipelineRunStoreCreate(deps: {
                 answer = await deps.request("GET", path);
             } catch (error) {
                 if (error instanceof HappyCloudRequestRefusal && error.status === 404) {
-                    if (!disposed) store.setState({ loading: false, missing: true, run: null });
+                    if (disposed) return;
+                    store.setState({ loading: false, missing: true, run: null });
+                    // A run that is not there is not live: off screen it stops following.
+                    followSettle();
                     return;
                 }
                 throw error;
