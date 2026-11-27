@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { CLOSE_SHORTCUT, commandShortcutMatches } from "./keyboardShortcut";
+import { WindowCover } from "./WindowOverlay";
 import {
     createContext,
     use,
@@ -114,9 +115,26 @@ const FOCUSABLE =
  * The overlay owns modal focus: on mount it moves focus to the hosted card's
  * first focusable control (unless the card already focused itself, as the
  * command palette does), so Escape works immediately without a preceding
- * click; on unmount it hands focus back to the control that opened it.
+ * click; on unmount it hands focus back to the control that opened it. While
+ * it is up, Tab turns round inside the card instead of walking out to the
+ * window behind the dim; a `clear` overlay leaves the window live and does not
+ * hold it.
+ *
+ * It hangs itself on the window's cover lane (`WindowCover`), past every
+ * connection's containment, so a dialog is written where it belongs in the
+ * product and its dim still covers the whole window, the connection rail
+ * included. Where there is no shell it stays where it was written.
  */
 export function ModalOverlay(props: ModalOverlayProps) {
+    // The surface mounts once its lane exists, so its focus handoff always
+    // runs against a committed overlay.
+    return (
+        <WindowCover>
+            <ModalOverlaySurface {...props} />
+        </WindowCover>
+    );
+}
+function ModalOverlaySurface(props: ModalOverlayProps) {
     const [local, rest] = partitionComponentProps(props, [
         "className",
         "style",
@@ -238,6 +256,25 @@ export function ModalOverlay(props: ModalOverlayProps) {
             onKeyDown={(event) => {
                 if (event.key === "Escape") {
                     (local.onEscape ?? local.onDismiss)?.();
+                    return;
+                }
+                if (event.key === "Tab" && !clear) {
+                    // The dim puts the rest of the window out of the pointer's
+                    // reach; Tab must not walk out to it either. Only a Tab
+                    // pressed in the overlay's own boxes turns round here: a
+                    // menu the card opened hangs elsewhere in the document,
+                    // owns its own keys, and reaches this handler only through
+                    // React's tree.
+                    const overlay = event.currentTarget;
+                    const focused = document.activeElement;
+                    if (!overlay.contains(focused)) return;
+                    const stops = [...overlay.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+                        (stop) => stop.getClientRects().length > 0,
+                    );
+                    const edge = event.shiftKey ? stops[0] : stops.at(-1);
+                    if (edge !== undefined && focused !== edge && focused !== overlay) return;
+                    event.preventDefault();
+                    (event.shiftKey ? stops.at(-1) : stops[0])?.focus();
                     return;
                 }
                 // The close chord means the innermost thing that is up, and

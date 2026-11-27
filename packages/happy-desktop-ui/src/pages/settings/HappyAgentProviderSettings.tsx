@@ -399,20 +399,9 @@ function HappyAgentProviderSheet(props: {
                 data-step={step}
                 data-testid="provider-detail-dialog"
                 footer={parts.footer}
-                leading={
-                    step === "details" ? (
-                        <ProviderTile provider={provider} />
-                    ) : (
-                        <Button
-                            aria-label={`Back to ${provider.name}`}
-                            icon="chevron-left"
-                            iconOnly
-                            onClick={back}
-                            size="small"
-                            variant="ghost"
-                        />
-                    )
-                }
+                backLabel={`Back to ${provider.name}`}
+                leading={<ProviderTile provider={provider} />}
+                {...(step === "details" ? {} : { onBack: back })}
                 onClose={close}
                 size="sheet"
                 subheader={

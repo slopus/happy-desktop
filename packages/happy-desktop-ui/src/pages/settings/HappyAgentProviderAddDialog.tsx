@@ -316,13 +316,13 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
         if (done) return { label: "Done", onClick: props.onClose };
         if (flow.kind === "apiKey" && aws)
             return {
-                label: busy ? "Checking the keys…" : "Add",
+                label: "Add",
                 onClick: awsSubmit,
                 disabled: aws.accessKeyId.trim() === "" || aws.secretAccessKey.trim() === "",
             };
         if (flow.kind === "apiKey")
             return {
-                label: busy ? "Checking the key…" : "Add",
+                label: "Add",
                 onClick: keySubmit,
                 disabled: secret.trim() === "",
             };
@@ -348,35 +348,25 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
     return (
         <ModalOverlay onDismiss={close}>
             <Modal
+                backLabel="Back to providers"
+                busy={busy}
                 footer={
-                    <>
-                        {(flow.kind === "choose" && !family) || done ? null : (
-                            <Button
-                                disabled={busy}
-                                onClick={family ? () => setFamilyId(undefined) : back}
-                                variant="ghost"
-                            >
-                                Back
-                            </Button>
-                        )}
-                        {done ? null : (
-                            <Button disabled={busy} onClick={close} variant="ghost">
-                                Cancel
-                            </Button>
-                        )}
-                        {primary ? (
-                            <Button
-                                disabled={primary.disabled === true && !busy}
-                                loading={busy}
-                                onClick={primary.onClick}
-                            >
-                                {primary.label}
-                            </Button>
-                        ) : null}
-                    </>
+                    primary ? (
+                        <Button
+                            disabled={primary.disabled === true && !busy}
+                            loading={busy}
+                            onClick={primary.onClick}
+                        >
+                            {primary.label}
+                        </Button>
+                    ) : undefined
                 }
+                frame="anchored"
                 icon="spark"
-                onClose={busy ? undefined : close}
+                {...((flow.kind === "choose" && !family) || done
+                    ? {}
+                    : { onBack: family ? () => setFamilyId(undefined) : back })}
+                onClose={close}
                 size="medium"
                 title={family ? family.name : titleOf(flow)}
             >
@@ -608,7 +598,7 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                         <>
                                             <Box className="happy-agent-provider-add__row">
                                                 <Button
-                                                    icon="open-external"
+                                                    trailingIcon="open-external"
                                                     onClick={() => open(props.signIn!.url)}
                                                     size="small"
                                                     variant="secondary"
@@ -664,7 +654,7 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                     ) : null}
                                     <Box className="happy-agent-provider-add__row">
                                         <Button
-                                            icon="open-external"
+                                            trailingIcon="open-external"
                                             onClick={() => open(props.signIn!.url)}
                                             size="small"
                                             variant="primary"

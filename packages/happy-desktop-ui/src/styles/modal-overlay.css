@@ -81,6 +81,34 @@
     max-height: min(calc(100% - 80px), 760px);
 }
 
+/* A framed Modal is placed by its frame: the root comes back as the box the
+   overlay centres, and the card hangs from its top (modal.css, "Frames"). The
+   frame may take the whole gutter box, as a sheet does. Its room below a short
+   card is still the dim, so presses there pass to the overlay and dismiss. */
+.happy-modal-overlay > .happy-modal[data-frame] {
+    display: flex;
+    flex: none;
+    pointer-events: none;
+}
+
+.happy-modal-overlay > .happy-modal[data-frame] > .happy-modal__dialog {
+    max-height: 100%;
+    pointer-events: auto;
+}
+
+/* The hosted card owns its hit surface (app-shell.css, drag regions, rule 2).
+   The overlay sits on the window's cover lane, outside the shell whose
+   controls opt out of the title band, so a card that reaches up into that
+   band would otherwise have its close and back buttons taken as a window
+   drag. The dim declares nothing: it is a click target for the page, and the
+   band under it still moves the window. */
+.happy-modal-overlay > .happy-modal > .happy-modal__dialog,
+.happy-modal-overlay > :not(.happy-modal-overlay__top-layout, .happy-modal),
+.happy-modal-overlay > .happy-modal-overlay__top-layout > * {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
 /* The soft backdrop is the same click target at a fraction of the dim: the
    window stays readable behind a transient type-ahead, and the card still
    reads as the one thing in front. */

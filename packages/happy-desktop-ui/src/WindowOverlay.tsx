@@ -18,18 +18,27 @@ export const WindowOverlayHostContext = createContext<HTMLElement | null>(null);
 export const WindowOverlayRetainedContext = createContext(false);
 
 /*
- * Hides an overlay of a view kept out of sight, with the focus in it, and shows
- * it again with the view. React detaches the refs of a subtree its `Activity`
- * hides — portals included — and attaches them again when it is shown; one
- * detached for good is unmounted with its node, so hiding it costs nothing.
+ * Shows an overlay's frame only while the view that opened it is on screen,
+ * and takes the focus out of it as it goes. React attaches the refs of a
+ * subtree only while its `Activity` shows it — portals included — and detaches
+ * them when it is hidden; one detached for good is unmounted with its node, so
+ * hiding it costs nothing. The frame is hidden by its own style until it is
+ * marked, so an overlay opened by a view already out of sight, whose refs were
+ * never attached, stays out of sight too.
+ *
+ * The mark is made from the frame's first child rather than from the frame:
+ * React attaches a parent's ref after its children's, and a menu that measures
+ * itself in its own ref would then be measuring a box not yet displayed. An
+ * earlier sibling's ref runs first.
  */
-function retainedOverlayFrame(element: HTMLDivElement | null) {
-    if (!element) return;
-    element.style.removeProperty("display");
+function retainedOverlayMark(mark: HTMLSpanElement | null) {
+    const frame = mark?.parentElement;
+    if (!frame) return;
+    frame.setAttribute("data-shown", "");
     return () => {
-        const focused = element.ownerDocument.activeElement;
-        if (focused instanceof HTMLElement && element.contains(focused)) focused.blur();
-        element.style.setProperty("display", "none", "important");
+        const focused = frame.ownerDocument.activeElement;
+        if (focused instanceof HTMLElement && frame.contains(focused)) focused.blur();
+        frame.removeAttribute("data-shown");
     };
 }
 
@@ -60,8 +69,8 @@ export function WindowOverlay(props: { children: ReactNode }) {
             <div
                 className="happy-retained-views__overlay"
                 data-happy-desktop-ui="retained-view-overlay"
-                ref={retainedOverlayFrame}
             >
+                <span hidden ref={retainedOverlayMark} />
                 {props.children}
             </div>
         ) : (
@@ -71,20 +80,34 @@ export function WindowOverlay(props: { children: ReactNode }) {
     );
 }
 
-/** The overlay lane above every connection, including the connection rail. */
-export const WindowCoverHostContext = createContext<HTMLElement | null>(null);
+/**
+ * The overlay lane above every connection, including the connection rail.
+ * `undefined` where there is no connection shell at all; `null` inside a shell
+ * whose lane has not been attached yet, which lasts one commit.
+ */
+export const WindowCoverHostContext = createContext<HTMLElement | null | undefined>(undefined);
 
-/** Hangs a full-window surface off the connection shell; hidden connections hide their covers. */
+/**
+ * Hangs a full-window surface off the connection shell; hidden connections
+ * hide their covers. `ModalOverlay` hangs itself here, so a dialog is written
+ * where it belongs in the product and still dims the whole window.
+ *
+ * What a cover opens of its own, such as a menu or a picture viewer, hangs on
+ * the same lane after it: left on the shell's lane inside the connection, it
+ * would open underneath the cover that asked for it.
+ */
 export function WindowCover(props: { children: ReactNode }) {
     const host = useContext(WindowCoverHostContext);
-    if (host === null) return <WindowOverlay>{props.children}</WindowOverlay>;
+    if (host === undefined) return <WindowOverlay>{props.children}</WindowOverlay>;
+    // Mounting in place for the one commit before the lane exists would mount
+    // the surface twice, dropping its focus and whatever it already held.
+    if (host === null) return null;
     return createPortal(
-        <div
-            className="happy-window-cover"
-            data-happy-desktop-ui="window-cover"
-            ref={retainedOverlayFrame}
-        >
-            {props.children}
+        <div className="happy-window-cover" data-happy-desktop-ui="window-cover">
+            <span hidden ref={retainedOverlayMark} />
+            <WindowOverlayHostContext value={host}>
+                <WindowOverlayRetainedContext value>{props.children}</WindowOverlayRetainedContext>
+            </WindowOverlayHostContext>
         </div>,
         host,
     );

@@ -5,6 +5,19 @@ import { Icon, type IconName } from "./Icon";
 import { ScrollArea } from "./Scrollbar";
 /** Three content-height widths, and `sheet`: one fixed frame whose body scrolls. */
 export type ModalSize = "small" | "medium" | "large" | "sheet";
+/**
+ * How a card holds its place while what it shows changes. A card without a
+ * frame is as tall as its content and centred on it, so any change of height
+ * moves its header up and its buttons down by half of it; that suits only a
+ * dialog whose height never changes while it is open.
+ *
+ * - `anchored`: the top edge sits where its size's frame (280, 560 or 720
+ *   tall, clamped to the window) would and stays there. The card is as tall
+ *   as its content, up to the frame, so only its bottom edge moves.
+ *
+ * `sheet` is already a fixed frame and takes no `frame`.
+ */
+export type ModalFrame = "anchored";
 export type ModalTone = "default" | "danger";
 export type ModalProps = {
     className?: string;
@@ -15,7 +28,24 @@ export type ModalProps = {
     children: ReactNode;
     footer?: ReactNode;
     onClose?: () => void;
+    /**
+     * The dialog's own work is running and it cannot be left for the moment:
+     * the close and back controls keep their places, unpressable. Dropping
+     * `onClose` or `onBack` instead would take the control away, and a header
+     * keeps its contents for as long as the dialog is open.
+     */
+    busy?: boolean;
+    /**
+     * Goes back one step of a flow. The dialog shows its one back control, a
+     * chevron in the header's leading slot, in place of `icon` or `leading`
+     * and in their box, so the title does not move as it comes and goes. Pass
+     * it only on a step that has a previous one.
+     */
+    onBack?: () => void;
+    /** Names where back leads, such as "Back to providers". */
+    backLabel?: string;
     size?: ModalSize;
+    frame?: ModalFrame;
     tone?: ModalTone;
     icon?: IconName;
     /**
@@ -38,6 +68,11 @@ export type ModalProps = {
  * whose size never follows its content — a 14px
  * shell radius, header (optional leading icon chip + title + close), a scrollable
  * body slot, and an optional right-aligned footer action row.
+ *
+ * A dialog whose content can change height while it is open (steps, a choice
+ * that swaps its fields, an error that appears) declares a `frame`, so its
+ * header holds one position; see `ModalFrame` and DESIGN.md "Dialogs hold
+ * their frame".
  */
 export function Modal(props: ModalProps) {
     const [local, rest] = partitionComponentProps(props, [
@@ -48,7 +83,11 @@ export function Modal(props: ModalProps) {
         "children",
         "footer",
         "onClose",
+        "busy",
+        "onBack",
+        "backLabel",
         "size",
+        "frame",
         "tone",
         "icon",
         "leading",
@@ -60,6 +99,8 @@ export function Modal(props: ModalProps) {
         <div
             {...rest}
             className={["happy-modal", local.className].filter(Boolean).join(" ")}
+            data-frame={size() === "sheet" ? undefined : local.frame}
+            data-frame-size={size() === "sheet" || !local.frame ? undefined : size()}
             data-happy-desktop-ui="modal"
             style={local.style}
         >
@@ -73,7 +114,23 @@ export function Modal(props: ModalProps) {
                 role="dialog"
             >
                 <header className="happy-modal__header" data-happy-desktop-ui="modal-header">
-                    {local.leading !== undefined ? (
+                    {local.onBack ? (
+                        <span
+                            className="happy-modal__leading"
+                            data-happy-desktop-ui="modal-leading"
+                        >
+                            <Button
+                                aria-label={local.backLabel ?? "Back"}
+                                className="happy-modal__back"
+                                disabled={local.busy === true}
+                                icon="chevron-left"
+                                iconOnly
+                                onClick={() => local.onBack?.()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </span>
+                    ) : local.leading !== undefined ? (
                         <span
                             className="happy-modal__leading"
                             data-happy-desktop-ui="modal-leading"
@@ -83,7 +140,7 @@ export function Modal(props: ModalProps) {
                     ) : local.icon ? (
                         ((name) => (
                             <span className="happy-modal__icon" data-happy-desktop-ui="modal-icon">
-                                <Icon name={name} size={16} />
+                                <Icon name={name} size={18} />
                             </span>
                         ))(local.icon)
                     ) : null}
@@ -94,6 +151,7 @@ export function Modal(props: ModalProps) {
                         <Button
                             aria-label={local.closeLabel ?? "Close"}
                             className="happy-modal__close"
+                            disabled={local.busy === true}
                             icon="close"
                             iconOnly
                             onClick={() => local.onClose?.()}

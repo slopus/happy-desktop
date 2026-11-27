@@ -86,6 +86,46 @@
     padding: 16px 28px;
 }
 
+/*
+ * Frames. A framed card is placed by its frame, never by its own height: the
+ * root becomes the frame's box, which the overlay centres, and the card hangs
+ * from its top. An `anchored` card is as tall as its content, so only its
+ * bottom edge moves. One frame per width, the large one being the sheet's own
+ * 640 × 720.
+ */
+.happy-modal[data-frame] {
+    align-items: flex-start;
+    height: var(--happy-modal-frame-height);
+    max-height: 100%;
+}
+
+.happy-modal[data-frame-size="small"] {
+    --happy-modal-frame-height: 280px;
+}
+
+.happy-modal[data-frame-size="medium"] {
+    --happy-modal-frame-height: 560px;
+}
+
+.happy-modal[data-frame-size="large"] {
+    --happy-modal-frame-height: 720px;
+}
+
+.happy-modal[data-frame] > .happy-modal__dialog {
+    max-height: 100%;
+}
+
+.happy-modal[data-frame] .happy-modal__body {
+    min-height: 0;
+}
+
+/* One box for the short labels a flow's primary takes in turn (Add, Connect,
+   Continue, Done), with room for the spinner `loading` puts beside them, so the
+   button is the same button on every step and while it works. */
+.happy-modal[data-frame] .happy-modal__footer > .happy-button:not([data-icon-only]) {
+    min-width: 112px;
+}
+
 .happy-modal__leading {
     display: flex;
     flex: none;
@@ -120,7 +160,9 @@
     width: 28px;
     height: 28px;
     background: var(--surface-selected);
-    border-radius: 8px;
+    /* The 28px IconTile's own corner and 18px glyph, so the chip and a tile
+       passed as `leading` are one build. */
+    border-radius: 7px;
     /* Neutral: a dialog's glyph names its subject rather than offering a link,
        and colour in this shell is kept for the destructive tone below. */
     color: var(--text);

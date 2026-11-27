@@ -168,7 +168,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
     expect(chip.offsets().top).toBe(16);
     expect(chip.computedStyles(["background-color", "border-radius", "color"])).toEqual({
         "background-color": "rgb(234, 234, 234)",
-        "border-radius": "8px",
+        "border-radius": "7px",
         color: "rgb(0, 0, 0)",
     });
     /* The chip's glyph is a font codepoint the icon font paints box-centered:

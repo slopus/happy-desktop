@@ -261,7 +261,9 @@
     position: relative;
 }
 .happy-connections__surface {
-    /* Fixed setup and modal chrome is contained by its connection, never the rail.
+    /* Fixed setup pages and browser guests are contained by their connection,
+       never the rail. A modal is not: ModalOverlay hangs itself on the cover
+       lane below, so its dim reaches the rail too.
        Layout containment alone: in full screen the sidebar toggle reaches back
        over the rail's empty title band to the window's leading edge, so the
        surface must not clip it. */
@@ -271,8 +273,14 @@
 /* What covers the whole window, rail and all, hangs here, past every
    connection's containment; it lays nothing out of its own. */
 .happy-connections__cover,
-.happy-window-cover {
+.happy-window-cover[data-shown] {
     display: contents;
+}
+
+/* A cover is on screen only while the connection that opened it is: its frame
+   is marked while React shows that connection (see `retainedOverlayMark`). */
+.happy-window-cover {
+    display: none;
 }
 
 .happy-connections__error {

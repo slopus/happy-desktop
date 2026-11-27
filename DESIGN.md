@@ -147,6 +147,7 @@ Current reference dimensions are:
 | Medium button             | 36 px high                      |
 | Large button              | 44 px high                      |
 | Modal dialog widths       | 360 / 480 / 640 (small/med/lg)  |
+| Modal frame (height cap)  | 280 / 560 / 720 (small/med/lg)  |
 | Modal overlay gutter      | 24 px safe-area around the card |
 | Blueprint toolbar         | 42 px high                      |
 | Blueprint specimen grid   | 16 px minor / 80 px major       |
@@ -257,8 +258,10 @@ confirmations and pickers are `small`, forms are `medium`, and content-heavy
 detail is `large`. It never sets its own position, scrim, or stacking — it is
 hosted by `ModalOverlay`, the single backdrop that fixes to the app window,
 dims with `--happy-scrim` at `--happy-z-overlay`, and keeps a 24 px minimum
-safe-area gutter. The default `center` placement is for dialogs and forms. The
-`top` placement is only for transient type-ahead surfaces, never forms; it uses
+safe-area gutter. The dim covers the whole window, the connection rail
+included: `ModalOverlay` hangs itself on the shell's cover lane (`WindowCover`),
+so a dialog needs no wrapper to reach the rail. The default `center` placement
+is for dialogs and forms. The `top` placement is only for transient type-ahead surfaces, never forms; it uses
 an adaptive top gutter of
 `min(128px, max(24px, calc(100cqh - 485px)))` so the card sits 128 px from the
 top both in the 1280 × 800 design reference and at the actual 720 × 640
@@ -273,6 +276,36 @@ because there is no exposed backdrop left to click. Application code composes
 instead of hand-rolling per-view scrims. Wire its `onDismiss` to close on a
 backdrop click; omit it for a surface that must not be lost to a stray click,
 such as an editor holding unsaved work.
+
+### Dialogs hold their frame
+
+A dialog's header and button row do not move while it is open.
+
+- Every step of a flow shows in the same `Modal`, at one width.
+- A dialog is as tall as its content. One whose height can change while it is
+  open uses `frame="anchored"`: its top edge holds and only its bottom edge
+  moves. Past its frame (280 / 560 / 720, clamped to the window) the body
+  scrolls. A `Modal` without a `frame` is centred on its own height and must
+  not change height while open.
+- A switch that swaps the fields under it is a segmented control at the top of
+  the body. Switching is not a step and brings no Back.
+- A list and the form a row opens share one card; the form takes `onBack` to
+  the list.
+- A different width or frame partway through a flow needs the person's OK.
+- No card inside the card: a note or group of rows in a dialog is an unfilled
+  frame with a 1 px divider border and 12 px corners, like
+  `HappyAgentUserInputPrompt` `variant="card"`.
+- The header's 28 px leading slot holds one of `icon`, `leading`, or the
+  `onBack` chevron, built alike, so swapping them moves nothing. Back is
+  `onBack`, never a footer button.
+- Close stays for the whole flow; `busy` disables close and back in place.
+- The button row holds only what moves the dialog forward: the primary at the
+  trailing edge, at most one secondary beside it. A dialog with a close button
+  has no Cancel, except a confirmation, where Cancel is one of its answers.
+- A button's label does not change while its action runs; `loading` shows the
+  work. In a framed dialog footer buttons are at least 112 px wide.
+- A button that leaves the app shows `open-external` after its words
+  (`trailingIcon`).
 
 ## Layout with flexbox
 

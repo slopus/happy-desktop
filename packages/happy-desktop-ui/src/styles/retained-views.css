@@ -13,7 +13,13 @@
 }
 
 /* What a kept view hangs off the shell's overlay lane, wrapped so it can be
-   hidden with the view. It lays out nothing, like the lane it sits in. */
+   hidden with the view: the frame is marked only while React shows that view
+   (see `retainedOverlayMark`). Shown, it lays out nothing, like the lane it
+   sits in. */
 .happy-retained-views__overlay {
+    display: none;
+}
+
+.happy-retained-views__overlay[data-shown] {
     display: contents;
 }

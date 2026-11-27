@@ -22,7 +22,7 @@ export function ModalPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Dialog card — header (leading icon chip · title · close) / body / right-aligned footer actions, three fixed widths, or a fixed-size sheet, on a 14px shell radius. Rendered as a specimen card; a host portals it over its own backdrop."
+            summary="Dialog card — header (leading icon chip or back · title · close) / body / right-aligned footer actions, three fixed widths, an anchored frame for a dialog that changes while open, or a fixed-size sheet, on a 14px shell radius. Rendered as a specimen card; ModalOverlay hosts it over the window."
             title="Modal"
         >
             <div className="specimen-grid specimen-grid--sizes">
@@ -55,14 +55,9 @@ export function ModalPage() {
                         <DimensionRule label="width 640" />
                         <Modal
                             footer={
-                                <>
-                                    <Button size="medium" variant="ghost">
-                                        Back
-                                    </Button>
-                                    <Button size="medium" variant="primary">
-                                        Save changes
-                                    </Button>
-                                </>
+                                <Button size="medium" variant="primary">
+                                    Save changes
+                                </Button>
                             }
                             icon="settings"
                             onClose={() => {}}
@@ -161,16 +156,8 @@ export function ModalPage() {
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                         <DimensionRule label="640 × 720 · body scrolls" />
                         <Modal
-                            footer={<ConfirmFooter confirmLabel="Done" />}
-                            leading={
-                                <Button
-                                    aria-label="Back"
-                                    icon="chevron-left"
-                                    iconOnly
-                                    size="small"
-                                    variant="ghost"
-                                />
-                            }
+                            footer={<Button>Done</Button>}
+                            onBack={() => {}}
                             onClose={() => {}}
                             size="sheet"
                             subheader="A fixed line under the title, above the scrolling body."
@@ -178,6 +165,46 @@ export function ModalPage() {
                         >
                             Whatever the body shows, the frame keeps its size; content taller than
                             the body scrolls inside it.
+                        </Modal>
+                    </div>
+                </Specimen>
+            </div>
+            <div className="specimen-grid">
+                <Specimen
+                    detail="frame anchored — the top edge sits where its size's frame (480 × 560) would and stays; the card is as tall as its content and only its bottom edge moves"
+                    label="Anchored frame"
+                    number="M-08"
+                    stage="app"
+                >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "24px" }}>
+                        <Modal
+                            footer={<Button>Connect</Button>}
+                            frame="anchored"
+                            icon="spark"
+                            onClose={() => {}}
+                            size="medium"
+                            title="A short step"
+                        >
+                            One line of content.
+                        </Modal>
+                        <Modal
+                            busy
+                            footer={<Button loading>Connect</Button>}
+                            frame="anchored"
+                            icon="spark"
+                            onBack={() => {}}
+                            onClose={() => {}}
+                            size="medium"
+                            title="A taller step, working"
+                        >
+                            <p style={{ margin: 0 }}>
+                                While the dialog works, close and back keep their places and take no
+                                press, and the primary keeps its label and its width.
+                            </p>
+                            <p>
+                                The frame reaches 560px before the body starts to scroll. Both cards
+                                hang from the same line.
+                            </p>
                         </Modal>
                     </div>
                 </Specimen>

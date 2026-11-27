@@ -382,7 +382,6 @@ import {
     workspaceLifecycleNoticeLines,
     WorkFloaty,
     type WorkFloatyRow,
-    WindowCover,
     Tooltip,
     type WorkspaceLifecyclePhase,
 } from "happy-desktop-ui";
@@ -5736,25 +5735,23 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         {/* The palette is mounted only while it is open and for the moment
                 it takes to leave, so nothing in the window pays for a surface
                 nobody has asked for, and its own subscriptions — the workspace
-                above all — start and end with it. It belongs to the window, so
-                its dim covers the whole window, the connection rail included. */}
-                        <WindowCover>
-                            <ModalOverlayPresence open={commandPaletteOpen}>
-                                {active?.session?.workspace ? (
-                                    <HappyAgentCommandPaletteSurface
-                                        {...paletteSubject}
-                                        workspace={active.session.workspace}
-                                        {...paletteActions}
-                                    />
-                                ) : (
-                                    <HappyAgentCommandPalette
-                                        {...paletteSubject}
-                                        {...paletteActions}
-                                        facts={PALETTE_WORKSPACE_ABSENT}
-                                    />
-                                )}
-                            </ModalOverlayPresence>
-                        </WindowCover>
+                above all — start and end with it. Like every ModalOverlay, its
+                dim covers the whole window, the connection rail included. */}
+                        <ModalOverlayPresence open={commandPaletteOpen}>
+                            {active?.session?.workspace ? (
+                                <HappyAgentCommandPaletteSurface
+                                    {...paletteSubject}
+                                    workspace={active.session.workspace}
+                                    {...paletteActions}
+                                />
+                            ) : (
+                                <HappyAgentCommandPalette
+                                    {...paletteSubject}
+                                    {...paletteActions}
+                                    facts={PALETTE_WORKSPACE_ABSENT}
+                                />
+                            )}
+                        </ModalOverlayPresence>
                     </LinkCopyContext.Provider>
                 </MessageSettingsLinksContext.Provider>
             </GenUiMachineContext>

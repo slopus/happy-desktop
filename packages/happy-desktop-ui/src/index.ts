@@ -616,7 +616,7 @@ export {
 } from "./ConfirmPopover";
 export { Menu, type MenuItem, type MenuProps } from "./Menu";
 export { MenuButton, type MenuButtonProps } from "./MenuButton";
-export { Modal, type ModalProps, type ModalSize, type ModalTone } from "./Modal";
+export { Modal, type ModalFrame, type ModalProps, type ModalSize, type ModalTone } from "./Modal";
 export {
     type WindowsSandboxSetupProps,
     type WindowsSandboxSetupState,
