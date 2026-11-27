@@ -103,6 +103,12 @@ export interface SessionProjectionInput {
     runFinalContextTokens?: ReadonlyMap<string, number>;
     usage?: UsageBreakdown;
     workspace?: Workspace;
+    /**
+     * Where a bot's or a task's own folder is, for an agent whose workspace is
+     * that folder. The workspace listing carries projects' roots and worktrees
+     * only, so the bot or task that owns the folder is what names it.
+     */
+    ownerCompute?: Task["compute"];
 }
 
 const defaultModes = new WeakMap<DaemonConfig, MessageMode>();
@@ -267,6 +273,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
     const mode = modeOf(config, input.draft, input.mode, input.intendedMode);
     const serviceTier = happyAgentServiceTierFromWire(mode.serviceTier);
     const activeRun = newestRunningRun(input.runs);
+    const cwd = sessionCwd(workspace, input.ownerCompute);
     // A bot's workspace belongs to the bot, not to any project, so the daemon
     // gives it no `projectId` at all. That is the scope, stated as itself: a
     // conversation in a bot is not a loose session the catalog failed to place.
@@ -307,7 +314,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         ...(projectId === undefined ? {} : { projectId }),
         ...(workspace?.kind === "root" ? {} : { workspaceId: workspace?.id }),
         ...(agent.orderKey === null ? {} : { orderKey: agent.orderKey }),
-        cwd: workspacePath(workspace),
+        cwd,
         ...(input.draft?.value == null
             ? {}
             : {
@@ -358,7 +365,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         backgroundProcesses: (input.activity?.processes ?? []).map((process) => ({
             sessionId: projectNumericIdentity(process.id),
             command: process.command,
-            cwd: workspacePath(workspace),
+            cwd,
             status: process.status,
             ...(process.exitCode === null ? {} : { exitCode: process.exitCode }),
             startedAt: process.startedAt,
@@ -2336,6 +2343,16 @@ function unreadOf(agents: readonly Agent[]): ProjectGroup["unread"] {
 
 function workspacePath(workspace: Workspace | undefined): string {
     return workspace === undefined ? "" : computePath(workspace.compute);
+}
+
+/** The folder a session works in: its listed workspace's, or else its owning bot's or task's. */
+export function sessionCwd(
+    workspace: Workspace | undefined,
+    ownerCompute: Task["compute"] | undefined,
+): string {
+    return workspace === undefined && ownerCompute !== undefined
+        ? computePath(ownerCompute)
+        : workspacePath(workspace);
 }
 
 function computePath(compute: Project["compute"]): string {

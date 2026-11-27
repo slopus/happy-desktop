@@ -163,19 +163,22 @@ function store(
     disk: ReturnType<typeof checkout>,
     viewPreferences: HappyAgentViewPreferencesPersistence = storage(),
     chat?: ReturnType<typeof cloudChat>,
+    listed: Record<PropertyKey, unknown> = {},
 ) {
     const loading = { type: "loading" } as const;
-    const list = new Proxy(
-        {
-            projects: loading,
-            bots: [],
-            tasks: [],
-            botsCreating: [],
-            archivedSessions: [],
-            revision: 0,
-        } as Record<PropertyKey, unknown>,
-        { get: (target, property) => (property in target ? target[property] : inert()) },
-    );
+    const rows: Record<PropertyKey, unknown> = {
+        projects: loading,
+        bots: [],
+        tasks: [],
+        botsCreating: [],
+        archivedSessions: [],
+        revision: 0,
+        ...listed,
+    };
+    const listListeners = new Set<() => void>();
+    const list = new Proxy(rows, {
+        get: (target, property) => (property in target ? target[property] : inert()),
+    });
     const client = new Proxy(
         {
             models: {
@@ -185,7 +188,13 @@ function store(
             },
             sessionList: () =>
                 new Proxy(
-                    { get: () => list, subscribe: () => () => undefined },
+                    {
+                        get: () => list,
+                        subscribe: (listener: () => void) => {
+                            listListeners.add(listener);
+                            return () => listListeners.delete(listener);
+                        },
+                    },
                     {
                         get: (target, property) =>
                             property in target ? target[property as keyof typeof target] : inert(),
@@ -211,6 +220,11 @@ function store(
     return {
         workspace,
         unsubscribe,
+        /** The host's next listing arriving, the way a read of it would land. */
+        listUpdate(change: Record<PropertyKey, unknown>): void {
+            Object.assign(rows, change);
+            for (const listener of listListeners) listener();
+        },
         names(path = ""): string[] | undefined {
             return workspace
                 .get()
@@ -635,6 +649,77 @@ describe("All files on a Happy Cloud conversation follows its compute", () => {
         workspace.fileScopeUpdate(GROUP, "all");
         await settle();
         expect(disk.reads).toEqual([""]);
+        unsubscribe();
+    });
+});
+
+describe("A folder Git does not track opens on every file", () => {
+    const TASK = "wt_task" as HappyAgentGroupId;
+    // A task's own folder. Git knows nothing about it, so Changes there can
+    // only list what a chat edited through its tools.
+    const task = {
+        id: "tsk_note",
+        workspaceId: TASK,
+        name: "Save a note",
+        conversation: { id: "ses_task", title: "Save a note" },
+        subtasks: [],
+        path: "/Users/reader/Happy/Tasks/save-a-note",
+        displayPath: "~/Happy/Tasks/save-a-note",
+        archived: false,
+    };
+
+    it("lists a task's folder when it opens, so a file saved from a shell shows", async () => {
+        const disk = checkout();
+        disk.add("shell-note.txt");
+        const { workspace, names, unsubscribe } = store(disk, storage(), undefined, {
+            tasks: [task],
+        });
+        workspace.groupOpen(TASK);
+        await settle();
+
+        expect(workspace.get().fileScope).toBe("all");
+        expect(names()).toEqual(["shell-note.txt"]);
+        unsubscribe();
+    });
+
+    it("lists it once the task arrives in a list that was still loading", async () => {
+        const disk = checkout();
+        disk.add("shell-note.txt");
+        const { workspace, names, listUpdate, unsubscribe } = store(disk);
+        workspace.groupOpen(TASK);
+        await settle();
+        expect(disk.reads).toEqual([]);
+
+        listUpdate({ tasks: [task] });
+        await settle();
+
+        expect(workspace.get().fileScope).toBe("all");
+        expect(names()).toEqual(["shell-note.txt"]);
+        unsubscribe();
+    });
+
+    it("keeps Changes once the reader picks it there", async () => {
+        const disk = checkout();
+        const preferences = storage();
+        const before = store(disk, preferences, undefined, { tasks: [task] });
+        before.workspace.groupOpen(TASK);
+        before.workspace.fileScopeUpdate(TASK, "changed");
+        before.unsubscribe();
+
+        const { workspace, unsubscribe } = store(disk, preferences, undefined, { tasks: [task] });
+        workspace.groupOpen(TASK);
+        expect(workspace.get().fileScope).toBe("changed");
+        unsubscribe();
+    });
+
+    it("still opens a project on its changes", async () => {
+        const disk = checkout();
+        const { workspace, unsubscribe } = store(disk, storage(), undefined, { tasks: [task] });
+        workspace.groupOpen(GROUP);
+        await settle();
+
+        expect(workspace.get().fileScope).toBe("changed");
+        expect(disk.reads).toEqual([]);
         unsubscribe();
     });
 });

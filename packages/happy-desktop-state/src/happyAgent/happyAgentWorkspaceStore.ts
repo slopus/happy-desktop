@@ -2705,8 +2705,47 @@ export function happyAgentWorkspaceStoreCreate(
      */
     const groupView = (groupId: HappyAgentGroupId | undefined): HappyAgentGroupViewPreferences =>
         groupId === undefined ? {} : (viewPreferences.groups[groupId] ?? {});
+    /**
+     * Whether the group is a bot's or a task's own folder rather than a project
+     * or one of its worktrees. Git does not track that folder, so its Changes
+     * can list only what a chat edited through its tools — a file saved from a
+     * shell, by another chat, or by the reader never appears there.
+     */
+    const groupUntracked = (groupId: HappyAgentGroupId): boolean => {
+        const snapshot = list.get();
+        const projects = snapshot.projects;
+        if (
+            projects.type === "ready" &&
+            projects.value.some(
+                (project) =>
+                    project.id === groupId ||
+                    project.worktrees.some((worktree) => worktree.id === groupId),
+            )
+        )
+            return false;
+        if (
+            snapshot.bots.some((bot) => bot.workspaceId === groupId) ||
+            snapshot.tasks.some((task) => task.workspaceId === groupId) ||
+            snapshot.tasksArchived.some((task) => task.workspaceId === groupId) ||
+            snapshot.taskDirectory.some((task) => task.workspaceId === groupId)
+        )
+            return true;
+        // A subtask may work in a project's worktree, which the projects name
+        // once they are read; until then nothing says which kind of folder it is.
+        return (
+            projects.type === "ready" &&
+            happyAgentBotSubtasks([...snapshot.bots, ...snapshot.tasks]).some(
+                (subtask) => subtask.workspaceId === groupId,
+            )
+        );
+    };
+    /**
+     * Changes where Git tracks the folder, every file where it does not; the
+     * reader's own pick wins either way.
+     */
     const fileScopeOf = (groupId: HappyAgentGroupId | undefined): HappyAgentFileScope =>
-        groupView(groupId).fileScope ?? "changed";
+        groupView(groupId).fileScope ??
+        (groupId !== undefined && groupUntracked(groupId) ? "all" : "changed");
     const viewPreferencesWrite = (
         groupId: HappyAgentGroupId,
         change: HappyAgentGroupViewPreferences,
@@ -3383,7 +3422,7 @@ export function happyAgentWorkspaceStoreCreate(
         // another project shows that project the way it was left, rather than
         // carrying the last one's panel width and listing across to it.
         const nextView = groupView(nextAddress.groupId);
-        const nextFileScope = nextView.fileScope ?? "changed";
+        const nextFileScope = fileScopeOf(nextAddress.groupId);
         // The daemon's all-files contract is a lazy directory tree. Flattening
         // it would require recursively opening every directory before the first
         // row could be truthful, which turns one panel open into a request storm.
@@ -7396,6 +7435,15 @@ export function happyAgentWorkspaceStoreCreate(
             // remembered files reopened yet; the list saying which sessions it
             // has is what makes that possible.
             if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
+            // Nor could it be known to be a folder Git does not track, which
+            // opens on every file; the list naming it as a bot's or a task's is
+            // what reads its root. One already read, or failed, is left alone.
+            if (
+                addressedGroupId !== undefined &&
+                workspaceFilesGroupId !== addressedGroupId &&
+                fileScopeOf(addressedGroupId) === "all"
+            )
+                workspaceFilesEnsure(addressedGroupId);
             fileTabsReconcile();
             pendingProjectClonesApply();
             sessionCreateFailureApply();
