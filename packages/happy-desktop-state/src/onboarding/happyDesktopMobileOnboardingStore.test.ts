@@ -41,21 +41,17 @@ function guided(integration: HappyIntegration) {
     return happyMobileOnboardingStoreCreate({
         guided: true,
         sync: syncWith(integration),
-        client: {
-            cancelHappyIntegration: vi.fn(),
-            getHappyIntegration: vi.fn(),
-            startHappyIntegration: vi.fn(),
-        } as never,
+        client: { getHappyIntegration: vi.fn() } as never,
     });
 }
 
-it("ends the guided phone step when the Happy Agent turned its relay off", async () => {
+it("keeps offering the guided phone step when the Happy Agent turned its relay off", async () => {
     const store = guided(disabled);
-    const statuses: string[] = [];
-    const leave = store.subscribe(() => statuses.push(store.get().status));
-    await vi.waitFor(() => expect(store.get().status).toBe("disabled"));
-    // Nothing on the way offered a code for a relay that is off.
-    expect(statuses).not.toContain("pairing");
+    const leave = store.subscribe(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(store.get()).toEqual({ status: "desktop", step: { kind: "intro" } });
+    store.happyMobileConnect();
+    expect(store.get()).toEqual({ status: "desktop", step: { kind: "link" } });
     leave();
     store[Symbol.dispose]();
 });

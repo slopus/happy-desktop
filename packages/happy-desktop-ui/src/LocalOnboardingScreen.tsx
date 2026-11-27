@@ -186,7 +186,7 @@ export type LocalOnboardingView =
           readonly kind: "happy-mobile-offer";
           readonly message?: string;
       }
-    /** Both pairing codes; each method's state is in `happyMobilePairingOptions`. */
+    /** The direct pairing code; its state is in `happyMobilePairingOptions`. */
     | { readonly kind: "happy-mobile-pairing" }
     | {
           /**
@@ -229,7 +229,7 @@ export interface LocalOnboardingScreenProps {
     onCommandCopy?(copy: LocalOnboardingCommandCopy): void;
     onHappyMobileConnect(): void;
     onHappyMobileSkip(): void;
-    /** Both pairing methods, shown side by side while linking. */
+    /** The direct pairing code, shown while linking. */
     readonly happyMobilePairingOptions: DesktopMobilePairingOptions;
     /** Asks Happy Agent to run Codex's or Grok's own sign-in. */
     onAssistantSignIn?(assistant: LocalOnboardingAssistantId): void;

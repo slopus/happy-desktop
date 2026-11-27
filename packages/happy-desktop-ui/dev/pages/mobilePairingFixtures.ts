@@ -4,7 +4,6 @@ import type {
     MobileDirectPairing,
     MobileDirectPairedDevice,
 } from "../../src/MobileDirectConnection";
-import type { MobileRelayPairingState } from "../../src/MobilePairingOptions";
 
 /** The fixed reference time every fixture is drawn against, so countdowns never move. */
 export const now = 1_755_400_000_000;
@@ -12,14 +11,6 @@ export const now = 1_755_400_000_000;
 /** A direct code with the real payload's shape and length. Opaque: never read. */
 export const directCode =
     "happy://direct?eyJ2IjoxLCJhIjoidGNBQVFJREJBVUdCd2dKQ2dzTURRNFBFQkVTRXhRVkZoY1lHUm9iSEIwZUh5QWhJaU1rSlNZbktDa3FLeXd0TGk4d01USXpORFUyTnpnNU9qczhQVDRfIiwicCI6MjQ3ODEsInQiOiJBZDNrOVFtMlhmWnA3THdSdDBiWWMxVmhOOHNHdUo0ZUtvUDZhSXlUekUwIiwibiI6IkFkYSdzIE1hY0Jvb2sgUHJvIiwiZSI6MTc1NTQwMDI3MjAwMH0";
-
-export const relayCode = "happy://terminal?Kf3oQ1v7ZpL0bN8sYc2HdRw6TxJmE4gA9uVnIqXk5te";
-
-export const relayWaiting: MobileRelayPairingState = {
-    kind: "waiting",
-    data: relayCode,
-    expiresAt: now + 104_000,
-};
 
 const pairingBase: MobileDirectPairing = {
     id: "pairing_blueprint",

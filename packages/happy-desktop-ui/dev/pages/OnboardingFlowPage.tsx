@@ -18,7 +18,7 @@ import {
     customProvidersAssistants,
     customProvidersChecking,
 } from "./customProviderFixtures";
-import { direct, relayWaiting } from "./mobilePairingFixtures";
+import { direct } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
 
 /** The sandbox step drawn alone, the way the flow's retained `SetupPage` draws it. */
@@ -31,17 +31,9 @@ export const componentNumber = "P-014";
 
 const noop = () => undefined;
 
-/**
- * What setup shows a phone on macOS: the Direct | Relay choice on Direct.
- * `starting` while the code is on its way.
- */
+/** What setup shows a phone: the direct code, `starting` while it is on its way. */
 function appPairingOptions(starting = false): DesktopMobilePairingOptions {
-    return setupPairingOptions({
-        direct: starting ? direct.loading : direct.waiting,
-        method: "direct",
-        onMethodSelect: noop,
-        relay: starting ? { kind: "starting" } : relayWaiting,
-    });
+    return setupPairingOptions({ direct: starting ? direct.loading : direct.waiting });
 }
 
 /** The window Happy opens at, and the smallest one it allows. */
@@ -557,13 +549,10 @@ const screens: readonly {
     },
     {
         id: "connect-code-loading",
-        label: "Link Mobile App · code on its way (shown at least 1s)",
+        label: "Link Mobile App · code on its way",
         render: () =>
             onboarding(
-                {
-                    kind: "happy-mobile-desktop",
-                    step: { kind: "link", phase: { kind: "checking" } },
-                },
+                { kind: "happy-mobile-desktop", step: { kind: "link" } },
                 undefined,
                 false,
                 "dark",
@@ -573,54 +562,20 @@ const screens: readonly {
     {
         id: "connect-phone",
         label: "Link Mobile App · QR",
-        render: () =>
-            onboarding({
-                kind: "happy-mobile-desktop",
-                step: {
-                    kind: "link",
-                    phase: {
-                        data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                        expiresAt: 1924992000000,
-                        kind: "pairing",
-                    },
-                },
-            }),
+        render: () => onboarding({ kind: "happy-mobile-desktop", step: { kind: "link" } }),
     },
-    ...(
-        [
-            ["direct", "dark", "macOS default: Direct, Relay one tap away"],
-            ["relay", "dark", "Windows and Linux default: Relay"],
-            ["direct", "light", "macOS default · light appearance"],
-            ["relay", "light", "Windows and Linux default · light appearance"],
-        ] as const
-    ).map(([method, appearance, label]) => ({
-        ...(appearance === "light" ? { appearance } : {}),
-        id: `connect-phone-${method}${appearance === "light" ? "-light" : ""}`,
-        label: `Link Mobile App · ${label}`,
+    {
+        appearance: "light",
+        id: "connect-phone-light",
+        label: "Link Mobile App · QR · light appearance",
         render: () =>
             onboarding(
-                {
-                    kind: "happy-mobile-desktop",
-                    step: {
-                        kind: "link",
-                        phase: {
-                            data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                            expiresAt: 1924992000000,
-                            kind: "pairing",
-                        },
-                    },
-                },
+                { kind: "happy-mobile-desktop", step: { kind: "link" } },
                 undefined,
                 false,
-                appearance,
-                setupPairingOptions({
-                    direct: direct.waiting,
-                    relay: relayWaiting,
-                    method,
-                    onMethodSelect: noop,
-                }),
+                "light",
             ),
-    })),
+    },
     {
         id: "phone-connected",
         label: "Link Mobile App · linked, the last page",

@@ -12,8 +12,6 @@ export {
     type AppHappyAgentViewProps,
 } from "./AppHappyAgentView";
 export {
-    appMobileRelayFromLink,
-    appMobileRelayFromOnboarding,
     appMobilePairingOptions,
     useAppMobilePairingOptions,
     type AppMobilePairingProps,

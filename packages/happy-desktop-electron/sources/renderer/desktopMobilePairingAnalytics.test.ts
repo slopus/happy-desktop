@@ -21,8 +21,6 @@ import {
     type HappyAgentIntegrationStore,
     type HappyAgentMobileConnectorSnapshot,
     type HappyAgentMobileConnectorStore,
-    type HappyMobileOnboardingSnapshot,
-    type HappyMobileOnboardingStore,
 } from "happy-desktop-state";
 import {
     desktopAnalyticsCreate,
@@ -37,11 +35,10 @@ vi.mock("happy-desktop-ui", () => import("../../../happy-desktop-ui/src/LocalOnb
 vi.mock("./happyAgentDirectoryStore", () => ({ LOCAL_HAPPY_AGENT_ID: "local" }));
 
 /** What a pairing shows or is told; none of it may reach an event. */
-const RELAY_CODE = "happy://relay?secret=relay-authorization";
 const DIRECT_CODE = "tailcat://100.64.0.7:4141?key=direct-secret";
 const EMOJI = ["🦊", "🌵", "🎈", "🧲"];
 const DEVICE = "Alice's iPhone";
-const SECRETS = [RELAY_CODE, DIRECT_CODE, "100.64.0.7", "direct-secret", DEVICE, ...EMOJI];
+const SECRETS = [DIRECT_CODE, "100.64.0.7", "direct-secret", DEVICE, ...EMOJI];
 
 interface Fake<T> {
     get(): T;
@@ -73,26 +70,17 @@ function observeCreate(method: AnalyticsMobilePairingMethod = "relay") {
     const report: MobilePairingReport = (event, properties) =>
         reported.push({ event, properties: { ...properties } });
     const methods = mobilePairingMethodStoreCreate({ defaultMethod: method });
-    const choose = (next: AnalyticsMobilePairingMethod) =>
-        methods.methodSelect(next, "mobile_access");
-    return { reported, choose, observe: mobilePairingObserveCreate(methods, report) };
+    return { reported, observe: mobilePairingObserveCreate(methods, report) };
 }
-
-/** Lets a failure queued behind its store's call stand or pass. */
-const settle = () => Promise.resolve();
 
 const integration = (
     extra: Partial<HappyAgentIntegrationSnapshot>,
 ): HappyAgentIntegrationSnapshot => ({
     disconnecting: false,
-    pairingCanceling: false,
-    pairingOpen: false,
     pairingStarting: false,
     status: "disconnected",
     ...extra,
 });
-
-const relayPairing = { data: RELAY_CODE, expiresAt: 300_000 };
 
 function directPairing(
     status: "waiting" | "verifying" | "completed" | "rejected" | "expired" | "cancelled" | "failed",
@@ -131,11 +119,6 @@ function connector(
     } as unknown as HappyAgentMobileConnectorSnapshot;
 }
 
-const shown = (default_method: AnalyticsMobilePairingMethod, surface: string) => ({
-    event: "mobile_pairing_options_shown",
-    properties: { options: "relay_direct", default_method, surface },
-});
-
 beforeEach(() => {
     vi.stubGlobal("window", new EventTarget());
     vi.stubGlobal("localStorage", {
@@ -147,129 +130,6 @@ beforeEach(() => {
 
 afterEach(() => {
     vi.unstubAllGlobals();
-});
-
-it("reports onboarding's choice showing once, and a relay code that linked a phone", () => {
-    const { reported, observe } = observeCreate();
-    const source = fakeCreate<HappyMobileOnboardingSnapshot>({
-        status: "desktop",
-        step: { kind: "intro" },
-    });
-    const store = observe.onboarding(source as unknown as HappyMobileOnboardingStore);
-    const leave = store.subscribe(() => undefined);
-    // The store code is not the pairing page.
-    expect(reported).toEqual([]);
-    source.set({ status: "desktop", step: { kind: "link", phase: { kind: "checking" } } });
-    source.set({
-        status: "desktop",
-        step: { kind: "link", phase: { kind: "pairing", ...relayPairing } },
-    });
-    // A second subscriber sees the same page, not a second showing.
-    const second = store.subscribe(() => undefined);
-    source.set({ status: "desktop", step: { kind: "connected", online: true } });
-    second();
-    leave();
-    expect(reported).toEqual([
-        shown("relay", "onboarding"),
-        { event: "mobile_pairing_completed", properties: { method: "relay" } },
-    ]);
-});
-
-it("reports a relay code that failed, and one left by skipping", async () => {
-    const { reported, observe } = observeCreate();
-    const source = fakeCreate<HappyMobileOnboardingSnapshot>({ status: "checking" });
-    const store = observe.onboarding(source as unknown as HappyMobileOnboardingStore);
-    const leave = store.subscribe(() => undefined);
-    source.set({ status: "pairing", ...relayPairing });
-    source.set({ status: "failed", message: "Relay refused the code", pending: false });
-    await settle();
-    // Try again: a new code is on its way, then shown, then skipped.
-    source.set({ status: "failed", message: "Relay refused the code", pending: true });
-    source.set({ status: "pairing", ...relayPairing });
-    source.set({ status: "skipped" });
-    leave();
-    await settle();
-    expect(reported).toEqual([
-        shown("relay", "onboarding"),
-        { event: "mobile_pairing_failed", properties: { method: "relay", error_code: "unknown" } },
-        { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
-    ]);
-});
-
-it("does not count a failure a store passes through on its way to a new code", async () => {
-    const { reported, observe } = observeCreate();
-    const source = fakeCreate(integration({}));
-    const store = observe.integration(source as unknown as HappyAgentIntegrationStore);
-    const leave = store.subscribe(() => undefined);
-    // Opening on a stopped integration: open first, then the start, in one call.
-    source.set(integration({ pairingOpen: true, status: "disconnected" }));
-    source.set(integration({ pairingOpen: true, status: "disconnected", pairingStarting: true }));
-    source.set(integration({ pairingOpen: true, status: "pairing", pairing: relayPairing }));
-    // An unused code expiring: failed, then its replacement asked for, in one call.
-    source.set(integration({ pairingOpen: true, status: "failed" }));
-    source.set(integration({ pairingOpen: true, status: "failed", pairingStarting: true }));
-    await settle();
-    source.set(integration({ pairingOpen: true, status: "pairing", pairing: relayPairing }));
-    leave();
-    expect(reported).toEqual([
-        shown("relay", "mobile_access"),
-        { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
-    ]);
-});
-
-it("reports a relay code left by choosing Direct, and never a Direct pairing as the relay's", () => {
-    const { reported, observe, choose } = observeCreate();
-    const source = fakeCreate<HappyMobileOnboardingSnapshot>({
-        status: "pairing",
-        ...relayPairing,
-    });
-    const store = observe.onboarding(source as unknown as HappyMobileOnboardingStore);
-    const leave = store.subscribe(() => undefined);
-    choose("direct");
-    // The phone paired directly; onboarding then reads the relay as configured.
-    source.set({ status: "configured" });
-    leave();
-    expect(reported).toEqual([
-        shown("relay", "onboarding"),
-        { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
-    ]);
-});
-
-it("reports the page left when onboarding stops showing it without a skip, and its next showing", () => {
-    const { reported, observe } = observeCreate();
-    const source = fakeCreate<HappyMobileOnboardingSnapshot>({
-        status: "pairing",
-        ...relayPairing,
-    });
-    const store = observe.onboarding(source as unknown as HappyMobileOnboardingStore);
-    store.subscribe(() => undefined)();
-    // The store still says pairing; the page is gone all the same.
-    store.subscribe(() => undefined)();
-    expect(reported).toEqual([
-        shown("relay", "onboarding"),
-        { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
-        shown("relay", "onboarding"),
-        { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
-    ]);
-});
-
-it("does not end a relay code on the person's behalf while Direct is chosen", () => {
-    const { reported, observe, choose } = observeCreate("direct");
-    const source = fakeCreate(integration({}));
-    const store = observe.integration(source as unknown as HappyAgentIntegrationStore);
-    const leave = store.subscribe(() => undefined);
-    source.set(integration({ pairingOpen: true, status: "pairing", pairing: relayPairing }));
-    source.set(integration({ pairingOpen: false, status: "disconnected" }));
-    // Relay chosen on the next showing: its close cancels the relay code.
-    choose("relay");
-    source.set(integration({ pairingOpen: true, status: "pairing", pairing: relayPairing }));
-    source.set(integration({ pairingOpen: false, status: "disconnected" }));
-    leave();
-    expect(reported).toEqual([
-        shown("direct", "mobile_access"),
-        shown("relay", "mobile_access"),
-        { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
-    ]);
 });
 
 it("reports how each direct pairing seen in progress ended", () => {
@@ -325,7 +185,7 @@ it("reports a direct page that could not get a code, once", () => {
     ]);
 });
 
-it("reports a direct pairing cancelled when its page closes or Relay is chosen", () => {
+it("reports a direct pairing cancelled when its page closes", () => {
     const { reported, observe } = observeCreate("direct");
     const source = fakeCreate(connector(null));
     // The real store closes its pairing when its last subscriber leaves.
@@ -416,7 +276,7 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
     const directStore = observe.connector(direct as unknown as HappyAgentMobileConnectorStore);
     const leaveRelay = relayStore.subscribe(() => undefined);
     const leaveDirect = directStore.subscribe(() => undefined);
-    relay.set(integration({ pairingOpen: true, status: "pairing", pairing: relayPairing }));
+    relay.set(integration({ setup: { kind: "link" } }));
     direct.set(connector(directPairing("waiting")));
     direct.set(connector(directPairing("verifying")));
     direct.set(connector(directPairing("completed")));

@@ -134,7 +134,7 @@ export interface LocalOnboardingStore {
     sandboxSetup(): void;
     happyMobileConnect(): void;
     happyMobileSkip(): void;
-    /** The direct connector the mobile steps offer beside the relay code. */
+    /** The direct connector whose code the mobile steps offer. */
     happyMobileDirect(): HappyAgentMobileConnectorStore;
 }
 
@@ -1396,15 +1396,13 @@ export function localOnboardingView(
                     return { kind: "happy-mobile-desktop", step: mobile.step };
                 case "offer":
                     return {
-                        busy: mobile.pending,
+                        busy: false,
                         kind: "happy-mobile-offer",
                         ...(mobile.message ? { message: mobile.message } : {}),
                     };
                 case "pairing":
-                case "failed":
                     return { kind: "happy-mobile-pairing" };
                 case "configured":
-                case "disabled":
                 case "skipped":
                     return {
                         busy,

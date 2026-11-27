@@ -16,7 +16,7 @@ import {
 } from "../../src/pages/settings/HappyAgentSettingsShell";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
-import { devices, direct, relayWaiting } from "./mobilePairingFixtures";
+import { devices, direct } from "./mobilePairingFixtures";
 import {
     directSectionSpecimen,
     mobileLinkSpecimen,
@@ -52,6 +52,7 @@ function settings(props: {
     /** This Happy Agent has no direct connection: no direct section. */
     readonly directSectionOff?: boolean;
     readonly pairing?: PairingVariant;
+    /** The Happy server link's own status, for a computer already linked through it. */
     readonly relay?: Partial<HappyAgentMobileSettingsProps>;
     readonly removal?: MobileDirectRemoval;
     readonly unavailable?: string;
@@ -85,7 +86,7 @@ function settings(props: {
                           }),
                       }
                     : {})}
-                status={props.pairing ? "pairing" : "disconnected"}
+                status="disconnected"
                 {...(props.unavailable ? { unavailable: props.unavailable } : {})}
                 {...props.relay}
             />
@@ -101,7 +102,7 @@ function setup(variant: PairingVariant) {
             onContinue={noop}
             onSkip={noop}
             pairingOptions={setupPairingOptions(variant)}
-            step={{ kind: "link", phase: { kind: "checking" } }}
+            step={{ kind: "link" }}
         />
     );
 }
@@ -145,26 +146,16 @@ const settingsScreens: readonly {
 }[] = [
     {
         id: "idle",
-        label: "Connect a phone, relay and direct sections",
+        label: "Connect a phone and the direct section",
         render: () => settings({ direct: direct.closed }),
     },
     {
-        id: "method-relay",
-        label: "Direct | Relay · Relay picked",
-        render: () =>
-            settings({
-                direct: direct.closed,
-                directSectionOff: true,
-                pairing: { direct: direct.closed, relay: relayWaiting, method: "relay" },
-            }),
-    },
-    {
         id: "method-direct",
-        label: "Direct | Relay · Direct, the default",
+        label: "Connect a phone · direct code",
         render: () =>
             settings({
                 direct: direct.closed,
-                pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+                pairing: { direct: direct.waiting },
             }),
     },
     {
@@ -173,23 +164,13 @@ const settingsScreens: readonly {
         render: () => mobileLinkSpecimen({ categories, step: { kind: "intro" } }),
     },
     {
-        id: "link-relay",
-        label: "Link a phone · Relay code",
-        render: () =>
-            mobileLinkSpecimen({
-                categories,
-                step: { kind: "link", phase: { kind: "checking" } },
-                pairing: { direct: direct.closed, relay: relayWaiting, method: "relay" },
-            }),
-    },
-    {
         id: "link-direct",
         label: "Link a phone · Direct code",
         render: () =>
             mobileLinkSpecimen({
                 categories,
-                step: { kind: "link", phase: { kind: "checking" } },
-                pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+                step: { kind: "link" },
+                pairing: { direct: direct.waiting },
             }),
     },
     {
@@ -198,25 +179,8 @@ const settingsScreens: readonly {
         render: () =>
             mobileLinkSpecimen({
                 categories,
-                step: { kind: "link", phase: { kind: "checking" } },
-                pairing: { direct: direct.failed, relay: relayWaiting, method: "direct" },
-            }),
-    },
-    {
-        id: "link-relay-failed",
-        label: "Link a phone · relay failed",
-        render: () =>
-            mobileLinkSpecimen({
-                categories,
-                step: {
-                    kind: "link",
-                    phase: { kind: "failed", message: "Happy couldn't reach its server." },
-                },
-                pairing: {
-                    direct: direct.closed,
-                    relay: { kind: "failed", message: "Happy couldn't reach its server." },
-                    method: "relay",
-                },
+                step: { kind: "link" },
+                pairing: { direct: direct.failed },
             }),
     },
     {
@@ -225,8 +189,8 @@ const settingsScreens: readonly {
         render: () =>
             mobileLinkSpecimen({
                 categories,
-                step: { kind: "link", phase: { kind: "checking" } },
-                pairing: { direct: direct.phoneConfirmed, relay: relayWaiting, method: "direct" },
+                step: { kind: "link" },
+                pairing: { direct: direct.phoneConfirmed },
             }),
     },
     {
@@ -235,8 +199,8 @@ const settingsScreens: readonly {
         render: () =>
             mobileLinkSpecimen({
                 categories,
-                step: { kind: "link", phase: { kind: "checking" } },
-                pairing: { direct: direct.completed, relay: relayWaiting, method: "direct" },
+                step: { kind: "link" },
+                pairing: { direct: direct.completed },
             }),
     },
     {
@@ -246,11 +210,11 @@ const settingsScreens: readonly {
     },
     {
         id: "codes",
-        label: "Both codes, side by side",
+        label: "Direct code, beside the direct section",
         render: () =>
             settings({
                 direct: direct.waiting,
-                pairing: { direct: direct.waiting, relay: relayWaiting },
+                pairing: { direct: direct.waiting },
             }),
     },
     {
@@ -259,7 +223,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.connected,
-                pairing: { direct: direct.connected, relay: relayWaiting },
+                pairing: { direct: direct.connected },
             }),
     },
     {
@@ -268,7 +232,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.verifying,
-                pairing: { direct: direct.verifying, relay: relayWaiting },
+                pairing: { direct: direct.verifying },
             }),
     },
     {
@@ -277,7 +241,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.phoneConfirmed,
-                pairing: { direct: direct.phoneConfirmed, relay: relayWaiting },
+                pairing: { direct: direct.phoneConfirmed },
             }),
     },
     {
@@ -286,7 +250,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.desktopConfirmed,
-                pairing: { direct: direct.desktopConfirmed, relay: relayWaiting },
+                pairing: { direct: direct.desktopConfirmed },
             }),
     },
     {
@@ -295,7 +259,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.completed,
-                pairing: { direct: direct.completed, relay: relayWaiting },
+                pairing: { direct: direct.completed },
             }),
     },
     {
@@ -304,7 +268,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.rejected,
-                pairing: { direct: direct.rejected, relay: relayWaiting },
+                pairing: { direct: direct.rejected },
             }),
     },
     {
@@ -313,7 +277,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.cancelled,
-                pairing: { direct: direct.cancelled, relay: relayWaiting },
+                pairing: { direct: direct.cancelled },
             }),
     },
     {
@@ -322,7 +286,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.expiredVerifying,
-                pairing: { direct: direct.expiredVerifying, relay: relayWaiting },
+                pairing: { direct: direct.expiredVerifying },
             }),
     },
     {
@@ -331,7 +295,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.expiredBeforeScan,
-                pairing: { direct: direct.expiredBeforeScan, relay: relayWaiting },
+                pairing: { direct: direct.expiredBeforeScan },
             }),
     },
     {
@@ -340,28 +304,16 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.failed,
-                pairing: { direct: direct.failed, relay: relayWaiting },
-            }),
-    },
-    {
-        id: "relay-failed",
-        label: "Relay failed, direct unaffected",
-        render: () =>
-            settings({
-                direct: direct.waiting,
-                pairing: {
-                    direct: direct.waiting,
-                    relay: { kind: "failed", message: "Happy couldn't reach its server." },
-                },
+                pairing: { direct: direct.failed },
             }),
     },
     {
         id: "relay-connected",
-        label: "Relay already linked; direct pairs another phone",
+        label: "Linked through the Happy server; direct pairs another phone",
         render: () =>
             settings({
                 direct: direct.waiting,
-                pairing: { direct: direct.waiting, relay: { kind: "connected" } },
+                pairing: { direct: direct.waiting },
                 relay: { configured: true, status: "connected" },
             }),
     },
@@ -385,7 +337,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.disabled,
-                pairing: { direct: direct.disabled, relay: relayWaiting },
+                pairing: { direct: direct.disabled },
             }),
     },
     {
@@ -394,7 +346,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.starting,
-                pairing: { direct: direct.starting, relay: relayWaiting },
+                pairing: { direct: direct.starting },
             }),
     },
     {
@@ -403,7 +355,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.socketFailed,
-                pairing: { direct: direct.socketFailed, relay: relayWaiting },
+                pairing: { direct: direct.socketFailed },
             }),
     },
     {
@@ -412,7 +364,7 @@ const settingsScreens: readonly {
         render: () =>
             settings({
                 direct: direct.unsupported,
-                pairing: { direct: direct.unsupported, relay: relayWaiting },
+                pairing: { direct: direct.unsupported },
             }),
     },
     {
@@ -433,53 +385,34 @@ const setupScreens: readonly {
 }[] = [
     {
         id: "setup-codes",
-        label: "Onboarding · both codes",
-        render: () => setup({ direct: direct.waiting, relay: relayWaiting }),
-    },
-    {
-        id: "setup-method-relay",
-        label: "Onboarding · Relay | Direct, Relay",
-        render: () => setup({ direct: direct.closed, relay: relayWaiting, method: "relay" }),
-    },
-    {
-        id: "setup-method-direct",
-        label: "Onboarding · Relay | Direct, Direct",
-        render: () => setup({ direct: direct.waiting, relay: relayWaiting, method: "direct" }),
+        label: "Onboarding · direct code",
+        render: () => setup({ direct: direct.waiting }),
     },
     {
         id: "setup-verifying",
         label: "Onboarding · emoji step",
-        render: () => setup({ direct: direct.phoneConfirmed, relay: relayWaiting }),
-    },
-    {
-        id: "setup-relay-failed",
-        label: "Onboarding · relay failed, direct code shown",
-        render: () =>
-            setup({
-                direct: direct.waiting,
-                relay: { kind: "failed", message: "Happy couldn't reach its server." },
-            }),
+        render: () => setup({ direct: direct.phoneConfirmed }),
     },
     {
         id: "setup-older-agent",
         label: "Onboarding · older Happy Agent",
-        render: () => setup({ direct: direct.unsupported, relay: relayWaiting }),
+        render: () => setup({ direct: direct.unsupported }),
     },
     {
         id: "setup-completed",
         label: "Onboarding · paired directly, Continue",
-        render: () => setup({ direct: direct.completed, relay: relayWaiting }),
+        render: () => setup({ direct: direct.completed }),
     },
     {
         id: "remote-codes",
-        label: "Remote onboarding · both codes",
-        render: () => remote({ direct: direct.waiting, relay: relayWaiting }),
+        label: "Remote onboarding · direct code",
+        render: () => remote({ direct: direct.waiting }),
     },
 ];
 
 /**
  * The Settings pairing dialog through one pairing's whole life, as the app
- * opens it: Direct | Relay at the top, Direct first. The dialog keeps one size
+ * opens it: the direct code. The dialog keeps one size
  * through all of them, so `pnpm blueprint:screens` can lay them side by side.
  */
 const dialogScreens: readonly {
@@ -490,90 +423,69 @@ const dialogScreens: readonly {
     {
         id: "dialog-generating",
         label: "Dialog · reading the connection",
-        pairing: { direct: direct.loading, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.loading },
     },
     {
         id: "dialog-opening",
         label: "Dialog · direct socket opening",
-        pairing: { direct: direct.starting, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.starting },
     },
     {
         id: "dialog-direct",
         label: "Dialog · direct code",
-        pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
-    },
-    {
-        id: "dialog-relay-starting",
-        label: "Dialog · relay code coming",
-        pairing: { direct: direct.waiting, relay: { kind: "starting" }, method: "relay" },
-    },
-    {
-        id: "dialog-relay",
-        label: "Dialog · relay code",
-        pairing: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
+        pairing: { direct: direct.waiting },
     },
     {
         id: "dialog-connected",
         label: "Dialog · phone connected, verifying",
-        pairing: { direct: direct.connected, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.connected },
     },
     {
         id: "dialog-emoji",
         label: "Dialog · emoji match",
-        pairing: { direct: direct.verifying, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.verifying },
     },
     {
         id: "dialog-emoji-waiting",
         label: "Dialog · emoji confirmed here, waiting for the phone",
-        pairing: { direct: direct.desktopConfirmed, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.desktopConfirmed },
     },
     {
         id: "dialog-completed",
         label: "Dialog · paired",
-        pairing: { direct: direct.completed, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.completed },
     },
     {
         id: "dialog-rejected",
         label: "Dialog · rejected by the phone",
-        pairing: { direct: direct.rejected, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.rejected },
     },
     {
         id: "dialog-expired",
         label: "Dialog · verification timed out",
-        pairing: { direct: direct.expiredVerifying, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.expiredVerifying },
     },
     {
         id: "dialog-code-expired",
         label: "Dialog · code expired",
-        pairing: { direct: direct.expiredBeforeScan, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.expiredBeforeScan },
     },
     {
         id: "dialog-failed",
         label: "Dialog · pairing failed",
-        pairing: { direct: direct.failed, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.failed },
     },
     {
         id: "dialog-unavailable",
         label: "Dialog · Happy Agent reconnecting",
         pairing: {
             direct: direct.waiting,
-            relay: relayWaiting,
-            method: "direct",
             unavailable: "Happy Agent is reconnecting. Actions return when it is back.",
-        },
-    },
-    {
-        id: "dialog-relay-failed",
-        label: "Dialog · relay failed",
-        pairing: {
-            direct: direct.waiting,
-            relay: { kind: "failed", message: "Happy couldn't reach its server." },
-            method: "relay",
         },
     },
 ];
 
-/** Onboarding's pairing step through the same pairing, Direct | Relay at the top. */
+/** Onboarding's pairing step through the same pairing. */
 const setupMethodScreens: readonly {
     readonly id: string;
     readonly label: string;
@@ -582,32 +494,27 @@ const setupMethodScreens: readonly {
     {
         id: "setup-generating",
         label: "Onboarding · reading the connection",
-        pairing: { direct: direct.loading, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.loading },
     },
     {
         id: "setup-direct",
         label: "Onboarding · direct code",
-        pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
-    },
-    {
-        id: "setup-relay",
-        label: "Onboarding · relay code",
-        pairing: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
+        pairing: { direct: direct.waiting },
     },
     {
         id: "setup-emoji",
         label: "Onboarding · emoji match",
-        pairing: { direct: direct.verifying, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.verifying },
     },
     {
         id: "setup-paired",
         label: "Onboarding · paired",
-        pairing: { direct: direct.completed, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.completed },
     },
     {
         id: "setup-failed",
         label: "Onboarding · pairing failed",
-        pairing: { direct: direct.failed, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.failed },
     },
 ];
 
@@ -620,29 +527,22 @@ const remoteMethodScreens: readonly {
     {
         id: "remote-direct",
         label: "Remote onboarding · direct code",
-        pairing: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
-    },
-    {
-        id: "remote-relay",
-        label: "Remote onboarding · relay code",
-        pairing: { direct: direct.waiting, relay: relayWaiting, method: "relay" },
+        pairing: { direct: direct.waiting },
     },
     {
         id: "remote-emoji",
         label: "Remote onboarding · emoji match",
-        pairing: { direct: direct.verifying, relay: relayWaiting, method: "direct" },
+        pairing: { direct: direct.verifying },
     },
 ];
 
 /** Settings screens also shown in the dark appearance, at the window Happy opens at. */
-const darkSettingsScreens = new Set(["link-relay", "link-direct"]);
+const darkSettingsScreens = new Set(["method-direct", "link-direct"]);
 
 /** Settings screens also shown at the smallest window, where the codes stack. */
 const narrowSettingsScreens = new Set([
-    "method-relay",
     "method-direct",
     "link-intro",
-    "link-relay",
     "link-direct",
     "codes",
     "verifying",
@@ -654,7 +554,7 @@ export function MobilePairingFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Pairing a phone with both methods side by side, in Settings › Mobile access and in first-run setup. Each viewport is named for `pnpm blueprint:screens`."
+            summary="Pairing a phone with the direct code, in Settings › Mobile access and in first-run setup. Each viewport is named for `pnpm blueprint:screens`."
             title="Mobile pairing flow"
         >
             {[defaultWindow, minimumWindow].flatMap((window) =>

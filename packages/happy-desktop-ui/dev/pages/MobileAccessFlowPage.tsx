@@ -8,7 +8,7 @@ import {
     type HappyAgentSettingsCategory,
 } from "../../src/pages/settings/HappyAgentSettingsShell";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
-import { direct, relayWaiting } from "./mobilePairingFixtures";
+import { direct } from "./mobilePairingFixtures";
 import { directSectionSpecimen, pairingOptionsSpecimen } from "./mobilePairingSpecimens";
 
 /** The page plan this page documents. The selector and the page header read the same value. */
@@ -67,20 +67,16 @@ const screens: readonly {
             status: "disconnected",
         },
     },
-    ...(["direct", "relay"] as const).map((method) => ({
-        id: `pairing-${method}`,
-        label: `Pairing · Direct | Relay dialog on ${method === "direct" ? "Direct" : "Relay"}`,
+    {
+        id: "pairing-direct",
+        label: "Pairing · direct code dialog",
         props: {
             ...handlers,
             configured: false,
-            status: "pairing" as const,
-            pairingOptions: pairingOptionsSpecimen("dialog", {
-                direct: direct.waiting,
-                relay: relayWaiting,
-                method,
-            }),
+            status: "disconnected",
+            pairingOptions: pairingOptionsSpecimen("dialog", { direct: direct.waiting }),
         },
-    })),
+    },
     { id: "ready", label: "Ready · linked through the Happy server", props: paired },
     {
         id: "direct",
@@ -88,12 +84,7 @@ const screens: readonly {
         props: {
             ...paired,
             direct: directSectionSpecimen(direct.waiting),
-            pairingOptions: pairingOptionsSpecimen("dialog", {
-                direct: direct.waiting,
-                relay: { kind: "connected" },
-                method: "direct",
-                methodFixed: true,
-            }),
+            pairingOptions: pairingOptionsSpecimen("dialog", { direct: direct.waiting }),
         },
     },
     {

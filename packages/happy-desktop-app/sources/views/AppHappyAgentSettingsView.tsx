@@ -6,7 +6,6 @@ import type {
     HappyAgentChangeTiersSnapshot,
     HappyAgentChangeTiersStore,
     ExperimentsStore,
-    MobilePairingMethodStore,
     ProjectsVisibilityStore,
     GptLiveStore,
     HappyAgentInstructionsSnapshot,
@@ -44,7 +43,6 @@ import {
     happyAgentProviderServiceName,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
-    mobilePairingMethodStoreNoop,
     projectsVisibilityStoreNoop,
     projectsVisibilityConnection,
     gptLiveStoreNoop,
@@ -52,7 +50,6 @@ import {
     happyAgentAvailabilityProject,
     happyAgentIntegrationStoreNoop,
     happyAgentMobileConnectorStoreNoop,
-    happyAgentMobileConnectorStoreUnfollowed,
     happyAgentIntegrationRemovalIncomplete,
     happyAgentVersionAtLeast,
     HAPPY_AGENT_COMPUTER_REMOVAL_VERSION,
@@ -150,8 +147,6 @@ import {
     AppMobileDirectSection,
     appMobileDirectOff,
     appMobilePairingOptions,
-    appMobileRelayFromIntegration,
-    appMobileRelayFromLink,
 } from "../components/AppMobilePairing";
 import {
     hostHappyAgent,
@@ -501,8 +496,6 @@ export interface AppHappyAgentSettingsViewProps {
      * in a host that remembers no such choice, which withholds them.
      */
     experiments?: ExperimentsStore;
-    /** Which way Mobile Access offers a phone first; absent, Relay. */
-    mobilePairingMethod?: MobilePairingMethodStore;
     /**
      * Whether the primary connection hides its Projects section. Absent in a
      * host that remembers no such choice, which offers no control for it.
@@ -562,12 +555,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         experimentsStore.subscribe,
         experimentsStore.get,
         experimentsStore.get,
-    );
-    const methodStore = props.mobilePairingMethod ?? mobilePairingMethodStoreNoop;
-    const { method: pairingMethod } = useSyncExternalStore(
-        methodStore.subscribe,
-        methodStore.get,
-        methodStore.get,
     );
     const projectsVisibilityStore = props.projectsVisibility ?? projectsVisibilityStoreNoop;
     const projectsVisibility = useSyncExternalStore(
@@ -748,45 +735,25 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         happyIntegrationStore.get,
     );
     // A computer linked through the Happy server already reaches every phone
-    // on the account, so it offers only the direct code, and its link stays.
+    // on the account; connecting one directly leaves that link as it is.
     const relayLinked = happyIntegration.configured === true;
-    // Phones paired directly, and the direct half of every pairing this
-    // category opens. Its pairing code is secret, so Dev Tools never prints it.
-    // While a pairing page shows Relay the connector is not followed, so no
-    // direct code is made behind it.
-    const relayPageShown =
-        pairingMethod === "relay" &&
-        !relayLinked &&
-        (happyIntegration.pairingOpen || happyIntegration.setup !== undefined);
+    // Phones paired directly, and every pairing this category opens. Its
+    // pairing code is secret, so Dev Tools never prints it.
     const mobileConnectorOwned =
         section === "mobile-access" ? host?.session?.mobileConnector?.() : undefined;
-    const mobileConnectorStore =
-        relayPageShown && mobileConnectorOwned
-            ? happyAgentMobileConnectorStoreUnfollowed
-            : (mobileConnectorOwned ?? happyAgentMobileConnectorStoreNoop);
-    // A page that opened on Relay asks for a direct code as Direct shows.
-    const pairingMethodSelect = (method: "relay" | "direct") => {
-        if (method === "direct") mobileConnectorOwned?.pairingOpen();
-        methodStore.methodSelect(method, "mobile_access");
-    };
+    const mobileConnectorStore = mobileConnectorOwned ?? happyAgentMobileConnectorStoreNoop;
     const mobileConnector = useSyncExternalStore(
         mobileConnectorStore.subscribe,
         mobileConnectorStore.get,
         mobileConnectorStore.get,
     );
-    // A way of pairing this Happy Agent reports off is not offered. The local
-    // desktop pairs through the guided setup, which goes through the relay, so
-    // with the relay off it has no way left. With none, Connect a phone is left out.
-    const relayOff = happyIntegration.status === "disabled";
+    // Phones pair only directly, so a Happy Agent that reports direct off
+    // leaves Connect a phone out.
     const directOff = appMobileDirectOff(mobileConnector.connector);
-    const pairingOff = relayOff && (directOff || happyIntegrationStore.mobileSetup !== undefined);
-    // Connect a phone directly: only the direct code, for a linked computer.
+    // Connect a phone directly, beside a computer's Happy server link.
     const directOnly = relayLinked && !directOff;
-    const directOnlyOpen =
-        directOnly &&
-        mobileConnector.pairingOpen &&
-        !happyIntegration.pairingOpen &&
-        happyIntegration.setup === undefined;
+    // The pairing dialog; the local desktop's guided setup is a page instead.
+    const pairingDialogOpen = mobileConnector.pairingOpen && happyIntegration.setup === undefined;
     // Secrets are safe metadata only. The store starts its repeating read while
     // this category (or raw Dev Tools state) watches it and stops immediately
     // when the surface leaves. Happy Cloud keeps a typed catalog instead of the
@@ -1010,13 +977,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                   setup: mobileSetup,
                   pairingOptions: appMobilePairingOptions({
                       layout: "settings",
-                      method: pairingMethod,
-                      onMethodSelect: pairingMethodSelect,
-                      relay:
-                          happyIntegration.setup.kind === "link"
-                              ? appMobileRelayFromLink(happyIntegration.setup.phase)
-                              : { kind: "starting" },
-                      onRelayRetry: mobileSetup.continue,
                       direct: mobileConnectorStore,
                       snapshot: mobileConnector,
                       clock: sessionClock,
@@ -1241,25 +1201,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     }}
                     pairingDirectOnly={directOnly}
                     onPairingOptionsOpen={() => {
-                        if (!happyAgentOnline() || pairingOff) return;
-                        // Every pairing page opens on the default; a pick lasts only on it.
-                        methodStore.methodReset();
-                        // A linked computer's relay link is left exactly as it is.
-                        if (directOnly) mobileConnectorOwned?.pairingOpen();
-                        // The local desktop walks through getting the app first.
-                        else if (mobileSetup) mobileSetup.start();
-                        else happyIntegrationStore.happyIntegrationPairingOpen();
+                        if (!happyAgentOnline() || directOff) return;
+                        // The local desktop walks through getting the app first,
+                        // unless it is already linked through the Happy server.
+                        if (mobileSetup && !relayLinked) mobileSetup.start();
+                        else mobileConnectorOwned?.pairingOpen();
                     }}
-                    // Pairing opens in a dialog over the rows: only the direct
-                    // code for a linked computer, else Direct | Relay.
-                    {...(directOnlyOpen && sessionClock
+                    // Pairing opens in a dialog over the rows.
+                    {...(pairingDialogOpen && sessionClock
                         ? {
                               pairingOptions: appMobilePairingOptions({
                                   layout: "dialog",
-                                  method: "direct",
-                                  directOnly: true,
-                                  onMethodSelect: pairingMethodSelect,
-                                  relay: { kind: "connected" },
                                   direct: mobileConnectorStore,
                                   snapshot: mobileConnector,
                                   clock: sessionClock,
@@ -1269,29 +1221,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                               onPairingOptionsClose: () => mobileConnectorOwned?.pairingClose(),
                           }
                         : {})}
-                    {...(happyIntegration.pairingOpen && sessionClock
-                        ? {
-                              pairingOptions: appMobilePairingOptions({
-                                  layout: "dialog",
-                                  method: pairingMethod,
-                                  onMethodSelect: pairingMethodSelect,
-                                  relay: appMobileRelayFromIntegration(happyIntegration),
-                                  relayStarting: happyIntegration.pairingStarting,
-                                  onRelayRetry: happyIntegrationStore.happyIntegrationPair,
-                                  direct: mobileConnectorStore,
-                                  snapshot: mobileConnector,
-                                  clock: sessionClock,
-                                  online: happyAgentOnline,
-                                  ...(unavailable === undefined ? {} : { unavailable }),
-                              }).view,
-                              onPairingOptionsClose:
-                                  happyIntegrationStore.happyIntegrationPairingClose,
-                          }
-                        : {})}
-                    pairingOff={pairingOff}
-                    // Reported off by the Happy Agent, or not followed behind a
-                    // Relay page, the direct section is left out.
-                    {...(!directOff && !relayPageShown
+                    pairingOff={directOff}
+                    // Reported off by the Happy Agent, the direct section is left out.
+                    {...(!directOff
                         ? {
                               direct: sessionClock ? (
                                   <AppMobileDirectSection

@@ -8,47 +8,26 @@ import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyDesktopMobileOnboardingStoreCreate } from "./happyDesktopMobileOnboardingStore.js";
 
-export type HappyMobileLinkPhase =
-    | { readonly kind: "checking" }
-    | { readonly kind: "pairing"; readonly data: string; readonly expiresAt: number }
-    | { readonly kind: "failed"; readonly message: string };
-
 export type HappyDesktopMobileStep =
     /** The download code; confirming it is the consent that starts setup. */
     | { readonly kind: "intro" }
-    | { readonly kind: "link"; readonly phase: HappyMobileLinkPhase }
+    /** The direct pairing code; the direct connector says how far it got. */
+    | { readonly kind: "link" }
     | { readonly kind: "connected"; readonly online: boolean; readonly message?: string };
 
 export type HappyMobileOnboardingSnapshot =
     | { readonly status: "desktop"; readonly step: HappyDesktopMobileStep }
     | { readonly status: "checking" }
-    | {
-          readonly message?: string;
-          readonly pending: boolean;
-          readonly status: "offer";
-      }
-    | {
-          /** Opaque data supplied by Happy Agent, rendered only as a QR code. */
-          readonly data: string;
-          readonly expiresAt: number;
-          readonly status: "pairing";
-      }
+    | { readonly message?: string; readonly status: "offer" }
+    /** The direct pairing code is on screen; the direct connector says how far it got. */
+    | { readonly status: "pairing" }
     | { readonly status: "configured" }
-    | { readonly status: "disabled" }
-    | { readonly status: "skipped" }
-    | {
-          readonly message: string;
-          readonly pending: boolean;
-          readonly status: "failed";
-      };
+    | { readonly status: "skipped" };
 
 export type HappyMobileOnboardingOutput = { readonly type: "happyMobileSkipped" };
 
 export interface HappyMobileOnboardingStore {
-    /**
-     * The same Happy Agent's direct connector. Its pairing is open while this
-     * flow shows its pairing code, so both methods are offered together.
-     */
+    /** The same Happy Agent's direct connector. Its pairing is open while this flow shows its code. */
     readonly direct: HappyAgentMobileConnectorStore;
     get(): HappyMobileOnboardingSnapshot;
     subscribe(listener: () => void): () => void;
@@ -59,12 +38,9 @@ export interface HappyMobileOnboardingStore {
 
 export interface HappyMobileOnboardingStoreOptions {
     readonly sync: HappyAgentSync;
-    readonly client: Pick<
-        HappyAgentClient,
-        "cancelHappyIntegration" | "getHappyIntegration" | "startHappyIntegration"
-    >;
+    readonly client: Pick<HappyAgentClient, "getHappyIntegration">;
     readonly initialSkipped?: boolean;
-    /** The direct connector offered beside the relay code; absent offers the relay alone. */
+    /** The direct connector whose code this flow offers. */
     readonly mobileConnector?: HappyAgentMobileConnectorStore;
     /**
      * The guided flow: store code and platform pick, then the pairing code, on
@@ -77,11 +53,8 @@ export interface HappyMobileOnboardingStoreOptions {
 
 const CHECKING: HappyMobileOnboardingSnapshot = { status: "checking" };
 const CONFIGURED: HappyMobileOnboardingSnapshot = { status: "configured" };
-const DISABLED: HappyMobileOnboardingSnapshot = { status: "disabled" };
+const PAIRING: HappyMobileOnboardingSnapshot = { status: "pairing" };
 const SKIPPED: HappyMobileOnboardingSnapshot = { status: "skipped" };
-
-/** The relay's error code when a pairing code ran out unused. */
-export const HAPPY_MOBILE_CODE_EXPIRED = "authorization_expired";
 
 /** Whether the direct connector has just paired a phone, which finishes phone setup too. */
 export function happyMobileDirectPaired(direct: HappyAgentMobileConnectorStore): boolean {
@@ -90,22 +63,20 @@ export function happyMobileDirectPaired(direct: HappyAgentMobileConnectorStore):
 }
 
 function resolved(snapshot: HappyMobileOnboardingSnapshot): boolean {
-    return (
-        snapshot.status === "configured" ||
-        snapshot.status === "disabled" ||
-        snapshot.status === "skipped"
-    );
+    return snapshot.status === "configured" || snapshot.status === "skipped";
 }
 
 /**
- * The optional Happy Mobile step, backed by one authoritative daemon snapshot
- * and its realtime replacements.
+ * The optional Happy Mobile step: an offer, then the direct pairing code.
+ * The Happy Agent's integration is read only to learn whether this computer
+ * is already linked through the Happy server, which finishes the step; the
+ * desktop never starts a relay pairing.
  *
  * The constructor opens nothing. The first subscriber takes a race-free
  * shared bootstrap or a narrow integration read and follows the connection's
- * shared journal; the last subscriber aborts its read immediately. Configured, disabled, and skipped
- * are terminal for onboarding, so they stop transport even while the screen
- * that follows remains mounted.
+ * shared journal; the last subscriber aborts its read immediately. Configured
+ * and skipped are terminal for onboarding, so they stop transport even while
+ * the screen that follows remains mounted.
  */
 export function happyMobileOnboardingStoreCreate(
     options: HappyMobileOnboardingStoreOptions,
@@ -117,15 +88,11 @@ export function happyMobileOnboardingStoreCreate(
     let snapshot: HappyMobileOnboardingSnapshot = options.initialSkipped ? SKIPPED : CHECKING;
     let version: string | undefined;
     let networkAbort: AbortController | undefined;
-    let mutation = 0;
     let disposed = false;
 
-    /** The direct code is offered exactly while the relay's pairing view is on screen. */
+    /** The direct code is offered exactly while the pairing view is on screen. */
     const directSync = (): void => {
-        const wanted =
-            !disposed &&
-            listeners.size > 0 &&
-            (snapshot.status === "pairing" || snapshot.status === "failed");
+        const wanted = !disposed && listeners.size > 0 && snapshot.status === "pairing";
         if (wanted === directOpen) return;
         directOpen = wanted;
         if (wanted) direct.pairingOpen();
@@ -141,60 +108,32 @@ export function happyMobileOnboardingStoreCreate(
         networkAbort?.abort();
         networkAbort = undefined;
     };
+    /** A read that failed is no reason to hold back the direct code; the offer says why. */
+    const readFailed = (error: unknown): void => {
+        if (snapshot.status !== "checking" && snapshot.status !== "offer") return;
+        publish({
+            message: `Happy could not read Happy Mobile setup. ${happyAgentUserError(error).message}`,
+            status: "offer",
+        });
+    };
     const integrationAdopt = (integration: HappyIntegration): void => {
-        if (disposed || snapshot.status === "skipped") return;
-        if (version !== undefined) {
-            const order = version.localeCompare(integration.version);
-            if (order > 0 || (order === 0 && snapshot.status !== "failed")) return;
-        }
+        if (disposed || resolved(snapshot)) return;
+        if (version !== undefined && version.localeCompare(integration.version) > 0) return;
         version = integration.version;
         if (integration.configured) {
             publish(CONFIGURED);
             networkStop();
             return;
         }
-        switch (integration.status) {
-            case "disabled":
-                publish(DISABLED);
-                networkStop();
-                return;
-            case "disconnected":
-                publish({
-                    ...(integration.error ? { message: integration.error.message } : {}),
-                    pending: false,
-                    status: "offer",
-                });
-                return;
-            case "pairing":
-                publish({
-                    data: integration.authorization.data,
-                    expiresAt: integration.authorization.expiresAt,
-                    status: "pairing",
-                });
-                return;
-            case "failed": {
-                const expired =
-                    snapshot.status === "pairing" &&
-                    integration.error.code === HAPPY_MOBILE_CODE_EXPIRED;
-                publish({ message: integration.error.message, pending: false, status: "failed" });
-                // A code that ran out unused while on screen is replaced, not reported.
-                if (expired && listeners.size > 0 && !happyMobileDirectPaired(direct))
-                    store.happyMobileConnect();
-                return;
-            }
-        }
+        if (snapshot.status === "checking" || snapshot.status === "offer")
+            publish({ status: "offer" });
     };
     const follow = async (abort: AbortController): Promise<void> => {
         const integrationRead = () =>
             happyAgentSyncRead(
                 abort.signal,
                 () => options.client.getHappyIntegration({ signal: abort.signal }),
-                (error) =>
-                    publish({
-                        message: `Happy could not read Happy Mobile setup. ${happyAgentUserError(error).message}`,
-                        pending: false,
-                        status: "failed",
-                    }),
+                readFailed,
             );
         for await (const input of options.sync.follow({
             signal: abort.signal,
@@ -207,7 +146,8 @@ export function happyMobileOnboardingStoreCreate(
                     input.kind === "reconcile" ||
                     (input.kind === "update" &&
                         input.update.kind === "connected" &&
-                        snapshot.status === "failed")
+                        snapshot.status === "offer" &&
+                        snapshot.message !== undefined)
                 ) {
                     const integration =
                         input.kind === "bootstrap"
@@ -215,12 +155,9 @@ export function happyMobileOnboardingStoreCreate(
                             : (await integrationRead()).integration;
                     if (abort.signal.aborted) return;
                     if (input.kind === "bootstrap") version = undefined;
+                    // Without a relay integration nothing is linked through it.
                     if (!integration) {
-                        publish({
-                            message: "This Happy Agent does not support Happy Mobile pairing.",
-                            pending: false,
-                            status: "failed",
-                        });
+                        if (snapshot.status === "checking") publish({ status: "offer" });
                         continue;
                     }
                     integrationAdopt(integration);
@@ -233,12 +170,7 @@ export function happyMobileOnboardingStoreCreate(
                     if (abort.signal.aborted || resolved(snapshot)) return;
                 }
             } catch (error) {
-                if (!abort.signal.aborted)
-                    publish({
-                        message: `Happy could not read Happy Mobile setup. ${happyAgentUserError(error).message}`,
-                        pending: false,
-                        status: "failed",
-                    });
+                if (!abort.signal.aborted) readFailed(error);
             }
         }
     };
@@ -248,12 +180,7 @@ export function happyMobileOnboardingStoreCreate(
         networkAbort = abort;
         void follow(abort)
             .catch((error: unknown) => {
-                if (abort.signal.aborted) return;
-                publish({
-                    message: `Happy could not read Happy Mobile setup. ${happyAgentUserError(error).message}`,
-                    pending: false,
-                    status: "failed",
-                });
+                if (!abort.signal.aborted) readFailed(error);
             })
             .finally(() => {
                 if (networkAbort === abort) networkAbort = undefined;
@@ -275,77 +202,29 @@ export function happyMobileOnboardingStoreCreate(
                 if (listeners.size === 0) {
                     directSync();
                     networkStop();
-                    mutation += 1;
-                    if (
-                        (snapshot.status === "offer" || snapshot.status === "failed") &&
-                        snapshot.pending
-                    )
-                        snapshot = {
-                            status: "failed",
-                            pending: false,
-                            message: "Setup paused. Try again to finish connecting Happy Mobile.",
-                        };
                 }
             };
         },
         happyMobileConnect() {
-            // A phone paired directly: phone setup is done whatever the relay says.
-            if (!disposed && directOpen && happyMobileDirectPaired(direct)) {
-                mutation += 1;
-                const cancelPairing = snapshot.status === "pairing";
+            if (disposed) return;
+            // A phone paired directly: phone setup is done.
+            if (directOpen && happyMobileDirectPaired(direct)) {
                 publish(CONFIGURED);
                 networkStop();
-                if (cancelPairing)
-                    void options.client.cancelHappyIntegration().catch(() => undefined);
                 return;
             }
-            if (
-                disposed ||
-                (snapshot.status !== "offer" && snapshot.status !== "failed") ||
-                snapshot.pending
-            )
-                return;
-            const request = ++mutation;
-            publish({ ...snapshot, pending: true });
-            void options.client.startHappyIntegration().then(
-                (response) => {
-                    if (request !== mutation || snapshot.status === "skipped") {
-                        if (
-                            !disposed &&
-                            snapshot.status === "skipped" &&
-                            !response.integration.configured &&
-                            response.integration.status === "pairing"
-                        )
-                            void options.client.cancelHappyIntegration().catch(() => undefined);
-                        return;
-                    }
-                    integrationAdopt(response.integration);
-                    networkEnsure();
-                },
-                (error: unknown) => {
-                    if (request !== mutation || resolved(snapshot)) return;
-                    publish({
-                        message: `Happy Mobile could not start pairing. ${happyAgentUserError(error).message}`,
-                        pending: false,
-                        status: "failed",
-                    });
-                },
-            );
+            if (snapshot.status === "offer") publish(PAIRING);
         },
         happyMobileSkip() {
             if (disposed || resolved(snapshot)) return;
-            const cancelPairing = snapshot.status === "pairing";
-            mutation += 1;
             publish(SKIPPED);
             networkStop();
             options.onOutput?.({ type: "happyMobileSkipped" });
-            if (cancelPairing) void options.client.cancelHappyIntegration().catch(() => undefined);
         },
         [Symbol.dispose]() {
             if (directOpen) direct.pairingClose();
             directOpen = false;
             disposed = true;
-            mutation += 1;
             networkStop();
             listeners.clear();
         },

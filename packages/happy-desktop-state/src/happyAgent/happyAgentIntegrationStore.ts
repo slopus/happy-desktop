@@ -7,10 +7,7 @@ import {
 import { Value } from "@sinclair/typebox/value";
 import { createStore } from "zustand/vanilla";
 import type { UserError } from "../types.js";
-import {
-    happyAgentMobileConnectorStoreNoop,
-    type HappyAgentMobileConnectorStore,
-} from "./happyAgentMobileConnectorStore.js";
+import type { HappyAgentMobileConnectorStore } from "./happyAgentMobileConnectorStore.js";
 import { happyAgentUserError } from "./happyAgentSupport.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
@@ -43,26 +40,14 @@ export interface HappyAgentIntegrationSnapshot {
     readonly configured?: boolean;
     /** True while this window is waiting for the daemon to confirm an unlink. */
     readonly disconnecting: boolean;
-    /** True while this window is waiting for the daemon to start pairing. */
+    /** True while this window is waiting for the daemon to connect a saved pairing again. */
     readonly pairingStarting: boolean;
-    /** True while this window is waiting for the daemon to cancel pairing. */
-    readonly pairingCanceling: boolean;
-    /**
-     * Settings shows both pairing methods: a relay code is kept on screen,
-     * replaced when it expires, and cancelled when the surface closes.
-     */
-    readonly pairingOpen: boolean;
     /** Why the live integration state could not be read. */
     readonly error?: UserError;
     /** Why the last unlink was refused. Cleared by the next attempt. */
     readonly disconnectError?: UserError;
-    /** Why the last pairing action was refused. Cleared by the next attempt. */
+    /** Why the last reconnect was refused. Cleared by the next attempt. */
     readonly pairingError?: UserError;
-    /** The opaque QR authorization supplied only while pairing is active. */
-    readonly pairing?: {
-        readonly data: string;
-        readonly expiresAt: number;
-    };
     /** The daemon's own detail for a disconnected or failed integration. */
     readonly message?: string;
     /** The daemon's stable code for `message`, such as `happy_unavailable`. */
@@ -80,28 +65,19 @@ export interface HappyAgentIntegrationStore {
     subscribe(listener: () => void): () => void;
     /** Unlinks the authenticated owner's Happy Agent pairing from Happy Mobile. */
     happyIntegrationDisconnect(): void;
-    /** Starts the authenticated owner's Happy Agent pairing with Happy Mobile. */
-    happyIntegrationPair(): void;
     /**
      * Keeps a saved pairing and asks the daemon to connect it again. This is
      * how a failed removal is abandoned ("Keep linked") and how any other
      * failed saved pairing is retried; it never replaces the credentials.
      */
     happyIntegrationReconnect(): void;
-    /** Cancels the pairing authorization currently shown by this window. */
-    happyIntegrationPairingCancel(): void;
-    /**
-     * Opens pairing with both methods: a relay code and a direct code, each
-     * replaced when it expires unused. Remote Agents pair in place this way;
-     * the local desktop opens `mobileSetup` instead.
-     */
-    happyIntegrationPairingOpen(): void;
-    /** Closes the pairing surface and cancels whichever code is still pending. */
-    happyIntegrationPairingClose(): void;
     happyIntegrationDisconnectRequest(): void;
     mobileManagementCancel(): void;
     mobileManagementConfirm(): void;
-    /** Present only for the local Desktop; remote Agents retain Agent-only pairing. */
+    /**
+     * Present only for the local Desktop, which walks through getting the app
+     * before the direct code; remote Agents open the direct code in place.
+     */
     readonly mobileSetup?: {
         start(): void;
         continue(): void;
@@ -113,25 +89,17 @@ export interface HappyAgentIntegrationStore {
 export interface HappyAgentIntegrationStoreDeps {
     /** The local desktop pairs through the guided setup; remote Agents pair in place. */
     readonly guidedMobileSetup?: boolean;
-    /** The same Happy Agent's direct connector, opened alongside the relay code. */
+    /** The same Happy Agent's direct connector, whose code the guided setup offers. */
     readonly mobileConnector?: HappyAgentMobileConnectorStore;
     readonly sync: HappyAgentSync;
     readonly client: Pick<
         HappyAgentClient,
-        | "cancelHappyIntegration"
-        | "disconnectHappyIntegration"
-        | "getHappyIntegration"
-        | "startHappyIntegration"
+        "disconnectHappyIntegration" | "getHappyIntegration" | "startHappyIntegration"
     >;
 }
 
-/** The relay's error code when a pairing code ran out unused. */
-const RELAY_CODE_EXPIRED = "authorization_expired";
-
 const EMPTY: HappyAgentIntegrationSnapshot = {
     disconnecting: false,
-    pairingCanceling: false,
-    pairingOpen: false,
     pairingStarting: false,
     status: "loading",
 };
@@ -149,13 +117,10 @@ export function happyAgentIntegrationStoreCreate(
 ): HappyAgentIntegrationStore {
     const store = createStore<HappyAgentIntegrationSnapshot>()(() => EMPTY);
     const listeners = new Set<() => void>();
-    const direct = deps.mobileConnector ?? happyAgentMobileConnectorStoreNoop;
     let controller: AbortController | undefined;
     let disposed = false;
     let version: string | undefined;
     let setup: HappyMobileOnboardingStore | undefined;
-    /** The open pairing surface still owes a relay code, once the state is known. */
-    let relayOwed = false;
     let setupUnsubscribe: (() => void) | undefined;
 
     const managementClose = (): void => {
@@ -192,17 +157,6 @@ export function happyAgentIntegrationStoreCreate(
         project();
     };
 
-    const relayRefresh = (): void => {
-        const current = store.getState();
-        if (disposed || !current.pairingOpen || !relayOwed || current.status === "loading") return;
-        relayOwed = false;
-        if (
-            current.configured === false &&
-            (current.status === "disconnected" || current.status === "failed")
-        )
-            integrationStore.happyIntegrationPair();
-    };
-
     const integrationAdopt = (integration: HappyIntegration): void => {
         if (version !== undefined && version.localeCompare(integration.version) >= 0) {
             // A successful bootstrap or stream event also proves transport has
@@ -212,11 +166,6 @@ export function happyAgentIntegrationStoreCreate(
             return;
         }
         version = integration.version;
-        const expired =
-            store.getState().status === "pairing" &&
-            integration.status === "failed" &&
-            !integration.configured &&
-            integration.error.code === RELAY_CODE_EXPIRED;
         // Unlink is a lifetime boundary for the open phone setup flow.
         if (store.getState().configured === true && !integration.configured) {
             setupClose();
@@ -227,8 +176,6 @@ export function happyAgentIntegrationStoreCreate(
             {
                 ...integrationProject(integration),
                 disconnecting: current.disconnecting,
-                pairingCanceling: current.pairingCanceling,
-                pairingOpen: current.pairingOpen,
                 ...(current.setup ? { setup: current.setup } : {}),
                 ...(current.management ? { management: current.management } : {}),
                 pairingStarting: current.pairingStarting,
@@ -241,10 +188,6 @@ export function happyAgentIntegrationStoreCreate(
             },
             true,
         );
-        // An open pairing surface keeps a code on screen: one that ran out
-        // unused is replaced rather than left as a failure.
-        if (expired && current.pairingOpen) relayOwed = true;
-        relayRefresh();
     };
 
     const follow = async (active: AbortController): Promise<void> => {
@@ -268,11 +211,10 @@ export function happyAgentIntegrationStoreCreate(
                     if (active.signal.aborted) return;
                     if (input.kind === "bootstrap") version = undefined;
                     if (!integration) {
-                        const { setup, management, pairingOpen } = store.getState();
+                        const { setup, management } = store.getState();
                         store.setState(
                             {
                                 ...EMPTY,
-                                pairingOpen,
                                 status: "unavailable",
                                 ...(setup ? { setup } : {}),
                                 ...(management ? { management } : {}),
@@ -338,8 +280,6 @@ export function happyAgentIntegrationStoreCreate(
                 controller?.abort();
                 controller = undefined;
                 setupClose();
-                // No surface is left to show either code.
-                integrationStore.happyIntegrationPairingClose();
                 if (!store.getState().management?.pending) managementClose();
             };
         },
@@ -416,53 +356,6 @@ export function happyAgentIntegrationStoreCreate(
             if (disposed || !current || current.pending) return;
             integrationStore.happyIntegrationDisconnect();
         },
-        happyIntegrationPair() {
-            if (deps.guidedMobileSetup) {
-                setupStart();
-                return;
-            }
-            const current = store.getState();
-            if (
-                disposed ||
-                current.configured !== false ||
-                current.pairingStarting ||
-                (current.status !== "disconnected" && current.status !== "failed")
-            )
-                return;
-            const { pairingError: _cleared, ...rest } = current;
-            store.setState({ ...rest, pairingStarting: true }, true);
-            void deps.client.startHappyIntegration().then(
-                (response) => {
-                    if (disposed) return;
-                    integrationAdopt(response.integration);
-                    store.setState({ pairingStarting: false }, false);
-                },
-                (error: unknown) => {
-                    if (disposed) return;
-                    store.setState(
-                        { pairingError: happyAgentUserError(error), pairingStarting: false },
-                        false,
-                    );
-                },
-            );
-        },
-        happyIntegrationPairingOpen() {
-            const current = store.getState();
-            if (disposed || deps.guidedMobileSetup || current.pairingOpen) return;
-            store.setState({ pairingOpen: true });
-            relayOwed = true;
-            direct.pairingOpen();
-            relayRefresh();
-        },
-        happyIntegrationPairingClose() {
-            const current = store.getState();
-            if (disposed || !current.pairingOpen) return;
-            const { pairingError: _cleared, ...rest } = current;
-            store.setState({ ...rest, pairingOpen: false }, true);
-            relayOwed = false;
-            direct.pairingClose();
-            if (current.status === "pairing") integrationStore.happyIntegrationPairingCancel();
-        },
         happyIntegrationReconnect() {
             const current = store.getState();
             if (
@@ -490,33 +383,8 @@ export function happyAgentIntegrationStoreCreate(
                 },
             );
         },
-        happyIntegrationPairingCancel() {
-            const current = store.getState();
-            if (disposed || current.status !== "pairing" || current.pairingCanceling) return;
-            const { pairingError: _cleared, ...rest } = current;
-            store.setState({ ...rest, pairingCanceling: true }, true);
-            void deps.client.cancelHappyIntegration().then(
-                (response) => {
-                    if (disposed) return;
-                    integrationAdopt(response.integration);
-                    store.setState({ pairingCanceling: false }, false);
-                },
-                (error: unknown) => {
-                    if (disposed) return;
-                    store.setState(
-                        { pairingCanceling: false, pairingError: happyAgentUserError(error) },
-                        false,
-                    );
-                },
-            );
-        },
         [Symbol.dispose]() {
             if (disposed) return;
-            if (store.getState().pairingOpen) {
-                direct.pairingClose();
-                if (store.getState().status === "pairing")
-                    void deps.client.cancelHappyIntegration().catch(() => undefined);
-            }
             disposed = true;
             setupClose();
             controller?.abort();
@@ -531,19 +399,9 @@ function integrationProject(integration: HappyIntegration): HappyAgentIntegratio
     return {
         configured: integration.configured,
         disconnecting: false,
-        pairingCanceling: false,
-        pairingOpen: false,
         pairingStarting: false,
         status: integration.status,
         updatedAt: integration.updatedAt,
-        ...(integration.status === "pairing"
-            ? {
-                  pairing: {
-                      data: integration.authorization.data,
-                      expiresAt: integration.authorization.expiresAt,
-                  },
-              }
-            : {}),
         ...((integration.status === "disconnected" || integration.status === "failed") &&
         integration.error
             ? { message: integration.error.message, messageCode: integration.error.code }
@@ -577,8 +435,6 @@ export function happyAgentIntegrationRemovalIncomplete(
 
 const UNAVAILABLE: HappyAgentIntegrationSnapshot = {
     disconnecting: false,
-    pairingCanceling: false,
-    pairingOpen: false,
     pairingStarting: false,
     status: "unavailable",
 };
@@ -588,11 +444,7 @@ export const happyAgentIntegrationStoreNoop: HappyAgentIntegrationStore = {
     get: () => UNAVAILABLE,
     subscribe: () => () => undefined,
     happyIntegrationDisconnect: () => undefined,
-    happyIntegrationPair: () => undefined,
     happyIntegrationReconnect: () => undefined,
-    happyIntegrationPairingCancel: () => undefined,
-    happyIntegrationPairingOpen: () => undefined,
-    happyIntegrationPairingClose: () => undefined,
     happyIntegrationDisconnectRequest: () => undefined,
     mobileManagementCancel: () => undefined,
     mobileManagementConfirm: () => undefined,

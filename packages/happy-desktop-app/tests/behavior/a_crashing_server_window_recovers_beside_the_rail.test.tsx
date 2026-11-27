@@ -14,7 +14,6 @@ import {
     happyAgentGroupAccessRefused,
     happyAgentHostNoop,
     happyAgentSettingsStoreCreate,
-    mobilePairingMethodStoreCreate,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     HAPPY_AGENT_RETAINED_CONVERSATIONS_NONE,
 } from "happy-desktop-state";
@@ -162,7 +161,6 @@ it("keeps a crashing server window beside a working rail, and brings it back on 
         appearance: appearanceStoreCreate({ mode: "light" }),
         happyAgents: store,
         settings: happyAgentSettingsStoreCreate(),
-        mobilePairingMethod: mobilePairingMethodStoreCreate({ defaultMethod: "direct" }),
     };
     router.update({ context });
     await router.load();

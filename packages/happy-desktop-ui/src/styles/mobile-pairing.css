@@ -1,8 +1,7 @@
 /*
  * Phone pairing: the parts both methods share (MobilePairingParts), C-298
  * MobileDirectPairingPanel and MobileDirectConnectionSection, and C-299
- * MobilePairingOptions, which sets the Happy relay and direct codes side by
- * side.
+ * MobilePairingOptions, which sets the direct code on its page.
  */
 
 .happy-mobile-pairing__code,
@@ -453,37 +452,9 @@
     width: 100%;
 }
 
-/* Direct | Relay: the one method shown sits under it, in the same place for either. */
-.happy-mobile-pairing-options__method {
-    align-self: center;
-}
-
-/*
- * "Older phone app? Use Relay", under the direct code's countdown, so it costs
- * the page no height. Stacked, it is no wider than the copy link above it.
- */
-.happy-mobile-pairing-options__fallback {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-    margin-top: 12px;
-}
-
-/* The button's label, not its hover face, lines up with the words above it. */
-.happy-mobile-pairing-options__fallback > .happy-button {
-    margin-inline-start: -10px;
-}
-
-/* Either method's side column is as wide, so switching moves neither code. */
+/* The code's side column keeps one width, so its copy link never moves the code. */
 .happy-mobile-pairing-options[data-method] .happy-mobile-pairing__code-side {
     width: 128px;
-}
-
-.happy-mobile-pairing-options__fallback-text {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
 }
 
 .happy-mobile-pairing-options__slot {
@@ -523,10 +494,10 @@
 }
 
 /*
- * A dialog showing one method keeps one size from the moment it opens: the
- * code's place while it is on its way, either code, the emoji step, and every
- * result. The slots hold the tallest of them, the direct code with its copy
- * link, countdown, how-to line and "Use Relay" (224 + 12 + 138); shorter
+ * The dialog keeps one size from the moment it opens: the code's place while
+ * it is on its way, the code, the emoji step, and every result. The slots hold
+ * the tallest of them, the direct code with its copy link, countdown and
+ * how-to line (224 + 12 + 84); shorter
  * steps sit centred in that room, while a code or its placeholder stays at
  * the top so it lands exactly where its placeholder was. Anything taller, such
  * as the "Happy Agent unavailable" warning standing above the code, or an
@@ -536,28 +507,13 @@
     .happy-mobile-pairing-options__slots {
     flex: none;
     flex-direction: column;
-    height: 374px;
+    height: 320px;
     overflow-y: auto;
 }
 
 .happy-mobile-pairing-options[data-layout="dialog"][data-method]
     .happy-mobile-pairing-options__slot-body:has(.happy-mobile-pairing__code) {
     justify-content: flex-start;
-}
-
-/* The tags stand 9px above the control; the dialog body's 4px inset would clip them. */
-.happy-mobile-pairing-options[data-layout="dialog"] .happy-mobile-pairing-options__method {
-    margin-top: 8px;
-}
-
-.happy-mobile-pairing-options[data-layout="dialog"] .happy-mobile-pairing-options__fallback {
-    align-items: center;
-}
-
-.happy-mobile-pairing-options[data-layout="dialog"]
-    .happy-mobile-pairing-options__fallback
-    > .happy-button {
-    margin-inline-start: 0;
 }
 
 .happy-mobile-pairing-options__hint {
@@ -578,28 +534,6 @@
     .happy-mobile-pairing-options__slots {
         flex-direction: column;
     }
-}
-
-.happy-mobile-pairing-options__slot-heading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    max-width: 280px;
-    text-align: center;
-}
-
-.happy-mobile-pairing-options__slot-title {
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 20px;
-}
-
-.happy-mobile-pairing-options__slot-detail {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
 }
 
 .happy-mobile-pairing-options__slot-body {
@@ -634,15 +568,6 @@
     flex: 0 1 auto;
     flex-direction: row-reverse;
     gap: 16px;
-}
-
-/* Two 160px bodies and 128px headings, 16px apart, with 24px between the
-   slots: 632px, inside the 640px a minimum window leaves the body. */
-.happy-mobile-pairing-options[data-layout="setup"] .happy-mobile-pairing-options__slot-heading {
-    align-items: flex-start;
-    flex: none;
-    width: 128px;
-    text-align: start;
 }
 
 .happy-mobile-pairing-options[data-layout="setup"] .happy-mobile-pairing-options__slot-body {

@@ -6,7 +6,6 @@ import type { ElectronApplication, Locator, Page } from "playwright";
 
 import { gymGoldReplayMaterialRead, type GymGoldReplayMaterial } from "./goldReplay.js";
 import { hiddenWindowRun } from "./hiddenWindow.js";
-import { mobilePairingMethodRun } from "./mobilePairingMethod.js";
 import { jumpShimmerRun } from "./jumpShimmer.js";
 import { stopShimmerRun } from "./stopShimmer.js";
 import { windowZoomRun } from "./windowZoom.js";
@@ -932,8 +931,6 @@ async function workloadRun(
     await mark("route-ready");
     if (workload === "hidden-window")
         return finish(await hiddenWindowRun(page, app, options.paths.artifacts, mark));
-    if (workload === "mobile-pairing-method")
-        return finish({ ...(await mobilePairingMethodRun(page, options.paths.artifacts)) });
     await options.profilerStart();
     await mark("profiler-started");
     if (workload === "long-transcript") {

@@ -21,14 +21,14 @@ import {
     HappyAgentSettingsShell,
     type HappyAgentSettingsCategory,
 } from "../../src/pages/settings/HappyAgentSettingsShell";
-import { direct, now, relayWaiting } from "./mobilePairingFixtures";
+import { direct, now } from "./mobilePairingFixtures";
 
 const noop = () => undefined;
 
-export type PairingVariant = Pick<MobilePairingOptionsProps, "direct" | "relay"> &
+export type PairingVariant = Pick<MobilePairingOptionsProps, "direct"> &
     Partial<MobilePairingOptionsProps>;
 
-/** Both pairing methods at the fixed fixture time, every action a no-op. */
+/** The direct pairing code at the fixed fixture time, every action a no-op. */
 export function pairingOptionsSpecimen(
     layout: MobilePairingOptionsLayout,
     variant: PairingVariant,
@@ -42,22 +42,21 @@ export function pairingOptionsSpecimen(
             onDirectConfirm={noop}
             onDirectReject={noop}
             onDirectStart={noop}
-            onRelayRetry={noop}
             {...variant}
         />
     );
 }
 
-/** What a setup page receives for `variant`: both codes by default. */
+/** What a setup page receives for `variant`: the direct code by default. */
 export function setupPairingOptions(
-    variant: PairingVariant = { direct: direct.waiting, relay: relayWaiting },
+    variant: PairingVariant = { direct: direct.waiting },
 ): DesktopMobilePairingOptions {
     return desktopPairingOptions("setup", variant);
 }
 
 /** What Settings › Mobile Access › Link mobile app receives for `variant`. */
 export function settingsLinkPairingOptions(
-    variant: PairingVariant = { direct: direct.waiting, relay: relayWaiting },
+    variant: PairingVariant = { direct: direct.waiting },
 ): DesktopMobilePairingOptions {
     // The guided link step has no close of its own: the Settings header leads back.
     return desktopPairingOptions("settings", variant, false);
@@ -68,16 +67,8 @@ function desktopPairingOptions(
     variant: PairingVariant,
     closable = true,
 ): DesktopMobilePairingOptions {
-    if (variant.method === "relay")
-        return {
-            view: pairingOptionsSpecimen(layout, variant, closable),
-            verifying: false,
-            completed: false,
-            method: "relay",
-        };
     return {
         view: pairingOptionsSpecimen(layout, variant, closable),
-        ...(variant.method ? { method: variant.method } : {}),
         verifying: mobileDirectPairingEngaged(variant.direct),
         completed:
             variant.direct.kind === "ready" &&

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Button } from "./Button";
-import type { MobilePairingMethod } from "./MobilePairingOptions";
 import {
     OnboardingSteps,
     type MobileOnboardingStage,
@@ -14,16 +13,11 @@ import type { ThemeMode } from "./ThemeScope";
 export type DesktopMobileSetupStep =
     /** The download code; confirming it is the consent that starts setup. */
     | { readonly kind: "intro" }
-    | {
-          readonly kind: "link";
-          readonly phase:
-              | { readonly kind: "checking" }
-              | { readonly kind: "pairing"; readonly data: string; readonly expiresAt: number }
-              | { readonly kind: "failed"; readonly message: string };
-      }
+    /** The direct pairing code; its own panel shows how far it got. */
+    | { readonly kind: "link" }
     | { readonly kind: "connected"; readonly online: boolean; readonly message?: string };
 
-/** Both pairing methods on a setup page, and whether the direct emoji step leads. */
+/** The direct pairing code on a setup page, and whether its emoji step leads. */
 export interface DesktopMobilePairingOptions {
     /** MobilePairingOptions in its `setup` layout. */
     readonly view: ReactNode;
@@ -31,22 +25,13 @@ export interface DesktopMobilePairingOptions {
     readonly verifying: boolean;
     /** The direct pairing finished: the page offers Continue instead of Skip. */
     readonly completed: boolean;
-    /** The method shown, one at a time; absent while both show side by side. */
-    readonly method?: MobilePairingMethod;
 }
 
-/** The subtitle over the codes, or over the emoji step once a phone connects directly. */
+/** The subtitle over the code, or over the emoji step once a phone connects. */
 export function desktopMobilePairingOptionsCopy(options: DesktopMobilePairingOptions): string {
     if (options.completed) return "Your phone can now reach this computer directly.";
     if (options.verifying) return "Check the emoji on this computer and on your phone.";
-    switch (options.method) {
-        case undefined:
-            return "Open Happy on your phone and scan either code.";
-        case "direct":
-            return "Scan with Happy on your phone to connect straight to this computer.";
-        case "relay":
-            return "Scan with Happy on your phone to connect through the Happy server.";
-    }
+    return "Scan with Happy on your phone to connect straight to this computer.";
 }
 
 export interface DesktopMobileSetupProps {
@@ -68,7 +53,7 @@ export interface DesktopMobileSetupProps {
     readonly onSkip: () => void;
     /** Opens an external page: the host owns how a link leaves the app. */
     onExternalOpen?(url: string): void;
-    /** Both pairing methods, shown side by side on the link step, each with its own state. */
+    /** The direct pairing code, shown on the link step with its own state. */
     readonly pairingOptions: DesktopMobilePairingOptions;
 }
 
@@ -152,7 +137,7 @@ export function desktopMobileSetupPage(props: DesktopMobileSetupProps): SetupPag
     const { step } = props;
     const mobile: MobileOnboardingStage =
         step.kind === "intro" ? "get-app" : step.kind === "link" ? "connect-phone" : "complete";
-    // A failed method shows in its own slot, not on the bar.
+    // A failed pairing shows in its own panel, not on the bar.
     const steps = props.onboarding ? (
         <OnboardingSteps
             scope="desktop"

@@ -38,9 +38,8 @@
 
 /*
  * On a setup page the code centres with the title above the footer, at 224px
- * while the window is tall enough. The pairing code's step also carries the
- * Direct | Relay control, so both codes leave it room and stay one size from
- * step to step: 180px at the smallest window, never under 136px.
+ * while the window is tall enough. Both codes stay one size from step to
+ * step: 180px at the smallest window, never under 136px.
  */
 .happy-desktop-mobile-setup .happy-desktop-mobile-setup__download {
     --happy-qr-code-size: clamp(136px, 100cqh - 460px, 224px);

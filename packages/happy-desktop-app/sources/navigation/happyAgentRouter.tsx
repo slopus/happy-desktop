@@ -27,7 +27,6 @@ import type {
     HappyAgentArtifactId,
     CommandPaletteStore,
     ExperimentsStore,
-    MobilePairingMethodStore,
     ProjectsVisibilityStore,
     GptLiveStore,
     HappyAgentGroupId,
@@ -162,8 +161,6 @@ export interface HappyAgentRouterContext {
      * in a host that remembers no such choice, which withholds them.
      */
     readonly experiments?: ExperimentsStore;
-    /** Which way the open pairing page offers a phone: the host computer's default, else the pick on it. */
-    readonly mobilePairingMethod: MobilePairingMethodStore;
     /**
      * Whether the sidebar leaves the Projects sections out, for every
      * connection. Absent in a host that remembers no such choice, which shows them.
@@ -282,7 +279,6 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             {...(setup.plugins ? { plugins: setup.plugins } : {})}
             {...(setup.payments ? { payments: setup.payments } : {})}
             {...(setup.providers ? { providers: setup.providers } : {})}
-            mobilePairingMethod={context.mobilePairingMethod}
             {...(context.externalLinkOpen ? { onExternalOpen: context.externalLinkOpen } : {})}
         >
             {content}
@@ -1000,7 +996,6 @@ function HappyAgentSettingsRoute() {
             {...(context.debug ? { debug: context.debug } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
-            mobilePairingMethod={context.mobilePairingMethod}
             {...(context.projectsVisibility
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}

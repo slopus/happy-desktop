@@ -1,11 +1,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { RouterProvider } from "@tanstack/react-router";
 import { expect, it, onTestFinished } from "vitest";
-import {
-    appearanceStoreCreate,
-    happyAgentSettingsStoreCreate,
-    mobilePairingMethodStoreCreate,
-} from "happy-desktop-state";
+import { appearanceStoreCreate, happyAgentSettingsStoreCreate } from "happy-desktop-state";
 import type {
     AppHappyAgentDirectorySnapshot,
     AppHappyAgentSignIn,
@@ -55,7 +51,6 @@ async function serverOpen(signIn: AppHappyAgentSignIn) {
             happyAgentSignInCancel: (id) => cancelled.push(id),
         },
         settings: happyAgentSettingsStoreCreate(),
-        mobilePairingMethod: mobilePairingMethodStoreCreate({ defaultMethod: "direct" }),
     };
     router.update({ context });
     await router.load();

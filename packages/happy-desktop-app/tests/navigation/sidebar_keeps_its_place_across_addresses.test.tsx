@@ -15,7 +15,6 @@ import {
     happyAgentGroupAccessRefused,
     happyAgentHostNoop,
     happyAgentSettingsStoreCreate,
-    mobilePairingMethodStoreCreate,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     HAPPY_AGENT_RETAINED_CONVERSATIONS_NONE,
 } from "happy-desktop-state";
@@ -152,7 +151,6 @@ async function windowOpen(address: string) {
         appearance: appearanceStoreCreate({ mode: "light" }),
         happyAgents: directory(),
         settings: happyAgentSettingsStoreCreate(),
-        mobilePairingMethod: mobilePairingMethodStoreCreate({ defaultMethod: "direct" }),
         experiments,
     };
     router.update({ context });
