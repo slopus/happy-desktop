@@ -860,6 +860,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // which runs again whenever this callback changes. Only a different agent
     // may read again, or every published read would trigger the next one.
     const voiceHostId = host?.id;
+    /* eslint-disable react-hooks/preserve-manual-memoization -- these callbacks may change only for a different agent, because GptLiveSettings rereads accounts whenever they change; React Compiler cannot keep that memoization while `host` is still mutable */
     const voiceAccountsRead = useCallback(() => {
         if (voiceHostId) gptLiveStore.availabilityRead(voiceHostId);
     }, [gptLiveStore, voiceHostId]);
@@ -869,6 +870,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         },
         [gptLiveStore, voiceHostId],
     );
+    /* eslint-enable react-hooks/preserve-manual-memoization */
     /** The window's call, when this agent hosts it. */
     const voiceCall =
         host && gptLive.call.kind !== "idle" && gptLive.call.connectionId === host.id
