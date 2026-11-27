@@ -1,3 +1,5 @@
+import { desktopCloudOnboardingAwayKey } from "./desktopCloudOnboardingAway";
+
 /** What one connection keeps in this window's storage, by key, beside its stores' own records. */
 export function desktopConnectionStorageKeys(happyAgentId: string): readonly string[] {
     return [
@@ -5,6 +7,7 @@ export function desktopConnectionStorageKeys(happyAgentId: string): readonly str
         `happy.model-settings.v1:${happyAgentId}`,
         `happy.connection-history.v1:${happyAgentId}`,
         `happy.welcome.v1:${happyAgentId}`,
+        desktopCloudOnboardingAwayKey(happyAgentId),
     ];
 }
 

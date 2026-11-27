@@ -38,6 +38,8 @@ it("erases one server's stored keys and store records, leaving every other serve
         ],
     });
     expect(forgotten).toEqual([`history:${ended}`, `attention:${ended}`]);
+    // Setup left for later belongs to the person who left it.
+    expect(desktopConnectionStorageKeys(ended)).toContain(`happy.onboarding.away.v1:${ended}`);
     for (const key of desktopConnectionStorageKeys(ended))
         expect(storage.values.has(key)).toBe(false);
     for (const key of desktopConnectionStorageKeys(other))
