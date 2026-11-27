@@ -1,6 +1,7 @@
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import { Checkbox } from "../../Checkbox";
 import { CopyButton } from "../../CopyButton";
 import { EmptyState } from "../../EmptyState";
 import { Modal } from "../../Modal";
@@ -9,6 +10,7 @@ import { Spinner } from "../../Spinner";
 import { IconTile } from "../../IconTile";
 import { TextField } from "../../TextField";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
+import { ZoneAccessLabels, type ZoneAccessLabel } from "./ZoneAccessLabels";
 
 /** Who a computer is for: the whole team, or one member's own agents. */
 export type HappyAgentComputeAccessName = "shared" | "private";
@@ -28,6 +30,7 @@ export interface HappyAgentComputeMachineRow {
     readonly status: HappyAgentComputeMachineRowStatus;
     readonly os: "macos" | "linux" | "windows" | "other";
     readonly access: HappyAgentComputeAccessName;
+    readonly zones?: readonly string[] | null;
     /** Already worded, for example "build-01.acme.internal · Linux x86_64". */
     readonly detail: string;
     /** What agents read about it. */
@@ -69,6 +72,7 @@ export interface HappyAgentComputeSettingsProps {
     readonly error?: string;
     readonly add: HappyAgentComputeAddAccess;
     readonly machines: readonly HappyAgentComputeMachineRow[];
+    readonly zones?: readonly ZoneAccessLabel[];
     readonly requests: readonly HappyAgentComputeJoinRequestRow[];
     /** What the reader should know about the last action that went through. */
     readonly actionNotice?: string;
@@ -239,6 +243,7 @@ function HappyAgentComputeTags(props: { readonly machine: HappyAgentComputeMachi
 
 function HappyAgentComputeMachineItem(props: {
     readonly machine: HappyAgentComputeMachineRow;
+    readonly zones: readonly ZoneAccessLabel[];
     onOpen: (machineId: string) => void;
 }) {
     const machine = props.machine;
@@ -252,6 +257,9 @@ function HappyAgentComputeMachineItem(props: {
                 </span>
                 <span className="happy-agent-compute__meta">
                     {`${machine.detail} · ${agentsText(machine)}`}
+                </span>
+                <span className="happy-agent-compute__meta" data-wrap="">
+                    <ZoneAccessLabels ids={machine.zones} zones={props.zones} />
                 </span>
                 {machine.description ? (
                     <span className="happy-agent-compute__description" title={machine.description}>
@@ -403,6 +411,7 @@ export function HappyAgentComputeSettings(props: HappyAgentComputeSettingsProps)
                                 key={machine.id}
                                 machine={machine}
                                 onOpen={props.onMachineOpen}
+                                zones={props.zones ?? []}
                             />
                         ))
                     )}
@@ -441,6 +450,7 @@ export interface HappyAgentComputeMachineEditDraft {
     readonly limited: boolean;
     /** The limit as typed, kept while no limit is chosen. */
     readonly concurrency: string;
+    readonly zones?: readonly string[] | null;
 }
 
 export interface HappyAgentComputeMachineDialogProps {
@@ -451,6 +461,9 @@ export interface HappyAgentComputeMachineDialogProps {
     /** Shown only where `machine.manageable`. */
     readonly draft: HappyAgentComputeMachineEditDraft;
     readonly saving: boolean;
+    readonly zones?: readonly ZoneAccessLabel[];
+    /** Only present for readers with pools.manage on a server that supports zone restrictions. */
+    onZonesChange?: (zones: readonly string[] | null) => void;
     /** Why the last save did not go through. */
     readonly error?: string;
     /** Why the last removal did not go through. */
@@ -472,6 +485,8 @@ export interface HappyAgentComputeMachineDialogProps {
  */
 export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDialogProps) {
     const machine = props.machine;
+    const chosenZones = props.draft.zones === undefined ? machine.zones : props.draft.zones;
+    const onZonesChange = props.onZonesChange;
     const close = (): void => {
         if (!props.saving) props.onClose();
     };
@@ -527,6 +542,11 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                         <span className="happy-agent-compute__meta" data-wrap="">
                             {machine.detail}
                         </span>
+                        {!onZonesChange ? (
+                            <span className="happy-agent-compute__meta" data-wrap="">
+                                <ZoneAccessLabels ids={machine.zones} zones={props.zones ?? []} />
+                            </span>
+                        ) : null}
                     </Box>
                     {machine.boundary ? (
                         <Banner tone="warning" title="Restricted commands can't run here">
@@ -601,6 +621,43 @@ export function HappyAgentComputeMachineDialog(props: HappyAgentComputeMachineDi
                                 onLimitedChange={props.onLimitedChange}
                                 onSubmit={props.onSave}
                             />
+                            {onZonesChange && chosenZones !== undefined ? (
+                                <Box
+                                    className="happy-agent-compute__agents"
+                                    aria-label="Zones"
+                                    role="group"
+                                >
+                                    <span className="happy-agent-compute__heading">Zones</span>
+                                    <span className="happy-agent-compute__meta" data-wrap="">
+                                        Only agents in the selected zones can join. Select none to
+                                        allow no zones.
+                                    </span>
+                                    <Checkbox
+                                        checked={chosenZones === null}
+                                        disabled={props.saving}
+                                        label="All zones"
+                                        onChange={(all) => onZonesChange(all ? null : [])}
+                                    />
+                                    {chosenZones !== null &&
+                                        (props.zones ?? []).map((zone) => (
+                                            <Checkbox
+                                                checked={chosenZones.includes(zone.id)}
+                                                disabled={props.saving}
+                                                key={zone.id}
+                                                label={zone.name}
+                                                onChange={(checked) =>
+                                                    onZonesChange(
+                                                        checked
+                                                            ? [...chosenZones, zone.id]
+                                                            : chosenZones.filter(
+                                                                  (id) => id !== zone.id,
+                                                              ),
+                                                    )
+                                                }
+                                            />
+                                        ))}
+                                </Box>
+                            ) : null}
                             <Box className="happy-agent-compute__danger">
                                 <span className="happy-agent-compute__text">
                                     <span className="happy-agent-compute__name">

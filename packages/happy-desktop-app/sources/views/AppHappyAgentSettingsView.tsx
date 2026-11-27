@@ -139,7 +139,7 @@ import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppOnboardingSettings } from "./AppOnboardingSettings";
 import { AppPaymentsSettings } from "./AppPaymentsSettings";
 import { AppComputeSettings } from "./AppComputeSettings";
-import { AppPermissionsSettings, appPermissionsHeading } from "./AppPermissionsSettings";
+import { AppZonesSettings, appZonesHeading } from "./AppZonesSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
 import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
@@ -172,14 +172,15 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
     // The computers agents run on, beside the models they run; Happy Cloud only.
     { group: "Agents", icon: "terminal", id: "compute", label: "Compute", tone: "blue" },
-    // Usage follows Inference because it is the same accounts read the other
-    // way round: which of them exist, then what each has spent.
-    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    // The zones agents join, which decide the computers, repositories and
+    // plugin tools they may use; Happy Cloud only.
+    { group: "Agents", icon: "shield", id: "zones", label: "Zones", tone: "purple" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    // Usage closes the group: the Inference accounts read the other way
+    // round, what each has spent.
+    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     // Who is on a Happy Cloud server; offered only there.
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
-    // The team's zones and who may join each; offered only on Happy Cloud.
-    { group: "Team", icon: "shield", id: "permissions", label: "Permissions", tone: "purple" },
     // The team's code on a Happy Cloud server; offered only there.
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
     // The team's credit and card; listed only where the server takes payments
@@ -208,17 +209,20 @@ export const HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES: Readonly<Record<string, stri
     // Team servers are added and removed by asking the Chief of Staff now.
     servers: "general",
     onboarding: "administration",
+    // The team's zones were listed under Permissions.
+    permissions: "zones",
 };
 
 /**
  * The category a `happy://settings/<page>` link opens here, or nothing when
- * this window has no such page. Import lives on the Inference page.
+ * this window has no such page. Import lives on the Inference page, and an
+ * old address opens the page it moved to.
  */
 export function happyAgentSettingsSectionOf(page: string): string | undefined {
     const section =
         page === "providers/import" || happyAgentProviderAddLinkParse(page) !== undefined
             ? "providers"
-            : page;
+            : (HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES[page] ?? page);
     return happyAgentSettingsCategoryExists(section) ? section : undefined;
 }
 
@@ -453,7 +457,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     usage: "What each provider account has spent",
     repositories: "The code your team works on",
     compute: "The computers agents run on",
-    permissions: "The team's zones and who may join each",
+    zones: "Where agents work, and who may join each zone",
     administration: "How this server is set up for everyone on it",
     danger: "Deleting this server for everyone",
     payments: "Credit, the card on file and what agents spend",
@@ -670,7 +674,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined) &&
-            (category.id !== "permissions" || zonesStore !== undefined) &&
+            (category.id !== "zones" || zonesStore !== undefined) &&
             (!ADMIN_CATEGORIES.has(category.id) || owner) &&
             (category.id !== "administration" ||
                 (onboardingSettingsStore !== undefined && onboardingSettings.available)) &&
@@ -826,14 +830,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (computeShown ?? happyAgentComputeStoreNoop).get,
         (computeShown ?? happyAgentComputeStoreNoop).get,
     );
-    // Zones are read, and followed through their events, only while
-    // Permissions is on screen.
-    const zonesShown = section === "permissions" ? zonesStore : undefined;
-    const zones = useSyncExternalStore(
-        (zonesShown ?? happyAgentZonesStoreNoop).subscribe,
-        (zonesShown ?? happyAgentZonesStoreNoop).get,
-        (zonesShown ?? happyAgentZonesStoreNoop).get,
-    );
+    // Compute also needs the zone names and colors to show each computer's access.
+    const zonesShown = section === "zones" ? zonesStore : undefined;
+    const zonesRead = (section === "compute" ? zonesStore : zonesShown) ?? happyAgentZonesStoreNoop;
+    const zones = useSyncExternalStore(zonesRead.subscribe, zonesRead.get, zonesRead.get);
     // AI providers exist only on Happy Cloud; the list is followed while
     // Providers is on screen.
     const cloudProvidersStore =
@@ -988,8 +988,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const mobileLinkHeading = mobileLink
         ? happyAgentMobileLinkHeading(mobileLink.step, mobileLink.pairingOptions)
         : undefined;
-    // A zone's page is a page inside Permissions, its header leading back to the list.
-    const zoneHeading = zonesShown ? appPermissionsHeading(zones, zonesShown) : undefined;
+    // A zone's page is a page inside Zones, its header leading back to the list.
+    const zoneHeading = zonesShown ? appZonesHeading(zones, zonesShown) : undefined;
     const subpageHeading = mobileLinkHeading ?? zoneHeading;
     const content = (
         <HappyAgentSettingsShell
@@ -1685,12 +1685,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 ) : null
             ) : section === "compute" ? (
                 computeShown ? (
-                    <AppComputeSettings snapshot={compute} store={computeShown} />
+                    <AppComputeSettings
+                        snapshot={compute}
+                        store={computeShown}
+                        zones={zones.zones}
+                    />
                 ) : null
-            ) : section === "permissions" ? (
+            ) : section === "zones" ? (
                 zonesShown ? (
-                    <AppPermissionsSettings
+                    <AppZonesSettings
                         bots={host?.bots ?? []}
+                        {...(computeStore ? { computeStore } : {})}
                         snapshot={zones}
                         store={zonesShown}
                     />

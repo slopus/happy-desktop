@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import {
-    HappyAgentPermissionsSettings,
+    HappyAgentZonesSettings,
     HappyAgentSettingsShell,
     HappyAgentZoneDeleteDialog,
     HappyAgentZoneDetailsDialog,
@@ -30,11 +30,13 @@ const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
     { icon: "bell", id: "sharing", label: "Notifications", tone: "red" },
+    { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
     { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
     { group: "Agents", icon: "terminal", id: "compute", label: "Compute", tone: "blue" },
+    { group: "Agents", icon: "shield", id: "zones", label: "Zones", tone: "purple" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
-    { group: "Team", icon: "shield", id: "permissions", label: "Permissions", tone: "purple" },
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
 ];
 
@@ -228,13 +230,13 @@ const WINDOWS = [
     { width: 720, height: 640 },
 ] as const;
 
-/** A zone's page heading, in place of the Permissions one, with a way back. */
+/** A zone's page heading, in place of the Zones one, with a way back. */
 interface Heading {
     readonly title: string;
     readonly description: string;
 }
 
-/** One screen of the settings window on Permissions, at both review window sizes. */
+/** One screen of the settings window on Zones, at both review window sizes. */
 function Screen(props: {
     number: string;
     screen: string;
@@ -246,7 +248,7 @@ function Screen(props: {
         <FullScreenSpecimen
             detail={props.detail}
             key={window.width}
-            label={`Settings — Permissions, ${String(window.width)} × ${String(window.height)}`}
+            label={`Settings — Zones, ${String(window.width)} × ${String(window.height)}`}
             number={props.number}
             screen={`${props.screen}-${String(window.width)}x${String(window.height)}`}
             window={window}
@@ -254,14 +256,15 @@ function Screen(props: {
             {/* The overlay is fixed; the transform keeps a dialog inside its screen. */}
             <div style={{ display: "flex", transform: "translateZ(0)" }}>
                 <HappyAgentSettingsShell
-                    activeCategoryId="permissions"
+                    activeCategoryId="zones"
                     categories={categories}
                     description={
-                        props.heading?.description ?? "The team's zones and who may join each"
+                        props.heading?.description ??
+                        "Where agents work, and who may join each zone"
                     }
                     onCategorySelect={noop}
                     onClose={noop}
-                    title={props.heading?.title ?? "Permissions"}
+                    title={props.heading?.title ?? "Zones"}
                     {...(props.heading ? { onBack: noop } : {})}
                 >
                     {props.children}
@@ -273,7 +276,7 @@ function Screen(props: {
 
 function List(props: { manage: boolean }) {
     return (
-        <HappyAgentPermissionsSettings
+        <HappyAgentZonesSettings
             loading={false}
             manage={props.manage}
             onZoneCreate={noop}
@@ -286,7 +289,7 @@ function List(props: { manage: boolean }) {
 const zoneOf = (id: string): HappyAgentZoneRow => zones.find((zone) => zone.id === id)!;
 
 /** The settings header over a zone's page, with the way back to the list. */
-const ZONE_HEADING: Heading = { title: "Permissions", description: "A zone, and who may join it" };
+const ZONE_HEADING: Heading = { title: "Zones", description: "A zone, and who may join it" };
 
 /** A zone's page, as someone who may manage it sees it. */
 function Page(props: Partial<HappyAgentZonePageProps> & { readonly zoneId: string }) {
@@ -314,7 +317,11 @@ function ReachPage(props: {
 }) {
     const policies = props.policies !== false;
     return (
-        <Page manage={props.manage} zoneId="z-payments">
+        <Page
+            computers={[{ id: "payments-01", name: "payments-01" }]}
+            manage={props.manage}
+            zoneId="z-payments"
+        >
             <HappyAgentZonePluginsSection
                 expanded={props.expanded}
                 manage={props.manage}
@@ -478,12 +485,12 @@ function unlisted(zoneId: string): readonly HappyAgentZonePersonRow[] {
     );
 }
 
-export function HappyCloudPermissionsFlowPage() {
+export function HappyCloudZonesFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Settings › Permissions on a Happy Cloud server: the team's zones, the default one first and the critical ones last, with each zone's picture or colour, owner, who may join and how many agents are in it. A row opens the zone's page, built for reviewing who may reach it: a header with the zone's details, then its members and, on a critical zone, its bots, each added in its own modal and removed in place. The details modal holds the rest of the zone's settings and Delete. A member without zones.manage reads the same pages."
-            title="Happy Cloud permissions flow"
+            summary="Settings › Zones on a Happy Cloud server: the team's zones, the default one first and the critical ones last, with each zone's picture or colour, owner, who may join and how many agents are in it. A row opens the zone's page, built for reviewing who may reach it: a header with the zone's details, then its members and, on a critical zone, its bots, each added in its own modal and removed in place. The details modal holds the rest of the zone's settings and Delete. A member without zones.manage reads the same pages."
+            title="Happy Cloud zones flow"
         >
             <Screen detail="zones, for someone who may manage them" number="01" screen="01-list">
                 <List manage />

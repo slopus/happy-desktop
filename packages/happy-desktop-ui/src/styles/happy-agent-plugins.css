@@ -95,6 +95,16 @@
     padding-inline-end: 8px;
 }
 
+/* Where Install would be once the plugin is installed: words, not a control. */
+.happy-agent-plugins__installed {
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
 /* ---- Row --------------------------------------------------------------- */
 
 .happy-agent-plugin-row {
@@ -149,46 +159,14 @@
     white-space: nowrap;
 }
 
-/* ---- Custom plugin ----------------------------------------------------- */
-
-/* Read-only, so no hover; its mark and name sit where an ordinary row's do. */
-.happy-agent-custom-plugin {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    box-sizing: border-box;
-    min-width: 0;
-    padding: 8px;
-}
-
-.happy-agent-custom-plugin__text {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-}
-
-.happy-agent-custom-plugin__summary {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.happy-agent-custom-plugin__description {
-    margin: 0;
-    color: var(--text);
-    font-size: 13px;
-    line-height: 18px;
-}
+/* ---- Custom plugin's page --------------------------------------------- */
 
 .happy-agent-custom-plugin__skills {
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin: 0;
-    padding: 0;
+    padding: 0 8px;
     list-style: none;
 }
 
@@ -372,6 +350,27 @@
     gap: 12px;
     min-width: 0;
     min-height: 28px;
+}
+
+.happy-agent-plugin-card__tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
+    font-size: 12px;
+}
+
+.happy-agent-plugin-card__tool-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+}
+
+.happy-agent-plugin-card__tool-switch {
+    margin-left: auto;
 }
 
 .happy-agent-plugin-card__title {

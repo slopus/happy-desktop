@@ -8,11 +8,13 @@ import type {
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
+import { Icon } from "../../Icon";
 import { ScrollArea } from "../../Scrollbar";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
 import {
     PluginInstallationStatus,
     PluginMark,
+    customPluginMeta,
     pluginInstallationTitle,
     usePluginAct,
 } from "./pluginPresentation";
@@ -21,6 +23,8 @@ export interface HappyAgentPluginsPageProps {
     /** The plugins as their store holds them. */
     plugins: HappyAgentPluginsSnapshot;
     onPluginOpen: (pluginId: string) => void;
+    /** Opens a custom plugin's page. */
+    onCustomPluginOpen: (customPluginId: string) => void;
     /** Installs one plugin; rejects with the reason to show. */
     onPluginInstall: (pluginId: string) => Promise<unknown>;
     className?: string;
@@ -32,7 +36,9 @@ export interface HappyAgentPluginsPageProps {
  * HappyAgentPluginsPage — what the team has installed, the custom plugins
  * agents made, then every plugin the server offers. A row opens the plugin; a
  * manager installs one from its row, and anyone installs a feature plugin for
- * themselves. Custom plugins are only shown: agents make, change and delete them.
+ * themselves. A plugin already installed reads Installed: installing it again,
+ * uninstalling and removing live on its own page. Agents make, change and
+ * delete custom plugins; a row opens one's page.
  */
 export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
     const snapshot = props.plugins;
@@ -111,7 +117,11 @@ export function HappyAgentPluginsPage(props: HappyAgentPluginsPageProps) {
                                     </p>
                                     <div className="happy-agent-plugins__list" role="list">
                                         {snapshot.customPlugins.map((plugin) => (
-                                            <CustomPluginRow key={plugin.id} plugin={plugin} />
+                                            <CustomPluginRow
+                                                key={plugin.id}
+                                                onOpen={props.onCustomPluginOpen}
+                                                plugin={plugin}
+                                            />
                                         ))}
                                     </div>
                                 </section>
@@ -179,51 +189,26 @@ function InstallationRow(props: {
     );
 }
 
-/** A custom plugin with its skills; nothing to open or install, agents manage it. */
-function CustomPluginRow(props: { readonly plugin: HappyAgentCustomPlugin }) {
+/** A custom plugin: who sees it and how many skills it gives; its page says the rest. */
+function CustomPluginRow(props: {
+    readonly plugin: HappyAgentCustomPlugin;
+    readonly onOpen: (customPluginId: string) => void;
+}) {
     const plugin = props.plugin;
-    const skillCount = plugin.skills.length;
     return (
-        <div
-            className="happy-agent-custom-plugin"
-            data-happy-desktop-ui="happy-agent-custom-plugin"
-            data-owner={plugin.owner}
-            role="listitem"
-        >
-            <PluginMark image={plugin.image} size="row" />
-            <div className="happy-agent-custom-plugin__text">
-                <div className="happy-agent-custom-plugin__summary">
+        <div className="happy-agent-plugins__item" data-owner={plugin.owner} role="listitem">
+            <button
+                className="happy-agent-plugin-row"
+                data-happy-desktop-ui="happy-agent-custom-plugin-row"
+                onClick={() => props.onOpen(plugin.id)}
+                type="button"
+            >
+                <PluginMark image={plugin.image} size="row" />
+                <span className="happy-agent-plugin-row__text">
                     <span className="happy-agent-plugin-row__name">{plugin.name}</span>
-                    <span className="happy-agent-plugin-row__meta">
-                        {plugin.owner === "team" ? "Shared with the team" : "Only you"}
-                        {" · "}
-                        {skillCount === 0
-                            ? "No skills"
-                            : `${String(skillCount)} ${skillCount === 1 ? "skill" : "skills"}`}
-                    </span>
-                    {plugin.description ? (
-                        <p className="happy-agent-custom-plugin__description">
-                            {plugin.description}
-                        </p>
-                    ) : null}
-                </div>
-                {skillCount === 0 ? null : (
-                    <ul aria-label="Skills" className="happy-agent-custom-plugin__skills">
-                        {plugin.skills.map((skill) => (
-                            <li className="happy-agent-custom-plugin__skill" key={skill.name}>
-                                <span className="happy-agent-custom-plugin__skill-name">
-                                    {skill.name}
-                                </span>
-                                {skill.description ? (
-                                    <span className="happy-agent-custom-plugin__skill-description">
-                                        {skill.description}
-                                    </span>
-                                ) : null}
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+                    <span className="happy-agent-plugin-row__meta">{customPluginMeta(plugin)}</span>
+                </span>
+            </button>
         </div>
     );
 }
@@ -259,7 +244,15 @@ function PluginRow(props: {
                     </span>
                 </span>
             </button>
-            {installable && (plugin.multiInstance || !props.installed) ? (
+            {props.installed ? (
+                <span
+                    className="happy-agent-plugins__row-action happy-agent-plugins__installed"
+                    data-happy-desktop-ui="happy-agent-plugin-installed"
+                >
+                    <Icon name="check" size={14} />
+                    Installed
+                </span>
+            ) : installable ? (
                 <div className="happy-agent-plugins__row-action">
                     <Button
                         disabled={plugin.installRefusal !== null}
@@ -269,9 +262,9 @@ function PluginRow(props: {
                         {...(plugin.installRefusal === null
                             ? {}
                             : { title: plugin.installRefusal })}
-                        variant={props.installed ? "ghost" : "secondary"}
+                        variant="secondary"
                     >
-                        {props.installed ? "Install again" : "Install"}
+                        Install
                     </Button>
                 </div>
             ) : null}

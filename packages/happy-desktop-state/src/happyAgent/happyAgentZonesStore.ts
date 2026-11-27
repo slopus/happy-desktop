@@ -150,7 +150,7 @@ export interface HappyAgentZonePick {
     readonly error?: UserError;
 }
 
-/** One zone's page in Settings › Permissions, opened from its row. */
+/** One zone's page in Settings › Zones, opened from its row. */
 export interface HappyAgentZoneOpen {
     readonly zoneId: string;
     /** The member, bot or installation whose removal is on its way to the cluster. */
@@ -194,7 +194,7 @@ export interface HappyAgentZonesSnapshot {
 }
 
 /**
- * Settings › Permissions on Happy Cloud: the team's zones and who may join
+ * Settings › Zones on Happy Cloud: the team's zones and who may join
  * each. The list follows `zone.*` and `agent.zone` events while it is on
  * screen and is read again on each; nothing is polled. A zone's page changes
  * its members and bots one step at a time, each saved as it is made; the rest

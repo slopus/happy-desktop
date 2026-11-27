@@ -295,7 +295,7 @@ const PLANS: readonly {
             "Built for many agents at once, and the people running them",
             "Run on our compute, or bring your own",
             "Use our models, or your own inference",
-            "Programmable permissions for every agent",
+            "Zones that control what agents can see and do",
         ],
         action: "Continue",
         recommended: true,
@@ -322,9 +322,9 @@ const CLOUD_SLIDES: readonly WelcomeSlide[] = [
     },
     {
         art: { kind: "scene", name: "closed-lock" },
-        copy: "Decide what every agent can see and do, and keep each one isolated.",
-        id: "permissions",
-        title: "Programmable permissions",
+        copy: "Use zones to decide where agents can run and what they can see and do.",
+        id: "zones",
+        title: "Control access with zones",
     },
     {
         art: { kind: "scene", name: "sparkles" },

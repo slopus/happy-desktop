@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type {
+    HappyAgentCustomPlugin,
     HappyAgentPluginImage,
     HappyAgentPluginInstallation,
     HappyAgentPluginInstallationStatus,
@@ -77,6 +78,19 @@ export function PluginInstallationStatus(props: {
  */
 export const FEATURE_PLUGIN_NOTE =
     "Just for you, in every team you belong to. Uninstalling hides it for you and deletes nothing: what your team made with it stays, other members keep using it, and installing it again brings everything back.";
+
+/** "Only you · 8 skills": who sees a custom plugin, and how many skills it gives agents. */
+export function customPluginMeta(plugin: HappyAgentCustomPlugin): string {
+    const count = plugin.skills.length;
+    return [
+        customPluginAudience(plugin),
+        count === 0 ? "No skills" : `${String(count)} ${count === 1 ? "skill" : "skills"}`,
+    ].join(" · ");
+}
+
+export function customPluginAudience(plugin: HappyAgentCustomPlugin): string {
+    return plugin.owner === "team" ? "Shared with the team" : "Only you";
+}
 
 /** How one installation is named: the plugin name, with its label when the person gave one. */
 export function pluginInstallationTitle(installation: HappyAgentPluginInstallation): string {

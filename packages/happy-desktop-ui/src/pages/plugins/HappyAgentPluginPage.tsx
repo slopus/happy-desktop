@@ -13,9 +13,11 @@ import { ModalOverlay } from "../../ModalOverlay";
 import { ScrollArea } from "../../Scrollbar";
 import { SecretValueField } from "../../SecretValueField";
 import { SegmentedControl } from "../../SegmentedControl";
+import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import { ArtifactHeader } from "../artifacts/ArtifactHeader";
+import { ZoneAccessLabels, type ZoneAccessLabel } from "../settings/ZoneAccessLabels";
 import {
     FEATURE_PLUGIN_NOTE,
     PluginInstallationStatus,
@@ -49,6 +51,12 @@ export interface HappyAgentPluginPageProps {
     /** Starts an OAuth sign-in in the person's browser. */
     onConnect: (installationId: string, methodId: string) => Promise<unknown>;
     onDisconnect: (installationId: string) => Promise<unknown>;
+    zones?: readonly ZoneAccessLabel[];
+    onToolCriticalChange?: (
+        installationId: string,
+        tool: string,
+        critical: boolean,
+    ) => Promise<unknown>;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -172,7 +180,9 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                                 onConnect={props.onConnect}
                                                 onDisconnect={props.onDisconnect}
                                                 onRemove={props.onRemove}
+                                                onToolCriticalChange={props.onToolCriticalChange}
                                                 plugin={plugin}
+                                                zones={props.zones}
                                             />
                                         ))}
                                     </div>
@@ -183,7 +193,12 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
                                     Only people who manage plugins can install and set them up.
                                 </p>
                             )}
-                            {plugin && plugin.tools.length > 0 ? (
+                            {plugin &&
+                            plugin.tools.length > 0 &&
+                            (feature ||
+                                installations.length === 0 ||
+                                (props.zones === undefined &&
+                                    !installations.some((entry) => entry.toolAccess))) ? (
                                 <section className="happy-agent-plugins__section">
                                     <h2 className="happy-agent-plugins__heading">Tools</h2>
                                     <ul className="happy-agent-plugin__tools">
@@ -220,6 +235,8 @@ function InstallationCard(props: {
     readonly onConfigure: HappyAgentPluginPageProps["onConfigure"];
     readonly onConnect: HappyAgentPluginPageProps["onConnect"];
     readonly onDisconnect: HappyAgentPluginPageProps["onDisconnect"];
+    readonly onToolCriticalChange: HappyAgentPluginPageProps["onToolCriticalChange"];
+    readonly zones: HappyAgentPluginPageProps["zones"];
 }) {
     const installation = props.installation;
     // A feature installation is the reader's own and has no sign-in to set up.
@@ -314,7 +331,79 @@ function InstallationCard(props: {
                     onConnect={props.onConnect}
                 />
             ) : null}
+            {!feature && (installation.toolAccess || props.zones !== undefined) ? (
+                <InstallationTools
+                    installation={installation}
+                    onToolCriticalChange={props.onToolCriticalChange}
+                    plugin={props.plugin}
+                    zones={props.zones ?? []}
+                />
+            ) : null}
         </article>
+    );
+}
+
+function InstallationTools(props: {
+    readonly installation: HappyAgentPluginInstallation;
+    readonly plugin: HappyAgentPlugin | undefined;
+    readonly zones: readonly ZoneAccessLabel[];
+    readonly onToolCriticalChange: HappyAgentPluginPageProps["onToolCriticalChange"];
+}) {
+    const { installation } = props;
+    const access = installation.toolAccess;
+    const entries = new Map(access?.tools.map((tool) => [tool.name, tool]));
+    const tools = new Map(props.plugin?.tools.map((tool) => [tool.name, tool.summary]));
+    for (const tool of entries.keys()) {
+        if (!tools.has(tool)) tools.set(tool, "");
+    }
+    const change = usePluginAct();
+    const update = access?.canManageZones ? props.onToolCriticalChange : undefined;
+    if (tools.size === 0) return null;
+    return (
+        <section className="happy-agent-plugin-card__tools">
+            <h3 className="happy-agent-plugins__heading">Tools</h3>
+            {change.error ? (
+                <p className="happy-agent-plugin__error" role="alert">
+                    {change.error}
+                </p>
+            ) : null}
+            <ul className="happy-agent-plugin__tools">
+                {[...tools].map(([name, summary]) => {
+                    const tool = entries.get(name);
+                    return (
+                        <li className="happy-agent-plugin__tool" key={name}>
+                            <div className="happy-agent-plugin-card__tool-header">
+                                <code className="happy-agent-plugin__tool-name">{name}</code>
+                                {tool?.critical ? (
+                                    <span className="happy-agent-zones__tag" data-critical="">
+                                        Critical
+                                    </span>
+                                ) : null}
+                                {tool && update ? (
+                                    <Switch
+                                        aria-label={`Critical: ${name}`}
+                                        checked={tool.critical}
+                                        className="happy-agent-plugin-card__tool-switch"
+                                        disabled={change.pending}
+                                        label="Critical"
+                                        onChange={(critical) =>
+                                            void change.run(() =>
+                                                update(installation.id, name, critical),
+                                            )
+                                        }
+                                        size="small"
+                                    />
+                                ) : null}
+                            </div>
+                            {summary ? (
+                                <span className="happy-agent-plugin__tool-summary">{summary}</span>
+                            ) : null}
+                            <ZoneAccessLabels ids={tool?.zones} zones={props.zones} />
+                        </li>
+                    );
+                })}
+            </ul>
+        </section>
     );
 }
 

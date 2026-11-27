@@ -4,6 +4,7 @@ import {
     type HappyAgentComputeMachineAdd,
     type HappyAgentComputeSnapshot,
     type HappyAgentComputeStore,
+    type HappyAgentZone,
 } from "happy-desktop-state";
 import {
     HappyAgentComputeMachineAddDialog,
@@ -19,6 +20,7 @@ import {
 export function AppComputeSettings(props: {
     readonly snapshot: HappyAgentComputeSnapshot;
     readonly store: HappyAgentComputeStore;
+    readonly zones?: readonly HappyAgentZone[];
 }) {
     const { snapshot, store } = props;
     const add = snapshot.machineAdd;
@@ -48,6 +50,7 @@ export function AppComputeSettings(props: {
                     store.approvalAnswer(key, approve ? "approve" : "deny")
                 }
                 requests={snapshot.approvals.map((approval) => requestRow(approval, snapshot))}
+                zones={props.zones ?? []}
             />
             {add ? (
                 <HappyAgentComputeMachineAddDialog
@@ -89,7 +92,11 @@ export function AppComputeSettings(props: {
                     onLimitedChange={(limited) => store.machineLimitedUpdate(limited)}
                     onNameChange={(value) => store.machineNameUpdate(value)}
                     onSave={() => store.machineSave()}
+                    {...(snapshot.access === "manage" && opened.zones !== undefined
+                        ? { onZonesChange: store.machineZonesUpdate }
+                        : {})}
                     saving={detail.step === "saving"}
+                    zones={props.zones ?? []}
                 />
             ) : null}
         </>
@@ -145,6 +152,7 @@ function machineRow(machine: HappyAgentComputeMachine): HappyAgentComputeMachine
                 ? machine.os
                 : "other",
         access: machine.access.kind,
+        ...(machine.zones === undefined ? {} : { zones: machine.zones }),
         detail: detail || "No details yet",
         ...(machine.description ? { description: machine.description } : {}),
         ...(owner

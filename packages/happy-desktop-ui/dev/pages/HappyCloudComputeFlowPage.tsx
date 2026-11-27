@@ -25,15 +25,23 @@ const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
     { icon: "bell", id: "sharing", label: "Notifications", tone: "red" },
+    { group: "Agents", icon: "doc", id: "instructions", label: "Instructions", tone: "purple" },
     { group: "Agents", icon: "globe", id: "providers", label: "Inference", tone: "indigo" },
     { group: "Agents", icon: "terminal", id: "compute", label: "Compute", tone: "blue" },
-    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
+    { group: "Agents", icon: "shield", id: "zones", label: "Zones", tone: "purple" },
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
+    { group: "Agents", icon: "zap", id: "usage", label: "Usage", tone: "teal" },
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
 ];
 
 const noop = () => undefined;
+
+const zones = [
+    { id: "default", name: "Default", color: "blue" },
+    { id: "build", name: "Build", color: "teal" },
+    { id: "release", name: "Release", color: "purple" },
+] as const;
 
 /**
  * The machines an admin sees: shared and private, a full one, one that can't
@@ -43,6 +51,7 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
     {
         id: "m1",
         name: "build-01",
+        zones: ["default", "build"],
         status: "online",
         os: "linux",
         access: "shared",
@@ -55,6 +64,7 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
     {
         id: "m2",
         name: "a100-box",
+        zones: ["build"],
         status: "full",
         os: "linux",
         access: "shared",
@@ -68,6 +78,7 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
     {
         id: "m3",
         name: "steve-mbp",
+        zones: null,
         status: "online",
         os: "macos",
         access: "private",
@@ -81,6 +92,7 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
     {
         id: "m4",
         name: "team-box",
+        zones: null,
         status: "online",
         os: "linux",
         access: "shared",
@@ -94,6 +106,7 @@ const machines: readonly HappyAgentComputeMachineRow[] = [
     {
         id: "m5",
         name: "kirill-desktop",
+        zones: [],
         status: "offline",
         os: "windows",
         access: "private",
@@ -179,6 +192,7 @@ function List(props: {
             onMachineOpen={noop}
             onRequestAnswer={noop}
             requests={props.requests ?? []}
+            zones={zones}
         />
     );
 }
@@ -224,6 +238,7 @@ function Detail(props: Partial<HappyAgentComputeMachineDialogProps>) {
             onNameChange={noop}
             onSave={noop}
             saving={false}
+            zones={zones}
             {...props}
         />
     );
@@ -312,9 +327,13 @@ export function HappyCloudComputeFlowPage() {
                 <List add="private" />
                 <Add accesses="private" stage={{ step: "install", install: install("private") }} />
             </Screen>
-            <Screen detail="managing a computer and its agents" number="09" screen="09-manage">
+            <Screen
+                detail="managing a computer, its agents and the zones that can use it"
+                number="09"
+                screen="09-manage"
+            >
                 <List add="any" />
-                <Detail />
+                <Detail onZonesChange={noop} />
             </Screen>
             <Screen
                 detail="a computer that can't keep restricted commands in"

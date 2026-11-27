@@ -885,6 +885,10 @@ export {
     type HappyAgentPluginSetupRefusal,
 } from "./pages/plugins/HappyAgentPluginPage";
 export {
+    HappyAgentCustomPluginPage,
+    type HappyAgentCustomPluginPageProps,
+} from "./pages/plugins/HappyAgentCustomPluginPage";
+export {
     HappyAgentPipelinesPage,
     type HappyAgentPipelinesPageProps,
 } from "./pages/pipelines/HappyAgentPipelinesPage";
@@ -1227,13 +1231,13 @@ export {
 } from "./pages/settings/HappyAgentComputeSettings";
 export {
     HAPPY_AGENT_ZONE_PALETTE,
-    HappyAgentPermissionsSettings,
+    HappyAgentZonesSettings,
     HappyAgentZoneDeleteDialog,
     HappyAgentZoneDetailsDialog,
     HappyAgentZonePage,
     HappyAgentZonePickDialog,
     HappyAgentZoneMark,
-    type HappyAgentPermissionsSettingsProps,
+    type HappyAgentZonesSettingsProps,
     type HappyAgentZoneCandidateRow,
     type HappyAgentZoneColorName,
     type HappyAgentZoneDeleteDialogProps,
@@ -1244,7 +1248,7 @@ export {
     type HappyAgentZoneDraftView,
     type HappyAgentZonePersonRow,
     type HappyAgentZoneRow,
-} from "./pages/settings/HappyAgentPermissionsSettings";
+} from "./pages/settings/HappyAgentZonesSettings";
 export {
     HappyAgentZonePluginsSection,
     HappyAgentZonePoliciesSection,

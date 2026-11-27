@@ -820,7 +820,7 @@ export interface AppHappyAgentSession {
     readonly payments?: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
     /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
-    /** Settings › Permissions, on a Happy Cloud server; absent or undefined elsewhere. */
+    /** Settings › Zones, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly zones?: () => import("happy-desktop-state").HappyAgentZonesStore | undefined;
     /** Settings › Usage's daily token history; absent or undefined where it cannot be read. */
     readonly dailyUsage?: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
@@ -1143,6 +1143,10 @@ export interface AppHappyAgentViewProps {
     onPluginsOpen?(happyAgentId: string): void;
     /** Addresses one plugin on one Happy Agent. */
     onPluginOpen?(happyAgentId: string, pluginId: string): void;
+    /** The custom plugin the URL opens, within those plugins. */
+    customPluginId?: string;
+    /** Addresses one custom plugin on one Happy Agent. */
+    onCustomPluginOpen?(happyAgentId: string, customPluginId: string): void;
     /** Whether the URL addresses the addressed Happy Cloud server's pipelines. */
     pipelinesOpen?: boolean;
     /** The pipeline the URL opens, within those pipelines. */
@@ -5352,10 +5356,17 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentPluginsSurface
                     onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
+                    onCustomPluginOpen={(customPluginId) =>
+                        props.onCustomPluginOpen?.(active.id, customPluginId)
+                    }
                     onPluginOpen={(pluginId) => props.onPluginOpen?.(active.id, pluginId)}
                     onPluginsOpen={() => props.onPluginsOpen?.(active.id)}
                     {...(props.pluginId === undefined ? {} : { pluginId: props.pluginId })}
+                    {...(props.customPluginId === undefined
+                        ? {}
+                        : { customPluginId: props.customPluginId })}
                     store={plugins}
+                    zonesStore={props.pluginId === undefined ? undefined : active.session.zones?.()}
                 />
             );
         }
@@ -5767,6 +5778,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                     props.surfaceId,
                                     props.artifactId,
                                     props.pluginId,
+                                    props.customPluginId,
                                     props.pipelineId,
                                     props.pipelineRunId,
                                     props.userProfileId,

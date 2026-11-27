@@ -4,6 +4,7 @@ import { UserError } from "../types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 import {
     HappyCloudRequestRefusal,
+    happyCloudAssignment,
     type HappyCloudRequest,
 } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
@@ -108,6 +109,15 @@ export type HappyAgentPluginInstallationStatus =
     | "notConfigured"
     | "methodUnavailable";
 
+interface HappyAgentPluginToolAccess {
+    readonly canManageZones: boolean;
+    readonly tools: readonly {
+        readonly name: string;
+        readonly critical: boolean;
+        readonly zones: readonly string[];
+    }[];
+}
+
 /** One installation of a plugin on the team. A plugin may be installed more than once. */
 export interface HappyAgentPluginInstallation {
     readonly id: string;
@@ -129,6 +139,8 @@ export interface HappyAgentPluginInstallation {
     readonly image: HappyAgentPluginImage | null;
     /** False for a plugin this server no longer offers; it cannot be changed or removed then. */
     readonly available: boolean;
+    /** Read on the plugin page, absent when the server has no tool access data. */
+    readonly toolAccess?: HappyAgentPluginToolAccess;
 }
 
 export interface HappyAgentPluginsSnapshot {
@@ -172,7 +184,8 @@ export class HappyAgentPluginFieldsError extends UserError {
  */
 export interface HappyAgentPluginsStore {
     get(): HappyAgentPluginsSnapshot;
-    subscribe(listener: () => void): () => void;
+    /** Subscribe with a plugin ID to also follow its installations' tool access. */
+    subscribe(listener: () => void, pluginId?: string): () => void;
     /** Installs one plugin and answers the new installation's ID. */
     pluginInstall(pluginId: string): Promise<string>;
     /** Removes an installation with its secrets; one already gone counts as removed. */
@@ -191,6 +204,12 @@ export interface HappyAgentPluginsStore {
     ): Promise<void>;
     /** Forgets every secret of an installation, revoking each grant upstream where it can. */
     installationDisconnect(installationId: string): Promise<void>;
+    /** Sets the critical flag for one installation's tool, where the server permits it. */
+    installationToolCriticalUpdate?(input: {
+        readonly installationId: string;
+        readonly tool: string;
+        readonly critical: boolean;
+    }): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -220,6 +239,26 @@ function textOrNull(value: unknown): string | null {
 
 function listOf(value: unknown): readonly unknown[] {
     return Array.isArray(value) ? value : [];
+}
+
+function toolAccessRead(answer: unknown): HappyAgentPluginToolAccess | undefined {
+    const body = recordOf(answer);
+    const toolZones = recordOf(body?.toolZones);
+    if (!toolZones) return undefined;
+    return {
+        canManageZones: body?.canManageZones === true,
+        tools: Object.entries(toolZones).flatMap(([name, value]) => {
+            const entry = recordOf(value);
+            const zones: unknown = entry?.zones;
+            if (
+                typeof entry?.critical !== "boolean" ||
+                !Array.isArray(zones) ||
+                !zones.every((id): id is string => typeof id === "string")
+            )
+                return [];
+            return [{ name, critical: entry.critical, zones }];
+        }),
+    };
 }
 
 function fieldRead(value: unknown): HappyAgentPluginAuthField | undefined {
@@ -294,9 +333,12 @@ export function happyAgentPluginsStoreCreate(deps: {
 }): HappyAgentPluginsStore {
     const store = createStore<HappyAgentPluginsSnapshot>()(() => EMPTY);
     const listeners = new Set<() => void>();
+    const watchedPlugins = new Map<string, number>();
+    const savingToolAccess = new Set<string>();
     let disposed = false;
     let reading = false;
     let readAgain = false;
+    let toolWriteRevision = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let follow: AbortController | undefined;
     const installation = (id: string): string =>
@@ -396,13 +438,43 @@ export function happyAgentPluginsStoreCreate(deps: {
     };
 
     const read = async (): Promise<void> => {
+        const revision = toolWriteRevision;
         // Every member reads both; the installations say whether the reader may manage them.
         const [catalog, installed] = await Promise.all([
             deps.request("GET", "v0/plugins"),
             deps.request("GET", "v0/plugins/installations"),
         ]);
         const manage = recordOf(installed)?.canManage === true;
-        if (disposed) return;
+        const installations = listOf(recordOf(installed)?.installations).flatMap((entry) => {
+            const installation = installationRead(entry);
+            return installation ? [installation] : [];
+        });
+        const previous = new Map(store.getState().installations.map((entry) => [entry.id, entry]));
+        const withTools = await Promise.all(
+            installations.map(async (entry) => {
+                const prior = previous.get(entry.id)?.toolAccess;
+                if (entry.kind === "feature" || !watchedPlugins.has(entry.pluginId)) {
+                    return prior ? { ...entry, toolAccess: prior } : entry;
+                }
+                try {
+                    const toolAccess = toolAccessRead(
+                        await deps.request("GET", installation(entry.id)),
+                    );
+                    return toolAccess ? { ...entry, toolAccess } : entry;
+                } catch (error) {
+                    // Older servers may not have the detail route. Keep the last data on transient failures.
+                    return prior &&
+                        !(
+                            error instanceof HappyCloudRequestRefusal &&
+                            [403, 404].includes(error.status)
+                        )
+                        ? { ...entry, toolAccess: prior }
+                        : entry;
+                }
+            }),
+        );
+        // A response begun before a toggle settled must not undo its answer.
+        if (disposed || revision !== toolWriteRevision) return;
         const current = store.getState();
         const { error: _cleared, ...rest } = current;
         store.setState(
@@ -419,13 +491,7 @@ export function happyAgentPluginsStoreCreate(deps: {
                         })
                         .sort(compareByName),
                 ),
-                installations: referencesPreserve(
-                    current.installations,
-                    listOf(recordOf(installed)?.installations).flatMap((entry) => {
-                        const read = installationRead(entry);
-                        return read ? [read] : [];
-                    }),
-                ),
+                installations: referencesPreserve(current.installations, withTools),
                 customPlugins: referencesPreserve(
                     current.customPlugins,
                     listOf(recordOf(catalog)?.customPlugins)
@@ -471,12 +537,25 @@ export function happyAgentPluginsStoreCreate(deps: {
             let greeted = false;
             for await (const input of sync.follow({
                 signal: active.signal,
-                events: ["plugins.changed"],
+                events: [
+                    "plugins.changed",
+                    "zone.created",
+                    "zone.updated",
+                    "zone.deleted",
+                    "zone.plugins",
+                ],
             })) {
                 const greeting = !greeted;
                 greeted = true;
                 // The first read was sent after this subscription was installed.
                 if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
+                if (
+                    watchedPlugins.size === 0 &&
+                    input.kind === "update" &&
+                    input.update.kind === "event" &&
+                    input.update.event.type !== "plugins.changed"
+                )
+                    continue;
                 load();
             }
         })().catch(() => undefined);
@@ -496,17 +575,24 @@ export function happyAgentPluginsStoreCreate(deps: {
 
     return {
         get: () => store.getState(),
-        subscribe(listener) {
+        subscribe(listener, pluginId) {
             if (disposed) return () => undefined;
+            const watchers = pluginId === undefined ? 0 : (watchedPlugins.get(pluginId) ?? 0);
+            if (pluginId !== undefined) watchedPlugins.set(pluginId, watchers + 1);
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) {
-                followStart();
+            if (listeners.size === 1) followStart();
+            if (listeners.size === 1 || (pluginId !== undefined && watchers === 0)) {
                 // Subscribing during React's commit never publishes synchronously.
                 queueMicrotask(load);
             }
             return () => {
                 unsubscribe();
+                if (pluginId !== undefined) {
+                    const remaining = (watchedPlugins.get(pluginId) ?? 1) - 1;
+                    if (remaining === 0) watchedPlugins.delete(pluginId);
+                    else watchedPlugins.set(pluginId, remaining);
+                }
                 listeners.delete(listener);
                 if (listeners.size > 0) return;
                 follow?.abort();
@@ -572,6 +658,40 @@ export function happyAgentPluginsStoreCreate(deps: {
             write(async () => {
                 await deps.request("POST", `${installation(installationId)}/disconnect`, {});
             }),
+        installationToolCriticalUpdate: ({ installationId, tool, critical }) =>
+            write(async () => {
+                const access = store
+                    .getState()
+                    .installations.find((entry) => entry.id === installationId)?.toolAccess;
+                if (!access?.canManageZones || !access.tools.some((entry) => entry.name === tool)) {
+                    throw new UserError(
+                        "You can't change this tool's critical setting.",
+                        "forbidden",
+                    );
+                }
+                if (savingToolAccess.has(installationId)) {
+                    throw new UserError("Another tool change is still saving.");
+                }
+                savingToolAccess.add(installationId);
+                try {
+                    const answer = await happyCloudAssignment(
+                        deps.request,
+                        `${installation(installationId)}/tools/${encodeURIComponent(tool)}/zone`,
+                        { critical },
+                    );
+                    if (disposed) return;
+                    const toolAccess = toolAccessRead(answer);
+                    if (!toolAccess) return;
+                    toolWriteRevision += 1;
+                    store.setState((current) => ({
+                        installations: current.installations.map((entry) =>
+                            entry.id === installationId ? { ...entry, toolAccess } : entry,
+                        ),
+                    }));
+                } finally {
+                    savingToolAccess.delete(installationId);
+                }
+            }),
         [Symbol.dispose]() {
             disposed = true;
             follow?.abort();
@@ -579,6 +699,7 @@ export function happyAgentPluginsStoreCreate(deps: {
             if (timer !== undefined) clearTimeout(timer);
             timer = undefined;
             listeners.clear();
+            watchedPlugins.clear();
         },
     };
 }

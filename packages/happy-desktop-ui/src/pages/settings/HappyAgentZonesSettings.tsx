@@ -5,6 +5,7 @@ import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { Checkbox } from "../../Checkbox";
 import { Icon } from "../../Icon";
+import { IconTile } from "../../IconTile";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
@@ -221,7 +222,7 @@ function HappyAgentZoneItem(props: {
     );
 }
 
-export interface HappyAgentPermissionsSettingsProps {
+export interface HappyAgentZonesSettingsProps {
     readonly loading: boolean;
     readonly error?: string;
     /** Whether the reader may create, change and delete zones. */
@@ -234,12 +235,12 @@ export interface HappyAgentPermissionsSettingsProps {
 }
 
 /**
- * Settings › Permissions on a Happy Cloud server: the team's zones, the
+ * Settings › Zones on a Happy Cloud server: the team's zones, the
  * default one first and the critical ones last, with who may join each and
  * how many agents are in it. Someone without
  * `zones.manage` reads the same list with nothing to change.
  */
-export function HappyAgentPermissionsSettings(props: HappyAgentPermissionsSettingsProps) {
+export function HappyAgentZonesSettings(props: HappyAgentZonesSettingsProps) {
     if (props.error)
         return (
             <Banner tone="danger" title="Zones unavailable">
@@ -288,6 +289,8 @@ export function HappyAgentPermissionsSettings(props: HappyAgentPermissionsSettin
 
 export interface HappyAgentZonePageProps {
     readonly zone: HappyAgentZoneRow;
+    /** Computers that explicitly list this zone, excluding unrestricted computers. */
+    readonly computers?: readonly { readonly id: string; readonly name: string }[];
     /** Whether the reader may change the zone; without it every part is read-only. */
     readonly manage: boolean;
     /** The member or bot whose removal is on its way. */
@@ -351,7 +354,7 @@ function HappyAgentZoneEntry(props: {
 }
 
 /**
- * One zone's page in Settings › Permissions, opened from its row, built for
+ * One zone's page in Settings › Zones, opened from its row, built for
  * reviewing who may reach it. The header names the zone and opens its
  * details modal; the body lists its members and, on a critical zone, its
  * bots, each added in its own modal and removed in place. Further sections
@@ -476,6 +479,19 @@ export function HappyAgentZonePage(props: HappyAgentZonePageProps) {
                         </Box>
                     ) : null}
                 </>
+            ) : null}
+            {props.computers?.length ? (
+                <HappyAgentSettingsSection
+                    description="These computers only allow agents from selected zones, including this one."
+                    title="Restricted computers"
+                >
+                    {props.computers.map((computer) => (
+                        <Box className="happy-agent-zones__entry" key={computer.id}>
+                            <IconTile ionicon="server-outline" tone="gray" />
+                            <span className="happy-agent-zones__name">{computer.name}</span>
+                        </Box>
+                    ))}
+                </HappyAgentSettingsSection>
             ) : null}
             {props.children}
         </>

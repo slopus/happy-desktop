@@ -255,6 +255,25 @@ export class HappyCloudRequestRefusal extends UserError {
     }
 }
 
+/** Retry an absolute assignment once when delivery is uncertain, with the same key and body. */
+export async function happyCloudAssignment(
+    request: HappyCloudRequest,
+    path: string,
+    body: unknown,
+): Promise<unknown> {
+    const headers = { "Idempotency-Key": crypto.randomUUID() };
+    try {
+        return await request("PUT", path, body, headers);
+    } catch (error) {
+        if (
+            !(error instanceof UserError && error.code === "offline") &&
+            !(error instanceof HappyCloudRequestRefusal && [502, 503, 504].includes(error.status))
+        )
+            throw error;
+        return request("PUT", path, body, headers);
+    }
+}
+
 export function happyCloudRequestCreate(options: {
     readonly endpoint: string;
     readonly token: string;

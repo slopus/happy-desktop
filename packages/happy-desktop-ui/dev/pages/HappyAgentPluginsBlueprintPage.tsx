@@ -5,6 +5,7 @@ import type {
     HappyAgentPluginsSnapshot,
 } from "happy-desktop-state";
 import { HappyAgentPluginPage } from "../../src/pages/plugins/HappyAgentPluginPage";
+import { HappyAgentCustomPluginPage } from "../../src/pages/plugins/HappyAgentCustomPluginPage";
 import { HappyAgentPluginsPage } from "../../src/pages/plugins/HappyAgentPluginsPage";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
@@ -12,6 +13,11 @@ import { ComponentPage, FullScreenSpecimen } from "../kit";
 export const componentNumber = "P-045";
 
 const WINDOW = { width: 1100, height: 760 } as const;
+
+const zones = [
+    { id: "default", name: "Default", color: "blue" },
+    { id: "release", name: "Release", color: "purple" },
+] as const;
 
 const github: HappyAgentPlugin = {
     id: "github",
@@ -93,6 +99,14 @@ const githubActive: HappyAgentPluginInstallation = {
     toolPrefix: "plugin_github_",
     image: null,
     available: true,
+    toolAccess: {
+        canManageZones: true,
+        tools: [
+            { name: "list_issues", critical: false, zones: ["default", "release"] },
+            { name: "create_pull_request", critical: true, zones: ["release"] },
+            { name: "comment", critical: false, zones: [] },
+        ],
+    },
 };
 
 const githubSecond: HappyAgentPluginInstallation = {
@@ -103,6 +117,10 @@ const githubSecond: HappyAgentPluginInstallation = {
     status: "notConfigured",
     authMethod: null,
     toolPrefix: "plugin_github_2_",
+    toolAccess: {
+        canManageZones: true,
+        tools: githubActive.toolAccess!.tools.map((tool) => ({ ...tool, zones: [] })),
+    },
 };
 
 const retired: HappyAgentPluginInstallation = {
@@ -182,7 +200,15 @@ const manager: HappyAgentPluginsSnapshot = {
     customPlugins: [],
 };
 
-const member: HappyAgentPluginsSnapshot = { ...manager, manage: false };
+const member: HappyAgentPluginsSnapshot = {
+    ...manager,
+    manage: false,
+    installations: manager.installations.map((entry) =>
+        entry.toolAccess
+            ? { ...entry, toolAccess: { ...entry.toolAccess, canManageZones: false } }
+            : entry,
+    ),
+};
 
 const loading: HappyAgentPluginsSnapshot = {
     loading: true,
@@ -352,9 +378,15 @@ const detailHandlers = {
     onDisconnect: settle,
     onInstall: settle,
     onRemove: settle,
+    onToolCriticalChange: settle,
 };
 
 export function HappyAgentPluginsBlueprintPage() {
+    const catalogHandlers = {
+        onCustomPluginOpen: () => undefined,
+        onPluginInstall: settle,
+        onPluginOpen: () => undefined,
+    };
     return (
         <ComponentPage
             contract="Props only"
@@ -364,17 +396,13 @@ export function HappyAgentPluginsBlueprintPage() {
             width={WINDOW.width + 64}
         >
             <FullScreenSpecimen
-                detail="A manager sees what is installed, then every plugin the server offers with Install on its row. An installation of a plugin the server stopped offering reads Unavailable."
+                detail="A manager sees what is installed, then every plugin the server offers with Install or Installed on its row. An installation of a plugin the server stopped offering reads Unavailable."
                 label="Catalog, manager"
                 number="01"
                 screen="01-catalog-manager-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={manager}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={manager} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A member without mcp.manage sees what the server offers and what the team installed, but cannot install."
@@ -383,11 +411,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="02-catalog-member-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={member}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={member} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Before the server first answers nothing is claimed."
@@ -396,20 +420,21 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="03-catalog-loading-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={loading}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={loading} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="One plugin: its installations, one signed in and one waiting for setup with a choice of sign-in, then the tools it gives agents."
+                detail="One plugin installed twice. Each installation shows its tools and allowed zones; a manager can change which tools are critical."
                 label="Plugin, installed twice"
                 number="04"
                 screen="04-plugin-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginPage {...detailHandlers} pluginId="github" plugins={manager} />
+                <HappyAgentPluginPage
+                    {...detailHandlers}
+                    pluginId="github"
+                    plugins={manager}
+                    zones={zones}
+                />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A plugin nobody installed yet, as a member sees it."
@@ -427,11 +452,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="06-catalog-happy-agent-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={daemon}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={daemon} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A failed install on a Happy Agent: the reason under the installation, Remove to clear it. These plugins have no sign-in and no tool prefix."
@@ -453,20 +474,21 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="08-plugin-installed-member-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginPage {...detailHandlers} pluginId="github" plugins={member} />
+                <HappyAgentPluginPage
+                    {...detailHandlers}
+                    pluginId="github"
+                    plugins={member}
+                    zones={zones}
+                />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Custom plugins agents made sit between what is installed and what the server offers, each with its picture, whether the team shares it or it is the reader's own, and its skills. Nothing on them opens or installs: agents make, change and delete them. One has docs and no skills."
+                detail="Custom plugins sit between Installed and Available. Each row shows who sees it and how many skills it contains, and opens its own page."
                 label="Catalog, custom plugins"
                 number="09"
-                screen="09-catalog-custom-1100x1200"
-                window={{ width: WINDOW.width, height: 1200 }}
+                screen="09-catalog-custom-1100x760"
+                window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={custom}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={custom} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A server that offers no plugins and has nothing installed still lists the team's custom plugins instead of saying there are none."
@@ -475,11 +497,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="10-catalog-custom-only-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={customOnly}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={customOnly} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="A feature plugin is the reader's own. Pipelines is installed, as it is for everyone until they uninstall it, and listed as a Feature beside the team's installations."
@@ -488,11 +506,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="11-catalog-feature-installed-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={featureInstalled}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={featureInstalled} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="After uninstalling Pipelines: a member who manages nothing still has Install on its row, since everyone installs their own features."
@@ -501,11 +515,7 @@ export function HappyAgentPluginsBlueprintPage() {
                 screen="12-catalog-feature-uninstalled-1100x760"
                 window={WINDOW}
             >
-                <HappyAgentPluginsPage
-                    onPluginInstall={settle}
-                    onPluginOpen={() => undefined}
-                    plugins={featureUninstalled}
-                />
+                <HappyAgentPluginsPage {...catalogHandlers} plugins={featureUninstalled} />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="The installed feature plugin's page: Uninstall on its one installation, with nothing to sign in or label, and the note that uninstalling deletes nothing."
@@ -531,6 +541,19 @@ export function HappyAgentPluginsBlueprintPage() {
                     {...detailHandlers}
                     pluginId="pipelines"
                     plugins={featureUninstalled}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The custom plugin's description, audience and skill descriptions. Changes go through an agent."
+                label="Custom plugin details"
+                number="15"
+                screen="15-custom-plugin-1100x760"
+                window={WINDOW}
+            >
+                <HappyAgentCustomPluginPage
+                    customPluginId={happySkills.id}
+                    onBack={detailHandlers.onBack}
+                    plugins={custom}
                 />
             </FullScreenSpecimen>
         </ComponentPage>

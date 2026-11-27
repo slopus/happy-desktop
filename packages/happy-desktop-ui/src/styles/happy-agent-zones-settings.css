@@ -1,5 +1,5 @@
 /*
- * Settings › Permissions: the team's zones. A zone's colour is one of the
+ * Settings › Zones: the team's zones. A zone's colour is one of the
  * fixed palette's tile hues, painted by the rules at the end of this file on
  * whatever draws it: its mark, its colour label's dot and its picker swatch.
  */
@@ -118,6 +118,24 @@
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
+}
+
+.happy-agent-zone-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-zone-chips__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--surface-pressed);
+    font-size: 11px;
 }
 
 .happy-agent-zones__swatch-dot {

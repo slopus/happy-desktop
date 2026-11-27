@@ -1,7 +1,10 @@
+import { useSyncExternalStore } from "react";
 import {
+    happyAgentComputeStoreNoop,
     happyAgentZonePolicyTargetKey,
     happyAgentZonePolicyTargetRead,
     type HappyAgentBot,
+    type HappyAgentComputeStore,
     type HappyAgentZone,
     type HappyAgentZoneInstallation,
     type HappyAgentZonePerson,
@@ -11,7 +14,7 @@ import {
     type HappyAgentZonesStore,
 } from "happy-desktop-state";
 import {
-    HappyAgentPermissionsSettings,
+    HappyAgentZonesSettings,
     HappyAgentZoneDeleteDialog,
     HappyAgentZoneDetailsDialog,
     HappyAgentZonePage,
@@ -26,15 +29,16 @@ import {
 } from "happy-desktop-ui";
 
 /**
- * Settings › Permissions on Happy Cloud, composed from its zones store: the
+ * Settings › Zones on Happy Cloud, composed from its zones store: the
  * list, or the page of the zone opened from it, with the zone's details
  * modal, the modals that add members and bots, and the delete confirmation
  * over either. The settings window's header leads back to the list while a
- * page is open; see `appPermissionsHeading`.
+ * page is open; see `appZonesHeading`.
  */
-export function AppPermissionsSettings(props: {
+export function AppZonesSettings(props: {
     readonly snapshot: HappyAgentZonesSnapshot;
     readonly store: HappyAgentZonesStore;
+    readonly computeStore?: HappyAgentComputeStore;
     /** The team's bots, as the app lists them, which a critical zone may let in. */
     readonly bots: readonly HappyAgentBot[];
 }) {
@@ -44,6 +48,13 @@ export function AppPermissionsSettings(props: {
     const details = snapshot.details;
     const deletion = snapshot.deletion;
     const opened = open ? zoneOf(snapshot, open.zoneId) : undefined;
+    const computeStore =
+        (opened && !open?.policy ? props.computeStore : undefined) ?? happyAgentComputeStoreNoop;
+    const compute = useSyncExternalStore(
+        computeStore.subscribe,
+        computeStore.get,
+        computeStore.get,
+    );
     const described = details?.zoneId === undefined ? undefined : zoneOf(snapshot, details.zoneId);
     const deleting = deletion ? zoneOf(snapshot, deletion.zoneId) : undefined;
     const people = [...snapshot.people.values()]
@@ -140,6 +151,9 @@ export function AppPermissionsSettings(props: {
                 />
             ) : opened ? (
                 <HappyAgentZonePage
+                    computers={compute.machines.filter((machine) =>
+                        machine.zones?.includes(opened.id),
+                    )}
                     {...(open?.error ? { error: open.error.message } : {})}
                     {...(open?.removing === undefined ? {} : { removing: open.removing })}
                     manage={snapshot.manage}
@@ -196,7 +210,7 @@ export function AppPermissionsSettings(props: {
                     ) : null}
                 </HappyAgentZonePage>
             ) : (
-                <HappyAgentPermissionsSettings
+                <HappyAgentZonesSettings
                     {...(snapshot.error ? { error: snapshot.error.message } : {})}
                     loading={snapshot.loading}
                     manage={snapshot.manage}
@@ -275,7 +289,7 @@ export function AppPermissionsSettings(props: {
  * under the section's own name, since the page's header names the zone.
  * Nothing while the list is shown.
  */
-export function appPermissionsHeading(
+export function appZonesHeading(
     snapshot: HappyAgentZonesSnapshot,
     store: HappyAgentZonesStore,
 ):
@@ -294,7 +308,7 @@ export function appPermissionsHeading(
             onBack: () => store.zonePolicyClose(),
         };
     return {
-        title: "Permissions",
+        title: "Zones",
         description: "A zone, and who may join it",
         onBack: () => store.zoneClose(),
     };

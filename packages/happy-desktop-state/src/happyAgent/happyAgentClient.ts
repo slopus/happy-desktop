@@ -352,7 +352,7 @@ export interface HappyAgentWorkspaceClient {
     genUiActions(): HappyAgentGenUiActions | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
-    /** Settings › Permissions on Happy Cloud: the team's zones; undefined anywhere else. */
+    /** Settings › Zones on Happy Cloud: the team's zones; undefined anywhere else. */
     zones(): HappyAgentZonesStore | undefined;
     /**
      * Which features are available to the person, by the feature plugins their

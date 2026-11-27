@@ -3,6 +3,7 @@ import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
 import {
     HappyCloudRequestRefusal,
+    happyCloudAssignment,
     type HappyCloudRequest,
 } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
@@ -72,6 +73,8 @@ export interface HappyAgentComputeMachine {
     readonly os: string | null;
     readonly arch: string | null;
     readonly access: HappyAgentComputeMachineAccessView;
+    /** Null allows every zone; an empty list allows none. Absent on older servers. */
+    readonly zones?: readonly string[] | null;
     /**
      * How many agents it takes at once; it is full once that many are on it.
      * 0 means no limit, and it is never full.
@@ -155,6 +158,8 @@ export type HappyAgentComputeMachineAdd =
 export interface HappyAgentComputeMachineEditDraft extends HappyAgentComputeConcurrencyDraft {
     readonly name: string;
     readonly description: string;
+    /** Absent until the reader changes zone access. */
+    readonly zones?: readonly string[] | null;
 }
 
 /** One machine's dialog, while it is open: its agents, and its fields for a reader who may edit them. */
@@ -233,6 +238,7 @@ export interface HappyAgentComputeStore {
     machineDetailClose(): void;
     machineNameUpdate(value: string): void;
     machineDescriptionUpdate(value: string): void;
+    machineZonesUpdate(zones: readonly string[] | null): void;
     /** Chooses no limit, or a limit, keeping the number typed. */
     machineLimitedUpdate(limited: boolean): void;
     machineConcurrencyUpdate(value: string): void;
@@ -404,6 +410,7 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
     if (!computer || typeof computer.id !== "string" || !status) return undefined;
     const access = computerAccessRead(computer, reader);
     if (!access) return undefined;
+    const zones: unknown = computer.zones;
     return {
         id: computer.id,
         name: textOrNull(computer.name) ?? textOrNull(computer.hostname) ?? computer.id.slice(0, 8),
@@ -412,6 +419,10 @@ function computerRead(value: unknown, reader: Reader): HappyAgentComputeMachine 
         os: textOrNull(computer.os),
         arch: textOrNull(computer.arch),
         access,
+        ...(zones === null ||
+        (Array.isArray(zones) && zones.every((zone): zone is string => typeof zone === "string"))
+            ? { zones }
+            : {}),
         concurrency: limitOrNull(computer.concurrency) ?? 1,
         maxConcurrency: countOrNull(computer.maxConcurrency),
         agents: listRead(computer, "agents", agentRead),
@@ -822,6 +833,14 @@ export function happyAgentComputeStoreCreate(deps: {
         machineDescriptionUpdate(value) {
             machineDraftUpdate({ description: value });
         },
+        machineZonesUpdate(zones) {
+            const snapshot = store.getState();
+            const machine = snapshot.machines.find(
+                (entry) => entry.id === snapshot.machineDetail?.machineId,
+            );
+            if (snapshot.access !== "manage" || machine?.zones === undefined) return;
+            machineDraftUpdate({ zones: zones === null ? null : [...new Set(zones)] });
+        },
         machineLimitedUpdate(limited) {
             const snapshot = store.getState();
             const detail = snapshot.machineDetail;
@@ -866,7 +885,21 @@ export function happyAgentComputeStoreCreate(deps: {
                 const { machineDetail: _closed, ...rest } = store.getState();
                 store.setState(rest, true);
             };
-            if (Object.keys(changes).length === 0) {
+            const zones = detail.draft.zones;
+            const currentZones = machine.zones;
+            const zonesChanged =
+                snapshot.access === "manage" &&
+                zones !== undefined &&
+                currentZones !== undefined &&
+                zones !== currentZones &&
+                !(
+                    zones !== null &&
+                    currentZones !== null &&
+                    zones.length === currentZones.length &&
+                    zones.every((zone) => currentZones.includes(zone))
+                );
+            const fieldsChanged = Object.keys(changes).length > 0;
+            if (!fieldsChanged && !zonesChanged) {
                 close();
                 return;
             }
@@ -876,28 +909,30 @@ export function happyAgentComputeStoreCreate(deps: {
                 draft: detail.draft,
             };
             set({ machineDetail: saving });
-            void deps
-                .request("PATCH", `v0/computers/${encodeURIComponent(detail.machineId)}`, changes)
-                .then(
-                    (answer) => {
-                        if (disposed || store.getState().machineDetail !== saving) return;
-                        const saved = computerRead(recordOf(answer)?.computer, reader());
-                        if (saved) {
-                            const current = store.getState();
-                            set({
-                                machines: current.machines
-                                    .map((entry) => (entry.id === saved.id ? saved : entry))
-                                    .sort(computerCompare),
-                            });
-                        }
-                        close();
-                        load();
-                    },
-                    (error: unknown) => {
-                        if (disposed || store.getState().machineDetail !== saving) return;
-                        refuse(happyAgentUserError(error));
-                    },
-                );
+            const path = `v0/computers/${encodeURIComponent(detail.machineId)}`;
+            const active = () => !disposed && store.getState().machineDetail === saving;
+            const apply = (answer: unknown) => {
+                if (!active()) return;
+                const saved = computerRead(recordOf(answer)?.computer, reader());
+                if (!saved) return;
+                set({
+                    machines: store
+                        .getState()
+                        .machines.map((entry) => (entry.id === saved.id ? saved : entry))
+                        .sort(computerCompare),
+                });
+            };
+            void (async () => {
+                if (fieldsChanged) apply(await deps.request("PATCH", path, changes));
+                if (active() && zonesChanged) {
+                    apply(await happyCloudAssignment(deps.request, `${path}/zones`, { zones }));
+                }
+                if (active()) close();
+            })()
+                .catch((error: unknown) => {
+                    if (active()) refuse(happyAgentUserError(error));
+                })
+                .finally(load);
         },
         machineAgentRemove(machineId, agentId) {
             const snapshot = store.getState();
@@ -1045,6 +1080,7 @@ export const happyAgentComputeStoreNoop: HappyAgentComputeStore = {
     machineDetailClose: () => undefined,
     machineNameUpdate: () => undefined,
     machineDescriptionUpdate: () => undefined,
+    machineZonesUpdate: () => undefined,
     machineLimitedUpdate: () => undefined,
     machineConcurrencyUpdate: () => undefined,
     machineSave: () => undefined,

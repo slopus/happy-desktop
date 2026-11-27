@@ -528,6 +528,12 @@ const pluginRoute = createRoute({
     path: "/plugins/$happyAgentId/$pluginId",
 });
 
+/** One custom plugin agents made, on the server that holds it. */
+const customPluginRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/plugins/$happyAgentId/custom/$customPluginId",
+});
+
 /** The pipelines a Happy Cloud server runs. */
 const pipelinesRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -668,6 +674,7 @@ const routeTree = rootRoute.addChildren([
         artifactRoute,
         pluginsRoute,
         pluginRoute,
+        customPluginRoute,
         pipelinesRoute,
         pipelineRoute,
         pipelineRunRoute,
@@ -725,7 +732,10 @@ function HappyAgentWorkspaceLayout() {
         botCreate: matched.has(botCreateRoute.id),
         feed: matched.has(feedRoute.id),
         inbox: matched.has(inboxRoute.id),
-        plugins: matched.has(pluginsRoute.id) || matched.has(pluginRoute.id),
+        plugins:
+            matched.has(pluginsRoute.id) ||
+            matched.has(pluginRoute.id) ||
+            matched.has(customPluginRoute.id),
         pipelines:
             matched.has(pipelinesRoute.id) ||
             matched.has(pipelineRoute.id) ||
@@ -780,6 +790,9 @@ function HappyAgentWorkspaceLayout() {
             {...(shows.plugins && params.pluginId !== undefined
                 ? { pluginId: params.pluginId }
                 : {})}
+            {...(shows.plugins && params.customPluginId !== undefined
+                ? { customPluginId: params.customPluginId }
+                : {})}
             onPluginsOpen={(happyAgentId) =>
                 void navigate({ params: { happyAgentId }, to: "/plugins/$happyAgentId" })
             }
@@ -787,6 +800,12 @@ function HappyAgentWorkspaceLayout() {
                 void navigate({
                     params: { happyAgentId, pluginId },
                     to: "/plugins/$happyAgentId/$pluginId",
+                })
+            }
+            onCustomPluginOpen={(happyAgentId, customPluginId) =>
+                void navigate({
+                    params: { happyAgentId, customPluginId },
+                    to: "/plugins/$happyAgentId/custom/$customPluginId",
                 })
             }
             pipelinesOpen={shows.pipelines}
