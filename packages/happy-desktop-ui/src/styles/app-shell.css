@@ -593,6 +593,35 @@
     app-region: no-drag;
 }
 
+/* Rule 2 for the controls that float over the band. A tooltip's bubble hangs
+   under its trigger whether shown or not, hidden by opacity alone, and takes
+   the band's drag with it: the folded pane toggle's bubble held the window over
+   the controls just under the band, a review's Unified, Split and No wrap among
+   them. It claims its box instead, except where the band reaches further down
+   anyway, as a hidden strip's veil over a transcript does. */
+.happy-desktop-app-shell[data-window-controls]
+    :is(
+        .happy-desktop-app-shell__panel-controls,
+        .happy-desktop-app-shell__sidebar-controls[data-collapsed]
+    )
+    .happy-tooltip__bubble {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
+.happy-desktop-app-shell[data-window-controls]:has(
+        .happy-desktop-app-shell__workspace
+            > .happy-tabbed-pane[data-bar-hidden]:not([data-bar-band-kept])
+    )
+    :is(
+        .happy-desktop-app-shell__panel-controls,
+        .happy-desktop-app-shell__sidebar-controls[data-collapsed]
+    )
+    .happy-tooltip__bubble {
+    -webkit-app-region: drag;
+    app-region: drag;
+}
+
 /* The window chrome row is the native title bar's own 40pt at any zoom, so the
    traffic lights, the sidebar toggle, and the heading beside them read as one
    band of window furniture rather than a 56px product header the lights float
