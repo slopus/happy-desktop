@@ -1043,6 +1043,9 @@ app.on("login", (event, _webContents, _details, authInfo, callback) => {
 
 function browserGuestAttach(window: BrowserWindow): void {
     window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+        // Developer tools are the window's. Only a live artifact's browser
+        // pages, which its author inspects on purpose, keep their own.
+        webPreferences.devTools = browserProxies.get(params.partition)?.artifact === true;
         if (params.partition === happyArtifactPartition) {
             if (!artifactSites || !artifactWebviewAdmitted(params, artifactSites)) {
                 event.preventDefault();
@@ -1641,6 +1644,19 @@ function zoomStep(next: (level: number) => number): void {
 }
 
 /*
+ * The window's own developer tools, never a page it embeds. The role would
+ * toggle whichever contents has focus, and that is a guest's as soon as one is
+ * clicked: an artifact, a preview, or a browser tab.
+ */
+function developerToolsToggle(): void {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!window) return;
+    const contents = window.webContents;
+    if (contents.isDevToolsOpened()) contents.closeDevTools();
+    else contents.openDevTools();
+}
+
+/*
  * The View menu, stated rather than taken from `role: "viewMenu"`. The roles
  * zoom the window without telling it, and a window that cannot hear its own
  * zoom cannot show what it is now at. The items and their accelerators are the
@@ -1651,7 +1667,11 @@ const viewMenu: MenuItemConstructorOptions = {
     submenu: [
         { role: "reload" },
         { role: "forceReload" },
-        { role: "toggleDevTools" },
+        {
+            label: "Toggle Developer Tools",
+            accelerator: process.platform === "darwin" ? "Alt+Command+I" : "Ctrl+Shift+I",
+            click: developerToolsToggle,
+        },
         { type: "separator" },
         { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => zoomStep(() => 0) },
         {
