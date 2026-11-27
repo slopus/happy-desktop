@@ -22,6 +22,18 @@ export interface HappyAgentTaskRepositoryCheckout {
     readonly scoped: boolean;
     /** The computer it is on; null until one is attached. */
     readonly computer: { readonly id: string; readonly name: string } | null;
+    /**
+     * What it changed against the commit it started from, as its last scan
+     * counted it; null before a scan, or when Git could not compare it.
+     */
+    readonly changes: HappyAgentTaskRepositoryChanges | null;
+}
+
+/** A checkout's line totals against the commit it started from. */
+export interface HappyAgentTaskRepositoryChanges {
+    readonly changedFiles: number;
+    readonly insertions: number;
+    readonly deletions: number;
 }
 
 /** One of the team's repositories, as a task works in it. */
@@ -102,6 +114,21 @@ function arrayOf(value: unknown): readonly unknown[] {
     return Array.isArray(value) ? value : [];
 }
 
+function count(value: unknown): number {
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function changesRead(value: unknown): HappyAgentTaskRepositoryChanges | null {
+    const changes = recordOf(value);
+    return changes
+        ? {
+              changedFiles: count(changes.changedFiles),
+              insertions: count(changes.insertions),
+              deletions: count(changes.deletions),
+          }
+        : null;
+}
+
 function checkoutRead(value: unknown): HappyAgentTaskRepositoryCheckout | undefined {
     const checkout = recordOf(value);
     const id = textOrNull(checkout?.checkoutId);
@@ -123,6 +150,7 @@ function checkoutRead(value: unknown): HappyAgentTaskRepositoryCheckout | undefi
             computerId === null
                 ? null
                 : { id: computerId, name: textOrNull(computer?.name) ?? computerId },
+        changes: changesRead(checkout.changes),
     };
 }
 

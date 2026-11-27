@@ -429,6 +429,7 @@ import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { HappyAgentViewersSlot } from "./views/HappyAgentViewersSlot";
 import { botFace, ownerInitials, taskFace } from "./agentFaces";
 import {
+    agentChangeStats,
     subtaskRepositoryStack,
     taskRepositoryStack,
     type TaskRepositories,
@@ -1320,9 +1321,11 @@ export function botCreatingSidebarItem(
  * owns wears the placeholder its own id picks, so it survives every rename
  * (`taskFace`).
  *
- * On Happy Cloud a task that works in repositories wears their photos
- * instead: one repository's photo for a task scoped to it, or all of them
- * piled for a task working across several (`RepositoryStack`).
+ * On Happy Cloud a task that works in repositories wears their photos after
+ * the owner's face: one repository's photo for a task scoped to it, or all of
+ * them piled for a task working across several (`RepositoryStack`). Its row
+ * reports the lines its own agent's checkouts changed, the way a worktree's
+ * row reports its delta; each subtask's row reports its own.
  *
  * The trailing control leaves the task. Leaving is the reader's own act on
  * their own list and loses nothing — the task carries on for everyone else and
@@ -1333,7 +1336,9 @@ function taskSidebarItem(
     task: HappyAgentTask,
     titleShimmerEnabled: boolean,
     repositories: readonly RepositoryStackEntry[],
+    listed: readonly HappyAgentTaskRepository[] | undefined,
 ): SidebarItem {
+    const changeStats = agentChangeStats(listed, task.conversation.id);
     return {
         id: task.workspaceId,
         kind: "project",
@@ -1341,6 +1346,7 @@ function taskSidebarItem(
         labelShimmer: titleShimmerEnabled,
         ...taskFace(task),
         ...(repositories.length > 0 ? { repositories } : {}),
+        ...(changeStats ? { changeStats } : {}),
         action: {
             icon: "close" as const,
             label: `Leave ${task.name}`,
@@ -1371,6 +1377,13 @@ function botSubtaskSidebarItems(
         // own and so no delta to report.
         const worktree = project?.worktrees.find((entry) => entry.id === task.workspaceId);
         const scoped = subtaskRepositoryStack(repositories, taskListed, task);
+        // On Happy Cloud the delta is the subtask's own checkouts', as its
+        // task lists them; on a Happy Agent it is its worktree's.
+        const changeStats = worktree
+            ? (worktree.addedLines ?? 0) > 0 || (worktree.deletedLines ?? 0) > 0
+                ? { added: worktree.addedLines ?? 0, deleted: worktree.deletedLines ?? 0 }
+                : undefined
+            : agentChangeStats(taskListed, task.conversation.id);
         return [
             {
                 id: task.conversation.id,
@@ -1396,14 +1409,7 @@ function botSubtaskSidebarItems(
                 ...(worktree ? sidebarLifecycle(worktree.lifecycle) : {}),
                 ...sidebarActivity(task.conversation.activity),
                 ...sidebarUnread([task.conversation]),
-                ...((worktree?.addedLines ?? 0) > 0 || (worktree?.deletedLines ?? 0) > 0
-                    ? {
-                          changeStats: {
-                              added: worktree?.addedLines ?? 0,
-                              deleted: worktree?.deletedLines ?? 0,
-                          },
-                      }
-                    : {}),
+                ...(changeStats ? { changeStats } : {}),
             },
             ...botSubtaskSidebarItems(
                 task.subtasks,
@@ -2924,6 +2930,7 @@ function happyAgentTasksSection(
                     task,
                     titleShimmerEnabled,
                     taskRepositoryStack(happyAgent.taskRepositories, task),
+                    happyAgent.taskRepositories?.tasks.get(task.id),
                 ),
                 ...botSubtaskSidebarItems(
                     task.subtasks,

@@ -103,9 +103,10 @@ export type SidebarItem = {
         placeholderSeed?: string;
     }[];
     /**
-     * The repositories a task row works in, worn as its identity in place of
-     * its own face: one repository's photo, or several piled, which fan out
-     * into a list of them when the pointer rests on the pile.
+     * The repositories a task row works in: one repository's photo, or several
+     * piled, which fan out into a list of them when the pointer rests on the
+     * pile. A `person`/`agent`/`project` row wears them after its own face, as
+     * a task wears its owner's; any other row wears them in place of a face.
      */
     repositories?: readonly RepositoryStackEntry[];
     /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
@@ -2056,6 +2057,10 @@ function SidebarRow({
      * out by shape and color long before it is read by name. Both marks are the
      * same box, so which one a row wears never moves its name.
      */
+    // A face of its own, then the repositories it works in.
+    const facedRepositories = () =>
+        (item().repositories?.length ?? 0) > 0 &&
+        (item().kind === "person" || item().kind === "agent" || item().kind === "project");
     const identityMark = () => {
         return (
             <Avatar
@@ -2372,7 +2377,9 @@ function SidebarRow({
                 <span
                     className="happy-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
-                    data-context={item().contextAvatars?.length ? "" : undefined}
+                    data-context={
+                        item().contextAvatars?.length || facedRepositories() ? "" : undefined
+                    }
                 >
                     {/* Identity, unless the window asked for work to be reported
                         here. By default it is not: what the row is doing is
@@ -2396,6 +2403,11 @@ function SidebarRow({
                         />
                     ) : activityLeading() ? (
                         activityMark()
+                    ) : facedRepositories() ? (
+                        <>
+                            {identityMark()}
+                            <RepositoryStack repositories={item().repositories!} />
+                        </>
                     ) : item().repositories?.length ? (
                         <RepositoryStack repositories={item().repositories!} />
                     ) : item().contextAvatars?.length ? (

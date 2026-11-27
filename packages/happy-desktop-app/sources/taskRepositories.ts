@@ -34,6 +34,26 @@ function repositoryStackEntries(
     });
 }
 
+/**
+ * What one agent's checkouts changed, summed over every repository it is in,
+ * as a row reports its own delta; absent when nothing is changed or no scan
+ * has counted it yet. A failed checkout changed nothing.
+ */
+export function agentChangeStats(
+    repositories: readonly HappyAgentTaskRepository[] | undefined,
+    agentId: string,
+): { readonly added: number; readonly deleted: number } | undefined {
+    let added = 0;
+    let deleted = 0;
+    for (const repository of repositories ?? [])
+        for (const checkout of repository.checkouts) {
+            if (checkout.agentId !== agentId || checkout.status === "failed") continue;
+            added += checkout.changes?.insertions ?? 0;
+            deleted += checkout.changes?.deletions ?? 0;
+        }
+    return added > 0 || deleted > 0 ? { added, deleted } : undefined;
+}
+
 /** The repositories a task's row wears; empty for a task working in none. */
 export function taskRepositoryStack(
     repositories: TaskRepositories | undefined,
