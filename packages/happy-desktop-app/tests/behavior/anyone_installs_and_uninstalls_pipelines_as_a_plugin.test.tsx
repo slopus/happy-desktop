@@ -83,6 +83,7 @@ function pluginsOpen(installed: boolean, pluginId?: string) {
     });
     const view = render(
         <HappyAgentPluginsSurface
+            onCustomPluginOpen={() => undefined}
             onExternalLinkOpen={() => undefined}
             onPluginOpen={() => undefined}
             onPluginsOpen={() => undefined}
