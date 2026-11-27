@@ -96,13 +96,16 @@
     .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp {
         position: absolute;
         /*
-         * Half a pixel short of the run's top and bottom. A run that sits on a
-         * fractional pixel has a partly covered first or last row, and the
-         * glyph mask is cut at the run's rounded edge, so that row would show
-         * the ramp unmasked as a faint line. No glyph reaches into it at an
-         * ordinary line height.
+         * A pixel short of every edge of the run. A run that sits on a
+         * fractional device pixel has a partly covered outer row and column,
+         * and the glyph mask is cut at the run's rounded edge, so whatever the
+         * ramp paints there shows unmasked: a line along the run's top, bottom
+         * or ends in the resting colour. A smaller inset, or none at the ends,
+         * leaves that line at some scales. No glyph reaches that far out at an
+         * ordinary line height, and one that did would still show the resting
+         * colour the glyphs paint beneath the ramp.
          */
-        inset: 0.5px 0;
+        inset: 1px;
         display: block;
         /* The ramp overhangs the run by two widths; it must not widen a scroll
            container, and nothing outside the run was ever painted. */
