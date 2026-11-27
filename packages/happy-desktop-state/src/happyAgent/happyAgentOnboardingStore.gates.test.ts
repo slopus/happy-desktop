@@ -221,3 +221,39 @@ it("leaves a reader at work when their last step is finished elsewhere while the
     expect(store.get().finale).toBeUndefined();
     unsubscribe();
 });
+
+it("completes at once, without leaving the app, when the reader exits on a last step already done", async () => {
+    let finished = 0;
+    const adminBot = {
+        id: "adminBot",
+        scope: "server",
+        requirement: "optional",
+        status: "open",
+        blocking: false,
+        canComplete: true,
+        data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
+    };
+    const { store, calls, unsubscribe, writer } = storeCreate(
+        { finished: false, completed: false, blocking: [], gates: [adminBot], steps },
+        () => finished++,
+    );
+    await settle();
+    writer.onboardingReceived({
+        onboarding: {
+            finished: true,
+            completed: true,
+            blocking: [],
+            gates: [{ ...adminBot, status: "done" }],
+            steps,
+        } as never,
+        profile: null as never,
+    });
+    await settle();
+    expect(store.get().flow?.current?.id).toBe("adminBot");
+    expect(calls).not.toContain("POST v0/onboarding/complete");
+    store.onboardingExit();
+    await settle();
+    expect(calls).toContain("POST v0/onboarding/complete");
+    expect(finished).toBe(0);
+    unsubscribe();
+});

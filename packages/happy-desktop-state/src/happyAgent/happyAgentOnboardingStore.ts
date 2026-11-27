@@ -311,7 +311,7 @@ export function happyAgentOnboardingStoreCreate(
      */
     let returnTo: string | undefined;
     let away: "now" | "earlier" | undefined = options.away ? "earlier" : undefined;
-    /** The last open steps were finished elsewhere while the reader was away. */
+    /** The flow ended while the reader was away: they are at work in the app, not walking it. */
     let finishedAway = false;
     let gatePending: string | undefined;
     let gateError: { readonly gate: string; readonly message: string } | undefined;
@@ -783,6 +783,8 @@ export function happyAgentOnboardingStoreCreate(
             pinned = undefined;
             returnTo = undefined;
             publish(snapshot, true);
+            // Leaving on a last step already done ends the flow here.
+            setupSynchronize();
         },
         onboardingResume() {
             if (!away) return;
