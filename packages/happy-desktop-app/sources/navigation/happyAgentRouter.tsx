@@ -20,6 +20,7 @@ import {
     happyAgentBotAttention,
     happyAgentFileLinkParse,
     happyAgentProviderAddPageOf,
+    happyAgentSurfaceSectionOf,
     parseHappyUrl,
 } from "happy-desktop-state";
 import type {
@@ -559,14 +560,57 @@ const artifactRoute = createRoute({
  */
 const surfaceRoute = createRoute({
     getParentRoute: () => workspaceRoute,
-    // Opening a Surface is seeing what is new in it.
+    // Opening a Surface is seeing what is new in it. A document or a todo list
+    // opens as a tab of its section, as a chat opens as a tab of its project.
     loader: ({ context, params }) => {
         context.happyAgents
             .get()
             .happyAgents.find((happyAgent) => happyAgent.id === params.happyAgentId)
             ?.session?.feed?.subjectSeen({ type: "surface", id: params.surfaceId });
+        const surfaces = happyAgentSurfaces(context, params.happyAgentId);
+        const surface = surfaces
+            ?.catalog()
+            .get()
+            .surfaces.find((entry) => entry.id === params.surfaceId);
+        const section =
+            surface === undefined ? undefined : happyAgentSurfaceSectionOf(surface.type);
+        if (section !== undefined)
+            surfaces?.tabs().surfaceTabOpen(section, params.surfaceId as HappyAgentSurfaceId);
     },
     path: "/surfaces/$happyAgentId/$surfaceId",
+});
+
+/**
+ * One machine's Documents or TODOs, as the list of every Surface of its type:
+ * where the section opens before anything in it has been opened.
+ */
+const documentsRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/documents/$happyAgentId",
+});
+const todosRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/todos/$happyAgentId",
+});
+
+/** The section's list open as one of its tabs, as "+" opens it. */
+const documentsListRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    loader: ({ context, params }) => {
+        happyAgentSurfaces(context, params.happyAgentId)
+            ?.tabs()
+            .listTabOpen("documents", params.listTabId);
+    },
+    path: "/documents/$happyAgentId/list/$listTabId",
+});
+const todosListRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    loader: ({ context, params }) => {
+        happyAgentSurfaces(context, params.happyAgentId)
+            ?.tabs()
+            .listTabOpen("todos", params.listTabId);
+    },
+    path: "/todos/$happyAgentId/list/$listTabId",
 });
 
 /**
@@ -674,6 +718,10 @@ const routeTree = rootRoute.addChildren([
         feedRoute,
         userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
+        documentsRoute,
+        documentsListRoute,
+        todosRoute,
+        todosListRoute,
         botCreateRoute,
         taskCreateRoute,
         bugReportCreateRoute,
@@ -731,6 +779,12 @@ function HappyAgentWorkspaceLayout() {
             matched.has(pipelineRoute.id) ||
             matched.has(pipelineRunRoute.id),
         surface: matched.has(surfaceRoute.id),
+        surfaceSection:
+            matched.has(documentsRoute.id) || matched.has(documentsListRoute.id)
+                ? ("documents" as const)
+                : matched.has(todosRoute.id) || matched.has(todosListRoute.id)
+                  ? ("todos" as const)
+                  : undefined,
         taskCreate: matched.has(taskCreateRoute.id),
         bugReportCreate: matched.has(bugReportCreateRoute.id),
         userProfile: matched.has(userProfileRoute.id),
@@ -833,6 +887,35 @@ function HappyAgentWorkspaceLayout() {
                 : {})}
             onSurfaceOpen={(happyAgentId, surfaceId) =>
                 happyAgentRouterSurfaceOpen(router, context, happyAgentId, surfaceId)
+            }
+            {...(shows.surfaceSection
+                ? {
+                      surfaceSection: {
+                          section: shows.surfaceSection,
+                          ...(params.listTabId === undefined
+                              ? {}
+                              : { listTabId: params.listTabId }),
+                      },
+                  }
+                : {})}
+            onSurfaceSectionOpen={(happyAgentId, section, listTabId) =>
+                void navigate(
+                    listTabId === undefined
+                        ? {
+                              params: { happyAgentId },
+                              to:
+                                  section === "documents"
+                                      ? "/documents/$happyAgentId"
+                                      : "/todos/$happyAgentId",
+                          }
+                        : {
+                              params: { happyAgentId, listTabId },
+                              to:
+                                  section === "documents"
+                                      ? "/documents/$happyAgentId/list/$listTabId"
+                                      : "/todos/$happyAgentId/list/$listTabId",
+                          },
+                )
             }
             onSurfaceChatShow={(happyAgentId, surfaceId, chat) =>
                 surfaceChatShow(

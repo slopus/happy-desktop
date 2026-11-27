@@ -29,6 +29,7 @@ import {
     UserError,
     happyAgentHostNoop,
     happyAgentSurfaceSupportStoreNone,
+    happyAgentSurfaceTabsStoreCreate,
 } from "happy-desktop-state";
 import {
     AppHappyAgentView,
@@ -160,6 +161,7 @@ function view(catalog: HappyAgentSurfaceCatalogSnapshot = CATALOG) {
     const onSurfaceOpen = vi.fn();
     const onArtifactOpen = vi.fn();
     const artifactsRead = vi.fn();
+    const surfaceTabs = happyAgentSurfaceTabsStoreCreate();
     const surfaces = {
         catalog: () =>
             ({
@@ -168,6 +170,7 @@ function view(catalog: HappyAgentSurfaceCatalogSnapshot = CATALOG) {
                 [Symbol.dispose]: () => undefined,
             }) as unknown as HappyAgentSurfaceCatalogStore,
         support: () => happyAgentSurfaceSupportStoreNone,
+        tabs: () => surfaceTabs,
     } as unknown as HappyAgentSurfaces;
     const search = {
         ...happyAgentArtifactCatalogStoreNoop,

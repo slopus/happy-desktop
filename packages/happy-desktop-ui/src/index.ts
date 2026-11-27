@@ -982,6 +982,11 @@ export {
     type HappyAgentSurfaceNotMadePageProps,
 } from "./pages/surfaces/HappyAgentSurfaceNotMadePage";
 export {
+    HappyAgentSurfaceListPage,
+    type HappyAgentSurfaceListItem,
+    type HappyAgentSurfaceListPageProps,
+} from "./pages/surfaces/HappyAgentSurfaceListPage";
+export {
     HappyAgentSurfaceReferencePage,
     type HappyAgentSurfaceReferencePageProps,
     type HappyAgentSurfaceReferenceView,

@@ -729,3 +729,109 @@
 .happy-agent-surface-chat[data-phase="open"] .happy-agent-surface-chat__body {
     justify-content: flex-start;
 }
+
+/* ---- Section list ------------------------------------------------------ */
+
+/* Every document, or every todo list, on one Happy Agent: the page Documents
+   and TODOs open on, and what "+" opens in a tab. It reads down the content
+   column under the shared header, as the plugins catalog does. */
+.happy-agent-surface-list {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-agent-surface-list__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+.happy-agent-surface-list__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-agent-surface-list__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-agent-surface-list__content {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 4px var(--happy-content-gutter) 48px;
+}
+
+.happy-agent-surface-list__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-agent-surface-list__item {
+    display: flex;
+    min-width: 0;
+    border-radius: 8px;
+}
+
+.happy-agent-surface-list__item:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-agent-surface-list-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+    padding: 0 12px 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-surface-list-row:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-agent-surface-list-row__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-surface-list-row__count {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+}

@@ -209,8 +209,8 @@ export interface HappyAgentSurfaceCatalogSnapshot {
     /** Surfaces whose join or leave this window asked for and the daemon has not answered. */
     readonly membershipPending: ReadonlySet<HappyAgentSurfaceId>;
     /**
-     * How many todos are still open in each todo list the reader joined, as
-     * last read from the daemon. A list missing from it has not been counted
+     * How many todos are still open in each todo list, joined or not, as
+     * last read from the daemon: TODOs lists every one with its count. A list missing from it has not been counted
      * yet. Read again whenever one of its todos is added, finished, reopened,
      * or deleted.
      */
@@ -844,10 +844,10 @@ export function happyAgentSurfaceCatalogStoreCreate(
         };
     };
 
-    /** The joined todo lists that are counted: every one the daemon already has. */
-    const countable = (joined: readonly HappyAgentSurface[]): Set<HappyAgentSurfaceId> =>
+    /** The todo lists that are counted: every one the daemon already has. */
+    const countable = (surfaces: readonly HappyAgentSurface[]): Set<HappyAgentSurfaceId> =>
         new Set(
-            joined
+            surfaces
                 .filter(
                     (surface) =>
                         surface.type.kind === "todo" &&
@@ -875,7 +875,7 @@ export function happyAgentSurfaceCatalogStoreCreate(
             .then(
                 (response) => {
                     if (countReads.get(surfaceId) !== entry) return;
-                    if (!countable(snapshot.joined).has(surfaceId)) return;
+                    if (!countable(snapshot.surfaces).has(surfaceId)) return;
                     const todos = response.todos
                         .map(happyAgentTodoProject)
                         .filter(
@@ -905,9 +905,9 @@ export function happyAgentSurfaceCatalogStoreCreate(
             });
     };
 
-    /** Reads every joined todo list's count again, as a reconciliation does. */
+    /** Reads every todo list's count again, as a reconciliation does. */
     const countsRefresh = (): void => {
-        for (const surfaceId of countable(snapshot.joined)) countRead(surfaceId);
+        for (const surfaceId of countable(snapshot.surfaces)) countRead(surfaceId);
     };
 
     /** A todo event is a hint that its list's count may have moved. */
@@ -922,7 +922,7 @@ export function happyAgentSurfaceCatalogStoreCreate(
             event.changes.status !== undefined ||
             event.changes.deletedAt !== undefined ||
             event.changes.text !== undefined;
-        if (counts && countable(snapshot.joined).has(surfaceId)) countRead(surfaceId);
+        if (counts && countable(snapshot.surfaces).has(surfaceId)) countRead(surfaceId);
         return true;
     };
 
@@ -1021,9 +1021,9 @@ export function happyAgentSurfaceCatalogStoreCreate(
     const republish = (next: Partial<HappyAgentSurfaceCatalogSnapshot> = {}): void => {
         snapshot = { ...snapshot, ...next };
         const projected = project();
-        // Counts follow the reader's sidebar: a list left drops its count, and
-        // one joined or just made is counted.
-        const counted = countable(projected.joined);
+        // Counts follow the catalog: a list gone drops its count, and one
+        // found or just made is counted.
+        const counted = countable(projected.surfaces);
         let counts = snapshot.activeTodoCounts;
         if ([...counts.keys()].some((surfaceId) => !counted.has(surfaceId)))
             counts = new Map([...counts].filter(([surfaceId]) => counted.has(surfaceId)));

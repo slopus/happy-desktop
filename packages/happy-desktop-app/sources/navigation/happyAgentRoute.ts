@@ -1,4 +1,4 @@
-import type { HappyAgentFileTabKind } from "happy-desktop-state";
+import type { HappyAgentFileTabKind, HappyAgentSurfaceSection } from "happy-desktop-state";
 
 /**
  * Every place this window can be, as a value. Paths and stored records are only
@@ -74,6 +74,17 @@ export type HappyAgentRoute =
           readonly surfaceId: string;
           readonly chat?: { readonly groupId: string; readonly chatId: string };
       }
+    /**
+     * One machine's Documents or TODOs: the list of every Surface of its type,
+     * or, when `listTabId` names one, that list open as a tab of its strip.
+     * A Surface open in a tab there is addressed as a `surface`.
+     */
+    | {
+          readonly kind: "surfaceSection";
+          readonly happyAgentId: string;
+          readonly section: HappyAgentSurfaceSection;
+          readonly listTabId?: string;
+      }
     /** Where a new task is made, on the machine it will live on, as a bot is. */
     | { readonly kind: "taskCreate"; readonly happyAgentId: string }
     /** One person's profile on a Happy Cloud server. */
@@ -137,6 +148,10 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
                 ? `/chat/${part(route.chat.groupId)}/${part(route.chat.chatId)}`
                 : "";
             return `/surfaces/${part(route.happyAgentId)}/${part(route.surfaceId)}${chat}`;
+        }
+        case "surfaceSection": {
+            const tab = route.listTabId ? `/list/${part(route.listTabId)}` : "";
+            return `/${route.section}/${part(route.happyAgentId)}${tab}`;
         }
         case "taskCreate":
             return `/tasks/new/${part(route.happyAgentId)}`;
@@ -264,6 +279,14 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
                       happyAgentId: first,
                       surfaceId: second,
                   }
+                : undefined;
+        case "documents":
+        case "todos":
+            if (first === undefined) return undefined;
+            if (segments.length === 2)
+                return { kind: "surfaceSection", happyAgentId: first, section: head };
+            return second === "list" && third !== undefined && segments.length === 4
+                ? { kind: "surfaceSection", happyAgentId: first, listTabId: third, section: head }
                 : undefined;
         case "tasks":
             return first === "new" && second !== undefined && segments.length === 3
@@ -405,6 +428,19 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
                       kind: "surface",
                       happyAgentId,
                       surfaceId,
+                  }
+                : undefined;
+        }
+        case "surfaceSection": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const section = fieldOf(record, "section");
+            const listTabId = fieldOf(record, "listTabId");
+            return happyAgentId && (section === "documents" || section === "todos")
+                ? {
+                      kind: "surfaceSection",
+                      happyAgentId,
+                      section,
+                      ...(listTabId ? { listTabId } : {}),
                   }
                 : undefined;
         }

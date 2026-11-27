@@ -6,6 +6,13 @@ import type {
     HappyAgentSessionId,
 } from "./happyAgentTypes.js";
 import type { HappyAgentBrowserRecent, HappyAgentViewPlacement } from "./happyAgentPanelStore.js";
+import type { HappyAgentSurfaceId } from "../surfaces/surfaceTypes.js";
+import {
+    happyAgentSurfaceTabId,
+    type HappyAgentSurfaceSectionTabs,
+    type HappyAgentSurfaceTab,
+    type HappyAgentSurfaceTabsSnapshot,
+} from "../surfaces/surfaceTabsStore.js";
 
 /** One file tab remembered for a group, enough to reopen it as it was left. */
 export interface HappyAgentFileTabMemory {
@@ -132,6 +139,8 @@ export interface HappyAgentWorkspaceMemoryDocument {
     readonly surfaceChatsShown?: readonly string[];
     /** The Surfaces the reader widened to the whole pane, oldest first. */
     readonly surfacesExpanded?: readonly string[];
+    /** The tabs open in Documents and in TODOs. */
+    readonly surfaceTabs?: HappyAgentSurfaceTabsSnapshot;
 }
 
 /**
@@ -188,6 +197,9 @@ export interface HappyAgentWorkspaceMemoryStore {
     /** The Surfaces the reader widened to the whole pane. */
     surfacesExpandedRead(): readonly string[];
     surfacesExpandedWrite(surfaceIds: readonly string[]): void;
+    /** The tabs open in Documents and in TODOs, if any were ever opened. */
+    surfaceTabsRead(): HappyAgentSurfaceTabsSnapshot | undefined;
+    surfaceTabsWrite(tabs: HappyAgentSurfaceTabsSnapshot): void;
 }
 
 const FILE_KINDS: readonly HappyAgentFileTabKind[] = ["file", "diff", "document", "media"];
@@ -197,6 +209,8 @@ const RECENT_FILE_LIMIT_PER_GROUP = 80;
 /** Surfaces remembered with their chat open, or widened; the oldest is forgotten first. */
 const SURFACE_CHATS_SHOWN_LIMIT = 500;
 const SURFACES_EXPANDED_LIMIT = 500;
+/** Tabs kept open in one section; the strip is not an archive. */
+const SURFACE_SECTION_TAB_LIMIT = 100;
 
 /** The distinct non-empty strings of a stored list, newest `limit` kept. */
 function storedKeysParse(value: unknown, limit: number): readonly string[] {
@@ -204,6 +218,45 @@ function storedKeysParse(value: unknown, limit: number): readonly string[] {
     return [
         ...new Set(value.filter((key): key is string => typeof key === "string" && key.length > 0)),
     ].slice(-limit);
+}
+
+/** Reads one section's stored strip, keeping only tabs of the shape we wrote. */
+function surfaceSectionTabsParse(value: unknown): HappyAgentSurfaceSectionTabs {
+    if (typeof value !== "object" || value === null) return { tabs: [], history: [] };
+    const record = value as Record<string, unknown>;
+    const seen = new Set<string>();
+    const tabs = (Array.isArray(record.tabs) ? record.tabs : [])
+        .flatMap((entry): HappyAgentSurfaceTab[] => {
+            if (typeof entry !== "object" || entry === null) return [];
+            const tab = entry as Record<string, unknown>;
+            const id = tab.kind === "surface" ? tab.surfaceId : tab.kind === "list" ? tab.id : "";
+            if (typeof id !== "string" || id.length === 0 || seen.has(id)) return [];
+            seen.add(id);
+            return [
+                tab.kind === "surface"
+                    ? { kind: "surface", surfaceId: id as HappyAgentSurfaceId }
+                    : { kind: "list", id },
+            ];
+        })
+        .slice(-SURFACE_SECTION_TAB_LIMIT);
+    const open = new Set<string>(tabs.map(happyAgentSurfaceTabId));
+    const history = [
+        ...new Set(
+            (Array.isArray(record.history) ? record.history : []).filter(
+                (id): id is string => typeof id === "string" && open.has(id),
+            ),
+        ),
+    ];
+    return { tabs, history };
+}
+
+function surfaceTabsParse(value: unknown): HappyAgentSurfaceTabsSnapshot | undefined {
+    if (typeof value !== "object" || value === null) return undefined;
+    const record = value as Record<string, unknown>;
+    return {
+        documents: surfaceSectionTabsParse(record.documents),
+        todos: surfaceSectionTabsParse(record.todos),
+    };
 }
 
 function recentTabsBound(
@@ -412,6 +465,7 @@ export function happyAgentWorkspaceMemoryStoreCreate(
     let recentTabs: readonly HappyAgentRecentTabMemory[] = [];
     let surfaceChatsShown: readonly string[] = [];
     let surfacesExpanded: readonly string[] = [];
+    let surfaceTabs: HappyAgentSurfaceTabsSnapshot | undefined;
     const stored = (() => {
         try {
             return persistence?.read();
@@ -442,6 +496,7 @@ export function happyAgentWorkspaceMemoryStoreCreate(
         }
         surfaceChatsShown = storedKeysParse(document.surfaceChatsShown, SURFACE_CHATS_SHOWN_LIMIT);
         surfacesExpanded = storedKeysParse(document.surfacesExpanded, SURFACES_EXPANDED_LIMIT);
+        surfaceTabs = surfaceTabsParse(document.surfaceTabs);
     }
 
     const flush = (): void => {
@@ -452,6 +507,7 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 recentTabs,
                 ...(surfaceChatsShown.length === 0 ? {} : { surfaceChatsShown }),
                 ...(surfacesExpanded.length === 0 ? {} : { surfacesExpanded }),
+                ...(surfaceTabs === undefined ? {} : { surfaceTabs }),
             });
         } catch {
             // Storage the host refused still keeps this client's memory alive.
@@ -537,6 +593,11 @@ export function happyAgentWorkspaceMemoryStoreCreate(
         surfacesExpandedRead: () => surfacesExpanded,
         surfacesExpandedWrite(surfaceIds) {
             surfacesExpanded = [...new Set(surfaceIds)].slice(-SURFACES_EXPANDED_LIMIT);
+            flush();
+        },
+        surfaceTabsRead: () => surfaceTabs,
+        surfaceTabsWrite(tabs) {
+            surfaceTabs = tabs;
             flush();
         },
     };

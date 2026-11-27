@@ -30,6 +30,9 @@ import {
     happyAgentSidebarTree,
     happyAgentTabsOrdered,
     happyAgentTodoHeading,
+    happyAgentSurfaceListTabIdCreate,
+    happyAgentSurfaceSectionOf,
+    happyAgentSurfaceTabId,
     type ConversationFileDiff,
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
@@ -229,6 +232,10 @@ import {
     type HappyAgentSurfaceChatActivity,
     type HappyAgentSurfaceCreateKind,
     type HappyAgentSurfaceSupportSnapshot,
+    type HappyAgentSurfaceSection,
+    type HappyAgentSurfaceSectionTabs,
+    type HappyAgentSurfaceTab,
+    type HappyAgentSurfaceTabsSnapshot,
     type HappyAgentSurfaceId,
     type HappyAgentVaultItemId,
     type HappyAgentSearchStore,
@@ -314,6 +321,8 @@ import {
     HappyAgentSurfaceCreateDialog,
     HappyAgentSurfaceUnsupportedPage,
     HappyAgentSurfaceNotMadePage,
+    HappyAgentSurfaceListPage,
+    type HappyAgentSurfaceListItem,
     HappyAgentSurfaceReferencePage,
     type HappyAgentSurfaceReferenceView,
     HappyAgentSurfaceChatPanel,
@@ -1180,6 +1189,20 @@ export interface AppHappyAgentViewProps {
         happyAgentId: string,
         surfaceId: string,
         chat: { readonly groupId: string; readonly chatId: string } | undefined,
+    ): void;
+    /**
+     * The addressed Happy Agent's Documents or TODOs when the URL opens its
+     * list, alone or as the list tab `listTabId` names.
+     */
+    surfaceSection?: {
+        readonly section: HappyAgentSurfaceSection;
+        readonly listTabId?: string;
+    };
+    /** Addresses one Happy Agent's Documents or TODOs: its list, or one list tab. */
+    onSurfaceSectionOpen?(
+        happyAgentId: string,
+        section: HappyAgentSurfaceSection,
+        listTabId: string | undefined,
     ): void;
     /** Whether the URL addresses the enrolled account's friends surface. */
     /** Addresses that friends surface. */
@@ -3273,8 +3296,10 @@ function surfaceTargetLink(
 /**
  * The first group in the sidebar, under no heading. Activity leads it,
  * Artifacts under it; both are always there, never move, and nothing is dragged
- * past them. The reader's Surfaces follow in their own order and are dragged
- * among themselves only. Happy Cloud's shared bots close the group, each
+ * past them. Documents and TODOs follow, just as fixed, and hold every document
+ * and todo list, which are no rows of their own. The reader's other Surfaces
+ * follow in their own order and are dragged among themselves only. Happy
+ * Cloud's shared bots close the group, each
  * opening its one conversation with its subtasks beneath; they are fixed, so
  * no Surface is dragged past them either.
  * Every type is listed by its own name and picture, including a type this
@@ -3314,20 +3339,26 @@ function happyAgentTopSection(
                 ? [PIPELINES_SIDEBAR_ITEM]
                 : []),
             ...(catalog.availability === "available"
-                ? catalog.joined.map((surface) =>
-                      surfaceSidebarItem(
-                          happyAgentId,
-                          surface,
-                          surfacePlacesOf(happyAgent),
-                          true,
-                          offline,
-                          {
-                              activeTodoCounts,
-                              chatActivity: catalog.chatActivity,
-                              labelShimmer: titleShimmerEnabled,
-                          },
-                      ),
-                  )
+                ? [DOCUMENTS_SIDEBAR_ITEM, TODOS_SIDEBAR_ITEM]
+                : []),
+            // A document or a todo list is found in its section, not as a row.
+            ...(catalog.availability === "available"
+                ? catalog.joined
+                      .filter((surface) => happyAgentSurfaceSectionOf(surface.type) === undefined)
+                      .map((surface) =>
+                          surfaceSidebarItem(
+                              happyAgentId,
+                              surface,
+                              surfacePlacesOf(happyAgent),
+                              true,
+                              offline,
+                              {
+                                  activeTodoCounts,
+                                  chatActivity: catalog.chatActivity,
+                                  labelShimmer: titleShimmerEnabled,
+                              },
+                          ),
+                      )
                 : []),
             ...(happyAgent
                 ? sharedBotSidebarItems(happyAgent, titleShimmerEnabled, attention)
@@ -3712,6 +3743,27 @@ const PLUGINS_ITEM = "plugins";
 const PIPELINES_ITEM = "pipelines";
 
 /**
+ * The rows that open the addressed Happy Agent's Documents and TODOs, under
+ * Pipelines. Each lists every Surface of its type on the machine and opens the
+ * ones picked as tabs, so no document or todo list is a row of its own. Like
+ * Artifacts, they belong to the machine and never move.
+ */
+const DOCUMENTS_ITEM = "documents";
+const TODOS_ITEM = "todos";
+
+/** The section row that opens a section, and the one a section's row is. */
+const SURFACE_SECTION_ITEMS: Record<HappyAgentSurfaceSection, string> = {
+    documents: DOCUMENTS_ITEM,
+    todos: TODOS_ITEM,
+};
+
+/** A section's name, as its row and its list tabs say it. */
+const SURFACE_SECTION_TITLES: Record<HappyAgentSurfaceSection, string> = {
+    documents: "Documents",
+    todos: "TODOs",
+};
+
+/**
  * The row that opens the reader's feed on the addressed Happy Agent: what
  * happened there, newest change first. It heads the sidebar's first group and,
  * like Artifacts under it, never moves; it counts what the reader has not
@@ -3821,6 +3873,24 @@ const PIPELINES_SIDEBAR_ITEM: SidebarItem = {
     id: PIPELINES_ITEM,
     kind: "project",
     label: "Pipelines",
+    reorderable: false,
+};
+
+const DOCUMENTS_SIDEBAR_ITEM: SidebarItem = {
+    icon: "doc",
+    tint: "blue",
+    id: DOCUMENTS_ITEM,
+    kind: "project",
+    label: SURFACE_SECTION_TITLES.documents,
+    reorderable: false,
+};
+
+const TODOS_SIDEBAR_ITEM: SidebarItem = {
+    icon: "tasks",
+    tint: "green",
+    id: TODOS_ITEM,
+    kind: "project",
+    label: SURFACE_SECTION_TITLES.todos,
     reorderable: false,
 };
 
@@ -4170,6 +4240,70 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         openSurface === undefined || openTodoCount === undefined
             ? surfaceCatalog.activeTodoCounts
             : new Map(surfaceCatalog.activeTodoCounts).set(openSurface.id, openTodoCount);
+    // Documents and TODOs: the one the address is inside, if either — its
+    // list, or one of its documents or todo lists open as a tab.
+    const surfaceTabsStore = active?.session?.surfaces?.tabs();
+    const surfaceTabs = useSyncExternalStore(
+        surfaceTabsStore?.subscribe ?? SUBSCRIBE_NONE,
+        surfaceTabsStore?.get ?? surfaceTabsNone,
+        surfaceTabsStore?.get ?? surfaceTabsNone,
+    );
+    const surfaceSectionShown =
+        props.surfaceSection?.section ??
+        (openSurface === undefined ? undefined : happyAgentSurfaceSectionOf(openSurface.type));
+    /**
+     * Goes to one tab of a section, or to its list when there is none. The
+     * tab comes to the front first, so opening a Surface from its own tab
+     * leaves the list tab that was in front where it is.
+     */
+    const surfaceSectionTabGo = (
+        happyAgentId: string,
+        section: HappyAgentSurfaceSection,
+        tab: HappyAgentSurfaceTab | undefined,
+    ): void => {
+        if (tab === undefined) {
+            props.onSurfaceSectionOpen?.(happyAgentId, section, undefined);
+            return;
+        }
+        surfaceTabsStore?.tabSelect(section, happyAgentSurfaceTabId(tab));
+        if (tab.kind === "surface") props.onSurfaceOpen?.(happyAgentId, tab.surfaceId);
+        else props.onSurfaceSectionOpen?.(happyAgentId, section, tab.id);
+    };
+    /** Opens a section where the reader left it: the tab last in front, or its list. */
+    const surfaceSectionResume = (section: HappyAgentSurfaceSection): void => {
+        if (!active) return;
+        const strip = surfaceTabs[section];
+        surfaceSectionTabGo(
+            active.id,
+            section,
+            surfaceSectionTabFront(
+                strip,
+                surfaceSectionTabsShown(strip, surfaceCatalog, undefined),
+            ),
+        );
+    };
+    /**
+     * Closes tabs of a section. Closing the one on screen goes to the tab
+     * behind it, or to the list once none is left.
+     */
+    const surfaceSectionTabsClose = (
+        section: HappyAgentSurfaceSection,
+        tabIds: readonly string[],
+    ): void => {
+        if (!active || !surfaceTabsStore) return;
+        for (const tabId of tabIds) surfaceTabsStore.tabClose(section, tabId);
+        const onScreen = props.surfaceId ?? props.surfaceSection?.listTabId;
+        if (onScreen === undefined || !tabIds.includes(onScreen)) return;
+        const strip = surfaceTabsStore.get()[section];
+        surfaceSectionTabGo(
+            active.id,
+            section,
+            surfaceSectionTabFront(
+                strip,
+                surfaceSectionTabsShown(strip, surfaceCatalog, undefined),
+            ),
+        );
+    };
     const desktop = props.platform === "desktop";
     // Happy's own update wins the row. Restarting the app is the larger event of
     // the two, and it carries the agent with it, so the agent states its case
@@ -4588,19 +4722,24 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           ? PIPELINES_ITEM
                           : props.feedOpen
                             ? FEED_ITEM
-                            : props.surfaceId !== undefined
-                              ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                              : props.groupId
+                            : surfaceSectionShown !== undefined
+                              ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
+                              : props.surfaceId !== undefined
                                 ? happyAgentItemId(
                                       props.happyAgentId,
-                                      activeRowId(
-                                          active?.bots ?? [],
-                                          active?.tasks ?? [],
-                                          props.groupId,
-                                          props.chatId,
-                                      ),
+                                      surfaceRowId(props.surfaceId),
                                   )
-                                : ""
+                                : props.groupId
+                                  ? happyAgentItemId(
+                                        props.happyAgentId,
+                                        activeRowId(
+                                            active?.bots ?? [],
+                                            active?.tasks ?? [],
+                                            props.groupId,
+                                            props.chatId,
+                                        ),
+                                    )
+                                  : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -4902,6 +5041,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 if (id === PIPELINES_ITEM) {
                     props.onPipelinesOpen?.(active?.id ?? props.happyAgentId);
+                    return;
+                }
+                if (id === DOCUMENTS_ITEM || id === TODOS_ITEM) {
+                    surfaceSectionResume(id === DOCUMENTS_ITEM ? "documents" : "todos");
                     return;
                 }
                 const row = happyAgentItemParse(id);
@@ -5456,82 +5599,122 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         // A Surface belongs to the addressed machine, like its artifacts. Its
         // header carries Leave or Join, so the header is the window's drag
         // band rather than an overlay on top of it.
-        if (props.surfaceId !== undefined && active?.session?.surfaces) {
+        if (
+            (props.surfaceId !== undefined || props.surfaceSection !== undefined) &&
+            active?.session?.surfaces
+        ) {
             const session = active.session;
             const workspace = session.workspace;
+            const surfaceContent =
+                props.surfaceId === undefined ? null : (
+                    <HappyAgentSurfaceContent
+                        key={props.surfaceId}
+                        {...(session.viewers ? { viewers: session.viewers } : {})}
+                        {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
+                        support={surfaceSupport}
+                        {...(props.surfaceChat ? { chat: props.surfaceChat } : {})}
+                        chatConversation={(chat, surfaceName) => (
+                            <HappyAgentSurfaceChat
+                                instanceId={active.instanceId}
+                                {...(invalidMessageReport
+                                    ? { onInvalidMessageReport: invalidMessageReport }
+                                    : {})}
+                                platform={props.platform}
+                                {...(referenceSurfaces ? { referenceSurfaces } : {})}
+                                {...(artifactsAvailable && session.artifacts
+                                    ? { artifacts: session.artifacts }
+                                    : {})}
+                                chatId={chat.chatId}
+                                clock={session.clock}
+                                groupId={chat.groupId}
+                                happyAgentOnline={activeHappyAgentOnline}
+                                onChatSelect={(groupId, chatId) =>
+                                    props.onChatSelect(active.id, groupId, chatId)
+                                }
+                                onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
+                                {...(session.providerUsage
+                                    ? { providerUsage: session.providerUsage }
+                                    : {})}
+                                surfaceName={surfaceName}
+                                {...(activeAvailability?.refusal === undefined
+                                    ? {}
+                                    : { unavailable: activeAvailability.refusal })}
+                                viewerId={viewerId}
+                                workspace={workspace}
+                            />
+                        )}
+                        onChatShow={(location) =>
+                            props.onSurfaceChatShow?.(
+                                active.id,
+                                props.surfaceId!,
+                                location === undefined
+                                    ? undefined
+                                    : { groupId: location.groupId, chatId: location.sessionId },
+                            )
+                        }
+                        onTargetOpen={(surface) => {
+                            if (surfaceTargetOpen(active, surface)) return;
+                            // A task the reader is not in is joined, and then opened.
+                            const target = surface.target;
+                            if (target?.state !== "available" || target.kind !== "task") return;
+                            if (!activeHappyAgentOnline()) return;
+                            void workspace
+                                .taskJoin(target.id)
+                                .then(() =>
+                                    taskJoinedThen(workspace, target.id, (task) =>
+                                        props.onChatSelect(
+                                            active.id,
+                                            task.workspaceId,
+                                            task.conversation.id,
+                                        ),
+                                    ),
+                                )
+                                .catch(() => undefined);
+                        }}
+                        clock={session.clock}
+                        places={surfacePlacesOf(active)}
+                        {...(activeAvailability?.refusal === undefined
+                            ? {}
+                            : { unavailable: activeAvailability.refusal })}
+                        surfaceId={props.surfaceId as HappyAgentSurfaceId}
+                        surfaces={active.session.surfaces}
+                    />
+                );
+            if (surfaceSectionShown === undefined) return surfaceContent;
+            const section = surfaceSectionShown;
+            const createKind: HappyAgentSurfaceCreateKind =
+                section === "documents" ? "document" : "todo";
             return (
-                <HappyAgentSurfaceContent
-                    key={props.surfaceId}
-                    {...(session.viewers ? { viewers: session.viewers } : {})}
-                    {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
-                    support={surfaceSupport}
-                    {...(props.surfaceChat ? { chat: props.surfaceChat } : {})}
-                    chatConversation={(chat, surfaceName) => (
-                        <HappyAgentSurfaceChat
-                            instanceId={active.instanceId}
-                            {...(invalidMessageReport
-                                ? { onInvalidMessageReport: invalidMessageReport }
-                                : {})}
-                            platform={props.platform}
-                            {...(referenceSurfaces ? { referenceSurfaces } : {})}
-                            {...(artifactsAvailable && session.artifacts
-                                ? { artifacts: session.artifacts }
-                                : {})}
-                            chatId={chat.chatId}
-                            clock={session.clock}
-                            groupId={chat.groupId}
-                            happyAgentOnline={activeHappyAgentOnline}
-                            onChatSelect={(groupId, chatId) =>
-                                props.onChatSelect(active.id, groupId, chatId)
-                            }
-                            onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                            {...(session.providerUsage
-                                ? { providerUsage: session.providerUsage }
-                                : {})}
-                            surfaceName={surfaceName}
-                            {...(activeAvailability?.refusal === undefined
-                                ? {}
-                                : { unavailable: activeAvailability.refusal })}
-                            viewerId={viewerId}
-                            workspace={workspace}
-                        />
-                    )}
-                    onChatShow={(location) =>
-                        props.onSurfaceChatShow?.(
+                <HappyAgentSurfaceSectionPane
+                    activeId={props.surfaceId ?? props.surfaceSection?.listTabId}
+                    activeTodoCounts={activeTodoCounts}
+                    catalog={surfaceCatalog}
+                    {...(!activeHappyAgentOnline()
+                        ? { createDisabledReason: "This Happy Agent is not reachable." }
+                        : createKind === "document" && surfaceSupport.documents !== "supported"
+                          ? { createDisabledReason: "This Happy Agent can’t make documents yet." }
+                          : {})}
+                    onCreate={() => surfaceCatalogStore.createOpen(createKind)}
+                    onListTabOpen={() =>
+                        props.onSurfaceSectionOpen?.(
                             active.id,
-                            props.surfaceId!,
-                            location === undefined
-                                ? undefined
-                                : { groupId: location.groupId, chatId: location.sessionId },
+                            section,
+                            happyAgentSurfaceListTabIdCreate(),
                         )
                     }
-                    onTargetOpen={(surface) => {
-                        if (surfaceTargetOpen(active, surface)) return;
-                        // A task the reader is not in is joined, and then opened.
-                        const target = surface.target;
-                        if (target?.state !== "available" || target.kind !== "task") return;
-                        if (!activeHappyAgentOnline()) return;
-                        void workspace
-                            .taskJoin(target.id)
-                            .then(() =>
-                                taskJoinedThen(workspace, target.id, (task) =>
-                                    props.onChatSelect(
-                                        active.id,
-                                        task.workspaceId,
-                                        task.conversation.id,
-                                    ),
-                                ),
-                            )
-                            .catch(() => undefined);
-                    }}
-                    clock={session.clock}
-                    places={surfacePlacesOf(active)}
-                    {...(activeAvailability?.refusal === undefined
-                        ? {}
-                        : { unavailable: activeAvailability.refusal })}
-                    surfaceId={props.surfaceId as HappyAgentSurfaceId}
-                    surfaces={active.session.surfaces}
-                />
+                    onSurfaceOpen={(surfaceId) => props.onSurfaceOpen?.(active.id, surfaceId)}
+                    onTabSelect={(tab) => surfaceSectionTabGo(active.id, section, tab)}
+                    onTabsClose={(tabIds) => surfaceSectionTabsClose(section, tabIds)}
+                    onTabsReorder={(tabIds) => surfaceTabsStore?.tabReorder(section, tabIds)}
+                    section={section}
+                    tabs={surfaceSectionTabsShown(
+                        surfaceTabs[section],
+                        surfaceCatalog,
+                        props.surfaceId as HappyAgentSurfaceId | undefined,
+                    )}
+                >
+                    {surfaceContent}
+                </HappyAgentSurfaceSectionPane>
             );
         }
 
@@ -5765,6 +5948,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                     props.groupId,
                                     props.chatId,
                                     props.surfaceId,
+                                    props.surfaceSection?.section,
+                                    props.surfaceSection?.listTabId,
                                     props.artifactId,
                                     props.pluginId,
                                     props.pipelineId,
@@ -6879,6 +7064,190 @@ function HappyAgentArtifactViewerSurface(props: {
                 : {})}
             viewer={viewer.artifactId === props.artifactId ? viewer : VIEWER_OPENING}
         />
+    );
+}
+
+/** The strips of a connection without Surfaces: nothing open anywhere. */
+const SURFACE_TABS_NONE: HappyAgentSurfaceTabsSnapshot = {
+    documents: { tabs: [], history: [] },
+    todos: { tabs: [], history: [] },
+};
+const surfaceTabsNone = (): HappyAgentSurfaceTabsSnapshot => SURFACE_TABS_NONE;
+
+/**
+ * The tabs a section's strip shows: those it holds whose Surface the catalog
+ * still has, once it has been read, and the addressed Surface last when the
+ * strip does not hold it yet, such as one opened before the catalog said what
+ * it was.
+ */
+function surfaceSectionTabsShown(
+    strip: HappyAgentSurfaceSectionTabs,
+    catalog: HappyAgentSurfaceCatalogSnapshot,
+    addressed: HappyAgentSurfaceId | undefined,
+): readonly HappyAgentSurfaceTab[] {
+    const present = (surfaceId: HappyAgentSurfaceId) =>
+        catalog.availability !== "available" ||
+        catalog.surfaces.some((surface) => surface.id === surfaceId);
+    const tabs = strip.tabs.filter((tab) => tab.kind === "list" || present(tab.surfaceId));
+    return addressed === undefined ||
+        tabs.some((tab) => tab.kind === "surface" && tab.surfaceId === addressed)
+        ? tabs
+        : [...tabs, { kind: "surface", surfaceId: addressed }];
+}
+
+/** The tab a section opens on: the one last in front that it still shows. */
+function surfaceSectionTabFront(
+    strip: HappyAgentSurfaceSectionTabs,
+    shown: readonly HappyAgentSurfaceTab[],
+): HappyAgentSurfaceTab | undefined {
+    for (const id of strip.history) {
+        const tab = shown.find((entry) => happyAgentSurfaceTabId(entry) === id);
+        if (tab !== undefined) return tab;
+    }
+    return undefined;
+}
+
+/**
+ * What a section's list holds: every Surface of its type on the Happy Agent,
+ * by name, each todo list with its open count once counted.
+ */
+function surfaceSectionItems(
+    section: HappyAgentSurfaceSection,
+    catalog: HappyAgentSurfaceCatalogSnapshot,
+    activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>,
+): HappyAgentSurfaceListItem[] {
+    return catalog.surfaces
+        .filter((surface) => happyAgentSurfaceSectionOf(surface.type) === section)
+        .map((surface) => {
+            const count = activeTodoCounts.get(surface.id);
+            return {
+                id: surface.id,
+                name: surfaceLabel(surface),
+                type: surface.type,
+                ...(surface.image ? { image: surface.image } : {}),
+                ...(count === undefined ? {} : { count }),
+            };
+        })
+        .sort(
+            (left, right) =>
+                left.name.localeCompare(right.name, undefined, { sensitivity: "base" }) ||
+                (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+        );
+}
+
+/**
+ * Documents or TODOs in the content area: the list of every Surface of the
+ * section's type, and, once one is opened from it, a strip of tabs like a
+ * project's chats. "+" opens the list again in a tab of its own, and picking
+ * there turns that tab into the Surface picked. With nothing open the list
+ * stands alone.
+ */
+function HappyAgentSurfaceSectionPane(props: {
+    section: HappyAgentSurfaceSection;
+    tabs: readonly HappyAgentSurfaceTab[];
+    /** The tab on screen; absent on the section's own list. */
+    activeId: string | undefined;
+    catalog: HappyAgentSurfaceCatalogSnapshot;
+    activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>;
+    /** The open Surface's page, when a Surface is what the address shows. */
+    children: ReactNode;
+    onSurfaceOpen: (surfaceId: HappyAgentSurfaceId) => void;
+    onCreate: () => void;
+    /** Why nothing can be made here right now. */
+    createDisabledReason?: string;
+    onTabSelect: (tab: HappyAgentSurfaceTab) => void;
+    onTabsClose: (tabIds: readonly string[]) => void;
+    onListTabOpen: () => void;
+    onTabsReorder: (tabIds: readonly string[]) => void;
+}) {
+    const title = SURFACE_SECTION_TITLES[props.section];
+    const active = props.tabs.find((tab) => happyAgentSurfaceTabId(tab) === props.activeId);
+    const list = (
+        <HappyAgentSurfaceListPage
+            {...(props.catalog.availability === "checking" ? { loading: true } : {})}
+            {...(props.createDisabledReason === undefined
+                ? {}
+                : { createDisabledReason: props.createDisabledReason })}
+            items={surfaceSectionItems(props.section, props.catalog, props.activeTodoCounts)}
+            onCreate={props.onCreate}
+            onOpen={(surfaceId) => props.onSurfaceOpen(surfaceId as HappyAgentSurfaceId)}
+            section={props.section}
+        />
+    );
+    const body = active?.kind === "surface" ? props.children : list;
+    if (props.tabs.length === 0) return body;
+    const ids = props.tabs.map(happyAgentSurfaceTabId);
+    const tabItems: TabItem[] = props.tabs.map((tab) => {
+        if (tab.kind === "list")
+            return { id: tab.id, label: title, icon: "list" as const, closable: true };
+        const surface = props.catalog.surfaces.find((entry) => entry.id === tab.surfaceId);
+        return {
+            id: tab.surfaceId,
+            label: surface === undefined ? "" : surfaceLabel(surface),
+            icon: props.section === "documents" ? ("doc" as const) : ("tasks" as const),
+            closable: true,
+        };
+    });
+    const tabOf = (tabId: string) =>
+        props.tabs.find((tab) => happyAgentSurfaceTabId(tab) === tabId);
+    const opener = props.section === "documents" ? "Open a document" : "Open a todo list";
+    return (
+        <TabbedPane
+            actions={
+                <Tooltip label={opener} placement="bottom">
+                    <Button
+                        aria-label={opener}
+                        data-testid="happy-agent-surface-section-tab-add"
+                        icon="plus"
+                        iconOnly
+                        onClick={props.onListTabOpen}
+                        size="small"
+                        variant="ghost"
+                    />
+                </Tooltip>
+            }
+            activeId={props.activeId ?? ""}
+            closeLabel="Close tab"
+            closePresentation="overlay"
+            closeShortcut={APP_SHORTCUTS.tabClose}
+            onClose={(tabId) => props.onTabsClose([tabId])}
+            onReorder={props.onTabsReorder}
+            onSelect={(tabId) => {
+                const tab = tabOf(tabId);
+                if (tab !== undefined) props.onTabSelect(tab);
+            }}
+            onTabMenuSelect={(tab, actionId) => {
+                const index = ids.indexOf(tab.id);
+                if (index < 0) return;
+                if (actionId === TAB_MENU_CLOSE) props.onTabsClose([tab.id]);
+                else if (actionId === TAB_MENU_CLOSE_OTHERS)
+                    props.onTabsClose(ids.filter((id) => id !== tab.id));
+                else if (actionId === TAB_MENU_CLOSE_LEFT) props.onTabsClose(ids.slice(0, index));
+                else if (actionId === TAB_MENU_CLOSE_RIGHT) props.onTabsClose(ids.slice(index + 1));
+                else if (actionId === TAB_MENU_CLOSE_ALL) props.onTabsClose(ids);
+            }}
+            overflowFade
+            size="medium"
+            tabMenuItems={(tab) => {
+                const index = ids.indexOf(tab.id);
+                return index < 0 ? [] : tabStripMenu(index, ids.length - index - 1);
+            }}
+            tabSizing="content"
+            tabs={tabItems}
+        >
+            {/* ⌘W closes the tab on screen, as it does a chat's. */}
+            {active === undefined ? null : (
+                <WindowShortcuts
+                    actions={[
+                        {
+                            run: () => props.onTabsClose([happyAgentSurfaceTabId(active)]),
+                            shortcut: APP_SHORTCUTS.tabClose,
+                        },
+                    ]}
+                />
+            )}
+            {body}
+        </TabbedPane>
     );
 }
 

@@ -160,6 +160,17 @@ export {
     type HappyAgentSurfaceSupportStore,
 } from "./surfaces/surfaceSupportStore.js";
 export {
+    happyAgentSurfaceListTabIdCreate,
+    happyAgentSurfaceSectionOf,
+    happyAgentSurfaceTabId,
+    happyAgentSurfaceTabsStoreCreate,
+    type HappyAgentSurfaceSection,
+    type HappyAgentSurfaceSectionTabs,
+    type HappyAgentSurfaceTab,
+    type HappyAgentSurfaceTabsSnapshot,
+    type HappyAgentSurfaceTabsStore,
+} from "./surfaces/surfaceTabsStore.js";
+export {
     happyAgentCalendarRangeOf,
     HAPPY_AGENT_CALENDAR_COUNT_LIMIT,
     HAPPY_AGENT_CALENDAR_INTERVAL_LIMIT,

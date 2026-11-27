@@ -46,6 +46,7 @@ import {
     type HappyAgentSurfaceReferenceView,
 } from "../../src/pages/surfaces/HappyAgentSurfaceReferencePage";
 import { HappyAgentSurfaceNotMadePage } from "../../src/pages/surfaces/HappyAgentSurfaceNotMadePage";
+import { HappyAgentSurfaceListPage } from "../../src/pages/surfaces/HappyAgentSurfaceListPage";
 import { HappyAgentSurfaceUnsupportedPage } from "../../src/pages/surfaces/HappyAgentSurfaceUnsupportedPage";
 import { HappyAgentTodoSurfacePage } from "../../src/pages/surfaces/HappyAgentTodoSurfacePage";
 import {
@@ -1043,6 +1044,24 @@ const HEADERS: readonly {
     },
 ];
 
+/** What Documents lists: every document on the Happy Agent, by name. */
+const DOCUMENT_ITEMS = [
+    { id: "d1", name: "House rules", type: { kind: "document" } },
+    { id: "d2", name: "Launch plan", type: { kind: "document" }, image: AMBER },
+    {
+        id: "d3",
+        name: "Quarterly planning notes for the whole team, with a title long enough to end in an ellipsis",
+        type: { kind: "document" },
+    },
+] as const;
+
+/** What TODOs lists: every todo list, with how many of its todos are open. */
+const TODO_ITEMS = [
+    { id: "t1", name: "Groceries", type: { kind: "todo" }, image: TEAL, count: 4 },
+    { id: "t2", name: "Launch checklist", type: { kind: "todo" }, count: 12 },
+    { id: "t3", name: "Packing", type: { kind: "todo" }, count: 0 },
+] as const;
+
 /** Gives each fixed overlay a desktop-sized, clipping-safe specimen window. */
 function frame(children: ReactNode) {
     return (
@@ -1249,6 +1268,52 @@ export function HappyAgentSurfacesBlueprintPage() {
                     name="Launch plan"
                     reason="This Happy Agent can’t make documents yet."
                     type={{ kind: "document" }}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="What Documents opens on, and what + opens in a tab: every document on the Happy Agent by name, and New document beside the header."
+                label="Documents"
+                number="05c"
+                screen="05c-documents-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentSurfaceListPage
+                    items={DOCUMENT_ITEMS}
+                    onCreate={noop}
+                    onOpen={noop}
+                    section="documents"
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Every todo list, each with how many of its todos are still open; a list with none open shows no count."
+                label="TODOs"
+                number="05d"
+                screen="05d-todos-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentSurfaceListPage
+                    items={TODO_ITEMS}
+                    onCreate={noop}
+                    onOpen={noop}
+                    section="todos"
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="No todo lists yet, with the Happy Agent away: New todo list stays, disabled, saying why."
+                label="TODOs, empty"
+                number="05e"
+                screen="05e-todos-empty-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentSurfaceListPage
+                    createDisabledReason="This Happy Agent is not reachable."
+                    items={[]}
+                    onCreate={noop}
+                    onOpen={noop}
+                    section="todos"
                 />
             </FullScreenSpecimen>
 

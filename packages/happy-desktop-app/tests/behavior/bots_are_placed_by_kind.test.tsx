@@ -22,6 +22,7 @@ import {
     happyAgentGroupAccessRefused,
     happyAgentHostNoop,
     happyAgentSurfaceSupportStoreNone,
+    happyAgentSurfaceTabsStoreCreate,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
 } from "happy-desktop-state";
 import {
@@ -141,7 +142,9 @@ function workspace(
 
 const PLAN: HappyAgentSurface = {
     id: "srf_plan" as HappyAgentSurfaceId,
-    type: { kind: "document" },
+    // A document or a todo list is listed in its section rather than as a
+    // row, so the joined Surface that keeps a row is a calendar.
+    type: { kind: "calendar" },
     name: "Launch plan",
     image: null,
     members: [{ userId: null, orderKey: "a", joinedAt: 1 }],
@@ -179,10 +182,13 @@ const SURFACE_CATALOG_STORE = {
     [Symbol.dispose]: () => undefined,
 } as unknown as HappyAgentSurfaceCatalogStore;
 
+const surfaceTabs = happyAgentSurfaceTabsStoreCreate();
+
 /** A joined Surface, so the first group holds every kind of row it can. */
 const SURFACES = {
     catalog: () => SURFACE_CATALOG_STORE,
     support: () => happyAgentSurfaceSupportStoreNone,
+    tabs: () => surfaceTabs,
 } as unknown as HappyAgentSurfaces;
 
 function view(
@@ -298,13 +304,15 @@ it("shows an owner the shared bot last in the main group, and not under Bots", (
     expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_writer", "ses_writer");
 });
 
-it("closes the main group with the shared bot, after Plugins, Pipelines, and Surfaces", () => {
+it("closes the main group with the shared bot, after Plugins, Pipelines, Documents, TODOs, and Surfaces", () => {
     const { container } = view([CHIEF_SHARED, WRITER], { happyCloud: true, everyTopRow: true });
     expect(sections(container)[0]!.rows).toEqual([
         "feed",
         "artifacts",
         "plugins",
         "pipelines",
+        "documents",
+        "todos",
         "local/surface:srf_plan",
         "local/ws_chief",
     ]);

@@ -1221,6 +1221,10 @@ export function happyAgentWorkspaceClientCreate(
                     read: () => memory.surfacesExpandedRead(),
                     write: (surfaceIds) => memory.surfacesExpandedWrite(surfaceIds),
                 },
+                tabsMemory: {
+                    read: () => memory.surfaceTabsRead(),
+                    write: (tabs) => memory.surfaceTabsWrite(tabs),
+                },
                 ...(deps.hostServices.vaultAppOpen
                     ? { vaultAppOpen: deps.hostServices.vaultAppOpen.bind(deps.hostServices) }
                     : {}),

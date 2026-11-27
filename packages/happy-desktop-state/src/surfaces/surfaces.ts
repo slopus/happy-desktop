@@ -36,6 +36,11 @@ import {
     type HappyAgentVaultStore,
 } from "./surfaceVaultStore.js";
 import {
+    happyAgentSurfaceTabsStoreCreate,
+    type HappyAgentSurfaceTabsDeps,
+    type HappyAgentSurfaceTabsStore,
+} from "./surfaceTabsStore.js";
+import {
     happyAgentSystemMonitorStoreCreate,
     type HappyAgentSystemMonitorStore,
     type HappyAgentSystemMonitorDeps,
@@ -82,6 +87,8 @@ export interface HappyAgentSurfaces {
     vault(surfaceId: HappyAgentSurfaceId): HappyAgentVaultStore;
     /** Which newer Surface types this Happy Agent serves. */
     support(): HappyAgentSurfaceSupportStore;
+    /** The tabs open in this Happy Agent's Documents and TODOs. */
+    tabs(): HappyAgentSurfaceTabsStore;
     [Symbol.dispose](): void;
 }
 
@@ -103,6 +110,8 @@ export interface HappyAgentSurfacesDeps {
     readonly expandedMemory?: HappyAgentSurfaceCatalogDeps["expandedMemory"];
     /** Serves a vault's HTML artifact entry as a live site, where the host can. */
     readonly vaultAppOpen?: HappyAgentVaultDeps["appOpen"];
+    /** Where the tabs of Documents and TODOs are remembered between runs. */
+    readonly tabsMemory?: HappyAgentSurfaceTabsDeps["memory"];
 }
 
 export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAgentSurfaces {
@@ -114,6 +123,7 @@ export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAge
     const messages = new Map<HappyAgentSurfaceId, HappyAgentSurfaceMessagesStore>();
     const vaults = new Map<HappyAgentSurfaceId, HappyAgentVaultStore>();
     let support: HappyAgentSurfaceSupportStore | undefined;
+    let tabs: HappyAgentSurfaceTabsStore | undefined;
     /** Lists this connection is making, until the daemon answers, for their todo stores to wait on. */
     const creating = new Map<HappyAgentSurfaceId, Promise<void>>();
     let disposed = false;
@@ -250,11 +260,19 @@ export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAge
                 }),
             ));
         },
+        tabs() {
+            return (tabs ??= inert(
+                happyAgentSurfaceTabsStoreCreate(
+                    deps.tabsMemory ? { memory: deps.tabsMemory } : {},
+                ),
+            ));
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
             catalog?.[Symbol.dispose]();
             support?.[Symbol.dispose]();
+            tabs?.[Symbol.dispose]();
             for (const store of todoLists.values()) store[Symbol.dispose]();
             todoLists.clear();
             for (const store of documents.values()) store[Symbol.dispose]();
