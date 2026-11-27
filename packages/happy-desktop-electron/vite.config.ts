@@ -147,10 +147,10 @@ export default defineConfig({
     },
     build: {
         outDir: "dist/renderer",
-        // Keep source locations available for raw profile traces. Normal
-        // release bundles remain unchanged; only the explicit profile flavor
-        // carries maps for correlating hot frames back to source.
-        sourcemap: profileBuild,
+        // Keep source locations available for raw profile traces, and for the
+        // hosted Nightly renderer so its DevTools can map minified frames back
+        // to the original sources. The bundled stable renderer ships no maps.
+        sourcemap: profileBuild || localWebSite,
         // Keep function/class names only in the explicit profile flavor. The
         // optimized profile remains minified, but this small bundler overhead
         // preserves React component attribution; normal builds stay untouched.
